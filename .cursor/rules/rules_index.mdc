@@ -1,0 +1,261 @@
+---
+alwaysApply: true
+---
+
+# Cursor Rules - Índice de Regras
+
+Esta pasta contém as **Regras do Projeto** para o Cursor IDE, que são aplicadas automaticamente ao trabalhar em arquivos do projeto. As regras fornecem contexto persistente para a IA, garantindo consistência e qualidade do código.
+
+## ⚠️ Importante: Prioridade das Regras
+
+**Para Claude Code AI:**
+- ✅ **Usar**: `.claude/` (prioridade ALTA)
+- ⚠️ `.cursor/rules/` (mantido para referência e compatibilidade)
+
+**Para Cursor IDE:**
+- ✅ **Usar**: `.cursor/rules/` (prioridade ALTA)
+
+> **Nota**: Este projeto mantém ambas as pastas sincronizadas. Quando houver diferença, Claude Code segue `.claude/` e Cursor segue `.cursor/rules/`.
+
+## Como Elas Funcionam
+
+As regras são arquivos `.mdc` (Markdown Cursor) que contêm:
+
+- **Frontmatter YAML**: Metadados sobre a regra
+  - `description`: Descrição breve da regra
+  - `globs`: Padrões de arquivo para os quais a regra se aplica
+  - `alwaysApply`: Define se a regra deve sempre ser aplicada
+
+- **Conteúdo Markdown**: As regras e diretrizes em si
+
+## Comportamentos Importantes
+
+### Commits e Documentação
+
+- ❌ **NUNCA faça git commits** a menos que explicitamente solicitado
+- ❌ **NUNCA crie documentação** (README.md, comentários, etc.) a menos que solicitado
+- ❌ **NUNCA faça push para repositório** a menos que solicitado
+- ✅ **APENAS commit/push/documente** quando o usuário explicitamente pedir
+- ✅ Sempre peça confirmação antes de commitar ou fazer push
+- ✅ Código deve ser autoexplicativo através de nomenclatura clara
+
+Essas regras garantem que o assistente de IA respeite o controle do usuário sobre decisões de versionamento e documentação.
+
+## Regras Disponíveis
+
+### 1. `general_rules.mdc` ⭐ ATUALIZADO
+
+**Aplicado a**: `lib/**/*.dart`, `test/**/*.dart`
+
+Define regras gerais do projeto:
+
+- **Documentação**: Não criar automaticamente
+- **Números Mágicos**: Sempre usar constantes nomeadas
+- **Código Autoexplicativo**: Nomenclatura clara em vez de comentários
+- **Comentários**: Apenas para explicar "por quê", não "o quê"
+
+### 2. `clean_architecture.mdc` ⭐ ATUALIZADO
+
+**Aplicado a**: `lib/**/*.dart`
+
+Define regras de dependência entre camadas:
+
+- Regra de Ouro: Dependencies apontam para dentro
+- Domain: Lógica de negócio pura (sem Flutter/HTTP)
+- Application: Orquestração de use cases
+- Infrastructure: Implementações técnicas
+- Presentation: UI e estado da interface
+- Tabela de importação clara
+- Exemplos de fluxo completo
+
+### 3. `solid_principles.mdc`
+
+**Aplicado a**: `lib/**/*.dart`
+
+Define princípios SOLID:
+
+- **SRP**: Single Responsibility Principle
+- **OCP**: Open/Closed Principle
+- **LSP**: Liskov Substitution Principle
+- **ISP**: Interface Segregation Principle
+- **DIP**: Dependency Inversion Principle
+
+### 4. `domain_layer.mdc`
+
+**Aplicado a**: `lib/domain/**/*.dart`
+
+Regras específicas para Domain Layer:
+
+- **Entities**: Objetos principais do domínio com identidade única
+- **Value Objects**: Objetos imutáveis comparados por valor
+- **Use Cases**: Operações de negócio isoladas e testáveis
+- **Repositories**: Interfaces que definem contratos
+- **Errors**: Exceções específicas do domínio
+
+### 5. `coding_conventions.mdc`
+
+**Aplicado a**: `lib/**/*.dart`
+
+Convenções de codificação:
+
+- Nomenclatura para classes, métodos e variáveis
+- Estrutura de arquivos
+- Tratamento de erros (Result pattern - result_dart)
+- Injeção de dependência
+- Organização de imports
+- Evitar comentários desnecessários
+- Usar constantes nomeadas ao invés de números mágicos
+
+### 6. `testing.mdc`
+
+**Aplicado a**: `test/**/*.dart`
+
+Padrões de testes:
+
+- Estrutura de testes unitários
+- Testes de widgets
+- Melhores práticas (padrão AAA)
+- Nomenclatura de testes
+- Isolamento e mocking
+
+### 7. `coding_style.mdc`
+
+**Aplicado a**: `lib/**/*.dart`, `test/**/*.dart`
+
+Guia de estilo Dart baseado em Effective Dart:
+
+- Nomenclatura e convenções
+- Tipos e null safety
+- Const e final
+- Strings e coleções
+- Funções e métodos
+- Classes e construtores
+- Imports e organização
+- Dot shorthands
+- Tear-off para widgets (nunca retornar Widget de funções)
+- Evitar números mágicos - usar constantes nomeadas
+- Comentários apenas quando necessário (explicar "por quê", não "o quê")
+
+### 8. `flutter_widgets.mdc` ⭐ ATUALIZADO
+
+**Aplicado a**: `lib/presentation/**/*.dart`, `lib/shared/**/*.dart`
+
+Melhores práticas para widgets Flutter:
+
+- Stateless vs StatefulWidget
+- Performance e otimização
+- Widgets const
+- Composição de widgets
+- Layout e design responsivo
+- Theming e **navegação (apenas go_router)**
+- Gerenciamento de estado (Provider)
+
+### 9. `null_safety.mdc`
+
+**Aplicado a**: `lib/**/*.dart`
+
+Melhores práticas para null safety:
+
+- Declaração de tipos nullable/non-nullable
+- Inicialização de variáveis
+- Null checks e operadores null-aware
+- Coleções nullable
+- Funções e métodos com null safety
+- APIs externas e parsing de JSON
+
+### 10. `dependencies_patterns.mdc` ⭐ ATUALIZADO
+
+**Aplicado a**: `lib/**/*.dart`, `pubspec.yaml`
+
+Padrões de dependências e bibliotecas:
+
+- **go_router** para rotas (nunca Navigator ou auto_route)
+- **dio** para HTTP/API (nunca http package)
+- **get_it** para injeção de dependência (nunca Provider para DI)
+- **Provider** para gerenciamento de estado (nunca BLoC, Riverpod, GetX)
+- **fluent_ui** para UI desktop Windows (ATUALIZADO)
+- **brasil_fields** para formatação BR
+- **flutter_dotenv** para variáveis de ambiente
+- **uuid** para geração de UUID
+- **result_dart** para tratamento de erros
+
+### 11. `architecture.mdc`
+
+**Aplicado a**: `lib/**/*.dart`
+
+Visão geral de Clean Architecture + Domain Driven Design (DDD):
+
+- Princípios de arquitetura e SOLID
+- Estrutura de camadas e organização
+- Regras de dependência entre camadas
+- Estrutura de pastas
+- Exemplos de fluxo de dados
+- Barrel files
+- Configuração de bibliotecas (go_router, dio, get_it, Provider, etc.)
+- Padrões de import
+- Checklist de code review
+- Checklist de configuração
+
+## ⭐ Indicador de Atualização
+
+Arquivos marcados com ⭐ foram recentemente atualizados para:
+- Remover inconsistências (ex: auto_route)
+- Padronizar exemplos (apenas go_router)
+- Adicionar fluent_ui como biblioteca padrão
+- Melhorar clareza e organização
+- Adicionar mais exemplos práticos
+
+## Criando Novas Regras
+
+Para criar uma nova regra:
+
+1. Crie um arquivo `.mdc` na pasta `.cursor/rules/`
+2. Adicione o frontmatter YAML:
+   ```yaml
+   ---
+   description: Descrição da regra
+   globs: ["pattern/**/*.dart"]
+   alwaysApply: true
+   ---
+   ```
+3. Adicione o conteúdo da regra em Markdown
+
+## Exemplo de Regra
+
+```mdc
+---
+description: Exemplo de regra para validação
+globs: ["lib/domain/**/*.dart"]
+alwaysApply: true
+---
+
+# Regra de Validação
+
+- Todas as entidades devem validar seus dados no construtor
+- Value objects devem lançar exceções específicas para valores inválidos
+- Use cases devem validar parâmetros antes de executar
+```
+
+## Referências
+
+- [Documentação do Cursor sobre Rules](https://docs.cursor.com/en/context/rules)
+- [Guia de Contexto do Cursor](https://docs.cursor.com/en/guides)
+
+## Sincronização com .claude/
+
+Este projeto mantém regras sincronizadas entre:
+- `.cursor/rules/` - Para Cursor IDE
+- `.claude/` - Para Claude Code AI
+
+Quando atualizar uma regra, considere atualizar em ambas as pastas para manter consistência.
+
+## Última Atualização
+
+**Data**: 2025-01-08
+**Mudanças**:
+- ✅ Removidas inconsistências (auto_route, Navigator)
+- ✅ Padronizados exemplos com go_router
+- ✅ Adicionado fluent_ui como biblioteca padrão
+- ✅ Melhorada seção de números mágicos no general_rules.mdc
+- ✅ Simplificado clean_architecture.mdc
+- ✅ Atualizado checklist em dependencies_patterns.mdc

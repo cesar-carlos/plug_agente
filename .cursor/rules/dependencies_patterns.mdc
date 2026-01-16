@@ -1,0 +1,463 @@
+---
+description: Padrões de Dependências - Bibliotecas e padrões de uso específicos do projeto
+globs: ["lib/**/*.dart", "pubspec.yaml"]
+alwaysApply: true
+---
+
+# Padrões de Dependências e Bibliotecas
+
+Este projeto utiliza as seguintes bibliotecas como padrão. **SEMPRE** use essas bibliotecas específicas, não alternativas.
+
+## Bibliotecas Padrão do Projeto
+
+### 1. Rotas - `go_router`
+
+- ✅ **SEMPRE usar `go_router`** para navegação e rotas
+- ❌ **NUNCA usar** `Navigator.push()`, `auto_route` ou outras bibliotecas de rotas
+- ✅ Configure rotas em `core/routes/`
+- ✅ Use `GoRouter` para gerenciar navegação
+- ✅ Use `context.go()` ou `context.push()` para navegação
+
+**Exemplo:**
+
+```dart
+// core/routes/app_router.dart
+import 'package:go_router/go_router.dart';
+import 'package:presentation/presentation.dart';
+
+final appRouter = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: '/user/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return UserDetailPage(userId: id);
+      },
+    ),
+  ],
+);
+
+// Uso
+context.go('/user/123');
+context.push('/user/123');
+```
+
+### 2. HTTP Client - `dio`
+
+- ✅ **SEMPRE usar `dio`** para requisições HTTP/API
+- ❌ **NUNCA usar** `http` package ou outras bibliotecas HTTP
+- ✅ Configure `Dio` em `infrastructure/external_services/`
+- ✅ Use interceptors para tratamento de erros e autenticação
+- ✅ Use `CancelToken` para cancelar requisições quando necessário
+
+**Exemplo:**
+
+```dart
+// infrastructure/external_services/api_client.dart
+import 'package:dio/dio.dart';
+
+class ApiClient {
+  late final Dio _dio;
+
+  ApiClient() {
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: 'https://api.example.com',
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+
+    _dio.interceptors.add(LogInterceptor());
+    _dio.interceptors.add(AuthInterceptor());
+  }
+
+  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) {
+    return _dio.get(path, queryParameters: queryParameters);
+  }
+
+  Future<Response> post(String path, {dynamic data}) {
+    return _dio.post(path, data: data);
+  }
+}
+```
+
+### 3. Service Locator - `get_it`
+
+- ✅ **SEMPRE usar `get_it`** para injeção de dependências
+- ❌ **NUNCA usar** `Provider` para DI, `injectable` ou outras bibliotecas de DI
+- ✅ Configure `GetIt` em `core/di/` ou `core/injection/`
+- ✅ Use `get_it` para registrar e resolver dependências
+- ✅ Registre dependências no `main.dart` ou em arquivo de configuração dedicado
+
+**Exemplo:**
+
+```dart
+// core/di/service_locator.dart
+import 'package:get_it/get_it.dart';
+import 'package:domain/domain.dart';
+import 'package:infrastructure/infrastructure.dart';
+import 'package:application/application.dart';
+
+final getIt = GetIt.instance;
+
+void setupDependencies() {
+  // Data Sources
+  getIt.registerLazySingleton<IUserDataSource>(
+    () => UserRemoteDataSource(),
+  );
+
+  // Repositories
+  getIt.registerLazySingleton<IUserRepository>(
+    () => UserRepository(
+      remoteDataSource: getIt<IUserDataSource>(),
+    ),
+  );
+
+  // Services
+  getIt.registerLazySingleton<UserService>(
+    () => UserService(
+      repository: getIt<IUserRepository>(),
+    ),
+  );
+}
+
+// Uso
+final userService = getIt<UserService>();
+```
+
+### 4. State Management - `Provider`
+
+- ✅ **SEMPRE usar `Provider`** para gerenciamento de estado
+- ❌ **NUNCA usar** `BLoC`, `Riverpod`, `GetX` ou outras bibliotecas de estado
+- ✅ Use `ChangeNotifierProvider` para estado local
+- ✅ Use `MultiProvider` para múltiplos providers
+- ✅ Crie providers em `presentation/providers/`
+- ✅ Separe lógica de negócio do estado da UI
+
+**Exemplo:**
+
+```dart
+// presentation/providers/user_provider.dart
+import 'package:flutter/foundation.dart';
+import 'package:domain/domain.dart';
+import 'package:application/application.dart';
+
+class UserProvider extends ChangeNotifier {
+  final UserService _userService;
+
+  UserProvider(this._userService);
+
+  User? _user;
+  bool _isLoading = false;
+  String? _error;
+
+  User? get user => _user;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  Future<void> loadUser(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    final result = await _userService.getUser(id);
+
+    result.fold(
+      (failure) {
+        _error = failure.message;
+        _isLoading = false;
+      },
+      (user) {
+        _user = user;
+        _isLoading = false;
+      },
+    );
+
+    notifyListeners();
+  }
+}
+
+// Uso
+ChangeNotifierProvider(
+  create: (_) => UserProvider(getIt<UserService>()),
+  child: UserPage(),
+)
+
+// No widget
+final userProvider = Provider.of<UserProvider>(context);
+```
+
+### 5. Formatação BR - `brasil_fields`
+
+- ✅ **SEMPRE usar `brasil_fields`** para formatação de campos brasileiros
+- ✅ Use para formatação de CPF, CNPJ, CEP, telefone, etc.
+- ✅ Use máscaras fornecidas pela biblioteca
+- ✅ Valide campos brasileiros usando a biblioteca
+
+**Exemplo:**
+
+```dart
+import 'package:brasil_fields/brasil_fields.dart';
+
+// Formatação de CPF
+final cpfFormatter = TextInputFormatter.withFunction((oldValue, newValue) {
+  return CPFInputFormatter.format(oldValue, newValue);
+});
+
+// Formatação de CEP
+final cepFormatter = TextInputFormatter.withFunction((oldValue, newValue) {
+  return CEPInputFormatter.format(oldValue, newValue);
+});
+
+// Validação
+bool isValidCPF = CPFValidator.isValid('123.456.789-00');
+bool isValidCNPJ = CNPJValidator.isValid('12.345.678/0001-90');
+```
+
+### 6. Environment Variables - `flutter_dotenv`
+
+- ✅ **SEMPRE usar `flutter_dotenv`** para variáveis de ambiente
+- ✅ Crie arquivo `.env` na raiz do projeto
+- ✅ Carregue variáveis no `main.dart`
+- ✅ Use `dotenv.env['KEY']` para acessar variáveis
+- ✅ Defina variáveis de exemplo em `.env.example`
+
+**Exemplo:**
+
+```dart
+// main.dart
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: '.env');
+
+  runApp(const MyApp());
+}
+
+// Uso
+final apiUrl = dotenv.env['API_URL'] ?? 'https://api.example.com';
+final apiKey = dotenv.env['API_KEY'] ?? '';
+```
+
+### 7. UUID - `uuid`
+
+- ✅ **SEMPRE usar `uuid`** para geração de identificadores únicos
+- ✅ Use `Uuid().v4()` para gerar UUIDs v4
+- ✅ Use para IDs de entidades quando necessário
+- ✅ Não use `DateTime.now().millisecondsSinceEpoch` ou outras alternativas
+
+**Exemplo:**
+
+```dart
+import 'package:uuid/uuid.dart';
+
+const uuid = Uuid();
+
+// Geração de UUID
+final userId = uuid.v4(); // Gera UUID v4
+
+// Uso em entidades
+class User {
+  final String id;
+  final String name;
+
+  User({
+    String? id,
+    required this.name,
+  }) : id = id ?? uuid.v4();
+}
+```
+
+### 8. Error Handling - `result_dart`
+
+- ✅ **SEMPRE usar `result_dart`** para tratamento de erros
+- ❌ **NUNCA usar** `Either` (dartz) ou outras bibliotecas de error handling
+- ✅ Use `Result<T>` para retornos que podem falhar
+- ✅ Use `Success(value)` para sucesso e `Failure(exception)` para falha
+- ✅ Use `fold()` para tratar sucesso e falha
+- ✅ Use `isSuccess()` e `isFailure()` para verificar o estado
+
+**Exemplo:**
+
+```dart
+import 'package:result_dart/result_dart.dart';
+
+// Retorno de função
+Future<Result<User>> getUser(String id) async {
+  if (id.isEmpty) {
+    return Failure(ValidationFailure('ID cannot be empty'));
+  }
+  
+  try {
+    final user = await repository.getById(id);
+    return Success(user);
+  } catch (e) {
+    return Failure(ServerFailure(e.toString()));
+  }
+}
+
+// Tratamento do Result
+final result = await getUser('123');
+result.fold(
+  (success) {
+    // Tratar sucesso
+    print('User: ${success.name}');
+  },
+  (failure) {
+    // Tratar falha
+    print('Error: ${failure.message}');
+  },
+);
+
+// Verificação de estado
+if (result.isSuccess()) {
+  final user = result.getOrNull();
+} else {
+  final failure = result.exceptionOrNull();
+}
+```
+
+### 9. Desktop UI - `fluent_ui`
+
+- ✅ **SEMPRE usar `fluent_ui`** para interface do Windows
+- ✅ Use widgets Fluent Design (ScaffoldPage, NavigationPane, etc.)
+- ✅ Configure tema em `core/theme/`
+- ✅ Use `NavigationPane` para navegação lateral
+- ❌ **NUNCA usar** Material Design diretamente para desktop Windows
+
+**Exemplo:**
+
+```dart
+import 'package:fluent_ui/fluent_ui.dart';
+
+class MyPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ScaffoldPage(
+      header: PageHeader(title: Text('My Page')),
+      content: ListView.builder(
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text('Item $index'),
+            onPressed: () => print('Pressed'),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### 10. Validação de Tipo
+
+- ✅ Use validação manual ou pacotes leves quando necessário
+- ✅ Valide no Domain Layer (value objects, entities)
+- ✅ Use `Result<T>` para retornar erros de validação
+
+**Exemplo:**
+
+```dart
+// domain/value_objects/email.dart
+class Email {
+  final String value;
+
+  Email(this.value) {
+    if (!isValid(value)) {
+      throw InvalidEmailException('Invalid email');
+    }
+  }
+
+  static bool isValid(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+}
+```
+
+## Estrutura de Configuração
+
+### pubspec.yaml
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Rotas
+  go_router: ^14.0.0
+
+  # HTTP
+  dio: ^5.4.0
+
+  # DI
+  get_it: ^7.6.0
+
+  # State Management
+  provider: ^6.1.0
+
+  # Desktop UI
+  fluent_ui: ^4.0.0
+
+  # Formatação BR
+  brasil_fields: ^2.0.0
+
+  # Environment
+  flutter_dotenv: ^5.1.0
+
+  # UUID
+  uuid: ^4.3.0
+
+  # Error Handling
+  result_dart: ^2.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+```
+
+## Regras de Uso
+
+### ✅ FAZER
+
+- ✅ Sempre usar as bibliotecas padrão listadas acima
+- ✅ Seguir os padrões de uso exemplificados
+- ✅ Configurar bibliotecas em locais apropriados (core, infrastructure)
+- ✅ Documentar configurações complexas quando necessário
+
+### ❌ NÃO FAZER
+
+- ❌ Não usar alternativas às bibliotecas padrão
+- ❌ Não misturar diferentes bibliotecas para a mesma funcionalidade
+- ❌ Não criar abstrações desnecessárias sobre as bibliotecas padrão
+- ❌ Não usar bibliotecas não listadas sem justificativa e aprovação
+
+## Checklist de Dependências
+
+Ao criar um novo recurso, verifique:
+
+- [ ] Rotas estão usando `go_router`?
+- [ ] Requisições HTTP estão usando `dio`?
+- [ ] Dependências estão registradas no `get_it`?
+- [ ] Estado está gerenciado com `Provider`?
+- [ ] UI está usando `fluent_ui` para desktop?
+- [ ] Campos brasileiros estão formatados com `brasil_fields`?
+- [ ] Variáveis de ambiente estão usando `flutter_dotenv`?
+- [ ] UUIDs estão sendo gerados com `uuid`?
+- [ ] Tratamento de erros está usando `result_dart`?
+
+## Exceções
+
+Se precisar usar uma biblioteca diferente das padrão:
+
+1. Justifique a necessidade
+2. Documente o motivo da escolha
+3. Atualize esta regra para incluir a nova biblioteca padrão
+4. Garanta que a nova biblioteca segue os princípios SOLID e Clean Architecture
+5. Valide com a equipe antes de adicionar novas dependências

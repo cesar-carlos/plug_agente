@@ -1,0 +1,26 @@
+{
+  // Dart & Flutter settings
+  "dart.lineLength": 120,
+  "dart.flutterSdkPath": null,
+  "dart.enableSdkFormatter": true,
+
+  // Editor settings
+  "editor.rulers": [120],
+  "editor.wordWrap": "off",
+  "editor.formatOnSave": true,
+
+  // Debug settings
+  "debug.toolBarLocation": "commandCenter",
+
+  // Dart-specific formatting
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [120],
+    "editor.selectionHighlight": false,
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.suggestSelection": "first",
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  }
+}

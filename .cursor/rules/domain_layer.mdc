@@ -1,0 +1,213 @@
+---
+description: Domain Layer - Regras para entidades, value objects, use cases e repositories
+globs: ["lib/domain/**/*.dart"]
+alwaysApply: true
+---
+
+# Domain Layer - Regras e Padrões
+
+## Entidades (Entities)
+
+### Características
+- Representam objetos principais do domínio com identidade única
+- Contêm lógica de negócio relacionada ao objeto
+- São imutáveis quando possível (final fields)
+- Comparadas por identidade (id), não por valor
+
+### Regras
+- ✅ Apenas classes Dart puro, sem dependências externas
+- ✅ Contêm apenas lógica de negócio relacionada à entidade
+- ✅ Campos devem ser `final` quando possível
+- ✅ Implementar `==` e `hashCode` baseado na identidade
+- ❌ NUNCA importar Flutter, HTTP, ou frameworks
+- ❌ NUNCA importar de outras camadas (application, infrastructure, presentation)
+
+### Exemplo
+```dart
+// domain/entities/user.dart
+class User {
+  final String id;
+  final String name;
+  final Email email;
+  final DateTime createdAt;
+  
+  User({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.createdAt,
+  });
+  
+  // Lógica de negócio relacionada ao User
+  bool isActive() {
+    return createdAt.isAfter(DateTime.now().subtract(Duration(days: 30)));
+  }
+  
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is User && other.id == id;
+  }
+  
+  @override
+  int get hashCode => id.hashCode;
+}
+```
+
+## Value Objects (Objetos de Valor)
+
+### Características
+- Representam conceitos do domínio definidos apenas por seus valores
+- São imutáveis
+- Comparados por valor, não por identidade
+- Validam seus próprios valores na construção
+
+### Regras
+- ✅ Sempre imutáveis (todos os campos `final`)
+- ✅ Validação no construtor
+- ✅ Implementar `==` e `hashCode` baseado em valor
+- ✅ Lançar exceções específicas do domínio em caso de valor inválido
+- ❌ NUNCA ter identidade (id)
+
+### Exemplo
+```dart
+// domain/value_objects/email.dart
+class Email {
+  final String value;
+  
+  Email(this.value) {
+    if (!_isValid(value)) {
+      throw InvalidEmailException('Invalid email format: $value');
+    }
+  }
+  
+  bool _isValid(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+  
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Email && other.value == value;
+  }
+  
+  @override
+  int get hashCode => value.hashCode;
+  
+  @override
+  String toString() => value;
+}
+```
+
+## Use Cases (Casos de Uso)
+
+### Características
+- Representam operações de negócio isoladas e testáveis
+- Têm uma única responsabilidade
+- Recebem dependências via construtor
+- Retornam `Result<T>` para tratamento de erros
+
+### Regras
+- ✅ Uma única responsabilidade (SRP)
+- ✅ Recebem dependências via construtor (DIP)
+- ✅ Dependem apenas de interfaces (repositories)
+- ✅ Implementam método `call()` para execução
+- ✅ Retornam `Result<T>` para tratamento de erros
+- ❌ NUNCA contêm lógica de apresentação
+- ❌ NUNCA dependem de frameworks
+
+### Exemplo
+```dart
+// domain/use_cases/get_user_by_id.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../repositories/repositories.dart';
+import '../errors/errors.dart';
+
+class GetUserById {
+  final IUserRepository repository;
+  
+  GetUserById(this.repository);
+  
+  Future<Result<User>> call(String id) async {
+    if (id.isEmpty) {
+      return Failure(ValidationFailure('ID cannot be empty'));
+    }
+    
+    try {
+      final result = await repository.getById(id);
+      return result;
+    } catch (e) {
+      return Failure(ServerFailure(e.toString()));
+    }
+  }
+}
+```
+
+## Repositories (Interfaces)
+
+### Características
+- Definem contratos para acesso a dados
+- São abstrações puras (interfaces/abstract classes)
+- Não têm implementações concretas no Domain
+- Retornam entidades do domínio ou `Result<T>`
+
+### Regras
+- ✅ Apenas interfaces/abstract classes
+- ✅ Métodos retornam entidades do domínio ou `Result<T>`
+- ✅ NUNCA têm implementações concretas no Domain
+- ✅ NUNCA dependem de frameworks ou tecnologias
+- ✅ Prefixo `I` para interfaces (ex: `IUserRepository`)
+
+### Exemplo
+```dart
+// domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../errors/errors.dart';
+
+abstract class IUserRepository {
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
+}
+```
+
+## Errors (Erros do Domínio)
+
+### Características
+- Representam erros específicos do domínio
+- Herdam de `Failure` ou `Exception`
+- Contêm mensagens descritivas
+
+### Regras
+- ✅ Erros específicos do domínio
+- ✅ Mensagens claras e descritivas
+- ✅ Hierarquia de erros quando necessário
+
+### Exemplo
+```dart
+// domain/errors/errors.dart
+abstract class Failure {
+  final String message;
+  Failure(this.message);
+}
+
+class ServerFailure extends Failure {
+  ServerFailure(String message) : super(message);
+}
+
+class NetworkFailure extends Failure {
+  NetworkFailure(String message) : super(message);
+}
+
+class ValidationFailure extends Failure {
+  ValidationFailure(String message) : super(message);
+}
+
+class NotFoundFailure extends Failure {
+  NotFoundFailure(String message) : super(message);
+}
+```

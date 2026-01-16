@@ -1,0 +1,663 @@
+---
+description: Clean Architecture + Domain Driven Design (DDD) - Architecture overview and principles
+alwaysApply: false
+---
+
+# Clean Architecture + Domain Driven Design (DDD)
+
+This project follows **Clean Architecture** and **Domain Driven Design (DDD)** principles, prioritizing **SOLID** principles to organize code in a clear, scalable, and testable way.
+
+## Cursor Rules
+
+This project uses **Cursor Rules** to ensure code consistency and quality. The rules are defined in the `.cursor/rules/` folder and are automatically applied by Cursor when working on corresponding files.
+
+### Available Rules
+
+- **`solid_principles.mdc`**: SOLID principles (SRP, OCP, LSP, ISP, DIP)
+- **`clean_architecture.mdc`**: Dependency rules between layers and organization
+- **`domain_layer.mdc`**: Specific rules for Domain Layer (entities, value objects, use cases)
+- **`coding_conventions.mdc`**: Naming conventions and file structure
+- **`testing.mdc`**: Testing patterns and best practices
+- **`dart_style_code.mdc`**: Dart style guide based on Effective Dart
+- **`flutter_widgets.mdc`**: Best practices for Flutter widgets
+- **`null_safety.mdc`**: Null safety best practices
+- **`general_rules.mdc`**: General project rules
+- **`dependencies_patterns.mdc`**: Dependency and library patterns
+
+Rules are automatically applied to corresponding files based on the `globs` patterns defined in each `.mdc` file.
+
+For more information about each rule, see the files in `.cursor/rules/`.
+
+## Fundamental Principles
+
+### SOLID
+
+- **S**ingle Responsibility Principle (SRP): Each class should have a single responsibility
+- **O**pen/Closed Principle (OCP): Open for extension, closed for modification
+- **L**iskov Substitution Principle (LSP): Objects should be substitutable by instances of their subtypes
+- **I**nterface Segregation Principle (ISP): Many specific interfaces are better than one general interface
+- **D**ependency Inversion Principle (DIP): Depend on abstractions, not concrete implementations
+
+### Clean Architecture
+
+The architecture is organized in concentric layers, where:
+
+- **Dependencies point inward**: Outer layers depend on inner layers
+- **Domain is independent**: Does not depend on frameworks, libraries, or implementation details
+- **Testability**: Business logic can be tested without external dependencies
+
+## Folder Structure
+
+```
+lib/
+├── domain/              # Domain Layer (Pure Business Logic)
+│   ├── entities/        # Domain entities (business objects)
+│   ├── value_objects/   # Value objects (immutable, compared by value)
+│   ├── repositories/    # Repository interfaces (contracts)
+│   ├── use_cases/       # Use cases (pure application logic)
+│   └── errors/          # Domain exceptions and errors
+│
+├── application/         # Application Layer (Orchestration)
+│   ├── services/        # Application services (coordinate use cases)
+│   ├── dtos/            # Data Transfer Objects (transfer between layers)
+│   └── mappers/         # Converters between entities and DTOs
+│
+├── infrastructure/      # Infrastructure Layer (Implementations)
+│   ├── datasources/     # Data sources (API, Local DB, etc.)
+│   ├── repositories/    # Repository implementations
+│   ├── external_services/  # External services (APIs, etc.)
+│   │   └── interceptors/  # HTTP interceptors (dio)
+│   └── models/          # Data models for serialization
+│
+├── presentation/        # Presentation Layer (UI)
+│   ├── pages/          # Application screens
+│   ├── widgets/        # Reusable UI components
+│   ├── controllers/    # State controllers (GetX, etc.)
+│   └── providers/      # Providers (state management with Provider)
+│
+├── core/               # Core Components (Shared)
+│   ├── constants/      # Application constants
+│   ├── utils/          # Utility functions
+│   │   └── formatters.dart  # BR formatting helpers (brasil_fields)
+│   ├── extensions/     # Class extensions
+│   ├── theme/          # Application theme
+│   ├── routes/         # Routes and navigation (go_router)
+│   ├── di/             # Dependency injection (get_it)
+│   └── validation/     # Validation schemas (zard)
+│       └── schemas/    # Validation schemas
+│
+└── shared/             # Shared Components
+    ├── widgets/        # Shared widgets
+    └── utils/          # Shared utilities
+```
+
+## Architecture Layers
+
+### 1. Domain Layer - Core
+
+**Responsibility**: Contains pure business logic, without dependencies on frameworks or external libraries.
+
+**Applied principles**:
+
+- ✅ **SRP**: Each entity and use case has a single responsibility
+- ✅ **DIP**: Defines interfaces (repositories), not implementations
+- ✅ **Independence**: Does not depend on any other layer
+
+**Components**:
+
+- **Entities**: Main domain objects with unique identity and business logic
+- **Value Objects**: Immutable objects compared by value (ex: Email, CPF, Money)
+- **Repositories**: Interfaces that define contracts for data access
+- **Use Cases**: Isolated, testable business operations with a single responsibility
+- **Errors**: Domain-specific exceptions
+
+**Rules**:
+
+- ❌ NEVER import Flutter, HTTP, or any external framework
+- ❌ NEVER import from `application`, `infrastructure` or `presentation`
+- ✅ Pure Dart classes only
+- ✅ Abstract interfaces for external dependencies
+
+### 2. Application Layer
+
+**Responsibility**: Orchestrates use cases and coordinates data flow between layers.
+
+**Applied principles**:
+
+- ✅ **SRP**: Each service coordinates a specific set of use cases
+- ✅ **DIP**: Depends only on Domain interfaces
+- ✅ **OCP**: Extensible through new use cases
+
+**Components**:
+
+- **Services**: Coordinate multiple use cases and orchestrate complex flows
+- **DTOs**: Objects for data transfer between layers (no business logic)
+- **Mappers**: Convert between domain entities and DTOs
+
+**Rules**:
+
+- ✅ Can import only from `domain` and `core`
+- ❌ NEVER import from `infrastructure` or `presentation`
+- ✅ Uses Domain interfaces, not implementations
+
+### 3. Infrastructure Layer
+
+**Responsibility**: Implements interfaces defined in the domain and handles technical details.
+
+**Applied principles**:
+
+- ✅ **DIP**: Implements Domain interfaces
+- ✅ **SRP**: Each data source has a single responsibility
+- ✅ **LSP**: Implementations are substitutable by interfaces
+
+**Components**:
+
+- **Data Sources**: Concrete implementations of data access (API, Local DB, Cache)
+- **Repositories**: Repository implementations using datasources
+- **External Services**: Integrations with external APIs
+  - **Interceptors**: HTTP interceptors for `dio` (authentication, logging, error handling)
+- **Models**: Models for serialization/deserialization (may differ from entities)
+
+**Rules**:
+
+- ✅ Can import from `domain` and `core`
+- ✅ Implements interfaces defined in Domain
+- ❌ NEVER import from `application` or `presentation`
+
+### 4. Presentation Layer
+
+**Responsibility**: User interface and UI state management.
+
+**Applied principles**:
+
+- ✅ **SRP**: Each page/controller has a single responsibility
+- ✅ **DIP**: Depends on services/interfaces, not concrete implementations
+- ✅ **ISP**: Specific interfaces for each need
+
+**Components**:
+
+- **Pages**: Application screens (Stateless/StatefulWidget)
+- **Widgets**: Reusable UI components specific to this layer
+- **Controllers/Providers**: State management (should not contain business logic)
+
+**Rules**:
+
+- ✅ Can import from `domain`, `application` and `core`
+- ❌ NEVER import from `infrastructure`
+- ✅ Uses Application services or Domain use cases
+- ✅ Controllers only manage state, business logic stays in Domain
+
+### 5. Core
+
+**Responsibility**: Shared components and general configurations.
+
+**Components**:
+
+- **Constants**: Fixed values used throughout the application
+- **Utils**: Pure utility functions (no dependencies)
+  - **Formatters**: BR formatting helpers using `brasil_fields`
+- **Extensions**: Dart/Flutter class extensions
+- **Theme**: Theme and style configurations
+- **Routes**: Route definitions and navigation using `go_router`
+- **DI**: Dependency injection setup using `get_it`
+- **Validation**: Validation schemas using `zard`
+
+**Rules**:
+
+- ✅ Can be imported by any layer
+- ✅ Should not import from `domain`, `application`, `infrastructure` or `presentation`
+
+### 6. Shared
+
+**Responsibility**: Widgets and utilities shared between features.
+
+**Components**:
+
+- **Widgets**: Generic and reusable UI components
+- **Utils**: Shared utilities
+
+**Rules**:
+
+- ✅ Can be imported by any layer
+- ✅ Should not import from other business layers
+
+## Dependency Rules (Clean Architecture)
+
+Dependencies must follow this strict hierarchy:
+
+```
+Presentation → Application → Domain ← Infrastructure
+Core → (can be used by any layer)
+Shared → (can be used by any layer)
+```
+
+### Import Rules
+
+1. **Domain**:
+
+   - ✅ Can import only from `core` and `shared`
+   - ❌ NEVER import from `application`, `infrastructure` or `presentation`
+
+2. **Application**:
+
+   - ✅ Can import from `domain` and `core`
+   - ❌ NEVER import from `infrastructure` or `presentation`
+
+3. **Infrastructure**:
+
+   - ✅ Can import from `domain` and `core`
+   - ❌ NEVER import from `application` or `presentation`
+
+4. **Presentation**:
+
+   - ✅ Can import from `domain`, `application` and `core`
+   - ❌ NEVER import from `infrastructure`
+
+5. **Core**:
+
+   - ✅ Does not import from other business layers
+   - ✅ Can be imported by any layer
+
+6. **Shared**:
+   - ✅ Does not import from other business layers
+   - ✅ Can be imported by any layer
+
+## Data Flow Example
+
+1. **Presentation** (UI) calls a **Service** from the **Application** layer
+2. **Service** executes **Use Cases** from the **Domain** layer
+3. **Use Cases** use **Repository** (interface) from the **Domain** layer
+4. **Repository** is implemented in the **Infrastructure** layer
+5. **Repository** uses **Data Sources** to fetch/persist data
+6. **Data Source** returns data that is converted to **Entities** from Domain
+7. **Entities** are converted to **DTOs** if necessary
+8. **DTOs** are returned to **Presentation**
+
+## Architecture Benefits
+
+- ✅ **Separation of concerns**: Each layer has a clear responsibility (SRP)
+- ✅ **Testability**: Isolated business logic easily testable without external dependencies
+- ✅ **Maintainability**: Organized code easy to maintain and understand
+- ✅ **Scalability**: Structure prepared for growth and new features
+- ✅ **Independence**: Domain independent of frameworks, libraries and technologies
+- ✅ **Flexibility**: Easy to swap implementations (ex: swap REST API for GraphQL)
+- ✅ **Reusability**: Business logic can be reused in different contexts
+- ✅ **SOLID compliance**: All SOLID principles are naturally applied
+
+## Coding Principles
+
+### Naming
+
+- **Entities**: Singular noun names (ex: `User`, `Product`)
+- **Value Objects**: Descriptive names (ex: `Email`, `Money`, `CPF`)
+- **Use Cases**: Infinitive verbs (ex: `GetUserById`, `CreateProduct`)
+- **Repositories**: Interfaces with `Repository` suffix (ex: `IUserRepository`)
+- **Services**: Classes with `Service` suffix (ex: `UserService`)
+- **DTOs**: Classes with `DTO` suffix (ex: `UserDTO`)
+
+### Use Case Structure Example
+
+```dart
+// domain/use_cases/get_user_by_id.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../repositories/repositories.dart';
+
+class GetUserById {
+  final IUserRepository repository;
+
+  GetUserById(this.repository);
+
+  Future<Result<User>> call(String id) async {
+    return await repository.getById(id);
+  }
+}
+```
+
+### Repository Structure Example (Interface)
+
+```dart
+// domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../errors/errors.dart';
+
+abstract class IUserRepository {
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
+}
+```
+
+### Repository Structure Example (Implementation)
+
+```dart
+// infrastructure/repositories/user_repository.dart
+import 'package:result_dart/result_dart.dart';
+import 'package:domain/domain.dart';
+import '../datasources/datasources.dart';
+import '../models/models.dart';
+
+class UserRepository implements IUserRepository {
+  final IUserDataSource dataSource;
+
+  UserRepository(this.dataSource);
+
+  @override
+  Future<Result<User>> getById(String id) async {
+    try {
+      final userModel = await dataSource.getById(id);
+      return Success(userModel.toEntity());
+    } catch (e) {
+      return Failure(ServerFailure(e.toString()));
+    }
+  }
+
+  // ... other methods
+}
+```
+
+## Barrel Files
+
+Each layer should have a barrel file (`layer_name.dart`) that exports all public components:
+
+- ✅ Use `library` declaration at the top of barrel files
+- ✅ Organize exports by category (entities, repositories, use cases, etc.)
+- ✅ Export only public APIs, keep internal implementations private
+
+**Example**:
+
+```dart
+// domain/domain.dart
+library domain;
+
+export 'entities/entities.dart';
+export 'value_objects/value_objects.dart';
+export 'repositories/repositories.dart';
+export 'use_cases/use_cases.dart';
+export 'errors/errors.dart';
+```
+
+**Barrel Files Structure**:
+
+- `domain/domain.dart` - Domain layer exports
+- `application/application.dart` - Application layer exports
+- `infrastructure/infrastructure.dart` - Infrastructure layer exports
+- `presentation/presentation.dart` - Presentation layer exports
+- `core/core.dart` - Core components exports
+- `shared/shared.dart` - Shared components exports
+
+## Library Configuration
+
+This section details where to configure each library and the specific folder structure for each.
+
+### go_router - Routes
+
+- **Location**: `core/routes/app_router.dart`
+- **Configuration**: Create `GoRouter` with all routes
+- **Export**: Export router in `core/routes/routes.dart`
+- **Usage**: Use `MaterialApp.router` in `main.dart`
+
+**Structure:**
+
+```
+core/
+├── routes/
+│   ├── app_router.dart      # GoRouter configuration
+│   ├── routes.dart          # Router export
+│   └── route_names.dart     # Route name constants
+```
+
+### dio - HTTP Client
+
+- **Location**: `infrastructure/external_services/api_client.dart`
+- **Configuration**: Create `ApiClient` class with configured `Dio`
+- **Interceptors**: Create interceptors in `infrastructure/external_services/interceptors/`
+- **Export**: Export in `infrastructure/external_services/external_services.dart`
+
+**Structure:**
+
+```
+infrastructure/
+├── external_services/
+│   ├── api_client.dart
+│   ├── interceptors/
+│   │   ├── auth_interceptor.dart
+│   │   ├── error_interceptor.dart
+│   │   └── logging_interceptor.dart
+│   └── external_services.dart
+```
+
+### get_it - Service Locator
+
+- **Location**: `core/di/service_locator.dart`
+- **Configuration**: Create `setupDependencies()` function to register all dependencies
+- **Call**: Call `setupDependencies()` in `main.dart` before `runApp()`
+- **Export**: Export `getIt` in `core/di/di.dart`
+
+**Structure:**
+
+```
+core/
+├── di/
+│   ├── service_locator.dart  # Dependency registration
+│   ├── di.dart               # getIt export
+│   └── modules/              # Registration modules (optional)
+│       ├── domain_module.dart
+│       ├── infrastructure_module.dart
+│       └── application_module.dart
+```
+
+### Provider - State Management
+
+- **Location**: `presentation/providers/`
+- **Configuration**: Create providers that extend `ChangeNotifier`
+- **Registration**: Register providers in `main.dart` with `MultiProvider`
+- **Export**: Export providers in `presentation/providers/providers.dart`
+
+**Structure:**
+
+```
+presentation/
+├── providers/
+│   ├── user_provider.dart
+│   ├── product_provider.dart
+│   └── providers.dart        # Providers export
+```
+
+### brasil_fields - BR Formatting
+
+- **Location**: `core/utils/formatters.dart`
+- **Configuration**: Create helper functions for formatting
+- **Usage**: Use directly in form widgets
+- **Export**: Export in `core/utils/utils.dart`
+
+**Structure:**
+
+```
+core/
+├── utils/
+│   ├── formatters.dart       # BR formatting helpers
+│   └── utils.dart
+```
+
+### flutter_dotenv - Environment Variables
+
+- **Location**: `.env` at project root
+- **Configuration**: Load in `main.dart` with `dotenv.load()`
+- **Access**: Use `dotenv.env['KEY']` anywhere
+- **Files**: Create `.env.example` with example variables
+
+**Structure:**
+
+```
+./
+├── .env                      # Environment variables (not committed)
+├── .env.example              # Example variables (committed)
+└── lib/
+    └── main.dart             # Load dotenv
+```
+
+### uuid - UUID Generation
+
+- **Location**: `core/utils/uuid_generator.dart` or direct use
+- **Configuration**: Create instance `const uuid = Uuid()` or use directly
+- **Usage**: Use in domain entities when needed
+- **Export**: Export in `core/utils/utils.dart` if creating helper
+
+**Structure:**
+
+```
+core/
+├── utils/
+│   ├── uuid_generator.dart   # UUID helper (optional)
+│   └── utils.dart
+```
+
+### zard - Validation
+
+- **Location**: `core/validation/`
+- **Configuration**: Create validation schemas
+- **Usage**: Validate API data and forms
+- **Export**: Export schemas in `core/validation/validation.dart`
+
+**Structure:**
+
+```
+core/
+├── validation/
+│   ├── schemas/
+│   │   ├── user_schema.dart
+│   │   └── product_schema.dart
+│   └── validation.dart
+```
+
+## Main.dart Example
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:core/core.dart';
+import 'package:presentation/presentation.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables
+  await dotenv.load(fileName: '.env');
+
+  // Configure dependencies
+  setupDependencies();
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => UserProvider(getIt<UserService>()),
+        ),
+        // ... other providers
+      ],
+      child: MaterialApp.router(
+        title: 'My App',
+        theme: AppTheme.lightTheme,
+        routerConfig: appRouter,
+      ),
+    );
+  }
+}
+```
+
+## Import Patterns
+
+### Import Order
+
+1. Flutter/Dart
+2. External packages (go_router, dio, provider, etc.)
+3. Core (core.dart)
+4. Shared (shared.dart)
+5. Domain (domain.dart)
+6. Application (application.dart)
+7. Infrastructure (infrastructure.dart)
+8. Presentation (presentation.dart)
+9. Relative (../)
+
+### Example
+
+```dart
+// Flutter/Dart
+import 'package:flutter/material.dart';
+import 'dart:async';
+
+// External packages
+import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
+
+// Core
+import 'package:core/core.dart';
+
+// Domain
+import 'package:domain/domain.dart';
+
+// Application
+import 'package:application/application.dart';
+
+// Relative
+import '../widgets/user_card.dart';
+```
+
+## Code Review Checklist
+
+When creating or reviewing code, verify:
+
+- [ ] Domain does not import anything other than `core` and `shared`
+- [ ] Application does not import `infrastructure` or `presentation`
+- [ ] Infrastructure does not import `application` or `presentation`
+- [ ] Presentation does not import `infrastructure`
+- [ ] Each class has a single responsibility (SRP)
+- [ ] Dependencies are injected via constructor (DIP)
+- [ ] Interfaces are used instead of concrete classes (DIP)
+- [ ] Use cases are small and focused (SRP)
+- [ ] Domain errors are handled appropriately
+- [ ] Unit tests are possible without complex mocks
+- [ ] Barrel files have `library` declaration
+- [ ] All required folders exist (`core/di/`, `core/validation/`, `infrastructure/external_services/interceptors/`)
+
+## Configuration Checklist
+
+When setting up the project, verify:
+
+- [ ] `go_router` configured in `core/routes/`
+- [ ] `dio` configured in `infrastructure/external_services/`
+- [ ] `get_it` configured in `core/di/`
+- [ ] Providers created in `presentation/providers/`
+- [ ] BR formatters in `core/utils/formatters.dart`
+- [ ] `.env` configured and `.env.example` created
+- [ ] `uuid` available for use
+- [ ] `zard` schemas in `core/validation/`
+- [ ] All dependencies registered in `main.dart`
+
+When creating or reviewing code, verify:
+
+- [ ] Domain does not import anything other than `core` and `shared`
+- [ ] Application does not import `infrastructure` or `presentation`
+- [ ] Infrastructure does not import `application` or `presentation`
+- [ ] Presentation does not import `infrastructure`
+- [ ] Each class has a single responsibility (SRP)
+- [ ] Dependencies are injected via constructor (DIP)
+- [ ] Interfaces are used instead of concrete classes (DIP)
+- [ ] Use cases are small and focused (SRP)
+- [ ] Domain errors are handled appropriately
+- [ ] Unit tests are possible without complex mocks
+- [ ] Barrel files have `library` declaration
+- [ ] All required folders exist (`core/di/`, `core/validation/`, `infrastructure/external_services/interceptors/`)

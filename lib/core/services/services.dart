@@ -1,0 +1,1 @@
+// Core services serão exportados aqui quando criados

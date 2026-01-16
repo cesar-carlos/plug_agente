@@ -1,0 +1,528 @@
+---
+description: Flutter Widgets - Boas práticas para widgets, performance e otimização
+globs: ["lib/presentation/**/*.dart", "lib/shared/**/*.dart"]
+alwaysApply: true
+---
+
+# Flutter Widgets - Boas Práticas
+
+## Stateless vs Stateful
+
+### StatelessWidget
+- ✅ Use `StatelessWidget` quando o widget não precisa gerenciar estado
+- ✅ Use `const` construtor quando possível para melhor performance
+- ✅ Prefira composição sobre herança
+
+```dart
+// ✅ Bom: StatelessWidget com const
+class UserCard extends StatelessWidget {
+  final User user;
+  
+  const UserCard({
+    super.key,
+    required this.user,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: Text(user.name),
+        subtitle: Text(user.email),
+      ),
+    );
+  }
+}
+```
+
+### StatefulWidget
+- ✅ Use `StatefulWidget` apenas quando necessário gerenciar estado
+- ✅ Mantenha estado mínimo (apenas o necessário)
+- ✅ Separe lógica de negócio do estado da UI
+
+```dart
+// ✅ Bom: StatefulWidget com estado mínimo
+class CounterWidget extends StatefulWidget {
+  const CounterWidget({super.key});
+  
+  @override
+  State<CounterWidget> createState() => _CounterWidgetState();
+}
+
+class _CounterWidgetState extends State<CounterWidget> {
+  int _counter = 0;
+  
+  void _increment() {
+    setState(() {
+      _counter++;
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('Counter: $_counter'),
+        ElevatedButton(
+          onPressed: _increment,
+          child: const Text('Increment'),
+        ),
+      ],
+    );
+  }
+}
+```
+
+## Performance
+
+### Const Widgets
+- ✅ Use `const` construtor para widgets imutáveis
+- ✅ Use `const` widgets filhos quando possível
+- ✅ Reduz reconstruções desnecessárias
+
+```dart
+// ✅ Bom: const widgets
+class MyWidget extends StatelessWidget {
+  const MyWidget({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Text('Hello'),
+        Text('World'),
+      ],
+    );
+  }
+}
+
+// ❌ Evite: sem const quando possível
+class MyWidget extends StatelessWidget {
+  MyWidget({super.key}); // Deveria ser const
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column( // Deveria ser const
+      children: [
+        Text('Hello'), // Deveria ser const
+        Text('World'), // Deveria ser const
+      ],
+    );
+  }
+}
+```
+
+### Rebuilds
+- ✅ Use `const` para evitar rebuilds desnecessários
+- ✅ Extraia widgets que mudam frequentemente
+- ✅ Use `RepaintBoundary` para widgets complexos
+- ✅ Use construtores `.builder` (ListView/Grid/Sliver) para listas longas ou infinitas
+- ✅ Evite trabalho pesado em `build()`; mova para inicialização, use cases ou camadas internas
+- ✅ Para CPU-bound pesado, use isolates (ex.: `compute`) para não bloquear o frame
+
+```dart
+// ✅ Bom: extrair widget que muda
+class UserList extends StatelessWidget {
+  final List<User> users;
+  
+  const UserList({super.key, required this.users});
+  
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        // Widget extraído que pode ser const
+        return UserListItem(user: users[index]);
+      },
+    );
+  }
+}
+
+class UserListItem extends StatelessWidget {
+  final User user;
+  
+  const UserListItem({super.key, required this.user});
+  
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(user.name),
+      subtitle: Text(user.email),
+    );
+  }
+}
+```
+
+### Keys
+- ✅ Use `Key` apenas quando necessário (listas, animações)
+- ✅ Use `ValueKey` para valores únicos
+- ✅ Use `ObjectKey` para objetos complexos
+
+```dart
+// ✅ Bom: usar Key quando necessário
+ListView.builder(
+  itemCount: users.length,
+  itemBuilder: (context, index) {
+    return UserCard(
+      key: ValueKey(users[index].id), // Key para otimizar rebuilds
+      user: users[index],
+    );
+  },
+)
+```
+
+## Widget Composition
+
+### Extrair Widgets
+- ✅ Extraia widgets quando ficarem muito grandes (>100 linhas no build)
+- ✅ Extraia widgets reutilizáveis
+- ✅ Use widgets pequenos e focados
+- ✅ Prefira criar componentes compartilháveis para evitar duplicação de código e padronizar layout
+
+```dart
+// ✅ Bom: widget extraído e reutilizável
+class UserCard extends StatelessWidget {
+  final User user;
+  
+  const UserCard({super.key, required this.user});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          UserAvatar(user: user),
+          UserInfo(user: user),
+          UserActions(user: user),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### Build Context
+- ✅ Evite passar `BuildContext` para métodos longos
+- ✅ Use `context` apenas dentro de `build()` ou callbacks
+- ✅ Não armazene `BuildContext` em campos
+
+```dart
+// ✅ Bom: usar context no build
+class MyWidget extends StatelessWidget {
+  const MyWidget({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.of(context).push(/* ... */);
+      },
+      child: const Text('Navigate'),
+    );
+  }
+}
+
+// ❌ Evite: armazenar context
+class MyWidget extends StatefulWidget {
+  @override
+  State<MyWidget> createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  BuildContext? _context; // ❌ Não armazene context
+  
+  @override
+  Widget build(BuildContext context) {
+    _context = context; // ❌ Errado
+    return Container();
+  }
+}
+```
+
+## Layout
+
+### Responsive Design
+- ✅ Use `MediaQuery` para dimensões responsivas
+- ✅ Use `LayoutBuilder` para layouts adaptativos
+- ✅ Evite valores hardcoded para dimensões
+
+```dart
+// ✅ Bom: layout responsivo
+class ResponsiveWidget extends StatelessWidget {
+  const ResponsiveWidget({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    return screenWidth > 600
+        ? const DesktopLayout()
+        : const MobileLayout();
+  }
+}
+
+// ✅ Bom: usar LayoutBuilder
+class AdaptiveLayout extends StatelessWidget {
+  const AdaptiveLayout({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth > 600) {
+          return const DesktopLayout();
+        }
+        return const MobileLayout();
+      },
+    );
+  }
+}
+```
+
+### Spacing
+- ✅ Use `SizedBox` para espaçamento explícito
+- ✅ Use `Padding` para padding
+- ✅ Evite valores mágicos (crie constantes)
+
+```dart
+// ✅ Bom: espaçamento explícito
+Column(
+  children: [
+    const Text('Title'),
+    const SizedBox(height: 16),
+    const Text('Subtitle'),
+    const SizedBox(height: 8),
+    const Text('Content'),
+  ],
+)
+
+// ✅ Bom: constantes para espaçamento
+class AppSpacing {
+  static const double small = 8.0;
+  static const double medium = 16.0;
+  static const double large = 24.0;
+}
+
+// Uso
+const SizedBox(height: AppSpacing.medium),
+```
+
+## Theming
+
+### ThemeData
+- ✅ Defina tema centralizado em `core/theme`
+- ✅ Use `Theme.of(context)` para acessar tema
+- ✅ Crie temas customizados quando necessário
+
+```dart
+// ✅ Bom: tema centralizado
+class AppTheme {
+  static ThemeData get lightTheme {
+    return ThemeData(
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      // ... outras configurações
+    );
+  }
+  
+  static ThemeData get darkTheme {
+    return ThemeData(
+      brightness: Brightness.dark,
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      // ... outras configurações
+    );
+  }
+}
+
+// Uso
+MaterialApp(
+  theme: AppTheme.lightTheme,
+  darkTheme: AppTheme.darkTheme,
+  themeMode: ThemeMode.system,
+  // ...
+)
+```
+
+### Text Styles
+- ✅ Use `Theme.of(context).textTheme` para estilos de texto
+- ✅ Crie text styles customizados quando necessário
+- ✅ Evite estilos hardcoded
+
+```dart
+// ✅ Bom: usar textTheme
+Text(
+  'Hello',
+  style: Theme.of(context).textTheme.headlineMedium,
+)
+
+// ✅ Bom: estilos customizados no tema
+ThemeData(
+  textTheme: TextTheme(
+    headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+    // ... outros estilos
+  ),
+)
+```
+
+## Navigation
+
+### Routes
+- ✅ Defina rotas centralizadas em `core/routes` usando `go_router`
+- ❌ **NUNCA use** `Navigator.push()`, `auto_route`, ou outras bibliotecas
+- ✅ Use `context.go()` para navegação principal
+- ✅ Use `context.push()` para adicionar à pilha
+
+```dart
+// core/routes/app_router.dart
+import 'package:go_router/go_router.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/printers',
+  routes: [
+    GoRoute(
+      path: '/printers',
+      builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: '/hosts/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return HostDetailsPage(hostId: id);
+      },
+    ),
+  ],
+);
+```
+
+### Navigation
+- ✅ Use `go_router` para toda navegação
+- ✅ Passe dados via parâmetros de rota ou construtor
+
+```dart
+// ✅ Bom: navegação com go_router
+context.go('/hosts/123');              // Navegação principal
+context.push('/settings');             // Adiciona à pilha
+context.pop();                         // Volta para anterior
+
+// ✅ Bom: passar dados via construtor
+GoRoute(
+  path: '/hosts/:id',
+  builder: (context, state) {
+    final id = state.pathParameters['id']!;
+    return HostDetailsPage(hostId: id);
+  },
+);
+```
+
+### ❌ NUNCA Faça
+
+```dart
+// ❌ ERRADO: Não use Navigator.push
+Navigator.push(context, MaterialPageRoute(...));
+
+// ❌ ERRADO: Não use auto_route
+// ❌ ERRADO: Não use outros sistemas de rota
+```
+
+## State Management
+
+### Local State
+- ✅ Use `StatefulWidget` para estado local simples
+- ✅ Use `setState()` apenas para estado da UI
+- ✅ Mantenha estado mínimo
+
+```dart
+// ✅ Bom: estado local simples
+class CounterWidget extends StatefulWidget {
+  const CounterWidget({super.key});
+  
+  @override
+  State<CounterWidget> createState() => _CounterWidgetState();
+}
+
+class _CounterWidgetState extends State<CounterWidget> {
+  int _counter = 0;
+  
+  void _increment() {
+    setState(() {
+      _counter++;
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Text('Counter: $_counter');
+  }
+}
+```
+
+### Global State
+- ✅ Use `Provider` para estado global (padrão do projeto)
+- ✅ Separe lógica de negócio do estado da UI
+- ✅ Use `ChangeNotifierProvider` para providers que estendem `ChangeNotifier`
+
+```dart
+// ✅ Bom: usar Provider para estado global
+class UserProvider extends ChangeNotifier {
+  final UserService userService;
+  
+  UserProvider(this.userService);
+  
+  User? _user;
+  bool _isLoading = false;
+  String? _error;
+  
+  User? get user => _user;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  
+  Future<void> loadUser(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    
+    try {
+      final result = await userService.getUser(id);
+      result.fold(
+        (failure) {
+          _error = failure.message;
+          _isLoading = false;
+        },
+        (user) {
+          _user = user;
+          _isLoading = false;
+        },
+      );
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+    }
+    
+    notifyListeners();
+  }
+}
+```
+
+## Boas Práticas Gerais
+
+### Widgets Pequenos
+- ✅ Mantenha widgets pequenos e focados
+- ✅ Extraia widgets quando `build()` ficar grande
+- ✅ Use composição sobre herança
+
+### Evitar Rebuilds
+- ✅ Use `const` widgets quando possível
+- ✅ Extraia widgets que mudam frequentemente
+- ✅ Use `RepaintBoundary` para widgets complexos
+
+### Acessibilidade
+- ✅ Use `Semantics` para widgets importantes
+- ✅ Forneça labels para widgets interativos
+- ✅ Teste com screen readers
+
+### Internacionalização
+- ✅ Use `intl` package para i18n
+- ✅ Evite strings hardcoded
+- ✅ Prepare strings para tradução desde o início

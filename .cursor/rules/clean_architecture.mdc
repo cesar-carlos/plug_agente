@@ -1,0 +1,320 @@
+---
+description: Clean Architecture - Regras de dependência entre camadas e organização do código
+globs: ["lib/**/*.dart"]
+alwaysApply: true
+---
+
+# Clean Architecture - Regras de Dependência
+
+## Visão Geral
+
+Este projeto segue **Clean Architecture** com as seguintes camadas:
+
+```
+┌─────────────────────────────────────────┐
+│         Presentation Layer              │  ← UI, State Management
+│  (Pages, Widgets, Providers)            │
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│        Application Layer                │  ← Orchestration
+│  (Services, DTOs, Mappers)              │
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│          Domain Layer                   │  ← Business Logic
+│  (Entities, Value Objects, Use Cases,   │
+│   Repository Interfaces, Errors)       │
+└─────────────────────────────────────────┘
+                  ↑
+┌─────────────────────────────────────────┐
+│      Infrastructure Layer               │  ← Implementation
+│  (Data Sources, Repositories, APIs)     │
+└─────────────────────────────────────────┘
+```
+
+## Regra de Ouro: Dependency Rule
+
+**Dependencies devem apontar para dentro:**
+
+```
+Presentation → Application → Domain ← Infrastructure
+```
+
+- ✅ Camadas externas dependem de camadas internas
+- ✅ Domain é independente (não depende de ninguém)
+- ❌ Domain nunca depende de outras camadas
+
+---
+
+## Domain Layer (Núcleo)
+
+### Responsabilidade
+Lógica de negócio pura, sem dependências externas.
+
+### Regras
+
+**✅ PODE:**
+- Importar apenas de `core` e `shared`
+- Definir interfaces (repositories)
+- Conter lógica de negócio pura
+- Ter classes Dart puras (sem Flutter/HTTP)
+
+**❌ NÃO PODE:**
+- Importar de `application`, `infrastructure` ou `presentation`
+- Importar Flutter, HTTP, ou frameworks externos
+- Ter implementações concretas de infraestrutura
+
+### Exemplo Correto
+
+```dart
+// domain/entities/host.dart
+import 'package:core/core.dart'; // ✅ OK
+
+class Host {
+  final String id;
+  final String name;
+  final HostAddress address;
+
+  const Host({
+    required this.id,
+    required this.name,
+    required this.address,
+  });
+
+  // Lógica de negócio
+  bool get isValid => address.isValid;
+}
+
+// domain/repositories/i_host_repository.dart
+abstract class IHostRepository {
+  Future<Result<List<Host>>> getAll();
+  Future<Result<Host>> getById(String id);
+}
+```
+
+### Exemplo Incorreto
+
+```dart
+// domain/entities/host.dart
+import 'package:flutter/material.dart'; // ❌ ERRADO
+import 'package:infrastructure/infrastructure.dart'; // ❌ ERRADO
+import 'package:dio/dio.dart'; // ❌ ERRADO
+```
+
+---
+
+## Application Layer (Orquestração)
+
+### Responsabilidade
+Coordena use cases e fluxos de dados.
+
+### Regras
+
+**✅ PODE:**
+- Importar de `domain` e `core`
+- Usar interfaces do Domain
+- Orquestrar múltiplos use cases
+- Ter DTOs para transferência de dados
+
+**❌ NÃO PODE:**
+- Importar de `infrastructure` ou `presentation`
+- Ter lógica de negócio (isso é do Domain)
+- Acessar dados diretamente (use Domain interfaces)
+
+### Exemplo Correto
+
+```dart
+// application/services/host_service.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+
+class HostService {
+  final IHostRepository repository;
+
+  HostService(this.repository);
+
+  Future<Result<List<Host>>> getAllHosts() async {
+    return await repository.getAll();
+  }
+}
+```
+
+---
+
+## Infrastructure Layer (Implementações)
+
+### Responsabilidade
+Implementa interfaces do Domain e lida com detalhes técnicos.
+
+### Regras
+
+**✅ PODE:**
+- Importar de `domain` e `core`
+- Implementar interfaces do Domain
+- Usar HTTP, databases, APIs externas
+
+**❌ NÃO PODE:**
+- Importar de `application` ou `presentation`
+- Ter lógica de negócio (isso é do Domain)
+
+### Exemplo Correto
+
+```dart
+// infrastructure/repositories/host_repository.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+import 'package:dio/dio.dart'; // ✅ OK (só na Infrastructure)
+
+class HostRepository implements IHostRepository {
+  final IHostDataSource dataSource;
+
+  HostRepository(this.dataSource);
+
+  @override
+  Future<Result<List<Host>>> getAll() async {
+    try {
+      final data = await dataSource.getAll();
+      return Success(data.map((e) => e.toEntity()).toList());
+    } catch (e) {
+      return Failure(ServerFailure(e.toString()));
+    }
+  }
+}
+```
+
+---
+
+## Presentation Layer (Interface)
+
+### Responsabilidade
+UI e estado da interface.
+
+### Regras
+
+**✅ PODE:**
+- Importar de `domain`, `application` e `core`
+- Usar Services da Application ou Use Cases do Domain
+- Gerenciar estado da UI (não lógica de negócio)
+
+**❌ NÃO PODE:**
+- Importar de `infrastructure`
+- Ter lógica de negócio (isso é do Domain)
+- Acessar implementações técnicas diretamente
+
+### Exemplo Correto
+
+```dart
+// presentation/providers/host_provider.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:application/application.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+
+class HostProvider extends ChangeNotifier {
+  final GetHosts _getHosts; // Use Case do Domain ✅
+
+  HostProvider(this._getHosts);
+
+  Future<void> loadHosts() async {
+    final result = await _getHosts(); // Executa use case
+
+    result.fold(
+      (failure) => _error = failure.message,
+      (hosts) => _hosts = hosts,
+    );
+
+    notifyListeners();
+  }
+}
+```
+
+### Exemplo Incorreto
+
+```dart
+// presentation/providers/host_provider.dart
+import 'package:infrastructure/repositories/host_repository.dart'; // ❌ ERRADO
+
+class HostProvider extends ChangeNotifier {
+  final HostRepository _repository; // Implementação concreta ❌
+}
+```
+
+---
+
+## Tabela de Importação
+
+| Camada | Pode Importar | Não Pode Importar |
+|--------|---------------|-------------------|
+| **Domain** | `core`, `shared` | `application`, `infrastructure`, `presentation`, Flutter, HTTP |
+| **Application** | `domain`, `core`, `shared` | `infrastructure`, `presentation` |
+| **Infrastructure** | `domain`, `core`, `shared` | `application`, `presentation` |
+| **Presentation** | `domain`, `application`, `core`, `shared` | `infrastructure` |
+
+---
+
+## Checklist de Verificação
+
+Ao criar ou modificar código:
+
+- [ ] Domain não importa Flutter, HTTP ou outras camadas
+- [ ] Application não importa Infrastructure ou Presentation
+- [ ] Infrastructure não importa Application ou Presentation
+- [ ] Presentation não importa Infrastructure
+- [ ] Dependências são interfaces (não implementações concretas)
+- [ ] Lógica de negócio está no Domain (não em Presentation)
+- [ ] Implementações técnicas estão na Infrastructure (não no Domain)
+
+---
+
+## Exemplo de Fluxo Completo
+
+```dart
+// 1. Domain - Interface (domain/repositories/i_host_repository.dart)
+abstract class IHostRepository {
+  Future<Result<List<Host>>> getAll();
+}
+
+// 2. Infrastructure - Implementação (infrastructure/repositories/host_repository.dart)
+class HostRepository implements IHostRepository {
+  final IHostDataSource dataSource;
+
+  HostRepository(this.dataSource);
+
+  @override
+  Future<Result<List<Host>>> getAll() async {
+    // Implementação com HTTP/DB
+  }
+}
+
+// 3. Domain - Use Case (domain/use_cases/get_hosts.dart)
+class GetHosts {
+  final IHostRepository repository; // Interface ✅
+
+  GetHosts(this.repository);
+
+  Future<Result<List<Host>>> call() async {
+    return await repository.getAll();
+  }
+}
+
+// 4. Application - Service (application/services/host_service.dart)
+class HostService {
+  final IHostRepository repository; // Interface ✅
+
+  HostService(this.repository);
+}
+
+// 5. Presentation - Provider (presentation/providers/host_provider.dart)
+class HostProvider extends ChangeNotifier {
+  final GetHosts _getHosts; // Use Case ✅
+
+  HostProvider(this._getHosts);
+}
+```
+
+## Princípios
+
+- **Independência**: Domain não depende de frameworks ou tecnologias
+- **Testabilidade**: Lógica de negócio pode ser testada sem dependências externas
+- **Inversão de Dependência**: Camadas externas dependem de camadas internas
+- **Separação de Responsabilidades**: Cada camada tem uma responsabilidade clara

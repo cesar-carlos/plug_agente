@@ -1,0 +1,288 @@
+---
+description: Convenções de codificação - Nomenclatura, estrutura de arquivos e padrões
+globs: ["lib/**/*.dart"]
+alwaysApply: true
+---
+
+# Convenções de Codificação
+
+## Nomenclatura
+
+### Classes e Interfaces
+
+- **Entities**: Substantivos no singular, PascalCase
+  - `User`, `Product`, `Order`
+- **Value Objects**: Substantivos descritivos, PascalCase
+  - `Email`, `Money`, `CPF`, `Address`
+- **Use Cases**: Verbos no infinitivo, PascalCase
+  - `GetUserById`, `CreateProduct`, `UpdateOrder`
+- **Repositories (Interfaces)**: Prefixo `I` + nome no singular, PascalCase
+  - `IUserRepository`, `IProductRepository`
+- **Repositories (Implementações)**: Nome no singular + `Repository`, PascalCase
+  - `UserRepository`, `ProductRepository`
+- **Services**: Nome no singular + `Service`, PascalCase
+  - `UserService`, `ProductService`
+- **DTOs**: Nome no singular + `DTO`, PascalCase
+  - `UserDTO`, `ProductDTO`
+- **Data Sources (Interfaces)**: Prefixo `I` + nome + `DataSource`, PascalCase
+  - `IUserDataSource`, `IRemoteDataSource`
+- **Data Sources (Implementações)**: Nome + tipo + `DataSource`, PascalCase
+  - `UserRemoteDataSource`, `UserLocalDataSource`
+- **Models**: Nome no singular + `Model`, PascalCase
+  - `UserModel`, `ProductModel`
+- **Controllers**: Nome + `Controller`, PascalCase
+  - `UserController`, `HomeController`
+- **Providers**: Nome + `Provider`, PascalCase
+  - `UserProvider`, `ProductProvider`
+- **Errors/Exceptions**: Nome descritivo + `Failure` ou `Exception`, PascalCase
+  - `UserNotFoundFailure`, `NetworkException`, `ValidationFailure`
+
+### Variáveis e Métodos
+
+- **Variáveis**: camelCase
+  - `userName`, `productList`, `isLoading`
+- **Métodos**: camelCase, verbos
+  - `getUser()`, `createProduct()`, `isValid()`
+- **Constantes**: camelCase com `const` ou `static const`
+  - `const maxRetries = 3`, `static const apiUrl = 'https://api.example.com'`
+- **Parâmetros privados**: Prefixo `_` + camelCase
+  - `_repository`, `_userService`
+
+### Arquivos
+
+- **Arquivos**: snake_case, mesma nomenclatura da classe principal
+  - `user.dart` → `class User`
+  - `get_user_by_id.dart` → `class GetUserById`
+  - `i_user_repository.dart` → `abstract class IUserRepository`
+
+## Estrutura de Arquivos
+
+### Use Case
+
+```dart
+// domain/use_cases/get_user_by_id.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../repositories/repositories.dart';
+import '../errors/errors.dart';
+
+class GetUserById {
+  final IUserRepository repository;
+
+  GetUserById(this.repository);
+
+  Future<Result<User>> call(String id) async {
+    if (id.isEmpty) {
+      return Failure(ValidationFailure('ID cannot be empty'));
+    }
+
+    return await repository.getById(id);
+  }
+}
+```
+
+### Repository Interface
+
+```dart
+// domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
+import '../entities/user.dart';
+import '../errors/errors.dart';
+
+abstract class IUserRepository {
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
+}
+```
+
+### Repository Implementation
+
+```dart
+// infrastructure/repositories/user_repository.dart
+import 'package:result_dart/result_dart.dart';
+import 'package:domain/domain.dart';
+import '../datasources/datasources.dart';
+import '../models/models.dart';
+
+class UserRepository implements IUserRepository {
+  final IUserDataSource remoteDataSource;
+  final IUserDataSource localDataSource;
+
+  UserRepository({
+    required this.remoteDataSource,
+    required this.localDataSource,
+  });
+
+  @override
+  Future<Result<User>> getById(String id) async {
+    try {
+      final localResult = await localDataSource.getById(id);
+      if (localResult != null) {
+        return Success(localResult.toEntity());
+      }
+
+      final remoteResult = await remoteDataSource.getById(id);
+      return Success(remoteResult.toEntity());
+    } on NetworkException catch (e) {
+      return Failure(NetworkFailure(e.message));
+    } catch (e) {
+      return Failure(ServerFailure(e.toString()));
+    }
+  }
+
+  // ... outros métodos
+}
+```
+
+## Tratamento de Erros
+
+### Usar Result Pattern (result_dart)
+
+```dart
+// domain/errors/errors.dart
+abstract class Failure {
+  final String message;
+  Failure(this.message);
+}
+
+class ServerFailure extends Failure {
+  ServerFailure(String message) : super(message);
+}
+
+class NetworkFailure extends Failure {
+  NetworkFailure(String message) : super(message);
+}
+
+class ValidationFailure extends Failure {
+  ValidationFailure(String message) : super(message);
+}
+
+// Uso
+import 'package:result_dart/result_dart.dart';
+
+Future<Result<User>> getUser(String id) async {
+  if (id.isEmpty) {
+    return Failure(ValidationFailure('ID cannot be empty'));
+  }
+
+  try {
+    final result = await repository.getById(id);
+    return result;
+  } catch (e) {
+    return Failure(ServerFailure(e.toString()));
+  }
+}
+
+// Tratamento do Result
+final result = await getUser('123');
+result.fold(
+  (success) {
+    // Tratar sucesso
+    print('User: ${success.name}');
+  },
+  (failure) {
+    // Tratar falha
+    print('Error: ${failure.message}');
+  },
+);
+```
+
+## Injeção de Dependências
+
+### Via Construtor
+
+```dart
+// ✅ Correto: Injeção via construtor
+class UserService {
+  final IUserRepository repository;
+
+  UserService(this.repository);
+}
+
+// Uso
+final repository = UserRepository(/* ... */);
+final service = UserService(repository);
+```
+
+### Evitar Singleton Direto
+
+```dart
+// ❌ Evitar: Singleton direto
+class UserService {
+  static final UserService _instance = UserService._();
+  factory UserService() => _instance;
+  UserService._();
+
+  final repository = UserRepository(); // ❌ Dependência hardcoded
+}
+```
+
+## Organização de Imports
+
+### Ordem de Imports
+
+1. Imports do Flutter/Dart
+2. Imports de pacotes externos
+3. Imports de `core` e `shared`
+4. Imports de outras camadas (domain, application, etc.)
+5. Imports relativos (mesma camada)
+
+### Exemplo
+
+```dart
+// Flutter/Dart
+import 'package:flutter/material.dart';
+import 'dart:async';
+
+// Pacotes externos
+import 'package:http/http.dart' as http;
+import 'package:get_it/get_it.dart';
+
+// Core e Shared
+import 'package:core/core.dart';
+import 'package:shared/shared.dart';
+
+// Outras camadas
+import 'package:domain/domain.dart';
+import 'package:application/application.dart';
+
+// Relativos
+import '../entities/user.dart';
+import '../repositories/repositories.dart';
+```
+
+## Documentação e Comentários
+
+### Regra Importante: Não Criar Documentação Automaticamente
+
+- ❌ **NÃO criar documentação** (`///`, `README.md`, etc.) automaticamente
+- ❌ **NÃO adicionar comentários** desnecessários no código
+- ✅ **Apenas criar documentação quando explicitamente solicitado** pelo usuário
+- ✅ **Código deve ser autoexplicativo** através de nomenclatura clara
+
+### Quando Documentar (Apenas se Solicitado)
+
+- ✅ Documente apenas APIs públicas complexas quando solicitado
+- ✅ Use `///` para documentação de APIs públicas (apenas quando necessário e solicitado)
+- ✅ Use `//` para comentários internos (apenas quando necessário)
+
+### Comentários
+
+- ✅ Use comentários apenas para explicar "por quê", não "o quê"
+- ✅ Mantenha comentários atualizados com o código
+- ✅ Prefira código claro sobre comentários
+
+```dart
+// ✅ Bom: explica por quê (decisão importante)
+// Usar cache local para reduzir chamadas à API em 80%
+final cachedUser = await localCache.getUser(id);
+
+// ❌ Evite: explica o que (código já faz isso)
+// Obter usuário do cache
+final user = await cache.getUser(id);
+```
+
+**Nota**: Para regras mais detalhadas sobre documentação, consulte `general_rules.mdc`.
