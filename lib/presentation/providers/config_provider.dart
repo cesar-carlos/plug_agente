@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../domain/entities/config.dart';
 import '../../domain/value_objects/database_driver.dart';
 import '../../domain/errors/failures.dart';
@@ -6,7 +8,6 @@ import '../../application/use_cases/save_agent_config.dart';
 import '../../application/use_cases/load_agent_config.dart';
 import '../../application/services/config_service.dart';
 import '../../core/logger/app_logger.dart';
-import 'package:uuid/uuid.dart';
 
 class ConfigProvider extends ChangeNotifier {
   final SaveAgentConfig _saveConfigUseCase;
@@ -14,12 +15,7 @@ class ConfigProvider extends ChangeNotifier {
   final ConfigService _configService;
   final Uuid _uuid;
 
-  ConfigProvider(
-    this._saveConfigUseCase,
-    this._loadConfigUseCase,
-    this._configService,
-    this._uuid,
-  ) {
+  ConfigProvider(this._saveConfigUseCase, this._loadConfigUseCase, this._configService, this._uuid) {
     _loadCurrentConfig();
   }
 
@@ -40,7 +36,7 @@ class ConfigProvider extends ChangeNotifier {
 
     try {
       final result = await _loadConfigUseCase(null);
-      
+
       result.fold(
         (config) {
           _currentConfig = config;
@@ -76,6 +72,7 @@ class ConfigProvider extends ChangeNotifier {
       serverUrl: 'https://api.example.com',
       agentId: _uuid.v4(),
       driverName: DatabaseDriver.sqlServer.displayName,
+      odbcDriverName: 'SQL Server Native Client 11.0',
       connectionString: '',
       username: '',
       password: '',
@@ -107,7 +104,7 @@ class ConfigProvider extends ChangeNotifier {
       );
 
       final result = await _saveConfigUseCase(configWithConnectionString);
-      
+
       result.fold(
         (_) {
           AppLogger.info('Config saved successfully');
@@ -152,6 +149,12 @@ class ConfigProvider extends ChangeNotifier {
   void updateDriverName(String driverName) {
     _ensureConfigExists();
     _currentConfig = _currentConfig!.copyWith(driverName: driverName);
+    notifyListeners();
+  }
+
+  void updateOdbcDriverName(String odbcDriverName) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(odbcDriverName: odbcDriverName);
     notifyListeners();
   }
 

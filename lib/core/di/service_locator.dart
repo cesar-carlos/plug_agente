@@ -67,19 +67,12 @@ Future<void> setupDependencies() async {
   getIt.registerLazySingleton<IDatabaseGateway>(() => OdbcDatabaseGateway(getIt<IAgentConfigRepository>()));
 
   // Auth Client
-  getIt.registerLazySingleton<IAuthClient>(
-    () => AuthClient(DioFactory.createDio()),
-  );
+  getIt.registerLazySingleton<IAuthClient>(() => AuthClient(DioFactory.createDio()));
 
   // Services
   getIt.registerLazySingleton(() => ConnectionService(getIt<ITransportClient>(), getIt<IDatabaseGateway>()));
 
-  getIt.registerLazySingleton(
-    () => AuthService(
-      getIt<IAuthClient>(),
-      getIt<IAgentConfigRepository>(),
-    ),
-  );
+  getIt.registerLazySingleton(() => AuthService(getIt<IAuthClient>(), getIt<IAgentConfigRepository>()));
 
   getIt.registerLazySingleton(() => QueryNormalizerService(getIt<QueryNormalizer>()));
 
@@ -111,11 +104,7 @@ Future<void> setupDependencies() async {
   getIt.registerLazySingleton(() => TestDbConnection(getIt<ConnectionService>()));
 
   getIt.registerLazySingleton(
-    () => ExecutePlaygroundQuery(
-      getIt<IDatabaseGateway>(),
-      getIt<IAgentConfigRepository>(),
-      getIt<Uuid>(),
-    ),
+    () => ExecutePlaygroundQuery(getIt<IDatabaseGateway>(), getIt<IAgentConfigRepository>(), getIt<Uuid>()),
   );
 
   getIt.registerLazySingleton(() => SaveAgentConfig(getIt<IAgentConfigRepository>(), getIt<ConfigService>()));

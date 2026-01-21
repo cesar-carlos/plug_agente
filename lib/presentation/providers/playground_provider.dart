@@ -9,10 +9,7 @@ class PlaygroundProvider extends ChangeNotifier {
   final ExecutePlaygroundQuery _executePlaygroundQuery;
   final TestDbConnection _testDbConnection;
 
-  PlaygroundProvider(
-    this._executePlaygroundQuery,
-    this._testDbConnection,
-  );
+  PlaygroundProvider(this._executePlaygroundQuery, this._testDbConnection);
 
   String _query = '';
   List<Map<String, dynamic>> _results = [];
@@ -60,9 +57,7 @@ class PlaygroundProvider extends ChangeNotifier {
         _executionTime = DateTime.now();
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
       },
     );
@@ -82,9 +77,7 @@ class PlaygroundProvider extends ChangeNotifier {
         _connectionStatus = 'Conexão estabelecida com sucesso';
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
         _connectionStatus = 'Falha na conexão';
       },

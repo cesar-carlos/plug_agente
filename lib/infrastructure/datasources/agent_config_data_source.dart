@@ -10,6 +10,7 @@ class ConfigTable extends Table {
   TextColumn get authUsername => text().nullable()();
   TextColumn get authPassword => text().nullable()();
   TextColumn get driverName => text()();
+  TextColumn get odbcDriverName => text()();
   TextColumn get connectionString => text()();
   TextColumn get username => text()();
   TextColumn get password => text().nullable()();

@@ -1,13 +1,14 @@
+import 'package:uuid/uuid.dart';
 import 'package:result_dart/result_dart.dart';
+
 import '../../domain/entities/query_request.dart';
 import '../../domain/entities/query_response.dart';
 import '../../domain/repositories/i_database_gateway.dart';
 import '../../domain/errors/failures.dart' as domain;
-import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway implements IDatabaseGateway {
   final Uuid _uuid;
-  
+
   MockDatabaseGateway() : _uuid = const Uuid();
 
   @override
@@ -16,7 +17,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     if (connectionString.contains('fail')) {
       return Failure(domain.ConnectionFailure('Connection test failed'));
     }
-    
+
     return Success(true);
   }
 
@@ -32,13 +33,13 @@ class MockDatabaseGateway implements IDatabaseGateway {
         timestamp: DateTime.now(),
         error: 'Simulated query error',
       );
-      
+
       return Success(errorResponse);
     }
-    
+
     // Mock data for SELECT queries
     List<Map<String, dynamic>> mockData = [];
-    
+
     if (request.query.toLowerCase().contains('select')) {
       mockData = [
         {'id': 1, 'name': 'Test User 1', 'email': 'test1@example.com'},
@@ -46,7 +47,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
         {'id': 3, 'name': 'Test User 3', 'email': 'test3@example.com'},
       ];
     }
-    
+
     final response = QueryResponse(
       id: _uuid.v4(),
       requestId: request.id,
@@ -55,7 +56,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
       affectedRows: mockData.length,
       timestamp: DateTime.now(),
     );
-    
+
     return Success(response);
   }
 
@@ -65,7 +66,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     if (query.toLowerCase().contains('error')) {
       return Failure(domain.QueryExecutionFailure('Failed to execute non-query'));
     }
-    
+
     // Mock affected rows for INSERT/UPDATE/DELETE
     int affectedRows = 0;
     if (query.toLowerCase().contains('insert')) {
@@ -75,7 +76,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     } else if (query.toLowerCase().contains('delete')) {
       affectedRows = 1;
     }
-    
+
     return Success(affectedRows);
   }
 }

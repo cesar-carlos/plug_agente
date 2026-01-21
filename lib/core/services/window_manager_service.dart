@@ -202,19 +202,19 @@ class WindowManagerService with WindowListener {
   Future<void> close() async {
     try {
       _logger.i('Fechando aplicativo...');
-      
+
       // Marcar como fechamento intencional
       _isClosing = true;
-      
+
       // Desabilitar closeToTray temporariamente para permitir fechamento real
       _closeToTray = false;
-      
+
       // Desabilitar preventClose para permitir fechamento
       await windowManager.setPreventClose(false);
-      
+
       // Fechar a janela
       await windowManager.close();
-      
+
       _logger.i('Aplicativo fechado');
     } catch (e, stackTrace) {
       _logger.e('Erro ao fechar aplicativo', error: e, stackTrace: stackTrace);

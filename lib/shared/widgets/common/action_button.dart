@@ -24,14 +24,7 @@ class ActionButton extends StatelessWidget {
     const destructiveColor = Color(0xFFD13438);
 
     if (isLoading) {
-      return Button(
-        onPressed: null,
-        child: const SizedBox(
-          width: 16,
-          height: 16,
-          child: ProgressRing(strokeWidth: 2),
-        ),
-      );
+      return Button(onPressed: null, child: const SizedBox(width: 16, height: 16, child: ProgressRing(strokeWidth: 2)));
     }
 
     final buttonStyle = ButtonStyle(
@@ -60,11 +53,6 @@ class ActionButton extends StatelessWidget {
       );
     }
 
-    return Button(
-      onPressed: onPressed,
-      style: buttonStyle,
-      child: Text(label),
-    );
+    return Button(onPressed: onPressed, style: buttonStyle, child: Text(label));
   }
 }
-

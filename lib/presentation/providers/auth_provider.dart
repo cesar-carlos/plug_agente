@@ -15,11 +15,7 @@ class AuthProvider extends ChangeNotifier {
   final RefreshAuthToken _refreshUseCase;
   final SaveAuthToken _saveUseCase;
 
-  AuthProvider(
-    this._loginUseCase,
-    this._refreshUseCase,
-    this._saveUseCase,
-  );
+  AuthProvider(this._loginUseCase, this._refreshUseCase, this._saveUseCase);
 
   AuthStatus _status = AuthStatus.unauthenticated;
   String _error = '';
@@ -37,7 +33,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await _loginUseCase(serverUrl, credentials);
-      
+
       result.fold(
         (token) async {
           _currentToken = token;
@@ -49,9 +45,7 @@ class AuthProvider extends ChangeNotifier {
             },
             (failure) {
               _status = AuthStatus.error;
-              final failureMessage = failure is Failure
-                  ? failure.message
-                  : failure.toString();
+              final failureMessage = failure is Failure ? failure.message : failure.toString();
               _error = 'Failed to save token: $failureMessage';
               AppLogger.error('Failed to save token: $failureMessage');
             },
@@ -59,9 +53,7 @@ class AuthProvider extends ChangeNotifier {
         },
         (failure) {
           _status = AuthStatus.error;
-          final failureMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
+          final failureMessage = failure is Failure ? failure.message : failure.toString();
           _error = failureMessage;
           AppLogger.error('Login failed: $failureMessage');
         },
@@ -85,7 +77,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await _refreshUseCase(serverUrl, _currentToken!.refreshToken);
-      
+
       result.fold(
         (token) async {
           _currentToken = token;
@@ -97,9 +89,7 @@ class AuthProvider extends ChangeNotifier {
             },
             (failure) {
               _status = AuthStatus.unauthenticated;
-              final failureMessage = failure is Failure
-                  ? failure.message
-                  : failure.toString();
+              final failureMessage = failure is Failure ? failure.message : failure.toString();
               _error = 'Failed to save token: $failureMessage';
               AppLogger.error('Failed to save token: $failureMessage');
             },
@@ -107,9 +97,7 @@ class AuthProvider extends ChangeNotifier {
         },
         (failure) {
           _status = AuthStatus.unauthenticated;
-          final failureMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
+          final failureMessage = failure is Failure ? failure.message : failure.toString();
           _error = failureMessage;
           AppLogger.error('Token refresh failed: $failureMessage');
         },

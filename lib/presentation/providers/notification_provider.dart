@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../../application/use_cases/send_notification.dart';
 import '../../application/use_cases/schedule_notification.dart';
 import '../../application/use_cases/cancel_notification.dart';
@@ -24,29 +25,19 @@ class NotificationProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> showNotification({
-    required String title,
-    required String body,
-    String? payload,
-  }) async {
+  Future<void> showNotification({required String title, required String body, String? payload}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    final result = await _sendNotification(
-      title: title,
-      body: body,
-      payload: payload,
-    );
+    final result = await _sendNotification(title: title, body: body, payload: payload);
 
     result.fold(
       (success) {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
         _isLoading = false;
       },
@@ -77,9 +68,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
         _isLoading = false;
       },
@@ -100,9 +89,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
         _isLoading = false;
       },
@@ -123,9 +110,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
         _error = failureMessage;
         _isLoading = false;
       },

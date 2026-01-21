@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:result_dart/result_dart.dart';
+
 import '../../domain/repositories/i_notification_service.dart';
 import '../../domain/errors/failures.dart' as domain;
 
@@ -29,11 +30,7 @@ class NotificationService implements INotificationService {
   }
 
   @override
-  Future<Result<void>> show({
-    required String title,
-    required String body,
-    String? payload,
-  }) async {
+  Future<Result<void>> show({required String title, required String body, String? payload}) async {
     try {
       const NotificationDetails platformChannelSpecifics = NotificationDetails();
 

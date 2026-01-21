@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../providers/connection_provider.dart';
 
@@ -48,14 +49,8 @@ class ConnectionStatusWidget extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                connectionProvider.isDbConnected
-                    ? 'DB: Connected'
-                    : 'DB: Disconnected',
-                style: TextStyle(
-                  color: connectionProvider.isDbConnected
-                      ? AppColors.success
-                      : AppColors.disabled,
-                ),
+                connectionProvider.isDbConnected ? 'DB: Connected' : 'DB: Disconnected',
+                style: TextStyle(color: connectionProvider.isDbConnected ? AppColors.success : AppColors.disabled),
               ),
             ],
           ),

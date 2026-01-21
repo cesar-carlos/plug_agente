@@ -1,4 +1,5 @@
 import 'package:result_dart/result_dart.dart';
+
 import '../entities/auth_token.dart';
 import '../value_objects/auth_credentials.dart';
 

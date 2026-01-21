@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
@@ -23,7 +24,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -42,6 +43,9 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       if (from < 4) {
         await m.addColumn(configTable, configTable.authUsername as GeneratedColumn<Object>);
         await m.addColumn(configTable, configTable.authPassword as GeneratedColumn<Object>);
+      }
+      if (from < 5) {
+        await m.addColumn(configTable, configTable.odbcDriverName as GeneratedColumn<Object>);
       }
     },
   );

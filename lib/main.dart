@@ -39,12 +39,7 @@ void main() async {
   final minSize = WindowConstraints.getMainWindowMinSize();
   const initialSize = Size(1200, 800);
 
-  await windowManagerService.initialize(
-    size: initialSize,
-    minimumSize: minSize,
-    center: true,
-    startMinimized: false,
-  );
+  await windowManagerService.initialize(size: initialSize, minimumSize: minSize, center: true, startMinimized: false);
 
   final trayManager = getIt<TrayManagerService>();
 
@@ -55,13 +50,10 @@ void main() async {
           await windowManagerService.show();
           break;
         case TrayMenuAction.exit:
-          // Destruir tray manager antes de fechar
           try {
             trayManager.dispose();
-          } catch (e) {
-            // Ignorar erros ao destruir tray
-          }
-          // Fechar aplicativo
+          } catch (e) {}
+
           await windowManagerService.close();
           break;
       }
@@ -88,17 +80,10 @@ class MyApp extends StatelessWidget {
               ConfigProvider(getIt<SaveAgentConfig>(), getIt<LoadAgentConfig>(), getIt<ConfigService>(), getIt<Uuid>()),
         ),
         ChangeNotifierProvider(
-          create: (context) => AuthProvider(
-            getIt<LoginUser>(),
-            getIt<RefreshAuthToken>(),
-            getIt<SaveAuthToken>(),
-          ),
+          create: (context) => AuthProvider(getIt<LoginUser>(), getIt<RefreshAuthToken>(), getIt<SaveAuthToken>()),
         ),
         ChangeNotifierProvider(
-          create: (context) => ConnectionProvider(
-            getIt<ConnectToHub>(),
-            getIt<TestDbConnection>(),
-          ),
+          create: (context) => ConnectionProvider(getIt<ConnectToHub>(), getIt<TestDbConnection>()),
         ),
         ChangeNotifierProvider(
           create: (context) => NotificationProvider(
@@ -109,10 +94,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(
-          create: (context) => PlaygroundProvider(
-            getIt<ExecutePlaygroundQuery>(),
-            getIt<TestDbConnection>(),
-          ),
+          create: (context) => PlaygroundProvider(getIt<ExecutePlaygroundQuery>(), getIt<TestDbConnection>()),
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
       ],

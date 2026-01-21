@@ -29,10 +29,7 @@ class _MainWindowState extends State<MainWindow> {
     final selectedIndex = _calculateSelectedIndex(context);
 
     return NavigationView(
-      appBar: NavigationAppBar(
-        title: const Text(AppConstants.appName),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: NavigationAppBar(title: const Text(AppConstants.appName), automaticallyImplyLeading: false),
       pane: NavigationPane(
         selected: selectedIndex,
         onChanged: (index) {
@@ -60,11 +57,7 @@ class _MainWindowState extends State<MainWindow> {
             title: const Text('Configurações'),
             body: const SizedBox.shrink(),
           ),
-          PaneItem(
-            icon: const Icon(FluentIcons.table),
-            title: const Text('Playground'),
-            body: const SizedBox.shrink(),
-          ),
+          PaneItem(icon: const Icon(FluentIcons.table), title: const Text('Playground'), body: const SizedBox.shrink()),
         ],
       ),
       // Usando transitionBuilder para exibir a página atual do Router

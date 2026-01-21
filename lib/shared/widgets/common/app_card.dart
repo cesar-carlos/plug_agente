@@ -6,13 +6,7 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
 
-  const AppCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.margin,
-    this.onTap,
-  });
+  const AppCard({super.key, required this.child, this.padding, this.margin, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +17,7 @@ class AppCard extends StatelessWidget {
     );
 
     if (onTap != null) {
-      return GestureDetector(
-        onTap: onTap,
-        child: card,
-      );
+      return GestureDetector(onTap: onTap, child: card);
     }
 
     return card;

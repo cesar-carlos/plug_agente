@@ -23,7 +23,7 @@ class AuthService {
   Future<Result<void>> saveAuthToken(AuthToken token) async {
     try {
       final configResult = await _configRepository.getCurrentConfig();
-      
+
       return await configResult.fold(
         (config) async {
           final updatedConfig = config.copyWith(
@@ -32,15 +32,10 @@ class AuthService {
             updatedAt: DateTime.now(),
           );
           final saveResult = await _configRepository.save(updatedConfig);
-          return saveResult.fold(
-            (_) => Success<Object, Exception>(Object()),
-            (failure) {
-              final failureMessage = failure is domain.Failure
-                  ? failure.message
-                  : failure.toString();
-              return Failure(domain.DatabaseFailure('Failed to save config: $failureMessage'));
-            },
-          );
+          return saveResult.fold((_) => Success<Object, Exception>(Object()), (failure) {
+            final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+            return Failure(domain.DatabaseFailure('Failed to save config: $failureMessage'));
+          });
         },
         (failure) async {
           return Failure(domain.NotFoundFailure('No configuration found'));

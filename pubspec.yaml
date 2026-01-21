@@ -45,7 +45,7 @@ dependencies:
   archive: ^3.4.9
 
   # Database via ODBC
-  dart_odbc: ^6.2.0
+  connect_database: ^1.0.0
 
   # Persistência
   drift: ^2.22.1
@@ -83,7 +83,7 @@ dependencies:
   tray_manager: ^0.5.2
 
   # Config/env
-  flutter_dotenv: ^5.1.0
+  flutter_dotenv: ^6.0.0
 
   # IDs/log
   uuid: ^4.3.3

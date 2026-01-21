@@ -1,4 +1,5 @@
 import 'package:result_dart/result_dart.dart';
+
 import '../../domain/repositories/i_notification_service.dart';
 
 class CancelAllNotifications {

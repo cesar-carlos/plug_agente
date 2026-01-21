@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
+
 import 'window_manager_service.dart';
 
 enum TrayMenuAction { show, exit }

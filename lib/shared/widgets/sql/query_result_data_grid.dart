@@ -1,14 +1,12 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
+
 import '../common/centered_message.dart';
 
 class QueryResultDataGrid extends StatelessWidget {
   final List<Map<String, dynamic>> data;
 
-  const QueryResultDataGrid({
-    super.key,
-    required this.data,
-  });
+  const QueryResultDataGrid({super.key, required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +39,7 @@ class QueryResultDataGrid extends StatelessWidget {
         label: Container(
           padding: const EdgeInsets.all(8),
           alignment: Alignment.center,
-          child: Text(
-            key,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       );
     }).toList();
@@ -63,10 +58,7 @@ class _QueryDataSource extends DataGridSource {
     return data.map((row) {
       return DataGridRow(
         cells: keys.map((key) {
-          return DataGridCell(
-            columnName: key,
-            value: row[key],
-          );
+          return DataGridCell(columnName: key, value: row[key]);
         }).toList(),
       );
     }).toList();
@@ -79,10 +71,7 @@ class _QueryDataSource extends DataGridSource {
         return Container(
           padding: const EdgeInsets.all(8),
           alignment: Alignment.centerLeft,
-          child: Text(
-            cell.value?.toString() ?? '',
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text(cell.value?.toString() ?? '', overflow: TextOverflow.ellipsis),
         );
       }).toList(),
     );

@@ -1,5 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 class WebSocketMessage {
   final DateTime timestamp;
@@ -7,12 +8,7 @@ class WebSocketMessage {
   final String event;
   final dynamic data;
 
-  WebSocketMessage({
-    required this.timestamp,
-    required this.direction,
-    required this.event,
-    required this.data,
-  });
+  WebSocketMessage({required this.timestamp, required this.direction, required this.event, required this.data});
 
   String get formattedData {
     try {
@@ -26,7 +22,8 @@ class WebSocketMessage {
   }
 
   String get displayText {
-    final time = '${timestamp.hour.toString().padLeft(2, '0')}:'
+    final time =
+        '${timestamp.hour.toString().padLeft(2, '0')}:'
         '${timestamp.minute.toString().padLeft(2, '0')}:'
         '${timestamp.second.toString().padLeft(2, '0')}';
     return '[$time] $direction: $event\n$formattedData';
@@ -45,12 +42,7 @@ class WebSocketLogProvider extends ChangeNotifier {
   void addMessage(String direction, String event, dynamic data) {
     if (!_isEnabled) return;
 
-    final message = WebSocketMessage(
-      timestamp: DateTime.now(),
-      direction: direction,
-      event: event,
-      data: data,
-    );
+    final message = WebSocketMessage(timestamp: DateTime.now(), direction: direction, event: event, data: data);
 
     _messages.insert(0, message);
 

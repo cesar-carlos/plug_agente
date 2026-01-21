@@ -97,6 +97,17 @@ class $ConfigTableTable extends ConfigTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _odbcDriverNameMeta = const VerificationMeta(
+    'odbcDriverName',
+  );
+  @override
+  late final GeneratedColumn<String> odbcDriverName = GeneratedColumn<String>(
+    'odbc_driver_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _connectionStringMeta = const VerificationMeta(
     'connectionString',
   );
@@ -191,6 +202,7 @@ class $ConfigTableTable extends ConfigTable
     authUsername,
     authPassword,
     driverName,
+    odbcDriverName,
     connectionString,
     username,
     password,
@@ -269,6 +281,17 @@ class $ConfigTableTable extends ConfigTable
       );
     } else if (isInserting) {
       context.missing(_driverNameMeta);
+    }
+    if (data.containsKey('odbc_driver_name')) {
+      context.handle(
+        _odbcDriverNameMeta,
+        odbcDriverName.isAcceptableOrUnknown(
+          data['odbc_driver_name']!,
+          _odbcDriverNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_odbcDriverNameMeta);
     }
     if (data.containsKey('connection_string')) {
       context.handle(
@@ -379,6 +402,10 @@ class $ConfigTableTable extends ConfigTable
         DriftSqlType.string,
         data['${effectivePrefix}driver_name'],
       )!,
+      odbcDriverName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}odbc_driver_name'],
+      )!,
       connectionString: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}connection_string'],
@@ -429,6 +456,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
   final String? authUsername;
   final String? authPassword;
   final String driverName;
+  final String odbcDriverName;
   final String connectionString;
   final String username;
   final String? password;
@@ -446,6 +474,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     this.authUsername,
     this.authPassword,
     required this.driverName,
+    required this.odbcDriverName,
     required this.connectionString,
     required this.username,
     this.password,
@@ -474,6 +503,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       map['auth_password'] = Variable<String>(authPassword);
     }
     map['driver_name'] = Variable<String>(driverName);
+    map['odbc_driver_name'] = Variable<String>(odbcDriverName);
     map['connection_string'] = Variable<String>(connectionString);
     map['username'] = Variable<String>(username);
     if (!nullToAbsent || password != null) {
@@ -505,6 +535,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ? const Value.absent()
           : Value(authPassword),
       driverName: Value(driverName),
+      odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
       password: password == null && nullToAbsent
@@ -532,6 +563,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       authUsername: serializer.fromJson<String?>(json['authUsername']),
       authPassword: serializer.fromJson<String?>(json['authPassword']),
       driverName: serializer.fromJson<String>(json['driverName']),
+      odbcDriverName: serializer.fromJson<String>(json['odbcDriverName']),
       connectionString: serializer.fromJson<String>(json['connectionString']),
       username: serializer.fromJson<String>(json['username']),
       password: serializer.fromJson<String?>(json['password']),
@@ -554,6 +586,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       'authUsername': serializer.toJson<String?>(authUsername),
       'authPassword': serializer.toJson<String?>(authPassword),
       'driverName': serializer.toJson<String>(driverName),
+      'odbcDriverName': serializer.toJson<String>(odbcDriverName),
       'connectionString': serializer.toJson<String>(connectionString),
       'username': serializer.toJson<String>(username),
       'password': serializer.toJson<String?>(password),
@@ -574,6 +607,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     Value<String?> authUsername = const Value.absent(),
     Value<String?> authPassword = const Value.absent(),
     String? driverName,
+    String? odbcDriverName,
     String? connectionString,
     String? username,
     Value<String?> password = const Value.absent(),
@@ -591,6 +625,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     authUsername: authUsername.present ? authUsername.value : this.authUsername,
     authPassword: authPassword.present ? authPassword.value : this.authPassword,
     driverName: driverName ?? this.driverName,
+    odbcDriverName: odbcDriverName ?? this.odbcDriverName,
     connectionString: connectionString ?? this.connectionString,
     username: username ?? this.username,
     password: password.present ? password.value : this.password,
@@ -618,6 +653,9 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       driverName: data.driverName.present
           ? data.driverName.value
           : this.driverName,
+      odbcDriverName: data.odbcDriverName.present
+          ? data.odbcDriverName.value
+          : this.odbcDriverName,
       connectionString: data.connectionString.present
           ? data.connectionString.value
           : this.connectionString,
@@ -644,6 +682,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ..write('authUsername: $authUsername, ')
           ..write('authPassword: $authPassword, ')
           ..write('driverName: $driverName, ')
+          ..write('odbcDriverName: $odbcDriverName, ')
           ..write('connectionString: $connectionString, ')
           ..write('username: $username, ')
           ..write('password: $password, ')
@@ -666,6 +705,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     authUsername,
     authPassword,
     driverName,
+    odbcDriverName,
     connectionString,
     username,
     password,
@@ -687,6 +727,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           other.authUsername == this.authUsername &&
           other.authPassword == this.authPassword &&
           other.driverName == this.driverName &&
+          other.odbcDriverName == this.odbcDriverName &&
           other.connectionString == this.connectionString &&
           other.username == this.username &&
           other.password == this.password &&
@@ -706,6 +747,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
   final Value<String?> authUsername;
   final Value<String?> authPassword;
   final Value<String> driverName;
+  final Value<String> odbcDriverName;
   final Value<String> connectionString;
   final Value<String> username;
   final Value<String?> password;
@@ -724,6 +766,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.authUsername = const Value.absent(),
     this.authPassword = const Value.absent(),
     this.driverName = const Value.absent(),
+    this.odbcDriverName = const Value.absent(),
     this.connectionString = const Value.absent(),
     this.username = const Value.absent(),
     this.password = const Value.absent(),
@@ -743,6 +786,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.authUsername = const Value.absent(),
     this.authPassword = const Value.absent(),
     required String driverName,
+    required String odbcDriverName,
     required String connectionString,
     required String username,
     this.password = const Value.absent(),
@@ -754,6 +798,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        driverName = Value(driverName),
+       odbcDriverName = Value(odbcDriverName),
        connectionString = Value(connectionString),
        username = Value(username),
        databaseName = Value(databaseName),
@@ -770,6 +815,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Expression<String>? authUsername,
     Expression<String>? authPassword,
     Expression<String>? driverName,
+    Expression<String>? odbcDriverName,
     Expression<String>? connectionString,
     Expression<String>? username,
     Expression<String>? password,
@@ -789,6 +835,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (authUsername != null) 'auth_username': authUsername,
       if (authPassword != null) 'auth_password': authPassword,
       if (driverName != null) 'driver_name': driverName,
+      if (odbcDriverName != null) 'odbc_driver_name': odbcDriverName,
       if (connectionString != null) 'connection_string': connectionString,
       if (username != null) 'username': username,
       if (password != null) 'password': password,
@@ -810,6 +857,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Value<String?>? authUsername,
     Value<String?>? authPassword,
     Value<String>? driverName,
+    Value<String>? odbcDriverName,
     Value<String>? connectionString,
     Value<String>? username,
     Value<String?>? password,
@@ -829,6 +877,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       authUsername: authUsername ?? this.authUsername,
       authPassword: authPassword ?? this.authPassword,
       driverName: driverName ?? this.driverName,
+      odbcDriverName: odbcDriverName ?? this.odbcDriverName,
       connectionString: connectionString ?? this.connectionString,
       username: username ?? this.username,
       password: password ?? this.password,
@@ -867,6 +916,9 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     }
     if (driverName.present) {
       map['driver_name'] = Variable<String>(driverName.value);
+    }
+    if (odbcDriverName.present) {
+      map['odbc_driver_name'] = Variable<String>(odbcDriverName.value);
     }
     if (connectionString.present) {
       map['connection_string'] = Variable<String>(connectionString.value);
@@ -909,6 +961,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
           ..write('authUsername: $authUsername, ')
           ..write('authPassword: $authPassword, ')
           ..write('driverName: $driverName, ')
+          ..write('odbcDriverName: $odbcDriverName, ')
           ..write('connectionString: $connectionString, ')
           ..write('username: $username, ')
           ..write('password: $password, ')
@@ -944,6 +997,7 @@ typedef $$ConfigTableTableCreateCompanionBuilder =
       Value<String?> authUsername,
       Value<String?> authPassword,
       required String driverName,
+      required String odbcDriverName,
       required String connectionString,
       required String username,
       Value<String?> password,
@@ -964,6 +1018,7 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<String?> authUsername,
       Value<String?> authPassword,
       Value<String> driverName,
+      Value<String> odbcDriverName,
       Value<String> connectionString,
       Value<String> username,
       Value<String?> password,
@@ -1021,6 +1076,11 @@ class $$ConfigTableTableFilterComposer
 
   ColumnFilters<String> get driverName => $composableBuilder(
     column: $table.driverName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get odbcDriverName => $composableBuilder(
+    column: $table.odbcDriverName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1114,6 +1174,11 @@ class $$ConfigTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get odbcDriverName => $composableBuilder(
+    column: $table.odbcDriverName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get connectionString => $composableBuilder(
     column: $table.connectionString,
     builder: (column) => ColumnOrderings(column),
@@ -1196,6 +1261,11 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get odbcDriverName => $composableBuilder(
+    column: $table.odbcDriverName,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get connectionString => $composableBuilder(
     column: $table.connectionString,
     builder: (column) => column,
@@ -1264,6 +1334,7 @@ class $$ConfigTableTableTableManager
                 Value<String?> authUsername = const Value.absent(),
                 Value<String?> authPassword = const Value.absent(),
                 Value<String> driverName = const Value.absent(),
+                Value<String> odbcDriverName = const Value.absent(),
                 Value<String> connectionString = const Value.absent(),
                 Value<String> username = const Value.absent(),
                 Value<String?> password = const Value.absent(),
@@ -1282,6 +1353,7 @@ class $$ConfigTableTableTableManager
                 authUsername: authUsername,
                 authPassword: authPassword,
                 driverName: driverName,
+                odbcDriverName: odbcDriverName,
                 connectionString: connectionString,
                 username: username,
                 password: password,
@@ -1302,6 +1374,7 @@ class $$ConfigTableTableTableManager
                 Value<String?> authUsername = const Value.absent(),
                 Value<String?> authPassword = const Value.absent(),
                 required String driverName,
+                required String odbcDriverName,
                 required String connectionString,
                 required String username,
                 Value<String?> password = const Value.absent(),
@@ -1320,6 +1393,7 @@ class $$ConfigTableTableTableManager
                 authUsername: authUsername,
                 authPassword: authPassword,
                 driverName: driverName,
+                odbcDriverName: odbcDriverName,
                 connectionString: connectionString,
                 username: username,
                 password: password,

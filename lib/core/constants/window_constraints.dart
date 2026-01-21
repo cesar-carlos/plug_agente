@@ -61,4 +61,3 @@ class WindowConstraints {
     return const Size(mainWindowMinWidth, mainWindowMinHeight);
   }
 }
-

@@ -9,7 +9,7 @@ class AgentId {
 
   bool _isValid(String agentId) {
     if (agentId.isEmpty) return false;
-    
+
     return true;
   }
 

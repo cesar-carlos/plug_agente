@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+
 import '../../../core/theme/app_colors.dart';
 
 class ErrorWidget extends StatelessWidget {
@@ -6,12 +7,7 @@ class ErrorWidget extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
 
-  const ErrorWidget({
-    super.key,
-    required this.title,
-    required this.message,
-    this.onRetry,
-  });
+  const ErrorWidget({super.key, required this.title, required this.message, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -28,11 +24,7 @@ class ErrorWidget extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.error,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.error),
           ),
           const SizedBox(height: 16),
           Text(
@@ -42,10 +34,7 @@ class ErrorWidget extends StatelessWidget {
           ),
           if (onRetry != null) ...[
             const SizedBox(height: 24),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Tentar Novamente'),
-            ),
+            FilledButton(onPressed: onRetry, child: const Text('Tentar Novamente')),
           ],
         ],
       ),

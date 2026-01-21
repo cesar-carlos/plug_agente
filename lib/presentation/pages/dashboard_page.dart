@@ -55,21 +55,13 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Plug Database',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            const Text('Plug Database', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            const Text(
-              'Monitor your agent status and database connections here.',
-              style: TextStyle(fontSize: 16),
-            ),
+            const Text('Monitor your agent status and database connections here.', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 32),
             const ConnectionStatusWidget(),
             const SizedBox(height: 24),
-            const Expanded(
-              child: WebSocketLogViewer(),
-            ),
+            const Expanded(child: WebSocketLogViewer()),
           ],
         ),
       ),

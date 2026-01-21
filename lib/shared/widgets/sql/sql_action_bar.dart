@@ -6,32 +6,17 @@ class SqlActionBar extends StatelessWidget {
   final VoidCallback? onClear;
   final bool isExecuting;
 
-  const SqlActionBar({
-    super.key,
-    this.onExecute,
-    this.onTestConnection,
-    this.onClear,
-    this.isExecuting = false,
-  });
+  const SqlActionBar({super.key, this.onExecute, this.onTestConnection, this.onClear, this.isExecuting = false});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        FilledButton(
-          onPressed: isExecuting ? null : onExecute,
-          child: const Text('Executar'),
-        ),
+        FilledButton(onPressed: isExecuting ? null : onExecute, child: const Text('Executar')),
         const SizedBox(width: 8),
-        Button(
-          onPressed: isExecuting ? null : onTestConnection,
-          child: const Text('Testar Conexão'),
-        ),
+        Button(onPressed: isExecuting ? null : onTestConnection, child: const Text('Testar Conexão')),
         const SizedBox(width: 8),
-        Button(
-          onPressed: isExecuting ? null : onClear,
-          child: const Text('Limpar'),
-        ),
+        Button(onPressed: isExecuting ? null : onClear, child: const Text('Limpar')),
       ],
     );
   }

@@ -4,7 +4,11 @@
       "Bash(flutter analyze:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(flutter pub get:*)",
+      "WebSearch",
+      "Bash(flutter pub:*)",
+      "Bash(dart run build_runner build:*)"
     ]
   }
 }

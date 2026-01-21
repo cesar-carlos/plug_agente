@@ -50,9 +50,7 @@ class AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String? errorText;
-    if (validator != null &&
-        controller != null &&
-        controller!.text.isNotEmpty) {
+    if (validator != null && controller != null && controller!.text.isNotEmpty) {
       errorText = validator!(controller!.text);
     }
 
@@ -81,8 +79,8 @@ class AppTextField extends StatelessWidget {
             Text(
               errorText,
               style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: const Color(0xFFD13438), // Error color
-                  ),
+                color: const Color(0xFFD13438), // Error color
+              ),
             ),
           ],
         ),

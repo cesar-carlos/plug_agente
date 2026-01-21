@@ -9,7 +9,7 @@ class ConnectionString {
 
   bool _isValid(String connectionString) {
     if (connectionString.isEmpty) return false;
-    
+
     return true;
   }
 

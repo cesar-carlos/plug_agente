@@ -88,13 +88,7 @@ class DioFactory {
     );
 
     dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        requestHeader: true,
-        responseHeader: true,
-        error: true,
-      ),
+      LogInterceptor(requestBody: true, responseBody: true, requestHeader: true, responseHeader: true, error: true),
     );
 
     return dio;

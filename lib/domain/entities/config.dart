@@ -7,6 +7,7 @@ class Config {
   final String? authUsername;
   final String? authPassword;
   final String driverName;
+  final String odbcDriverName;
   final String connectionString;
   final String username;
   final String? password;
@@ -18,13 +19,14 @@ class Config {
 
   const Config({
     required this.id,
-    this.serverUrl = 'https://api.example.com', // Default for migration/new
+    this.serverUrl = 'https://api.example.com',
     this.agentId = '',
     this.authToken,
     this.refreshToken,
     this.authUsername,
     this.authPassword,
     required this.driverName,
+    required this.odbcDriverName,
     required this.connectionString,
     required this.username,
     this.password,
@@ -44,6 +46,7 @@ class Config {
     String? authUsername,
     String? authPassword,
     String? driverName,
+    String? odbcDriverName,
     String? connectionString,
     String? username,
     String? password,
@@ -62,6 +65,7 @@ class Config {
       authUsername: authUsername ?? this.authUsername,
       authPassword: authPassword ?? this.authPassword,
       driverName: driverName ?? this.driverName,
+      odbcDriverName: odbcDriverName ?? this.odbcDriverName,
       connectionString: connectionString ?? this.connectionString,
       username: username ?? this.username,
       password: password ?? this.password,

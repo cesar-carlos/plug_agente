@@ -1,4 +1,5 @@
 import 'package:result_dart/result_dart.dart';
+
 import '../../domain/entities/query_response.dart';
 import '../../domain/errors/failures.dart' as domain;
 import '../../infrastructure/compression/gzip_compressor.dart';
@@ -24,12 +25,8 @@ class CompressionService {
         ),
       ),
       (failure) {
-        final failureMessage = failure is domain.Failure 
-            ? failure.message 
-            : failure.toString();
-        return Failure(
-          domain.CompressionFailure('Failed to compress response data: $failureMessage'),
-        );
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+        return Failure(domain.CompressionFailure('Failed to compress response data: $failureMessage'));
       },
     );
   }
@@ -50,12 +47,8 @@ class CompressionService {
         ),
       ),
       (failure) {
-        final failureMessage = failure is domain.Failure 
-            ? failure.message 
-            : failure.toString();
-        return Failure(
-          domain.CompressionFailure('Failed to decompress response data: $failureMessage'),
-        );
+        final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+        return Failure(domain.CompressionFailure('Failed to decompress response data: $failureMessage'));
       },
     );
   }

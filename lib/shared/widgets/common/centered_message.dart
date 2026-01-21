@@ -5,12 +5,7 @@ class CenteredMessage extends StatelessWidget {
   final String message;
   final IconData icon;
 
-  const CenteredMessage({
-    super.key,
-    required this.title,
-    required this.message,
-    required this.icon,
-  });
+  const CenteredMessage({super.key, required this.title, required this.message, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -21,24 +16,11 @@ class CenteredMessage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 64,
-              color: theme.accentColor,
-            ),
+            Icon(icon, size: 64, color: theme.accentColor),
             const SizedBox(height: 16),
-            Text(
-              title,
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text(title, style: theme.typography.subtitle?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: theme.typography.body,
-            ),
+            Text(message, textAlign: TextAlign.center, style: theme.typography.body),
           ],
         ),
       ),

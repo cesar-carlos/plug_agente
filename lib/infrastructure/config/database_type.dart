@@ -1,5 +1,1 @@
-enum DatabaseType {
-  sqlServer,
-  sybaseAnywhere,
-  postgresql,
-}
+enum DatabaseType { sqlServer, sybaseAnywhere, postgresql }

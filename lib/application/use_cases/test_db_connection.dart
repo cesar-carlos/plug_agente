@@ -10,9 +10,7 @@ class TestDbConnection {
 
   Future<Result<bool>> call(String connectionString) async {
     if (connectionString.isEmpty) {
-      return Failure(
-        domain.ValidationFailure('Connection string cannot be empty'),
-      );
+      return Failure(domain.ValidationFailure('Connection string cannot be empty'));
     }
 
     return await _service.testConnection(connectionString);

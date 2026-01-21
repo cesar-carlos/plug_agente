@@ -13,12 +13,7 @@ class HandleQueryRequest {
   final QueryNormalizerService _normalizerService;
   final CompressionService _compressionService;
 
-  HandleQueryRequest(
-    this._databaseGateway,
-    this._transportClient,
-    this._normalizerService,
-    this._compressionService,
-  );
+  HandleQueryRequest(this._databaseGateway, this._transportClient, this._normalizerService, this._compressionService);
 
   Future<Result<void>> call(QueryRequest request) async {
     try {
@@ -26,26 +21,16 @@ class HandleQueryRequest {
 
       return await queryResult.fold(
         (response) async {
-          final normalizedResponse = await _normalizerService.normalize(
-            response,
-          );
-          final compressionResult = await _compressionService.compress(
-            normalizedResponse,
-          );
+          final normalizedResponse = await _normalizerService.normalize(response);
+          final compressionResult = await _compressionService.compress(normalizedResponse);
 
           return await compressionResult.fold(
             (compressedResponse) async {
               return await _transportClient.sendResponse(compressedResponse);
             },
             (failure) {
-              final failureMessage = failure is domain.Failure
-                  ? failure.message
-                  : failure.toString();
-              return Failure(
-                domain.QueryExecutionFailure(
-                  'Failed to compress response: $failureMessage',
-                ),
-              );
+              final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+              return Failure(domain.QueryExecutionFailure('Failed to compress response: $failureMessage'));
             },
           );
         },
@@ -54,9 +39,7 @@ class HandleQueryRequest {
         },
       );
     } catch (e) {
-      return Failure(
-        domain.QueryExecutionFailure('Failed to handle query request: $e'),
-      );
+      return Failure(domain.QueryExecutionFailure('Failed to handle query request: $e'));
     }
   }
 }

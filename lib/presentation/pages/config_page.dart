@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../domain/value_objects/auth_credentials.dart';
-import '../../domain/value_objects/database_driver.dart';
 import '../../shared/widgets/common/app_button.dart';
 import '../../shared/widgets/common/app_card.dart';
 import '../../shared/widgets/common/app_dropdown.dart';
@@ -40,6 +39,7 @@ class _ConfigPageState extends State<ConfigPage> {
   final _authUsernameController = TextEditingController();
   final _authPasswordController = TextEditingController();
   final _driverNameController = TextEditingController();
+  final _odbcDriverNameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _databaseNameController = TextEditingController();
@@ -61,7 +61,7 @@ class _ConfigPageState extends State<ConfigPage> {
     _authProvider = Provider.of<AuthProvider>(context, listen: false);
     _previousAuthStatus = _authProvider!.status;
     _previousAuthError = _authProvider!.error;
-    
+
     _authProvider!.addListener(_onAuthStateChanged);
   }
 
@@ -69,58 +69,57 @@ class _ConfigPageState extends State<ConfigPage> {
     _connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
     _previousConnectionStatus = _connectionProvider!.status;
     _previousConnectionError = _connectionProvider!.error;
-    
+
     _connectionProvider!.addListener(_onConnectionStateChanged);
   }
 
   void _setupConfigListener() {
     _configProvider = Provider.of<ConfigProvider>(context, listen: false);
     _previousConfigError = _configProvider!.error;
-    
+
     _configProvider!.addListener(_onConfigStateChanged);
   }
 
   void _onAuthStateChanged() {
     if (!mounted) return;
-    
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentStatus = authProvider.status;
     final currentError = authProvider.error;
-    
+
     // Verificar se houve mudança de status para autenticado
-    if (_previousAuthStatus != AuthStatus.authenticated && 
+    if (_previousAuthStatus != AuthStatus.authenticated &&
         currentStatus == AuthStatus.authenticated &&
         currentError.isEmpty) {
       _showSuccessModal();
     }
-    
+
     // Verificar se houve novo erro
     if (currentError.isNotEmpty && currentError != _previousAuthError) {
       _showErrorModal(currentError);
     }
-    
+
     _previousAuthStatus = currentStatus;
     _previousAuthError = currentError;
   }
 
   void _onConnectionStateChanged() {
     if (!mounted) return;
-    
+
     final connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
     final currentStatus = connectionProvider.status;
     final currentError = connectionProvider.error;
-    
+
     // Verificar se houve mudança de status para conectado
-    if (_previousConnectionStatus != ConnectionStatus.connected && 
-        currentStatus == ConnectionStatus.connected) {
+    if (_previousConnectionStatus != ConnectionStatus.connected && currentStatus == ConnectionStatus.connected) {
       _showConnectionSuccessModal();
     }
-    
+
     // Verificar se houve novo erro
     if (currentError.isNotEmpty && currentError != _previousConnectionError) {
       _showConnectionErrorModal(currentError);
     }
-    
+
     _previousConnectionStatus = currentStatus;
     _previousConnectionError = currentError;
   }
@@ -147,15 +146,15 @@ class _ConfigPageState extends State<ConfigPage> {
 
   void _onConfigStateChanged() {
     if (!mounted) return;
-    
+
     final configProvider = Provider.of<ConfigProvider>(context, listen: false);
     final currentError = configProvider.error;
-    
+
     // Verificar se houve novo erro
     if (currentError.isNotEmpty && currentError != _previousConfigError) {
       _showConfigErrorModal(currentError);
     }
-    
+
     _previousConfigError = currentError;
   }
 
@@ -217,12 +216,13 @@ class _ConfigPageState extends State<ConfigPage> {
     _authProvider?.removeListener(_onAuthStateChanged);
     _connectionProvider?.removeListener(_onConnectionStateChanged);
     _configProvider?.removeListener(_onConfigStateChanged);
-    
+
     _serverUrlController.dispose();
     _agentIdController.dispose();
     _authUsernameController.dispose();
     _authPasswordController.dispose();
     _driverNameController.dispose();
+    _odbcDriverNameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _databaseNameController.dispose();
@@ -252,6 +252,9 @@ class _ConfigPageState extends State<ConfigPage> {
       if (_driverNameController.text.isEmpty) {
         _driverNameController.text = config.driverName;
       }
+      if (_odbcDriverNameController.text.isEmpty) {
+        _odbcDriverNameController.text = config.odbcDriverName;
+      }
       if (_usernameController.text.isEmpty) {
         _usernameController.text = config.username;
       }
@@ -267,16 +270,15 @@ class _ConfigPageState extends State<ConfigPage> {
       if (_portController.text.isEmpty) {
         _portController.text = config.port.toString();
       }
-      
+
       // Mark as initialized only if we actually had a config to load
       // This prevents "loading" empty state from marking as initialized
       _fieldsInitialized = true;
     } else {
-       // If config is null, maybe we are still loading or need defaults.
-       // We'll wait for config to be non-null.
+      // If config is null, maybe we are still loading or need defaults.
+      // We'll wait for config to be non-null.
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -290,11 +292,13 @@ class _ConfigPageState extends State<ConfigPage> {
         padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
         child: Column(
           children: [
-            _buildNavigationTabs(context),
+            _NavigationTabs(
+              currentPage: _currentPage,
+              onDatabaseTabTap: () => setState(() => _currentPage = 0),
+              onWebSocketTabTap: () => setState(() => _currentPage = 1),
+            ),
             const SizedBox(height: 16),
             Expanded(
-              // Usando Builder para isolar o contexto, mas evitando Consumers globais que rebuildam a tela toda
-              // Os campos mantêm seu estado via TextEditingControllers
               child: _currentPage == 0
                   ? _buildDatabaseConfigPage(context, configProvider, connectionProvider)
                   : _buildWebSocketConfigPage(context, configProvider, connectionProvider),
@@ -316,17 +320,40 @@ class _ConfigPageState extends State<ConfigPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDatabaseSectionHeader(context),
+            const _DatabaseSectionHeader(),
             const SizedBox(height: 16),
-            _buildDriverSection(context, configProvider),
+            _DriverSection(
+              driverNameController: _driverNameController,
+              odbcDriverNameController: _odbcDriverNameController,
+              onDriverChanged: (value) => configProvider.updateDriverName(value),
+              fieldsInitialized: _fieldsInitialized,
+            ),
             const SizedBox(height: 16),
-            _buildConnectionSection(context, configProvider),
+            _ConnectionSection(hostController: _hostController, portController: _portController),
             const SizedBox(height: 16),
-            _buildDatabaseCredentialsSection(context, configProvider),
+            _DatabaseCredentialsSection(
+              databaseNameController: _databaseNameController,
+              usernameController: _usernameController,
+              passwordController: _passwordController,
+            ),
             const SizedBox(height: 24),
-            _buildActionButtons(context, configProvider, connectionProvider),
+            _ActionButtons(
+              driverNameController: _driverNameController,
+              hostController: _hostController,
+              portController: _portController,
+              onTestConnection: () {
+                _updateAllFieldsToProvider(configProvider);
+                final connectionString = configProvider.getConnectionString();
+                connectionProvider.testDbConnection(connectionString);
+              },
+              onSaveConfig: () {
+                _updateAllFieldsToProvider(configProvider);
+                configProvider.saveConfig();
+              },
+              isLoading: configProvider.isLoading,
+            ),
             const SizedBox(height: 16),
-            _buildStatusSection(context, configProvider, connectionProvider),
+            const _StatusSection(),
           ],
         ),
       ),
@@ -348,7 +375,7 @@ class _ConfigPageState extends State<ConfigPage> {
             const SizedBox(height: 24),
             _buildWebSocketActionButtons(context, configProvider, connectionProvider),
             const SizedBox(height: 16),
-            _buildStatusSection(context, configProvider, connectionProvider),
+            const _StatusSection(),
           ],
         ),
       ),
@@ -358,88 +385,13 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget _buildServerSection(BuildContext context, ConfigProvider configProvider) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, _) {
-        return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Conexão WebSocket', style: FluentTheme.of(context).typography.subtitle),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'URL do Servidor',
-                controller: _serverUrlController,
-                hint: 'https://api.example.com',
-                enabled: true,
-              ),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'ID do Agente',
-                controller: _agentIdController,
-                hint: 'UUID ou Nome Único',
-                enabled: true,
-              ),
-              const SizedBox(height: 24),
-              Text('Autenticação (Opcional)', style: FluentTheme.of(context).typography.subtitle),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'Usuário',
-                controller: _authUsernameController,
-                hint: 'Usuário para autenticação',
-                enabled: true,
-              ),
-              const SizedBox(height: 16),
-              PasswordField(
-                label: 'Senha',
-                controller: _authPasswordController,
-                hint: 'Senha para autenticação',
-                validator: null,
-                enabled: true,
-              ),
-              const SizedBox(height: 16),
-              AppButton(
-                label: authProvider.status == AuthStatus.authenticating
-                    ? 'Autenticando...'
-                    : authProvider.isAuthenticated
-                        ? 'Logout'
-                        : 'Login',
-                isPrimary: false,
-                isLoading: authProvider.status == AuthStatus.authenticating,
-                onPressed: () {
-                  if (authProvider.isAuthenticated) {
-                    authProvider.logout();
-                  } else {
-                    final serverUrl = _serverUrlController.text.trim();
-                    if (serverUrl.isEmpty) {
-                      MessageModal.show(
-                        context: context,
-                        title: 'Erro',
-                        message: 'URL do Servidor é obrigatória',
-                        type: MessageType.error,
-                        confirmText: 'OK',
-                      );
-                      return;
-                    }
-                    
-                    if (_authUsernameController.text.isNotEmpty &&
-                        _authPasswordController.text.isNotEmpty) {
-                      final credentials = AuthCredentials(
-                        username: _authUsernameController.text.trim(),
-                        password: _authPasswordController.text.trim(),
-                      );
-                      authProvider.login(serverUrl, credentials);
-                    } else {
-                      MessageModal.show(
-                        context: context,
-                        title: 'Erro',
-                        message: 'Usuário e senha são obrigatórios',
-                        type: MessageType.error,
-                        confirmText: 'OK',
-                      );
-                    }
-                  }
-                },
-              ),
-            ],
-          ),
+        return _ServerSection(
+          authProvider: authProvider,
+          serverUrlController: _serverUrlController,
+          agentIdController: _agentIdController,
+          authUsernameController: _authUsernameController,
+          authPasswordController: _authPasswordController,
+          onLoginOrLogout: () => _handleLoginOrLogout(context, authProvider),
         );
       },
     );
@@ -454,37 +406,16 @@ class _ConfigPageState extends State<ConfigPage> {
       builder: (context, connectionProvider, _) {
         return Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
-            return Row(
-              children: [
-                AppButton(
-                  label: connectionProvider.isConnected ? 'Desconectar' : 'Conectar',
-                  isPrimary: true,
-                  onPressed: () {
-                    if (connectionProvider.isConnected) {
-                      connectionProvider.disconnect();
-                    } else {
-                      final serverUrl = _serverUrlController.text.trim();
-                      final agentId = _agentIdController.text.trim();
-                      final authToken = authProvider.currentToken?.token;
-                      
-                      if (serverUrl.isNotEmpty && agentId.isNotEmpty) {
-                        configProvider.updateServerUrl(serverUrl);
-                        configProvider.updateAgentId(agentId);
-                        connectionProvider.connect(serverUrl, agentId, authToken: authToken);
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(width: 16),
-                AppButton(
-                  label: 'Salvar Configuração',
-                  isLoading: configProvider.isLoading,
-                  onPressed: () {
-                    _updateAllFieldsToProvider(configProvider);
-                    configProvider.saveConfig();
-                  },
-                ),
-              ],
+            return _WebSocketActionButtons(
+              connectionProvider: connectionProvider,
+              authProvider: authProvider,
+              onConnectOrDisconnect: () =>
+                  _handleConnectOrDisconnect(context, configProvider, connectionProvider, authProvider),
+              onSaveConfig: () {
+                _updateAllFieldsToProvider(configProvider);
+                configProvider.saveConfig();
+              },
+              isLoading: configProvider.isLoading,
             );
           },
         );
@@ -492,49 +423,95 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
-  Widget _buildNavigationTabs(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(color: FluentTheme.of(context).cardColor, borderRadius: BorderRadius.circular(4)),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildTabButton(
-              context,
-              label: 'Configuração do Banco de Dados',
-              icon: FluentIcons.database,
-              isSelected: _currentPage == 0,
-              onTap: () {
-                setState(() {
-                  _currentPage = 0;
-                });
-              },
-            ),
-          ),
-          Expanded(
-            child: _buildTabButton(
-              context,
-              label: 'Conexão WebSocket',
-              icon: FluentIcons.plug_connected,
-              isSelected: _currentPage == 1,
-              onTap: () {
-                setState(() {
-                  _currentPage = 1;
-                });
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+  void _handleLoginOrLogout(BuildContext context, AuthProvider authProvider) {
+    if (authProvider.isAuthenticated) {
+      authProvider.logout();
+    } else {
+      final serverUrl = _serverUrlController.text.trim();
+      if (serverUrl.isEmpty) {
+        MessageModal.show(
+          context: context,
+          title: 'Erro',
+          message: 'URL do Servidor é obrigatória',
+          type: MessageType.error,
+          confirmText: 'OK',
+        );
+        return;
+      }
+
+      if (_authUsernameController.text.isNotEmpty && _authPasswordController.text.isNotEmpty) {
+        final credentials = AuthCredentials(
+          username: _authUsernameController.text.trim(),
+          password: _authPasswordController.text.trim(),
+        );
+        authProvider.login(serverUrl, credentials);
+      } else {
+        MessageModal.show(
+          context: context,
+          title: 'Erro',
+          message: 'Usuário e senha são obrigatórios',
+          type: MessageType.error,
+          confirmText: 'OK',
+        );
+      }
+    }
   }
 
-  Widget _buildTabButton(
-    BuildContext context, {
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
+  void _handleConnectOrDisconnect(
+    BuildContext context,
+    ConfigProvider configProvider,
+    ConnectionProvider connectionProvider,
+    AuthProvider authProvider,
+  ) {
+    if (connectionProvider.isConnected) {
+      connectionProvider.disconnect();
+    } else {
+      final serverUrl = _serverUrlController.text.trim();
+      final agentId = _agentIdController.text.trim();
+      final authToken = authProvider.currentToken?.token;
+
+      if (serverUrl.isNotEmpty && agentId.isNotEmpty) {
+        configProvider.updateServerUrl(serverUrl);
+        configProvider.updateAgentId(agentId);
+        connectionProvider.connect(serverUrl, agentId, authToken: authToken);
+      }
+    }
+  }
+
+  void _updateAllFieldsToProvider(ConfigProvider configProvider) {
+    // Database Fields
+    configProvider.updateHost(_hostController.text);
+    configProvider.updatePort(int.tryParse(_portController.text) ?? 1433);
+    configProvider.updateDatabaseName(_databaseNameController.text);
+    configProvider.updateUsername(_usernameController.text);
+    configProvider.updatePassword(_passwordController.text);
+    configProvider.updateDriverName(_driverNameController.text);
+    configProvider.updateOdbcDriverName(_odbcDriverNameController.text);
+
+    // WebSocket Fields
+    configProvider.updateServerUrl(_serverUrlController.text);
+    configProvider.updateAgentId(_agentIdController.text);
+
+    // WebSocket Authentication Fields
+    configProvider.updateAuthUsername(
+      _authUsernameController.text.trim().isEmpty ? null : _authUsernameController.text.trim(),
+    );
+    configProvider.updateAuthPassword(
+      _authPasswordController.text.trim().isEmpty ? null : _authPasswordController.text.trim(),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({required this.label, required this.icon, required this.isSelected, required this.onTap});
+
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final backgroundColor = isSelected ? AppColors.primary : Colors.transparent;
     final textColor = isSelected ? Colors.white : theme.resources.textFillColorPrimary;
@@ -558,162 +535,326 @@ class _ConfigPageState extends State<ConfigPage> {
       ),
     );
   }
+}
 
-  Widget _buildDatabaseSectionHeader(BuildContext context) {
+class _DatabaseSectionHeader extends StatelessWidget {
+  const _DatabaseSectionHeader();
+
+  @override
+  Widget build(BuildContext context) {
     return Text('Configuração do Banco de Dados', style: FluentTheme.of(context).typography.subtitle);
   }
+}
 
-  Widget _buildDriverSection(BuildContext context, ConfigProvider configProvider) {
-    return AppDropdown<String>(
-      label: 'Driver do Banco de Dados',
-      value: _driverNameController.text,
-      items: [
-        ComboBoxItem(value: DatabaseDriver.sqlServer.displayName, child: Text(DatabaseDriver.sqlServer.displayName)),
-        ComboBoxItem(value: DatabaseDriver.postgreSQL.displayName, child: Text(DatabaseDriver.postgreSQL.displayName)),
-        ComboBoxItem(
-          value: DatabaseDriver.sqlAnywhere.displayName,
-          child: Text(DatabaseDriver.sqlAnywhere.displayName),
-        ),
-      ],
-      onChanged: (value) {
-        if (value != null && _fieldsInitialized) {
-          _driverNameController.text = value;
-          // Dropdown pode atualizar imediatamente pois não é digitação contínua
-          configProvider.updateDriverName(value);
-        }
-      },
-    );
+class _DriverSection extends StatelessWidget {
+  const _DriverSection({
+    required this.driverNameController,
+    required this.odbcDriverNameController,
+    required this.onDriverChanged,
+    required this.fieldsInitialized,
+  });
+
+  final TextEditingController driverNameController;
+  final TextEditingController odbcDriverNameController;
+  final ValueChanged<String> onDriverChanged;
+  final bool fieldsInitialized;
+
+  void _updateOdbcDriverNameSuggestion(String driverName) {
+    final suggestion = switch (driverName) {
+      'SQL Server' => 'SQL Server Native Client 11.0',
+      'PostgreSQL' => 'PostgreSQL Unicode',
+      'SQL Anywhere' => 'SQL Anywhere 17',
+      _ => odbcDriverNameController.text,
+    };
+    if (odbcDriverNameController.text.isEmpty) {
+      odbcDriverNameController.text = suggestion;
+    }
   }
 
-  Widget _buildConnectionSection(BuildContext context, ConfigProvider configProvider) {
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppDropdown<String>(
+            label: 'Driver do Banco de Dados',
+            value: driverNameController.text,
+            items: const [
+              ComboBoxItem(value: 'SQL Server', child: Text('SQL Server')),
+              ComboBoxItem(value: 'PostgreSQL', child: Text('PostgreSQL')),
+              ComboBoxItem(value: 'SQL Anywhere', child: Text('SQL Anywhere')),
+            ],
+            onChanged: (value) {
+              if (value != null && fieldsInitialized) {
+                driverNameController.text = value;
+                onDriverChanged(value);
+                _updateOdbcDriverNameSuggestion(value);
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
+            label: 'Nome do Driver ODBC',
+            controller: odbcDriverNameController,
+            hint: 'SQL Server Native Client 11.0',
+            enabled: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionSection extends StatelessWidget {
+  const _ConnectionSection({required this.hostController, required this.portController});
+
+  final TextEditingController hostController;
+  final TextEditingController portController;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
           flex: 3,
-          child: AppTextField(
-            label: 'Host',
-            controller: _hostController,
-            hint: 'localhost',
-            enabled: true,
-          ),
+          child: AppTextField(label: 'Host', controller: hostController, hint: 'localhost', enabled: true),
         ),
         const SizedBox(width: 16),
         Expanded(
           flex: 1,
           child: NumericField(
             label: 'Porta',
-            controller: _portController,
+            controller: portController,
             hint: '1433',
             minValue: 1,
             maxValue: 65535,
             enabled: true,
-            // onChanged removido
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildDatabaseCredentialsSection(BuildContext context, ConfigProvider configProvider) {
+class _DatabaseCredentialsSection extends StatelessWidget {
+  const _DatabaseCredentialsSection({
+    required this.databaseNameController,
+    required this.usernameController,
+    required this.passwordController,
+  });
+
+  final TextEditingController databaseNameController;
+  final TextEditingController usernameController;
+  final TextEditingController passwordController;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          AppTextField(
-            label: 'Nome do Banco de Dados',
-            controller: _databaseNameController,
-            hint: 'Nome da Base',
-            enabled: true,
-            // onChanged removido
-          ),
-          const SizedBox(height: 16),
-          AppTextField(
-            label: 'Usuário',
-            controller: _usernameController,
-            hint: 'Usuário',
-            enabled: true,
-            // onChanged removido
-          ),
-          const SizedBox(height: 16),
-          PasswordField(
-            label: 'Senha',
-            controller: _passwordController,
-            hint: 'Senha',
-            validator: null,
-            enabled: true,
-            // onChanged removido
-          ),
+        AppTextField(
+          label: 'Nome do Banco de Dados',
+          controller: databaseNameController,
+          hint: 'Nome da Base',
+          enabled: true,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(label: 'Usuário', controller: usernameController, hint: 'Usuário', enabled: true),
+        const SizedBox(height: 16),
+        PasswordField(label: 'Senha', controller: passwordController, hint: 'Senha', validator: null, enabled: true),
       ],
     );
   }
+}
 
-  Widget _buildActionButtons(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-  ) {
+class _ActionButtons extends StatelessWidget {
+  const _ActionButtons({
+    required this.driverNameController,
+    required this.hostController,
+    required this.portController,
+    required this.onTestConnection,
+    required this.onSaveConfig,
+    required this.isLoading,
+  });
+
+  final TextEditingController driverNameController;
+  final TextEditingController hostController;
+  final TextEditingController portController;
+  final VoidCallback onTestConnection;
+  final VoidCallback onSaveConfig;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         AppButton(
           label: 'Testar Conexão com Banco',
           isPrimary: false,
           onPressed: () {
-            // Validacao simples
-            if (_driverNameController.text.isNotEmpty && 
-                _hostController.text.isNotEmpty && 
-                _portController.text.isNotEmpty) {
-              
-              // Atualizar tudo antes de testar
-              _updateAllFieldsToProvider(configProvider);
-              
-              final connectionString = configProvider.getConnectionString();
-              connectionProvider.testDbConnection(connectionString);
+            if (driverNameController.text.isNotEmpty &&
+                hostController.text.isNotEmpty &&
+                portController.text.isNotEmpty) {
+              onTestConnection();
             }
           },
         ),
         const SizedBox(width: 16),
         AppButton(
           label: 'Salvar Configuração',
-          isLoading: configProvider.isLoading,
+          isLoading: isLoading,
           onPressed: () {
-            // Validacao simples
-             if (_driverNameController.text.isNotEmpty && 
-                _hostController.text.isNotEmpty && 
-                _portController.text.isNotEmpty) {
-                  
-              // Atualiza provider com valores atuais de ambas as abas para garantir consistência
-            _updateAllFieldsToProvider(configProvider);
-            configProvider.saveConfig();
+            if (driverNameController.text.isNotEmpty &&
+                hostController.text.isNotEmpty &&
+                portController.text.isNotEmpty) {
+              onSaveConfig();
             }
           },
         ),
       ],
     );
   }
+}
 
-  void _updateAllFieldsToProvider(ConfigProvider configProvider) {
-    // Database Fields
-    configProvider.updateHost(_hostController.text);
-    configProvider.updatePort(int.tryParse(_portController.text) ?? 1433);
-    configProvider.updateDatabaseName(_databaseNameController.text);
-    configProvider.updateUsername(_usernameController.text);
-    configProvider.updatePassword(_passwordController.text);
-    configProvider.updateDriverName(_driverNameController.text);
-    
-    // WebSocket Fields
-    configProvider.updateServerUrl(_serverUrlController.text);
-    configProvider.updateAgentId(_agentIdController.text);
-    
-    // WebSocket Authentication Fields
-    configProvider.updateAuthUsername(_authUsernameController.text.trim().isEmpty ? null : _authUsernameController.text.trim());
-    configProvider.updateAuthPassword(_authPasswordController.text.trim().isEmpty ? null : _authPasswordController.text.trim());
+class _ServerSection extends StatelessWidget {
+  const _ServerSection({
+    required this.authProvider,
+    required this.serverUrlController,
+    required this.agentIdController,
+    required this.authUsernameController,
+    required this.authPasswordController,
+    required this.onLoginOrLogout,
+  });
+
+  final AuthProvider authProvider;
+  final TextEditingController serverUrlController;
+  final TextEditingController agentIdController;
+  final TextEditingController authUsernameController;
+  final TextEditingController authPasswordController;
+  final VoidCallback onLoginOrLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Conexão WebSocket', style: FluentTheme.of(context).typography.subtitle),
+          const SizedBox(height: 16),
+          AppTextField(
+            label: 'URL do Servidor',
+            controller: serverUrlController,
+            hint: 'https://api.example.com',
+            enabled: true,
+          ),
+          const SizedBox(height: 16),
+          AppTextField(label: 'ID do Agente', controller: agentIdController, hint: 'UUID ou Nome Único', enabled: true),
+          const SizedBox(height: 24),
+          Text('Autenticação (Opcional)', style: FluentTheme.of(context).typography.subtitle),
+          const SizedBox(height: 16),
+          AppTextField(
+            label: 'Usuário',
+            controller: authUsernameController,
+            hint: 'Usuário para autenticação',
+            enabled: true,
+          ),
+          const SizedBox(height: 16),
+          PasswordField(
+            label: 'Senha',
+            controller: authPasswordController,
+            hint: 'Senha para autenticação',
+            validator: null,
+            enabled: true,
+          ),
+          const SizedBox(height: 16),
+          AppButton(
+            label: authProvider.status == AuthStatus.authenticating
+                ? 'Autenticando...'
+                : authProvider.isAuthenticated
+                ? 'Logout'
+                : 'Login',
+            isPrimary: false,
+            isLoading: authProvider.status == AuthStatus.authenticating,
+            onPressed: onLoginOrLogout,
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  Widget _buildStatusSection(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-  ) {
+class _WebSocketActionButtons extends StatelessWidget {
+  const _WebSocketActionButtons({
+    required this.connectionProvider,
+    required this.authProvider,
+    required this.onConnectOrDisconnect,
+    required this.onSaveConfig,
+    required this.isLoading,
+  });
+
+  final ConnectionProvider connectionProvider;
+  final AuthProvider authProvider;
+  final VoidCallback onConnectOrDisconnect;
+  final VoidCallback onSaveConfig;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        AppButton(
+          label: connectionProvider.isConnected ? 'Desconectar' : 'Conectar',
+          isPrimary: true,
+          onPressed: onConnectOrDisconnect,
+        ),
+        const SizedBox(width: 16),
+        AppButton(label: 'Salvar Configuração', isLoading: isLoading, onPressed: onSaveConfig),
+      ],
+    );
+  }
+}
+
+class _NavigationTabs extends StatelessWidget {
+  const _NavigationTabs({required this.currentPage, required this.onDatabaseTabTap, required this.onWebSocketTabTap});
+
+  final int currentPage;
+  final VoidCallback onDatabaseTabTap;
+  final VoidCallback onWebSocketTabTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(color: FluentTheme.of(context).cardColor, borderRadius: BorderRadius.circular(4)),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TabButton(
+              label: 'Configuração do Banco de Dados',
+              icon: FluentIcons.database,
+              isSelected: currentPage == 0,
+              onTap: onDatabaseTabTap,
+            ),
+          ),
+          Expanded(
+            child: _TabButton(
+              label: 'Conexão WebSocket',
+              icon: FluentIcons.plug_connected,
+              isSelected: currentPage == 1,
+              onTap: onWebSocketTabTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusSection extends StatelessWidget {
+  const _StatusSection();
+
+  @override
+  Widget build(BuildContext context) {
     return const ConnectionStatusWidget();
   }
-
 }

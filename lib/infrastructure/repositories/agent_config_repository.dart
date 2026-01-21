@@ -1,8 +1,10 @@
 import 'package:result_dart/result_dart.dart';
 import 'package:drift/drift.dart';
+
 import '../../domain/entities/config.dart';
 import '../../domain/repositories/i_agent_config_repository.dart';
 import '../../domain/errors/failures.dart' as domain;
+
 import 'agent_config_drift_database.dart';
 
 class AgentConfigRepository implements IAgentConfigRepository {
@@ -95,6 +97,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
       authUsername: config.authUsername,
       authPassword: config.authPassword,
       driverName: config.driverName,
+      odbcDriverName: config.odbcDriverName,
       connectionString: config.connectionString,
       username: config.username,
       password: config.password,
@@ -116,6 +119,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
       authUsername: data.authUsername,
       authPassword: data.authPassword,
       driverName: data.driverName,
+      odbcDriverName: data.odbcDriverName,
       connectionString: data.connectionString,
       username: data.username,
       password: data.password,

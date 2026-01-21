@@ -1,4 +1,5 @@
 import 'package:result_dart/result_dart.dart';
+
 import '../../domain/entities/config.dart';
 import '../validation/config_validator.dart';
 

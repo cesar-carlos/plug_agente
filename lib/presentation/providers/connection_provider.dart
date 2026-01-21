@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../../application/use_cases/connect_to_hub.dart';
 import '../../application/use_cases/test_db_connection.dart';
 import '../../core/logger/app_logger.dart';
@@ -21,8 +22,8 @@ class ConnectionProvider extends ChangeNotifier {
     this._testDbConnectionUseCase, {
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
-  })  : _authProvider = authProvider,
-        _configProvider = configProvider;
+  }) : _authProvider = authProvider,
+       _configProvider = configProvider;
 
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
@@ -54,7 +55,7 @@ class ConnectionProvider extends ChangeNotifier {
       transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
       final result = await _connectToHubUseCase(serverUrl, agentId, authToken: authToken);
-      
+
       result.fold(
         (_) {
           _status = ConnectionStatus.connected;
@@ -62,9 +63,7 @@ class ConnectionProvider extends ChangeNotifier {
         },
         (failure) {
           _status = ConnectionStatus.error;
-          final failureMessage = failure is domain.Failure
-              ? failure.message
-              : failure.toString();
+          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
           _error = failureMessage;
           AppLogger.error('Failed to connect to hub: $failureMessage');
         },
@@ -83,7 +82,7 @@ class ConnectionProvider extends ChangeNotifier {
       _status = ConnectionStatus.disconnected;
       _error = '';
       notifyListeners();
-      
+
       // Call disconnect on transport client
       AppLogger.info('Disconnected from hub');
     } catch (e) {
@@ -96,7 +95,7 @@ class ConnectionProvider extends ChangeNotifier {
   Future<void> testDbConnection(String connectionString) async {
     try {
       final result = await _testDbConnectionUseCase(connectionString);
-      
+
       result.fold(
         (isConnected) {
           _isDbConnected = isConnected;
@@ -108,13 +107,11 @@ class ConnectionProvider extends ChangeNotifier {
         },
         (failure) {
           _isDbConnected = false;
-          final failureMessage = failure is domain.Failure
-              ? failure.message
-              : failure.toString();
+          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
           AppLogger.error('Database connection test failed: $failureMessage');
         },
       );
-      
+
       notifyListeners();
     } catch (e) {
       _isDbConnected = false;
@@ -130,24 +127,24 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> _handleTokenExpired() async {
     if (_isReconnecting) return;
-    
+
     _isReconnecting = true;
     _status = ConnectionStatus.reconnecting;
     _error = '';
     AppLogger.warning('Token expired, attempting refresh...');
     notifyListeners();
-    
+
     try {
       final transportClient = getIt<ITransportClient>();
       await transportClient.disconnect();
-      
+
       final serverUrl = _configProvider?.currentConfig?.serverUrl;
       if (serverUrl != null && serverUrl.isNotEmpty && _authProvider != null) {
         await _authProvider!.refreshToken(serverUrl);
-        
+
         final newToken = _authProvider!.currentToken;
         final agentId = _configProvider?.currentConfig?.agentId ?? '';
-        
+
         if (newToken != null && agentId.isNotEmpty) {
           await connect(serverUrl, agentId, authToken: newToken.token);
           AppLogger.info('Reconnected with refreshed token successfully');
@@ -166,29 +163,27 @@ class ConnectionProvider extends ChangeNotifier {
       _error = 'Failed to refresh token: $e';
       AppLogger.error('Token refresh failed: $e');
     }
-    
+
     _isReconnecting = false;
     notifyListeners();
   }
 
   Future<void> _handleReconnectionNeeded() async {
     if (_isReconnecting) return;
-    
+
     _isReconnecting = true;
     _status = ConnectionStatus.reconnecting;
     AppLogger.warning('Reconnection needed after failed attempts');
     notifyListeners();
-    
+
     await Future.delayed(const Duration(seconds: 2));
-    
+
     try {
       final serverUrl = _configProvider?.currentConfig?.serverUrl;
       final agentId = _configProvider?.currentConfig?.agentId;
-      final authToken = _authProvider?.currentToken?.token ?? 
-                       _configProvider?.currentConfig?.authToken;
-      
-      if (serverUrl != null && serverUrl.isNotEmpty && 
-          agentId != null && agentId.isNotEmpty) {
+      final authToken = _authProvider?.currentToken?.token ?? _configProvider?.currentConfig?.authToken;
+
+      if (serverUrl != null && serverUrl.isNotEmpty && agentId != null && agentId.isNotEmpty) {
         await connect(serverUrl, agentId, authToken: authToken);
         AppLogger.info('Attempted manual reconnection');
       } else {
@@ -201,7 +196,7 @@ class ConnectionProvider extends ChangeNotifier {
       _error = 'Failed to reconnect: $e';
       AppLogger.error('Manual reconnection failed: $e');
     }
-    
+
     _isReconnecting = false;
     notifyListeners();
   }

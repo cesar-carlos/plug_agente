@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+
 import 'app_text_field.dart';
 
 class PasswordField extends StatefulWidget {
@@ -33,7 +34,8 @@ class _PasswordFieldState extends State<PasswordField> {
       label: widget.label,
       hint: widget.hint ?? 'Digite a senha',
       obscureText: _obscureText,
-      validator: widget.validator ??
+      validator:
+          widget.validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
               return '${widget.label} é obrigatória';
@@ -44,9 +46,7 @@ class _PasswordFieldState extends State<PasswordField> {
       enabled: widget.enabled,
       prefixIcon: const Icon(FluentIcons.lock),
       suffixIcon: IconButton(
-        icon: Icon(
-          _obscureText ? FluentIcons.view : FluentIcons.hide,
-        ),
+        icon: Icon(_obscureText ? FluentIcons.view : FluentIcons.hide),
         onPressed: () {
           setState(() {
             _obscureText = !_obscureText;
@@ -56,4 +56,3 @@ class _PasswordFieldState extends State<PasswordField> {
     );
   }
 }
-
