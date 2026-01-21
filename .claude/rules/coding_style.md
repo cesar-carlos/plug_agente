@@ -1,9 +1,3 @@
----
-description: Dart Style Guide - Effective Dart (2026) with modern best practices
-globs: ["lib/**/*.dart", "test/**/*.dart"]
-alwaysApply: true
----
-
 # Dart Style Guide - Effective Dart (2026)
 
 **Based on**: [Effective Dart](https://dart.dev/effective-dart) and [Flutter AI Rules](https://docs.flutter.dev/ai/ai-rules)

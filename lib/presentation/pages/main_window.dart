@@ -18,6 +18,9 @@ class _MainWindowState extends State<MainWindow> {
     if (location.startsWith('/config')) {
       return 1;
     }
+    if (location.startsWith('/playground')) {
+      return 2;
+    }
     return 0;
   }
 
@@ -40,6 +43,9 @@ class _MainWindowState extends State<MainWindow> {
             case 1:
               context.go('/config');
               break;
+            case 2:
+              context.go('/playground');
+              break;
           }
         },
         displayMode: PaneDisplayMode.compact,
@@ -52,6 +58,11 @@ class _MainWindowState extends State<MainWindow> {
           PaneItem(
             icon: const Icon(FluentIcons.settings),
             title: const Text('Configurações'),
+            body: const SizedBox.shrink(),
+          ),
+          PaneItem(
+            icon: const Icon(FluentIcons.table),
+            title: const Text('Playground'),
             body: const SizedBox.shrink(),
           ),
         ],

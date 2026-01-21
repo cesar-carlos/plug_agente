@@ -68,18 +68,20 @@ class PayPal implements PaymentMethod {
 **Exemplo Correto:**
 
 ```dart
+import 'dart:developer' as developer;
+
 abstract class Animal {
   void makeSound();
 }
 
 class Dog implements Animal {
   @override
-  void makeSound() => print('Woof!');
+  void makeSound() => developer.log('Woof!');
 }
 
 class Cat implements Animal {
   @override
-  void makeSound() => print('Meow!');
+  void makeSound() => developer.log('Meow!');
 }
 
 // Qualquer Animal pode ser usado

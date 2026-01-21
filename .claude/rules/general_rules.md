@@ -1,9 +1,3 @@
----
-description: Regras gerais do projeto - Core principles, documentação e código limpo
-globs: ["lib/**/*.dart", "test/**/*.dart"]
-alwaysApply: true
----
-
 # Regras Gerais do Projeto
 
 ## Princípios Fundamentais (Core Principles)
@@ -168,7 +162,7 @@ _counter++;
 
 ### Tooling e Logging
 
-- ✅ Siga `coding_style.mdc` para rotina de **format/fix/analyze** e padrões de logging
+- ✅ Siga `coding_style.md` para rotina de **format/fix/analyze** e padrões de logging
 - ✅ Evite `print`; prefira logging estruturado (`dart:developer` `log`)
 
 ### Evitar Números Mágicos

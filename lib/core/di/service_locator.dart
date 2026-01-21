@@ -26,6 +26,7 @@ import '../../application/services/auth_service.dart';
 import '../../application/validation/config_validator.dart';
 import '../../application/validation/query_normalizer.dart';
 import '../../application/use_cases/connect_to_hub.dart';
+import '../../application/use_cases/execute_playground_query.dart';
 import '../../application/use_cases/handle_query_request.dart';
 import '../../application/use_cases/test_db_connection.dart';
 import '../../application/use_cases/save_agent_config.dart';
@@ -108,6 +109,14 @@ Future<void> setupDependencies() async {
   );
 
   getIt.registerLazySingleton(() => TestDbConnection(getIt<ConnectionService>()));
+
+  getIt.registerLazySingleton(
+    () => ExecutePlaygroundQuery(
+      getIt<IDatabaseGateway>(),
+      getIt<IAgentConfigRepository>(),
+      getIt<Uuid>(),
+    ),
+  );
 
   getIt.registerLazySingleton(() => SaveAgentConfig(getIt<IAgentConfigRepository>(), getIt<ConfigService>()));
 

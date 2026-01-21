@@ -1,9 +1,3 @@
----
-description: Clean Architecture - Generic dependency and layer boundary rules
-globs: ["lib/**/*.dart"]
-alwaysApply: true
----
-
 # Clean Architecture (Generic)
 
 ## Layers

@@ -1,9 +1,3 @@
----
-description: Flutter Widgets - Modern best practices (2026) with Material 3
-globs: ["lib/presentation/**/*.dart", "lib/shared/**/*.dart", "lib/page/**/*.dart"]
-alwaysApply: true
----
-
 # Flutter Widgets - Modern Best Practices
 
 **Based on**: [Flutter AI Rules](https://docs.flutter.dev/ai/rules) and Material 3 Guidelines
@@ -821,7 +815,7 @@ ThemeData(
 
 ## Typography & Accessibility
 
-- ✅ For design-level guidance (palette, typography scale, contrast), follow `ui_ux_design.mdc`
+- ✅ For design-level guidance (palette, typography scale, contrast), follow `ui_ux_design.md`
 - ✅ In widgets, ensure:
   - semantic labels for icon-only actions
   - scalable text (avoid hardcoded sizes when possible)

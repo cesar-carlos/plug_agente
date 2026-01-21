@@ -2,6 +2,7 @@ export 'cancel_all_notifications.dart';
 export 'cancel_notification.dart';
 export 'check_for_updates.dart';
 export 'connect_to_hub.dart';
+export 'execute_playground_query.dart';
 export 'handle_query_request.dart';
 export 'load_agent_config.dart';
 export 'login_user.dart';

@@ -1,9 +1,3 @@
----
-description: Padrões de testes - Estrutura, organização e boas práticas
-globs: ["test/**/*.dart"]
-alwaysApply: true
----
-
 # Padrões de Testes
 
 ## Estrutura de Testes

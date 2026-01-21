@@ -1,0 +1,267 @@
+---
+description: Project-specific rules for backup_database application
+globs: ["lib/**/*.dart", "pubspec.yaml"]
+alwaysApply: true
+---
+
+# Backup Database - Project Specifics
+
+**Project Type**: Desktop Application (Database Backup Utility)
+**Architecture**: Clean Architecture + DDD (Domain Driven Design)
+
+## Project Overview
+
+This is a database backup application for Windows desktop that follows Clean Architecture principles and Domain Driven Design patterns.
+
+## Project Architecture
+
+### Clean Architecture Structure
+
+```
+lib/
+├── domain/              # Domain Layer (Pure Business Logic)
+│   ├── entities/        # Domain entities (business objects)
+│   ├── value_objects/   # Value objects (immutable, compared by value)
+│   ├── repositories/    # Repository interfaces (contracts)
+│   ├── use_cases/       # Use cases (pure application logic)
+│   └── errors/          # Domain exceptions and errors
+│
+├── application/         # Application Layer (Orchestration)
+│   ├── services/        # Application services (coordinate use cases)
+│   ├── dtos/            # Data Transfer Objects (transfer between layers)
+│   └── mappers/         # Converters between entities and DTOs
+│
+├── infrastructure/      # Infrastructure Layer (Implementations)
+│   ├── datasources/     # Data sources (API, Local DB, etc.)
+│   ├── repositories/    # Repository implementations
+│   ├── external_services/  # External services (APIs, etc.)
+│   │   └── interceptors/  # HTTP interceptors (dio)
+│   └── models/          # Data models for serialization
+│
+├── presentation/        # Presentation Layer (UI)
+│   ├── pages/          # Application screens
+│   ├── widgets/        # Reusable UI components
+│   └── providers/      # Providers (state management with Provider)
+│
+├── core/               # Core Components (Shared)
+│   ├── constants/      # Application constants
+│   ├── utils/          # Utility functions
+│   ├── extensions/     # Class extensions
+│   ├── theme/          # Application theme
+│   ├── routes/         # Routes and navigation (go_router)
+│   └── di/             # Dependency injection (get_it)
+│
+└── shared/             # Shared Components
+    ├── widgets/        # Shared widgets
+    └── utils/          # Shared utilities
+```
+
+## Project Dependencies
+
+### Core Dependencies
+
+This project uses specific packages following clean architecture principles:
+
+- **go_router** - Navigation and routing
+- **dio** - HTTP client for API communication
+- **get_it** - Dependency injection
+- **Provider** - State management
+- **result_dart** - Error handling with Result pattern
+- **flutter_dotenv** - Environment variables
+- **brasil_fields** - BR formatting (if applicable)
+
+### Dependency Rules
+
+- ✅ **ALWAYS use `go_router`** for navigation (never Navigator or auto_route)
+- ✅ **ALWAYS use `dio`** for HTTP/API (never http package)
+- ✅ **ALWAYS use `get_it`** for dependency injection (never Provider for DI)
+- ✅ **ALWAYS use `Provider`** for state management (never BLoC, Riverpod, GetX)
+- ✅ **ALWAYS use `result_dart`** for error handling (never Either/dartz)
+
+## Architecture Rules
+
+- Follow `clean_architecture.mdc` for layer boundaries and dependency direction.
+
+## Desktop-Specific Considerations
+
+### Windows Platform
+
+- ✅ Use `window_manager` for window management
+- ✅ Configure window before `runApp()`
+- ✅ Consider keyboard shortcuts and focus behavior
+- ✅ Handle window resizing and positioning
+
+### UI Framework (Fluent UI vs Material)
+
+- ✅ **Prefer Fluent UI** para a experiência desktop Windows quando a feature/tela for “desktop-first”
+- ✅ **Use tokens centralizados** (cores/typography/spacing) em `core/theme` e mantenha coerência entre telas
+- ❌ **Evite misturar Fluent UI e Material** dentro da mesma tela/superfície
+- ✅ Se uma tela ainda estiver em Material:
+  - mantenha o escopo isolado (tela inteira)
+  - garanta Light/Dark, estados (hover/focus/pressed) e spacing consistentes
+  - migre gradualmente para Fluent quando houver equivalente
+
+### Entry Point Pattern
+
+```dart
+// main.dart
+void main(List<String> args) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables
+  await dotenv.load(fileName: '.env');
+
+  // Configure dependencies
+  setupDependencies();
+
+  runApp(const MyApp());
+}
+```
+
+## Data Flow
+
+```
+1. Presentation (UI) calls Service from Application layer
+   ↓
+2. Service executes Use Cases from Domain layer
+   ↓
+3. Use Cases use Repository (interface) from Domain layer
+   ↓
+4. Repository is implemented in Infrastructure layer
+   ↓
+5. Repository uses Data Sources to fetch/persist data
+   ↓
+6. Data Source returns data converted to Entities from Domain
+   ↓
+7. Entities are converted to DTOs if necessary
+   ↓
+8. DTOs are returned to Presentation
+```
+
+## Patterns Used
+
+### Repository Pattern
+
+```dart
+// Domain - Interface
+abstract class IUserRepository {
+  Future<Result<User>> getById(String id);
+}
+
+// Infrastructure - Implementation
+class UserRepository implements IUserRepository {
+  final IUserDataSource dataSource;
+
+  UserRepository(this.dataSource);
+
+  @override
+  Future<Result<User>> getById(String id) async {
+    try {
+      final userModel = await dataSource.getById(id);
+      return Success(userModel.toEntity());
+    } catch (e) {
+      return Failure(ServerFailure(e.toString()));
+    }
+  }
+}
+```
+
+### Result Pattern
+
+```dart
+// Use Result<T> for operations that can fail
+import 'dart:developer' as developer;
+
+Future<Result<User>> getUser(String id) async {
+  if (id.isEmpty) {
+    return Failure(ValidationFailure('ID cannot be empty'));
+  }
+
+  try {
+    final user = await repository.getById(id);
+    return Success(user);
+  } catch (e) {
+    return Failure(ServerFailure(e.toString()));
+  }
+}
+
+// Handle results with fold
+final result = await getUser('123');
+result.fold(
+  (success) => developer.log('User: ${success.name}'),
+  (failure) => developer.log('Error: ${failure.message}'),
+);
+```
+
+### Dependency Injection
+
+```dart
+// core/di/service_locator.dart
+final getIt = GetIt.instance;
+
+void setupDependencies() {
+  // Data Sources
+  getIt.registerLazySingleton<IUserDataSource>(
+    () => UserRemoteDataSource(),
+  );
+
+  // Repositories
+  getIt.registerLazySingleton<IUserRepository>(
+    () => UserRepository(
+      dataSource: getIt<IUserDataSource>(),
+    ),
+  );
+
+  // Services
+  getIt.registerLazySingleton<UserService>(
+    () => UserService(
+      repository: getIt<IUserRepository>(),
+    ),
+  );
+}
+```
+
+## Best Practices for This Project
+
+### ✅ DO
+
+- Follow Clean Architecture layer rules strictly
+- Use dependency injection via constructor
+- Return Result<T> for operations that can fail
+- Dispose all resources (FocusNode, controllers, streams)
+- Handle errors appropriately at each layer
+- Use const constructors wherever possible
+- Configure dependencies in `main.dart` before `runApp()`
+
+### ❌ DON'T
+
+- Mix concerns between layers
+- Import infrastructure code in domain layer
+- Import presentation code in application layer
+- Use concrete implementations where interfaces are expected
+- Forget to dispose resources
+- Create circular dependencies between layers
+
+## When This Architecture Is Appropriate
+
+This Clean Architecture is appropriate when:
+
+- ✅ Large applications with complex business logic
+- ✅ Multiple platforms with different behaviors
+- ✅ Large team requiring clear boundaries
+- ✅ Long-term maintainability is critical
+- ✅ Testing is a priority
+
+## Code Review Checklist
+
+- [ ] Domain does not import anything other than `core` and `shared`
+- [ ] Application does not import `infrastructure` or `presentation`
+- [ ] Infrastructure does not import `application` or `presentation`
+- [ ] Presentation does not import `infrastructure`
+- [ ] Each class has a single responsibility (SRP)
+- [ ] Dependencies are injected via constructor (DIP)
+- [ ] Interfaces are used instead of concrete classes (DIP)
+- [ ] Use cases return Result<T> for operations that can fail
+- [ ] Domain errors are handled appropriately
+- [ ] Unit tests are possible without complex mocks
+- [ ] All required folders exist and follow structure

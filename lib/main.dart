@@ -10,6 +10,7 @@ import 'core/services/window_manager_service.dart';
 import 'domain/repositories/i_notification_service.dart';
 import 'application/use_cases/connect_to_hub.dart';
 import 'application/use_cases/test_db_connection.dart';
+import 'application/use_cases/execute_playground_query.dart';
 import 'application/use_cases/save_agent_config.dart';
 import 'application/use_cases/load_agent_config.dart';
 import 'application/use_cases/cancel_all_notifications.dart';
@@ -20,6 +21,7 @@ import 'application/services/config_service.dart';
 import 'presentation/providers/connection_provider.dart';
 import 'presentation/providers/config_provider.dart';
 import 'presentation/providers/notification_provider.dart';
+import 'presentation/providers/playground_provider.dart';
 import 'presentation/providers/websocket_log_provider.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'application/use_cases/login_user.dart';
@@ -104,6 +106,12 @@ class MyApp extends StatelessWidget {
             getIt<ScheduleNotification>(),
             getIt<CancelNotification>(),
             getIt<CancelAllNotifications>(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => PlaygroundProvider(
+            getIt<ExecutePlaygroundQuery>(),
+            getIt<TestDbConnection>(),
           ),
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),

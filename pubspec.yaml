@@ -72,6 +72,10 @@ dependencies:
   # Gráficos
   fl_chart: ^1.1.1
 
+  # DataGrid
+  syncfusion_flutter_datagrid: ^32.1.23
+  syncfusion_flutter_core: ^32.1.23
+
   # Fluent UI (Windows)
   fluent_ui: ^4.13.0
   fluentui_system_icons: ^1.1.273
