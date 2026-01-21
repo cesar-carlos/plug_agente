@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:result_dart/result_dart.dart';
 
+import '../../application/use_cases/check_odbc_driver.dart';
 import '../../application/use_cases/connect_to_hub.dart';
 import '../../application/use_cases/test_db_connection.dart';
 import '../../core/logger/app_logger.dart';
@@ -14,12 +16,14 @@ enum ConnectionStatus { disconnected, connecting, connected, reconnecting, error
 class ConnectionProvider extends ChangeNotifier {
   final ConnectToHub _connectToHubUseCase;
   final TestDbConnection _testDbConnectionUseCase;
+  final CheckOdbcDriver _checkOdbcDriverUseCase;
   AuthProvider? _authProvider;
   ConfigProvider? _configProvider;
 
   ConnectionProvider(
     this._connectToHubUseCase,
-    this._testDbConnectionUseCase, {
+    this._testDbConnectionUseCase,
+    this._checkOdbcDriverUseCase, {
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
   }) : _authProvider = authProvider,
@@ -37,12 +41,14 @@ class ConnectionProvider extends ChangeNotifier {
   String _error = '';
   bool _isDbConnected = false;
   bool _isReconnecting = false;
+  bool _isCheckingDriver = false;
 
   ConnectionStatus get status => _status;
   String get error => _error;
   bool get isDbConnected => _isDbConnected;
   bool get isConnected => _status == ConnectionStatus.connected;
   bool get isReconnecting => _isReconnecting;
+  bool get isCheckingDriver => _isCheckingDriver;
 
   Future<void> connect(String serverUrl, String agentId, {String? authToken}) async {
     _status = ConnectionStatus.connecting;
@@ -92,7 +98,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> testDbConnection(String connectionString) async {
+  Future<Result<bool>> testDbConnection(String connectionString) async {
     try {
       final result = await _testDbConnectionUseCase(connectionString);
 
@@ -113,16 +119,52 @@ class ConnectionProvider extends ChangeNotifier {
       );
 
       notifyListeners();
+      return result;
     } catch (e) {
       _isDbConnected = false;
       AppLogger.error('Error testing database connection: $e');
       notifyListeners();
+      return Failure(domain.DatabaseFailure('Erro ao testar conexão: $e'));
     }
   }
 
   void clearError() {
     _error = '';
     notifyListeners();
+  }
+
+  Future<Result<bool>> checkOdbcDriver(String driverName) async {
+    _isCheckingDriver = true;
+    _error = '';
+    notifyListeners();
+
+    try {
+      final result = await _checkOdbcDriverUseCase(driverName);
+
+      result.fold(
+        (isInstalled) {
+          if (isInstalled) {
+            AppLogger.info('ODBC driver "$driverName" is installed');
+          } else {
+            AppLogger.warning('ODBC driver "$driverName" is not installed');
+          }
+        },
+        (failure) {
+          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          _error = failureMessage;
+          AppLogger.error('Failed to check ODBC driver: $failureMessage');
+        },
+      );
+
+      return result;
+    } catch (e) {
+      _error = 'Unexpected error: $e';
+      AppLogger.error('Error checking ODBC driver: $e');
+      return Failure(domain.ConfigurationFailure('Erro ao verificar driver ODBC: $e'));
+    } finally {
+      _isCheckingDriver = false;
+      notifyListeners();
+    }
   }
 
   Future<void> _handleTokenExpired() async {

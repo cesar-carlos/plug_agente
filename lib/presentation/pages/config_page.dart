@@ -1,19 +1,16 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_colors.dart';
-import '../../domain/value_objects/auth_credentials.dart';
-import '../../shared/widgets/common/app_button.dart';
-import '../../shared/widgets/common/app_card.dart';
-import '../../shared/widgets/common/app_dropdown.dart';
-import '../../shared/widgets/common/app_text_field.dart';
-import '../../shared/widgets/common/message_modal.dart';
-import '../../shared/widgets/common/numeric_field.dart';
-import '../../shared/widgets/common/password_field.dart';
 import '../providers/auth_provider.dart';
 import '../providers/config_provider.dart';
 import '../providers/connection_provider.dart';
-import '../widgets/connection_status_widget.dart';
+import 'config/config_form_controller.dart';
+import 'config/widgets/config_navigation_tabs.dart';
+import 'config/widgets/database_config_section.dart';
+import 'config/widgets/websocket_config_section.dart';
+import '../../core/constants/odbc_drivers.dart';
+import '../../domain/errors/failures.dart' as domain;
+import '../../shared/widgets/common/message_modal.dart';
 
 class ConfigPage extends StatefulWidget {
   const ConfigPage({super.key});
@@ -23,9 +20,7 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  // _formKey removido pois não estamos usando Form com TextFormFields
   int _currentPage = 0;
-  bool _fieldsInitialized = false;
   AuthStatus? _previousAuthStatus;
   String _previousAuthError = '';
   ConnectionStatus? _previousConnectionStatus;
@@ -34,21 +29,12 @@ class _ConfigPageState extends State<ConfigPage> {
   AuthProvider? _authProvider;
   ConnectionProvider? _connectionProvider;
   ConfigProvider? _configProvider;
-  final _serverUrlController = TextEditingController();
-  final _agentIdController = TextEditingController();
-  final _authUsernameController = TextEditingController();
-  final _authPasswordController = TextEditingController();
-  final _driverNameController = TextEditingController();
-  final _odbcDriverNameController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _databaseNameController = TextEditingController();
-  final _hostController = TextEditingController();
-  final _portController = TextEditingController();
+  late final ConfigFormController _formController;
 
   @override
   void initState() {
     super.initState();
+    _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndInitializeFields();
       _setupAuthListener();
@@ -61,7 +47,6 @@ class _ConfigPageState extends State<ConfigPage> {
     _authProvider = Provider.of<AuthProvider>(context, listen: false);
     _previousAuthStatus = _authProvider!.status;
     _previousAuthError = _authProvider!.error;
-
     _authProvider!.addListener(_onAuthStateChanged);
   }
 
@@ -69,14 +54,12 @@ class _ConfigPageState extends State<ConfigPage> {
     _connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
     _previousConnectionStatus = _connectionProvider!.status;
     _previousConnectionError = _connectionProvider!.error;
-
     _connectionProvider!.addListener(_onConnectionStateChanged);
   }
 
   void _setupConfigListener() {
     _configProvider = Provider.of<ConfigProvider>(context, listen: false);
     _previousConfigError = _configProvider!.error;
-
     _configProvider!.addListener(_onConfigStateChanged);
   }
 
@@ -87,14 +70,12 @@ class _ConfigPageState extends State<ConfigPage> {
     final currentStatus = authProvider.status;
     final currentError = authProvider.error;
 
-    // Verificar se houve mudança de status para autenticado
     if (_previousAuthStatus != AuthStatus.authenticated &&
         currentStatus == AuthStatus.authenticated &&
         currentError.isEmpty) {
       _showSuccessModal();
     }
 
-    // Verificar se houve novo erro
     if (currentError.isNotEmpty && currentError != _previousAuthError) {
       _showErrorModal(currentError);
     }
@@ -110,18 +91,29 @@ class _ConfigPageState extends State<ConfigPage> {
     final currentStatus = connectionProvider.status;
     final currentError = connectionProvider.error;
 
-    // Verificar se houve mudança de status para conectado
     if (_previousConnectionStatus != ConnectionStatus.connected && currentStatus == ConnectionStatus.connected) {
       _showConnectionSuccessModal();
     }
 
-    // Verificar se houve novo erro
     if (currentError.isNotEmpty && currentError != _previousConnectionError) {
       _showConnectionErrorModal(currentError);
     }
 
     _previousConnectionStatus = currentStatus;
     _previousConnectionError = currentError;
+  }
+
+  void _onConfigStateChanged() {
+    if (!mounted) return;
+
+    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
+    final currentError = configProvider.error;
+
+    if (currentError.isNotEmpty && currentError != _previousConfigError) {
+      _showConfigErrorModal(currentError);
+    }
+
+    _previousConfigError = currentError;
   }
 
   void _showSuccessModal() {
@@ -142,20 +134,6 @@ class _ConfigPageState extends State<ConfigPage> {
       type: MessageType.success,
       confirmText: 'OK',
     );
-  }
-
-  void _onConfigStateChanged() {
-    if (!mounted) return;
-
-    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
-    final currentError = configProvider.error;
-
-    // Verificar se houve novo erro
-    if (currentError.isNotEmpty && currentError != _previousConfigError) {
-      _showConfigErrorModal(currentError);
-    }
-
-    _previousConfigError = currentError;
   }
 
   void _showConnectionErrorModal(String error) {
@@ -203,10 +181,9 @@ class _ConfigPageState extends State<ConfigPage> {
   void _checkAndInitializeFields() {
     if (!mounted) return;
     final configProvider = Provider.of<ConfigProvider>(context, listen: false);
-    if (!_fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
-      _initializeFields(configProvider);
+    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
+      _formController.initializeFromConfig(configProvider.currentConfig);
     } else if (configProvider.isLoading) {
-      // Se ainda estiver carregando, agendar nova verificação
       Future.delayed(const Duration(milliseconds: 100), _checkAndInitializeFields);
     }
   }
@@ -216,73 +193,12 @@ class _ConfigPageState extends State<ConfigPage> {
     _authProvider?.removeListener(_onAuthStateChanged);
     _connectionProvider?.removeListener(_onConnectionStateChanged);
     _configProvider?.removeListener(_onConfigStateChanged);
-
-    _serverUrlController.dispose();
-    _agentIdController.dispose();
-    _authUsernameController.dispose();
-    _authPasswordController.dispose();
-    _driverNameController.dispose();
-    _odbcDriverNameController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _databaseNameController.dispose();
-    _hostController.dispose();
-    _portController.dispose();
+    _formController.dispose();
     super.dispose();
-  }
-
-  void _initializeFields(ConfigProvider configProvider) {
-    if (_fieldsInitialized) return;
-
-    final config = configProvider.currentConfig;
-
-    if (config != null) {
-      if (_serverUrlController.text.isEmpty) {
-        _serverUrlController.text = config.serverUrl;
-      }
-      if (_agentIdController.text.isEmpty) {
-        _agentIdController.text = config.agentId;
-      }
-      if (_authUsernameController.text.isEmpty) {
-        _authUsernameController.text = config.authUsername ?? '';
-      }
-      if (_authPasswordController.text.isEmpty) {
-        _authPasswordController.text = config.authPassword ?? '';
-      }
-      if (_driverNameController.text.isEmpty) {
-        _driverNameController.text = config.driverName;
-      }
-      if (_odbcDriverNameController.text.isEmpty) {
-        _odbcDriverNameController.text = config.odbcDriverName;
-      }
-      if (_usernameController.text.isEmpty) {
-        _usernameController.text = config.username;
-      }
-      if (_passwordController.text.isEmpty) {
-        _passwordController.text = config.password ?? '';
-      }
-      if (_databaseNameController.text.isEmpty) {
-        _databaseNameController.text = config.databaseName;
-      }
-      if (_hostController.text.isEmpty) {
-        _hostController.text = config.host;
-      }
-      if (_portController.text.isEmpty) {
-        _portController.text = config.port.toString();
-      }
-
-      // Mark as initialized only if we actually had a config to load
-      // This prevents "loading" empty state from marking as initialized
-      _fieldsInitialized = true;
-    } else {
-      // If config is null, maybe we are still loading or need defaults.
-      // We'll wait for config to be non-null.
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Apenas leitura, sem escutar mudanças para evitar rebuilds da página inteira
     final configProvider = context.read<ConfigProvider>();
     final connectionProvider = context.read<ConnectionProvider>();
 
@@ -292,7 +208,7 @@ class _ConfigPageState extends State<ConfigPage> {
         padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
         child: Column(
           children: [
-            _NavigationTabs(
+            ConfigNavigationTabs(
               currentPage: _currentPage,
               onDatabaseTabTap: () => setState(() => _currentPage = 0),
               onWebSocketTabTap: () => setState(() => _currentPage = 1),
@@ -300,561 +216,174 @@ class _ConfigPageState extends State<ConfigPage> {
             const SizedBox(height: 16),
             Expanded(
               child: _currentPage == 0
-                  ? _buildDatabaseConfigPage(context, configProvider, connectionProvider)
-                  : _buildWebSocketConfigPage(context, configProvider, connectionProvider),
+                  ? DatabaseConfigSection(
+                      formController: _formController,
+                      configProvider: configProvider,
+                      connectionProvider: connectionProvider,
+                      onDriverChanged: (value) {
+                        setState(() {
+                          configProvider.updateDriverName(value);
+                          final currentOdbcName = _formController.odbcDriverNameController.text;
+
+                          if (OdbcDrivers.isDefaultSuggestion(currentOdbcName)) {
+                            final suggestion = OdbcDrivers.getDefaultDriver(value);
+                            if (suggestion.isNotEmpty) {
+                              _formController.odbcDriverNameController.text = suggestion;
+                              configProvider.updateOdbcDriverName(suggestion);
+                            }
+                          }
+                        });
+                      },
+                      onTestConnection: () async {
+                        final odbcDriverName = _formController.odbcDriverNameController.text.trim();
+                        if (odbcDriverName.isEmpty) {
+                          MessageModal.show(
+                            context: context,
+                            title: 'Erro',
+                            message: 'Nome do Driver ODBC é obrigatório',
+                            type: MessageType.error,
+                            confirmText: 'OK',
+                          );
+                          return;
+                        }
+
+                        final driverCheckResult = await connectionProvider.checkOdbcDriver(odbcDriverName);
+                        await driverCheckResult.fold(
+                          (isInstalled) async {
+                            if (!isInstalled) {
+                              MessageModal.show(
+                                context: context,
+                                title: 'Driver Não Encontrado',
+                                message:
+                                    'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de testar a conexão.',
+                                type: MessageType.error,
+                                confirmText: 'OK',
+                              );
+                              return;
+                            }
+
+                            _formController.updateAllFieldsToProvider(configProvider);
+                            final connectionString = configProvider.getConnectionString();
+                            final testResult = await connectionProvider.testDbConnection(connectionString);
+                            
+                            if (!mounted) return;
+                            
+                            testResult.fold(
+                              (isConnected) {
+                                MessageModal.show(
+                                  context: context,
+                                  title: isConnected ? 'Conexão Bem-Sucedida' : 'Falha na Conexão',
+                                  message: isConnected
+                                      ? 'Conexão com o banco de dados estabelecida com sucesso!'
+                                      : 'Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.',
+                                  type: isConnected ? MessageType.success : MessageType.error,
+                                  confirmText: 'OK',
+                                );
+                              },
+                              (failure) {
+                                final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+                                MessageModal.show(
+                                  context: context,
+                                  title: 'Erro ao Testar Conexão',
+                                  message: failureMessage,
+                                  type: MessageType.error,
+                                  confirmText: 'OK',
+                                );
+                              },
+                            );
+                          },
+                          (failure) async {
+                            final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+                            MessageModal.show(
+                              context: context,
+                              title: 'Erro ao Verificar Driver',
+                              message: failureMessage,
+                              type: MessageType.error,
+                              confirmText: 'OK',
+                            );
+                          },
+                        );
+                      },
+                      onSaveConfig: () async {
+                        final odbcDriverName = _formController.odbcDriverNameController.text.trim();
+                        if (odbcDriverName.isEmpty) {
+                          MessageModal.show(
+                            context: context,
+                            title: 'Erro',
+                            message: 'Nome do Driver ODBC é obrigatório',
+                            type: MessageType.error,
+                            confirmText: 'OK',
+                          );
+                          return;
+                        }
+
+                        final driverCheckResult = await connectionProvider.checkOdbcDriver(odbcDriverName);
+                        await driverCheckResult.fold(
+                          (isInstalled) async {
+                            if (!isInstalled) {
+                              MessageModal.show(
+                                context: context,
+                                title: 'Driver Não Encontrado',
+                                message:
+                                    'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de salvar a configuração.',
+                                type: MessageType.error,
+                                confirmText: 'OK',
+                              );
+                              return;
+                            }
+
+                            _formController.updateAllFieldsToProvider(configProvider);
+                            final saveResult = await configProvider.saveConfig();
+                            
+                            if (!mounted) return;
+                            
+                            saveResult.fold(
+                              (_) {
+                                MessageModal.show(
+                                  context: context,
+                                  title: 'Configuração Salva',
+                                  message: 'Configuração salva com sucesso!',
+                                  type: MessageType.success,
+                                  confirmText: 'OK',
+                                );
+                              },
+                              (failure) {
+                                final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+                                MessageModal.show(
+                                  context: context,
+                                  title: 'Erro ao Salvar',
+                                  message: failureMessage,
+                                  type: MessageType.error,
+                                  confirmText: 'OK',
+                                );
+                              },
+                            );
+                          },
+                          (failure) async {
+                            final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+                            MessageModal.show(
+                              context: context,
+                              title: 'Erro ao Verificar Driver',
+                              message: failureMessage,
+                              type: MessageType.error,
+                              confirmText: 'OK',
+                            );
+                          },
+                        );
+                      },
+                    )
+                  : WebSocketConfigSection(
+                      formController: _formController,
+                      configProvider: configProvider,
+                      onSaveConfig: () {
+                        _formController.updateAllFieldsToProvider(configProvider);
+                        configProvider.saveConfig();
+                      },
+                    ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildDatabaseConfigPage(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-  ) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _DatabaseSectionHeader(),
-            const SizedBox(height: 16),
-            _DriverSection(
-              driverNameController: _driverNameController,
-              odbcDriverNameController: _odbcDriverNameController,
-              onDriverChanged: (value) => configProvider.updateDriverName(value),
-              fieldsInitialized: _fieldsInitialized,
-            ),
-            const SizedBox(height: 16),
-            _ConnectionSection(hostController: _hostController, portController: _portController),
-            const SizedBox(height: 16),
-            _DatabaseCredentialsSection(
-              databaseNameController: _databaseNameController,
-              usernameController: _usernameController,
-              passwordController: _passwordController,
-            ),
-            const SizedBox(height: 24),
-            _ActionButtons(
-              driverNameController: _driverNameController,
-              hostController: _hostController,
-              portController: _portController,
-              onTestConnection: () {
-                _updateAllFieldsToProvider(configProvider);
-                final connectionString = configProvider.getConnectionString();
-                connectionProvider.testDbConnection(connectionString);
-              },
-              onSaveConfig: () {
-                _updateAllFieldsToProvider(configProvider);
-                configProvider.saveConfig();
-              },
-              isLoading: configProvider.isLoading,
-            ),
-            const SizedBox(height: 16),
-            const _StatusSection(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWebSocketConfigPage(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-  ) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildServerSection(context, configProvider),
-            const SizedBox(height: 24),
-            _buildWebSocketActionButtons(context, configProvider, connectionProvider),
-            const SizedBox(height: 16),
-            const _StatusSection(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildServerSection(BuildContext context, ConfigProvider configProvider) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, _) {
-        return _ServerSection(
-          authProvider: authProvider,
-          serverUrlController: _serverUrlController,
-          agentIdController: _agentIdController,
-          authUsernameController: _authUsernameController,
-          authPasswordController: _authPasswordController,
-          onLoginOrLogout: () => _handleLoginOrLogout(context, authProvider),
-        );
-      },
-    );
-  }
-
-  Widget _buildWebSocketActionButtons(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-  ) {
-    return Consumer<ConnectionProvider>(
-      builder: (context, connectionProvider, _) {
-        return Consumer<AuthProvider>(
-          builder: (context, authProvider, _) {
-            return _WebSocketActionButtons(
-              connectionProvider: connectionProvider,
-              authProvider: authProvider,
-              onConnectOrDisconnect: () =>
-                  _handleConnectOrDisconnect(context, configProvider, connectionProvider, authProvider),
-              onSaveConfig: () {
-                _updateAllFieldsToProvider(configProvider);
-                configProvider.saveConfig();
-              },
-              isLoading: configProvider.isLoading,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _handleLoginOrLogout(BuildContext context, AuthProvider authProvider) {
-    if (authProvider.isAuthenticated) {
-      authProvider.logout();
-    } else {
-      final serverUrl = _serverUrlController.text.trim();
-      if (serverUrl.isEmpty) {
-        MessageModal.show(
-          context: context,
-          title: 'Erro',
-          message: 'URL do Servidor é obrigatória',
-          type: MessageType.error,
-          confirmText: 'OK',
-        );
-        return;
-      }
-
-      if (_authUsernameController.text.isNotEmpty && _authPasswordController.text.isNotEmpty) {
-        final credentials = AuthCredentials(
-          username: _authUsernameController.text.trim(),
-          password: _authPasswordController.text.trim(),
-        );
-        authProvider.login(serverUrl, credentials);
-      } else {
-        MessageModal.show(
-          context: context,
-          title: 'Erro',
-          message: 'Usuário e senha são obrigatórios',
-          type: MessageType.error,
-          confirmText: 'OK',
-        );
-      }
-    }
-  }
-
-  void _handleConnectOrDisconnect(
-    BuildContext context,
-    ConfigProvider configProvider,
-    ConnectionProvider connectionProvider,
-    AuthProvider authProvider,
-  ) {
-    if (connectionProvider.isConnected) {
-      connectionProvider.disconnect();
-    } else {
-      final serverUrl = _serverUrlController.text.trim();
-      final agentId = _agentIdController.text.trim();
-      final authToken = authProvider.currentToken?.token;
-
-      if (serverUrl.isNotEmpty && agentId.isNotEmpty) {
-        configProvider.updateServerUrl(serverUrl);
-        configProvider.updateAgentId(agentId);
-        connectionProvider.connect(serverUrl, agentId, authToken: authToken);
-      }
-    }
-  }
-
-  void _updateAllFieldsToProvider(ConfigProvider configProvider) {
-    // Database Fields
-    configProvider.updateHost(_hostController.text);
-    configProvider.updatePort(int.tryParse(_portController.text) ?? 1433);
-    configProvider.updateDatabaseName(_databaseNameController.text);
-    configProvider.updateUsername(_usernameController.text);
-    configProvider.updatePassword(_passwordController.text);
-    configProvider.updateDriverName(_driverNameController.text);
-    configProvider.updateOdbcDriverName(_odbcDriverNameController.text);
-
-    // WebSocket Fields
-    configProvider.updateServerUrl(_serverUrlController.text);
-    configProvider.updateAgentId(_agentIdController.text);
-
-    // WebSocket Authentication Fields
-    configProvider.updateAuthUsername(
-      _authUsernameController.text.trim().isEmpty ? null : _authUsernameController.text.trim(),
-    );
-    configProvider.updateAuthPassword(
-      _authPasswordController.text.trim().isEmpty ? null : _authPasswordController.text.trim(),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  const _TabButton({required this.label, required this.icon, required this.isSelected, required this.onTap});
-
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    final backgroundColor = isSelected ? AppColors.primary : Colors.transparent;
-    final textColor = isSelected ? Colors.white : theme.resources.textFillColorPrimary;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(4)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: textColor),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(color: textColor, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DatabaseSectionHeader extends StatelessWidget {
-  const _DatabaseSectionHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Text('Configuração do Banco de Dados', style: FluentTheme.of(context).typography.subtitle);
-  }
-}
-
-class _DriverSection extends StatelessWidget {
-  const _DriverSection({
-    required this.driverNameController,
-    required this.odbcDriverNameController,
-    required this.onDriverChanged,
-    required this.fieldsInitialized,
-  });
-
-  final TextEditingController driverNameController;
-  final TextEditingController odbcDriverNameController;
-  final ValueChanged<String> onDriverChanged;
-  final bool fieldsInitialized;
-
-  void _updateOdbcDriverNameSuggestion(String driverName) {
-    final suggestion = switch (driverName) {
-      'SQL Server' => 'SQL Server Native Client 11.0',
-      'PostgreSQL' => 'PostgreSQL Unicode',
-      'SQL Anywhere' => 'SQL Anywhere 17',
-      _ => odbcDriverNameController.text,
-    };
-    if (odbcDriverNameController.text.isEmpty) {
-      odbcDriverNameController.text = suggestion;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppDropdown<String>(
-            label: 'Driver do Banco de Dados',
-            value: driverNameController.text,
-            items: const [
-              ComboBoxItem(value: 'SQL Server', child: Text('SQL Server')),
-              ComboBoxItem(value: 'PostgreSQL', child: Text('PostgreSQL')),
-              ComboBoxItem(value: 'SQL Anywhere', child: Text('SQL Anywhere')),
-            ],
-            onChanged: (value) {
-              if (value != null && fieldsInitialized) {
-                driverNameController.text = value;
-                onDriverChanged(value);
-                _updateOdbcDriverNameSuggestion(value);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-          AppTextField(
-            label: 'Nome do Driver ODBC',
-            controller: odbcDriverNameController,
-            hint: 'SQL Server Native Client 11.0',
-            enabled: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionSection extends StatelessWidget {
-  const _ConnectionSection({required this.hostController, required this.portController});
-
-  final TextEditingController hostController;
-  final TextEditingController portController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: AppTextField(label: 'Host', controller: hostController, hint: 'localhost', enabled: true),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 1,
-          child: NumericField(
-            label: 'Porta',
-            controller: portController,
-            hint: '1433',
-            minValue: 1,
-            maxValue: 65535,
-            enabled: true,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DatabaseCredentialsSection extends StatelessWidget {
-  const _DatabaseCredentialsSection({
-    required this.databaseNameController,
-    required this.usernameController,
-    required this.passwordController,
-  });
-
-  final TextEditingController databaseNameController;
-  final TextEditingController usernameController;
-  final TextEditingController passwordController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppTextField(
-          label: 'Nome do Banco de Dados',
-          controller: databaseNameController,
-          hint: 'Nome da Base',
-          enabled: true,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(label: 'Usuário', controller: usernameController, hint: 'Usuário', enabled: true),
-        const SizedBox(height: 16),
-        PasswordField(label: 'Senha', controller: passwordController, hint: 'Senha', validator: null, enabled: true),
-      ],
-    );
-  }
-}
-
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({
-    required this.driverNameController,
-    required this.hostController,
-    required this.portController,
-    required this.onTestConnection,
-    required this.onSaveConfig,
-    required this.isLoading,
-  });
-
-  final TextEditingController driverNameController;
-  final TextEditingController hostController;
-  final TextEditingController portController;
-  final VoidCallback onTestConnection;
-  final VoidCallback onSaveConfig;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        AppButton(
-          label: 'Testar Conexão com Banco',
-          isPrimary: false,
-          onPressed: () {
-            if (driverNameController.text.isNotEmpty &&
-                hostController.text.isNotEmpty &&
-                portController.text.isNotEmpty) {
-              onTestConnection();
-            }
-          },
-        ),
-        const SizedBox(width: 16),
-        AppButton(
-          label: 'Salvar Configuração',
-          isLoading: isLoading,
-          onPressed: () {
-            if (driverNameController.text.isNotEmpty &&
-                hostController.text.isNotEmpty &&
-                portController.text.isNotEmpty) {
-              onSaveConfig();
-            }
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _ServerSection extends StatelessWidget {
-  const _ServerSection({
-    required this.authProvider,
-    required this.serverUrlController,
-    required this.agentIdController,
-    required this.authUsernameController,
-    required this.authPasswordController,
-    required this.onLoginOrLogout,
-  });
-
-  final AuthProvider authProvider;
-  final TextEditingController serverUrlController;
-  final TextEditingController agentIdController;
-  final TextEditingController authUsernameController;
-  final TextEditingController authPasswordController;
-  final VoidCallback onLoginOrLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Conexão WebSocket', style: FluentTheme.of(context).typography.subtitle),
-          const SizedBox(height: 16),
-          AppTextField(
-            label: 'URL do Servidor',
-            controller: serverUrlController,
-            hint: 'https://api.example.com',
-            enabled: true,
-          ),
-          const SizedBox(height: 16),
-          AppTextField(label: 'ID do Agente', controller: agentIdController, hint: 'UUID ou Nome Único', enabled: true),
-          const SizedBox(height: 24),
-          Text('Autenticação (Opcional)', style: FluentTheme.of(context).typography.subtitle),
-          const SizedBox(height: 16),
-          AppTextField(
-            label: 'Usuário',
-            controller: authUsernameController,
-            hint: 'Usuário para autenticação',
-            enabled: true,
-          ),
-          const SizedBox(height: 16),
-          PasswordField(
-            label: 'Senha',
-            controller: authPasswordController,
-            hint: 'Senha para autenticação',
-            validator: null,
-            enabled: true,
-          ),
-          const SizedBox(height: 16),
-          AppButton(
-            label: authProvider.status == AuthStatus.authenticating
-                ? 'Autenticando...'
-                : authProvider.isAuthenticated
-                ? 'Logout'
-                : 'Login',
-            isPrimary: false,
-            isLoading: authProvider.status == AuthStatus.authenticating,
-            onPressed: onLoginOrLogout,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WebSocketActionButtons extends StatelessWidget {
-  const _WebSocketActionButtons({
-    required this.connectionProvider,
-    required this.authProvider,
-    required this.onConnectOrDisconnect,
-    required this.onSaveConfig,
-    required this.isLoading,
-  });
-
-  final ConnectionProvider connectionProvider;
-  final AuthProvider authProvider;
-  final VoidCallback onConnectOrDisconnect;
-  final VoidCallback onSaveConfig;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        AppButton(
-          label: connectionProvider.isConnected ? 'Desconectar' : 'Conectar',
-          isPrimary: true,
-          onPressed: onConnectOrDisconnect,
-        ),
-        const SizedBox(width: 16),
-        AppButton(label: 'Salvar Configuração', isLoading: isLoading, onPressed: onSaveConfig),
-      ],
-    );
-  }
-}
-
-class _NavigationTabs extends StatelessWidget {
-  const _NavigationTabs({required this.currentPage, required this.onDatabaseTabTap, required this.onWebSocketTabTap});
-
-  final int currentPage;
-  final VoidCallback onDatabaseTabTap;
-  final VoidCallback onWebSocketTabTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(color: FluentTheme.of(context).cardColor, borderRadius: BorderRadius.circular(4)),
-      child: Row(
-        children: [
-          Expanded(
-            child: _TabButton(
-              label: 'Configuração do Banco de Dados',
-              icon: FluentIcons.database,
-              isSelected: currentPage == 0,
-              onTap: onDatabaseTabTap,
-            ),
-          ),
-          Expanded(
-            child: _TabButton(
-              label: 'Conexão WebSocket',
-              icon: FluentIcons.plug_connected,
-              isSelected: currentPage == 1,
-              onTap: onWebSocketTabTap,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusSection extends StatelessWidget {
-  const _StatusSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return const ConnectionStatusWidget();
   }
 }

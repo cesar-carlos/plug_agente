@@ -1,6 +1,7 @@
 export 'cancel_all_notifications.dart';
 export 'cancel_notification.dart';
 export 'check_for_updates.dart';
+export 'check_odbc_driver.dart';
 export 'connect_to_hub.dart';
 export 'execute_playground_query.dart';
 export 'handle_query_request.dart';

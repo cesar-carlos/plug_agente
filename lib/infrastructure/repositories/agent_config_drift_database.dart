@@ -45,7 +45,15 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         await m.addColumn(configTable, configTable.authPassword as GeneratedColumn<Object>);
       }
       if (from < 5) {
-        await m.addColumn(configTable, configTable.odbcDriverName as GeneratedColumn<Object>);
+        await m.alterTable(
+          TableMigration(
+            configTable,
+            columnTransformer: {
+              configTable.odbcDriverName: const Constant(''),
+            },
+            newColumns: [configTable.odbcDriverName],
+          ),
+        );
       }
     },
   );

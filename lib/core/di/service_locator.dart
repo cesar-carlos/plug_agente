@@ -4,11 +4,13 @@ import 'package:uuid/uuid.dart';
 import '../../domain/repositories/i_agent_config_repository.dart';
 import '../../domain/repositories/i_database_gateway.dart';
 import '../../domain/repositories/i_notification_service.dart';
+import '../../domain/repositories/i_odbc_driver_checker.dart';
 import '../../domain/repositories/i_transport_client.dart';
 import '../../domain/repositories/i_auth_client.dart';
 import '../../infrastructure/repositories/agent_config_repository.dart';
 import '../../infrastructure/external_services/socket_io_transport_client.dart';
 import '../../infrastructure/external_services/odbc_database_gateway.dart';
+import '../../infrastructure/external_services/odbc_driver_checker.dart';
 import '../../infrastructure/external_services/auth_client.dart';
 import '../../infrastructure/external_services/dio_factory.dart';
 import '../../infrastructure/datasources/socket_data_source.dart';
@@ -25,6 +27,7 @@ import '../../application/services/query_processing_service.dart';
 import '../../application/services/auth_service.dart';
 import '../../application/validation/config_validator.dart';
 import '../../application/validation/query_normalizer.dart';
+import '../../application/use_cases/check_odbc_driver.dart';
 import '../../application/use_cases/connect_to_hub.dart';
 import '../../application/use_cases/execute_playground_query.dart';
 import '../../application/use_cases/handle_query_request.dart';
@@ -66,6 +69,8 @@ Future<void> setupDependencies() async {
 
   getIt.registerLazySingleton<IDatabaseGateway>(() => OdbcDatabaseGateway(getIt<IAgentConfigRepository>()));
 
+  getIt.registerLazySingleton<IOdbcDriverChecker>(() => OdbcDriverChecker());
+
   // Auth Client
   getIt.registerLazySingleton<IAuthClient>(() => AuthClient(DioFactory.createDio()));
 
@@ -102,6 +107,8 @@ Future<void> setupDependencies() async {
   );
 
   getIt.registerLazySingleton(() => TestDbConnection(getIt<ConnectionService>()));
+
+  getIt.registerLazySingleton(() => CheckOdbcDriver(getIt<IOdbcDriverChecker>()));
 
   getIt.registerLazySingleton(
     () => ExecutePlaygroundQuery(getIt<IDatabaseGateway>(), getIt<IAgentConfigRepository>(), getIt<Uuid>()),

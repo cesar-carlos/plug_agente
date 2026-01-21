@@ -1,6 +1,7 @@
 import 'package:result_dart/result_dart.dart';
 
 import '../../domain/entities/config.dart';
+import '../../domain/value_objects/database_driver.dart';
 import '../validation/config_validator.dart';
 
 class ConfigService {
@@ -13,16 +14,48 @@ class ConfigService {
   }
 
   String generateConnectionString(Config config) {
-    switch (config.driverName.toLowerCase()) {
-      case 'sql server':
-        return 'DRIVER={SQL Server};SERVER=${config.host},${config.port};DATABASE=${config.databaseName};UID=${config.username}${config.password != null ? ';PWD=${config.password}' : ''}';
-      case 'postgresql':
-      case 'postgres':
-        return 'DRIVER={PostgreSQL Unicode};SERVER=${config.host};PORT=${config.port};DATABASE=${config.databaseName};UID=${config.username}${config.password != null ? ';PWD=${config.password}' : ''}';
-      case 'sql anywhere':
-        return 'DRIVER={SQL Anywhere 17};UID=${config.username}${config.password != null ? ';PWD=${config.password}' : ''};DBN=${config.databaseName};HOST=${config.host};PORT=${config.port}';
-      default:
-        return '';
+    final driver = DatabaseDriver.fromString(config.driverName);
+
+    return switch (driver) {
+      DatabaseDriver.sqlServer => _buildSqlServerConnectionString(config),
+      DatabaseDriver.postgreSQL => _buildPostgreSqlConnectionString(config),
+      DatabaseDriver.sqlAnywhere => _buildSqlAnywhereConnectionString(config),
+      DatabaseDriver.unknown => '',
+    };
+  }
+
+  String _buildSqlServerConnectionString(Config config) {
+    final buffer = StringBuffer('DRIVER={SQL Server};');
+    buffer.write('SERVER=${config.host},${config.port};');
+    buffer.write('DATABASE=${config.databaseName};');
+    buffer.write('UID=${config.username}');
+    if (config.password != null) {
+      buffer.write(';PWD=${config.password}');
     }
+    return buffer.toString();
+  }
+
+  String _buildPostgreSqlConnectionString(Config config) {
+    final buffer = StringBuffer('DRIVER={PostgreSQL Unicode};');
+    buffer.write('SERVER=${config.host};');
+    buffer.write('PORT=${config.port};');
+    buffer.write('DATABASE=${config.databaseName};');
+    buffer.write('UID=${config.username}');
+    if (config.password != null) {
+      buffer.write(';PWD=${config.password}');
+    }
+    return buffer.toString();
+  }
+
+  String _buildSqlAnywhereConnectionString(Config config) {
+    final buffer = StringBuffer('DRIVER={${config.odbcDriverName}};');
+    buffer.write('UID=${config.username}');
+    if (config.password != null) {
+      buffer.write(';PWD=${config.password}');
+    }
+    buffer.write(';DBN=${config.databaseName};');
+    buffer.write('HOST=${config.host};');
+    buffer.write('PORT=${config.port}');
+    return buffer.toString();
   }
 }

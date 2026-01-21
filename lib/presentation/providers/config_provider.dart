@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/entities/config.dart';
 import '../../domain/value_objects/database_driver.dart';
-import '../../domain/errors/failures.dart';
+import '../../domain/errors/failures.dart' as domain;
 import '../../application/use_cases/save_agent_config.dart';
 import '../../application/use_cases/load_agent_config.dart';
 import '../../application/services/config_service.dart';
@@ -44,11 +45,11 @@ class ConfigProvider extends ChangeNotifier {
         },
         (exception) {
           // NotFoundFailure means no config exists, not an error
-          if (exception is NotFoundFailure) {
+          if (exception is domain.NotFoundFailure) {
             _currentConfig = null;
             AppLogger.info('No config found, creating new one');
             _createDefaultConfig();
-          } else if (exception is Failure) {
+          } else if (exception is domain.Failure) {
             _error = exception.message;
             AppLogger.error('Failed to load config: ${exception.message}');
           } else {
@@ -84,11 +85,11 @@ class ConfigProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> saveConfig() async {
+  Future<Result<void>> saveConfig() async {
     if (_currentConfig == null) {
       _error = 'No configuration to save';
       notifyListeners();
-      return;
+      return Failure(domain.ValidationFailure('Nenhuma configuração para salvar'));
     }
 
     _isLoading = true;
@@ -107,21 +108,21 @@ class ConfigProvider extends ChangeNotifier {
 
       result.fold(
         (_) {
+          _error = '';
           AppLogger.info('Config saved successfully');
         },
-        (exception) {
-          if (exception is Failure) {
-            _error = exception.message;
-            AppLogger.error('Failed to save config: ${exception.message}');
-          } else {
-            _error = exception.toString();
-            AppLogger.error('Failed to save config: $exception');
-          }
+        (failure) {
+          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          _error = failureMessage;
+          AppLogger.error('Failed to save config: $failureMessage');
         },
       );
+
+      return result;
     } catch (e) {
       _error = 'Unexpected error: $e';
       AppLogger.error('Error saving config: $e');
+      return Failure(domain.ConfigurationFailure('Erro inesperado: $e'));
     } finally {
       _isLoading = false;
       notifyListeners();

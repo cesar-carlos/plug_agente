@@ -8,6 +8,7 @@ import 'core/constants/window_constraints.dart';
 import 'core/services/tray_manager_service.dart';
 import 'core/services/window_manager_service.dart';
 import 'domain/repositories/i_notification_service.dart';
+import 'application/use_cases/check_odbc_driver.dart';
 import 'application/use_cases/connect_to_hub.dart';
 import 'application/use_cases/test_db_connection.dart';
 import 'application/use_cases/execute_playground_query.dart';
@@ -52,7 +53,9 @@ void main() async {
         case TrayMenuAction.exit:
           try {
             trayManager.dispose();
-          } catch (e) {}
+          } catch (_) {
+            // Ignore errors during tray disposal
+          }
 
           await windowManagerService.close();
           break;
@@ -83,7 +86,8 @@ class MyApp extends StatelessWidget {
           create: (context) => AuthProvider(getIt<LoginUser>(), getIt<RefreshAuthToken>(), getIt<SaveAuthToken>()),
         ),
         ChangeNotifierProvider(
-          create: (context) => ConnectionProvider(getIt<ConnectToHub>(), getIt<TestDbConnection>()),
+          create: (context) =>
+              ConnectionProvider(getIt<ConnectToHub>(), getIt<TestDbConnection>(), getIt<CheckOdbcDriver>()),
         ),
         ChangeNotifierProvider(
           create: (context) => NotificationProvider(
