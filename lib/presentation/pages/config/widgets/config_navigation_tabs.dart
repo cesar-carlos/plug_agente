@@ -1,13 +1,13 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/app_colors.dart';
 
 class ConfigNavigationTabs extends StatelessWidget {
   const ConfigNavigationTabs({
-    super.key,
     required this.currentPage,
     required this.onDatabaseTabTap,
     required this.onWebSocketTabTap,
+    super.key,
   });
 
   final int currentPage;
@@ -62,7 +62,9 @@ class _TabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final backgroundColor = isSelected ? AppColors.primary : Colors.transparent;
-    final textColor = isSelected ? Colors.white : theme.resources.textFillColorPrimary;
+    final textColor = isSelected
+        ? Colors.white
+        : theme.resources.textFillColorPrimary;
 
     return GestureDetector(
       onTap: onTap,

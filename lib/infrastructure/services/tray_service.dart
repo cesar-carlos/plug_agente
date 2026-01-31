@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -38,12 +40,12 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    windowManager.show();
-    windowManager.focus();
+    unawaited(windowManager.show());
+    unawaited(windowManager.focus());
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    trayManager.popUpContextMenu();
+    unawaited(trayManager.popUpContextMenu());
   }
 }

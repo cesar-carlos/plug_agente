@@ -225,50 +225,59 @@ Para cada dependência, recomendamos manter as versões mais recentes estáveis 
 
 ## Tabela de Compatibilidade
 
-| Componente                    | Versão Mínima | Versão Recomendada | Notas                           |
-| ----------------------------- | ------------- | ------------------ | ------------------------------- |
-| fluent_ui                     | 4.5.0         | 4.13.0+            | UI modern para Windows          |
-| socket_io_client              | 1.0.0         | 2.0.3+1            | Comunicação em tempo real       |
-| archive                       | 3.0.0         | 3.4.9              | Melhor compressão               |
-| get_it                        | 7.0.0         | 7.6.7+             | Injeção de dependências         |
-| drift                         | 2.0.0         | 2.22.1             | ORM para SQLite                 |
-| result_dart                   | 2.0.0         | 2.1.1              | Tratamento de erros             |
-| provider                      | 6.0.0         | 6.1.2+             | Gerenciamento de estado         |
-| go_router                     | 14.0.0        | 14.6.2+            | Sistema de rotas                |
-| dio                           | 5.0.0         | 5.4.0              | Cliente HTTP                    |
-| window_manager                | 0.3.0         | 0.5.1+             | Gerenciamento de janelas        |
-| tray_manager                  | 0.2.0         | 0.5.2+             | Sistema tray                    |
-| flutter_local_notifications   | 19.0.0        | 19.5.0+            | Notificações locais             |
-| fl_chart                      | 1.0.0         | 1.1.1+             | Gráficos                        |
-| mailer                        | 6.0.0         | 6.6.0              | Envio de e-mails                |
+| Componente                  | Versão Mínima | Versão Recomendada | Notas                     |
+| --------------------------- | ------------- | ------------------ | ------------------------- |
+| fluent_ui                   | 4.5.0         | 4.13.0+            | UI modern para Windows    |
+| socket_io_client            | 1.0.0         | 2.0.3+1            | Comunicação em tempo real |
+| archive                     | 3.0.0         | 3.4.9              | Melhor compressão         |
+| get_it                      | 7.0.0         | 7.6.7+             | Injeção de dependências   |
+| drift                       | 2.0.0         | 2.22.1             | ORM para SQLite           |
+| result_dart                 | 2.0.0         | 2.1.1              | Tratamento de erros       |
+| provider                    | 6.0.0         | 6.1.2+             | Gerenciamento de estado   |
+| go_router                   | 14.0.0        | 14.6.2+            | Sistema de rotas          |
+| dio                         | 5.0.0         | 5.4.0              | Cliente HTTP              |
+| window_manager              | 0.3.0         | 0.5.1+             | Gerenciamento de janelas  |
+| tray_manager                | 0.2.0         | 0.5.2+             | Sistema tray              |
+| flutter_local_notifications | 19.0.0        | 19.5.0+            | Notificações locais       |
+| fl_chart                    | 1.0.0         | 1.1.1+             | Gráficos                  |
+| mailer                      | 6.0.0         | 6.6.0              | Envio de e-mails          |
 
 ## Organização por Categoria
 
 ### Comunicação e Rede
+
 - socket_io_client, dio
 
 ### Persistência de Dados
+
 - drift, sqlite3_flutter_libs, path_provider, shared_preferences, flutter_secure_storage
 
 ### UI e Interface
+
 - fluent_ui, fluentui_system_icons, window_manager, tray_manager, fl_chart
 
 ### Navegação
+
 - go_router
 
 ### Estado e Validação
+
 - provider, result_dart, zard
 
 ### Utilitários
+
 - uuid, logger, crypto, path, collection, win32, ffi
 
 ### Configuração
+
 - flutter_dotenv, package_info_plus
 
 ### Notificações e Comunicação Externa
+
 - flutter_local_notifications, mailer, auto_updater
 
 ### Desenvolvimento
+
 - flutter_lints, drift_dev, build_runner, mocktail, test, protoc_plugin, flutter_launcher_icons
 
 ## Próximos Passos

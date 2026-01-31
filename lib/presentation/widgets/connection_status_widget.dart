@@ -1,8 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
-
-import '../../core/theme/app_colors.dart';
-import '../providers/connection_provider.dart';
 
 class ConnectionStatusWidget extends StatelessWidget {
   const ConnectionStatusWidget({super.key});
@@ -20,17 +19,14 @@ class ConnectionStatusWidget extends StatelessWidget {
             icon = FluentIcons.check_mark;
             color = AppColors.success;
             statusText = 'Connected';
-            break;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
             color = AppColors.warning;
             statusText = 'Connecting...';
-            break;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = AppColors.error;
             statusText = 'Connection Error';
-            break;
           default:
             icon = FluentIcons.circle_pause;
             color = AppColors.disabled;
@@ -38,7 +34,7 @@ class ConnectionStatusWidget extends StatelessWidget {
         }
 
         return Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
               Icon(icon, color: color, size: 16),
@@ -49,8 +45,14 @@ class ConnectionStatusWidget extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                connectionProvider.isDbConnected ? 'DB: Connected' : 'DB: Disconnected',
-                style: TextStyle(color: connectionProvider.isDbConnected ? AppColors.success : AppColors.disabled),
+                connectionProvider.isDbConnected
+                    ? 'DB: Connected'
+                    : 'DB: Disconnected',
+                style: TextStyle(
+                  color: connectionProvider.isDbConnected
+                      ? AppColors.success
+                      : AppColors.disabled,
+                ),
               ),
             ],
           ),

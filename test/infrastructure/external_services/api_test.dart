@@ -35,7 +35,9 @@ void main() {
 
       // Act & Assert
       try {
-        await clientWithTimeout.get(Uri.parse(url)).timeout(const Duration(seconds: 1));
+        await clientWithTimeout
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 1));
         fail('Should have thrown TimeoutException');
       } on Exception catch (e) {
         expect(e, isA<Exception>());
@@ -59,22 +61,28 @@ void main() {
 
         // Assert
         expect(response.statusCode, isNotNull);
-      } catch (e) {
+      } on Exception {
         // Request failed, but we're just testing the configuration
       }
     });
 
-    test('should handle different endpoints correctly', () async {
-      // Arrange
-      const baseUrl = 'http://31.97.29.223:3000/';
+    test(
+      'should handle different endpoints correctly',
+      () async {
+        // Arrange
+        const baseUrl = 'http://31.97.29.223:3000/';
 
-      // Act & Assert - Test base endpoint
-      try {
-        final response = await client.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 5));
-        expect(response.statusCode, isNotNull);
-      } catch (e) {
-        // Don't fail the test, just catch the error
-      }
-    }, timeout: const Timeout(Duration(seconds: 15)));
+        // Act & Assert - Test base endpoint
+        try {
+          final response = await client
+              .get(Uri.parse(baseUrl))
+              .timeout(const Duration(seconds: 5));
+          expect(response.statusCode, isNotNull);
+        } on Exception {
+          // Don't fail the test, just catch the error
+        }
+      },
+      timeout: const Timeout(Duration(seconds: 15)),
+    );
   });
 }

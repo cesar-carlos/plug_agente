@@ -1,15 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/app_text_field.dart';
 
 class PasswordField extends StatefulWidget {
-  final String label;
-  final String? hint;
-  final TextEditingController? controller;
-  final String? Function(String?)? validator;
-  final ValueChanged<String>? onChanged;
-  final bool enabled;
-
   const PasswordField({
     super.key,
     this.label = 'Senha',
@@ -19,6 +12,12 @@ class PasswordField extends StatefulWidget {
     this.onChanged,
     this.enabled = true,
   });
+  final String label;
+  final String? hint;
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
 
   @override
   State<PasswordField> createState() => _PasswordFieldState();

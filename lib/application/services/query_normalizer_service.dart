@@ -1,10 +1,9 @@
-import '../../domain/entities/query_response.dart';
-import '../validation/query_normalizer.dart';
+import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 
 class QueryNormalizerService {
-  final QueryNormalizer _normalizer;
-
   QueryNormalizerService(this._normalizer);
+  final QueryNormalizer _normalizer;
 
   Future<QueryResponse> normalize(QueryResponse response) async {
     final normalizedData = <Map<String, dynamic>>[];
@@ -38,7 +37,7 @@ class QueryNormalizerService {
     return columnName
         .replaceAllMapped(RegExp(r'\s+'), (match) => '_')
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+        .replaceAll(RegExp('[^a-z0-9_]'), '');
   }
 
   dynamic _normalizeValue(dynamic value) {

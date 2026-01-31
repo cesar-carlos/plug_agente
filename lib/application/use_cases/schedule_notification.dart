@@ -1,11 +1,9 @@
+import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:result_dart/result_dart.dart';
 
-import '../../domain/repositories/i_notification_service.dart';
-
 class ScheduleNotification {
-  final INotificationService _notificationService;
-
   ScheduleNotification(this._notificationService);
+  final INotificationService _notificationService;
 
   Future<Result<void>> call({
     required String title,
@@ -13,7 +11,7 @@ class ScheduleNotification {
     required DateTime scheduledTime,
     String? payload,
   }) async {
-    return await _notificationService.schedule(
+    return _notificationService.schedule(
       title: title,
       body: body,
       scheduledTime: scheduledTime,

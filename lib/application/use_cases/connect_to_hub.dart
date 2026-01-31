@@ -1,14 +1,16 @@
+import 'package:plug_agente/application/services/connection_service.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-import '../services/connection_service.dart';
-import '../../domain/errors/failures.dart' as domain;
-
 class ConnectToHub {
+  ConnectToHub(this._service);
   final ConnectionService _service;
 
-  ConnectToHub(this._service);
-
-  Future<Result<void>> call(String serverUrl, String agentId, {String? authToken}) async {
+  Future<Result<void>> call(
+    String serverUrl,
+    String agentId, {
+    String? authToken,
+  }) async {
     if (serverUrl.isEmpty) {
       return Failure(domain.ValidationFailure('Server URL cannot be empty'));
     }
@@ -17,6 +19,6 @@ class ConnectToHub {
       return Failure(domain.ValidationFailure('Agent ID cannot be empty'));
     }
 
-    return await _service.connect(serverUrl, agentId, authToken: authToken);
+    return _service.connect(serverUrl, agentId, authToken: authToken);
   }
 }

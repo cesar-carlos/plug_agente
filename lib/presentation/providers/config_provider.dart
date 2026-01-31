@@ -1,24 +1,27 @@
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/use_cases/load_agent_config.dart';
+import 'package:plug_agente/application/use_cases/save_agent_config.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../domain/entities/config.dart';
-import '../../domain/value_objects/database_driver.dart';
-import '../../domain/errors/failures.dart' as domain;
-import '../../application/use_cases/save_agent_config.dart';
-import '../../application/use_cases/load_agent_config.dart';
-import '../../application/services/config_service.dart';
-import '../../core/logger/app_logger.dart';
-
 class ConfigProvider extends ChangeNotifier {
+  ConfigProvider(
+    this._saveConfigUseCase,
+    this._loadConfigUseCase,
+    this._configService,
+    this._uuid,
+  ) {
+    _loadCurrentConfig();
+  }
   final SaveAgentConfig _saveConfigUseCase;
   final LoadAgentConfig _loadConfigUseCase;
   final ConfigService _configService;
   final Uuid _uuid;
-
-  ConfigProvider(this._saveConfigUseCase, this._loadConfigUseCase, this._configService, this._uuid) {
-    _loadCurrentConfig();
-  }
 
   Config? _currentConfig;
   bool _isLoading = false;
@@ -58,7 +61,7 @@ class ConfigProvider extends ChangeNotifier {
           }
         },
       );
-    } catch (e) {
+    } on Exception catch (e) {
       _error = 'Unexpected error: $e';
       AppLogger.error('Error loading config: $e');
     } finally {
@@ -70,7 +73,6 @@ class ConfigProvider extends ChangeNotifier {
   void _createDefaultConfig() {
     _currentConfig = Config(
       id: _uuid.v4(),
-      serverUrl: 'https://api.example.com',
       agentId: _uuid.v4(),
       driverName: DatabaseDriver.sqlServer.displayName,
       odbcDriverName: 'SQL Server Native Client 11.0',
@@ -89,7 +91,9 @@ class ConfigProvider extends ChangeNotifier {
     if (_currentConfig == null) {
       _error = 'No configuration to save';
       notifyListeners();
-      return Failure(domain.ValidationFailure('Nenhuma configuração para salvar'));
+      return Failure(
+        domain.ValidationFailure('Nenhuma configuração para salvar'),
+      );
     }
 
     _isLoading = true;
@@ -98,7 +102,9 @@ class ConfigProvider extends ChangeNotifier {
 
     try {
       // Generate connection string
-      final connectionString = _configService.generateConnectionString(_currentConfig!);
+      final connectionString = _configService.generateConnectionString(
+        _currentConfig!,
+      );
       final configWithConnectionString = _currentConfig!.copyWith(
         connectionString: connectionString,
         updatedAt: DateTime.now(),
@@ -112,14 +118,16 @@ class ConfigProvider extends ChangeNotifier {
           AppLogger.info('Config saved successfully');
         },
         (failure) {
-          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          final failureMessage = failure is domain.Failure
+              ? failure.message
+              : failure.toString();
           _error = failureMessage;
           AppLogger.error('Failed to save config: $failureMessage');
         },
       );
 
       return result;
-    } catch (e) {
+    } on Exception catch (e) {
       _error = 'Unexpected error: $e';
       AppLogger.error('Error saving config: $e');
       return Failure(domain.ConfigurationFailure('Erro inesperado: $e'));

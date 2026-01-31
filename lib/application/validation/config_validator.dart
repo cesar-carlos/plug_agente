@@ -1,6 +1,6 @@
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
-import '../../domain/entities/config.dart';
-import '../../domain/errors/failures.dart' as domain;
 
 class ConfigValidator {
   Result<bool> validate(Config config) {
@@ -38,6 +38,6 @@ class ConfigValidator {
       return Failure(domain.ValidationFailure(errors.join(', ')));
     }
 
-    return Success(true);
+    return const Success(true);
   }
 }

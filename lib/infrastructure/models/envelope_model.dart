@@ -1,13 +1,4 @@
 class EnvelopeModel {
-  final int v;
-  final String type;
-  final String requestId;
-  final String agentId;
-  final DateTime timestamp;
-  final String cmp;
-  final String contentType;
-  final List<Map<String, dynamic>> payloadBytes;
-
   const EnvelopeModel({
     required this.v,
     required this.type,
@@ -28,9 +19,18 @@ class EnvelopeModel {
       timestamp: DateTime.parse(json['timestamp'] as String),
       cmp: json['cmp'] as String? ?? 'none',
       contentType: json['contentType'] as String? ?? 'json',
-      payloadBytes: (json['payloadBytes'] as List<dynamic>).cast<Map<String, dynamic>>(),
+      payloadBytes: (json['payloadBytes'] as List<dynamic>)
+          .cast<Map<String, dynamic>>(),
     );
   }
+  final int v;
+  final String type;
+  final String requestId;
+  final String agentId;
+  final DateTime timestamp;
+  final String cmp;
+  final String contentType;
+  final List<Map<String, dynamic>> payloadBytes;
 
   Map<String, dynamic> toJson() {
     return {

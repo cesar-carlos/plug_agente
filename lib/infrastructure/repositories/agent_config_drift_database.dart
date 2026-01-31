@@ -1,11 +1,10 @@
 import 'dart:io';
 
-import 'package:drift/native.dart';
 import 'package:drift/drift.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
-
-import '../datasources/agent_config_data_source.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart';
 
 part 'agent_config_drift_database.g.dart';
 
@@ -37,20 +36,30 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         await m.addColumn(configTable, configTable.agentId);
       }
       if (from < 3) {
-        await m.addColumn(configTable, configTable.authToken as GeneratedColumn<Object>);
-        await m.addColumn(configTable, configTable.refreshToken as GeneratedColumn<Object>);
+        await m.addColumn(
+          configTable,
+          configTable.authToken as GeneratedColumn<Object>,
+        );
+        await m.addColumn(
+          configTable,
+          configTable.refreshToken as GeneratedColumn<Object>,
+        );
       }
       if (from < 4) {
-        await m.addColumn(configTable, configTable.authUsername as GeneratedColumn<Object>);
-        await m.addColumn(configTable, configTable.authPassword as GeneratedColumn<Object>);
+        await m.addColumn(
+          configTable,
+          configTable.authUsername as GeneratedColumn<Object>,
+        );
+        await m.addColumn(
+          configTable,
+          configTable.authPassword as GeneratedColumn<Object>,
+        );
       }
       if (from < 5) {
         await m.alterTable(
           TableMigration(
             configTable,
-            columnTransformer: {
-              configTable.odbcDriverName: const Constant(''),
-            },
+            columnTransformer: {configTable.odbcDriverName: const Constant('')},
             newColumns: [configTable.odbcDriverName],
           ),
         );
@@ -62,13 +71,19 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   Future<List<ConfigData>> getAllConfigs() => select(configTable).get();
 
   @override
-  Future<ConfigData?> getConfigById(String id) =>
-      (select(configTable)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+  Future<ConfigData?> getConfigById(String id) => (select(
+    configTable,
+  )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
 
   @override
   Future<ConfigData?> getCurrentConfig() =>
       (select(configTable)
-            ..orderBy([(tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc)])
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                expression: tbl.updatedAt,
+                mode: OrderingMode.desc,
+              ),
+            ])
             ..limit(1))
           .getSingleOrNull();
 
@@ -91,7 +106,8 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 
   @override
-  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) =>
+      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 }
 
 LazyDatabase _openConnection() {

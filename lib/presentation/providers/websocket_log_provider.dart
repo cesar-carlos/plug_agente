@@ -3,12 +3,16 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 class WebSocketMessage {
+  WebSocketMessage({
+    required this.timestamp,
+    required this.direction,
+    required this.event,
+    required this.data,
+  });
   final DateTime timestamp;
   final String direction;
   final String event;
   final dynamic data;
-
-  WebSocketMessage({required this.timestamp, required this.direction, required this.event, required this.data});
 
   String get formattedData {
     try {
@@ -16,7 +20,7 @@ class WebSocketMessage {
         return const JsonEncoder.withIndent('  ').convert(data);
       }
       return data.toString();
-    } catch (e) {
+    } on Exception {
       return data.toString();
     }
   }
@@ -42,7 +46,12 @@ class WebSocketLogProvider extends ChangeNotifier {
   void addMessage(String direction, String event, dynamic data) {
     if (!_isEnabled) return;
 
-    final message = WebSocketMessage(timestamp: DateTime.now(), direction: direction, event: event, data: data);
+    final message = WebSocketMessage(
+      timestamp: DateTime.now(),
+      direction: direction,
+      event: event,
+      data: data,
+    );
 
     _messages.insert(0, message);
 

@@ -8,7 +8,18 @@
       "Bash(flutter pub get:*)",
       "WebSearch",
       "Bash(flutter pub:*)",
-      "Bash(dart run build_runner build:*)"
+      "Bash(dart run build_runner build:*)",
+      "Bash(tree:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(flutter clean:*)",
+      "Bash(dart format:*)",
+      "Bash(dart fix:*)",
+      "Bash(flutter test:*)",
+      "Bash(genhtml:*)",
+      "Bash(flutter gen-l10n:*)",
+      "Bash(del:*)"
     ]
   }
 }

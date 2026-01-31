@@ -1,15 +1,13 @@
-import 'package:uuid/uuid.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../../domain/entities/query_request.dart';
-import '../../domain/entities/query_response.dart';
-import '../../domain/repositories/i_database_gateway.dart';
-import '../../domain/errors/failures.dart' as domain;
+import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway implements IDatabaseGateway {
-  final Uuid _uuid;
-
   MockDatabaseGateway() : _uuid = const Uuid();
+  final Uuid _uuid;
 
   @override
   Future<Result<bool>> testConnection(String connectionString) async {
@@ -18,7 +16,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
       return Failure(domain.ConnectionFailure('Connection test failed'));
     }
 
-    return Success(true);
+    return const Success(true);
   }
 
   @override
@@ -38,7 +36,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     }
 
     // Mock data for SELECT queries
-    List<Map<String, dynamic>> mockData = [];
+    var mockData = <Map<String, dynamic>>[];
 
     if (request.query.toLowerCase().contains('select')) {
       mockData = [
@@ -61,14 +59,19 @@ class MockDatabaseGateway implements IDatabaseGateway {
   }
 
   @override
-  Future<Result<int>> executeNonQuery(String query, Map<String, dynamic>? parameters) async {
+  Future<Result<int>> executeNonQuery(
+    String query,
+    Map<String, dynamic>? parameters,
+  ) async {
     // Simulate non-query execution
     if (query.toLowerCase().contains('error')) {
-      return Failure(domain.QueryExecutionFailure('Failed to execute non-query'));
+      return Failure(
+        domain.QueryExecutionFailure('Failed to execute non-query'),
+      );
     }
 
     // Mock affected rows for INSERT/UPDATE/DELETE
-    int affectedRows = 0;
+    var affectedRows = 0;
     if (query.toLowerCase().contains('insert')) {
       affectedRows = 1;
     } else if (query.toLowerCase().contains('update')) {

@@ -1,15 +1,13 @@
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
-import '../../domain/entities/config.dart';
-import '../../domain/repositories/i_agent_config_repository.dart';
-import '../services/config_service.dart';
-import '../../domain/errors/failures.dart' as domain;
-
 class SaveAgentConfig {
+  SaveAgentConfig(this._repository, this._service);
   final IAgentConfigRepository _repository;
   final ConfigService _service;
-
-  SaveAgentConfig(this._repository, this._service);
 
   Future<Result<Config>> call(Config config) async {
     final validationResult = await _service.validateConfig(config);
@@ -20,7 +18,7 @@ class SaveAgentConfig {
           return Failure(domain.ValidationFailure('Invalid configuration'));
         }
 
-        return await _repository.save(config);
+        return _repository.save(config);
       },
       (failure) {
         return Failure(failure);

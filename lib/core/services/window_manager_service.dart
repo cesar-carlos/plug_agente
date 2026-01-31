@@ -1,17 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../constants/window_constraints.dart';
-import '../constants/app_constants.dart';
-
 class WindowManagerService with WindowListener {
-  static final WindowManagerService _instance = WindowManagerService._();
   factory WindowManagerService() => _instance;
   WindowManagerService._();
+  static final WindowManagerService _instance = WindowManagerService._();
 
   final Logger _logger = Logger();
   bool _isInitialized = false;
@@ -36,13 +36,14 @@ class WindowManagerService with WindowListener {
     await windowManager.ensureInitialized();
 
     final defaultSize = size ?? const ui.Size(1280, 800);
-    final defaultMinimumSize = minimumSize ?? WindowConstraints.getMainWindowMinSize();
+    final defaultMinimumSize =
+        minimumSize ?? WindowConstraints.getMainWindowMinSize();
 
     final windowOptions = WindowOptions(
       size: defaultSize,
       minimumSize: defaultMinimumSize,
       center: center,
-      backgroundColor: ui.Color.fromARGB(0, 0, 0, 0),
+      backgroundColor: const ui.Color.fromARGB(0, 0, 0, 0),
       skipTaskbar: startMinimized,
       titleBarStyle: TitleBarStyle.normal,
       title: windowTitle,
@@ -59,10 +60,12 @@ class WindowManagerService with WindowListener {
     });
 
     if (startMinimized) {
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       final isVisible = await windowManager.isVisible();
       if (isVisible) {
-        _logger.w('Janela ainda visível após hide(), tentando ocultar novamente...');
+        _logger.w(
+          'Janela ainda visível após hide(), tentando ocultar novamente...',
+        );
         await windowManager.hide();
         await windowManager.setSkipTaskbar(true);
       }
@@ -77,27 +80,35 @@ class WindowManagerService with WindowListener {
     windowManager.addListener(this);
     _isInitialized = true;
 
-    _logger.i('WindowManager inicializado - Tamanho mínimo: ${defaultMinimumSize.width}x${defaultMinimumSize.height}');
+    _logger.i(
+      'WindowManager inicializado - Tamanho mínimo: ${defaultMinimumSize.width}x${defaultMinimumSize.height}',
+    );
   }
 
-  void setCallbacks({VoidCallback? onMinimize, VoidCallback? onClose, VoidCallback? onFocus}) {
+  void setCallbacks({
+    VoidCallback? onMinimize,
+    VoidCallback? onClose,
+    VoidCallback? onFocus,
+  }) {
     _onMinimize = onMinimize;
     _onClose = onClose;
     _onFocus = onFocus;
   }
 
-  void setMinimizeToTray(bool value) {
+  void setMinimizeToTray({required bool value}) {
     _minimizeToTray = value;
     _logger.d('Minimizar para bandeja: $value');
   }
 
-  void setCloseToTray(bool value) {
+  void setCloseToTray({required bool value}) {
     _closeToTray = value;
     _logger.d('Fechar para bandeja: $value');
 
-    _updatePreventClose(value).catchError((e) {
-      _logger.w('Erro ao configurar preventClose: $e');
-    });
+    unawaited(
+      _updatePreventClose(value).catchError((Object e) {
+        _logger.w('Erro ao configurar preventClose: $e');
+      }),
+    );
   }
 
   Future<void> _updatePreventClose(bool closeToTray) async {
@@ -109,7 +120,7 @@ class WindowManagerService with WindowListener {
         await windowManager.setPreventClose(false);
         _logger.d('PreventClose desativado - fechar irá encerrar aplicativo');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _logger.w('Erro ao configurar preventClose: $e');
     }
   }
@@ -119,58 +130,66 @@ class WindowManagerService with WindowListener {
       _logger.i('🪟 Mostrando janela...');
 
       await windowManager.setSkipTaskbar(false);
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       final isMinimized = await windowManager.isMinimized();
       final isVisible = await windowManager.isVisible();
 
-      _logger.i('📊 Estado antes de mostrar - Minimizada: $isMinimized, Visível: $isVisible');
+      _logger.i(
+        '📊 Estado antes de mostrar - Minimizada: $isMinimized, Visível: $isVisible',
+      );
 
       if (isMinimized) {
         _logger.i('🔄 Janela está minimizada, restaurando...');
         await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
 
       _logger.i('👁️ Chamando show()...');
       await windowManager.show();
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final isVisibleAfterShow = await windowManager.isVisible();
       _logger.i('📊 Visível após show(): $isVisibleAfterShow');
 
       if (!isVisibleAfterShow) {
-        _logger.w('⚠️ Janela ainda não está visível após show(), tentando restaurar...');
+        _logger.w(
+          '⚠️ Janela ainda não está visível após show(), tentando restaurar...',
+        );
         await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
         await windowManager.show();
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
 
       _logger.i('🎯 Focando janela...');
       await windowManager.focus();
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();
-      _logger.i('✅ Janela exibida! Visível: $finalIsVisible, Minimizada: $finalIsMinimized');
+      _logger.i(
+        '✅ Janela exibida! Visível: $finalIsVisible, Minimizada: $finalIsMinimized',
+      );
 
       if (!finalIsVisible) {
-        _logger.e('❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!');
+        _logger.e(
+          '❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!',
+        );
         await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         await windowManager.show();
         await windowManager.focus();
       }
-    } catch (e, stackTrace) {
+    } on Exception catch (e, stackTrace) {
       _logger.e('❌ Erro ao mostrar janela', error: e, stackTrace: stackTrace);
       try {
         _logger.i('🔄 Tentando método alternativo...');
         await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
         await windowManager.show();
         await windowManager.focus();
-      } catch (e2) {
+      } on Exception catch (e2) {
         _logger.e('❌ Erro crítico ao mostrar janela', error: e2);
         rethrow;
       }
@@ -179,7 +198,7 @@ class WindowManagerService with WindowListener {
 
   Future<void> restore() async {
     await windowManager.restore();
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
     await show();
   }
 
@@ -216,7 +235,7 @@ class WindowManagerService with WindowListener {
       await windowManager.close();
 
       _logger.i('Aplicativo fechado');
-    } catch (e, stackTrace) {
+    } on Exception catch (e, stackTrace) {
       _logger.e('Erro ao fechar aplicativo', error: e, stackTrace: stackTrace);
       // Forçar saída mesmo com erro
       exit(0);
@@ -228,30 +247,32 @@ class WindowManagerService with WindowListener {
   }
 
   Future<bool> isVisible() async {
-    return await windowManager.isVisible();
+    return windowManager.isVisible();
   }
 
   Future<bool> isMinimized() async {
-    return await windowManager.isMinimized();
+    return windowManager.isMinimized();
   }
 
   Future<bool> isFocused() async {
-    return await windowManager.isFocused();
+    return windowManager.isFocused();
   }
 
   // WindowListener callbacks
   @override
   void onWindowMinimize() {
     if (_minimizeToTray) {
-      hide().catchError((e) {
-        _logger.e('Erro ao ocultar janela ao minimizar', error: e);
-      });
+      unawaited(
+        hide().catchError((Object e) {
+          _logger.e('Erro ao ocultar janela ao minimizar', error: e);
+        }),
+      );
     }
     _onMinimize?.call();
   }
 
   @override
-  void onWindowClose() async {
+  Future<void> onWindowClose() async {
     // Se já estamos fechando intencionalmente, permitir fechamento
     if (_isClosing) {
       _logger.d('Fechamento intencional - permitindo');
@@ -266,7 +287,7 @@ class WindowManagerService with WindowListener {
         _logger.d('Fechamento prevenido por outro motivo - ignorando evento');
         return;
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _logger.w('Erro ao verificar preventClose: $e');
     }
 
@@ -276,12 +297,12 @@ class WindowManagerService with WindowListener {
         await hide();
         await windowManager.setSkipTaskbar(true);
         _logger.i('✅ Janela ocultada para a bandeja (fechamento prevenido)');
-      } catch (e) {
+      } on Exception catch (e) {
         _logger.e('Erro ao ocultar janela para bandeja', error: e);
         try {
           await hide();
           await windowManager.setSkipTaskbar(true);
-        } catch (e2) {
+        } on Exception catch (e2) {
           _logger.e('Erro crítico ao ocultar janela', error: e2);
         }
       }
@@ -290,7 +311,7 @@ class WindowManagerService with WindowListener {
         await windowManager.setPreventClose(false);
         _logger.i('Fechamento permitido - encerrando aplicativo');
         _onClose?.call();
-      } catch (e) {
+      } on Exception catch (e) {
         _logger.e('Erro ao configurar preventClose para fechar', error: e);
         _onClose?.call();
       }

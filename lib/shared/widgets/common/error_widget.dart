@@ -1,13 +1,17 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/app_colors.dart';
 
 class ErrorWidget extends StatelessWidget {
+  const ErrorWidget({
+    required this.title,
+    required this.message,
+    super.key,
+    this.onRetry,
+  });
   final String title;
   final String message;
   final VoidCallback? onRetry;
-
-  const ErrorWidget({super.key, required this.title, required this.message, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -19,12 +23,16 @@ class ErrorWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(FluentIcons.error_badge, color: AppColors.error, size: 48),
+          const Icon(FluentIcons.error_badge, color: AppColors.error, size: 48),
           const SizedBox(height: 16),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.error),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.error,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -34,7 +42,10 @@ class ErrorWidget extends StatelessWidget {
           ),
           if (onRetry != null) ...[
             const SizedBox(height: 24),
-            FilledButton(onPressed: onRetry, child: const Text('Tentar Novamente')),
+            FilledButton(
+              onPressed: onRetry,
+              child: const Text('Tentar Novamente'),
+            ),
           ],
         ],
       ),

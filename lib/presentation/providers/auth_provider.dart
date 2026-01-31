@@ -1,21 +1,20 @@
 import 'package:flutter/foundation.dart';
 
-import '../../application/use_cases/login_user.dart';
-import '../../application/use_cases/refresh_auth_token.dart';
-import '../../application/use_cases/save_auth_token.dart';
-import '../../core/logger/app_logger.dart';
-import '../../domain/entities/auth_token.dart';
-import '../../domain/errors/failures.dart';
-import '../../domain/value_objects/auth_credentials.dart';
+import 'package:plug_agente/application/use_cases/login_user.dart';
+import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
+import 'package:plug_agente/application/use_cases/save_auth_token.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated, error }
 
 class AuthProvider extends ChangeNotifier {
+  AuthProvider(this._loginUseCase, this._refreshUseCase, this._saveUseCase);
   final LoginUser _loginUseCase;
   final RefreshAuthToken _refreshUseCase;
   final SaveAuthToken _saveUseCase;
-
-  AuthProvider(this._loginUseCase, this._refreshUseCase, this._saveUseCase);
 
   AuthStatus _status = AuthStatus.unauthenticated;
   String _error = '';
@@ -45,7 +44,9 @@ class AuthProvider extends ChangeNotifier {
             },
             (failure) {
               _status = AuthStatus.error;
-              final failureMessage = failure is Failure ? failure.message : failure.toString();
+              final failureMessage = failure is Failure
+                  ? failure.message
+                  : failure.toString();
               _error = 'Failed to save token: $failureMessage';
               AppLogger.error('Failed to save token: $failureMessage');
             },
@@ -53,12 +54,14 @@ class AuthProvider extends ChangeNotifier {
         },
         (failure) {
           _status = AuthStatus.error;
-          final failureMessage = failure is Failure ? failure.message : failure.toString();
+          final failureMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
           _error = failureMessage;
           AppLogger.error('Login failed: $failureMessage');
         },
       );
-    } catch (e) {
+    } on Exception catch (e) {
       _status = AuthStatus.error;
       _error = 'Unexpected error: $e';
       AppLogger.error('Unexpected error during login: $e');
@@ -76,7 +79,10 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final result = await _refreshUseCase(serverUrl, _currentToken!.refreshToken);
+      final result = await _refreshUseCase(
+        serverUrl,
+        _currentToken!.refreshToken,
+      );
 
       result.fold(
         (token) async {
@@ -89,7 +95,9 @@ class AuthProvider extends ChangeNotifier {
             },
             (failure) {
               _status = AuthStatus.unauthenticated;
-              final failureMessage = failure is Failure ? failure.message : failure.toString();
+              final failureMessage = failure is Failure
+                  ? failure.message
+                  : failure.toString();
               _error = 'Failed to save token: $failureMessage';
               AppLogger.error('Failed to save token: $failureMessage');
             },
@@ -97,12 +105,14 @@ class AuthProvider extends ChangeNotifier {
         },
         (failure) {
           _status = AuthStatus.unauthenticated;
-          final failureMessage = failure is Failure ? failure.message : failure.toString();
+          final failureMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
           _error = failureMessage;
           AppLogger.error('Token refresh failed: $failureMessage');
         },
       );
-    } catch (e) {
+    } on Exception catch (e) {
       _status = AuthStatus.unauthenticated;
       _error = 'Unexpected error: $e';
       AppLogger.error('Unexpected error during token refresh: $e');

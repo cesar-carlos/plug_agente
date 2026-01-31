@@ -177,6 +177,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.2"
+  code_assets:
+    dependency: transitive
+    description:
+      name: code_assets
+      sha256: "83ccdaa064c980b5596c35dd64a8d3ecc68620174ab9b90b6343b753aa721687"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   code_builder:
     dependency: transitive
     description:
@@ -193,14 +201,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
-  connect_database:
-    dependency: "direct main"
-    description:
-      name: connect_database
-      sha256: "1c2d3958b563a900abb2696f99d9a56707e92fa52ba9d49878084abb19465341"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   convert:
     dependency: transitive
     description:
@@ -233,14 +233,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
-  dart_odbc:
-    dependency: transitive
-    description:
-      name: dart_odbc
-      sha256: "1035515d4a84206718017fc7489ff7752847d1324edeb5e318e2c8b5b8f3a3af"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.2.0"
   dart_style:
     dependency: transitive
     description:
@@ -273,6 +265,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
+  dotenv:
+    dependency: transitive
+    description:
+      name: dotenv
+      sha256: "379e64b6fc82d3df29461d349a1796ecd2c436c480d4653f3af6872eccbc90e1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.0"
   drift:
     dependency: "direct main"
     description:
@@ -415,7 +415,7 @@ packages:
     source: hosted
     version: "1.0.3"
   flutter_localizations:
-    dependency: transitive
+    dependency: "direct main"
     description: flutter
     source: sdk
     version: "0.0.0"
@@ -517,6 +517,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.2"
+  hooks:
+    dependency: transitive
+    description:
+      name: hooks
+      sha256: "5d309c86e7ce34cd8e37aa71cb30cb652d3829b900ab145e4d9da564b31d59f7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   http:
     dependency: "direct main"
     description:
@@ -550,7 +558,7 @@ packages:
     source: hosted
     version: "4.3.0"
   intl:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: intl
       sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
@@ -709,6 +717,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.2"
+  odbc_fast:
+    dependency: "direct main"
+    description:
+      name: odbc_fast
+      sha256: "8047257b4d817aab0a2b103278f9603c236bb22403ec10bbec3819255bab0522"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1"
   package_config:
     dependency: transitive
     description:
@@ -1226,6 +1242,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  very_good_analysis:
+    dependency: "direct dev"
+    description:
+      name: very_good_analysis
+      sha256: "96245839dbcc45dfab1af5fa551603b5c7a282028a64746c19c547d21a7f1e3a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.0.0"
   vm_service:
     dependency: transitive
     description:

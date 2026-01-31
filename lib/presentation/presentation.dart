@@ -1,5 +1,5 @@
-export 'pages/pages.dart';
-export 'widgets/widgets.dart';
-export 'providers/providers.dart';
-export 'controllers/controllers.dart';
 export 'app/app.dart';
+export 'controllers/controllers.dart';
+export 'pages/pages.dart';
+export 'providers/providers.dart';
+export 'widgets/widgets.dart';

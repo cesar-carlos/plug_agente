@@ -1,25 +1,24 @@
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
+import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
+import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
-import '../../application/use_cases/check_odbc_driver.dart';
-import '../../application/use_cases/connect_to_hub.dart';
-import '../../application/use_cases/test_db_connection.dart';
-import '../../core/logger/app_logger.dart';
-import '../../core/di/service_locator.dart';
-import '../../domain/repositories/i_transport_client.dart';
-import '../../domain/errors/failures.dart' as domain;
-import 'auth_provider.dart';
-import 'config_provider.dart';
-
-enum ConnectionStatus { disconnected, connecting, connected, reconnecting, error }
+enum ConnectionStatus {
+  disconnected,
+  connecting,
+  connected,
+  reconnecting,
+  error,
+}
 
 class ConnectionProvider extends ChangeNotifier {
-  final ConnectToHub _connectToHubUseCase;
-  final TestDbConnection _testDbConnectionUseCase;
-  final CheckOdbcDriver _checkOdbcDriverUseCase;
-  AuthProvider? _authProvider;
-  ConfigProvider? _configProvider;
-
   ConnectionProvider(
     this._connectToHubUseCase,
     this._testDbConnectionUseCase,
@@ -28,6 +27,11 @@ class ConnectionProvider extends ChangeNotifier {
     ConfigProvider? configProvider,
   }) : _authProvider = authProvider,
        _configProvider = configProvider;
+  final ConnectToHub _connectToHubUseCase;
+  final TestDbConnection _testDbConnectionUseCase;
+  final CheckOdbcDriver _checkOdbcDriverUseCase;
+  AuthProvider? _authProvider;
+  ConfigProvider? _configProvider;
 
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
@@ -50,7 +54,11 @@ class ConnectionProvider extends ChangeNotifier {
   bool get isReconnecting => _isReconnecting;
   bool get isCheckingDriver => _isCheckingDriver;
 
-  Future<void> connect(String serverUrl, String agentId, {String? authToken}) async {
+  Future<void> connect(
+    String serverUrl,
+    String agentId, {
+    String? authToken,
+  }) async {
     _status = ConnectionStatus.connecting;
     _error = '';
     notifyListeners();
@@ -60,7 +68,11 @@ class ConnectionProvider extends ChangeNotifier {
       transportClient.setOnTokenExpired(_handleTokenExpired);
       transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
-      final result = await _connectToHubUseCase(serverUrl, agentId, authToken: authToken);
+      final result = await _connectToHubUseCase(
+        serverUrl,
+        agentId,
+        authToken: authToken,
+      );
 
       result.fold(
         (_) {
@@ -69,12 +81,14 @@ class ConnectionProvider extends ChangeNotifier {
         },
         (failure) {
           _status = ConnectionStatus.error;
-          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          final failureMessage = failure is domain.Failure
+              ? failure.message
+              : failure.toString();
           _error = failureMessage;
           AppLogger.error('Failed to connect to hub: $failureMessage');
         },
       );
-    } catch (e) {
+    } on Exception catch (e) {
       _status = ConnectionStatus.error;
       _error = 'Unexpected error: $e';
       AppLogger.error('Unexpected error during connection: $e');
@@ -91,7 +105,7 @@ class ConnectionProvider extends ChangeNotifier {
 
       // Call disconnect on transport client
       AppLogger.info('Disconnected from hub');
-    } catch (e) {
+    } on Exception catch (e) {
       _error = 'Failed to disconnect: $e';
       AppLogger.error('Error during disconnection: $e');
       notifyListeners();
@@ -113,14 +127,16 @@ class ConnectionProvider extends ChangeNotifier {
         },
         (failure) {
           _isDbConnected = false;
-          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          final failureMessage = failure is domain.Failure
+              ? failure.message
+              : failure.toString();
           AppLogger.error('Database connection test failed: $failureMessage');
         },
       );
 
       notifyListeners();
       return result;
-    } catch (e) {
+    } on Exception catch (e) {
       _isDbConnected = false;
       AppLogger.error('Error testing database connection: $e');
       notifyListeners();
@@ -150,17 +166,21 @@ class ConnectionProvider extends ChangeNotifier {
           }
         },
         (failure) {
-          final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+          final failureMessage = failure is domain.Failure
+              ? failure.message
+              : failure.toString();
           _error = failureMessage;
           AppLogger.error('Failed to check ODBC driver: $failureMessage');
         },
       );
 
       return result;
-    } catch (e) {
+    } on Exception catch (e) {
       _error = 'Unexpected error: $e';
       AppLogger.error('Error checking ODBC driver: $e');
-      return Failure(domain.ConfigurationFailure('Erro ao verificar driver ODBC: $e'));
+      return Failure(
+        domain.ConfigurationFailure('Erro ao verificar driver ODBC: $e'),
+      );
     } finally {
       _isCheckingDriver = false;
       notifyListeners();
@@ -198,9 +218,11 @@ class ConnectionProvider extends ChangeNotifier {
       } else {
         _status = ConnectionStatus.error;
         _error = 'Server URL, AuthProvider or ConfigProvider not available';
-        AppLogger.error('Server URL, AuthProvider or ConfigProvider not available for token refresh');
+        AppLogger.error(
+          'Server URL, AuthProvider or ConfigProvider not available for token refresh',
+        );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _status = ConnectionStatus.error;
       _error = 'Failed to refresh token: $e';
       AppLogger.error('Token refresh failed: $e');
@@ -218,22 +240,29 @@ class ConnectionProvider extends ChangeNotifier {
     AppLogger.warning('Reconnection needed after failed attempts');
     notifyListeners();
 
-    await Future.delayed(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(seconds: 2));
 
     try {
       final serverUrl = _configProvider?.currentConfig?.serverUrl;
       final agentId = _configProvider?.currentConfig?.agentId;
-      final authToken = _authProvider?.currentToken?.token ?? _configProvider?.currentConfig?.authToken;
+      final authToken =
+          _authProvider?.currentToken?.token ??
+          _configProvider?.currentConfig?.authToken;
 
-      if (serverUrl != null && serverUrl.isNotEmpty && agentId != null && agentId.isNotEmpty) {
+      if (serverUrl != null &&
+          serverUrl.isNotEmpty &&
+          agentId != null &&
+          agentId.isNotEmpty) {
         await connect(serverUrl, agentId, authToken: authToken);
         AppLogger.info('Attempted manual reconnection');
       } else {
         _status = ConnectionStatus.error;
         _error = 'Server URL or Agent ID not available for reconnection';
-        AppLogger.error('Server URL or Agent ID not available for reconnection');
+        AppLogger.error(
+          'Server URL or Agent ID not available for reconnection',
+        );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _status = ConnectionStatus.error;
       _error = 'Failed to reconnect: $e';
       AppLogger.error('Manual reconnection failed: $e');

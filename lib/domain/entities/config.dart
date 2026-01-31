@@ -1,4 +1,26 @@
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+// Reason: Config uses ID-based equality for collections and state comparison.
+
 class Config {
+  const Config({
+    required this.id,
+    required this.driverName,
+    required this.odbcDriverName,
+    required this.connectionString,
+    required this.username,
+    required this.databaseName,
+    required this.host,
+    required this.port,
+    required this.createdAt,
+    required this.updatedAt,
+    this.serverUrl = 'https://api.example.com',
+    this.agentId = '',
+    this.authToken,
+    this.refreshToken,
+    this.authUsername,
+    this.authPassword,
+    this.password,
+  });
   final String id;
   final String serverUrl;
   final String agentId;
@@ -16,26 +38,6 @@ class Config {
   final int port;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  const Config({
-    required this.id,
-    this.serverUrl = 'https://api.example.com',
-    this.agentId = '',
-    this.authToken,
-    this.refreshToken,
-    this.authUsername,
-    this.authPassword,
-    required this.driverName,
-    required this.odbcDriverName,
-    required this.connectionString,
-    required this.username,
-    this.password,
-    required this.databaseName,
-    required this.host,
-    required this.port,
-    required this.createdAt,
-    required this.updatedAt,
-  });
 
   Config copyWith({
     String? id,

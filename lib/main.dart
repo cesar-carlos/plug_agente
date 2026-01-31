@@ -1,46 +1,48 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
+import 'package:plug_agente/application/use_cases/cancel_notification.dart';
+import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
+import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
+import 'package:plug_agente/application/use_cases/load_agent_config.dart';
+import 'package:plug_agente/application/use_cases/login_user.dart';
+import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
+import 'package:plug_agente/application/use_cases/save_agent_config.dart';
+import 'package:plug_agente/application/use_cases/save_auth_token.dart';
+import 'package:plug_agente/application/use_cases/schedule_notification.dart';
+import 'package:plug_agente/application/use_cases/send_notification.dart';
+import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/constants/window_constraints.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/domain/repositories/i_notification_service.dart';
+import 'package:plug_agente/presentation/app/app.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
+import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
+import 'package:plug_agente/presentation/providers/notification_provider.dart';
+import 'package:plug_agente/presentation/providers/playground_provider.dart';
+import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-
-import 'core/di/service_locator.dart';
-import 'core/constants/window_constraints.dart';
-import 'core/services/tray_manager_service.dart';
-import 'core/services/window_manager_service.dart';
-import 'domain/repositories/i_notification_service.dart';
-import 'application/use_cases/check_odbc_driver.dart';
-import 'application/use_cases/connect_to_hub.dart';
-import 'application/use_cases/test_db_connection.dart';
-import 'application/use_cases/execute_playground_query.dart';
-import 'application/use_cases/save_agent_config.dart';
-import 'application/use_cases/load_agent_config.dart';
-import 'application/use_cases/cancel_all_notifications.dart';
-import 'application/use_cases/cancel_notification.dart';
-import 'application/use_cases/send_notification.dart';
-import 'application/use_cases/schedule_notification.dart';
-import 'application/services/config_service.dart';
-import 'presentation/providers/connection_provider.dart';
-import 'presentation/providers/config_provider.dart';
-import 'presentation/providers/notification_provider.dart';
-import 'presentation/providers/playground_provider.dart';
-import 'presentation/providers/websocket_log_provider.dart';
-import 'presentation/providers/auth_provider.dart';
-import 'application/use_cases/login_user.dart';
-import 'application/use_cases/refresh_auth_token.dart';
-import 'application/use_cases/save_auth_token.dart';
-import 'presentation/app/app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env', isOptional: true);
+  await dotenv.load(isOptional: true);
   await setupDependencies();
 
   final windowManagerService = WindowManagerService();
   final minSize = WindowConstraints.getMainWindowMinSize();
   const initialSize = Size(1200, 800);
 
-  await windowManagerService.initialize(size: initialSize, minimumSize: minSize, center: true, startMinimized: false);
+  await windowManagerService.initialize(
+    size: initialSize,
+    minimumSize: minSize,
+  );
 
   final trayManager = getIt<TrayManagerService>();
 
@@ -49,22 +51,20 @@ void main() async {
       switch (action) {
         case TrayMenuAction.show:
           await windowManagerService.show();
-          break;
         case TrayMenuAction.exit:
           try {
             trayManager.dispose();
-          } catch (_) {
+          } on Object catch (_) {
             // Ignore errors during tray disposal
           }
 
           await windowManagerService.close();
-          break;
       }
     },
   );
 
-  windowManagerService.setMinimizeToTray(true);
-  windowManagerService.setCloseToTray(true);
+  windowManagerService.setMinimizeToTray(value: true);
+  windowManagerService.setCloseToTray(value: true);
 
   await getIt<INotificationService>().initialize();
 
@@ -79,15 +79,26 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (context) =>
-              ConfigProvider(getIt<SaveAgentConfig>(), getIt<LoadAgentConfig>(), getIt<ConfigService>(), getIt<Uuid>()),
+          create: (context) => ConfigProvider(
+            getIt<SaveAgentConfig>(),
+            getIt<LoadAgentConfig>(),
+            getIt<ConfigService>(),
+            getIt<Uuid>(),
+          ),
         ),
         ChangeNotifierProvider(
-          create: (context) => AuthProvider(getIt<LoginUser>(), getIt<RefreshAuthToken>(), getIt<SaveAuthToken>()),
+          create: (context) => AuthProvider(
+            getIt<LoginUser>(),
+            getIt<RefreshAuthToken>(),
+            getIt<SaveAuthToken>(),
+          ),
         ),
         ChangeNotifierProvider(
-          create: (context) =>
-              ConnectionProvider(getIt<ConnectToHub>(), getIt<TestDbConnection>(), getIt<CheckOdbcDriver>()),
+          create: (context) => ConnectionProvider(
+            getIt<ConnectToHub>(),
+            getIt<TestDbConnection>(),
+            getIt<CheckOdbcDriver>(),
+          ),
         ),
         ChangeNotifierProvider(
           create: (context) => NotificationProvider(
@@ -98,7 +109,10 @@ class MyApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(
-          create: (context) => PlaygroundProvider(getIt<ExecutePlaygroundQuery>(), getIt<TestDbConnection>()),
+          create: (context) => PlaygroundProvider(
+            getIt<ExecutePlaygroundQuery>(),
+            getIt<TestDbConnection>(),
+          ),
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
       ],

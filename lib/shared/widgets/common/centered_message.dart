@@ -1,11 +1,15 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 class CenteredMessage extends StatelessWidget {
+  const CenteredMessage({
+    required this.title,
+    required this.message,
+    required this.icon,
+    super.key,
+  });
   final String title;
   final String message;
   final IconData icon;
-
-  const CenteredMessage({super.key, required this.title, required this.message, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -18,9 +22,18 @@ class CenteredMessage extends StatelessWidget {
           children: [
             Icon(icon, size: 64, color: theme.accentColor),
             const SizedBox(height: 16),
-            Text(title, style: theme.typography.subtitle?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: theme.typography.subtitle?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center, style: theme.typography.body),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.typography.body,
+            ),
           ],
         ),
       ),

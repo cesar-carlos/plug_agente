@@ -1,6 +1,5 @@
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../entities/config.dart';
 
 abstract class IAgentConfigRepository {
   Future<Result<Config>> getById(String id);

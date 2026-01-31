@@ -1,9 +1,8 @@
 import 'package:go_router/go_router.dart';
-
-import '../../presentation/pages/main_window.dart';
-import '../../presentation/pages/dashboard_page.dart';
-import '../../presentation/pages/config_page.dart';
-import '../../presentation/pages/playground_page.dart';
+import 'package:plug_agente/presentation/pages/config_page.dart';
+import 'package:plug_agente/presentation/pages/dashboard_page.dart';
+import 'package:plug_agente/presentation/pages/main_window.dart';
+import 'package:plug_agente/presentation/pages/playground_page.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -14,8 +13,14 @@ final appRouter = GoRouter(
       },
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
-        GoRoute(path: '/config', builder: (context, state) => const ConfigPage()),
-        GoRoute(path: '/playground', builder: (context, state) => const PlaygroundPage()),
+        GoRoute(
+          path: '/config',
+          builder: (context, state) => const ConfigPage(),
+        ),
+        GoRoute(
+          path: '/playground',
+          builder: (context, state) => const PlaygroundPage(),
+        ),
       ],
     ),
   ],

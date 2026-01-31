@@ -1,22 +1,21 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/app_colors.dart';
 
 class ConfigListItem extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final String? trailing;
-  final void Function()? onTap;
-  final bool isSelected;
-
   const ConfigListItem({
-    super.key,
     required this.title,
+    super.key,
     this.subtitle,
     this.trailing,
     this.onTap,
     this.isSelected = false,
   });
+  final String title;
+  final String? subtitle;
+  final String? trailing;
+  final void Function()? onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +44,9 @@ class ConfigListItem extends StatelessWidget {
               subtitle!,
               style: TextStyle(
                 fontSize: 14,
-                color: isSelected ? AppColors.primary.withValues(alpha: 0.7) : textColor?.withValues(alpha: 0.7),
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.7)
+                    : textColor?.withValues(alpha: 0.7),
               ),
             ),
           if (trailing != null)
@@ -53,7 +54,9 @@ class ConfigListItem extends StatelessWidget {
               trailing!,
               style: TextStyle(
                 fontSize: 14,
-                color: isSelected ? AppColors.primary.withValues(alpha: 0.7) : textColor?.withValues(alpha: 0.7),
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.7)
+                    : textColor?.withValues(alpha: 0.7),
               ),
             ),
         ],

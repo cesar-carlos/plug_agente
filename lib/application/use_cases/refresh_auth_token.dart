@@ -1,13 +1,11 @@
+import 'package:plug_agente/application/services/auth_service.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-import '../../domain/entities/auth_token.dart';
-import '../../domain/errors/failures.dart' as domain;
-import '../services/auth_service.dart';
-
 class RefreshAuthToken {
-  final AuthService _service;
-
   RefreshAuthToken(this._service);
+  final AuthService _service;
 
   Future<Result<AuthToken>> call(String serverUrl, String refreshToken) async {
     if (serverUrl.isEmpty) {
@@ -18,6 +16,6 @@ class RefreshAuthToken {
       return Failure(domain.ValidationFailure('Refresh token is required'));
     }
 
-    return await _service.refreshToken(serverUrl, refreshToken);
+    return _service.refreshToken(serverUrl, refreshToken);
   }
 }

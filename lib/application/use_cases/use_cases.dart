@@ -10,6 +10,6 @@ export 'login_user.dart';
 export 'refresh_auth_token.dart';
 export 'save_agent_config.dart';
 export 'save_auth_token.dart';
-export 'send_notification.dart';
 export 'schedule_notification.dart';
+export 'send_notification.dart';
 export 'test_db_connection.dart';

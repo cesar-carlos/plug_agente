@@ -5,7 +5,7 @@ import 'package:dio/io.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 
 class DioFactory {
   static String? _userAgent;
@@ -20,7 +20,7 @@ class DioFactory {
 
     if (_isInitializing) {
       while (_userAgent == null) {
-        await Future.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
       }
       return _userAgent!;
     }
@@ -29,8 +29,9 @@ class DioFactory {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       _userAgent = '${AppConstants.appName}/${packageInfo.version} (Windows)';
-    } catch (e) {
-      _userAgent = '${AppConstants.appName}/${AppConstants.appVersion} (Windows)';
+    } on Exception {
+      _userAgent =
+          '${AppConstants.appName}/${AppConstants.appVersion} (Windows)';
     } finally {
       _isInitializing = false;
     }
@@ -42,23 +43,31 @@ class DioFactory {
     try {
       final envValue = dotenv.env[_envKeyAcceptBadCertificates];
       return envValue?.toLowerCase() == 'true' || envValue == '1';
-    } catch (e) {
+    } on Exception {
       return false;
     }
   }
 
   static Dio createDio({bool? acceptBadCertificates}) {
-    final shouldAccept = acceptBadCertificates ?? _shouldAcceptBadCertificates();
+    final shouldAccept =
+        acceptBadCertificates ?? _shouldAcceptBadCertificates();
 
     final dio = Dio(
       BaseOptions(
-        connectTimeout: Duration(seconds: AppConstants.connectionTimeoutSeconds),
-        receiveTimeout: Duration(seconds: AppConstants.connectionTimeoutSeconds),
-        sendTimeout: Duration(seconds: AppConstants.connectionTimeoutSeconds),
+        connectTimeout: const Duration(
+          seconds: AppConstants.connectionTimeoutSeconds,
+        ),
+        receiveTimeout: const Duration(
+          seconds: AppConstants.connectionTimeoutSeconds,
+        ),
+        sendTimeout: const Duration(
+          seconds: AppConstants.connectionTimeoutSeconds,
+        ),
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'User-Agent': '${AppConstants.appName}/${AppConstants.appVersion} (Windows)',
+          'User-Agent':
+              '${AppConstants.appName}/${AppConstants.appVersion} (Windows)',
         },
         persistentConnection: true,
         followRedirects: true,
@@ -67,10 +76,10 @@ class DioFactory {
 
     final adapter = IOHttpClientAdapter(
       createHttpClient: () {
-        final client = HttpClient();
-        client.autoUncompress = true;
+        final client = HttpClient()..autoUncompress = true;
         if (shouldAccept) {
-          client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+          client.badCertificateCallback =
+              (X509Certificate cert, String host, int port) => true;
         }
         return client;
       },
@@ -88,7 +97,10 @@ class DioFactory {
     );
 
     dio.interceptors.add(
-      LogInterceptor(requestBody: true, responseBody: true, requestHeader: true, responseHeader: true, error: true),
+      LogInterceptor(
+        requestBody: true,
+        responseBody: true,
+      ),
     );
 
     return dio;

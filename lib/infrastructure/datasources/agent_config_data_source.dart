@@ -3,7 +3,8 @@ import 'package:drift/drift.dart';
 @DataClassName('ConfigData')
 class ConfigTable extends Table {
   TextColumn get id => text()();
-  TextColumn get serverUrl => text().withDefault(const Constant('https://api.example.com'))();
+  TextColumn get serverUrl =>
+      text().withDefault(const Constant('https://api.example.com'))();
   TextColumn get agentId => text().withDefault(const Constant(''))();
   TextColumn get authToken => text().nullable()();
   TextColumn get refreshToken => text().nullable()();

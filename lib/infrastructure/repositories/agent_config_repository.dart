@@ -1,16 +1,13 @@
-import 'package:result_dart/result_dart.dart';
 import 'package:drift/drift.dart';
-
-import '../../domain/entities/config.dart';
-import '../../domain/repositories/i_agent_config_repository.dart';
-import '../../domain/errors/failures.dart' as domain;
-
-import 'agent_config_drift_database.dart';
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:result_dart/result_dart.dart';
 
 class AgentConfigRepository implements IAgentConfigRepository {
-  final AppDatabase _database;
-
   AgentConfigRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<Result<Config>> getById(String id) async {
@@ -25,7 +22,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = _mapDataToEntity(configData);
       return Success(config);
-    } catch (e) {
+    } on Exception catch (e) {
       return Failure(domain.DatabaseFailure('Failed to get config: $e'));
     }
   }
@@ -33,11 +30,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
   @override
   Future<Result<List<Config>>> getAll() async {
     try {
-      final configsData = await (_database.select(_database.configTable)).get();
+      final configsData = await _database.select(_database.configTable).get();
 
       final configs = configsData.map(_mapDataToEntity).toList();
       return Success(configs);
-    } catch (e) {
+    } on Exception catch (e) {
       return Failure(domain.DatabaseFailure('Failed to get all configs: $e'));
     }
   }
@@ -47,10 +44,12 @@ class AgentConfigRepository implements IAgentConfigRepository {
     try {
       final configData = _mapEntityToData(config);
 
-      await _database.into(_database.configTable).insertOnConflictUpdate(configData);
+      await _database
+          .into(_database.configTable)
+          .insertOnConflictUpdate(configData);
 
       return Success(config);
-    } catch (e) {
+    } on Exception catch (e) {
       return Failure(domain.DatabaseFailure('Failed to save config: $e'));
     }
   }
@@ -58,11 +57,13 @@ class AgentConfigRepository implements IAgentConfigRepository {
   @override
   Future<Result<void>> delete(String id) async {
     try {
-      await (_database.delete(_database.configTable)..where((tbl) => tbl.id.equals(id))).go();
+      await (_database.delete(
+        _database.configTable,
+      )..where((tbl) => tbl.id.equals(id))).go();
 
       // For Result<void>, we use a unit value
-      return Success<Object, Exception>(Object());
-    } catch (e) {
+      return const Success<Object, Exception>(Object());
+    } on Exception catch (e) {
       return Failure(domain.DatabaseFailure('Failed to delete config: $e'));
     }
   }
@@ -82,8 +83,10 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = _mapDataToEntity(configData);
       return Success(config);
-    } catch (e) {
-      return Failure(domain.DatabaseFailure('Failed to get current config: $e'));
+    } on Exception catch (e) {
+      return Failure(
+        domain.DatabaseFailure('Failed to get current config: $e'),
+      );
     }
   }
 

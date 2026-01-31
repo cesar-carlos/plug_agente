@@ -1,11 +1,13 @@
-class AgentId {
-  final String value;
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+// Reason: Value object compares by value for equality.
 
+class AgentId {
   AgentId(this.value) {
     if (!_isValid(value)) {
       throw ArgumentError('Invalid agent ID: $value');
     }
   }
+  final String value;
 
   bool _isValid(String agentId) {
     if (agentId.isEmpty) return false;

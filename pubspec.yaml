@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
 
   # Navegação e Rotas
   go_router: ^14.6.2
@@ -43,9 +46,6 @@ dependencies:
 
   # Compression
   archive: ^3.4.9
-
-  # Database via ODBC
-  connect_database: ^1.0.0
 
   # Persistência
   drift: ^2.22.1
@@ -102,6 +102,7 @@ dependencies:
   # HTTP Client
   dio: ^5.4.0
   http: ^1.2.0
+  odbc_fast: 0.3.1
 
 dev_dependencies:
   flutter_test:
@@ -114,6 +115,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
   mocktail: ^1.0.4
   test: ^1.25.8
+  very_good_analysis: ^10.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -124,6 +126,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Localization
+  generate: true
 
   # To add assets to your application, add an assets section, like this:
   assets:

@@ -1,14 +1,12 @@
+import 'package:plug_agente/application/services/auth_service.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:result_dart/result_dart.dart';
 
-import '../../domain/entities/auth_token.dart';
-import '../services/auth_service.dart';
-
 class SaveAuthToken {
+  SaveAuthToken(this._service);
   final AuthService _service;
 
-  SaveAuthToken(this._service);
-
   Future<Result<void>> call(AuthToken token) async {
-    return await _service.saveAuthToken(token);
+    return _service.saveAuthToken(token);
   }
 }

@@ -1,13 +1,11 @@
+import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:result_dart/result_dart.dart';
 
-import '../../domain/repositories/i_notification_service.dart';
-
 class CancelAllNotifications {
+  CancelAllNotifications(this._notificationService);
   final INotificationService _notificationService;
 
-  CancelAllNotifications(this._notificationService);
-
   Future<Result<void>> call() async {
-    return await _notificationService.cancelAll();
+    return _notificationService.cancelAll();
   }
 }

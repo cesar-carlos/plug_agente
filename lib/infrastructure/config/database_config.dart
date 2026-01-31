@@ -1,14 +1,6 @@
-import 'database_type.dart';
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 
 class DatabaseConfig {
-  final String driverName;
-  final String username;
-  final String password;
-  final String database;
-  final String server;
-  final int port;
-  final DatabaseType databaseType;
-
   DatabaseConfig({
     required this.driverName,
     required this.username,
@@ -75,4 +67,11 @@ class DatabaseConfig {
       databaseType: DatabaseType.postgresql,
     );
   }
+  final String driverName;
+  final String username;
+  final String password;
+  final String database;
+  final String server;
+  final int port;
+  final DatabaseType databaseType;
 }

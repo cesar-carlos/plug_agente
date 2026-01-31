@@ -3,11 +3,15 @@ import 'package:fluent_ui/fluent_ui.dart';
 enum DialogType { destination, schedule, sqlServerConfig, sybaseConfig }
 
 class ConstrainedDialog extends StatelessWidget {
+  const ConstrainedDialog({
+    required this.child,
+    required this.type,
+    super.key,
+    this.title,
+  });
   final Widget child;
   final DialogType type;
   final String? title;
-
-  const ConstrainedDialog({super.key, required this.child, required this.type, this.title});
 
   static Future<T?> show<T>({
     required BuildContext context,
@@ -17,7 +21,8 @@ class ConstrainedDialog extends StatelessWidget {
   }) {
     return showDialog<T>(
       context: context,
-      builder: (context) => ConstrainedDialog(type: type, title: title, child: child),
+      builder: (context) =>
+          ConstrainedDialog(type: type, title: title, child: child),
     );
   }
 
@@ -48,7 +53,12 @@ class ConstrainedDialog extends StatelessWidget {
           child: SingleChildScrollView(child: child),
         ),
       ),
-      actions: [Button(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar'))],
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+      ],
     );
   }
 }
