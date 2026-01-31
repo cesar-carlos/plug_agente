@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/errors.dart';
 
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(this._executePlaygroundQuery, this._testDbConnection);
@@ -75,10 +76,8 @@ class PlaygroundProvider extends ChangeNotifier {
         _executionDuration = stopwatch.elapsed;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to execute query: ${_error ?? failure}');
         _columnMetadata = null;
         _executionDuration = stopwatch.elapsed;
       },
@@ -99,10 +98,8 @@ class PlaygroundProvider extends ChangeNotifier {
         _connectionStatus = 'Conexão estabelecida com sucesso';
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to test connection: ${_error ?? failure}');
         _connectionStatus = 'Falha na conexão';
       },
     );

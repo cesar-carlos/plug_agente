@@ -5,6 +5,7 @@ import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
+import 'package:plug_agente/infrastructure/errors/failure_converter.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AuthClient implements IAuthClient {
@@ -16,36 +17,6 @@ class AuthClient implements IAuthClient {
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
     return '$normalizedBase$path';
-  }
-
-  String _getErrorMessage(DioException e) {
-    if (e.response != null) {
-      final statusCode = e.response!.statusCode;
-      final data = e.response!.data;
-
-      if (data is Map<String, dynamic> && data['error'] != null) {
-        return data['error'] as String;
-      }
-
-      return 'Server error: $statusCode';
-    }
-
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        return 'Connection timeout. Please check your internet connection.';
-      case DioExceptionType.badResponse:
-        return 'Invalid server response';
-      case DioExceptionType.cancel:
-        return 'Request was cancelled';
-      case DioExceptionType.connectionError:
-        return 'Unable to connect to server. Please check the server URL and your internet connection.';
-      case DioExceptionType.badCertificate:
-        return 'SSL certificate error';
-      case DioExceptionType.unknown:
-        return e.message ?? 'Network error occurred';
-    }
   }
 
   @override
@@ -87,7 +58,7 @@ class AuthClient implements IAuthClient {
       return Failure(
         domain.ServerFailure('Server error: ${response.statusCode}'),
       );
-    } on DioException catch (e) {
+    } on DioException catch (e, stackTrace) {
       debugPrint(
         'AuthClient: DioException: ${e.message}, Type: ${e.type}, Response: ${e.response?.statusCode}',
       );
@@ -99,10 +70,27 @@ class AuthClient implements IAuthClient {
           ),
         );
       }
-      return Failure(domain.NetworkFailure(_getErrorMessage(e)));
-    } on Exception catch (e) {
+      return Failure(
+        FailureConverter.convert(
+          e,
+          stackTrace,
+          operation: 'login',
+          additionalContext: {
+            'serverUrl': serverUrl,
+            'exceptionType': e.type.toString(),
+          },
+        ),
+      );
+    } on Exception catch (e, stackTrace) {
       debugPrint('AuthClient: Unexpected error: $e');
-      return Failure(domain.ServerFailure('Unexpected error: $e'));
+      return Failure(
+        FailureConverter.convert(
+          e,
+          stackTrace,
+          operation: 'login',
+          additionalContext: {'serverUrl': serverUrl},
+        ),
+      );
     }
   }
 
@@ -140,7 +128,7 @@ class AuthClient implements IAuthClient {
       return Failure(
         domain.ServerFailure('Server error: ${response.statusCode}'),
       );
-    } on DioException catch (e) {
+    } on DioException catch (e, stackTrace) {
       if (e.response?.statusCode == AppConstants.httpStatusUnauthorized) {
         final data = e.response?.data as Map<String, dynamic>?;
         return Failure(
@@ -149,9 +137,26 @@ class AuthClient implements IAuthClient {
           ),
         );
       }
-      return Failure(domain.NetworkFailure(_getErrorMessage(e)));
-    } on Exception catch (e) {
-      return Failure(domain.ServerFailure('Unexpected error: $e'));
+      return Failure(
+        FailureConverter.convert(
+          e,
+          stackTrace,
+          operation: 'refreshToken',
+          additionalContext: {
+            'serverUrl': serverUrl,
+            'exceptionType': e.type.toString(),
+          },
+        ),
+      );
+    } on Exception catch (e, stackTrace) {
+      return Failure(
+        FailureConverter.convert(
+          e,
+          stackTrace,
+          operation: 'refreshToken',
+          additionalContext: {'serverUrl': serverUrl},
+        ),
+      );
     }
   }
 }

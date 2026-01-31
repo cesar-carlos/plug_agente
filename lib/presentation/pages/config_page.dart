@@ -12,14 +12,21 @@ import 'package:plug_agente/shared/widgets/common/message_modal.dart';
 import 'package:provider/provider.dart';
 
 class ConfigPage extends StatefulWidget {
-  const ConfigPage({super.key});
+  const ConfigPage({
+    this.configId,
+    this.initialTab,
+    super.key,
+  });
+
+  final String? configId;
+  final String? initialTab;
 
   @override
   State<ConfigPage> createState() => _ConfigPageState();
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  int _currentPage = 0;
+  late int _currentPage;
   AuthStatus? _previousAuthStatus;
   String _previousAuthError = '';
   ConnectionStatus? _previousConnectionStatus;
@@ -33,13 +40,22 @@ class _ConfigPageState extends State<ConfigPage> {
   @override
   void initState() {
     super.initState();
+    _currentPage = widget.initialTab == 'websocket' ? 1 : 0;
     _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.configId != null) {
+        _loadConfig(widget.configId!);
+      }
       _checkAndInitializeFields();
       _setupAuthListener();
       _setupConnectionListener();
       _setupConfigListener();
     });
+  }
+
+  Future<void> _loadConfig(String configId) async {
+    final configProvider = context.read<ConfigProvider>();
+    await configProvider.loadConfigById(configId);
   }
 
   void _setupAuthListener() {

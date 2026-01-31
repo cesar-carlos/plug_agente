@@ -17,6 +17,7 @@
 - **`flutter_widgets.md`**: widget construction/performance patterns (composition, const, lists, layout, theming tokens)
 - **`ui_ux_design.md`**: desktop UI/UX principles (Fluent vs Material policy, navigation, a11y, responsive desktop)
 - **`testing.md`**: unit/widget testing conventions (AAA, naming, isolation, mocking)
+- **`result_dart_guide.md`**: result_dart package usage patterns (Result type, error handling, by layer)
 
 ### Project-specific (`backup_database`)
 

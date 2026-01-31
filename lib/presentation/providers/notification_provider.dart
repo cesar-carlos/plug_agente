@@ -3,7 +3,8 @@ import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart'
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/errors/errors.dart';
 
 class NotificationProvider extends ChangeNotifier {
   NotificationProvider(
@@ -43,10 +44,8 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
     );
@@ -76,10 +75,8 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
     );
@@ -99,10 +96,8 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
     );
@@ -122,10 +117,8 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        final failureMessage = failure is domain.Failure
-            ? failure.message
-            : failure.toString();
-        _error = failureMessage;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
     );

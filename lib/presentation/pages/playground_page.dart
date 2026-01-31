@@ -7,7 +7,12 @@ import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
 
 class PlaygroundPage extends StatefulWidget {
-  const PlaygroundPage({super.key});
+  const PlaygroundPage({
+    this.configId,
+    super.key,
+  });
+
+  final String? configId;
 
   @override
   State<PlaygroundPage> createState() => _PlaygroundPageState();
@@ -22,6 +27,17 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     super.initState();
     _queryController = TextEditingController();
     _focusNode = FocusNode();
+
+    if (widget.configId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadConfig(widget.configId!);
+      });
+    }
+  }
+
+  Future<void> _loadConfig(String configId) async {
+    final configProvider = context.read<ConfigProvider>();
+    await configProvider.loadConfigById(configId);
   }
 
   @override

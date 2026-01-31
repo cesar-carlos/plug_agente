@@ -5,7 +5,7 @@ import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
-import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated, error }
@@ -30,42 +30,32 @@ class AuthProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    try {
-      final result = await _loginUseCase(serverUrl, credentials);
+    final result = await _loginUseCase(serverUrl, credentials);
 
-      result.fold(
-        (token) async {
-          _currentToken = token;
-          final saveResult = await _saveUseCase(token);
-          saveResult.fold(
-            (_) {
-              _status = AuthStatus.authenticated;
-              AppLogger.info('Login successful');
-            },
-            (failure) {
-              _status = AuthStatus.error;
-              final failureMessage = failure is Failure
-                  ? failure.message
-                  : failure.toString();
-              _error = 'Failed to save token: $failureMessage';
-              AppLogger.error('Failed to save token: $failureMessage');
-            },
-          );
-        },
-        (failure) {
-          _status = AuthStatus.error;
-          final failureMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
-          _error = failureMessage;
-          AppLogger.error('Login failed: $failureMessage');
-        },
-      );
-    } on Exception catch (e) {
-      _status = AuthStatus.error;
-      _error = 'Unexpected error: $e';
-      AppLogger.error('Unexpected error during login: $e');
-    }
+    await result.fold(
+      (token) async {
+        _currentToken = token;
+        final saveResult = await _saveUseCase(token);
+        saveResult.fold(
+          (_) {
+            _status = AuthStatus.authenticated;
+            AppLogger.info('Login successful');
+          },
+          (failure) {
+            _status = AuthStatus.error;
+            _error = 'Failed to save token: ${failure.toUserMessage()}';
+            AppLogger.error(
+              'Failed to save token: ${failure.toUserMessage()}',
+            );
+          },
+        );
+      },
+      (failure) {
+        _status = AuthStatus.error;
+        _error = failure.toUserMessage();
+        AppLogger.error('Login failed: $_error');
+      },
+    );
 
     notifyListeners();
   }
@@ -78,45 +68,33 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
-    try {
-      final result = await _refreshUseCase(
-        serverUrl,
-        _currentToken!.refreshToken,
-      );
+    final result = await _refreshUseCase(
+      serverUrl,
+      _currentToken!.refreshToken,
+    );
 
-      result.fold(
-        (token) async {
-          _currentToken = token;
-          final saveResult = await _saveUseCase(token);
-          saveResult.fold(
-            (_) {
-              _status = AuthStatus.authenticated;
-              AppLogger.info('Token refreshed successfully');
-            },
-            (failure) {
-              _status = AuthStatus.unauthenticated;
-              final failureMessage = failure is Failure
-                  ? failure.message
-                  : failure.toString();
-              _error = 'Failed to save token: $failureMessage';
-              AppLogger.error('Failed to save token: $failureMessage');
-            },
-          );
-        },
-        (failure) {
-          _status = AuthStatus.unauthenticated;
-          final failureMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
-          _error = failureMessage;
-          AppLogger.error('Token refresh failed: $failureMessage');
-        },
-      );
-    } on Exception catch (e) {
-      _status = AuthStatus.unauthenticated;
-      _error = 'Unexpected error: $e';
-      AppLogger.error('Unexpected error during token refresh: $e');
-    }
+    await result.fold(
+      (token) async {
+        _currentToken = token;
+        final saveResult = await _saveUseCase(token);
+        saveResult.fold(
+          (_) {
+            _status = AuthStatus.authenticated;
+            AppLogger.info('Token refreshed successfully');
+          },
+          (failure) {
+            _status = AuthStatus.unauthenticated;
+            _error = 'Failed to save token: ${failure.toUserMessage()}';
+            AppLogger.error('Failed to save token: ${failure.toUserMessage()}');
+          },
+        );
+      },
+      (failure) {
+        _status = AuthStatus.unauthenticated;
+        _error = failure.toUserMessage();
+        AppLogger.error('Token refresh failed: $_error');
+      },
+    );
 
     notifyListeners();
   }

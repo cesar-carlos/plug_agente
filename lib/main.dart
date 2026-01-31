@@ -16,6 +16,7 @@ import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
@@ -29,11 +30,18 @@ import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await dotenv.load(isOptional: true);
   await setupDependencies();
+
+  // Handle deep links from command-line arguments
+  final deepLinkService = DeepLinkService();
+  final initialLink = deepLinkService.getInitialLink(args);
+  final initialRoute = initialLink != null
+      ? deepLinkService.deepLinkToRoute(initialLink)
+      : null;
 
   final windowManagerService = WindowManagerService();
   final minSize = WindowConstraints.getMainWindowMinSize();
@@ -68,11 +76,16 @@ void main() async {
 
   await getIt<INotificationService>().initialize();
 
-  runApp(const MyApp());
+  runApp(MyApp(initialRoute: initialRoute));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({
+    this.initialRoute,
+    super.key,
+  });
+
+  final String? initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -116,13 +129,17 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
       ],
-      child: const _ProviderInitializer(),
+      child: _ProviderInitializer(initialRoute: initialRoute),
     );
   }
 }
 
 class _ProviderInitializer extends StatelessWidget {
-  const _ProviderInitializer();
+  const _ProviderInitializer({
+    this.initialRoute,
+  });
+
+  final String? initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +150,6 @@ class _ProviderInitializer extends StatelessWidget {
     connectionProvider.setAuthProvider(authProvider);
     connectionProvider.setConfigProvider(configProvider);
 
-    return const PlugAgentApp();
+    return PlugAgentApp(initialRoute: initialRoute);
   }
 }

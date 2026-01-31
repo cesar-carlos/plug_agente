@@ -19,7 +19,8 @@
       "Bash(flutter test:*)",
       "Bash(genhtml:*)",
       "Bash(flutter gen-l10n:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(flutter run:*)"
     ]
   }
 }

@@ -4,7 +4,7 @@ import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -63,85 +63,61 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    try {
-      final transportClient = getIt<ITransportClient>();
-      transportClient.setOnTokenExpired(_handleTokenExpired);
-      transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
+    final transportClient = getIt<ITransportClient>();
+    transportClient.setOnTokenExpired(_handleTokenExpired);
+    transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
-      final result = await _connectToHubUseCase(
-        serverUrl,
-        agentId,
-        authToken: authToken,
-      );
+    final result = await _connectToHubUseCase(
+      serverUrl,
+      agentId,
+      authToken: authToken,
+    );
 
-      result.fold(
-        (_) {
-          _status = ConnectionStatus.connected;
-          AppLogger.info('Connected to hub successfully');
-        },
-        (failure) {
-          _status = ConnectionStatus.error;
-          final failureMessage = failure is domain.Failure
-              ? failure.message
-              : failure.toString();
-          _error = failureMessage;
-          AppLogger.error('Failed to connect to hub: $failureMessage');
-        },
-      );
-    } on Exception catch (e) {
-      _status = ConnectionStatus.error;
-      _error = 'Unexpected error: $e';
-      AppLogger.error('Unexpected error during connection: $e');
-    }
+    result.fold(
+      (_) {
+        _status = ConnectionStatus.connected;
+        AppLogger.info('Connected to hub successfully');
+      },
+      (failure) {
+        _status = ConnectionStatus.error;
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to connect to hub: $_error');
+      },
+    );
 
     notifyListeners();
   }
 
   Future<void> disconnect() async {
-    try {
-      _status = ConnectionStatus.disconnected;
-      _error = '';
-      notifyListeners();
+    _status = ConnectionStatus.disconnected;
+    _error = '';
+    notifyListeners();
 
-      // Call disconnect on transport client
-      AppLogger.info('Disconnected from hub');
-    } on Exception catch (e) {
-      _error = 'Failed to disconnect: $e';
-      AppLogger.error('Error during disconnection: $e');
-      notifyListeners();
-    }
+    AppLogger.info('Disconnected from hub');
   }
 
   Future<Result<bool>> testDbConnection(String connectionString) async {
-    try {
-      final result = await _testDbConnectionUseCase(connectionString);
+    final result = await _testDbConnectionUseCase(connectionString);
 
-      result.fold(
-        (isConnected) {
-          _isDbConnected = isConnected;
-          if (isConnected) {
-            AppLogger.info('Database connection test successful');
-          } else {
-            AppLogger.warning('Database connection test failed');
-          }
-        },
-        (failure) {
-          _isDbConnected = false;
-          final failureMessage = failure is domain.Failure
-              ? failure.message
-              : failure.toString();
-          AppLogger.error('Database connection test failed: $failureMessage');
-        },
-      );
+    result.fold(
+      (isConnected) {
+        _isDbConnected = isConnected;
+        if (isConnected) {
+          AppLogger.info('Database connection test successful');
+        } else {
+          AppLogger.warning('Database connection test failed');
+        }
+      },
+      (failure) {
+        _isDbConnected = false;
+        AppLogger.error(
+          'Database connection test failed: ${failure.toUserMessage()}',
+        );
+      },
+    );
 
-      notifyListeners();
-      return result;
-    } on Exception catch (e) {
-      _isDbConnected = false;
-      AppLogger.error('Error testing database connection: $e');
-      notifyListeners();
-      return Failure(domain.DatabaseFailure('Erro ao testar conexão: $e'));
-    }
+    notifyListeners();
+    return result;
   }
 
   void clearError() {
@@ -154,37 +130,25 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    try {
-      final result = await _checkOdbcDriverUseCase(driverName);
+    final result = await _checkOdbcDriverUseCase(driverName);
 
-      result.fold(
-        (isInstalled) {
-          if (isInstalled) {
-            AppLogger.info('ODBC driver "$driverName" is installed');
-          } else {
-            AppLogger.warning('ODBC driver "$driverName" is not installed');
-          }
-        },
-        (failure) {
-          final failureMessage = failure is domain.Failure
-              ? failure.message
-              : failure.toString();
-          _error = failureMessage;
-          AppLogger.error('Failed to check ODBC driver: $failureMessage');
-        },
-      );
+    result.fold(
+      (isInstalled) {
+        if (isInstalled) {
+          AppLogger.info('ODBC driver "$driverName" is installed');
+        } else {
+          AppLogger.warning('ODBC driver "$driverName" is not installed');
+        }
+      },
+      (failure) {
+        _error = failure.toUserMessage();
+        AppLogger.error('Failed to check ODBC driver: $_error');
+      },
+    );
 
-      return result;
-    } on Exception catch (e) {
-      _error = 'Unexpected error: $e';
-      AppLogger.error('Error checking ODBC driver: $e');
-      return Failure(
-        domain.ConfigurationFailure('Erro ao verificar driver ODBC: $e'),
-      );
-    } finally {
-      _isCheckingDriver = false;
-      notifyListeners();
-    }
+    _isCheckingDriver = false;
+    notifyListeners();
+    return result;
   }
 
   Future<void> _handleTokenExpired() async {

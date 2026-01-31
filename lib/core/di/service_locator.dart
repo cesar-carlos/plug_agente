@@ -1,5 +1,5 @@
 import 'package:get_it/get_it.dart';
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
@@ -50,15 +50,20 @@ import 'package:uuid/uuid.dart';
 
 final GetIt getIt = GetIt.instance;
 
+odbc.ServiceLocator _odbcLocator = odbc.ServiceLocator();
+
 Future<void> setupDependencies() async {
+  _odbcLocator.initialize(useAsync: true);
+
   // External
   getIt
-    ..registerLazySingleton(SocketDataSource.new)
+    ..registerLazySingleton<odbc.OdbcService>(() => _odbcLocator.asyncService)
     ..registerLazySingleton(GzipCompressor.new)
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(TrayManagerService.new)
     ..registerLazySingleton<INotificationService>(NotificationService.new)
+    ..registerLazySingleton(SocketDataSource.new)
     ..registerLazySingleton(AppDatabase.new)
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(getIt<AppDatabase>()),
@@ -67,17 +72,15 @@ Future<void> setupDependencies() async {
       () => SocketIOTransportClient(getIt<SocketDataSource>()),
     )
     ..registerLazySingleton(() => const Uuid())
-    ..registerLazySingleton(ServiceLocator.new)
-    ..registerLazySingleton(() => OdbcService(getIt<IOdbcRepository>()))
     ..registerLazySingleton<IConnectionPool>(
-      () => OdbcConnectionPool(getIt<OdbcService>()),
+      () => OdbcConnectionPool(getIt<odbc.OdbcService>()),
     )
     ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
     ..registerLazySingleton(() => MetricsCollector.instance)
     ..registerLazySingleton<IDatabaseGateway>(
       () => OdbcDatabaseGateway(
         getIt<IAgentConfigRepository>(),
-        getIt<OdbcService>(),
+        getIt<odbc.OdbcService>(),
         getIt<IConnectionPool>(),
         getIt<IRetryManager>(),
         getIt<MetricsCollector>(),

@@ -5,7 +5,12 @@ import 'package:plug_agente/core/routes/routes.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 
 class PlugAgentApp extends StatelessWidget {
-  const PlugAgentApp({super.key});
+  const PlugAgentApp({
+    this.initialRoute,
+    super.key,
+  });
+
+  final String? initialRoute;
 
   @override
   Widget build(BuildContext context) {

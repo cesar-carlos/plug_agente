@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/routes/app_routes.dart';
 
 class MainWindow extends StatefulWidget {
   const MainWindow({required this.child, super.key});
+
   final Widget child;
 
   @override
@@ -13,20 +15,21 @@ class MainWindow extends StatefulWidget {
 }
 
 class _MainWindowState extends State<MainWindow> {
-  int _calculateSelectedIndex(BuildContext context) {
+  NavDestination _getCurrentDestination(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
-    if (location.startsWith('/config')) {
-      return 2;
-    }
-    if (location.startsWith('/playground')) {
-      return 1;
-    }
-    return 0;
+    return NavDestination.fromRoute(location);
+  }
+
+  void _navigateToDestination(
+    BuildContext context,
+    NavDestination destination,
+  ) {
+    context.go(destination.route);
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedIndex = _calculateSelectedIndex(context);
+    final selectedDestination = _getCurrentDestination(context);
 
     return NavigationView(
       appBar: const NavigationAppBar(
@@ -34,16 +37,10 @@ class _MainWindowState extends State<MainWindow> {
         automaticallyImplyLeading: false,
       ),
       pane: NavigationPane(
-        selected: selectedIndex,
+        selected: selectedDestination.index,
         onChanged: (index) {
-          switch (index) {
-            case 0:
-              context.go('/');
-            case 1:
-              context.go('/playground');
-            case 2:
-              context.go('/config');
-          }
+          final destination = NavDestination.fromIndex(index);
+          _navigateToDestination(context, destination);
         },
         displayMode: PaneDisplayMode.compact,
         items: [
@@ -64,8 +61,6 @@ class _MainWindowState extends State<MainWindow> {
           ),
         ],
       ),
-      // Usando transitionBuilder para exibir a página atual do Router
-      // Isso evita o erro de assert do content vs pane, e garante que o widget.child (GoRouter) seja exibido.
       transitionBuilder: (child, animation) {
         return widget.child;
       },

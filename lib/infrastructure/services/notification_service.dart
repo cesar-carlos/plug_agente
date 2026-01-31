@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:result_dart/result_dart.dart';
@@ -7,10 +8,20 @@ class NotificationService implements INotificationService {
   NotificationService() : _plugin = FlutterLocalNotificationsPlugin();
   final FlutterLocalNotificationsPlugin _plugin;
 
+  static const String _notificationGuid =
+      'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
+
   @override
   Future<Result<void>> initialize() async {
     try {
-      const initializationSettings = InitializationSettings();
+      const initializationSettings = InitializationSettings(
+        windows: WindowsInitializationSettings(
+          appName: AppConstants.appName,
+          appUserModelId:
+              'PlugDatabase.PlugAgente.App.${AppConstants.appVersion}',
+          guid: _notificationGuid,
+        ),
+      );
 
       final result = await _plugin.initialize(
         initializationSettings,
