@@ -6,19 +6,14 @@ import 'package:result_dart/result_dart.dart';
 class ConfigValidator {
   ConfigValidator();
 
-  /// Validates all config fields and returns `Result<bool>`.
-  ///
-  /// Uses Zard for validation with detailed error messages.
   Result<bool> validate(Config config) {
     final errors = <String>[];
 
-    // Validate ID
     final idResult = _validateId(config.id);
     if (idResult.isError()) {
       errors.add('ID: ${(idResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid ID'}');
     }
 
-    // Validate driver name
     final driverResult = _validateDriverName(config.driverName);
     if (driverResult.isError()) {
       errors.add(
@@ -26,7 +21,6 @@ class ConfigValidator {
       );
     }
 
-    // Validate connection string
     final connResult = _validateConnectionString(config.connectionString);
     if (connResult.isError()) {
       errors.add(
@@ -34,13 +28,11 @@ class ConfigValidator {
       );
     }
 
-    // Validate username
     final userResult = _validateUsername(config.username);
     if (userResult.isError()) {
       errors.add('Username: ${(userResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid username'}');
     }
 
-    // Validate database name
     final dbResult = _validateDatabaseName(config.databaseName);
     if (dbResult.isError()) {
       errors.add(
@@ -48,13 +40,11 @@ class ConfigValidator {
       );
     }
 
-    // Validate host
     final hostResult = _validateHost(config.host);
     if (hostResult.isError()) {
       errors.add('Host: ${(hostResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid host'}');
     }
 
-    // Validate port
     final portResult = _validatePort(config.port);
     if (portResult.isError()) {
       errors.add('Port: ${(portResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid port'}');
@@ -67,7 +57,6 @@ class ConfigValidator {
     return const Success(true);
   }
 
-  /// Validates config ID (non-empty string)
   Result<String> _validateId(String id) {
     return InputValidators.nonEmptyString(
       id,
@@ -75,7 +64,6 @@ class ConfigValidator {
     ).map((_) => id);
   }
 
-  /// Validates driver name (non-empty string)
   Result<String> _validateDriverName(String driverName) {
     return InputValidators.nonEmptyString(
       driverName,
@@ -83,7 +71,6 @@ class ConfigValidator {
     ).map((_) => driverName);
   }
 
-  /// Validates connection string (non-empty string)
   Result<String> _validateConnectionString(String connectionString) {
     return InputValidators.nonEmptyString(
       connectionString,
@@ -91,7 +78,6 @@ class ConfigValidator {
     ).map((_) => connectionString);
   }
 
-  /// Validates username (non-empty string)
   Result<String> _validateUsername(String username) {
     return InputValidators.nonEmptyString(
       username,
@@ -99,16 +85,13 @@ class ConfigValidator {
     ).map((_) => username);
   }
 
-  /// Validates database name using InputValidators
   Result<String> _validateDatabaseName(String databaseName) {
     return InputValidators.databaseName(
       databaseName,
     ).map((_) => databaseName);
   }
 
-  /// Validates host (hostname or IPv4)
   Result<String> _validateHost(String host) {
-    // Try as hostname first, then IPv4
     final hostnameResult = InputValidators.hostname(host);
     if (hostnameResult.isSuccess()) {
       return hostnameResult;
@@ -119,13 +102,11 @@ class ConfigValidator {
       return ipv4Result;
     }
 
-    // Both failed, return error
     return Failure(
       domain.ValidationFailure('Host must be a valid hostname or IPv4 address'),
     );
   }
 
-  /// Validates port (1-65535)
   Result<int> _validatePort(int port) {
     return InputValidators.port(port);
   }

@@ -24,13 +24,10 @@ class ExecutePlaygroundQuery {
       return Failure(domain.ValidationFailure('A query não pode estar vazia'));
     }
 
-    // Validar segurança da query
     final validation = SqlValidator.validateSelectQuery(trimmedQuery);
 
-    // Encadear validação com execução usando fold
     return validation.fold(
       (_) async {
-        // Validação sucesso, buscar config e executar
         final configResult = await _configRepository.getCurrentConfig();
 
         return configResult.fold(
@@ -45,9 +42,7 @@ class ExecutePlaygroundQuery {
             return _databaseGateway.executeQuery(request);
           },
           (failure) {
-            final failureMessage = failure is domain.Failure
-                ? failure.message
-                : failure.toString();
+            final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
             return Failure(
               domain.ConfigurationFailure(
                 'Configuração não encontrada: $failureMessage',
@@ -57,7 +52,6 @@ class ExecutePlaygroundQuery {
         );
       },
       (failure) {
-        // Validação falhou - retornar Failure de validação
         return Failure(failure);
       },
     );
