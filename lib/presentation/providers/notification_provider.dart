@@ -44,7 +44,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
@@ -75,7 +75,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
@@ -96,7 +96,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },
@@ -117,7 +117,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to send notification: $_error');
         _isLoading = false;
       },

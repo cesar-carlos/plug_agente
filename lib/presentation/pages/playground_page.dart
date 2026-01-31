@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
@@ -52,7 +53,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     final navigatorContext = Navigator.of(context, rootNavigator: true).context;
     MessageModal.show<void>(
       context: navigatorContext,
-      title: 'Erro',
+      title: AppStrings.queryErrorTitle,
       message: error,
       type: MessageType.error,
     );
@@ -75,8 +76,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     if (!mounted) return;
 
     final error = provider.error;
-    if (error != null) {
-      _showErrorModal(error);
+    if (error != null && error.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showErrorModal(error);
+      });
     }
   }
 
@@ -188,6 +191,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       executionDuration: playgroundProvider.executionDuration,
                       affectedRows: playgroundProvider.affectedRows,
                       columnMetadata: playgroundProvider.columnMetadata,
+                      error: playgroundProvider.error,
+                      onShowErrorDetails: playgroundProvider.error != null
+                          ? () => _showErrorModal(playgroundProvider.error!)
+                          : null,
                     ),
                   ),
                 ],

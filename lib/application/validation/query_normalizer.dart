@@ -8,8 +8,7 @@ class QueryNormalizer {
     if (normalizedQuery.startsWith('truncate ')) return false;
     if (normalizedQuery.startsWith('alter ')) return false;
     if (normalizedQuery.startsWith('create ')) return false;
-    if (normalizedQuery.startsWith('delete ') &&
-        !normalizedQuery.contains('where')) {
+    if (normalizedQuery.startsWith('delete ') && !normalizedQuery.contains('where')) {
       return false;
     }
 

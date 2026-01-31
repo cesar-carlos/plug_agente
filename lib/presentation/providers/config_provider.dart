@@ -53,7 +53,7 @@ class ConfigProvider extends ChangeNotifier {
           AppLogger.info('No config found, creating new one');
           _createDefaultConfig();
         } else {
-          _error = failure.toUserMessage();
+          _error = failure.toDisplayMessage();
           AppLogger.error('Failed to load config: $_error');
         }
       },
@@ -80,7 +80,7 @@ class ConfigProvider extends ChangeNotifier {
         AppLogger.info('Config loaded successfully by ID: $id');
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to load config: $_error');
       },
     );
@@ -136,7 +136,7 @@ class ConfigProvider extends ChangeNotifier {
         AppLogger.info('Config saved successfully');
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to save config: $_error');
       },
     );

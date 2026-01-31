@@ -39,9 +39,7 @@ void main(List<String> args) async {
   // Handle deep links from command-line arguments
   final deepLinkService = DeepLinkService();
   final initialLink = deepLinkService.getInitialLink(args);
-  final initialRoute = initialLink != null
-      ? deepLinkService.deepLinkToRoute(initialLink)
-      : null;
+  final initialRoute = initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
 
   final windowManagerService = WindowManagerService();
   final minSize = WindowConstraints.getMainWindowMinSize();

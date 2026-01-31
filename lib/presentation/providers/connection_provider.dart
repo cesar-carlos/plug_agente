@@ -80,7 +80,7 @@ class ConnectionProvider extends ChangeNotifier {
       },
       (failure) {
         _status = ConnectionStatus.error;
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to connect to hub: $_error');
       },
     );
@@ -111,7 +111,7 @@ class ConnectionProvider extends ChangeNotifier {
       (failure) {
         _isDbConnected = false;
         AppLogger.error(
-          'Database connection test failed: ${failure.toUserMessage()}',
+          'Database connection test failed: ${failure.toDisplayMessage()}',
         );
       },
     );
@@ -141,7 +141,7 @@ class ConnectionProvider extends ChangeNotifier {
         }
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to check ODBC driver: $_error');
       },
     );

@@ -97,7 +97,7 @@ class ErrorDisplay extends StatelessWidget {
 
   String _getMessage() {
     if (error is Failure) {
-      return (error as Failure).message;
+      return (error as Failure).toString();
     }
     return error.toString();
   }
@@ -144,7 +144,7 @@ class ErrorDisplay extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
+          SelectableText(
             _getMessage(),
             style: const TextStyle(fontSize: 14),
           ),

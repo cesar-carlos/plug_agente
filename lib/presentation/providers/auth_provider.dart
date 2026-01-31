@@ -43,16 +43,16 @@ class AuthProvider extends ChangeNotifier {
           },
           (failure) {
             _status = AuthStatus.error;
-            _error = 'Failed to save token: ${failure.toUserMessage()}';
+            _error = 'Failed to save token: ${failure.toDisplayMessage()}';
             AppLogger.error(
-              'Failed to save token: ${failure.toUserMessage()}',
+              'Failed to save token: ${failure.toDisplayMessage()}',
             );
           },
         );
       },
       (failure) {
         _status = AuthStatus.error;
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Login failed: $_error');
       },
     );
@@ -84,14 +84,14 @@ class AuthProvider extends ChangeNotifier {
           },
           (failure) {
             _status = AuthStatus.unauthenticated;
-            _error = 'Failed to save token: ${failure.toUserMessage()}';
-            AppLogger.error('Failed to save token: ${failure.toUserMessage()}');
+            _error = 'Failed to save token: ${failure.toDisplayMessage()}';
+            AppLogger.error('Failed to save token: ${failure.toDisplayMessage()}');
           },
         );
       },
       (failure) {
         _status = AuthStatus.unauthenticated;
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Token refresh failed: $_error');
       },
     );

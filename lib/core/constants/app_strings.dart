@@ -72,6 +72,8 @@ class AppStrings {
   static const String queryNoResults = 'Sem resultados';
   static const String queryNoResultsMessage =
       'Execute uma consulta SELECT para ver os resultados aqui.';
+  static const String queryErrorTitle = 'Erro na Consulta';
+  static const String queryErrorShowDetails = 'Ver Detalhes';
   static const String queryTotalRecords = 'Total de registros';
   static const String queryExecutionTime = 'Tempo de execução';
   static const String queryAffectedRows = 'Linhas afetadas';

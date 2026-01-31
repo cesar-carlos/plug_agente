@@ -207,7 +207,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (poolResult.isSuccess()) {
       final connId = poolResult.getOrNull()!;
 
-      final queryResult = await _service.executeQuery(connId, request.query);
+      final queryResult = await _service.executeQueryParams(
+        connId,
+        request.query,
+        [],
+      );
 
       await _connectionPool.release(connId);
 

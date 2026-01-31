@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/theme/app_colors.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/shared/widgets/common/centered_message.dart';
 import 'package:plug_agente/shared/widgets/sql/query_result_data_grid.dart';
@@ -12,17 +13,28 @@ class QueryResultsSection extends StatelessWidget {
     this.executionDuration,
     this.affectedRows,
     this.columnMetadata,
+    this.error,
+    this.onShowErrorDetails,
   });
   final List<Map<String, dynamic>> results;
   final bool isLoading;
   final Duration? executionDuration;
   final int? affectedRows;
   final List<Map<String, dynamic>>? columnMetadata;
+  final String? error;
+  final VoidCallback? onShowErrorDetails;
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(child: ProgressRing());
+    }
+
+    if (error != null && error!.isNotEmpty) {
+      return _QueryErrorState(
+        error: error!,
+        onShowDetails: onShowErrorDetails,
+      );
     }
 
     if (results.isEmpty) {
@@ -138,5 +150,64 @@ class _QueryResultsFooter extends StatelessWidget {
       final seconds = duration.inSeconds % 60;
       return '${minutes}m ${seconds}s';
     }
+  }
+}
+
+class _QueryErrorState extends StatelessWidget {
+  const _QueryErrorState({
+    required this.error,
+    this.onShowDetails,
+  });
+  final String error;
+  final VoidCallback? onShowDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              FluentIcons.error_badge,
+              size: 64,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              AppStrings.queryErrorTitle,
+              style: theme.typography.subtitle?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: theme.resources.subtleFillColorSecondary,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.5),
+                ),
+              ),
+              child: SelectableText(
+                error,
+                style: theme.typography.body,
+              ),
+            ),
+            if (onShowDetails != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              FilledButton(
+                onPressed: onShowDetails,
+                child: const Text(AppStrings.queryErrorShowDetails),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

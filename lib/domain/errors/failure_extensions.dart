@@ -15,6 +15,18 @@ extension ObjectFailureExtension on Object {
     return toString();
   }
 
+  /// Returns the full error for user analysis.
+  ///
+  /// Never suppresses details. For [Failure], includes message, cause,
+  /// and context so the user can fully analyze what went wrong.
+  /// For other objects, returns toString().
+  String toDisplayMessage() {
+    if (this is Failure) {
+      return (this as Failure).toString();
+    }
+    return toString();
+  }
+
   /// Checks if this object is a domain [Failure].
   bool get isFailure => this is Failure;
 
@@ -43,10 +55,7 @@ extension ExceptionToFailureExtension on Object {
     final errorMessage = message ?? toString();
 
     // Validation/Format errors
-    if (this is FormatException ||
-        this is ArgumentError ||
-        this is StateError ||
-        this is NoSuchMethodError) {
+    if (this is FormatException || this is ArgumentError || this is StateError || this is NoSuchMethodError) {
       return ValidationFailure.withContext(
         message: errorMessage,
         context: context,
@@ -105,7 +114,7 @@ extension ResultLoggingExtension on Object {
     String operation, {
     Map<String, dynamic> context = const {},
   }) {
-    return toUserMessage();
+    return toDisplayMessage();
   }
 
   /// Checks if this error should be shown to the user as a modal dialog.
@@ -116,9 +125,7 @@ extension ResultLoggingExtension on Object {
     final failure = this as Failure;
 
     // Show modal for these error types
-    return failure is ConfigurationFailure ||
-        failure is ConnectionFailure ||
-        failure is ServerFailure;
+    return failure is ConfigurationFailure || failure is ConnectionFailure || failure is ServerFailure;
   }
 
   /// Checks if this error is recoverable by user action.

@@ -12,9 +12,7 @@ class DeepLinkService {
   /// launched from a protocol handler (e.g., `plugdb://config/123`).
   String? getInitialLink(List<String> args) {
     for (final arg in args) {
-      if (arg.startsWith('plugdb://') ||
-          arg.startsWith('http://') ||
-          arg.startsWith('https://')) {
+      if (arg.startsWith('plugdb://') || arg.startsWith('http://') || arg.startsWith('https://')) {
         return arg;
       }
     }
@@ -104,9 +102,7 @@ class DeepLinkService {
     if (link == null || link.isEmpty) return false;
 
     // Check for valid schemes
-    if (link.startsWith('plugdb://') ||
-        link.startsWith('http://') ||
-        link.startsWith('https://')) {
+    if (link.startsWith('plugdb://') || link.startsWith('http://') || link.startsWith('https://')) {
       // Basic format validation: must have something after ://
       final parts = link.split('://');
       if (parts.length < 2) return false;

@@ -57,31 +57,40 @@ class PlaygroundProvider extends ChangeNotifier {
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
-    final result = await _executePlaygroundQuery(_query);
-    stopwatch.stop();
 
-    _isLoading = false;
+    try {
+      final result = await _executePlaygroundQuery(_query);
+      stopwatch.stop();
+      _isLoading = false;
 
-    result.fold(
-      (response) {
-        if (response.error != null) {
-          _error = response.error;
-          _results = [];
+      result.fold(
+        (response) {
+          if (response.error != null) {
+            _error = response.error;
+            _results = [];
+            _columnMetadata = null;
+          } else {
+            _results = response.data;
+            _affectedRows = response.affectedRows ?? 0;
+            _columnMetadata = response.columnMetadata;
+          }
+          _executionDuration = stopwatch.elapsed;
+        },
+        (failure) {
+          _error = failure.toDisplayMessage();
+          AppLogger.error('Failed to execute query: ${_error ?? failure}');
           _columnMetadata = null;
-        } else {
-          _results = response.data;
-          _affectedRows = response.affectedRows ?? 0;
-          _columnMetadata = response.columnMetadata;
-        }
-        _executionDuration = stopwatch.elapsed;
-      },
-      (failure) {
-        _error = failure.toUserMessage();
-        AppLogger.error('Failed to execute query: ${_error ?? failure}');
-        _columnMetadata = null;
-        _executionDuration = stopwatch.elapsed;
-      },
-    );
+          _executionDuration = stopwatch.elapsed;
+        },
+      );
+    } on Object catch (e, stackTrace) {
+      stopwatch.stop();
+      _isLoading = false;
+      _error = e.toString();
+      _columnMetadata = null;
+      _executionDuration = stopwatch.elapsed;
+      AppLogger.error('Query execution threw: $_error', e, stackTrace);
+    }
 
     notifyListeners();
   }
@@ -98,7 +107,7 @@ class PlaygroundProvider extends ChangeNotifier {
         _connectionStatus = 'Conexão estabelecida com sucesso';
       },
       (failure) {
-        _error = failure.toUserMessage();
+        _error = failure.toDisplayMessage();
         AppLogger.error('Failed to test connection: ${_error ?? failure}');
         _connectionStatus = 'Falha na conexão';
       },
