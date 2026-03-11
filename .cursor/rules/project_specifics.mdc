@@ -88,6 +88,67 @@ This project uses specific packages following clean architecture principles:
 
 - Follow `clean_architecture.mdc` for layer boundaries and dependency direction.
 
+## Error Handling and User Feedback
+
+- ✅ **Use `Result<T>`/`result_dart` for fallible flows** instead of letting exceptions cross layers silently
+- ✅ **Never suppress errors** with empty `catch`, ignored `Future` failures, or silent fallback values that hide the real problem
+- ✅ **Map infrastructure exceptions to specific domain `Failure` types** (`NetworkFailure`, `ConnectionFailure`, `ValidationFailure`, etc.)
+- ✅ **Preserve the original cause and useful context** when translating errors with `Failure.withContext(...)`
+- ✅ **Log/report technical details**, but return **clear and actionable messages** to the UI layer
+- ✅ **Show user-friendly messages in Presentation**; do not expose stack traces or raw low-level exceptions directly to users
+- ✅ **Catch the most specific exception you can handle**; use broad `catch` only as the last mapping boundary
+- ❌ **Do not return generic `ServerFailure(e.toString())` everywhere** when a more specific failure/message is available
+
+### Error Handling Pattern
+
+```dart
+Future<Result<User>> getById(String id) async {
+  try {
+    final userModel = await dataSource.getById(id);
+    return Success(userModel.toEntity());
+  } on SocketException catch (error) {
+    return Failure(
+      NetworkFailure.withContext(
+        message: 'Unable to reach the server',
+        cause: error,
+        context: {'operation': 'getById', 'id': id},
+      ),
+    );
+  } on FormatException catch (error) {
+    return Failure(
+      ServerFailure.withContext(
+        message: 'Received an invalid response from the server',
+        cause: error,
+        context: {'operation': 'getById', 'id': id},
+      ),
+    );
+  } on Exception catch (error) {
+    return Failure(
+      ServerFailure.withContext(
+        message: 'Failed to load user data',
+        cause: error,
+        context: {'operation': 'getById', 'id': id},
+      ),
+    );
+  }
+}
+```
+
+### User-Facing Error Rule
+
+```dart
+result.fold(
+  (success) => state = Loaded(success),
+  (failure) {
+    failure.log();
+    state = ErrorState(
+      message: failure.message,
+      canRetry: failure.isTransient,
+    );
+  },
+);
+```
+
 ## Desktop-Specific Considerations
 
 ### Windows Platform
@@ -165,8 +226,14 @@ class UserRepository implements IUserRepository {
     try {
       final userModel = await dataSource.getById(id);
       return Success(userModel.toEntity());
-    } catch (e) {
-      return Failure(ServerFailure(e.toString()));
+    } on Exception catch (error) {
+      return Failure(
+        ServerFailure.withContext(
+          message: 'Failed to load user data',
+          cause: error,
+          context: {'operation': 'getById', 'id': id},
+        ),
+      );
     }
   }
 }
@@ -183,19 +250,17 @@ Future<Result<User>> getUser(String id) async {
     return Failure(ValidationFailure('ID cannot be empty'));
   }
 
-  try {
-    final user = await repository.getById(id);
-    return Success(user);
-  } catch (e) {
-    return Failure(ServerFailure(e.toString()));
-  }
+  return repository.getById(id);
 }
 
-// Handle results with fold
+// Handle results explicitly
 final result = await getUser('123');
 result.fold(
   (success) => developer.log('User: ${success.name}'),
-  (failure) => developer.log('Error: ${failure.message}'),
+  (failure) {
+    failure.log();
+    developer.log('Error: ${failure.message}');
+  },
 );
 ```
 
@@ -234,6 +299,9 @@ void setupDependencies() {
 - Follow Clean Architecture layer rules strictly
 - Use dependency injection via constructor
 - Return Result<T> for operations that can fail
+- Map exceptions to the most specific `Failure` possible
+- Preserve `cause` and `context` when translating errors
+- Return user-friendly, actionable error messages in Presentation
 - Dispose all resources (FocusNode, controllers, streams)
 - Handle errors appropriately at each layer
 - Use const constructors wherever possible
@@ -245,6 +313,8 @@ void setupDependencies() {
 - Import infrastructure code in domain layer
 - Import presentation code in application layer
 - Use concrete implementations where interfaces are expected
+- Suppress errors with empty `catch` blocks or hidden fallbacks
+- Expose raw stack traces or opaque low-level exceptions to end users
 - Forget to dispose resources
 - Create circular dependencies between layers
 
@@ -269,5 +339,8 @@ This Clean Architecture is appropriate when:
 - [ ] Interfaces are used instead of concrete classes (DIP)
 - [ ] Use cases return Result<T> for operations that can fail
 - [ ] Domain errors are handled appropriately
+- [ ] Errors are not silently swallowed
+- [ ] Failures preserve original cause/context when useful
+- [ ] User-facing error messages are clear and actionable
 - [ ] Unit tests are possible without complex mocks
 - [ ] All required folders exist and follow structure

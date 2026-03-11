@@ -10,23 +10,25 @@ alwaysApply: true
 
 - ❌ Never commit, push, or create docs unless explicitly requested
 - ✅ Prefer self-explanatory code via naming and structure
+- ❌ Never suppress errors silently; preserve enough context to diagnose them
+- ✅ Prefer clear, actionable user-facing errors over generic failures
 
 ## Rules (single source of truth per topic)
 
 ### Generic (reusable)
 
-- **`general_rules.mdc`**: core coding principles (readability, duplication, docs/comments policy)
+- **`general_rules.mdc`**: core coding principles (readability, duplication, docs/comments policy, no auto-docs)
 - **`clean_architecture.mdc`**: layer boundaries and dependency direction (generic)
-- **`coding_style.mdc`**: Dart language/style (naming, formatting, imports, modern Dart, logging, codegen)
+- **`coding_style.mdc`**: Dart language/style (naming, formatting, imports, modern Dart, logging, async/error-handling basics)
 - **`null_safety.mdc`**: sound null-safety guidelines and patterns
 - **`solid_principles.mdc`**: SOLID principles with examples
-- **`flutter_widgets.mdc`**: widget construction/performance patterns (composition, const, lists, layout, theming tokens)
+- **`flutter_widgets.mdc`**: widget construction/performance patterns (composition, const, tear-offs, lists, layout, theming tokens)
 - **`ui_ux_design.mdc`**: desktop UI/UX principles (Fluent vs Material policy, navigation, a11y, responsive desktop)
 - **`testing.mdc`**: unit/widget testing conventions (AAA, naming, isolation, mocking)
 
 ### Project-specific (`plug_agente`)
 
-- **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, odbc_fast, Socket.IO, desktop)
+- **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, `result_dart`, typed failures, ODBC, Socket.IO, desktop)
 
 ## Copying to other projects
 

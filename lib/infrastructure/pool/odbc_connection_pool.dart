@@ -164,6 +164,31 @@ class OdbcConnectionPool implements IConnectionPool {
   }
 
   @override
+  Future<Result<void>> recycle(String connectionString) async {
+    final poolId = _pools.remove(connectionString);
+    _poolCreationFutures.remove(connectionString);
+    if (poolId == null) {
+      return const Success(unit);
+    }
+
+    developer.log(
+      'Recycling pool for connection',
+      name: 'connection_pool',
+      level: 800,
+    );
+
+    final closeResult = await _service.poolClose(poolId);
+    return closeResult.fold(
+      (_) => const Success(unit),
+      (error) => Failure(
+        domain.ConnectionFailure(
+          'Failed to recycle pool: ${_odbcErrorMessage(error)}',
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<Result<int>> getActiveCount() async {
     var totalActive = 0;
 

@@ -39,9 +39,16 @@ class OdbcDriverChecker implements IOdbcDriverChecker {
           'Não foi possível executar PowerShell para verificar drivers ODBC.',
         ),
       );
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.ConfigurationFailure('Erro ao verificar driver ODBC: $e'),
+        domain.ConfigurationFailure.withContext(
+          message: 'Erro ao verificar driver ODBC',
+          cause: error,
+          context: {
+            'operation': 'checkDriverInstalled',
+            'driverName': driverName,
+          },
+        ),
       );
     }
   }

@@ -1,24 +1,12 @@
 import 'dart:developer' as developer;
 
-/// Base class for all domain failures.
-///
-/// Provides structured error information with:
-/// - Message: Human-readable description
-/// - Code: Machine-readable error identifier
-/// - Cause: Original exception (if any)
-/// - Timestamp: When the error occurred
-/// - Context: Additional metadata
-/// - Recoverability: Whether user can recover from this error
-/// - Transience: Whether error is temporary/retryable
 abstract class Failure implements Exception {
-  /// Simple constructor with message only (backward compatible).
   Failure(this.message, String defaultCode)
     : _code = defaultCode,
       cause = null,
       timestamp = DateTime.now(),
       context = const {};
 
-  /// Extended constructor with all fields.
   Failure.withContext({
     required this.message,
     required String defaultCode,
@@ -34,26 +22,10 @@ abstract class Failure implements Exception {
   final DateTime timestamp;
   final Map<String, dynamic> context;
 
-  /// Get the error code.
   String get code => _code;
 
-  /// Whether this error can be recovered from by user action.
-  ///
-  /// Examples of recoverable errors:
-  /// - ValidationFailure (user can fix input)
-  /// - ConfigurationFailure (user can update config)
-  /// - NotFoundFailure (user can create resource)
-  ///
-  /// Override in subclasses for specific behavior.
   bool get isRecoverable => false;
 
-  /// Whether this error is temporary/transient.
-  ///
-  /// Transient errors may succeed on retry:
-  /// - NetworkFailure (temporary network issues)
-  /// - ConnectionFailure (server temporarily unavailable)
-  ///
-  /// Override in subclasses for specific behavior.
   bool get isTransient => false;
 
   @override
@@ -83,7 +55,6 @@ abstract class Failure implements Exception {
   }
 }
 
-/// Server-side error (HTTP 5xx, API errors).
 class ServerFailure extends Failure {
   ServerFailure(String message) : super(message, 'SERVER_ERROR');
 
@@ -98,10 +69,9 @@ class ServerFailure extends Failure {
        );
 
   @override
-  bool get isTransient => true; // Server errors may be temporary
+  bool get isTransient => true;
 }
 
-/// Network connectivity error.
 class NetworkFailure extends Failure {
   NetworkFailure(String message) : super(message, 'NETWORK_ERROR');
 
@@ -116,10 +86,9 @@ class NetworkFailure extends Failure {
        );
 
   @override
-  bool get isTransient => true; // Network issues are often temporary
+  bool get isTransient => true;
 }
 
-/// Database operation error.
 class DatabaseFailure extends Failure {
   DatabaseFailure(String message) : super(message, 'DATABASE_ERROR');
 
@@ -134,10 +103,9 @@ class DatabaseFailure extends Failure {
        );
 
   @override
-  bool get isRecoverable => true; // User may fix query/data
+  bool get isRecoverable => true;
 }
 
-/// Input validation error.
 class ValidationFailure extends Failure {
   ValidationFailure(String message) : super(message, 'VALIDATION_ERROR');
 
@@ -152,10 +120,9 @@ class ValidationFailure extends Failure {
        );
 
   @override
-  bool get isRecoverable => true; // User can fix invalid input
+  bool get isRecoverable => true;
 }
 
-/// Resource not found error.
 class NotFoundFailure extends Failure {
   NotFoundFailure(String message) : super(message, 'NOT_FOUND');
 
@@ -170,10 +137,9 @@ class NotFoundFailure extends Failure {
        );
 
   @override
-  bool get isRecoverable => true; // User can create the resource
+  bool get isRecoverable => true;
 }
 
-/// Configuration error (missing/invalid config).
 class ConfigurationFailure extends Failure {
   ConfigurationFailure(String message) : super(message, 'CONFIG_ERROR');
 
@@ -188,10 +154,9 @@ class ConfigurationFailure extends Failure {
        );
 
   @override
-  bool get isRecoverable => true; // User can fix configuration
+  bool get isRecoverable => true;
 }
 
-/// Database connection error.
 class ConnectionFailure extends Failure {
   ConnectionFailure(String message) : super(message, 'CONNECTION_ERROR');
 
@@ -206,10 +171,9 @@ class ConnectionFailure extends Failure {
        );
 
   @override
-  bool get isTransient => true; // Connection issues may be temporary
+  bool get isTransient => true;
 }
 
-/// SQL query execution error.
 class QueryExecutionFailure extends Failure {
   QueryExecutionFailure(String message) : super(message, 'QUERY_ERROR');
 
@@ -224,10 +188,9 @@ class QueryExecutionFailure extends Failure {
        );
 
   @override
-  bool get isRecoverable => true; // User can fix the query
+  bool get isRecoverable => true;
 }
 
-/// Data compression/decompression error.
 class CompressionFailure extends Failure {
   CompressionFailure(String message) : super(message, 'COMPRESSION_ERROR');
 
@@ -242,10 +205,9 @@ class CompressionFailure extends Failure {
        );
 
   @override
-  bool get isTransient => true; // May succeed on retry
+  bool get isTransient => true;
 }
 
-/// Notification system error.
 class NotificationFailure extends Failure {
   NotificationFailure(String message) : super(message, 'NOTIFICATION_ERROR');
 
@@ -260,5 +222,5 @@ class NotificationFailure extends Failure {
        );
 
   @override
-  bool get isTransient => true; // Notification may work on retry
+  bool get isTransient => true;
 }

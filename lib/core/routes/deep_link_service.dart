@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 
 /// Service for handling deep links on desktop platforms.
 ///
@@ -60,7 +61,7 @@ class DeepLinkService {
       return null;
     } on Exception catch (e) {
       if (kDebugMode) {
-        print('Error parsing deep link: $e');
+        AppLogger.warning('Error parsing deep link', e);
       }
       return null;
     }

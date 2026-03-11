@@ -11,6 +11,11 @@ abstract class IConnectionPool {
   /// Fecha todas as conexões do pool.
   Future<Result<void>> closeAll();
 
+  /// Recicla o pool associado à connection string.
+  ///
+  /// Fecha o pool atual (se existir) e força recriação no próximo acquire.
+  Future<Result<void>> recycle(String connectionString);
+
   /// Retorna o número de conexões ativas no pool.
   Future<Result<int>> getActiveCount();
 }

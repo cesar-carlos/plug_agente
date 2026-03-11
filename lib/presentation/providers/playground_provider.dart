@@ -95,18 +95,29 @@ class PlaygroundProvider extends ChangeNotifier {
         },
         (failure) {
           _error = failure.toDisplayMessage();
-          AppLogger.error('Failed to execute query: ${_error ?? failure}');
+          AppLogger.error(
+            'Failed to execute query: ${failure.toDisplayMessage()}',
+            failure.toTechnicalMessage(),
+          );
           _columnMetadata = null;
           _executionDuration = stopwatch.elapsed;
         },
       );
-    } on Object catch (e, stackTrace) {
+    } on Exception catch (error, stackTrace) {
       stopwatch.stop();
       _isLoading = false;
-      _error = e.toString();
+      final failure = error.toFailure(
+        message: 'Erro ao executar a consulta',
+        context: {'operation': 'executeQuery'},
+      );
+      _error = failure.toDisplayMessage();
       _columnMetadata = null;
       _executionDuration = stopwatch.elapsed;
-      AppLogger.error('Query execution threw: $_error', e, stackTrace);
+      AppLogger.error(
+        'Query execution threw: ${failure.message}',
+        error,
+        stackTrace,
+      );
     }
 
     notifyListeners();
@@ -127,7 +138,10 @@ class PlaygroundProvider extends ChangeNotifier {
       },
       (failure) {
         _error = failure.toDisplayMessage();
-        AppLogger.error('Failed to test connection: ${_error ?? failure}');
+        AppLogger.error(
+          'Failed to test connection: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
         _connectionStatus = AppStrings.queryConnectionFailure;
         _isConnectionStatusSuccess = false;
       },
@@ -186,16 +200,27 @@ class PlaygroundProvider extends ChangeNotifier {
         (failure) {
           _error = failure.toDisplayMessage();
           _isStreaming = false;
-          AppLogger.error('Streaming query failed: $_error');
+          AppLogger.error(
+            'Streaming query failed: ${failure.toDisplayMessage()}',
+            failure.toTechnicalMessage(),
+          );
         },
       );
 
       notifyListeners();
-    } on Exception catch (e) {
+    } on Exception catch (error, stackTrace) {
       _isLoading = false;
       _isStreaming = false;
-      _error = '${AppStrings.queryStreamingErrorPrefix}: $e';
-      AppLogger.error('Streaming exception: $e');
+      final failure = error.toFailure(
+        message: AppStrings.queryStreamingErrorPrefix,
+        context: {'operation': 'executeQueryWithStreaming'},
+      );
+      _error = failure.toDisplayMessage();
+      AppLogger.error(
+        'Streaming exception: ${failure.message}',
+        error,
+        stackTrace,
+      );
       notifyListeners();
     } finally {
       stopwatch.stop();

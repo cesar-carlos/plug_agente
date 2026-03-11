@@ -1,12 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:result_dart/result_dart.dart';
 
 class UpdateService {
   UpdateService(this._updateUrl, this._dio);
   final String _updateUrl;
   final Dio _dio;
 
-  Future<bool> checkForUpdates() async {
+  Future<Result<bool>> checkForUpdates() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
@@ -17,11 +19,26 @@ class UpdateService {
       );
 
       if (response.statusCode != 200) {
-        return false;
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Unable to verify updates right now',
+            context: {
+              'operation': 'checkForUpdates',
+              'statusCode': response.statusCode,
+            },
+          ),
+        );
       }
 
       final data = response.data;
-      if (data == null) return false;
+      if (data == null) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Update server returned an empty response',
+            context: {'operation': 'checkForUpdates'},
+          ),
+        );
+      }
       final isUpdateAvailable = data['updateAvailable'] as bool? ?? false;
 
       if (isUpdateAvailable) {
@@ -33,9 +50,23 @@ class UpdateService {
         // await autoUpdater.checkForUpdates();
       }
 
-      return isUpdateAvailable;
-    } on Exception {
-      return false;
+      return Success(isUpdateAvailable);
+    } on DioException catch (error) {
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Unable to check for updates. Check your connection and try again.',
+          cause: error,
+          context: {'operation': 'checkForUpdates'},
+        ),
+      );
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to check for updates',
+          cause: error,
+          context: {'operation': 'checkForUpdates'},
+        ),
+      );
     }
   }
 }

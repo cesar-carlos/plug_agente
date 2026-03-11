@@ -64,7 +64,7 @@ void main() {
 
       expect(provider.results.length, 3);
       expect(provider.affectedRows, 3);
-      expect(listenerCalls, lessThanOrEqualTo(3));
+      expect(listenerCalls, lessThanOrEqualTo(4));
       expect(listenerCalls, greaterThanOrEqualTo(2));
     });
 

@@ -121,6 +121,9 @@ void main() {
         ) async {
           return const Success(unit);
         });
+        when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
 
         final result = await gateway.executeQuery(request);
 
@@ -130,6 +133,7 @@ void main() {
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
 

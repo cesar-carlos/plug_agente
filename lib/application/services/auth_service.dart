@@ -50,8 +50,10 @@ class AuthService {
             stackTrace,
           );
           return Failure(
-            domain_errors.DatabaseFailure(
-              'Failed to save config: $e',
+            domain_errors.DatabaseFailure.withContext(
+              message: 'Failed to save configuration',
+              cause: e,
+              context: {'operation': 'saveAuthToken'},
             ),
           );
         }

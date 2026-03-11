@@ -250,6 +250,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (queryResult.isError()) {
         final error = queryResult.exceptionOrNull()!;
         if (_isInvalidConnectionIdError(error)) {
+          await _tryRecoverPoolAfterInvalidConnectionId(connectionString);
           developer.log(
             'Pool returned invalid connection id ($connId), falling back to direct connection',
             name: 'database_gateway',
@@ -387,6 +388,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (result.isError()) {
         final error = result.exceptionOrNull()!;
         if (_isInvalidConnectionIdError(error)) {
+          await _tryRecoverPoolAfterInvalidConnectionId(connectionString);
           developer.log(
             'Pool returned invalid connection id ($connId) for non-query, falling back to direct connection',
             name: 'database_gateway',
@@ -533,9 +535,31 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  Future<void> _tryRecoverPoolAfterInvalidConnectionId(
+    String connectionString,
+  ) async {
+    final recycleResult = await _connectionPool.recycle(connectionString);
+    if (recycleResult.isSuccess()) {
+      developer.log(
+        'Pool recycled after invalid connection id',
+        name: 'database_gateway',
+        level: 800,
+      );
+      return;
+    }
+
+    developer.log(
+      'Failed to recycle pool after invalid connection id',
+      name: 'database_gateway',
+      level: 900,
+      error: recycleResult.exceptionOrNull(),
+    );
+  }
+
   bool _isInvalidConnectionIdError(Object error) {
+    final message = _odbcErrorMessage(error).toLowerCase();
+
     if (error is ValidationError) {
-      final message = error.message.toLowerCase();
       return message.contains('invalid connection id');
     }
 
@@ -543,11 +567,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (error.nativeCode == 100000) {
         return true;
       }
-      final message = error.message.toLowerCase();
       return message.contains('invalid connection id');
     }
 
-    return false;
+    if (error is OdbcError || error is QueryError) {
+      return message.contains('invalid connection id');
+    }
+
+    return message.contains('invalid connection id');
   }
 
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {

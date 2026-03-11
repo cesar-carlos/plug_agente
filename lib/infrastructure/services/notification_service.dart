@@ -11,6 +11,18 @@ class NotificationService implements INotificationService {
   static const String _notificationGuid =
       'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
 
+  domain.NotificationFailure _buildFailure(
+    String message, {
+    Object? cause,
+    Map<String, dynamic> context = const {},
+  }) {
+    return domain.NotificationFailure.withContext(
+      message: message,
+      cause: cause,
+      context: context,
+    );
+  }
+
   @override
   Future<Result<void>> initialize() async {
     try {
@@ -30,14 +42,21 @@ class NotificationService implements INotificationService {
 
       if (result != null && !result) {
         return Failure(
-          domain.NotificationFailure('Failed to initialize notifications'),
+          _buildFailure(
+            'Failed to initialize notifications',
+            context: {'operation': 'initialize'},
+          ),
         );
       }
 
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.NotificationFailure('Failed to initialize notifications: $e'),
+        _buildFailure(
+          'Failed to initialize notifications',
+          cause: error,
+          context: {'operation': 'initialize'},
+        ),
       );
     }
   }
@@ -60,9 +79,16 @@ class NotificationService implements INotificationService {
       );
 
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.NotificationFailure('Failed to show notification: $e'),
+        _buildFailure(
+          'Failed to show notification',
+          cause: error,
+          context: {
+            'operation': 'show',
+            'title': title,
+          },
+        ),
       );
     }
   }
@@ -88,9 +114,17 @@ class NotificationService implements INotificationService {
       );
 
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.NotificationFailure('Failed to schedule notification: $e'),
+        _buildFailure(
+          'Failed to schedule notification',
+          cause: error,
+          context: {
+            'operation': 'schedule',
+            'title': title,
+            'scheduledTime': scheduledTime.toIso8601String(),
+          },
+        ),
       );
     }
   }
@@ -100,9 +134,16 @@ class NotificationService implements INotificationService {
     try {
       await _plugin.cancel(id);
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.NotificationFailure('Failed to cancel notification: $e'),
+        _buildFailure(
+          'Failed to cancel notification',
+          cause: error,
+          context: {
+            'operation': 'cancel',
+            'notificationId': id,
+          },
+        ),
       );
     }
   }
@@ -112,9 +153,13 @@ class NotificationService implements INotificationService {
     try {
       await _plugin.cancelAll();
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.NotificationFailure('Failed to cancel all notifications: $e'),
+        _buildFailure(
+          'Failed to cancel all notifications',
+          cause: error,
+          context: {'operation': 'cancelAll'},
+        ),
       );
     }
   }

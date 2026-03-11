@@ -9,6 +9,18 @@ class AgentConfigRepository implements IAgentConfigRepository {
   AgentConfigRepository(this._database);
   final AppDatabase _database;
 
+  domain.DatabaseFailure _buildDatabaseFailure(
+    String message, {
+    Object? cause,
+    Map<String, dynamic> context = const {},
+  }) {
+    return domain.DatabaseFailure.withContext(
+      message: message,
+      cause: cause,
+      context: context,
+    );
+  }
+
   @override
   Future<Result<Config>> getById(String id) async {
     try {
@@ -22,8 +34,17 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = _mapDataToEntity(configData);
       return Success(config);
-    } on Exception catch (e) {
-      return Failure(domain.DatabaseFailure('Failed to get config: $e'));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to load configuration',
+          cause: error,
+          context: {
+            'operation': 'getById',
+            'configId': id,
+          },
+        ),
+      );
     }
   }
 
@@ -34,8 +55,14 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final configs = configsData.map(_mapDataToEntity).toList();
       return Success(configs);
-    } on Exception catch (e) {
-      return Failure(domain.DatabaseFailure('Failed to get all configs: $e'));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to load configurations',
+          cause: error,
+          context: {'operation': 'getAll'},
+        ),
+      );
     }
   }
 
@@ -49,8 +76,17 @@ class AgentConfigRepository implements IAgentConfigRepository {
           .insertOnConflictUpdate(configData);
 
       return Success(config);
-    } on Exception catch (e) {
-      return Failure(domain.DatabaseFailure('Failed to save config: $e'));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to save configuration',
+          cause: error,
+          context: {
+            'operation': 'save',
+            'configId': config.id,
+          },
+        ),
+      );
     }
   }
 
@@ -63,8 +99,17 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       // For Result<void>, we use a unit value
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
-      return Failure(domain.DatabaseFailure('Failed to delete config: $e'));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to delete configuration',
+          cause: error,
+          context: {
+            'operation': 'delete',
+            'configId': id,
+          },
+        ),
+      );
     }
   }
 
@@ -83,9 +128,13 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = _mapDataToEntity(configData);
       return Success(config);
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.DatabaseFailure('Failed to get current config: $e'),
+        _buildDatabaseFailure(
+          'Failed to load current configuration',
+          cause: error,
+          context: {'operation': 'getCurrentConfig'},
+        ),
       );
     }
   }

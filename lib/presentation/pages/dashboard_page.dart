@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/services/query_processing_service.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/app_colors.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
@@ -59,8 +60,12 @@ class _DashboardPageState extends State<DashboardPage> {
       try {
         final transportClient = getIt<ITransportClient>();
         transportClient.setMessageCallback(logProvider.addMessage);
-      } on Exception {
-        // Transport client might not be initialized yet
+      } on Object catch (error, stackTrace) {
+        AppLogger.warning(
+          'Transport client not available for WebSocket logging yet',
+          error,
+          stackTrace,
+        );
       }
     });
   }

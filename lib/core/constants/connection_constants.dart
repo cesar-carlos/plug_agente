@@ -6,6 +6,7 @@ class ConnectionConstants {
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
   static const int defaultMaxResultBufferBytes = 32 * 1024 * 1024;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
+  static const int defaultStreamingChunkSizeKb = 1024;
   static const int defaultMaxReconnectAttempts = 3;
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;

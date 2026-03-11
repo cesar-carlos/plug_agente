@@ -278,6 +278,33 @@ test('should do something', () {
 - Mock apenas dependências externas
 - Não mock entidades ou value objects do domínio
 
+### Error-path Assertions
+
+- ✅ Teste não só que houve falha, mas **qual** falha foi retornada
+- ✅ Verifique mensagens de erro claras e acionáveis quando fizer sentido
+- ✅ Prefira validar subtype de `Failure` e conteúdo de `message`
+- ✅ Cubra caminhos onde exceções são mapeadas para `Result`/`Failure`
+
+```dart
+test('should return ValidationFailure with clear message when query is empty', () async {
+  // Arrange
+
+  // Act
+  final result = await useCase('');
+
+  // Assert
+  check(result.isFailure()).isTrue();
+
+  result.fold(
+    (_) => fail('Should not succeed'),
+    (failure) {
+      check(failure).isA<ValidationFailure>();
+      check(failure.message).contains('empty');
+    },
+  );
+});
+```
+
 ### Assertions (package:checks)
 
 - ✅ **Use `package:checks`** para assertions mais expressivos e legíveis

@@ -5,6 +5,18 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
 class GzipCompressor {
+  domain.CompressionFailure _buildFailure(
+    String message, {
+    Object? cause,
+    Map<String, dynamic> context = const {},
+  }) {
+    return domain.CompressionFailure.withContext(
+      message: message,
+      cause: cause,
+      context: context,
+    );
+  }
+
   Future<Result<List<Map<String, dynamic>>>> compress(
     List<Map<String, dynamic>> data,
   ) async {
@@ -15,8 +27,9 @@ class GzipCompressor {
 
       if (compressedBytes == null) {
         return Failure(
-          domain.CompressionFailure(
-            'Failed to compress data: encoder returned null',
+          _buildFailure(
+            'Failed to compress data',
+            context: {'reason': 'encoder_returned_null'},
           ),
         );
       }
@@ -31,8 +44,14 @@ class GzipCompressor {
           'original_size': bytes.length,
         },
       ]);
-    } on Exception catch (e) {
-      return Failure(domain.CompressionFailure('Failed to compress data: $e'));
+    } on Exception catch (error) {
+      return Failure(
+        _buildFailure(
+          'Failed to compress data',
+          cause: error,
+          context: {'operation': 'compress'},
+        ),
+      );
     }
   }
 
@@ -58,9 +77,13 @@ class GzipCompressor {
 
       // Return data as-is if not compressed
       return Success(data);
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.CompressionFailure('Failed to decompress data: $e'),
+        _buildFailure(
+          'Failed to decompress data',
+          cause: error,
+          context: {'operation': 'decompress'},
+        ),
       );
     }
   }

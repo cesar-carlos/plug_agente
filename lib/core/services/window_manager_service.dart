@@ -312,12 +312,13 @@ class WindowManagerService with WindowListener {
       }
     } else {
       try {
-        await windowManager.setPreventClose(false);
         _logger.i('Fechamento permitido - encerrando aplicativo');
         _onClose?.call();
+        await close();
       } on Exception catch (e) {
         _logger.e('Erro ao configurar preventClose para fechar', error: e);
         _onClose?.call();
+        await close();
       }
     }
   }

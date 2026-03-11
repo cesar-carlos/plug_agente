@@ -27,8 +27,10 @@ class CompressionService {
             ? failure.message
             : failure.toString();
         return Failure(
-          domain.CompressionFailure(
-            'Failed to compress response data: $failureMessage',
+          domain.CompressionFailure.withContext(
+            message: 'Failed to compress response data',
+            cause: failure,
+            context: {'reason': failureMessage},
           ),
         );
       },
@@ -55,8 +57,10 @@ class CompressionService {
             ? failure.message
             : failure.toString();
         return Failure(
-          domain.CompressionFailure(
-            'Failed to decompress response data: $failureMessage',
+          domain.CompressionFailure.withContext(
+            message: 'Failed to decompress response data',
+            cause: failure,
+            context: {'reason': failureMessage},
           ),
         );
       },

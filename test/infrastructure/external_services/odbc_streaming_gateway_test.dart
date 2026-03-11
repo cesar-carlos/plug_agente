@@ -38,6 +38,9 @@ void main() {
           ),
         ),
       );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
       when(
         () => mockService.streamQuery('conn-1', any()),
       ).thenAnswer((_) => controller.stream);
@@ -90,6 +93,9 @@ void main() {
             isActive: true,
           ),
         ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
       );
       when(
         () => mockService.streamQuery('conn-cancel', any()),

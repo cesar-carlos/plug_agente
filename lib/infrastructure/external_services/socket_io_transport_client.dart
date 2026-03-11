@@ -44,6 +44,25 @@ class SocketIOTransportClient implements ITransportClient {
     _onMessage?.call(direction, event, data);
   }
 
+  domain.Failure _buildConnectionFailure(String errorMessage, Object error) {
+    final normalizedError = errorMessage.toLowerCase();
+    if (normalizedError.contains('authentication') ||
+        normalizedError.contains('invalid token') ||
+        normalizedError.contains('401')) {
+      return domain.ConfigurationFailure.withContext(
+        message: 'Authentication failed. Please sign in again.',
+        cause: error,
+        context: {'operation': 'connect'},
+      );
+    }
+
+    return domain.NetworkFailure.withContext(
+      message: 'Unable to connect to the hub. Check the server URL and your network connection.',
+      cause: error,
+      context: {'operation': 'connect'},
+    );
+  }
+
   @override
   bool get isConnected => _socket?.connected ?? false;
 
@@ -109,7 +128,12 @@ class SocketIOTransportClient implements ITransportClient {
         timeoutTimer?.cancel();
         _logMessage('ERROR', 'connect_error', error);
         final errorMessage = error.toString();
-        AppLogger.error('Connection error: $errorMessage');
+        final cause = error is Object ? error : Exception(errorMessage);
+        final failure = _buildConnectionFailure(
+          errorMessage,
+          cause,
+        );
+        AppLogger.error('Connection error: ${failure.message}', error);
 
         // Limpar socket em caso de erro para evitar reconexão
         _socket?.dispose();
@@ -122,16 +146,19 @@ class SocketIOTransportClient implements ITransportClient {
         }
 
         if (!completer.isCompleted) {
-          completer.complete(
-            Failure(domain.NetworkFailure('Connection error: $errorMessage')),
-          );
+          completer.complete(Failure(failure));
         }
       });
 
       _socket!.on('error', (error) {
         _logMessage('ERROR', 'socket_error', error);
         final errorMessage = error.toString();
-        AppLogger.error('Socket error: $errorMessage');
+        final cause = error is Object ? error : Exception(errorMessage);
+        final failure = _buildConnectionFailure(
+          errorMessage,
+          cause,
+        );
+        AppLogger.error('Socket error: ${failure.message}', error);
 
         if (errorMessage.contains('Authentication') ||
             errorMessage.contains('Invalid token') ||
@@ -151,8 +178,12 @@ class SocketIOTransportClient implements ITransportClient {
           final envelope = EnvelopeModel.fromJson(data as Map<String, dynamic>);
           final request = _envelopeToQueryRequest(envelope);
           _queryRequestController.add(request);
-        } on Exception catch (e) {
-          AppLogger.error('Error processing query request', e);
+        } on Exception catch (error, stackTrace) {
+          AppLogger.error(
+            'Error processing query request',
+            error,
+            stackTrace,
+          );
         }
       });
 
@@ -173,7 +204,13 @@ class SocketIOTransportClient implements ITransportClient {
     } on Exception catch (e) {
       _socket?.dispose();
       _socket = null;
-      return Failure(domain.NetworkFailure('Failed to connect to server: $e'));
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Failed to connect to server',
+          cause: e,
+          context: {'operation': 'connect'},
+        ),
+      );
     }
   }
 
@@ -187,7 +224,13 @@ class SocketIOTransportClient implements ITransportClient {
       }
       return const Success<Object, Exception>(Object());
     } on Exception catch (e) {
-      return Failure(domain.NetworkFailure('Failed to disconnect: $e'));
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Failed to disconnect',
+          cause: e,
+          context: {'operation': 'disconnect'},
+        ),
+      );
     }
   }
 
@@ -205,7 +248,17 @@ class SocketIOTransportClient implements ITransportClient {
 
       return const Success<Object, Exception>(Object());
     } on Exception catch (e) {
-      return Failure(domain.NetworkFailure('Failed to send response: $e'));
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Failed to send response',
+          cause: e,
+          context: {
+            'operation': 'sendResponse',
+            'requestId': response.requestId,
+            'agentId': response.agentId,
+          },
+        ),
+      );
     }
   }
 

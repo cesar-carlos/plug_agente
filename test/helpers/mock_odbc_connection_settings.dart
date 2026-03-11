@@ -5,6 +5,7 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
     this.poolSize = 4,
     this.loginTimeoutSeconds = 30,
     this.maxResultBufferMb = 32,
+    this.streamingChunkSizeKb = 1024,
   });
 
   @override
@@ -15,6 +16,9 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   int maxResultBufferMb;
+
+  @override
+  int streamingChunkSizeKb;
 
   @override
   Future<void> load() async {}
@@ -29,4 +33,8 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   @override
   Future<void> setMaxResultBufferMb(int value) async =>
       maxResultBufferMb = value;
+
+  @override
+  Future<void> setStreamingChunkSizeKb(int value) async =>
+      streamingChunkSizeKb = value;
 }

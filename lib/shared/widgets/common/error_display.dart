@@ -4,10 +4,6 @@ import 'package:plug_agente/core/theme/app_colors.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/shared/widgets/common/message_modal.dart';
 
-/// Standardized error display component.
-///
-/// Provides consistent error presentation across the application
-/// with appropriate actions based on error type and recoverability.
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({
     required this.error,
@@ -16,18 +12,10 @@ class ErrorDisplay extends StatelessWidget {
     super.key,
   });
 
-  /// The error to display.
   final Object error;
-
-  /// Optional custom title. If not provided, uses error type.
   final String? title;
-
-  /// Optional retry action for recoverable errors.
   final VoidCallback? onRetry;
 
-  /// Shows error as a modal dialog.
-  ///
-  /// Use for critical errors that require user attention.
   static Future<void> showModal(
     BuildContext context, {
     required Object error,
@@ -50,9 +38,6 @@ class ErrorDisplay extends StatelessWidget {
     );
   }
 
-  /// Shows error in-place as a widget.
-  ///
-  /// Use for non-critical errors within a page.
   static Widget show({
     required Object error,
     String? title,
@@ -96,10 +81,7 @@ class ErrorDisplay extends StatelessWidget {
   }
 
   String _getMessage() {
-    if (error is Failure) {
-      return (error as Failure).toString();
-    }
-    return error.toString();
+    return error.toDisplayMessage();
   }
 
   bool _isRecoverable() {

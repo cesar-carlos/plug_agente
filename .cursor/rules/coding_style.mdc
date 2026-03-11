@@ -505,34 +505,6 @@ String getUserName() {
 }
 ```
 
-### Tear-off for Widgets
-
-- ✅ **NEVER return Widget from a function** - use tear-off instead
-- ✅ Use tear-off to pass widget constructors directly
-- ✅ This improves performance and code clarity
-
-```dart
-// ❌ Bad: returning Widget from function
-Widget buildUserCard(User user) {
-  return UserCard(user: user);
-}
-
-// Usage
-itemBuilder: (context, index) => buildUserCard(users[index])
-
-// ✅ Good: use tear-off
-itemBuilder: (context, index) => UserCard(user: users[index])
-
-// Or with .new
-itemBuilder: UserCard.new
-
-// ✅ Good: tear-off for named constructors
-builder: UserCard.fromJson
-
-// ✅ Good: tear-off in callbacks
-onTap: () => Navigator.push(context, MaterialPageRoute(builder: UserDetailPage.new))
-```
-
 ## Classes
 
 ### Constructors
@@ -827,17 +799,43 @@ export 'src/services/user_service.dart';
 
 Ensure proper use of `async`/`await` for asynchronous operations with robust error handling.
 
+- ✅ Catch the most specific exception you can actually handle
+- ✅ Never suppress exceptions with empty `catch` blocks
+- ✅ When translating an error, preserve the original `error` and `stackTrace`
+- ✅ Prefer explicit failure/result handling at architecture boundaries
+- ❌ Avoid generic fallback errors when a clearer domain-specific message is available
+
 ```dart
 // ✅ Good: proper error handling
+import 'dart:developer' as developer;
+
 Future<User> getUser(String id) async {
   try {
     final response = await http.get('/users/$id');
     return User.fromJson(response.data);
-  } on SocketException catch (e) {
+  } on SocketException catch (e, s) {
+    developer.log(
+      'Network error while fetching user',
+      name: 'user_service',
+      error: e,
+      stackTrace: s,
+    );
     throw NetworkException('No internet connection');
-  } on HttpException catch (e) {
+  } on HttpException catch (e, s) {
+    developer.log(
+      'Server error while fetching user',
+      name: 'user_service',
+      error: e,
+      stackTrace: s,
+    );
     throw ServerException('Server error: ${e.message}');
-  } catch (e) {
+  } catch (e, s) {
+    developer.log(
+      'Unexpected error while fetching user',
+      name: 'user_service',
+      error: e,
+      stackTrace: s,
+    );
     throw UnknownException(e.toString());
   }
 }

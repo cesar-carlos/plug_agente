@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -81,7 +82,10 @@ class ConnectionProvider extends ChangeNotifier {
       (failure) {
         _status = ConnectionStatus.error;
         _error = failure.toDisplayMessage();
-        AppLogger.error('Failed to connect to hub: $_error');
+        AppLogger.error(
+          'Failed to connect to hub: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
       },
     );
 
@@ -112,8 +116,10 @@ class ConnectionProvider extends ChangeNotifier {
       },
       (failure) {
         _isDbConnected = false;
+        _error = failure.toDisplayMessage();
         AppLogger.error(
           'Database connection test failed: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
         );
       },
     );
@@ -144,7 +150,10 @@ class ConnectionProvider extends ChangeNotifier {
       },
       (failure) {
         _error = failure.toDisplayMessage();
-        AppLogger.error('Failed to check ODBC driver: $_error');
+        AppLogger.error(
+          'Failed to check ODBC driver: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
       },
     );
 
@@ -188,10 +197,19 @@ class ConnectionProvider extends ChangeNotifier {
           'Server URL, AuthProvider or ConfigProvider not available for token refresh',
         );
       }
-    } on Exception catch (e) {
+    } on Exception catch (error, stackTrace) {
       _status = ConnectionStatus.error;
-      _error = 'Failed to refresh token: $e';
-      AppLogger.error('Token refresh failed: $e');
+      final failure = domain_errors.ConnectionFailure.withContext(
+        message: 'Failed to refresh token',
+        cause: error,
+        context: {'operation': 'handleTokenExpired'},
+      );
+      _error = failure.toDisplayMessage();
+      AppLogger.error(
+        'Token refresh failed: ${failure.toDisplayMessage()}',
+        error,
+        stackTrace,
+      );
     }
 
     _isReconnecting = false;
@@ -228,10 +246,19 @@ class ConnectionProvider extends ChangeNotifier {
           'Server URL or Agent ID not available for reconnection',
         );
       }
-    } on Exception catch (e) {
+    } on Exception catch (error, stackTrace) {
       _status = ConnectionStatus.error;
-      _error = 'Failed to reconnect: $e';
-      AppLogger.error('Manual reconnection failed: $e');
+      final failure = domain_errors.ConnectionFailure.withContext(
+        message: 'Failed to reconnect to the hub',
+        cause: error,
+        context: {'operation': 'handleReconnectionNeeded'},
+      );
+      _error = failure.toDisplayMessage();
+      AppLogger.error(
+        'Manual reconnection failed: ${failure.toDisplayMessage()}',
+        error,
+        stackTrace,
+      );
     }
 
     _isReconnecting = false;

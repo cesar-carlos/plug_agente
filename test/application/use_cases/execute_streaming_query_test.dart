@@ -2,20 +2,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockStreamingDatabaseGateway extends Mock
     implements IStreamingDatabaseGateway {}
 
+class MockOdbcConnectionSettings extends Mock
+    implements IOdbcConnectionSettings {}
+
 void main() {
   group('ExecuteStreamingQuery', () {
     late MockStreamingDatabaseGateway mockGateway;
+    late MockOdbcConnectionSettings mockSettings;
     late ExecuteStreamingQuery useCase;
 
     setUp(() {
       mockGateway = MockStreamingDatabaseGateway();
-      useCase = ExecuteStreamingQuery(mockGateway);
+      mockSettings = MockOdbcConnectionSettings();
+      when(() => mockSettings.streamingChunkSizeKb).thenReturn(2048);
+      useCase = ExecuteStreamingQuery(mockGateway, mockSettings);
     });
 
     test('should fail when query is empty', () async {
@@ -72,7 +79,7 @@ void main() {
           'DSN=Test',
           any(),
           fetchSize: 1000,
-          chunkSizeBytes: 1024 * 1024,
+          chunkSizeBytes: 2048 * 1024,
         ),
       ).called(1);
     });

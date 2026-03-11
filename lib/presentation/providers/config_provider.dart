@@ -54,7 +54,10 @@ class ConfigProvider extends ChangeNotifier {
           _createDefaultConfig();
         } else {
           _error = failure.toDisplayMessage();
-          AppLogger.error('Failed to load config: $_error');
+          AppLogger.error(
+            'Failed to load config: ${failure.toDisplayMessage()}',
+            failure.toTechnicalMessage(),
+          );
         }
       },
     );
@@ -81,7 +84,10 @@ class ConfigProvider extends ChangeNotifier {
       },
       (failure) {
         _error = failure.toDisplayMessage();
-        AppLogger.error('Failed to load config: $_error');
+        AppLogger.error(
+          'Failed to load config: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
       },
     );
 
@@ -137,7 +143,10 @@ class ConfigProvider extends ChangeNotifier {
       },
       (failure) {
         _error = failure.toDisplayMessage();
-        AppLogger.error('Failed to save config: $_error');
+        AppLogger.error(
+          'Failed to save config: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
       },
     );
 

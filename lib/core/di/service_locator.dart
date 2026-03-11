@@ -194,7 +194,10 @@ Future<void> setupDependencies() async {
       ),
     )
     ..registerLazySingleton(
-      () => ExecuteStreamingQuery(getIt<IStreamingDatabaseGateway>()),
+      () => ExecuteStreamingQuery(
+        getIt<IStreamingDatabaseGateway>(),
+        getIt<IOdbcConnectionSettings>(),
+      ),
     )
     ..registerLazySingleton(
       () => SaveAgentConfig(
@@ -221,6 +224,16 @@ Future<void> setupDependencies() async {
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
     ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()));
+
+  final odbcInitResult = await getIt<odbc.OdbcService>().initialize();
+  odbcInitResult.fold(
+    (_) {},
+    (error) {
+      throw StateError(
+        'ODBC initialization failed during startup: $error',
+      );
+    },
+  );
 
   // Initialize database
   final database = getIt<AppDatabase>();

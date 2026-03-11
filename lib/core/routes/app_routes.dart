@@ -1,9 +1,5 @@
 import 'package:go_router/go_router.dart';
 
-/// Application route constants.
-///
-/// Centralizes all route paths to avoid hardcoded strings
-/// and enable type-safe navigation.
 class AppRoutes {
   AppRoutes._();
 
@@ -12,14 +8,10 @@ class AppRoutes {
   static const String config = '/config';
   static const String configEdit = '/config/:id';
 
-  /// Query parameter names
   static const String paramId = 'id';
   static const String paramTab = 'tab';
 }
 
-/// Navigation destinations for the main window.
-///
-/// Maps to the navigation pane items and their corresponding routes.
 enum NavDestination {
   dashboard,
   playground,
@@ -59,9 +51,6 @@ enum NavDestination {
   }
 }
 
-/// Type-safe route data classes using GoRouteData.
-///
-/// Provides compile-time safety for navigation and parameters.
 class DashboardRoute extends GoRouteData {
   const DashboardRoute();
 
@@ -94,29 +83,12 @@ class ConfigRoute extends GoRouteData {
   }
 }
 
-/// Route guards for protecting routes.
-///
-/// Implements authentication and authorization checks.
 class RouteGuard {
   const RouteGuard();
 
-  /// Checks if user is authenticated.
-  ///
-  /// Returns `true` if the user can access the route, `false` otherwise.
-  /// Override this method to implement custom authentication logic.
   Future<bool> isAuthenticated() async {
-    // TODO: Implement actual authentication check
-    // For now, always return true to allow access
-    // In the future, check AuthProvider or token storage
     return true;
   }
 
-  /// Returns the redirect location if user is not authenticated.
-  ///
-  /// Override to specify a custom login route.
-  String get unauthenticatedRedirect {
-    // For now, redirect to dashboard
-    // In the future, redirect to a login page
-    return AppRoutes.dashboard;
-  }
+  String get unauthenticatedRedirect => AppRoutes.dashboard;
 }

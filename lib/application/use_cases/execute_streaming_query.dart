@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -7,8 +8,9 @@ import 'package:result_dart/result_dart.dart';
 ///
 /// Valida a query e delega para o gateway de streaming.
 class ExecuteStreamingQuery {
-  ExecuteStreamingQuery(this._gateway);
+  ExecuteStreamingQuery(this._gateway, this._settings);
   final IStreamingDatabaseGateway _gateway;
+  final IOdbcConnectionSettings _settings;
 
   /// Executa query em streaming.
   ///
@@ -45,7 +47,7 @@ class ExecuteStreamingQuery {
       connectionString,
       onChunk,
       fetchSize: fetchSize,
-      chunkSizeBytes: 1024 * 1024, // 1MB chunks
+      chunkSizeBytes: _settings.streamingChunkSizeKb * 1024,
     );
   }
 

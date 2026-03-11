@@ -18,6 +18,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   final IOdbcConnectionSettings _settings;
   String? _activeConnectionId;
   bool _isCancelRequested = false;
+  bool _initialized = false;
+  static const Duration _cancelDisconnectTimeout = Duration(seconds: 3);
 
   ConnectionOptions _buildStreamingConnectionOptions(int chunkSizeBytes) {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
@@ -49,6 +51,26 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     return error.toString();
   }
 
+  Future<Result<void>> _ensureInitialized() async {
+    if (_initialized) {
+      return const Success(unit);
+    }
+
+    final initResult = await _service.initialize();
+    return initResult.fold(
+      (_) {
+        _initialized = true;
+        return const Success(unit);
+      },
+      (error) => Failure(
+        domain.ConnectionFailure(
+          'Falha ao inicializar ODBC para streaming: '
+          '${_odbcErrorMessage(error)}',
+        ),
+      ),
+    );
+  }
+
   @override
   Future<Result<void>> executeQueryStream(
     String query,
@@ -58,6 +80,17 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     int chunkSizeBytes = 1024 * 1024,
   }) async {
     _isCancelRequested = false;
+
+    final initResult = await _ensureInitialized();
+    if (initResult.isError()) {
+      final initFailure = initResult.exceptionOrNull();
+      if (initFailure != null) {
+        return Failure(initFailure);
+      }
+      return Failure(
+        domain.ConnectionFailure('Falha desconhecida ao inicializar ODBC'),
+      );
+    }
 
     // Conectar com opções otimizadas para streaming
     final connResult = await _service.connect(
@@ -95,7 +128,14 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           return const Success(unit);
         } on Exception catch (e) {
           return Failure(
-            domain.QueryExecutionFailure('Streaming error: $e'),
+            domain.QueryExecutionFailure.withContext(
+              message: 'Streaming error',
+              cause: e,
+              context: {
+                'operation': 'executeQueryStream',
+                'connectionId': connection.id,
+              },
+            ),
           );
         } finally {
           await _service.disconnect(connection.id);
@@ -118,15 +158,25 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     }
 
     _isCancelRequested = true;
-    final result = await _service.disconnect(activeConnectionId);
-    return result.fold(
-      (_) => const Success(unit),
-      (error) => Failure(
-        domain.ConnectionFailure(
-          'Falha ao cancelar streaming: ${_odbcErrorMessage(error)}',
+    try {
+      final result = await _service
+          .disconnect(activeConnectionId)
+          .timeout(_cancelDisconnectTimeout);
+      return result.fold(
+        (_) => const Success(unit),
+        (error) => Failure(
+          domain.ConnectionFailure(
+            'Falha ao cancelar streaming: ${_odbcErrorMessage(error)}',
+          ),
         ),
-      ),
-    );
+      );
+    } on TimeoutException {
+      return const Success(unit);
+    } finally {
+      if (_activeConnectionId == activeConnectionId) {
+        _activeConnectionId = null;
+      }
+    }
   }
 
   Iterable<List<Map<String, dynamic>>> _chunkRows(

@@ -20,19 +20,29 @@ class HandleQueryRequest {
   final QueryNormalizerService _normalizerService;
   final CompressionService _compressionService;
 
+  QueryResponse _buildErrorResponse(
+    QueryRequest request,
+    String message,
+  ) {
+    return QueryResponse(
+      id: request.id,
+      requestId: request.id,
+      agentId: request.agentId,
+      data: const [],
+      timestamp: DateTime.now(),
+      error: message,
+    );
+  }
+
   Future<Result<void>> call(QueryRequest request) async {
     try {
       final validation = SqlValidator.validateSelectQuery(request.query);
       if (validation.isError()) {
         final failure = validation.exceptionOrNull()!;
-        final errorResponse = QueryResponse(
-          id: request.id,
-          requestId: request.id,
-          agentId: request.agentId,
-          data: const [],
-          timestamp: DateTime.now(),
-          error: failure.toString(),
-        );
+        final errorMessage = failure is domain.Failure
+            ? failure.message
+            : failure.toString();
+        final errorResponse = _buildErrorResponse(request, errorMessage);
         return _transportClient.sendResponse(errorResponse);
       }
 
@@ -52,32 +62,37 @@ class HandleQueryRequest {
               return _transportClient.sendResponse(compressedResponse);
             },
             (failure) {
-              final failureMessage = failure is domain.Failure
-                  ? failure.message
-                  : failure.toString();
               return Failure(
-                domain.QueryExecutionFailure(
-                  'Failed to compress response: $failureMessage',
+                domain.QueryExecutionFailure.withContext(
+                  message: 'Failed to compress response',
+                  cause: failure,
+                  context: {
+                    'requestId': request.id,
+                    'agentId': request.agentId,
+                  },
                 ),
               );
             },
           );
         },
         (failure) async {
-          final errorResponse = QueryResponse(
-            id: request.id,
-            requestId: request.id,
-            agentId: request.agentId,
-            data: const [],
-            timestamp: DateTime.now(),
-            error: failure.toString(),
-          );
+          final errorMessage = failure is domain.Failure
+              ? failure.message
+              : failure.toString();
+          final errorResponse = _buildErrorResponse(request, errorMessage);
           return _transportClient.sendResponse(errorResponse);
         },
       );
-    } on Exception catch (e) {
+    } on Exception catch (error) {
       return Failure(
-        domain.QueryExecutionFailure('Failed to handle query request: $e'),
+        domain.QueryExecutionFailure.withContext(
+          message: 'Failed to handle query request',
+          cause: error,
+          context: {
+            'requestId': request.id,
+            'agentId': request.agentId,
+          },
+        ),
       );
     }
   }
