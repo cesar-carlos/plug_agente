@@ -9,7 +9,15 @@ extension ObjectFailureExtension on Object {
     return toString();
   }
 
-  String toDisplayMessage() => toUserMessage();
+  String toDisplayMessage() {
+    final message = toUserMessage();
+    if (_isBufferTooSmallMessage(message)) {
+      return 'Resultado muito grande para o buffer atual. '
+          'Ative o modo streaming ou aumente "Buffer de resultados (MB)" '
+          'nas configurações avançadas.';
+    }
+    return message;
+  }
 
   String toTechnicalMessage() {
     if (this is Failure) {
@@ -21,6 +29,10 @@ extension ObjectFailureExtension on Object {
   bool get isFailure => this is Failure;
 
   Failure? get asFailure => this is Failure ? this as Failure : null;
+
+  bool _isBufferTooSmallMessage(String message) {
+    return message.toLowerCase().contains('buffer too small');
+  }
 }
 
 extension ExceptionToFailureExtension on Object {

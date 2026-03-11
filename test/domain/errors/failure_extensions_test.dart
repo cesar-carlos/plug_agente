@@ -16,6 +16,24 @@ void main() {
       expect(failure.toDisplayMessage(), isNot(contains('operation')));
     });
 
+    test(
+      'toDisplayMessage should show user guidance for buffer too small',
+      () {
+        final failure = QueryExecutionFailure(
+          'Buffer too small: need 60830894 bytes, got 33554432',
+        );
+
+        expect(
+          failure.toDisplayMessage(),
+          contains('Ative o modo streaming'),
+        );
+        expect(
+          failure.toDisplayMessage(),
+          contains('Buffer de resultados (MB)'),
+        );
+      },
+    );
+
     test('toTechnicalMessage should include cause and context', () {
       final failure = DatabaseFailure.withContext(
         message: 'Failed to load configuration',

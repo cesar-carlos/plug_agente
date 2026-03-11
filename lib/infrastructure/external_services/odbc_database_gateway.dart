@@ -44,6 +44,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final IOdbcConnectionSettings _settings;
   final Uuid _uuid;
   bool _initialized = false;
+  static const int _bufferRetryMarginBytes = 1024 * 1024;
+  static const int _maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
 
   ConnectionOptions get _connectionOptions => ConnectionOptions(
         loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
@@ -258,6 +260,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
           return _executeQueryWithoutPool(request, connectionString, stopwatch);
         }
+        if (_isBufferTooSmallError(error)) {
+          developer.log(
+            'Buffer too small in pooled query, retrying with expanded buffer',
+            name: 'database_gateway',
+            level: 900,
+            error: error,
+          );
+          return _executeQueryWithoutPool(
+            request,
+            connectionString,
+            stopwatch,
+            options: _buildExpandedConnectionOptions(error),
+          );
+        }
       }
 
       return queryResult.fold(
@@ -418,10 +434,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     QueryRequest request,
     String connectionString,
     Stopwatch stopwatch,
+    {ConnectionOptions? options}
   ) async {
     final connectResult = await _service.connect(
       connectionString,
-      options: _connectionOptions,
+      options: options ?? _connectionOptions,
     );
 
     return connectResult.fold(
@@ -535,6 +552,66 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  ConnectionOptions _buildExpandedConnectionOptions(Object error) {
+    final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
+    final expandedBufferBytes = _calculateExpandedBufferBytes(error);
+    final initialResultBufferBytes = expandedBufferBytes <
+            ConnectionConstants.defaultInitialResultBufferBytes
+        ? expandedBufferBytes
+        : ConnectionConstants.defaultInitialResultBufferBytes;
+
+    developer.log(
+      'Expanding max result buffer for retry: '
+      '$currentBufferBytes -> $expandedBufferBytes bytes',
+      name: 'database_gateway',
+      level: 800,
+    );
+
+    return ConnectionOptions(
+      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+      queryTimeout: ConnectionConstants.defaultQueryTimeout,
+      maxResultBufferBytes: expandedBufferBytes,
+      initialResultBufferBytes: initialResultBufferBytes,
+      autoReconnectOnConnectionLost: true,
+      maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+      reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+    );
+  }
+
+  int _calculateExpandedBufferBytes(Object error) {
+    final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
+    final requiredBufferBytes = _extractRequiredBufferBytes(error);
+
+    if (requiredBufferBytes == null) {
+      final doubledBuffer = currentBufferBytes * 2;
+      if (doubledBuffer > _maxAutoExpandedBufferBytes) {
+        return _maxAutoExpandedBufferBytes;
+      }
+      return doubledBuffer;
+    }
+
+    final withMargin = requiredBufferBytes + _bufferRetryMarginBytes;
+    if (withMargin > _maxAutoExpandedBufferBytes) {
+      return _maxAutoExpandedBufferBytes;
+    }
+    if (withMargin < currentBufferBytes) {
+      return currentBufferBytes;
+    }
+    return withMargin;
+  }
+
+  int? _extractRequiredBufferBytes(Object error) {
+    final message = _odbcErrorMessage(error);
+    final match = RegExp(
+      r'need\s+(\d+)\s+bytes',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (match == null) {
+      return null;
+    }
+    return int.tryParse(match.group(1) ?? '');
+  }
+
   Future<void> _tryRecoverPoolAfterInvalidConnectionId(
     String connectionString,
   ) async {
@@ -575,6 +652,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     return message.contains('invalid connection id');
+  }
+
+  bool _isBufferTooSmallError(Object error) {
+    final message = _odbcErrorMessage(error).toLowerCase();
+    return message.contains('buffer too small');
   }
 
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {

@@ -185,6 +185,85 @@ void main() {
       expect(result.isSuccess(), isTrue);
       verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
     });
+
+    test('should retry with expanded buffer when pooled query buffer is too small', () async {
+      const pooledConnectionId = 'pool-buffer';
+      const directConnectionId = 'direct-buffer';
+      const sql = 'SELECT * FROM very_large_table';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-buffer',
+        agentId: config.agentId,
+        query: sql,
+        timestamp: DateTime.now(),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQuery(
+          any(),
+          connectionId: pooledConnectionId,
+        ),
+      ).thenAnswer((_) async {
+        return const Failure(
+          QueryError(
+            message: 'Buffer too small: need 60830894 bytes, got 33554432',
+          ),
+        );
+      });
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((_) async {
+        return Success(
+          Connection(
+            id: directConnectionId,
+            connectionString: connectionString,
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => mockService.executeQuery(
+          any(),
+          connectionId: directConnectionId,
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).called(1);
+      verify(() => mockService.disconnect(directConnectionId)).called(1);
+      verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+    });
   });
 }
 

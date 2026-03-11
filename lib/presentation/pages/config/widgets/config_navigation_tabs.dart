@@ -89,11 +89,14 @@ class _TabButton extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: textColor),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
