@@ -12,6 +12,36 @@ Requisitos para instalação e execução do **Plug Agente** no Windows.
 | **Espaço em disco** | 500 MB |
 | **Permissões** | Administrador para instalação |
 
+## Matriz de Compatibilidade (SO)
+
+| Plataforma | Versão | Status | Modo de Execução |
+|------------|--------|--------|------------------|
+| Windows (cliente) | Windows 10 e Windows 11 | Totalmente suportado | Completo (todos os recursos) |
+| Windows Server | 2012 / 2012 R2 | Suportado com limitações | Degradado (sem tray/notificações/auto-update) |
+| Windows Server | 2016 ou superior | Suportado com limitações | Degradado (sem tray/notificações/auto-update) |
+| Windows (cliente) | Windows 8 / 8.1 | Suportado com limitações | Degradado |
+| Windows (qualquer) | Windows 7 ou inferior | Não suportado | Não inicializa |
+
+### Modo Degradado
+
+No modo degradado, o aplicativo executa com os seguintes recursos desabilitados:
+- **Tray (bandeja do sistema)**: Ícone e menu de contexto não disponíveis
+- **Notificações locais**: Sistema de notificações Windows desabilitado (usa logging interno)
+- **Auto-update**: Verificação automática de atualizações desabilitada
+- **Minimize-to-tray**: Janela minimiza normalmente (não para a bandeja)
+
+Recursos que **permanecem funcionais** no modo degradado:
+- Core do agente (Socket.IO + ODBC)
+- Todas as funcionalidades de query (SQL normal e streaming)
+- Configuração e gerenciamento de conexões
+- Playground SQL
+- Conexão com hub remoto
+
+Notas:
+- O app detecta automaticamente a versão do Windows e ajusta suas capacidades
+- Banner de modo degradado aparece na UI quando aplicável
+- Em ambientes de servidor, valide GPO, permissões, Visual C++ Redistributable e drivers ODBC
+
 ## Dependências de Software
 
 ### Visual C++ Redistributable

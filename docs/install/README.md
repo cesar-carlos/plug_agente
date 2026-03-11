@@ -2,6 +2,11 @@
 
 Documentação e scripts de instalação do Plug Agente.
 
+Compatibilidade de SO (resumo):
+- Suportado: Windows 10/11 (x64)
+- Não suportado: Windows Server 2012/2012 R2
+- Windows Server 2016+: suporte condicional, com homologação recomendada
+
 ## Documentos
 
 | Documento | Descrição |

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/services/auth_service.dart';
@@ -25,6 +27,9 @@ import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
@@ -49,6 +54,7 @@ import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
+import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -88,7 +94,24 @@ Future<void> shutdownApp() async {
   _odbcLocator.shutdown();
 }
 
-Future<void> setupDependencies() async {
+Future<void> setupDependencies({
+  required RuntimeCapabilities capabilities,
+}) async {
+  developer.log(
+    'Setting up dependencies with runtime mode: ${capabilities.mode.displayName}',
+    name: 'service_locator',
+    level: 800,
+  );
+
+  if (!capabilities.canRunCore) {
+    throw StateError(
+      'Cannot run application: ${capabilities.degradationReasons.join(", ")}',
+    );
+  }
+
+  // Register capabilities globally
+  getIt.registerSingleton<RuntimeCapabilities>(capabilities);
+
   _odbcLocator.initialize(useAsync: true);
 
   final prefs = await SharedPreferences.getInstance();
@@ -104,8 +127,6 @@ Future<void> setupDependencies() async {
     ..registerLazySingleton(GzipCompressor.new)
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
-    ..registerLazySingleton(TrayManagerService.new)
-    ..registerLazySingleton<INotificationService>(NotificationService.new)
     ..registerLazySingleton(SocketDataSource.new)
     ..registerLazySingleton(AppDatabase.new)
     ..registerLazySingleton<IAgentConfigRepository>(
@@ -209,6 +230,42 @@ Future<void> setupDependencies() async {
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
     ..registerLazySingleton(() => CheckForUpdates(getIt<UpdateService>()))
+    ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
+    ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
+    ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()));
+
+  // Conditional registrations based on capabilities
+  if (capabilities.supportsTray) {
+    developer.log('Registering TrayManagerService', name: 'service_locator');
+    getIt.registerLazySingleton(TrayManagerService.new);
+  } else {
+    developer.log(
+      'Registering NoopTrayManagerService (degraded mode)',
+      name: 'service_locator',
+    );
+    getIt.registerLazySingleton<NoopTrayManagerService>(
+      NoopTrayManagerService.new,
+    );
+  }
+
+  if (capabilities.supportsNotifications) {
+    developer.log(
+      'Registering NotificationService',
+      name: 'service_locator',
+    );
+    getIt.registerLazySingleton<INotificationService>(NotificationService.new);
+  } else {
+    developer.log(
+      'Registering NoopNotificationService (degraded mode)',
+      name: 'service_locator',
+    );
+    getIt.registerLazySingleton<INotificationService>(
+      NoopNotificationService.new,
+    );
+  }
+
+  // Register notification use cases (work with both real and noop services)
+  getIt
     ..registerLazySingleton(
       () => SendNotification(getIt<INotificationService>()),
     )
@@ -220,10 +277,7 @@ Future<void> setupDependencies() async {
     )
     ..registerLazySingleton(
       () => CancelAllNotifications(getIt<INotificationService>()),
-    )
-    ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
-    ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
-    ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()));
+    );
 
   final odbcInitResult = await getIt<odbc.OdbcService>().initialize();
   odbcInitResult.fold(

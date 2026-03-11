@@ -13,6 +13,10 @@ Antes de começar, certifique-se de ter:
 3. **Conexão com a Internet** (para atualizações, se configurado)
 4. **Espaço em disco** suficiente (mínimo 500 MB)
 
+Compatibilidade de sistema:
+- **Windows Server 2012 / 2012 R2**: não suportado
+- **Windows Server 2016+**: compatibilidade condicional (homologar no ambiente)
+
 Consulte [requirements.md](requirements.md) para requisitos detalhados.
 
 ---

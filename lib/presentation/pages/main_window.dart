@@ -1,9 +1,10 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
+import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
+import 'package:provider/provider.dart';
 
 class MainWindow extends StatefulWidget {
   const MainWindow({required this.child, super.key});
@@ -30,6 +31,7 @@ class _MainWindowState extends State<MainWindow> {
   @override
   Widget build(BuildContext context) {
     final selectedDestination = _getCurrentDestination(context);
+    final runtimeMode = context.watch<RuntimeModeProvider>();
 
     return NavigationView(
       appBar: const NavigationAppBar(
@@ -61,9 +63,38 @@ class _MainWindowState extends State<MainWindow> {
           ),
         ],
       ),
-      transitionBuilder: (child, animation) {
-        return widget.child;
-      },
+      content: Column(
+        children: [
+          if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
+          Expanded(child: widget.child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDegradedModeBanner(BuildContext context) {
+    final runtimeMode = context.watch<RuntimeModeProvider>();
+
+    return InfoBar(
+      title: const Text('Modo Degradado Ativo'),
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'O aplicativo está rodando com recursos limitados:',
+          ),
+          const SizedBox(height: 8),
+          ...runtimeMode.degradationReasons.map(
+            (reason) => Padding(
+              padding: const EdgeInsets.only(left: 16, bottom: 4),
+              child: Text('• $reason'),
+            ),
+          ),
+        ],
+      ),
+      severity: InfoBarSeverity.warning,
+      isLong: true,
     );
   }
 }
