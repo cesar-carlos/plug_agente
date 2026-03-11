@@ -5,8 +5,10 @@ import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
 import 'package:plug_agente/presentation/pages/dashboard_page.dart';
+import 'package:plug_agente/presentation/pages/database_settings_page.dart';
 import 'package:plug_agente/presentation/pages/main_window.dart';
 import 'package:plug_agente/presentation/pages/playground_page.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings_page.dart';
 
 /// Route guard instance.
 ///
@@ -47,7 +49,13 @@ GoRouter createAppRouter({
             builder: (context, state) {
               final id = state.pathParameters[AppRoutes.paramId] ?? '';
               final tab = state.uri.queryParameters[AppRoutes.paramTab];
-              return ConfigPage(configId: id, initialTab: tab);
+              if (tab == 'websocket') {
+                return WebSocketSettingsPage(configId: id);
+              }
+              if (tab == 'database' || tab == 'advanced') {
+                return DatabaseSettingsPage(configId: id, initialTab: tab);
+              }
+              return const ConfigPage();
             },
           ),
           GoRoute(
@@ -55,7 +63,45 @@ GoRouter createAppRouter({
             name: 'config',
             builder: (context, state) {
               final tab = state.uri.queryParameters[AppRoutes.paramTab];
-              return ConfigPage(initialTab: tab);
+              if (tab == 'websocket') {
+                return const WebSocketSettingsPage();
+              }
+              if (tab == 'database' || tab == 'advanced') {
+                return DatabaseSettingsPage(initialTab: tab);
+              }
+              return const ConfigPage();
+            },
+          ),
+          GoRoute(
+            path: '${AppRoutes.databaseSettings}/:id',
+            name: 'databaseSettingsEdit',
+            builder: (context, state) {
+              final id = state.pathParameters[AppRoutes.paramId] ?? '';
+              final tab = state.uri.queryParameters[AppRoutes.paramTab];
+              return DatabaseSettingsPage(configId: id, initialTab: tab);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.databaseSettings,
+            name: 'databaseSettings',
+            builder: (context, state) {
+              final tab = state.uri.queryParameters[AppRoutes.paramTab];
+              return DatabaseSettingsPage(initialTab: tab);
+            },
+          ),
+          GoRoute(
+            path: '${AppRoutes.websocketSettings}/:id',
+            name: 'websocketSettingsEdit',
+            builder: (context, state) {
+              final id = state.pathParameters[AppRoutes.paramId] ?? '';
+              return WebSocketSettingsPage(configId: id);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.websocketSettings,
+            name: 'websocketSettings',
+            builder: (context, state) {
+              return const WebSocketSettingsPage();
             },
           ),
         ],

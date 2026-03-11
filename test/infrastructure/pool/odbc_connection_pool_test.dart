@@ -20,41 +20,44 @@ void main() {
       pool = OdbcConnectionPool(mockService, mockSettings);
     });
 
-    test('should create native pool once under concurrent acquire calls', () async {
-      var createdPools = 0;
-      var connectionCounter = 0;
+    test(
+      'should create native pool once under concurrent acquire calls',
+      () async {
+        var createdPools = 0;
+        var connectionCounter = 0;
 
-      when(
-        () => mockService.poolCreate(any(), any()),
-      ).thenAnswer((_) async {
-        createdPools++;
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        return const Success(77);
-      });
+        when(
+          () => mockService.poolCreate(any(), any()),
+        ).thenAnswer((_) async {
+          createdPools++;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return const Success(77);
+        });
 
-      when(
-        () => mockService.poolGetConnection(77),
-      ).thenAnswer((_) async {
-        connectionCounter++;
-        return Success(
-          Connection(
-            id: 'conn-$connectionCounter',
-            connectionString: 'DSN=Test',
-            createdAt: DateTime.now(),
-            isActive: true,
-          ),
+        when(
+          () => mockService.poolGetConnection(77),
+        ).thenAnswer((_) async {
+          connectionCounter++;
+          return Success(
+            Connection(
+              id: 'conn-$connectionCounter',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+
+        final results = await Future.wait(
+          List.generate(12, (_) => pool.acquire('DSN=Test')),
         );
-      });
 
-      final results = await Future.wait(
-        List.generate(12, (_) => pool.acquire('DSN=Test')),
-      );
-
-      expect(results.every((r) => r.isSuccess()), isTrue);
-      expect(createdPools, 1);
-      verify(() => mockService.poolCreate('DSN=Test', any())).called(1);
-      verify(() => mockService.poolGetConnection(77)).called(12);
-    });
+        expect(results.every((r) => r.isSuccess()), isTrue);
+        expect(createdPools, 1);
+        verify(() => mockService.poolCreate('DSN=Test', any())).called(1);
+        verify(() => mockService.poolGetConnection(77)).called(12);
+      },
+    );
 
     test('should close created pools and clear internal state', () async {
       when(

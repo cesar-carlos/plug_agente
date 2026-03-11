@@ -6,6 +6,8 @@ import 'package:plug_agente/core/routes/routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/theme_provider.dart';
+import 'package:provider/provider.dart';
 
 class PlugAgentApp extends StatefulWidget {
   const PlugAgentApp({
@@ -35,10 +37,13 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
     return FluentApp.router(
       title: AppConstants.appName,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      themeMode: themeProvider.themeMode,
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       localizationsDelegates: const [

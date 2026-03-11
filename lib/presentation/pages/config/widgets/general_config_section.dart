@@ -17,6 +17,9 @@ class GeneralConfigSection extends StatelessWidget {
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
     required this.onCheckUpdates,
+    required this.onOpenStartupSettings,
+    this.startupSupported = true,
+    this.startupError,
     super.key,
   });
 
@@ -32,6 +35,9 @@ class GeneralConfigSection extends StatelessWidget {
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onCheckUpdates;
+  final VoidCallback onOpenStartupSettings;
+  final bool startupSupported;
+  final String? startupError;
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +62,15 @@ class GeneralConfigSection extends StatelessWidget {
             SettingsToggleTile(
               label: 'Iniciar com o Windows',
               value: startWithWindows,
-              onChanged: onStartWithWindowsChanged,
+              onChanged: startupSupported ? onStartWithWindowsChanged : null,
             ),
+            if (startupError != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _StartupErrorMessage(
+                error: startupError!,
+                onOpenSettings: onOpenStartupSettings,
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: 'Iniciar minimizado',
@@ -111,6 +124,67 @@ class GeneralConfigSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StartupErrorMessage extends StatelessWidget {
+  const _StartupErrorMessage({
+    required this.error,
+    required this.onOpenSettings,
+  });
+
+  final String error;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: Colors.red.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            FluentIcons.error_badge,
+            color: Colors.red,
+            size: 16,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              error,
+              style: theme.typography.caption?.copyWith(
+                color: Colors.red,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          FilledButton(
+            onPressed: onOpenSettings,
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.all(
+                Colors.red.withValues(alpha: 0.1),
+              ),
+              foregroundColor: WidgetStateProperty.all(Colors.red),
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+              ),
+            ),
+            child: const Text('Abrir configurações'),
+          ),
+        ],
       ),
     );
   }

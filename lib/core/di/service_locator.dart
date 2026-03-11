@@ -29,6 +29,7 @@ import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
@@ -55,6 +56,7 @@ import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
+import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
@@ -246,6 +248,13 @@ Future<void> setupDependencies({
     );
     getIt.registerLazySingleton<ITrayService>(
       NoopTrayManagerService.new,
+    );
+  }
+
+  if (capabilities.supportsWindowManager) {
+    developer.log('Registering AutoStartService', name: 'service_locator');
+    getIt.registerLazySingleton<IStartupService>(
+      () => AutoStartService(prefs),
     );
   }
 

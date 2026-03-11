@@ -11,7 +11,9 @@ class ConfigValidator {
 
     final idResult = _validateId(config.id);
     if (idResult.isError()) {
-      errors.add('ID: ${(idResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid ID'}');
+      errors.add(
+        'ID: ${(idResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid ID'}',
+      );
     }
 
     final driverResult = _validateDriverName(config.driverName);
@@ -30,7 +32,9 @@ class ConfigValidator {
 
     final userResult = _validateUsername(config.username);
     if (userResult.isError()) {
-      errors.add('Username: ${(userResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid username'}');
+      errors.add(
+        'Username: ${(userResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid username'}',
+      );
     }
 
     final dbResult = _validateDatabaseName(config.databaseName);
@@ -42,12 +46,16 @@ class ConfigValidator {
 
     final hostResult = _validateHost(config.host);
     if (hostResult.isError()) {
-      errors.add('Host: ${(hostResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid host'}');
+      errors.add(
+        'Host: ${(hostResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid host'}',
+      );
     }
 
     final portResult = _validatePort(config.port);
     if (portResult.isError()) {
-      errors.add('Port: ${(portResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid port'}');
+      errors.add(
+        'Port: ${(portResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid port'}',
+      );
     }
 
     if (errors.isNotEmpty) {

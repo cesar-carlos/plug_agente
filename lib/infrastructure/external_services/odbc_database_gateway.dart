@@ -48,16 +48,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   static const int _maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
 
   ConnectionOptions get _connectionOptions => ConnectionOptions(
-        loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
-        queryTimeout: ConnectionConstants.defaultQueryTimeout,
-        maxResultBufferBytes:
-            _settings.maxResultBufferMb * 1024 * 1024,
-        initialResultBufferBytes:
-            ConnectionConstants.defaultInitialResultBufferBytes,
-        autoReconnectOnConnectionLost: true,
-        maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
-        reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
-      );
+    loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+    queryTimeout: ConnectionConstants.defaultQueryTimeout,
+    maxResultBufferBytes: _settings.maxResultBufferMb * 1024 * 1024,
+    initialResultBufferBytes:
+        ConnectionConstants.defaultInitialResultBufferBytes,
+    autoReconnectOnConnectionLost: true,
+    maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+    reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+  );
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -433,9 +432,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<QueryResponse>> _executeQueryWithoutPool(
     QueryRequest request,
     String connectionString,
-    Stopwatch stopwatch,
-    {ConnectionOptions? options}
-  ) async {
+    Stopwatch stopwatch, {
+    ConnectionOptions? options,
+  }) async {
     final connectResult = await _service.connect(
       connectionString,
       options: options ?? _connectionOptions,
@@ -555,7 +554,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   ConnectionOptions _buildExpandedConnectionOptions(Object error) {
     final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
     final expandedBufferBytes = _calculateExpandedBufferBytes(error);
-    final initialResultBufferBytes = expandedBufferBytes <
+    final initialResultBufferBytes =
+        expandedBufferBytes <
             ConnectionConstants.defaultInitialResultBufferBytes
         ? expandedBufferBytes
         : ConnectionConstants.defaultInitialResultBufferBytes;

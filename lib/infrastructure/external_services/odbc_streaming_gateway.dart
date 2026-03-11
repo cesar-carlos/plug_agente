@@ -103,11 +103,15 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
         _activeConnectionId = connection.id;
         try {
           // Usar streaming real para processar chunks incrementalmente
-          await for (final chunkResult
-              in _service.streamQuery(connection.id, query)) {
+          await for (final chunkResult in _service.streamQuery(
+            connection.id,
+            query,
+          )) {
             if (_isCancelRequested) {
               return Failure(
-                domain.QueryExecutionFailure('Streaming cancelado pelo usuário'),
+                domain.QueryExecutionFailure(
+                  'Streaming cancelado pelo usuário',
+                ),
               );
             }
 

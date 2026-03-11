@@ -13,6 +13,7 @@ import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppInitializer {
   const AppInitializer();
@@ -114,13 +115,19 @@ class AppInitializer {
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
+      final prefs = getIt<SharedPreferences>();
+      final startMinimized = prefs.getBool('settings.start_minimized') ?? false;
+
       await windowManagerService.initialize(
         size: initialSize,
         minimumSize: minSize,
+        startMinimized: startMinimized,
       );
 
+      getIt.registerSingleton<WindowManagerService>(windowManagerService);
+
       developer.log(
-        'Window manager initialized',
+        'Window manager initialized (startMinimized: $startMinimized)',
         name: 'app_initializer',
         level: 800,
       );
@@ -155,9 +162,20 @@ class AppInitializer {
       );
 
       if (windowManagerService != null) {
+        final prefs = getIt<SharedPreferences>();
+        final minimizeToTray =
+            prefs.getBool('settings.minimize_to_tray') ?? true;
+        final closeToTray = prefs.getBool('settings.close_to_tray') ?? true;
+
         windowManagerService
-          ..setMinimizeToTray(value: true)
-          ..setCloseToTray(value: true);
+          ..setMinimizeToTray(value: minimizeToTray)
+          ..setCloseToTray(value: closeToTray);
+
+        developer.log(
+          'Tray behaviors configured (minimize: $minimizeToTray, close: $closeToTray)',
+          name: 'app_initializer',
+          level: 800,
+        );
       }
 
       developer.log(

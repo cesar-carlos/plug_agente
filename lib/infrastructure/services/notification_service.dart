@@ -36,7 +36,7 @@ class NotificationService implements INotificationService {
       );
 
       final result = await _plugin.initialize(
-        initializationSettings,
+        settings: initializationSettings,
         onDidReceiveNotificationResponse: _onNotificationResponse,
       );
 
@@ -71,10 +71,10 @@ class NotificationService implements INotificationService {
       const platformChannelSpecifics = NotificationDetails();
 
       await _plugin.show(
-        0,
-        title,
-        body,
-        platformChannelSpecifics,
+        id: 0,
+        title: title,
+        body: body,
+        notificationDetails: platformChannelSpecifics,
         payload: payload,
       );
 
@@ -106,10 +106,10 @@ class NotificationService implements INotificationService {
       // For Windows, schedule is not directly supported, so we use show() instead
       // This is a limitation of flutter_local_notifications on Windows desktop
       await _plugin.show(
-        0,
-        title,
-        body,
-        platformChannelSpecifics,
+        id: 0,
+        title: title,
+        body: body,
+        notificationDetails: platformChannelSpecifics,
         payload: payload,
       );
 
@@ -132,7 +132,7 @@ class NotificationService implements INotificationService {
   @override
   Future<Result<void>> cancel(int id) async {
     try {
-      await _plugin.cancel(id);
+      await _plugin.cancel(id: id);
       return const Success<Object, Exception>(Object());
     } on Exception catch (error) {
       return Failure(

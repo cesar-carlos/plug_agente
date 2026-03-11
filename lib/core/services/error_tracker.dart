@@ -117,8 +117,8 @@ class ErrorTracker {
     'dsn': _dsn.isEmpty
         ? '<empty>'
         : _dsn.length <= 20
-            ? _dsn
-            : '${_dsn.substring(0, 20)}...',
+        ? _dsn
+        : '${_dsn.substring(0, 20)}...',
     'environment': _environment,
     'release': _release,
     'tags': _tags,

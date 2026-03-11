@@ -87,7 +87,7 @@ class _DatabaseSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SettingsSectionTitle(
-      title: 'Configuração do Banco de Dados',
+      title: 'Configuração do banco de dados',
     );
   }
 }

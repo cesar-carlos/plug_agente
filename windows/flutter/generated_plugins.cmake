@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  auto_start_flutter
   auto_updater_windows
   flutter_secure_storage_windows
   screen_retriever_windows

@@ -176,7 +176,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SettingsSectionTitle(title: 'Connection Pool e Timeouts'),
+            const SettingsSectionTitle(title: 'Pool de conexões e timeouts'),
             const SizedBox(height: 16),
             AppCard(
               child: Column(

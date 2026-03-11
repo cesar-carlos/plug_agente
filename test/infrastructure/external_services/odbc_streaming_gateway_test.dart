@@ -146,7 +146,9 @@ void main() {
       final result = await execution;
 
       expect(result.isError(), isTrue);
-      verify(() => mockService.disconnect('conn-cancel')).called(greaterThan(0));
+      verify(
+        () => mockService.disconnect('conn-cancel'),
+      ).called(greaterThan(0));
     });
   });
 }

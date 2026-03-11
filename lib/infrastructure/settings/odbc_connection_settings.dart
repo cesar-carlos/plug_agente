@@ -13,8 +13,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   final SharedPreferences _prefs;
 
   int _poolSize = ConnectionConstants.defaultPoolSize;
-  int _loginTimeoutSeconds =
-      ConnectionConstants.defaultLoginTimeout.inSeconds;
+  int _loginTimeoutSeconds = ConnectionConstants.defaultLoginTimeout.inSeconds;
   int _maxResultBufferMb =
       ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
@@ -33,10 +32,13 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   Future<void> load() async {
-    _poolSize = _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
-    _loginTimeoutSeconds = _prefs.getInt(_keyLoginTimeoutSeconds) ??
+    _poolSize =
+        _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
+    _loginTimeoutSeconds =
+        _prefs.getInt(_keyLoginTimeoutSeconds) ??
         ConnectionConstants.defaultLoginTimeout.inSeconds;
-    _maxResultBufferMb = _prefs.getInt(_keyMaxResultBufferMb) ??
+    _maxResultBufferMb =
+        _prefs.getInt(_keyMaxResultBufferMb) ??
         (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
     _streamingChunkSizeKb =
         _prefs.getInt(_keyStreamingChunkSizeKb) ??

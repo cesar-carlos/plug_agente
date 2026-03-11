@@ -30,7 +30,8 @@ class ZardAdapter {
       return const Success(true);
     }
 
-    final errorMsg = zardResult.error?.messages ??
+    final errorMsg =
+        zardResult.error?.messages ??
         zardResult.error?.toString() ??
         'Validation failed';
 
@@ -42,7 +43,8 @@ class ZardAdapter {
       return Success(zardResult.data!);
     }
 
-    final errorMsg = zardResult.error?.messages ??
+    final errorMsg =
+        zardResult.error?.messages ??
         zardResult.error?.toString() ??
         'Validation failed';
 

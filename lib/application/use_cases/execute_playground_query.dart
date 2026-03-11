@@ -42,7 +42,9 @@ class ExecutePlaygroundQuery {
             return _databaseGateway.executeQuery(request);
           },
           (failure) {
-            final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+            final failureMessage = failure is domain.Failure
+                ? failure.message
+                : failure.toString();
             return Failure(
               domain.ConfigurationFailure(
                 'Configuração não encontrada: $failureMessage',

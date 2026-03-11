@@ -35,14 +35,14 @@ dependencies:
   intl: any
 
   # Navegação e Rotas
-  go_router: ^14.6.2
+  go_router: ^17.1.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
   # Communication
-  socket_io_client: ^2.0.3+1
+  socket_io_client: ^3.1.4
 
   # Compression
   archive: ^3.4.9
@@ -67,7 +67,7 @@ dependencies:
   mailer: ^6.6.0
 
   # Notificações Locais
-  flutter_local_notifications: ^19.5.0
+  flutter_local_notifications: ^21.0.0
 
   # Gráficos
   fl_chart: ^1.1.1
@@ -81,6 +81,7 @@ dependencies:
   fluentui_system_icons: ^1.1.273
   window_manager: ^0.5.1
   tray_manager: ^0.5.2
+  auto_start_flutter: ^1.0.0
 
   # Config/env
   flutter_dotenv: ^6.0.0
@@ -90,11 +91,11 @@ dependencies:
   logger: ^2.1.0
 
   # Version/update
-  package_info_plus: ^4.2.0
-  auto_updater: ^0.2.1
+  package_info_plus: ^9.0.0
+  auto_updater: ^1.0.0
 
   # Secrets
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: ^10.0.0
   win32: ^5.15.0
   ffi: ^2.1.5
   collection: ^1.19.1
@@ -103,7 +104,7 @@ dependencies:
   dio: ^5.4.0
   http: ^1.2.0
   odbc_fast: ^1.2.1
-  google_fonts: ^6.2.1
+  google_fonts: ^8.0.2
 
 dev_dependencies:
   flutter_test:
@@ -117,6 +118,7 @@ dev_dependencies:
   mocktail: ^1.0.4
   test: ^1.25.8
   very_good_analysis: ^10.0.0
+  checks: ^0.3.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

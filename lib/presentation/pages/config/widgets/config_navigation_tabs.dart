@@ -6,17 +6,13 @@ class ConfigNavigationTabs extends StatelessWidget {
   const ConfigNavigationTabs({
     required this.currentPage,
     required this.onGeneralTabTap,
-    required this.onDatabaseTabTap,
     required this.onWebSocketTabTap,
-    required this.onAdvancedTabTap,
     super.key,
   });
 
   final int currentPage;
   final VoidCallback onGeneralTabTap;
-  final VoidCallback onDatabaseTabTap;
   final VoidCallback onWebSocketTabTap;
-  final VoidCallback onAdvancedTabTap;
 
   @override
   Widget build(BuildContext context) {
@@ -37,24 +33,10 @@ class ConfigNavigationTabs extends StatelessWidget {
           ),
           _TabSeparator(color: theme.resources.controlStrokeColorDefault),
           _TabButton(
-            label: 'Banco de dados',
-            icon: FluentIcons.database,
-            isSelected: currentPage == 1,
-            onTap: onDatabaseTabTap,
-          ),
-          _TabSeparator(color: theme.resources.controlStrokeColorDefault),
-          _TabButton(
             label: 'WebSocket',
             icon: FluentIcons.plug_connected,
-            isSelected: currentPage == 2,
+            isSelected: currentPage == 1,
             onTap: onWebSocketTabTap,
-          ),
-          _TabSeparator(color: theme.resources.controlStrokeColorDefault),
-          _TabButton(
-            label: 'Avançado',
-            icon: FluentIcons.developer_tools,
-            isSelected: currentPage == 3,
-            onTap: onAdvancedTabTap,
           ),
         ],
       ),

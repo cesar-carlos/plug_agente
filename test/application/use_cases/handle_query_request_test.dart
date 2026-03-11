@@ -14,7 +14,8 @@ class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class MockTransportClient extends Mock implements ITransportClient {}
 
-class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
+class MockQueryNormalizerService extends Mock
+    implements QueryNormalizerService {}
 
 class MockCompressionService extends Mock implements CompressionService {}
 
@@ -77,9 +78,10 @@ void main() {
       verifyNever(() => mockDatabaseGateway.executeQuery(any()));
 
       final captured =
-          verify(() => mockTransportClient.sendResponse(captureAny()))
-              .captured
-              .single as QueryResponse;
+          verify(
+                () => mockTransportClient.sendResponse(captureAny()),
+              ).captured.single
+              as QueryResponse;
       expect(captured.error, isNotNull);
       expect(captured.error, contains('SELECT/WITH'));
     });
@@ -103,9 +105,10 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       final captured =
-          verify(() => mockTransportClient.sendResponse(captureAny()))
-              .captured
-              .single as QueryResponse;
+          verify(
+                () => mockTransportClient.sendResponse(captureAny()),
+              ).captured.single
+              as QueryResponse;
       expect(captured.error, contains('database down'));
     });
 
@@ -133,36 +136,41 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       final captured =
-          verify(() => mockTransportClient.sendResponse(captureAny()))
-              .captured
-              .single as QueryResponse;
+          verify(
+                () => mockTransportClient.sendResponse(captureAny()),
+              ).captured.single
+              as QueryResponse;
       expect(captured.error, equals('database down'));
       expect(captured.error, isNot(contains('Context:')));
       expect(captured.error, isNot(contains('Caused by:')));
     });
 
-    test('should return contextual failure when request handling throws', () async {
-      final request = QueryRequest(
-        id: 'request-4',
-        agentId: 'agent-4',
-        query: 'SELECT * FROM users',
-        timestamp: DateTime.now(),
-      );
-      final exception = Exception('unexpected crash');
+    test(
+      'should return contextual failure when request handling throws',
+      () async {
+        final request = QueryRequest(
+          id: 'request-4',
+          agentId: 'agent-4',
+          query: 'SELECT * FROM users',
+          timestamp: DateTime.now(),
+        );
+        final exception = Exception('unexpected crash');
 
-      when(
-        () => mockDatabaseGateway.executeQuery(any()),
-      ).thenThrow(exception);
+        when(
+          () => mockDatabaseGateway.executeQuery(any()),
+        ).thenThrow(exception);
 
-      final result = await useCase(request);
-      final failure = result.exceptionOrNull()! as domain.QueryExecutionFailure;
+        final result = await useCase(request);
+        final failure =
+            result.exceptionOrNull()! as domain.QueryExecutionFailure;
 
-      expect(result.isError(), isTrue);
-      expect(failure.message, 'Failed to handle query request');
-      expect(failure.cause, exception);
-      expect(failure.context, containsPair('requestId', 'request-4'));
-      expect(failure.context, containsPair('agentId', 'agent-4'));
-      verifyNever(() => mockTransportClient.sendResponse(any()));
-    });
+        expect(result.isError(), isTrue);
+        expect(failure.message, 'Failed to handle query request');
+        expect(failure.cause, exception);
+        expect(failure.context, containsPair('requestId', 'request-4'));
+        expect(failure.context, containsPair('agentId', 'agent-4'));
+        verifyNever(() => mockTransportClient.sendResponse(any()));
+      },
+    );
   });
 }

@@ -16,6 +16,8 @@ import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -23,8 +25,11 @@ import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/providers/notification_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
+import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
+import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class AppRoot extends StatelessWidget {
@@ -44,6 +49,20 @@ class AppRoot extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) =>
               RuntimeModeProvider(getIt<RuntimeCapabilities>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => ThemeProvider(getIt<SharedPreferences>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => SystemSettingsProvider(
+            getIt<SharedPreferences>(),
+            windowManagerService: getIt.isRegistered<WindowManagerService>()
+                ? getIt<WindowManagerService>()
+                : null,
+            startupService: getIt.isRegistered<IStartupService>()
+                ? getIt<IStartupService>()
+                : null,
+          ),
         ),
         ChangeNotifierProvider(
           create: (context) => ConfigProvider(

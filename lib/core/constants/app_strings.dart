@@ -8,7 +8,9 @@ class AppStrings {
   // Navigation
   static const String navDashboard = 'Dashboard';
   static const String navPlayground = 'Playground';
+  static const String navWebSocketSettings = 'Conexão WebSocket';
   static const String navSettings = 'Configurações';
+  static const String navDatabaseSettings = 'Banco de dados';
 
   // Page Titles
   static const String titlePlayground = 'Playground Database';

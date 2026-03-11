@@ -7,6 +7,10 @@ class AppRoutes {
   static const String playground = '/playground';
   static const String config = '/config';
   static const String configEdit = '/config/:id';
+  static const String databaseSettings = '/database-settings';
+  static const String databaseSettingsEdit = '/database-settings/:id';
+  static const String websocketSettings = '/websocket-settings';
+  static const String websocketSettingsEdit = '/websocket-settings/:id';
 
   static const String paramId = 'id';
   static const String paramTab = 'tab';
@@ -15,6 +19,8 @@ class AppRoutes {
 enum NavDestination {
   dashboard,
   playground,
+  databaseSettings,
+  websocketSettings,
   config
   ;
 
@@ -26,6 +32,10 @@ enum NavDestination {
         return AppRoutes.playground;
       case NavDestination.config:
         return AppRoutes.config;
+      case NavDestination.databaseSettings:
+        return AppRoutes.databaseSettings;
+      case NavDestination.websocketSettings:
+        return AppRoutes.websocketSettings;
     }
   }
 
@@ -34,6 +44,10 @@ enum NavDestination {
       case 1:
         return NavDestination.playground;
       case 2:
+        return NavDestination.databaseSettings;
+      case 3:
+        return NavDestination.websocketSettings;
+      case 4:
         return NavDestination.config;
       default:
         return NavDestination.dashboard;
@@ -41,6 +55,12 @@ enum NavDestination {
   }
 
   static NavDestination fromRoute(String route) {
+    if (route.startsWith(AppRoutes.databaseSettings)) {
+      return NavDestination.databaseSettings;
+    }
+    if (route.startsWith(AppRoutes.websocketSettings)) {
+      return NavDestination.websocketSettings;
+    }
     if (route.startsWith(AppRoutes.config)) {
       return NavDestination.config;
     }
@@ -70,6 +90,46 @@ class ConfigRoute extends GoRouteData {
   final String? tab;
 
   static const String $baseLocation = AppRoutes.config;
+
+  String get $location {
+    final buf = StringBuffer($baseLocation);
+    if (id != null) {
+      buf.write('/$id');
+    }
+    if (tab != null) {
+      buf.write('?tab=$tab');
+    }
+    return buf.toString();
+  }
+}
+
+class DatabaseSettingsRoute extends GoRouteData {
+  const DatabaseSettingsRoute({this.id, this.tab});
+
+  final String? id;
+  final String? tab;
+
+  static const String $baseLocation = AppRoutes.databaseSettings;
+
+  String get $location {
+    final buf = StringBuffer($baseLocation);
+    if (id != null) {
+      buf.write('/$id');
+    }
+    if (tab != null) {
+      buf.write('?tab=$tab');
+    }
+    return buf.toString();
+  }
+}
+
+class WebSocketSettingsRoute extends GoRouteData {
+  const WebSocketSettingsRoute({this.id, this.tab});
+
+  final String? id;
+  final String? tab;
+
+  static const String $baseLocation = AppRoutes.websocketSettings;
 
   String get $location {
     final buf = StringBuffer($baseLocation);

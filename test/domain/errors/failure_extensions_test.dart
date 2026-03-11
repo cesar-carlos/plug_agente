@@ -78,18 +78,21 @@ void main() {
       expect(failure.context, containsPair('operation', 'parse'));
     });
 
-    test('toFailure should convert query-like exception to DatabaseFailure', () {
-      final exception = Exception('SQL query failed');
+    test(
+      'toFailure should convert query-like exception to DatabaseFailure',
+      () {
+        final exception = Exception('SQL query failed');
 
-      final failure = exception.toFailure(
-        message: 'Failed to execute query',
-        context: {'operation': 'executeQuery'},
-      );
+        final failure = exception.toFailure(
+          message: 'Failed to execute query',
+          context: {'operation': 'executeQuery'},
+        );
 
-      expect(failure, isA<DatabaseFailure>());
-      expect(failure.message, 'Failed to execute query');
-      expect(failure.cause, exception);
-      expect(failure.context, containsPair('operation', 'executeQuery'));
-    });
+        expect(failure, isA<DatabaseFailure>());
+        expect(failure.message, 'Failed to execute query');
+        expect(failure.cause, exception);
+        expect(failure.context, containsPair('operation', 'executeQuery'));
+      },
+    );
   });
 }

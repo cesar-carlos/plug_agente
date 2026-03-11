@@ -72,7 +72,10 @@ class InputValidators {
     String value, {
     String? message,
   }) {
-    final schema = z.string().ipv4(message: message ?? 'Invalid IPv4 address').trim();
+    final schema = z
+        .string()
+        .ipv4(message: message ?? 'Invalid IPv4 address')
+        .trim();
 
     return schema.parseSafe(value);
   }
@@ -133,7 +136,9 @@ class InputValidators {
         .toLowerCase()
         .refine(
           (val) => RegExp(r'^[a-z0-9_-]+$').hasMatch(val),
-          message: message ?? 'Username can only contain letters, numbers, underscores, and hyphens',
+          message:
+              message ??
+              'Username can only contain letters, numbers, underscores, and hyphens',
         );
 
     return schema.parseSafe(value);
@@ -150,7 +155,8 @@ class InputValidators {
         .min(
           minLength,
           message:
-              message ?? 'Database name must be at least $minLength character(s)',
+              message ??
+              'Database name must be at least $minLength character(s)',
         )
         .max(
           maxLength,
@@ -160,7 +166,9 @@ class InputValidators {
         .trim()
         .refine(
           (val) => RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(val),
-          message: message ?? 'Database name can only contain letters, numbers, and underscores',
+          message:
+              message ??
+              'Database name can only contain letters, numbers, and underscores',
         );
 
     return schema.parseSafe(value);

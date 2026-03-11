@@ -57,7 +57,8 @@ class SocketIOTransportClient implements ITransportClient {
     }
 
     return domain.NetworkFailure.withContext(
-      message: 'Unable to connect to the hub. Check the server URL and your network connection.',
+      message:
+          'Unable to connect to the hub. Check the server URL and your network connection.',
       cause: error,
       context: {'operation': 'connect'},
     );
