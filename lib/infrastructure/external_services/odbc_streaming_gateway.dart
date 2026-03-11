@@ -1,15 +1,45 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Gateway com suporte a streaming para grandes datasets.
+/// Gateway com suporte a streaming real para grandes datasets.
 ///
-/// Usa OdbcService padrão para simplificar. Streaming completo
-/// pode ser implementado posteriormente com AsyncNativeOdbcConnection.
+/// Implementa streaming incremental usando streamQuery da odbc_fast,
+/// processando resultados em chunks sem carregar tudo em memória.
 class OdbcStreamingGateway implements IStreamingDatabaseGateway {
-  OdbcStreamingGateway(this._service);
+  OdbcStreamingGateway(this._service, this._settings);
   final OdbcService _service;
+  final IOdbcConnectionSettings _settings;
+  String? _activeConnectionId;
+  bool _isCancelRequested = false;
+
+  ConnectionOptions _buildStreamingConnectionOptions(int chunkSizeBytes) {
+    final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
+    final maxResultBufferBytes = max(
+      normalizedChunkSize,
+      _settings.maxResultBufferMb * 1024 * 1024,
+    );
+    final initialResultBufferBytes = min(
+      ConnectionConstants.defaultInitialResultBufferBytes,
+      maxResultBufferBytes,
+    );
+
+    return ConnectionOptions(
+      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+      queryTimeout: const Duration(minutes: 5),
+      maxResultBufferBytes: maxResultBufferBytes,
+      initialResultBufferBytes: initialResultBufferBytes,
+      autoReconnectOnConnectionLost: true,
+      maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+      reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+    );
+  }
 
   /// Helper para converter erros ODBC em String.
   String _odbcErrorMessage(Object error) {
@@ -27,37 +57,87 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     int fetchSize = 1000,
     int chunkSizeBytes = 1024 * 1024,
   }) async {
-    // Conectar
-    final connResult = await _service.connect(connectionString);
+    _isCancelRequested = false;
+
+    // Conectar com opções otimizadas para streaming
+    final connResult = await _service.connect(
+      connectionString,
+      options: _buildStreamingConnectionOptions(chunkSizeBytes),
+    );
 
     return connResult.fold(
       (connection) async {
-        // Executar query
-        final result = await _service.executeQuery(connection.id, query);
-
-        // Desconectar
-        await _service.disconnect(connection.id);
-
-        return result.fold(
-          (queryResult) {
-            // Converter e notificar via callback (implementação simplificada)
-            final rows = _convertQueryResultToMaps(queryResult);
-            if (rows.isNotEmpty) {
-              onChunk(rows);
+        _activeConnectionId = connection.id;
+        try {
+          // Usar streaming real para processar chunks incrementalmente
+          await for (final chunkResult
+              in _service.streamQuery(connection.id, query)) {
+            if (_isCancelRequested) {
+              return Failure(
+                domain.QueryExecutionFailure('Streaming cancelado pelo usuário'),
+              );
             }
-            return const Success(unit);
-          },
-          (error) {
-            return Failure(
-              domain.QueryExecutionFailure(_odbcErrorMessage(error)),
+
+            await chunkResult.fold(
+              (queryResult) async {
+                // Converter chunk e notificar callback
+                final rows = _convertQueryResultToMaps(queryResult);
+                if (rows.isNotEmpty) {
+                  _chunkRows(rows, fetchSize).forEach(onChunk);
+                }
+              },
+              (error) {
+                throw Exception(_odbcErrorMessage(error));
+              },
             );
-          },
-        );
+          }
+
+          return const Success(unit);
+        } on Exception catch (e) {
+          return Failure(
+            domain.QueryExecutionFailure('Streaming error: $e'),
+          );
+        } finally {
+          await _service.disconnect(connection.id);
+          if (_activeConnectionId == connection.id) {
+            _activeConnectionId = null;
+          }
+        }
       },
       (error) {
         return Failure(domain.ConnectionFailure(_odbcErrorMessage(error)));
       },
     );
+  }
+
+  @override
+  Future<Result<void>> cancelActiveStream() async {
+    final activeConnectionId = _activeConnectionId;
+    if (activeConnectionId == null) {
+      return const Success(unit);
+    }
+
+    _isCancelRequested = true;
+    final result = await _service.disconnect(activeConnectionId);
+    return result.fold(
+      (_) => const Success(unit),
+      (error) => Failure(
+        domain.ConnectionFailure(
+          'Falha ao cancelar streaming: ${_odbcErrorMessage(error)}',
+        ),
+      ),
+    );
+  }
+
+  Iterable<List<Map<String, dynamic>>> _chunkRows(
+    List<Map<String, dynamic>> rows,
+    int fetchSize,
+  ) sync* {
+    final safeFetchSize = fetchSize > 0 ? fetchSize : 1000;
+    for (var i = 0; i < rows.length; i += safeFetchSize) {
+      final end = min(i + safeFetchSize, rows.length);
+      yield rows.sublist(i, end);
+    }
   }
 
   /// Converte QueryResult para lista de maps.

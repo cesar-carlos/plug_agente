@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const _playgroundStreamingModeKey = 'playground_streaming_mode_enabled';
 
 class PlaygroundPage extends StatefulWidget {
   const PlaygroundPage({
@@ -22,12 +28,14 @@ class PlaygroundPage extends StatefulWidget {
 class _PlaygroundPageState extends State<PlaygroundPage> {
   late final TextEditingController _queryController;
   late final FocusNode _focusNode;
+  bool _streamingModeEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _queryController = TextEditingController();
     _focusNode = FocusNode();
+    unawaited(_restoreStreamingMode());
 
     if (widget.configId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -39,6 +47,20 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   Future<void> _loadConfig(String configId) async {
     final configProvider = context.read<ConfigProvider>();
     await configProvider.loadConfigById(configId);
+  }
+
+  Future<void> _restoreStreamingMode() async {
+    final prefs = getIt<SharedPreferences>();
+    final enabled = prefs.getBool(_playgroundStreamingModeKey) ?? false;
+    if (!mounted) {
+      return;
+    }
+    setState(() => _streamingModeEnabled = enabled);
+  }
+
+  Future<void> _saveStreamingMode(bool enabled) async {
+    final prefs = getIt<SharedPreferences>();
+    await prefs.setBool(_playgroundStreamingModeKey, enabled);
   }
 
   @override
@@ -70,9 +92,22 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     );
   }
 
-  Future<void> _handleExecute(PlaygroundProvider provider) async {
+  Future<void> _handleExecute(
+    PlaygroundProvider provider,
+    ConfigProvider configProvider,
+  ) async {
     provider.setQuery(_queryController.text);
-    await provider.executeQuery();
+    final config = configProvider.currentConfig;
+
+    if (_streamingModeEnabled && config != null) {
+      await provider.executeQueryWithStreaming(
+        _queryController.text,
+        config.connectionString,
+      );
+    } else {
+      await provider.executeQuery();
+    }
+
     if (!mounted) return;
 
     final error = provider.error;
@@ -126,7 +161,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     // F5 or Ctrl+Enter: Execute query
     if (event.logicalKey == LogicalKeyboardKey.f5 ||
         (isControlPressed && event.logicalKey == LogicalKeyboardKey.enter)) {
-      _handleExecute(playgroundProvider);
+      _handleExecute(playgroundProvider, configProvider);
       return KeyEventResult.handled;
     }
 
@@ -175,7 +210,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   SqlActionBar(
-                    onExecute: () => _handleExecute(playgroundProvider),
+                    onExecute: () => _handleExecute(
+                      playgroundProvider,
+                      configProvider,
+                    ),
                     onTestConnection: config != null
                         ? () => _handleTestConnection(
                             configProvider,
@@ -185,12 +223,21 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                     onClear: () => _handleClear(playgroundProvider),
                     onCancel: () => playgroundProvider.cancelQuery(),
                     isExecuting: playgroundProvider.isLoading,
+                    useStreamingMode: config != null,
+                    streamingModeEnabled: _streamingModeEnabled,
+                    onStreamingModeChanged: (value) {
+                      setState(() => _streamingModeEnabled = value);
+                      unawaited(_saveStreamingMode(value));
+                    },
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Expanded(
                     child: QueryResultsSection(
                       results: playgroundProvider.results,
                       isLoading: playgroundProvider.isLoading,
+                      isStreaming: playgroundProvider.isStreaming,
+                      rowsProcessed: playgroundProvider.rowsProcessed,
+                      progress: playgroundProvider.progress,
                       executionDuration: playgroundProvider.executionDuration,
                       affectedRows: playgroundProvider.affectedRows,
                       columnMetadata: playgroundProvider.columnMetadata,

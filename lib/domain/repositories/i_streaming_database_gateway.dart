@@ -17,4 +17,9 @@ abstract class IStreamingDatabaseGateway {
     int fetchSize,
     int chunkSizeBytes,
   });
+
+  /// Cancela o streaming ativo no runtime ODBC.
+  ///
+  /// Deve interromper a operação em andamento e liberar recursos.
+  Future<Result<void>> cancelActiveStream();
 }

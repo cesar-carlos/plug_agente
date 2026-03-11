@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:window_manager/window_manager.dart';
 
 class WindowManagerService with WindowListener {
@@ -221,6 +222,9 @@ class WindowManagerService with WindowListener {
   Future<void> close() async {
     try {
       _logger.i('Fechando aplicativo...');
+
+      // Shutdown all resources before closing window
+      await shutdownApp();
 
       // Marcar como fechamento intencional
       _isClosing = true;

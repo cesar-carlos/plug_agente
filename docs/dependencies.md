@@ -25,9 +25,10 @@ Este documento documenta as dependências do projeto Plug Agente e suas versões
 
 ### Banco de Dados via ODBC
 
-- **dart_odbc**: ^0.1.2 (comentado para investigação)
-  - Conector ODBC para acesso a bancos de dados como SQL Server e SQL Anywhere
-  - Implementação temporária usando MockDatabaseGateway até que a dependência seja resolvida
+- **odbc_fast**: ^1.2.1
+  - Conector ODBC com motor Rust nativo
+  - Connection pool, streaming de resultados, prepared statements
+  - Suporte a SQL Server, PostgreSQL, SQL Anywhere
 
 ### Configuração Local (SQLite)
 
@@ -88,7 +89,7 @@ Este documento documenta as dependências do projeto Plug Agente e suas versões
 
 ### Configuração e Variáveis de Ambiente
 
-- **flutter_dotenv**: ^5.1.0
+- **flutter_dotenv**: ^6.0.0
   - Carregamento de variáveis de ambiente de arquivo .env
   - Configuração externa da aplicação
 - **uuid**: ^4.3.3
@@ -125,6 +126,8 @@ Este documento documenta as dependências do projeto Plug Agente e suas versões
   - Cliente HTTP poderoso para Dart
   - Suporte a interceptors, cancelamento e timeouts
   - Usado para requisições HTTP e interceptors
+- **http**: ^1.2.0
+  - Cliente HTTP básico (dependência transitiva)
 
 ### E-mail (SMTP)
 
@@ -138,11 +141,14 @@ Este documento documenta as dependências do projeto Plug Agente e suas versões
   - Notificações locais do sistema
   - Notificações agendadas e em tempo real
 
-### Gráficos
+### Gráficos e DataGrid
 
 - **fl_chart**: ^1.1.1
   - Biblioteca de gráficos para Flutter
   - Gráficos de linha, barra, pizza, etc.
+- **syncfusion_flutter_datagrid**: ^32.1.23
+  - DataGrid para exibição de resultados de queries SQL
+  - Virtualização e performance para grandes datasets
 
 ### Utilitários do Sistema
 
@@ -178,7 +184,7 @@ Este documento documenta as dependências do projeto Plug Agente e suas versões
 
 ### Linting e Análise
 
-- **flutter_lints**: ^5.0.0
+- **flutter_lints**: ^6.0.0
   - Conjunto de regras de lint para Flutter
   - Análise estática de código
 
@@ -241,6 +247,7 @@ Para cada dependência, recomendamos manter as versões mais recentes estáveis 
 | flutter_local_notifications | 19.0.0        | 19.5.0+            | Notificações locais       |
 | fl_chart                    | 1.0.0         | 1.1.1+             | Gráficos                  |
 | mailer                      | 6.0.0         | 6.6.0              | Envio de e-mails          |
+| odbc_fast                   | 1.0.0         | 1.2.1+             | ODBC com motor Rust       |
 
 ## Organização por Categoria
 
@@ -282,11 +289,7 @@ Para cada dependência, recomendamos manter as versões mais recentes estáveis 
 
 ## Próximos Passos
 
-1. Investigar e resolver dependência dart_odbc
-2. Implementar testes unitários completos
-3. Adicionar integração com banco de dados real
-4. Implementar funcionalidades de compressão avançadas
-5. Otimizar performance da UI
-6. Implementar gráficos no dashboard usando fl_chart
-7. Adicionar notificações locais para eventos importantes
-8. Implementar envio de e-mails para alertas críticos
+1. Implementar testes unitários completos
+2. Implementar gráficos no dashboard usando fl_chart
+3. Adicionar notificações locais para eventos importantes
+4. Implementar envio de e-mails para alertas críticos

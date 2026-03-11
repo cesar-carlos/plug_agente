@@ -4,6 +4,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/config_navigation_tabs.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -40,7 +41,9 @@ class _ConfigPageState extends State<ConfigPage> {
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.initialTab == 'websocket' ? 1 : 0;
+    _currentPage = widget.initialTab == 'websocket'
+        ? 1
+        : (widget.initialTab == 'advanced' ? 2 : 0);
     _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.configId != null) {
@@ -245,6 +248,7 @@ class _ConfigPageState extends State<ConfigPage> {
               currentPage: _currentPage,
               onDatabaseTabTap: () => setState(() => _currentPage = 0),
               onWebSocketTabTap: () => setState(() => _currentPage = 1),
+              onAdvancedTabTap: () => setState(() => _currentPage = 2),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -438,16 +442,18 @@ class _ConfigPageState extends State<ConfigPage> {
                         );
                       },
                     )
-                  : WebSocketConfigSection(
-                      formController: _formController,
-                      configProvider: configProvider,
-                      onSaveConfig: () {
-                        _formController.updateAllFieldsToProvider(
-                          configProvider,
-                        );
-                        configProvider.saveConfig();
-                      },
-                    ),
+                  : _currentPage == 1
+                      ? WebSocketConfigSection(
+                          formController: _formController,
+                          configProvider: configProvider,
+                          onSaveConfig: () {
+                            _formController.updateAllFieldsToProvider(
+                              configProvider,
+                            );
+                            configProvider.saveConfig();
+                          },
+                        )
+                      : const OdbcConnectionPoolSection(),
             ),
           ],
         ),

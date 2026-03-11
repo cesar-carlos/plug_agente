@@ -214,6 +214,6 @@ code /seu-projeto/.cursor/rules/project_specifics.mdc
 
 ---
 
-**Última atualização**: Janeiro 2026
-**Versão Dart/Flutter**: Dart 3+, Flutter 3.19+
+**Última atualização**: Março 2026
+**Versão Dart/Flutter**: Dart 3.10+, Flutter 3.19+
 **Baseado em**: Effective Dart 2026, Flutter AI Rules, Clean Architecture, SOLID Principles

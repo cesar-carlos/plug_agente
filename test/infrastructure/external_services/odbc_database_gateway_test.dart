@@ -11,6 +11,8 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 
+import '../../helpers/mock_odbc_connection_settings.dart';
+
 class MockOdbcService extends Mock implements OdbcService {}
 
 class MockAgentConfigRepository extends Mock
@@ -25,6 +27,7 @@ void main() {
     late MockConnectionPool mockConnectionPool;
     late IRetryManager retryManager;
     late MetricsCollector metrics;
+    late MockOdbcConnectionSettings mockSettings;
     late OdbcDatabaseGateway gateway;
 
     setUp(() {
@@ -33,12 +36,14 @@ void main() {
       mockConnectionPool = MockConnectionPool();
       retryManager = RetryManager.instance;
       metrics = MetricsCollector.instance..clear();
+      mockSettings = MockOdbcConnectionSettings();
       gateway = OdbcDatabaseGateway(
         mockConfigRepository,
         mockService,
         mockConnectionPool,
         retryManager,
         metrics,
+        mockSettings,
       );
     });
 

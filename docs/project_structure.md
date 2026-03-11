@@ -40,6 +40,8 @@ lib/
 │   ├── use_cases/          # Casos de uso
 │   │   ├── check_for_updates.dart
 │   │   ├── connect_to_hub.dart
+│   │   ├── execute_playground_query.dart
+│   │   ├── execute_streaming_query.dart
 │   │   ├── handle_query_request.dart
 │   │   ├── load_agent_config.dart
 │   │   ├── save_agent_config.dart
@@ -60,6 +62,8 @@ lib/
 │   │   ├── agent_config_data_source.dart
 │   │   ├── socket_data_source.dart
 │   │   └── datasources.dart # Barrel file
+│   ├── pool/               # Pool de conexões ODBC
+│   │   └── odbc_connection_pool.dart
 │   ├── repositories/       # Implementações de repositórios
 │   │   ├── agent_config_repository.dart
 │   │   ├── agent_config_drift_database.dart
@@ -67,10 +71,13 @@ lib/
 │   ├── external_services/  # Serviços externos
 │   │   ├── mock_database_gateway.dart
 │   │   ├── odbc_database_gateway.dart
+│   │   ├── odbc_streaming_gateway.dart
 │   │   ├── socket_io_transport_client.dart
 │   │   ├── interceptors/   # Interceptadores HTTP (dio)
 │   │   │   └── interceptors.dart # Barrel file
 │   │   └── external_services.dart # Barrel file
+│   ├── builders/          # Builders de conexão
+│   │   └── odbc_connection_builder.dart
 │   ├── models/            # Modelos para serialização
 │   │   ├── envelope_model.dart
 │   │   └── models.dart    # Barrel file
@@ -82,7 +89,9 @@ lib/
 ├── presentation/           # Presentation Layer (UI)
 │   ├── pages/            # Telas da aplicação
 │   │   ├── config_page.dart
+│   │   ├── dashboard_page.dart
 │   │   ├── main_window.dart
+│   │   ├── playground_page.dart
 │   │   └── pages.dart    # Barrel file
 │   ├── widgets/          # Widgets específicos da apresentação
 │   │   ├── connection_status_widget.dart
@@ -90,6 +99,7 @@ lib/
 │   ├── providers/        # Gerenciamento de estado (Provider)
 │   │   ├── config_provider.dart
 │   │   ├── connection_provider.dart
+│   │   ├── playground_provider.dart
 │   │   └── providers.dart # Barrel file
 │   ├── controllers/      # Controllers (quando necessário)
 │   │   └── controllers.dart # Barrel file
@@ -100,6 +110,7 @@ lib/
 ├── core/                  # Core Components (Compartilhado)
 │   ├── constants/        # Constantes da aplicação
 │   │   ├── app_constants.dart
+│   │   ├── app_strings.dart
 │   │   └── constants.dart # Barrel file
 │   ├── di/              # Injeção de dependências (get_it)
 │   │   ├── service_locator.dart
@@ -112,6 +123,7 @@ lib/
 │   │   └── services.dart # Barrel file
 │   ├── theme/           # Tema da aplicação
 │   │   ├── app_colors.dart
+│   │   ├── app_spacing.dart
 │   │   └── theme.dart   # Barrel file
 │   ├── utils/           # Utilitários
 │   │   └── utils.dart   # Barrel file
@@ -147,6 +159,12 @@ lib/
 │   │   │   └── common.dart # Barrel file
 │   │   ├── dashboard/  # Widgets do dashboard
 │   │   │   └── dashboard.dart # Barrel file
+│   │   ├── sql/       # Widgets do Playground SQL
+│   │   │   ├── sql_editor.dart
+│   │   │   ├── sql_action_bar.dart
+│   │   │   ├── query_results_section.dart
+│   │   │   ├── query_result_data_grid.dart
+│   │   │   └── sql_visual_identity.dart
 │   │   └── widgets.dart # Barrel file
 │   ├── utils/          # Utilitários compartilhados
 │   │   └── utils.dart  # Barrel file

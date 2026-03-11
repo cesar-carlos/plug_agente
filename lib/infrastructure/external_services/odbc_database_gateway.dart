@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
@@ -33,26 +34,28 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     this._connectionPool,
     this._retryManager,
     this._metrics,
+    this._settings,
   ) : _uuid = const Uuid();
   final OdbcService _service;
   final IAgentConfigRepository _configRepository;
   final IConnectionPool _connectionPool;
   final IRetryManager _retryManager;
   final MetricsCollector _metrics;
+  final IOdbcConnectionSettings _settings;
   final Uuid _uuid;
   bool _initialized = false;
 
-  /// Default connection options for ODBC operations.
-  static const ConnectionOptions _defaultConnectionOptions = ConnectionOptions(
-    loginTimeout: ConnectionConstants.defaultLoginTimeout,
-    queryTimeout: ConnectionConstants.defaultQueryTimeout,
-    maxResultBufferBytes: ConnectionConstants.defaultMaxResultBufferBytes,
-    initialResultBufferBytes:
-        ConnectionConstants.defaultInitialResultBufferBytes,
-    autoReconnectOnConnectionLost: true,
-    maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
-    reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
-  );
+  ConnectionOptions get _connectionOptions => ConnectionOptions(
+        loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+        queryTimeout: ConnectionConstants.defaultQueryTimeout,
+        maxResultBufferBytes:
+            _settings.maxResultBufferMb * 1024 * 1024,
+        initialResultBufferBytes:
+            ConnectionConstants.defaultInitialResultBufferBytes,
+        autoReconnectOnConnectionLost: true,
+        maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+        reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+      );
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -123,7 +126,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
       final connResult = await _service.connect(
         connectionString,
-        options: _defaultConnectionOptions,
+        options: _connectionOptions,
       );
 
       return connResult.fold(
@@ -416,7 +419,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   ) async {
     final connectResult = await _service.connect(
       connectionString,
-      options: _defaultConnectionOptions,
+      options: _connectionOptions,
     );
 
     return connectResult.fold(
@@ -484,7 +487,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   ) async {
     final connectResult = await _service.connect(
       connectionString,
-      options: _defaultConnectionOptions,
+      options: _connectionOptions,
     );
 
     return connectResult.fold(

@@ -57,6 +57,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       }
       if (from < 5) {
         await m.alterTable(
+          // ignore: experimental_member_use - TableMigration is Drift's API for column defaults
           TableMigration(
             configTable,
             columnTransformer: {configTable.odbcDriverName: const Constant('')},

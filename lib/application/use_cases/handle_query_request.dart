@@ -1,6 +1,8 @@
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
@@ -20,6 +22,20 @@ class HandleQueryRequest {
 
   Future<Result<void>> call(QueryRequest request) async {
     try {
+      final validation = SqlValidator.validateSelectQuery(request.query);
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()!;
+        final errorResponse = QueryResponse(
+          id: request.id,
+          requestId: request.id,
+          agentId: request.agentId,
+          data: const [],
+          timestamp: DateTime.now(),
+          error: failure.toString(),
+        );
+        return _transportClient.sendResponse(errorResponse);
+      }
+
       final queryResult = await _databaseGateway.executeQuery(request);
 
       return await queryResult.fold(
@@ -47,8 +63,16 @@ class HandleQueryRequest {
             },
           );
         },
-        (failure) {
-          return Failure(failure);
+        (failure) async {
+          final errorResponse = QueryResponse(
+            id: request.id,
+            requestId: request.id,
+            agentId: request.agentId,
+            data: const [],
+            timestamp: DateTime.now(),
+            error: failure.toString(),
+          );
+          return _transportClient.sendResponse(errorResponse);
         },
       );
     } on Exception catch (e) {

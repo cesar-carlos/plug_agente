@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
@@ -21,8 +22,9 @@ class ExecuteStreamingQuery {
     void Function(List<Map<String, dynamic>>) onChunk, {
     int fetchSize = 1000,
   }) async {
-    // Validação
-    if (query.trim().isEmpty) {
+    final trimmedQuery = query.trim();
+
+    if (trimmedQuery.isEmpty) {
       return Failure(domain.ValidationFailure('Query cannot be empty'));
     }
 
@@ -32,13 +34,22 @@ class ExecuteStreamingQuery {
       );
     }
 
+    final validation = SqlValidator.validateSelectQuery(trimmedQuery);
+    if (validation.isError()) {
+      return Failure(validation.exceptionOrNull()!);
+    }
+
     // Executar via gateway de streaming
     return _gateway.executeQueryStream(
-      query,
+      trimmedQuery,
       connectionString,
       onChunk,
       fetchSize: fetchSize,
       chunkSizeBytes: 1024 * 1024, // 1MB chunks
     );
+  }
+
+  Future<Result<void>> cancelActiveStream() {
+    return _gateway.cancelActiveStream();
   }
 }

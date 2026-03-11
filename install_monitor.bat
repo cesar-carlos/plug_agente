@@ -15,7 +15,7 @@ if %errorLevel% neq 0 (
 )
 
 REM Set paths
-set DLL_SOURCE=%~dp0native\PlugPortMon\build\Release\PlugPortMon.dll
+set "DLL_SOURCE=%~dp0native\PlugPortMon\build\Release\PlugPortMon.dll"
 set DLL_DEST=C:\Windows\System32\PlugPortMon.dll
 
 REM Check if DLL exists
@@ -99,6 +99,6 @@ echo 10. Select "Generic" manufacturer and "Generic / Text Only" printer
 echo 11. Name the printer: "PlugAgent Port Monitor"
 echo 12. Complete the wizard
 echo.
-echo After setup, start the Flutter app and navigate to Port Monitor page.
+echo After setup, use your Windows printer queue to validate print flow.
 echo.
 pause

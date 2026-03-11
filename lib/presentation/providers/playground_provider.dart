@@ -201,6 +201,7 @@ class PlaygroundProvider extends ChangeNotifier {
       stopwatch.stop();
       _executionDuration = stopwatch.elapsed;
       _isLoading = false;
+      notifyListeners();
     }
   }
 

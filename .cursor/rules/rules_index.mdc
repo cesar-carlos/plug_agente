@@ -24,9 +24,9 @@ alwaysApply: true
 - **`ui_ux_design.mdc`**: desktop UI/UX principles (Fluent vs Material policy, navigation, a11y, responsive desktop)
 - **`testing.mdc`**: unit/widget testing conventions (AAA, naming, isolation, mocking)
 
-### Project-specific (`backup_database`)
+### Project-specific (`plug_agente`)
 
-- **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, dependencies, desktop specifics)
+- **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, odbc_fast, Socket.IO, desktop)
 
 ## Copying to other projects
 

@@ -6,6 +6,7 @@ import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
+import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
@@ -63,7 +64,6 @@ void main(List<String> args) async {
           } on Object catch (_) {
             // Ignore errors during tray disposal
           }
-
           await windowManagerService.close();
       }
     },
@@ -123,6 +123,7 @@ class MyApp extends StatelessWidget {
           create: (context) => PlaygroundProvider(
             getIt<ExecutePlaygroundQuery>(),
             getIt<TestDbConnection>(),
+            getIt<ExecuteStreamingQuery>(),
           ),
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),

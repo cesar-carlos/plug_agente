@@ -89,6 +89,8 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    final transportClient = getIt<ITransportClient>();
+    await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
     _error = '';
     notifyListeners();

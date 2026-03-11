@@ -10,12 +10,18 @@ class SqlActionBar extends StatelessWidget {
     this.onClear,
     this.onCancel,
     this.isExecuting = false,
+    this.useStreamingMode = false,
+    this.onStreamingModeChanged,
+    this.streamingModeEnabled = false,
   });
   final VoidCallback? onExecute;
   final VoidCallback? onTestConnection;
   final VoidCallback? onClear;
   final VoidCallback? onCancel;
   final bool isExecuting;
+  final bool useStreamingMode;
+  final ValueChanged<bool>? onStreamingModeChanged;
+  final bool streamingModeEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +46,14 @@ class SqlActionBar extends StatelessWidget {
 
     return Row(
       children: [
+        if (useStreamingMode && onStreamingModeChanged != null) ...[
+          ToggleSwitch(
+            checked: streamingModeEnabled,
+            onChanged: isExecuting ? null : onStreamingModeChanged,
+            content: const Text(AppStrings.queryStreamingMode),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+        ],
         if (isExecuting) ...[
           FilledButton(
             onPressed: onCancel,

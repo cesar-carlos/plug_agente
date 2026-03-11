@@ -11,6 +11,9 @@ class QueryResultsSection extends StatelessWidget {
     required this.results,
     super.key,
     this.isLoading = false,
+    this.isStreaming = false,
+    this.rowsProcessed = 0,
+    this.progress = 0.0,
     this.executionDuration,
     this.affectedRows,
     this.columnMetadata,
@@ -19,6 +22,9 @@ class QueryResultsSection extends StatelessWidget {
   });
   final List<Map<String, dynamic>> results;
   final bool isLoading;
+  final bool isStreaming;
+  final int rowsProcessed;
+  final double progress;
   final Duration? executionDuration;
   final int? affectedRows;
   final List<Map<String, dynamic>>? columnMetadata;
@@ -27,7 +33,7 @@ class QueryResultsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
+    if (isLoading && !isStreaming) {
       return const Center(child: ProgressRing());
     }
 
@@ -38,7 +44,7 @@ class QueryResultsSection extends StatelessWidget {
       );
     }
 
-    if (results.isEmpty) {
+    if (results.isEmpty && !isLoading) {
       return const CenteredMessage(
         title: AppStrings.queryNoResults,
         message: AppStrings.queryNoResultsMessage,
@@ -49,6 +55,11 @@ class QueryResultsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isLoading && isStreaming)
+          _StreamingProgressBar(
+            rowsProcessed: rowsProcessed,
+            progress: progress,
+          ),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -74,6 +85,50 @@ class QueryResultsSection extends StatelessWidget {
           affectedRows: affectedRows,
         ),
       ],
+    );
+  }
+}
+
+class _StreamingProgressBar extends StatelessWidget {
+  const _StreamingProgressBar({
+    required this.rowsProcessed,
+    required this.progress,
+  });
+  final int rowsProcessed;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: theme.resources.cardBackgroundFillColorSecondary,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.resources.controlStrokeColorDefault,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          const ProgressRing(strokeWidth: 2),
+          const SizedBox(width: AppSpacing.md),
+          Text(
+            '${AppStrings.queryStreamingProgress}: '
+            '$rowsProcessed ${AppStrings.queryStreamingRows}',
+            style: theme.typography.body,
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: ProgressBar(value: progress.clamp(0.0, 1.0)),
+          ),
+        ],
+      ),
     );
   }
 }

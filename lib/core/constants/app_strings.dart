@@ -90,8 +90,25 @@ class AppStrings {
   static const String queryConnectionFailure = 'Falha na conexão';
   static const String queryCancelledByUser = 'Query cancelada pelo usuário';
   static const String queryStreamingErrorPrefix = 'Erro no streaming';
+  static const String queryStreamingMode = 'Modo streaming';
+  static const String queryStreamingModeHint =
+      'Para grandes datasets (milhares de linhas)';
+  static const String queryStreamingProgress = 'Processando';
+  static const String queryStreamingRows = 'linhas';
 
   // Dashboard
   static const String dashboardDescription =
       'Monitor your agent status and database connections here.';
+  static const String dashboardMetricsTitle = 'Métricas ODBC';
+  static const String dashboardMetricsQueries = 'Queries executadas';
+  static const String dashboardMetricsSuccess = 'Sucesso';
+  static const String dashboardMetricsErrors = 'Erros';
+  static const String dashboardMetricsSuccessRate = 'Taxa de sucesso';
+  static const String dashboardMetricsAvgLatency = 'Latência média';
+  static const String dashboardMetricsMaxLatency = 'Latência máxima';
+  static const String dashboardMetricsTotalRows = 'Total de linhas';
+  static const String dashboardMetricsPeriod = 'Período';
+  static const String dashboardMetricsPeriod1h = 'Última 1h';
+  static const String dashboardMetricsPeriod24h = 'Últimas 24h';
+  static const String dashboardMetricsPeriodAll = 'Total';
 }

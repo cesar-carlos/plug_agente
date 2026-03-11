@@ -7,12 +7,14 @@ class ConfigNavigationTabs extends StatelessWidget {
     required this.currentPage,
     required this.onDatabaseTabTap,
     required this.onWebSocketTabTap,
+    required this.onAdvancedTabTap,
     super.key,
   });
 
   final int currentPage;
   final VoidCallback onDatabaseTabTap;
   final VoidCallback onWebSocketTabTap;
+  final VoidCallback onAdvancedTabTap;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,14 @@ class ConfigNavigationTabs extends StatelessWidget {
               icon: FluentIcons.plug_connected,
               isSelected: currentPage == 1,
               onTap: onWebSocketTabTap,
+            ),
+          ),
+          Expanded(
+            child: _TabButton(
+              label: 'Avançado',
+              icon: FluentIcons.settings,
+              isSelected: currentPage == 2,
+              onTap: onAdvancedTabTap,
             ),
           ),
         ],

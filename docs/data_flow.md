@@ -12,19 +12,19 @@ flowchart TD
     Hub[Hub_SocketIO] --> Client[ClientApp_Windows]
 
     subgraph AgentRuntime[AgentRuntime]
-      Transport[SocketClient_Infrastructure]
+      Transport[SocketIOTransportClient_Infrastructure]
       Gateway[OdbcDatabaseGateway_Infrastructure]
-        Normalizer[Normalizer_Application]
-        Compressor[GzipCompressor_Infrastructure]
-        SQLiteRepo[AgentConfigRepository_Drift]
+      Normalizer[Normalizer_Application]
+      Compressor[GzipCompressor_Infrastructure]
+      SQLiteRepo[AgentConfigRepository_Drift]
 
-    Hub --> SocketClient
-    SocketClient --> RequestHandler[HandleQueryRequest_UseCase]
-    RequestHandler --> DatabaseGateway
-    DatabaseGateway --> Normalizer
+    Hub --> Transport
+    Transport --> RequestHandler[HandleQueryRequest_UseCase]
+    RequestHandler --> Gateway
+    Gateway --> Normalizer
     Normalizer --> Compressor
-    Compressor --> SocketClient
-    SocketClient --> ResponseHub
+    Compressor --> Transport
+    Transport --> Hub
 
     AgentRuntime --> SQLiteRepo
     SQLiteRepo --> ConfigProvider
@@ -86,6 +86,14 @@ flowchart TD
 - Acesso seguro a dados locais
 
 ## Fluxo de Operação
+
+### Playground (Consulta SQL Local)
+
+1. **PlaygroundPage** exibe o editor SQL e botões de ação
+2. **PlaygroundProvider** orquestra a execução
+3. **ExecutePlaygroundQuery** ou **ExecuteStreamingQuery** executa a query
+4. **OdbcDatabaseGateway** (com pool) ou **OdbcStreamingGateway** acessa o banco
+5. Resultados são exibidos no **QueryResultDataGrid** (Syncfusion)
 
 ### 1. Inicialização
 

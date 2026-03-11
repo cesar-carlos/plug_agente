@@ -1,17 +1,17 @@
 ---
-description: Project-specific rules for backup_database application
+description: Project-specific rules for plug_agente application
 globs: ["lib/**/*.dart", "pubspec.yaml"]
 alwaysApply: true
 ---
 
-# Backup Database - Project Specifics
+# Plug Agente - Project Specifics
 
-**Project Type**: Desktop Application (Database Backup Utility)
+**Project Type**: Desktop Application (Windows Agent with Socket.IO + ODBC)
 **Architecture**: Clean Architecture + DDD (Domain Driven Design)
 
 ## Project Overview
 
-This is a database backup application for Windows desktop that follows Clean Architecture principles and Domain Driven Design patterns.
+Agente Windows que atua como intermediário entre um hub central e bancos de dados locais. Recebe requisições SQL via Socket.IO, executa em ODBC (SQL Server, SQL Anywhere) e retorna resultados comprimidos. Inclui Playground SQL local com streaming.
 
 ## Project Architecture
 
@@ -33,13 +33,16 @@ lib/
 │
 ├── infrastructure/      # Infrastructure Layer (Implementations)
 │   ├── datasources/     # Data sources (API, Local DB, etc.)
-│   ├── repositories/    # Repository implementations
-│   ├── external_services/  # External services (APIs, etc.)
+│   ├── pool/            # ODBC connection pool
+│   ├── builders/        # Connection string builders (odbc_fast)
+│   ├── repositories/   # Repository implementations
+│   ├── external_services/  # ODBC gateway, Socket.IO, etc.
 │   │   └── interceptors/  # HTTP interceptors (dio)
-│   └── models/          # Data models for serialization
+│   ├── compression/    # Gzip compression
+│   └── models/         # Data models for serialization
 │
 ├── presentation/        # Presentation Layer (UI)
-│   ├── pages/          # Application screens
+│   ├── pages/          # Dashboard, Playground, Config, etc.
 │   ├── widgets/        # Reusable UI components
 │   └── providers/      # Providers (state management with Provider)
 │
@@ -68,7 +71,8 @@ This project uses specific packages following clean architecture principles:
 - **Provider** - State management
 - **result_dart** - Error handling with Result pattern
 - **flutter_dotenv** - Environment variables
-- **brasil_fields** - BR formatting (if applicable)
+- **odbc_fast** - ODBC database access (connection pool, streaming)
+- **socket_io_client** - Real-time communication with hub
 
 ### Dependency Rules
 
@@ -77,6 +81,8 @@ This project uses specific packages following clean architecture principles:
 - ✅ **ALWAYS use `get_it`** for dependency injection (never Provider for DI)
 - ✅ **ALWAYS use `Provider`** for state management (never BLoC, Riverpod, GetX)
 - ✅ **ALWAYS use `result_dart`** for error handling (never Either/dartz)
+- ✅ **ALWAYS use `odbc_fast`** for ODBC database access (never odbc package)
+- ✅ **ALWAYS use `socket_io_client`** for hub communication (never raw WebSocket)
 
 ## Architecture Rules
 

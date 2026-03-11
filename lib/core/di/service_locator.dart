@@ -13,6 +13,7 @@ import 'package:plug_agente/application/use_cases/check_for_updates.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
+import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/handle_query_request.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
@@ -30,8 +31,10 @@ import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/compression/gzip_compressor.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -39,6 +42,7 @@ import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
@@ -46,14 +50,53 @@ import 'package:plug_agente/infrastructure/repositories/agent_config_drift_datab
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
+import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 final GetIt getIt = GetIt.instance;
 
 odbc.ServiceLocator _odbcLocator = odbc.ServiceLocator();
 
+/// Shutdown centralizado de todos os recursos.
+///
+/// Sequência de encerramento:
+/// 1. Desconectar transporte (WebSocket)
+/// 2. Fechar pool de conexões ODBC
+/// 3. Fechar banco local (Drift)
+/// 4. Encerrar worker ODBC
+Future<void> shutdownApp() async {
+  // 1. Desconectar transporte
+  if (getIt.isRegistered<ITransportClient>()) {
+    final transport = getIt<ITransportClient>();
+    await transport.disconnect();
+  }
+
+  // 2. Fechar pool de conexões
+  if (getIt.isRegistered<IConnectionPool>()) {
+    final pool = getIt<IConnectionPool>();
+    await pool.closeAll();
+  }
+
+  // 3. Fechar banco local
+  if (getIt.isRegistered<AppDatabase>()) {
+    final db = getIt<AppDatabase>();
+    await db.close();
+  }
+
+  // 4. Encerrar worker ODBC (synchronous)
+  _odbcLocator.shutdown();
+}
+
 Future<void> setupDependencies() async {
   _odbcLocator.initialize(useAsync: true);
+
+  final prefs = await SharedPreferences.getInstance();
+  getIt.registerSingleton<SharedPreferences>(prefs);
+
+  final odbcSettings = OdbcConnectionSettings(prefs);
+  await odbcSettings.load();
+  getIt.registerSingleton<IOdbcConnectionSettings>(odbcSettings);
 
   // External
   getIt
@@ -73,7 +116,10 @@ Future<void> setupDependencies() async {
     )
     ..registerLazySingleton(() => const Uuid())
     ..registerLazySingleton<IConnectionPool>(
-      () => OdbcConnectionPool(getIt<odbc.OdbcService>()),
+      () => OdbcConnectionPool(
+        getIt<odbc.OdbcService>(),
+        getIt<IOdbcConnectionSettings>(),
+      ),
     )
     ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
     ..registerLazySingleton(() => MetricsCollector.instance)
@@ -84,6 +130,13 @@ Future<void> setupDependencies() async {
         getIt<IConnectionPool>(),
         getIt<IRetryManager>(),
         getIt<MetricsCollector>(),
+        getIt<IOdbcConnectionSettings>(),
+      ),
+    )
+    ..registerLazySingleton<IStreamingDatabaseGateway>(
+      () => OdbcStreamingGateway(
+        getIt<odbc.OdbcService>(),
+        getIt<IOdbcConnectionSettings>(),
       ),
     )
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
@@ -139,6 +192,9 @@ Future<void> setupDependencies() async {
         getIt<IAgentConfigRepository>(),
         getIt<Uuid>(),
       ),
+    )
+    ..registerLazySingleton(
+      () => ExecuteStreamingQuery(getIt<IStreamingDatabaseGateway>()),
     )
     ..registerLazySingleton(
       () => SaveAgentConfig(

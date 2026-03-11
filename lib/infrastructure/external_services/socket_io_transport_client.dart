@@ -185,7 +185,6 @@ class SocketIOTransportClient implements ITransportClient {
         _socket!.dispose();
         _socket = null;
       }
-      await _queryRequestController.close();
       return const Success<Object, Exception>(Object());
     } on Exception catch (e) {
       return Failure(domain.NetworkFailure('Failed to disconnect: $e'));
