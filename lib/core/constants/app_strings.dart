@@ -77,6 +77,19 @@ class AppStrings {
   static const String queryTotalRecords = 'Total de registros';
   static const String queryExecutionTime = 'Tempo de execução';
   static const String queryAffectedRows = 'Linhas afetadas';
+  static const String querySqlLabel = 'Consulta SQL';
+  static const String querySqlHint = 'SELECT * FROM tabela...';
+  static const String queryActionExecute = 'Executar';
+  static const String queryActionTestConnection = 'Testar Conexão';
+  static const String queryActionClear = 'Limpar';
+  static const String queryActionCancel = 'Cancelar';
+  static const String queryConnectionStatusTitle = 'Status da Conexão';
+  static const String queryConnectionTesting = 'Testando conexão...';
+  static const String queryConnectionSuccess =
+      'Conexão estabelecida com sucesso';
+  static const String queryConnectionFailure = 'Falha na conexão';
+  static const String queryCancelledByUser = 'Query cancelada pelo usuário';
+  static const String queryStreamingErrorPrefix = 'Erro no streaming';
 
   // Dashboard
   static const String dashboardDescription =

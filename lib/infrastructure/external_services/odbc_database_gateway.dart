@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -40,6 +41,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final MetricsCollector _metrics;
   final Uuid _uuid;
   bool _initialized = false;
+
+  /// Default connection options for ODBC operations.
+  static const ConnectionOptions _defaultConnectionOptions = ConnectionOptions(
+    loginTimeout: ConnectionConstants.defaultLoginTimeout,
+    queryTimeout: ConnectionConstants.defaultQueryTimeout,
+    maxResultBufferBytes: ConnectionConstants.defaultMaxResultBufferBytes,
+    initialResultBufferBytes:
+        ConnectionConstants.defaultInitialResultBufferBytes,
+    autoReconnectOnConnectionLost: true,
+    maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+    reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+  );
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -97,17 +110,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  QueryResponse _createErrorResponse(QueryRequest request, String error) {
-    return QueryResponse(
-      id: _uuid.v4(),
-      requestId: request.id,
-      agentId: request.agentId,
-      data: [],
-      timestamp: DateTime.now(),
-      error: error,
-    );
-  }
-
   @override
   Future<Result<bool>> testConnection(String connectionString) async {
     final initResult = await _ensureInitialized();
@@ -121,6 +123,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
       final connResult = await _service.connect(
         connectionString,
+        options: _defaultConnectionOptions,
       );
 
       return connResult.fold(
@@ -159,16 +162,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
             return _executeQueryWithRetry(request, connectionString);
           },
-          (domainFailure) {
-            return Success(
-              _createErrorResponse(request, domainFailure.toString()),
-            );
-          },
+          (domainFailure) => Failure(
+            domain.ConfigurationFailure(
+              'Failed to load database configuration: $domainFailure',
+            ),
+          ),
         );
       },
-      (error) {
-        return Success(_createErrorResponse(request, error.toString()));
-      },
+      (error) => Failure(
+        domain.ConnectionFailure('ODBC initialization failed: $error'),
+      ),
     );
   }
 
@@ -204,16 +207,54 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     final poolResult = await _connectionPool.acquire(connectionString);
 
-    if (poolResult.isSuccess()) {
-      final connId = poolResult.getOrNull()!;
+    if (poolResult.isError()) {
+      stopwatch.stop();
+      final error = poolResult.exceptionOrNull()!;
 
-      final queryResult = await _service.executeQueryParams(
-        connId,
-        request.query,
-        [],
+      developer.log(
+        'Failed to acquire connection for query ${request.id}',
+        name: 'database_gateway',
+        level: 1000,
+        error: error,
       );
 
-      await _connectionPool.release(connId);
+      _metrics.recordFailure(
+        queryId: request.id,
+        query: request.query,
+        executionDuration: stopwatch.elapsed,
+        errorMessage: _odbcErrorMessage(error),
+      );
+
+      return Failure(domain.ConnectionFailure(_odbcErrorMessage(error)));
+    }
+
+    final connId = poolResult.getOrNull()!;
+
+    try {
+      // Use named parameters if available, otherwise execute without params
+      final queryResult =
+          request.parameters != null && request.parameters!.isNotEmpty
+          ? await _service.executeQueryNamed(
+              connId,
+              request.query,
+              request.parameters!,
+            )
+          : await _service.executeQuery(
+              request.query,
+              connectionId: connId,
+            );
+
+      if (queryResult.isError()) {
+        final error = queryResult.exceptionOrNull()!;
+        if (_isInvalidConnectionIdError(error)) {
+          developer.log(
+            'Pool returned invalid connection id ($connId), falling back to direct connection',
+            name: 'database_gateway',
+            level: 900,
+          );
+          return _executeQueryWithoutPool(request, connectionString, stopwatch);
+        }
+      }
 
       return queryResult.fold(
         (qr) {
@@ -258,26 +299,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
         },
       );
-    } else {
-      stopwatch.stop();
-
-      final error = poolResult.exceptionOrNull()!;
-
-      developer.log(
-        'Failed to acquire connection for query ${request.id}',
-        name: 'database_gateway',
-        level: 1000,
-        error: error,
-      );
-
-      _metrics.recordFailure(
-        queryId: request.id,
-        query: request.query,
-        executionDuration: stopwatch.elapsed,
-        errorMessage: _odbcErrorMessage(error),
-      );
-
-      return Failure(domain.ConnectionFailure(_odbcErrorMessage(error)));
+    } finally {
+      // Always release connection back to pool, even if query fails
+      await _releaseConnectionSafely(connId);
     }
   }
 
@@ -334,27 +358,193 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   ) async {
     final poolResult = await _connectionPool.acquire(connectionString);
 
-    return poolResult.fold(
-      (connId) async {
-        final result = parameters != null && parameters.isNotEmpty
-            ? await _service.executeQueryParams(
-                connId,
-                query,
-                _paramsToList(parameters),
-              )
-            : await _service.executeQuery(connId, query);
+    if (poolResult.isError()) {
+      return Failure(
+        domain.ConnectionFailure(
+          _odbcErrorMessage(poolResult.exceptionOrNull()!),
+        ),
+      );
+    }
 
-        await _connectionPool.release(connId);
+    final connId = poolResult.getOrNull()!;
 
-        return result.fold(
-          (queryResult) => Success(queryResult.rowCount),
-          (error) => Failure(
-            domain.QueryExecutionFailure(_odbcErrorMessage(error)),
-          ),
+    try {
+      // Use named parameters if available
+      final result = parameters != null && parameters.isNotEmpty
+          ? await _service.executeQueryNamed(
+              connId,
+              query,
+              parameters,
+            )
+          : await _service.executeQuery(
+              query,
+              connectionId: connId,
+            );
+
+      if (result.isError()) {
+        final error = result.exceptionOrNull()!;
+        if (_isInvalidConnectionIdError(error)) {
+          developer.log(
+            'Pool returned invalid connection id ($connId) for non-query, falling back to direct connection',
+            name: 'database_gateway',
+            level: 900,
+          );
+          return _executeNonQueryWithoutPool(
+            query,
+            parameters,
+            connectionString,
+          );
+        }
+      }
+
+      return result.fold(
+        (queryResult) => Success(queryResult.rowCount),
+        (error) => Failure(
+          domain.QueryExecutionFailure(_odbcErrorMessage(error)),
+        ),
+      );
+    } finally {
+      // Always release connection back to pool
+      await _releaseConnectionSafely(connId);
+    }
+  }
+
+  Future<Result<QueryResponse>> _executeQueryWithoutPool(
+    QueryRequest request,
+    String connectionString,
+    Stopwatch stopwatch,
+  ) async {
+    final connectResult = await _service.connect(
+      connectionString,
+      options: _defaultConnectionOptions,
+    );
+
+    return connectResult.fold(
+      (connection) async {
+        try {
+          final queryResult =
+              request.parameters != null && request.parameters!.isNotEmpty
+              ? await _service.executeQueryNamed(
+                  connection.id,
+                  request.query,
+                  request.parameters!,
+                )
+              : await _service.executeQuery(
+                  request.query,
+                  connectionId: connection.id,
+                );
+
+          return queryResult.fold(
+            (qr) {
+              final response = _createSuccessResponse(request, qr);
+              stopwatch.stop();
+              _metrics.recordSuccess(
+                queryId: request.id,
+                query: request.query,
+                executionDuration: stopwatch.elapsed,
+                rowsAffected: response.affectedRows ?? 0,
+                columnCount: response.columnMetadata?.length ?? 0,
+              );
+              return Success(response);
+            },
+            (error) {
+              stopwatch.stop();
+              _metrics.recordFailure(
+                queryId: request.id,
+                query: request.query,
+                executionDuration: stopwatch.elapsed,
+                errorMessage: _odbcErrorMessage(error),
+              );
+              return Failure(
+                domain.QueryExecutionFailure(_odbcErrorMessage(error)),
+              );
+            },
+          );
+        } finally {
+          await _service.disconnect(connection.id);
+        }
+      },
+      (error) {
+        stopwatch.stop();
+        _metrics.recordFailure(
+          queryId: request.id,
+          query: request.query,
+          executionDuration: stopwatch.elapsed,
+          errorMessage: _odbcErrorMessage(error),
         );
+        return Failure(domain.ConnectionFailure(_odbcErrorMessage(error)));
+      },
+    );
+  }
+
+  Future<Result<int>> _executeNonQueryWithoutPool(
+    String query,
+    Map<String, dynamic>? parameters,
+    String connectionString,
+  ) async {
+    final connectResult = await _service.connect(
+      connectionString,
+      options: _defaultConnectionOptions,
+    );
+
+    return connectResult.fold(
+      (connection) async {
+        try {
+          final result = parameters != null && parameters.isNotEmpty
+              ? await _service.executeQueryNamed(
+                  connection.id,
+                  query,
+                  parameters,
+                )
+              : await _service.executeQuery(
+                  query,
+                  connectionId: connection.id,
+                );
+
+          return result.fold(
+            (queryResult) => Success(queryResult.rowCount),
+            (error) => Failure(
+              domain.QueryExecutionFailure(_odbcErrorMessage(error)),
+            ),
+          );
+        } finally {
+          await _service.disconnect(connection.id);
+        }
       },
       (error) => Failure(domain.ConnectionFailure(_odbcErrorMessage(error))),
     );
+  }
+
+  Future<void> _releaseConnectionSafely(String connectionId) async {
+    final releaseResult = await _connectionPool.release(connectionId);
+    if (releaseResult.isSuccess()) {
+      return;
+    }
+
+    final releaseError = releaseResult.exceptionOrNull()!;
+    developer.log(
+      'Failed to release pooled connection: $connectionId',
+      name: 'database_gateway',
+      level: 900,
+      error: releaseError,
+    );
+  }
+
+  bool _isInvalidConnectionIdError(Object error) {
+    if (error is ValidationError) {
+      final message = error.message.toLowerCase();
+      return message.contains('invalid connection id');
+    }
+
+    if (error is ConnectionError) {
+      if (error.nativeCode == 100000) {
+        return true;
+      }
+      final message = error.message.toLowerCase();
+      return message.contains('invalid connection id');
+    }
+
+    return false;
   }
 
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {
@@ -374,9 +564,5 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
       return map;
     }).toList();
-  }
-
-  List<dynamic> _paramsToList(Map<String, dynamic> params) {
-    return params.values.toList();
   }
 }

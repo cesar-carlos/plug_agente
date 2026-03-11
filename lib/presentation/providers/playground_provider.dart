@@ -1,21 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
+import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 
 class PlaygroundProvider extends ChangeNotifier {
-  PlaygroundProvider(this._executePlaygroundQuery, this._testDbConnection);
+  PlaygroundProvider(
+    this._executePlaygroundQuery,
+    this._testDbConnection,
+    this._executeStreamingQuery,
+  );
   final ExecutePlaygroundQuery _executePlaygroundQuery;
   final TestDbConnection _testDbConnection;
+  final ExecuteStreamingQuery _executeStreamingQuery;
 
   String _query = '';
   List<Map<String, dynamic>> _results = [];
   bool _isLoading = false;
   String? _error;
   String? _connectionStatus;
+  bool? _isConnectionStatusSuccess;
   Duration? _executionDuration;
   int? _affectedRows;
   List<Map<String, dynamic>>? _columnMetadata;
@@ -25,12 +35,19 @@ class PlaygroundProvider extends ChangeNotifier {
   bool _isStreaming = false;
   int _rowsProcessed = 0;
   double _progress = 0;
+  DateTime _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  static const Duration _streamingUiUpdateInterval = Duration(
+    milliseconds: 200,
+  );
+  static const int _progressEstimateOffset = 100;
 
   String get query => _query;
   List<Map<String, dynamic>> get results => _results;
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get connectionStatus => _connectionStatus;
+  bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
   int? get affectedRows => _affectedRows;
   List<Map<String, dynamic>>? get columnMetadata => _columnMetadata;
@@ -97,19 +114,22 @@ class PlaygroundProvider extends ChangeNotifier {
 
   Future<void> testConnection(Config config) async {
     _clearError();
-    _connectionStatus = 'Testando conexão...';
+    _connectionStatus = AppStrings.queryConnectionTesting;
+    _isConnectionStatusSuccess = null;
     notifyListeners();
 
     final result = await _testDbConnection(config.connectionString);
 
     result.fold(
       (_) {
-        _connectionStatus = 'Conexão estabelecida com sucesso';
+        _connectionStatus = AppStrings.queryConnectionSuccess;
+        _isConnectionStatusSuccess = true;
       },
       (failure) {
         _error = failure.toDisplayMessage();
         AppLogger.error('Failed to test connection: ${_error ?? failure}');
-        _connectionStatus = 'Falha na conexão';
+        _connectionStatus = AppStrings.queryConnectionFailure;
+        _isConnectionStatusSuccess = false;
       },
     );
 
@@ -125,6 +145,7 @@ class PlaygroundProvider extends ChangeNotifier {
     String connectionString,
   ) async {
     _clearError();
+    _cancellationToken.reset();
     _isLoading = true;
     _isStreaming = true;
     _rowsProcessed = 0;
@@ -133,27 +154,53 @@ class PlaygroundProvider extends ChangeNotifier {
     _affectedRows = null;
     _columnMetadata = null;
     _progress = 0.0;
+    _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Este método seria implementado com ExecuteStreamingQuery
-      // Por enquanto, mantemos a implementação padrão
-      // TODO: Implementar streaming completo quando necessário
-      await executeQuery();
+      // Executar streaming real com chunks incrementais
+      final result = await _executeStreamingQuery(
+        query,
+        connectionString,
+        (chunk) {
+          // Callback chamado para cada chunk recebido
+          _results.addAll(chunk);
+          _rowsProcessed += chunk.length;
+          _affectedRows = _rowsProcessed;
 
-      _isStreaming = false;
-      _progress = 1.0;
+          // Atualizar progresso (estimativa simples)
+          _progress =
+              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+
+          _notifyStreamingProgressIfNeeded();
+        },
+      );
+
+      result.fold(
+        (_) {
+          _isStreaming = false;
+          _progress = 1.0;
+        },
+        (failure) {
+          _error = failure.toDisplayMessage();
+          _isStreaming = false;
+          AppLogger.error('Streaming query failed: $_error');
+        },
+      );
+
       notifyListeners();
     } on Exception catch (e) {
       _isLoading = false;
       _isStreaming = false;
-      _error = 'Erro no streaming: $e';
+      _error = '${AppStrings.queryStreamingErrorPrefix}: $e';
+      AppLogger.error('Streaming exception: $e');
       notifyListeners();
     } finally {
       stopwatch.stop();
       _executionDuration = stopwatch.elapsed;
+      _isLoading = false;
     }
   }
 
@@ -164,6 +211,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _executionDuration = null;
     _affectedRows = null;
     _connectionStatus = null;
+    _isConnectionStatusSuccess = null;
     _columnMetadata = null;
     _isStreaming = false;
     _rowsProcessed = 0;
@@ -176,10 +224,24 @@ class PlaygroundProvider extends ChangeNotifier {
   void cancelQuery() {
     if (_isLoading) {
       _cancellationToken.cancel();
+      unawaited(_executeStreamingQuery.cancelActiveStream());
       _isLoading = false;
-      _error = 'Query cancelada pelo usuário';
+      _isStreaming = false;
+      _error = AppStrings.queryCancelledByUser;
       notifyListeners();
     }
+  }
+
+  void _notifyStreamingProgressIfNeeded() {
+    final now = DateTime.now();
+    final shouldNotify =
+        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    if (!shouldNotify) {
+      return;
+    }
+
+    _lastStreamingNotifyAt = now;
+    notifyListeners();
   }
 
   void _clearError() {

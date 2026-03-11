@@ -1,4 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/shared/widgets/common/centered_message.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
@@ -15,8 +17,8 @@ class QueryResultDataGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     if (data.isEmpty) {
       return const CenteredMessage(
-        title: 'Nenhum resultado',
-        message: 'A consulta não retornou dados.',
+        title: AppStrings.queryNoResults,
+        message: AppStrings.queryNoResultsMessage,
         icon: FluentIcons.table,
       );
     }
@@ -45,7 +47,7 @@ class QueryResultDataGrid extends StatelessWidget {
         columnName: key,
         width: columnWidth,
         label: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.sm),
           alignment: Alignment.center,
           child: Text(
             metadata?['name'] as String? ?? key,
@@ -151,7 +153,7 @@ class _QueryDataSource extends DataGridSource {
     return DataGridRowAdapter(
       cells: row.getCells().map((cell) {
         return Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.sm),
           alignment: Alignment.centerLeft,
           child: Text(
             cell.value?.toString() ?? '',

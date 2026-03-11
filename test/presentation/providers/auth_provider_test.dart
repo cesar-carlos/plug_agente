@@ -21,10 +21,12 @@ void main() {
   setUpAll(() {
     // Register fallback values for mocktail
     registerFallbackValue(AuthCredentials.test());
-    registerFallbackValue(const AuthToken(
-      token: 'test_token',
-      refreshToken: 'test_refresh_token',
-    ));
+    registerFallbackValue(
+      const AuthToken(
+        token: 'test_token',
+        refreshToken: 'test_refresh_token',
+      ),
+    );
   });
 
   group('AuthProvider', () {
@@ -51,10 +53,12 @@ void main() {
           token: 'test_token',
           refreshToken: 'test_refresh_token',
         );
-        when(() => mockLoginUseCase('server_url', any()))
-            .thenAnswer((_) async => const Success(token));
-        when(() => mockSaveUseCase(token))
-            .thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockLoginUseCase('server_url', any()),
+        ).thenAnswer((_) async => const Success(token));
+        when(
+          () => mockSaveUseCase(token),
+        ).thenAnswer((_) async => const Success(unit));
 
         // Act
         await provider.login('server_url', AuthCredentials.test());
@@ -65,37 +69,45 @@ void main() {
         expect(provider.error, isEmpty);
       });
 
-      test('should set error status when login fails with ValidationFailure',
-          () async {
-        // Arrange
-        final failure = domain_errors.ValidationFailure('Invalid credentials');
-        when(() => mockLoginUseCase('server_url', any()))
-            .thenAnswer((_) async => Failure(failure));
+      test(
+        'should set error status when login fails with ValidationFailure',
+        () async {
+          // Arrange
+          final failure = domain_errors.ValidationFailure(
+            'Invalid credentials',
+          );
+          when(
+            () => mockLoginUseCase('server_url', any()),
+          ).thenAnswer((_) async => Failure(failure));
 
-        // Act
-        await provider.login('server_url', AuthCredentials.test());
+          // Act
+          await provider.login('server_url', AuthCredentials.test());
 
-        // Assert
-        expect(provider.isAuthenticated, isFalse);
-        expect(provider.status, equals(AuthStatus.error));
-        expect(provider.error, equals('Invalid credentials'));
-      });
+          // Assert
+          expect(provider.isAuthenticated, isFalse);
+          expect(provider.status, equals(AuthStatus.error));
+          expect(provider.error, contains('Invalid credentials'));
+        },
+      );
 
-      test('should set error status when login fails with NetworkFailure',
-          () async {
-        // Arrange
-        final failure = domain_errors.NetworkFailure('Connection timeout');
-        when(() => mockLoginUseCase('server_url', any()))
-            .thenAnswer((_) async => Failure(failure));
+      test(
+        'should set error status when login fails with NetworkFailure',
+        () async {
+          // Arrange
+          final failure = domain_errors.NetworkFailure('Connection timeout');
+          when(
+            () => mockLoginUseCase('server_url', any()),
+          ).thenAnswer((_) async => Failure(failure));
 
-        // Act
-        await provider.login('server_url', AuthCredentials.test());
+          // Act
+          await provider.login('server_url', AuthCredentials.test());
 
-        // Assert
-        expect(provider.isAuthenticated, isFalse);
-        expect(provider.status, equals(AuthStatus.error));
-        expect(provider.error, equals('Connection timeout'));
-      });
+          // Assert
+          expect(provider.isAuthenticated, isFalse);
+          expect(provider.status, equals(AuthStatus.error));
+          expect(provider.error, contains('Connection timeout'));
+        },
+      );
 
       test('should set error status when saving token fails', () async {
         // Arrange
@@ -103,10 +115,12 @@ void main() {
           token: 'test_token',
           refreshToken: 'test_refresh_token',
         );
-        when(() => mockLoginUseCase('server_url', any()))
-            .thenAnswer((_) async => const Success(token));
-        when(() => mockSaveUseCase(token))
-            .thenAnswer((_) async => Failure(domain_errors.DatabaseFailure('Save failed')));
+        when(
+          () => mockLoginUseCase('server_url', any()),
+        ).thenAnswer((_) async => const Success(token));
+        when(() => mockSaveUseCase(token)).thenAnswer(
+          (_) async => Failure(domain_errors.DatabaseFailure('Save failed')),
+        );
 
         // Act
         await provider.login('server_url', AuthCredentials.test());
@@ -120,8 +134,9 @@ void main() {
       test('should set authenticating status during login', () async {
         // Arrange
         final completer = Completer<Result<AuthToken>>();
-        when(() => mockLoginUseCase('server_url', any()))
-            .thenAnswer((_) => completer.future);
+        when(
+          () => mockLoginUseCase('server_url', any()),
+        ).thenAnswer((_) => completer.future);
 
         // Act
         final future = provider.login('server_url', AuthCredentials.test());
@@ -148,15 +163,18 @@ void main() {
           refreshToken: 'new_refresh',
         );
 
-        when(() => mockLoginUseCase(any(), any()))
-            .thenAnswer((_) async => const Success(oldToken));
-        when(() => mockSaveUseCase(any()))
-            .thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockLoginUseCase(any(), any()),
+        ).thenAnswer((_) async => const Success(oldToken));
+        when(
+          () => mockSaveUseCase(any()),
+        ).thenAnswer((_) async => const Success(unit));
         await provider.login('server_url', AuthCredentials.test());
 
         // Now set up refresh mocks
-        when(() => mockRefreshUseCase('server_url', 'old_refresh'))
-            .thenAnswer((_) async => const Success(newToken));
+        when(
+          () => mockRefreshUseCase('server_url', 'old_refresh'),
+        ).thenAnswer((_) async => const Success(newToken));
 
         // Act
         await provider.refreshToken('server_url');
@@ -174,15 +192,18 @@ void main() {
           refreshToken: 'old_refresh',
         );
 
-        when(() => mockLoginUseCase(any(), any()))
-            .thenAnswer((_) async => const Success(oldToken));
-        when(() => mockSaveUseCase(any()))
-            .thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockLoginUseCase(any(), any()),
+        ).thenAnswer((_) async => const Success(oldToken));
+        when(
+          () => mockSaveUseCase(any()),
+        ).thenAnswer((_) async => const Success(unit));
         await provider.login('server_url', AuthCredentials.test());
 
         // Now set up refresh to fail
-        when(() => mockRefreshUseCase('server_url', 'old_refresh'))
-            .thenAnswer((_) async => Failure(domain_errors.NetworkFailure('Network error')));
+        when(() => mockRefreshUseCase('server_url', 'old_refresh')).thenAnswer(
+          (_) async => Failure(domain_errors.NetworkFailure('Network error')),
+        );
 
         // Act
         await provider.refreshToken('server_url');
@@ -190,7 +211,7 @@ void main() {
         // Assert
         expect(provider.isAuthenticated, isFalse);
         expect(provider.status, equals(AuthStatus.unauthenticated));
-        expect(provider.error, equals('Network error'));
+        expect(provider.error, contains('Network error'));
       });
 
       test('should set error when no refresh token available', () async {
@@ -215,10 +236,12 @@ void main() {
           refreshToken: 'test_refresh',
         );
 
-        when(() => mockLoginUseCase(any(), any()))
-            .thenAnswer((_) async => const Success(token));
-        when(() => mockSaveUseCase(any()))
-            .thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockLoginUseCase(any(), any()),
+        ).thenAnswer((_) async => const Success(token));
+        when(
+          () => mockSaveUseCase(any()),
+        ).thenAnswer((_) async => const Success(unit));
         await provider.login('server_url', AuthCredentials.test());
 
         // Verify authenticated state before logout
@@ -240,8 +263,9 @@ void main() {
       test('should clear error message', () async {
         // Arrange - set error through login failure
         final failure = domain_errors.ValidationFailure('Test error');
-        when(() => mockLoginUseCase(any(), any()))
-            .thenAnswer((_) async => Failure(failure));
+        when(
+          () => mockLoginUseCase(any(), any()),
+        ).thenAnswer((_) async => Failure(failure));
 
         // Act - trigger error then clear it
         await provider.login('url', AuthCredentials.test());

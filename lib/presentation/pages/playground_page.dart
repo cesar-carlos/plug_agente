@@ -64,7 +64,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     final navigatorContext = Navigator.of(context, rootNavigator: true).context;
     MessageModal.show<void>(
       context: navigatorContext,
-      title: 'Status da Conexão',
+      title: AppStrings.queryConnectionStatusTitle,
       message: status,
       type: isSuccess ? MessageType.success : MessageType.error,
     );
@@ -94,10 +94,13 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     if (!mounted) return;
 
     final connectionStatus = provider.connectionStatus;
+    final isConnectionStatusSuccess = provider.isConnectionStatusSuccess;
     final error = provider.error;
-    if (connectionStatus != null) {
-      final isSuccess = connectionStatus.contains('sucesso');
-      _showConnectionStatusModal(connectionStatus, isSuccess);
+    if (connectionStatus != null && isConnectionStatusSuccess != null) {
+      _showConnectionStatusModal(
+        connectionStatus,
+        isConnectionStatusSuccess,
+      );
     } else if (error != null) {
       _showErrorModal(error);
     }
@@ -147,7 +150,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Playground Database')),
+      header: const PageHeader(title: Text(AppStrings.titlePlayground)),
       content: Consumer2<PlaygroundProvider, ConfigProvider>(
         builder: (context, playgroundProvider, configProvider, _) {
           final config = configProvider.currentConfig;

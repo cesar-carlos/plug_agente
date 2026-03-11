@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
+  final shouldRunLiveApiTests =
+      Platform.environment['RUN_LIVE_API_TESTS'] == 'true';
+
   group('API Test - GET http://31.97.29.223:3000/', () {
     late http.Client client;
 
@@ -13,20 +18,24 @@ void main() {
       client.close();
     });
 
-    test('should successfully connect to production server', () async {
-      // Arrange
-      const url = 'http://31.97.29.223:3000/';
+    test(
+      'should successfully connect to production server',
+      () async {
+        // Arrange
+        const url = 'http://31.97.29.223:3000/';
 
-      // Act & Assert
-      try {
-        final response = await client.get(Uri.parse(url));
+        // Act & Assert
+        try {
+          final response = await client.get(Uri.parse(url));
 
-        expect(response.statusCode, isNotNull);
-        expect(response.statusCode, isA<int>());
-      } catch (e) {
-        rethrow;
-      }
-    });
+          expect(response.statusCode, isNotNull);
+          expect(response.statusCode, isA<int>());
+        } catch (e) {
+          rethrow;
+        }
+      },
+      skip: !shouldRunLiveApiTests,
+    );
 
     test('should handle connection timeout gracefully', () async {
       // Arrange
@@ -44,7 +53,7 @@ void main() {
       } finally {
         clientWithTimeout.close();
       }
-    });
+    }, skip: !shouldRunLiveApiTests);
 
     test('should include proper headers in request', () async {
       // Arrange
@@ -64,7 +73,7 @@ void main() {
       } on Exception {
         // Request failed, but we're just testing the configuration
       }
-    });
+    }, skip: !shouldRunLiveApiTests);
 
     test(
       'should handle different endpoints correctly',
@@ -83,6 +92,7 @@ void main() {
         }
       },
       timeout: const Timeout(Duration(seconds: 15)),
+      skip: !shouldRunLiveApiTests,
     );
   });
 }

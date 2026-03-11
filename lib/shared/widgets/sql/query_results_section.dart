@@ -4,6 +4,7 @@ import 'package:plug_agente/core/theme/app_colors.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/shared/widgets/common/centered_message.dart';
 import 'package:plug_agente/shared/widgets/sql/query_result_data_grid.dart';
+import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
 class QueryResultsSection extends StatelessWidget {
   const QueryResultsSection({
@@ -56,10 +57,10 @@ class QueryResultsSection extends StatelessWidget {
                   context,
                 ).resources.controlStrokeColorDefault,
               ),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: SqlVisualIdentity.panelBorderRadius,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: SqlVisualIdentity.panelBorderRadius,
               child: QueryResultDataGrid(
                 data: results,
                 columnMetadata: columnMetadata,
@@ -106,28 +107,27 @@ class _QueryResultsFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(FluentIcons.table, size: 16),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '${AppStrings.queryTotalRecords}: $totalRecords',
-            style: theme.typography.body,
+          _ResultMetric(
+            icon: FluentIcons.table,
+            text: '${AppStrings.queryTotalRecords}: $totalRecords',
+            textStyle: theme.typography.body,
           ),
           if (executionDuration != null) ...[
             const SizedBox(width: AppSpacing.lg),
-            const Icon(FluentIcons.clock, size: 16),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              '${AppStrings.queryExecutionTime}: ${_formatDuration(executionDuration!)}',
-              style: theme.typography.body,
+            _ResultMetric(
+              icon: FluentIcons.clock,
+              text:
+                  '${AppStrings.queryExecutionTime}: '
+                  '${_formatDuration(executionDuration!)}',
+              textStyle: theme.typography.body,
             ),
           ],
           if (affectedRows != null && affectedRows != totalRecords) ...[
             const SizedBox(width: AppSpacing.lg),
-            const Icon(FluentIcons.edit, size: 16),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              '${AppStrings.queryAffectedRows}: $affectedRows',
-              style: theme.typography.body,
+            _ResultMetric(
+              icon: FluentIcons.edit,
+              text: '${AppStrings.queryAffectedRows}: $affectedRows',
+              textStyle: theme.typography.body,
             ),
           ],
         ],
@@ -150,6 +150,30 @@ class _QueryResultsFooter extends StatelessWidget {
       final seconds = duration.inSeconds % 60;
       return '${minutes}m ${seconds}s';
     }
+  }
+}
+
+class _ResultMetric extends StatelessWidget {
+  const _ResultMetric({
+    required this.icon,
+    required this.text,
+    this.textStyle,
+  });
+
+  final IconData icon;
+  final String text;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16),
+        const SizedBox(width: AppSpacing.sm),
+        Text(text, style: textStyle),
+      ],
+    );
   }
 }
 

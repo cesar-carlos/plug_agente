@@ -1,6 +1,8 @@
-import 'package:flutter/widgets.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/shared/widgets/common/common.dart';
+import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
 class SqlEditor extends StatelessWidget {
   const SqlEditor({super.key, this.controller, this.onChanged, this.validator});
@@ -10,14 +12,24 @@ class SqlEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppTextField(
-      label: 'Consulta SQL',
-      hint: 'SELECT * FROM tabela...',
-      controller: controller,
-      onChanged: onChanged,
-      validator: validator,
-      maxLines: 10,
-      keyboardType: TextInputType.multiline,
+    return Container(
+      padding: SqlVisualIdentity.panelPadding,
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
+        border: Border.all(
+          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+        ),
+        borderRadius: SqlVisualIdentity.panelBorderRadius,
+      ),
+      child: AppTextField(
+        label: AppStrings.querySqlLabel,
+        hint: AppStrings.querySqlHint,
+        controller: controller,
+        onChanged: onChanged,
+        validator: validator,
+        maxLines: 10,
+        keyboardType: TextInputType.multiline,
+      ),
     );
   }
 }
