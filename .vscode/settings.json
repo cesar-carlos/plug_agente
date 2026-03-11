@@ -9,11 +9,15 @@
   "editor.wordWrap": "off",
   "editor.formatOnSave": true,
 
+    // Explorer settings
+    "explorer.compactFolders": false,
+
   // Debug settings
   "debug.toolBarLocation": "commandCenter",
 
   // Dart-specific formatting
   "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
     "editor.formatOnSave": true,
     "editor.formatOnType": true,
     "editor.rulers": [120],

@@ -1,15 +1,17 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/config_navigation_tabs.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
-import 'package:plug_agente/shared/widgets/common/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:provider/provider.dart';
 
 class ConfigPage extends StatefulWidget {
@@ -37,13 +39,21 @@ class _ConfigPageState extends State<ConfigPage> {
   ConnectionProvider? _connectionProvider;
   ConfigProvider? _configProvider;
   late final ConfigFormController _formController;
+  bool _isDarkThemeEnabled = true;
+  bool _startWithWindows = true;
+  bool _startMinimized = false;
+  bool _minimizeToTray = true;
+  bool _closeToTray = true;
+  String _lastUpdateCheck = 'Nunca verificado';
 
   @override
   void initState() {
     super.initState();
     _currentPage = widget.initialTab == 'websocket'
-        ? 1
-        : (widget.initialTab == 'advanced' ? 2 : 0);
+        ? 2
+        : (widget.initialTab == 'advanced'
+              ? 3
+              : (widget.initialTab == 'database' ? 1 : 0));
     _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.configId != null) {
@@ -209,6 +219,17 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
+  void _checkUpdates() {
+    MessageModal.show<void>(
+      context: context,
+      title: 'Atualizações',
+      message:
+          'A verificação automática de atualizações será implementada '
+          'na próxima etapa.',
+      confirmText: 'OK',
+    );
+  }
+
   void _checkAndInitializeFields() {
     if (!mounted) return;
     final configProvider = Provider.of<ConfigProvider>(context, listen: false);
@@ -239,223 +260,264 @@ class _ConfigPageState extends State<ConfigPage> {
     final connectionProvider = context.read<ConnectionProvider>();
 
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Configurações - Plug Database')),
+      header: PageHeader(
+        title: Text(
+          'Configurações',
+          style: context.sectionTitle,
+        ),
+      ),
       content: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        child: Column(
-          children: [
-            ConfigNavigationTabs(
-              currentPage: _currentPage,
-              onDatabaseTabTap: () => setState(() => _currentPage = 0),
-              onWebSocketTabTap: () => setState(() => _currentPage = 1),
-              onAdvancedTabTap: () => setState(() => _currentPage = 2),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _currentPage == 0
-                  ? DatabaseConfigSection(
-                      formController: _formController,
-                      configProvider: configProvider,
-                      connectionProvider: connectionProvider,
-                      onDriverChanged: (value) {
-                        setState(() {
-                          configProvider.updateDriverName(value);
-                          final currentOdbcName =
-                              _formController.odbcDriverNameController.text;
+        padding: AppLayout.pagePadding(context),
+        child: AppLayout.centeredContent(
+          maxWidth: AppLayout.maxSettingsWidth,
+          child: Column(
+            children: [
+              ConfigNavigationTabs(
+                currentPage: _currentPage,
+                onGeneralTabTap: () => setState(() => _currentPage = 0),
+                onDatabaseTabTap: () => setState(() => _currentPage = 1),
+                onWebSocketTabTap: () => setState(() => _currentPage = 2),
+                onAdvancedTabTap: () => setState(() => _currentPage = 3),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _currentPage == 0
+                    ? GeneralConfigSection(
+                        isDarkThemeEnabled: _isDarkThemeEnabled,
+                        startWithWindows: _startWithWindows,
+                        startMinimized: _startMinimized,
+                        minimizeToTray: _minimizeToTray,
+                        closeToTray: _closeToTray,
+                        lastUpdateCheck: _lastUpdateCheck,
+                        onDarkThemeChanged: (value) {
+                          setState(() => _isDarkThemeEnabled = value);
+                        },
+                        onStartWithWindowsChanged: (value) {
+                          setState(() => _startWithWindows = value);
+                        },
+                        onStartMinimizedChanged: (value) {
+                          setState(() => _startMinimized = value);
+                        },
+                        onMinimizeToTrayChanged: (value) {
+                          setState(() => _minimizeToTray = value);
+                        },
+                        onCloseToTrayChanged: (value) {
+                          setState(() => _closeToTray = value);
+                        },
+                        onCheckUpdates: () {
+                          setState(
+                            () => _lastUpdateCheck = 'Verificação manual',
+                          );
+                          _checkUpdates();
+                        },
+                      )
+                    : _currentPage == 1
+                    ? DatabaseConfigSection(
+                        formController: _formController,
+                        configProvider: configProvider,
+                        connectionProvider: connectionProvider,
+                        onDriverChanged: (value) {
+                          setState(() {
+                            configProvider.updateDriverName(value);
+                            final currentOdbcName =
+                                _formController.odbcDriverNameController.text;
 
-                          if (OdbcDrivers.isDefaultSuggestion(
-                            currentOdbcName,
-                          )) {
-                            final suggestion = OdbcDrivers.getDefaultDriver(
-                              value,
-                            );
-                            if (suggestion.isNotEmpty) {
-                              _formController.odbcDriverNameController.text =
-                                  suggestion;
-                              configProvider.updateOdbcDriverName(suggestion);
+                            if (OdbcDrivers.isDefaultSuggestion(
+                              currentOdbcName,
+                            )) {
+                              final suggestion = OdbcDrivers.getDefaultDriver(
+                                value,
+                              );
+                              if (suggestion.isNotEmpty) {
+                                _formController.odbcDriverNameController.text =
+                                    suggestion;
+                                configProvider.updateOdbcDriverName(suggestion);
+                              }
                             }
+                          });
+                        },
+                        onTestConnection: () async {
+                          final odbcDriverName = _formController
+                              .odbcDriverNameController
+                              .text
+                              .trim();
+                          if (odbcDriverName.isEmpty) {
+                            MessageModal.show<void>(
+                              context: context,
+                              title: 'Erro',
+                              message: 'Nome do Driver ODBC é obrigatório',
+                              type: MessageType.error,
+                              confirmText: 'OK',
+                            );
+                            return;
                           }
-                        });
-                      },
-                      onTestConnection: () async {
-                        final odbcDriverName = _formController
-                            .odbcDriverNameController
-                            .text
-                            .trim();
-                        if (odbcDriverName.isEmpty) {
-                          MessageModal.show<void>(
-                            context: context,
-                            title: 'Erro',
-                            message: 'Nome do Driver ODBC é obrigatório',
-                            type: MessageType.error,
-                            confirmText: 'OK',
-                          );
-                          return;
-                        }
 
-                        final driverCheckResult = await connectionProvider
-                            .checkOdbcDriver(odbcDriverName);
-                        await driverCheckResult.fold(
-                          (isInstalled) async {
-                            if (!isInstalled) {
-                              MessageModal.show<void>(
-                                context: context,
-                                title: 'Driver Não Encontrado',
-                                message:
-                                    'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de testar a conexão.',
-                                type: MessageType.error,
-                                confirmText: 'OK',
-                              );
-                              return;
-                            }
-
-                            _formController.updateAllFieldsToProvider(
-                              configProvider,
-                            );
-                            final connectionString = configProvider
-                                .getConnectionString();
-                            final testResult = await connectionProvider
-                                .testDbConnection(connectionString);
-
-                            if (!mounted) return;
-
-                            testResult.fold(
-                              (isConnected) {
+                          final driverCheckResult = await connectionProvider
+                              .checkOdbcDriver(odbcDriverName);
+                          await driverCheckResult.fold(
+                            (isInstalled) async {
+                              if (!isInstalled) {
                                 MessageModal.show<void>(
                                   context: context,
-                                  title: isConnected
-                                      ? 'Conexão Bem-Sucedida'
-                                      : 'Falha na Conexão',
-                                  message: isConnected
-                                      ? 'Conexão com o banco de dados estabelecida com sucesso!'
-                                      : 'Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.',
-                                  type: isConnected
-                                      ? MessageType.success
-                                      : MessageType.error,
-                                  confirmText: 'OK',
-                                );
-                              },
-                              (failure) {
-                                final failureMessage = failure is domain.Failure
-                                    ? failure.message
-                                    : failure.toString();
-                                MessageModal.show<void>(
-                                  context: context,
-                                  title: 'Erro ao Testar Conexão',
-                                  message: failureMessage,
+                                  title: 'Driver Não Encontrado',
+                                  message:
+                                      'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de testar a conexão.',
                                   type: MessageType.error,
                                   confirmText: 'OK',
                                 );
-                              },
-                            );
-                          },
-                          (failure) async {
-                            final failureMessage = failure is domain.Failure
-                                ? failure.message
-                                : failure.toString();
-                            MessageModal.show<void>(
-                              context: context,
-                              title: 'Erro ao Verificar Driver',
-                              message: failureMessage,
-                              type: MessageType.error,
-                              confirmText: 'OK',
-                            );
-                          },
-                        );
-                      },
-                      onSaveConfig: () async {
-                        final odbcDriverName = _formController
-                            .odbcDriverNameController
-                            .text
-                            .trim();
-                        if (odbcDriverName.isEmpty) {
-                          MessageModal.show<void>(
-                            context: context,
-                            title: 'Erro',
-                            message: 'Nome do Driver ODBC é obrigatório',
-                            type: MessageType.error,
-                            confirmText: 'OK',
-                          );
-                          return;
-                        }
+                                return;
+                              }
 
-                        final driverCheckResult = await connectionProvider
-                            .checkOdbcDriver(odbcDriverName);
-                        await driverCheckResult.fold(
-                          (isInstalled) async {
-                            if (!isInstalled) {
+                              _formController.updateAllFieldsToProvider(
+                                configProvider,
+                              );
+                              final connectionString = configProvider
+                                  .getConnectionString();
+                              final testResult = await connectionProvider
+                                  .testDbConnection(connectionString);
+
+                              if (!mounted) return;
+
+                              testResult.fold(
+                                (isConnected) {
+                                  MessageModal.show<void>(
+                                    context: context,
+                                    title: isConnected
+                                        ? 'Conexão Bem-Sucedida'
+                                        : 'Falha na Conexão',
+                                    message: isConnected
+                                        ? 'Conexão com o banco de dados estabelecida com sucesso!'
+                                        : 'Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.',
+                                    type: isConnected
+                                        ? MessageType.success
+                                        : MessageType.error,
+                                    confirmText: 'OK',
+                                  );
+                                },
+                                (failure) {
+                                  final failureMessage =
+                                      failure is domain.Failure
+                                      ? failure.message
+                                      : failure.toString();
+                                  MessageModal.show<void>(
+                                    context: context,
+                                    title: 'Erro ao Testar Conexão',
+                                    message: failureMessage,
+                                    type: MessageType.error,
+                                    confirmText: 'OK',
+                                  );
+                                },
+                              );
+                            },
+                            (failure) async {
+                              final failureMessage = failure is domain.Failure
+                                  ? failure.message
+                                  : failure.toString();
                               MessageModal.show<void>(
                                 context: context,
-                                title: 'Driver Não Encontrado',
-                                message:
-                                    'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de salvar a configuração.',
+                                title: 'Erro ao Verificar Driver',
+                                message: failureMessage,
                                 type: MessageType.error,
                                 confirmText: 'OK',
                               );
-                              return;
-                            }
-
-                            _formController.updateAllFieldsToProvider(
-                              configProvider,
-                            );
-                            final saveResult = await configProvider
-                                .saveConfig();
-
-                            if (!mounted) return;
-
-                            saveResult.fold(
-                              (_) {
-                                MessageModal.show<void>(
-                                  context: context,
-                                  title: 'Configuração Salva',
-                                  message: 'Configuração salva com sucesso!',
-                                  type: MessageType.success,
-                                  confirmText: 'OK',
-                                );
-                              },
-                              (failure) {
-                                final failureMessage = failure is domain.Failure
-                                    ? failure.message
-                                    : failure.toString();
-                                MessageModal.show<void>(
-                                  context: context,
-                                  title: 'Erro ao Salvar',
-                                  message: failureMessage,
-                                  type: MessageType.error,
-                                  confirmText: 'OK',
-                                );
-                              },
-                            );
-                          },
-                          (failure) async {
-                            final failureMessage = failure is domain.Failure
-                                ? failure.message
-                                : failure.toString();
+                            },
+                          );
+                        },
+                        onSaveConfig: () async {
+                          final odbcDriverName = _formController
+                              .odbcDriverNameController
+                              .text
+                              .trim();
+                          if (odbcDriverName.isEmpty) {
                             MessageModal.show<void>(
                               context: context,
-                              title: 'Erro ao Verificar Driver',
-                              message: failureMessage,
+                              title: 'Erro',
+                              message: 'Nome do Driver ODBC é obrigatório',
                               type: MessageType.error,
                               confirmText: 'OK',
                             );
-                          },
-                        );
-                      },
-                    )
-                  : _currentPage == 1
-                      ? WebSocketConfigSection(
-                          formController: _formController,
-                          configProvider: configProvider,
-                          onSaveConfig: () {
-                            _formController.updateAllFieldsToProvider(
-                              configProvider,
-                            );
-                            configProvider.saveConfig();
-                          },
-                        )
-                      : const OdbcConnectionPoolSection(),
-            ),
-          ],
+                            return;
+                          }
+
+                          final driverCheckResult = await connectionProvider
+                              .checkOdbcDriver(odbcDriverName);
+                          await driverCheckResult.fold(
+                            (isInstalled) async {
+                              if (!isInstalled) {
+                                MessageModal.show<void>(
+                                  context: context,
+                                  title: 'Driver Não Encontrado',
+                                  message:
+                                      'Driver ODBC "$odbcDriverName" não foi encontrado. Verifique se o driver está instalado antes de salvar a configuração.',
+                                  type: MessageType.error,
+                                  confirmText: 'OK',
+                                );
+                                return;
+                              }
+
+                              _formController.updateAllFieldsToProvider(
+                                configProvider,
+                              );
+                              final saveResult = await configProvider
+                                  .saveConfig();
+
+                              if (!mounted) return;
+
+                              saveResult.fold(
+                                (_) {
+                                  MessageModal.show<void>(
+                                    context: context,
+                                    title: 'Configuração Salva',
+                                    message: 'Configuração salva com sucesso!',
+                                    type: MessageType.success,
+                                    confirmText: 'OK',
+                                  );
+                                },
+                                (failure) {
+                                  final failureMessage =
+                                      failure is domain.Failure
+                                      ? failure.message
+                                      : failure.toString();
+                                  MessageModal.show<void>(
+                                    context: context,
+                                    title: 'Erro ao Salvar',
+                                    message: failureMessage,
+                                    type: MessageType.error,
+                                    confirmText: 'OK',
+                                  );
+                                },
+                              );
+                            },
+                            (failure) async {
+                              final failureMessage = failure is domain.Failure
+                                  ? failure.message
+                                  : failure.toString();
+                              MessageModal.show<void>(
+                                context: context,
+                                title: 'Erro ao Verificar Driver',
+                                message: failureMessage,
+                                type: MessageType.error,
+                                confirmText: 'OK',
+                              );
+                            },
+                          );
+                        },
+                      )
+                    : _currentPage == 2
+                    ? WebSocketConfigSection(
+                        formController: _formController,
+                        configProvider: configProvider,
+                        onSaveConfig: () {
+                          _formController.updateAllFieldsToProvider(
+                            configProvider,
+                          );
+                          configProvider.saveConfig();
+                        },
+                      )
+                    : const OdbcConnectionPoolSection(),
+              ),
+            ],
+          ),
         ),
       ),
     );

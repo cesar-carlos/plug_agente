@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:plug_agente/shared/widgets/common/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 void main() {
   group('AppCard', () {

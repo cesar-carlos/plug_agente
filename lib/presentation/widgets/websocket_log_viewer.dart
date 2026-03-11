@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
-import 'package:plug_agente/shared/widgets/common/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
 
 class WebSocketLogViewer extends StatelessWidget {
@@ -19,7 +20,7 @@ class WebSocketLogViewer extends StatelessWidget {
                 children: [
                   Text(
                     'WebSocket Messages',
-                    style: FluentTheme.of(context).typography.subtitle,
+                    style: context.sectionTitle,
                   ),
                   Row(
                     children: [
@@ -30,20 +31,23 @@ class WebSocketLogViewer extends StatelessWidget {
                       ),
                       const SizedBox(width: 16),
                       Button(
-                        child: const Text('Clear'),
+                        child: Text(
+                          'Clear',
+                          style: context.bodyText,
+                        ),
                         onPressed: () => logProvider.clearMessages(),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
               Expanded(
                 child: logProvider.messages.isEmpty
                     ? Center(
                         child: Text(
                           'No messages yet',
-                          style: FluentTheme.of(context).typography.body,
+                          style: context.bodyMuted,
                         ),
                       )
                     : ListView.builder(
@@ -69,12 +73,12 @@ class WebSocketLogViewer extends StatelessWidget {
         : (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md - 4),
       decoration: BoxDecoration(
         color: FluentTheme.of(context).cardColor,
         border: Border.all(color: color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,31 +86,34 @@ class WebSocketLogViewer extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Text(
                   message.direction,
-                  style: TextStyle(
+                  style: context.bodyMuted.copyWith(
                     fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     color: color,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 message.event,
-                style: FluentTheme.of(context).typography.bodyStrong,
+                style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           SelectableText(
             message.formattedData,
-            style: FluentTheme.of(context).typography.caption?.copyWith(
+            style: context.bodyMuted.copyWith(
               fontFamily: 'Consolas',
               fontSize: 11,
             ),

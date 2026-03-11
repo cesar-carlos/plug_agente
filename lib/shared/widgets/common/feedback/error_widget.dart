@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class ErrorWidget extends StatelessWidget {
   const ErrorWidget({
@@ -19,32 +19,33 @@ class ErrorWidget extends StatelessWidget {
     final textColor = theme.typography.body?.color;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(FluentIcons.error_badge, color: AppColors.error, size: 48),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
+            style: context.sectionTitle.copyWith(
               color: AppColors.error,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: textColor),
+            style: context.bodyText.copyWith(color: textColor),
           ),
           if (onRetry != null) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.lg),
             FilledButton(
               onPressed: onRetry,
-              child: const Text('Tentar Novamente'),
+              child: Text(
+                'Tentar Novamente',
+                style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ],

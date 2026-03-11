@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/routes/routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 
 class PlugAgentApp extends StatefulWidget {
@@ -36,8 +37,8 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
   Widget build(BuildContext context) {
     return FluentApp.router(
       title: AppConstants.appName,
-      theme: FluentThemeData.light(),
-      darkTheme: FluentThemeData.dark(),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       localizationsDelegates: const [

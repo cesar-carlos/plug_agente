@@ -5,8 +5,7 @@ import 'package:plug_agente/application/services/query_processing_service.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/core/theme/app_colors.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -148,37 +147,39 @@ class _DashboardPageState extends State<DashboardPage> {
     return ScaffoldPage(
       header: const PageHeader(title: Text('Dashboard')),
       content: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Plug Database',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Monitor your agent status and database connections here.',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 32),
-            const ConnectionStatusWidget(),
-            const SizedBox(height: AppSpacing.lg),
-            _OdbcMetricsCard(
-              summary: _metricsSummary,
-              selectedPeriod: _selectedPeriod,
-              onPeriodChanged: (period) {
-                if (period == null) {
-                  return;
-                }
-                setState(() => _selectedPeriod = period);
-                unawaited(_saveMetricsPeriod(period));
-                _updateMetrics();
-              },
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Expanded(child: WebSocketLogViewer()),
-          ],
+        padding: AppLayout.pagePadding(context),
+        child: AppLayout.centeredContent(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Plug Database',
+                style: context.pageTitle,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Monitor your agent status and database connections here.',
+                style: context.bodyMuted,
+              ),
+              const SizedBox(height: 32),
+              const ConnectionStatusWidget(),
+              const SizedBox(height: AppSpacing.lg),
+              _OdbcMetricsCard(
+                summary: _metricsSummary,
+                selectedPeriod: _selectedPeriod,
+                onPeriodChanged: (period) {
+                  if (period == null) {
+                    return;
+                  }
+                  setState(() => _selectedPeriod = period);
+                  unawaited(_saveMetricsPeriod(period));
+                  _updateMetrics();
+                },
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const Expanded(child: WebSocketLogViewer()),
+            ],
+          ),
         ),
       ),
     );
@@ -197,8 +198,6 @@ class _OdbcMetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -210,7 +209,7 @@ class _OdbcMetricsCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     AppStrings.dashboardMetricsTitle,
-                    style: theme.typography.titleLarge,
+                    style: context.sectionTitle,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -259,8 +258,9 @@ class _OdbcMetricsCard extends StatelessWidget {
                   icon: FluentIcons.error_badge,
                   label: AppStrings.dashboardMetricsErrors,
                   value: summary.failedQueries.toString(),
-                  valueColor:
-                      summary.failedQueries > 0 ? AppColors.error : null,
+                  valueColor: summary.failedQueries > 0
+                      ? AppColors.error
+                      : null,
                 ),
                 _MetricChip(
                   icon: FluentIcons.completed_solid,
@@ -331,14 +331,11 @@ class _MetricChip extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Text(
             '$label: ',
-            style: theme.typography.body,
+            style: context.bodyMuted,
           ),
           Text(
             value,
-            style: theme.typography.body?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: valueColor,
-            ),
+            style: context.metricValue.copyWith(color: valueColor),
           ),
         ],
       ),

@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -33,22 +33,29 @@ class ConnectionStatusWidget extends StatelessWidget {
             statusText = 'Disconnected';
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: FluentTheme.of(context).resources.subtleFillColorSecondary,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
           child: Row(
             children: [
               Icon(icon, color: color, size: 16),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 statusText,
-                style: TextStyle(color: color, fontWeight: FontWeight.w500),
+                style: context.bodyText.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const Spacer(),
               Text(
                 connectionProvider.isDbConnected
                     ? 'DB: Connected'
                     : 'DB: Disconnected',
-                style: TextStyle(
+                style: context.bodyText.copyWith(
                   color: connectionProvider.isDbConnected
                       ? AppColors.success
                       : AppColors.disabled,

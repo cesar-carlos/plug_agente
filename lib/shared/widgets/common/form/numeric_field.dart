@@ -1,7 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-
-import 'package:plug_agente/shared/widgets/common/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class NumericField extends StatelessWidget {
   const NumericField({

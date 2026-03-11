@@ -1,6 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-
-import 'package:plug_agente/shared/widgets/common/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class PasswordField extends StatefulWidget {
   const PasswordField({

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:plug_agente/core/theme/app_spacing.dart';
 
 class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({super.key, this.message});
@@ -9,13 +10,13 @@ class LoadingIndicator extends StatelessWidget {
     return Center(
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(),
               if (message != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
                 Text(message!, style: Theme.of(context).textTheme.bodyMedium),
               ],
             ],

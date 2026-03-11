@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:plug_agente/shared/widgets/common/loading_indicator.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/loading_indicator.dart';
 
 void main() {
   group('LoadingIndicator', () {

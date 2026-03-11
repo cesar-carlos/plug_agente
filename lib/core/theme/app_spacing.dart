@@ -9,6 +9,11 @@ class AppSpacing {
   static const double xl = 32;
   static const double xxl = 48;
   static const double xxxl = 64;
+
+  // Desktop layout insets
+  static const double pageHorizontal = 24;
+  static const double settingsSectionHorizontal = 80;
+  static const double settingsSectionVertical = 20;
 }
 
 /// Constantes de borda arredondada.

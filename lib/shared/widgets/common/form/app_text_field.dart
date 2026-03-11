@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class AppTextField extends StatelessWidget {
   const AppTextField({
@@ -38,12 +39,15 @@ class AppTextField extends StatelessWidget {
     if (prefixIcon is Icon) {
       final icon = prefixIcon! as Icon;
       return Padding(
-        padding: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.only(left: AppSpacing.sm),
         child: Icon(icon.icon, size: 18, color: icon.color),
       );
     }
 
-    return Padding(padding: const EdgeInsets.only(left: 8), child: prefixIcon);
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSpacing.sm),
+      child: prefixIcon,
+    );
   }
 
   @override
@@ -58,6 +62,7 @@ class AppTextField extends StatelessWidget {
     final textBox = TextBox(
       controller: controller,
       placeholder: hint,
+      style: context.bodyText,
       obscureText: obscureText,
       keyboardType: keyboardType,
       maxLines: maxLines,
@@ -71,16 +76,18 @@ class AppTextField extends StatelessWidget {
     if (errorText != null) {
       return InfoLabel(
         label: label,
+        labelStyle: context.bodyStrong,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             textBox,
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               errorText,
-              style: FluentTheme.of(context).typography.caption?.copyWith(
-                color: const Color(0xFFD13438), // Error color
+              style: context.bodyMuted.copyWith(
+                color: AppColors.error,
+                fontSize: 12,
               ),
             ),
           ],
@@ -88,6 +95,10 @@ class AppTextField extends StatelessWidget {
       );
     }
 
-    return InfoLabel(label: label, child: textBox);
+    return InfoLabel(
+      label: label,
+      labelStyle: context.bodyStrong,
+      child: textBox,
+    );
   }
 }

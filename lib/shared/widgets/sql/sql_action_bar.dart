@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class SqlActionBar extends StatelessWidget {
   const SqlActionBar({
@@ -130,9 +130,8 @@ class _KeyboardShortcut extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       keys,
-      style: TextStyle(
+      style: context.bodyMuted.copyWith(
         fontSize: 11,
-        color: FluentTheme.of(context).resources.textFillColorTertiary,
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
-import 'package:plug_agente/shared/widgets/common/centered_message.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
 class QueryResultDataGrid extends StatelessWidget {
@@ -24,7 +24,7 @@ class QueryResultDataGrid extends StatelessWidget {
     }
 
     final columnKeys = data.first.keys.toList();
-    final columns = _generateColumns(columnKeys);
+    final columns = _generateColumns(context, columnKeys);
     final dataSource = _QueryDataSource(data);
 
     return SfDataGrid(
@@ -38,7 +38,10 @@ class QueryResultDataGrid extends StatelessWidget {
     );
   }
 
-  List<GridColumn> _generateColumns(List<String> keys) {
+  List<GridColumn> _generateColumns(
+    BuildContext context,
+    List<String> keys,
+  ) {
     return keys.map((key) {
       final metadata = _findColumnMetadata(key);
       final columnWidth = _calculateColumnWidth(key, metadata);
@@ -51,7 +54,7 @@ class QueryResultDataGrid extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             metadata?['name'] as String? ?? key,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: context.bodyStrong.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
       );

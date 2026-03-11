@@ -1,8 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_colors.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
-import 'package:plug_agente/shared/widgets/common/centered_message.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:plug_agente/shared/widgets/sql/query_result_data_grid.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
@@ -121,7 +120,7 @@ class _StreamingProgressBar extends StatelessWidget {
           Text(
             '${AppStrings.queryStreamingProgress}: '
             '$rowsProcessed ${AppStrings.queryStreamingRows}',
-            style: theme.typography.body,
+            style: context.bodyText,
           ),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
@@ -165,7 +164,7 @@ class _QueryResultsFooter extends StatelessWidget {
           _ResultMetric(
             icon: FluentIcons.table,
             text: '${AppStrings.queryTotalRecords}: $totalRecords',
-            textStyle: theme.typography.body,
+            textStyle: context.bodyText,
           ),
           if (executionDuration != null) ...[
             const SizedBox(width: AppSpacing.lg),
@@ -174,7 +173,7 @@ class _QueryResultsFooter extends StatelessWidget {
               text:
                   '${AppStrings.queryExecutionTime}: '
                   '${_formatDuration(executionDuration!)}',
-              textStyle: theme.typography.body,
+              textStyle: context.bodyText,
             ),
           ],
           if (affectedRows != null && affectedRows != totalRecords) ...[
@@ -182,7 +181,7 @@ class _QueryResultsFooter extends StatelessWidget {
             _ResultMetric(
               icon: FluentIcons.edit,
               text: '${AppStrings.queryAffectedRows}: $affectedRows',
-              textStyle: theme.typography.body,
+              textStyle: context.bodyText,
             ),
           ],
         ],
@@ -258,23 +257,21 @@ class _QueryErrorState extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               AppStrings.queryErrorTitle,
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: AppSpacing.sm),
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: theme.resources.subtleFillColorSecondary,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(
                   color: AppColors.error.withValues(alpha: 0.5),
                 ),
               ),
               child: SelectableText(
                 error,
-                style: theme.typography.body,
+                style: context.bodyText,
               ),
             ),
             if (onShowDetails != null) ...[

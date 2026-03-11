@@ -2,12 +2,14 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
-import 'package:plug_agente/shared/widgets/common/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/message_modal.dart';
-import 'package:plug_agente/shared/widgets/common/numeric_field.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class OdbcConnectionPoolSection extends StatefulWidget {
   const OdbcConnectionPoolSection({super.key});
@@ -43,8 +45,8 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _poolSizeController.text = settings.poolSize.toString();
       _loginTimeoutController.text = settings.loginTimeoutSeconds.toString();
       _maxResultBufferController.text = settings.maxResultBufferMb.toString();
-      _streamingChunkSizeController.text =
-          settings.streamingChunkSizeKb.toString();
+      _streamingChunkSizeController.text = settings.streamingChunkSizeKb
+          .toString();
       _isLoading = false;
     });
   }
@@ -63,7 +65,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _showError('Login timeout deve ser entre 1 e 120 segundos');
       return;
     }
-    if (maxResultBuffer == null || maxResultBuffer < 8 || maxResultBuffer > 128) {
+    if (maxResultBuffer == null ||
+        maxResultBuffer < 8 ||
+        maxResultBuffer > 128) {
       _showError('Buffer de resultados deve ser entre 8 e 128 MB');
       return;
     }
@@ -105,13 +109,16 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   Future<void> _restoreDefaults() async {
     _poolSizeController.text = ConnectionConstants.defaultPoolSize.toString();
-    _loginTimeoutController.text =
-        ConnectionConstants.defaultLoginTimeout.inSeconds.toString();
+    _loginTimeoutController.text = ConnectionConstants
+        .defaultLoginTimeout
+        .inSeconds
+        .toString();
     _maxResultBufferController.text =
         (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024))
             .toString();
-    _streamingChunkSizeController.text =
-        ConnectionConstants.defaultStreamingChunkSizeKb.toString();
+    _streamingChunkSizeController.text = ConnectionConstants
+        .defaultStreamingChunkSizeKb
+        .toString();
 
     await _saveSettings();
   }
@@ -163,14 +170,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.settingsSectionHorizontal,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Connection Pool e Timeouts',
-              style: FluentTheme.of(context).typography.subtitle,
-            ),
+            const SettingsSectionTitle(title: 'Connection Pool e Timeouts'),
             const SizedBox(height: 16),
             AppCard(
               child: Column(

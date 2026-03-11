@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -63,12 +64,19 @@ class _MainWindowState extends State<MainWindow> {
           ),
         ],
       ),
-      content: Column(
-        children: [
-          if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
-          Expanded(child: widget.child),
-        ],
-      ),
+      transitionBuilder: (child, animation) {
+        return Column(
+          children: [
+            if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
+            Expanded(
+              child: AppLayout.centeredContent(
+                maxWidth: AppLayout.maxDataWidth,
+                child: widget.child,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -84,10 +92,13 @@ class _MainWindowState extends State<MainWindow> {
           const Text(
             'O aplicativo está rodando com recursos limitados:',
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           ...runtimeMode.degradationReasons.map(
             (reason) => Padding(
-              padding: const EdgeInsets.only(left: 16, bottom: 4),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.md,
+                bottom: AppSpacing.xs,
+              ),
               child: Text('• $reason'),
             ),
           ),

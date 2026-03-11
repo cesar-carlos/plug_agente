@@ -1,15 +1,17 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
-import 'package:plug_agente/shared/widgets/common/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/app_text_field.dart';
-import 'package:plug_agente/shared/widgets/common/message_modal.dart';
-import 'package:plug_agente/shared/widgets/common/password_field.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
 
 class WebSocketConfigSection extends StatelessWidget {
@@ -28,7 +30,9 @@ class WebSocketConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.settingsSectionHorizontal,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -105,10 +109,7 @@ class _ServerSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Conexão WebSocket',
-                style: FluentTheme.of(context).typography.subtitle,
-              ),
+              const SettingsSectionTitle(title: 'Conexão WebSocket'),
               const SizedBox(height: 16),
               AppTextField(
                 label: 'URL do Servidor',
@@ -122,10 +123,7 @@ class _ServerSection extends StatelessWidget {
                 hint: 'UUID ou Nome Único',
               ),
               const SizedBox(height: 24),
-              Text(
-                'Autenticação (Opcional)',
-                style: FluentTheme.of(context).typography.subtitle,
-              ),
+              const SettingsSectionTitle(title: 'Autenticação (Opcional)'),
               const SizedBox(height: 16),
               AppTextField(
                 label: 'Usuário',

@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class CenteredMessage extends StatelessWidget {
   const CenteredMessage({
@@ -16,24 +17,22 @@ class CenteredMessage extends StatelessWidget {
     final theme = FluentTheme.of(context);
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 64, color: theme.accentColor),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Text(
               title,
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.typography.body,
+              style: context.bodyText,
             ),
           ],
         ),

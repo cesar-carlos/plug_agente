@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 enum MessageType { info, success, warning, error, confirmation }
 
@@ -54,7 +54,6 @@ class MessageModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Definir cores e ícones baseados no tipo
     Color accentColor;
     IconData iconData;
 
@@ -81,14 +80,11 @@ class MessageModal extends StatelessWidget {
         children: [
           Icon(iconData, color: accentColor, size: 24),
           if (title != null) ...[
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(
                 title!,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: context.sectionTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -105,11 +101,11 @@ class MessageModal extends StatelessWidget {
               type == MessageType.error
                   ? SelectableText(
                       message!,
-                      style: const TextStyle(fontSize: 16),
+                      style: context.bodyText,
                     )
-                  : Text(message!, style: const TextStyle(fontSize: 16)),
+                  : Text(message!, style: context.bodyText),
             if (content != null) ...[
-              if (message != null) const SizedBox(height: 12),
+              if (message != null) const SizedBox(height: AppSpacing.md),
               content!,
             ],
           ],
@@ -122,7 +118,6 @@ class MessageModal extends StatelessWidget {
   List<Widget> _buildActions(BuildContext context, Color accentColor) {
     final actions = <Widget>[];
 
-    // Botão Cancelar (apenas se fornecido callback ou texto, ou se for confirmação)
     if (onCancel != null ||
         type == MessageType.confirmation ||
         cancelText != null) {
@@ -132,26 +127,36 @@ class MessageModal extends StatelessWidget {
             if (onCancel != null) {
               onCancel!();
             }
-            Navigator.of(context).pop(false); // Retorna false se for aguardado
+            Navigator.of(context).pop(false);
           },
-          child: Text(cancelText ?? AppStrings.btnCancel),
+          child: Text(
+            cancelText ?? AppStrings.btnCancel,
+            style: context.bodyText,
+          ),
         ),
       );
     }
 
-    // Botão Confirmar/OK
     actions.add(
       FilledButton(
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.all(accentColor),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
         ),
         onPressed: () {
           if (onConfirm != null) {
             onConfirm!();
           }
-          Navigator.of(context).pop(true); // Retorna true se for aguardado
+          Navigator.of(context).pop(true);
         },
-        child: Text(confirmText ?? AppStrings.btnOk),
+        child: Text(
+          confirmText ?? AppStrings.btnOk,
+          style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+        ),
       ),
     );
 

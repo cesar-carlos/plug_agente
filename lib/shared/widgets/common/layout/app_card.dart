@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -16,8 +17,9 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = Card(
-      padding: padding ?? const EdgeInsets.all(16),
-      margin: margin ?? const EdgeInsets.all(0),
+      padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+      margin: margin ?? EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: child,
     );
 

@@ -4,7 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/shared/shared.dart';
@@ -185,7 +185,12 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(title: Text(AppStrings.titlePlayground)),
+      header: PageHeader(
+        title: Text(
+          AppStrings.titlePlayground,
+          style: context.sectionTitle,
+        ),
+      ),
       content: Consumer2<PlaygroundProvider, ConfigProvider>(
         builder: (context, playgroundProvider, configProvider, _) {
           final config = configProvider.currentConfig;
@@ -198,56 +203,59 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
               configProvider,
             ),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SqlEditor(
-                    controller: _queryController,
-                    onChanged: (value) {
-                      playgroundProvider.setQuery(value);
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SqlActionBar(
-                    onExecute: () => _handleExecute(
-                      playgroundProvider,
-                      configProvider,
+              padding: AppLayout.pagePadding(context),
+              child: AppLayout.centeredContent(
+                maxWidth: AppLayout.maxDataWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SqlEditor(
+                      controller: _queryController,
+                      onChanged: (value) {
+                        playgroundProvider.setQuery(value);
+                      },
                     ),
-                    onTestConnection: config != null
-                        ? () => _handleTestConnection(
-                            configProvider,
-                            playgroundProvider,
-                          )
-                        : null,
-                    onClear: () => _handleClear(playgroundProvider),
-                    onCancel: () => playgroundProvider.cancelQuery(),
-                    isExecuting: playgroundProvider.isLoading,
-                    useStreamingMode: config != null,
-                    streamingModeEnabled: _streamingModeEnabled,
-                    onStreamingModeChanged: (value) {
-                      setState(() => _streamingModeEnabled = value);
-                      unawaited(_saveStreamingMode(value));
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Expanded(
-                    child: QueryResultsSection(
-                      results: playgroundProvider.results,
-                      isLoading: playgroundProvider.isLoading,
-                      isStreaming: playgroundProvider.isStreaming,
-                      rowsProcessed: playgroundProvider.rowsProcessed,
-                      progress: playgroundProvider.progress,
-                      executionDuration: playgroundProvider.executionDuration,
-                      affectedRows: playgroundProvider.affectedRows,
-                      columnMetadata: playgroundProvider.columnMetadata,
-                      error: playgroundProvider.error,
-                      onShowErrorDetails: playgroundProvider.error != null
-                          ? () => _showErrorModal(playgroundProvider.error!)
+                    const SizedBox(height: AppSpacing.md),
+                    SqlActionBar(
+                      onExecute: () => _handleExecute(
+                        playgroundProvider,
+                        configProvider,
+                      ),
+                      onTestConnection: config != null
+                          ? () => _handleTestConnection(
+                              configProvider,
+                              playgroundProvider,
+                            )
                           : null,
+                      onClear: () => _handleClear(playgroundProvider),
+                      onCancel: () => playgroundProvider.cancelQuery(),
+                      isExecuting: playgroundProvider.isLoading,
+                      useStreamingMode: config != null,
+                      streamingModeEnabled: _streamingModeEnabled,
+                      onStreamingModeChanged: (value) {
+                        setState(() => _streamingModeEnabled = value);
+                        unawaited(_saveStreamingMode(value));
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.md),
+                    Expanded(
+                      child: QueryResultsSection(
+                        results: playgroundProvider.results,
+                        isLoading: playgroundProvider.isLoading,
+                        isStreaming: playgroundProvider.isStreaming,
+                        rowsProcessed: playgroundProvider.rowsProcessed,
+                        progress: playgroundProvider.progress,
+                        executionDuration: playgroundProvider.executionDuration,
+                        affectedRows: playgroundProvider.affectedRows,
+                        columnMetadata: playgroundProvider.columnMetadata,
+                        error: playgroundProvider.error,
+                        onShowErrorDetails: playgroundProvider.error != null
+                            ? () => _showErrorModal(playgroundProvider.error!)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

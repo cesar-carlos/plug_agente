@@ -1,8 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
-
-import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
-import 'package:plug_agente/shared/widgets/common/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({
@@ -96,10 +95,10 @@ class ErrorDisplay extends StatelessWidget {
     final recoverable = _isRecoverable();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       ),
       child: Column(
@@ -112,29 +111,30 @@ class ErrorDisplay extends StatelessWidget {
                 color: AppColors.error,
                 size: 20,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
                   _getTitle(),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  style: context.bodyStrong.copyWith(
                     color: AppColors.error,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           SelectableText(
             _getMessage(),
-            style: const TextStyle(fontSize: 14),
+            style: context.bodyText,
           ),
           if (recoverable && onRetry != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             FilledButton(
               onPressed: onRetry,
-              child: const Text('Tentar Novamente'),
+              child: Text(
+                'Tentar Novamente',
+                style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ],

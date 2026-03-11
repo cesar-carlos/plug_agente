@@ -1,16 +1,18 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
+import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
-import 'package:plug_agente/shared/widgets/common/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/app_dropdown.dart';
-import 'package:plug_agente/shared/widgets/common/app_text_field.dart';
-import 'package:plug_agente/shared/widgets/common/numeric_field.dart';
-import 'package:plug_agente/shared/widgets/common/password_field.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class DatabaseConfigSection extends StatelessWidget {
   const DatabaseConfigSection({
@@ -34,7 +36,9 @@ class DatabaseConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.settingsSectionHorizontal,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -82,9 +86,8 @@ class _DatabaseSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Configuração do Banco de Dados',
-      style: FluentTheme.of(context).typography.subtitle,
+    return const SettingsSectionTitle(
+      title: 'Configuração do Banco de Dados',
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:plug_agente/shared/widgets/common/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 void main() {
   group('AppButton', () {

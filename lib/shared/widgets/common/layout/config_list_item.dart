@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'package:plug_agente/core/theme/app_colors.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class ConfigListItem extends StatelessWidget {
   const ConfigListItem({
@@ -25,16 +25,18 @@ class ConfigListItem extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: 16,
+            style: context.bodyStrong.copyWith(
               fontWeight: FontWeight.w600,
               color: isSelected ? AppColors.primary : textColor,
             ),
@@ -42,8 +44,7 @@ class ConfigListItem extends StatelessWidget {
           if (subtitle != null)
             Text(
               subtitle!,
-              style: TextStyle(
-                fontSize: 14,
+              style: context.bodyMuted.copyWith(
                 color: isSelected
                     ? AppColors.primary.withValues(alpha: 0.7)
                     : textColor?.withValues(alpha: 0.7),
@@ -52,8 +53,7 @@ class ConfigListItem extends StatelessWidget {
           if (trailing != null)
             Text(
               trailing!,
-              style: TextStyle(
-                fontSize: 14,
+              style: context.bodyMuted.copyWith(
                 color: isSelected
                     ? AppColors.primary.withValues(alpha: 0.7)
                     : textColor?.withValues(alpha: 0.7),
