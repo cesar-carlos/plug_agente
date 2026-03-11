@@ -93,6 +93,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
       final match = regex.firstMatch(osVersion);
 
       if (match != null) {
+        final osVersionLower = osVersion.toLowerCase();
         final major = int.parse(match.group(1)!);
         final minor = int.parse(match.group(2)!);
         final build = int.parse(match.group(3)!);
@@ -101,7 +102,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
           majorVersion: major,
           minorVersion: minor,
           buildNumber: build,
-          isServer: false,
+          isServer: osVersionLower.contains('server'),
           productName: 'Windows (fallback detection)',
         );
 

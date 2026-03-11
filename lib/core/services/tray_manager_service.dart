@@ -4,12 +4,11 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:tray_manager/tray_manager.dart';
 
-enum TrayMenuAction { show, exit }
-
-class TrayManagerService with TrayListener {
+class TrayManagerService with TrayListener implements ITrayService {
   factory TrayManagerService() => _instance;
   TrayManagerService._();
   static final TrayManagerService _instance = TrayManagerService._();
@@ -19,6 +18,7 @@ class TrayManagerService with TrayListener {
   bool _isInitialized = false;
   String? _cachedIconPath;
 
+  @override
   Future<void> initialize({
     void Function(TrayMenuAction)? onMenuAction,
   }) async {
@@ -173,6 +173,7 @@ class TrayManagerService with TrayListener {
     }
   }
 
+  @override
   Future<void> setStatus(String status) async {
     await trayManager.setToolTip('Plug Database - $status');
   }
@@ -253,6 +254,7 @@ class TrayManagerService with TrayListener {
     }
   }
 
+  @override
   void dispose() {
     unawaited((trayManager..removeListener(this)).destroy());
   }

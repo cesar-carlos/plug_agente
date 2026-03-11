@@ -29,6 +29,7 @@ import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -237,13 +238,13 @@ Future<void> setupDependencies({
   // Conditional registrations based on capabilities
   if (capabilities.supportsTray) {
     developer.log('Registering TrayManagerService', name: 'service_locator');
-    getIt.registerLazySingleton(TrayManagerService.new);
+    getIt.registerLazySingleton<ITrayService>(TrayManagerService.new);
   } else {
     developer.log(
       'Registering NoopTrayManagerService (degraded mode)',
       name: 'service_locator',
     );
-    getIt.registerLazySingleton<NoopTrayManagerService>(
+    getIt.registerLazySingleton<ITrayService>(
       NoopTrayManagerService.new,
     );
   }

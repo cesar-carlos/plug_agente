@@ -23,7 +23,7 @@ import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/runtime/runtime_policy_evaluator.dart';
-import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
@@ -59,11 +59,16 @@ void main(List<String> args) async {
     },
     (failure) {
       developer.log(
-        'Failed to detect Windows version, assuming full capabilities: $failure',
+        'Failed to detect Windows version, using degraded safe mode: $failure',
         name: 'main',
         level: 900,
       );
-      return RuntimeCapabilities.full();
+      return RuntimeCapabilities.degraded(
+        reasons: <String>[
+          'Falha ao detectar versão do Windows com confiança',
+          'Fallback seguro aplicado para evitar crashes de plugins desktop',
+        ],
+      );
     },
   );
 
@@ -123,7 +128,7 @@ void main(List<String> args) async {
   // Initialize tray manager (only if supported)
   if (capabilities.supportsTray) {
     try {
-      final trayManager = getIt<TrayManagerService>();
+      final trayManager = getIt<ITrayService>();
 
       await trayManager.initialize(
         onMenuAction: (action) async {
@@ -187,15 +192,22 @@ void main(List<String> args) async {
     );
   }
 
-  runApp(MyApp(initialRoute: initialRoute));
+  runApp(
+    MyApp(
+      initialRoute: initialRoute,
+      capabilities: capabilities,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({
+    required this.capabilities,
     this.initialRoute,
     super.key,
   });
 
+  final RuntimeCapabilities capabilities;
   final String? initialRoute;
 
   @override
@@ -245,16 +257,21 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
       ],
-      child: _ProviderInitializer(initialRoute: initialRoute),
+      child: _ProviderInitializer(
+        initialRoute: initialRoute,
+        capabilities: capabilities,
+      ),
     );
   }
 }
 
 class _ProviderInitializer extends StatelessWidget {
   const _ProviderInitializer({
+    required this.capabilities,
     this.initialRoute,
   });
 
+  final RuntimeCapabilities capabilities;
   final String? initialRoute;
 
   @override
@@ -266,6 +283,9 @@ class _ProviderInitializer extends StatelessWidget {
     connectionProvider.setAuthProvider(authProvider);
     connectionProvider.setConfigProvider(configProvider);
 
-    return PlugAgentApp(initialRoute: initialRoute);
+    return PlugAgentApp(
+      initialRoute: initialRoute,
+      capabilities: capabilities,
+    );
   }
 }
