@@ -52,9 +52,13 @@ class ConnectionStatusWidget extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                connectionProvider.isDbConnected ? 'DB: Connected' : 'DB: Disconnected',
+                connectionProvider.isDbConnected
+                    ? 'DB: Connected'
+                    : 'DB: Disconnected',
                 style: context.bodyText.copyWith(
-                  color: connectionProvider.isDbConnected ? AppColors.success : AppColors.disabled,
+                  color: connectionProvider.isDbConnected
+                      ? AppColors.success
+                      : AppColors.disabled,
                 ),
               ),
             ],

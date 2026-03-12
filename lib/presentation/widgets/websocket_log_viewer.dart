@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
@@ -28,18 +29,21 @@ class WebSocketLogViewer extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('WebSocket Messages', style: context.sectionTitle),
+                      Text(AppStrings.wsLogTitle, style: context.sectionTitle),
                       Row(
                         children: [
                           ToggleSwitch(
                             checked: logProvider.isEnabled,
                             onChanged: logProvider.setEnabled,
-                            content: const Text('Enabled'),
+                            content: const Text(AppStrings.wsLogEnabled),
                           ),
                           const SizedBox(width: 16),
                           Button(
                             onPressed: logProvider.clearMessages,
-                            child: Text('Clear', style: context.bodyText),
+                            child: Text(
+                              AppStrings.wsLogClear,
+                              style: context.bodyText,
+                            ),
                           ),
                         ],
                       ),
@@ -52,7 +56,7 @@ class WebSocketLogViewer extends StatelessWidget {
                     child: logProvider.messages.isEmpty
                         ? Center(
                             child: Text(
-                              'No messages yet',
+                              AppStrings.wsLogNoMessages,
                               style: context.bodyMuted,
                             ),
                           )
@@ -111,21 +115,21 @@ class _AuthorizationSummaryCard extends StatelessWidget {
         runSpacing: AppSpacing.xs,
         children: [
           _SummaryChip(
-            label: 'Auth checks',
+            label: AppStrings.wsLogAuthChecks,
             value: summary!.total.toString(),
           ),
           _SummaryChip(
-            label: 'Allowed',
+            label: AppStrings.wsLogAllowed,
             value: summary!.totalAuthorized.toString(),
             valueColor: Colors.green,
           ),
           _SummaryChip(
-            label: 'Denied',
+            label: AppStrings.wsLogDenied,
             value: summary!.totalDenied.toString(),
             valueColor: summary!.totalDenied > 0 ? Colors.red : null,
           ),
           _SummaryChip(
-            label: 'Denial rate',
+            label: AppStrings.wsLogDenialRate,
             value: '$denialRate%',
             valueColor: summary!.totalDenied > 0 ? Colors.red : null,
           ),

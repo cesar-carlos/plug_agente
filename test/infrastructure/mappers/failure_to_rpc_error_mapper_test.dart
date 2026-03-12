@@ -114,6 +114,71 @@ void main() {
       expect(data['table'], equals('users'));
     });
 
+    test(
+      'should map NetworkFailure with timeout_stage transport when flag on',
+      () {
+        final failure = NetworkFailure.withContext(
+          message: 'Connection timeout',
+          context: {'timeout': true, 'timeout_stage': 'transport'},
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          useTimeoutByStage: true,
+        );
+
+        expect(rpcError.code, equals(RpcErrorCode.timeout));
+        final data = rpcError.data as Map<String, dynamic>;
+        expect(data['reason'], equals('transport_timeout'));
+      },
+    );
+
+    test('should map NetworkFailure with timeout_stage ack when flag on', () {
+      final failure = NetworkFailure.withContext(
+        message: 'Ack timeout',
+        context: {'timeout': true, 'timeout_stage': 'ack'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(
+        failure,
+        useTimeoutByStage: true,
+      );
+
+      expect(rpcError.code, equals(RpcErrorCode.timeout));
+      final data = rpcError.data as Map<String, dynamic>;
+      expect(data['reason'], equals('ack_timeout'));
+    });
+
+    test(
+      'should map QueryExecutionFailure with timeout_stage sql when flag on',
+      () {
+        final failure = QueryExecutionFailure.withContext(
+          message: 'Query timed out',
+          context: {'timeout_stage': 'sql'},
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          useTimeoutByStage: true,
+        );
+
+        expect(rpcError.code, equals(RpcErrorCode.queryTimeout));
+      },
+    );
+
+    test('should not override reason when useTimeoutByStage is false', () {
+      final failure = NetworkFailure.withContext(
+        message: 'Connection timeout',
+        context: {'timeout': true, 'timeout_stage': 'transport'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+
+      expect(rpcError.code, equals(RpcErrorCode.timeout));
+      final data = rpcError.data as Map<String, dynamic>;
+      expect(data['reason'], equals('timeout'));
+    });
+
     test('should sanitize sensitive data from context', () {
       final failure = DatabaseFailure.withContext(
         message: 'Connection failed',

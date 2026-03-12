@@ -3,6 +3,7 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
@@ -163,7 +164,9 @@ class ConfigProvider extends ChangeNotifier {
 
   void updateServerUrl(String serverUrl) {
     _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(serverUrl: serverUrl);
+    _currentConfig = _currentConfig!.copyWith(
+      serverUrl: normalizeServerUrl(serverUrl),
+    );
     notifyListeners();
   }
 

@@ -7,11 +7,15 @@ import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/delivery_guarantee.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/models/envelope_model.dart';
+import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -58,6 +62,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
   static const Duration _heartbeatAckTimeout = Duration(seconds: 8);
   static const int _maxMissedHeartbeats = 2;
   final RpcRequestGuard _rpcRequestGuard = RpcRequestGuard();
+  final RpcRequestSchemaValidator _schemaValidator =
+      const RpcRequestSchemaValidator();
+  final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
 
   @override
   void setMessageCallback(
@@ -78,6 +85,97 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   void _logMessage(String direction, String event, dynamic data) {
     _onMessage?.call(direction, event, data);
+  }
+
+  IRpcStreamEmitter _createStreamEmitter() {
+    if (_featureFlags.enableSocketBackpressure) {
+      return BackpressureStreamEmitter(
+        emit: (event, payload) {
+          _logMessage('SENT', event, payload);
+          _socket?.emit(event, payload);
+        },
+        onRegister: (streamId, emitter) {
+          _streamEmitters[streamId] = emitter;
+        },
+        onUnregister: _streamEmitters.remove,
+      );
+    }
+    return _SocketRpcStreamEmitter(_socket, _logMessage);
+  }
+
+  void _handleStreamPull(dynamic data) {
+    if (data is! Map<String, dynamic>) return;
+    try {
+      final pull = RpcStreamPull.fromJson(data);
+      _logMessage('INFO', 'rpc:stream.pull', {
+        'stream_id': pull.streamId,
+        'window_size': pull.windowSize,
+      });
+      _streamEmitters[pull.streamId]?.releaseChunks(pull.windowSize);
+    } on Object catch (_) {}
+  }
+
+  void _emitRequestAck(dynamic requestId) {
+    if (requestId == null || _socket == null) return;
+    final ackPayload = {
+      'request_id': requestId.toString(),
+      'received_at': DateTime.now().toIso8601String(),
+    };
+    _logMessage('SENT', 'rpc:request_ack', ackPayload);
+    _socket!.emit('rpc:request_ack', ackPayload);
+  }
+
+  void _emitBatchRequestAck(List<RpcRequest> requests) {
+    if (_socket == null || requests.isEmpty) return;
+    final ids = requests
+        .where((r) => r.id != null)
+        .map((r) => r.id.toString())
+        .toList();
+    if (ids.isEmpty) return;
+    final ackPayload = {
+      'request_ids': ids,
+      'received_at': DateTime.now().toIso8601String(),
+    };
+    _logMessage('SENT', 'rpc:batch_ack', ackPayload);
+    _socket!.emit('rpc:batch_ack', ackPayload);
+  }
+
+  Future<void> _emitRpcResponse(dynamic responseData) async {
+    final prepared = responseData is List<RpcResponse>
+        ? responseData.map(_prepareResponseForSend).toList()
+        : _prepareResponseForSend(responseData as RpcResponse);
+
+    if (!_featureFlags.enableSocketDeliveryGuarantees || _socket == null) {
+      _logMessage('SENT', 'rpc:response', prepared);
+      _socket?.emit('rpc:response', prepared);
+      return;
+    }
+
+    const maxRetries = DeliveryGuaranteeConfig.maxResponseRetries;
+    final timeoutMs = DeliveryGuaranteeConfig.responseAckTimeout.inMilliseconds;
+
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        _logMessage('SENT', 'rpc:response', prepared);
+        await _socket!
+            .timeout(timeoutMs)
+            .emitWithAckAsync('rpc:response', prepared);
+        return;
+      } on Exception catch (e) {
+        if (attempt < maxRetries) {
+          AppLogger.warning(
+            'rpc:response ack timeout, retrying (${attempt + 1}/$maxRetries)',
+            e,
+          );
+        } else {
+          AppLogger.warning(
+            'rpc:response ack failed after $maxRetries retries, sending without ack',
+            e,
+          );
+          _socket?.emit('rpc:response', prepared);
+        }
+      }
+    }
   }
 
   @override
@@ -174,6 +272,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _handleRpcRequest(data);
       });
 
+      if (_featureFlags.enableSocketBackpressure) {
+        _socket!.on('rpc:stream.pull', (data) {
+          _logMessage('RECEIVED', 'rpc:stream.pull', data);
+          _handleStreamPull(data);
+        });
+      }
+
       _socket!.connect();
 
       timeoutTimer = Timer(const Duration(seconds: 10), () {
@@ -181,7 +286,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
           _socket?.dispose();
           _socket = null;
           completer.complete(
-            Failure(domain.NetworkFailure('Connection timeout')),
+            Failure(
+              domain.NetworkFailure.withContext(
+                message: 'Connection timeout',
+                context: {'timeout': true, 'timeout_stage': 'transport'},
+              ),
+            ),
           );
         }
       });
@@ -274,14 +384,60 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// Handles RPC v2 request.
   Future<void> _handleRpcRequest(dynamic data) async {
     try {
-      // Check if it's a batch
-      if (data is List) {
-        await _handleRpcBatchRequest(data);
+      dynamic payload = data;
+      void Function()? socketAck;
+
+      if (data is List && data.length == 2 && data[1] is Function) {
+        payload = data[0];
+        socketAck = data[1] as void Function();
+      }
+
+      if (payload is List) {
+        await _handleRpcBatchRequest(payload);
+        socketAck?.call();
         return;
       }
 
+      if (payload is! Map<String, dynamic>) {
+        await _sendSchemaValidationError(
+          null,
+          RpcErrorCode.invalidRequest,
+          'Request must be a JSON object',
+        );
+        socketAck?.call();
+        return;
+      }
+
+      final requestMap = payload;
+
+      if (_featureFlags.enableSocketSchemaValidation) {
+        final validation = _schemaValidator.validateSingle(requestMap);
+        if (validation.isError()) {
+          final failure = validation.exceptionOrNull() as domain.Failure?;
+          if (failure != null) {
+            await _sendSchemaValidationError(
+              requestMap['id'],
+              RpcErrorCode.invalidRequest,
+              failure.message,
+            );
+            return;
+          }
+        }
+      }
+
       // Single request
-      final request = RpcRequest.fromJson(data as Map<String, dynamic>);
+      final request = RpcRequest.fromJson(requestMap);
+
+      if (_featureFlags.enableSocketDeliveryGuarantees) {
+        _emitRequestAck(request.id);
+      }
+      socketAck?.call();
+
+      if (_featureFlags.enableSocketNotificationsContract &&
+          request.isNotification) {
+        return;
+      }
+
       final guardResult = _rpcRequestGuard.evaluate(request);
       if (guardResult != RpcRequestGuardResult.allow) {
         final errorResponse = _buildRpcErrorResponse(
@@ -289,15 +445,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
           code: _guardResultToCode(guardResult),
           technicalMessage: _guardResultToTechnicalMessage(guardResult),
         );
-        _logMessage('SENT', 'rpc:response', errorResponse.toJson());
-        _socket?.emit('rpc:response', errorResponse.toJson());
+        await _emitRpcResponse(errorResponse);
         return;
       }
       final clientToken = _extractClientTokenFromRpcParams(request.params);
+      final streamEmitter = _featureFlags.enableSocketStreamingChunks
+          ? _createStreamEmitter()
+          : null;
       final response = await _rpcDispatcher.dispatch(
         request,
         _agentId,
         clientToken: clientToken,
+        streamEmitter: streamEmitter,
       );
       _logAuthorizationDecision(
         request: request,
@@ -305,9 +464,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         clientToken: clientToken,
       );
 
-      // Send response
-      _logMessage('SENT', 'rpc:response', response.toJson());
-      _socket!.emit('rpc:response', response.toJson());
+      await _emitRpcResponse(response);
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC request',
@@ -315,7 +472,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
         stackTrace,
       );
 
-      // Send parse error
       final errorResponse = RpcResponse.error(
         id: null,
         error: RpcError(
@@ -331,7 +487,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         ),
       );
 
-      _socket!.emit('rpc:response', errorResponse.toJson());
+      await _emitRpcResponse(errorResponse);
     }
   }
 
@@ -354,17 +510,83 @@ class SocketIOTransportClientV2 implements ITransportClient {
             ),
           ),
         );
-        _socket!.emit('rpc:response', errorResponse.toJson());
+        await _emitRpcResponse(errorResponse);
         return;
+      }
+
+      if (_featureFlags.enableSocketSchemaValidation) {
+        final validation = _schemaValidator.validateBatch(data);
+        if (validation.isError()) {
+          final failure = validation.exceptionOrNull() as domain.Failure?;
+          if (failure != null) {
+            await _sendSchemaValidationError(
+              null,
+              RpcErrorCode.invalidRequest,
+              failure.message,
+            );
+            return;
+          }
+        }
       }
 
       final requests = data
           .map((e) => RpcRequest.fromJson(e as Map<String, dynamic>))
           .toList();
 
+      if (_featureFlags.enableSocketDeliveryGuarantees) {
+        _emitBatchRequestAck(requests);
+      }
+
+      if (_featureFlags.enableSocketBatchStrictValidation) {
+        final batch = RpcBatchRequest(requests);
+        final validation = batch.validateStrict();
+        switch (validation) {
+          case RpcBatchDuplicateIds(:final duplicateIds):
+            final errorResponse = RpcResponse.error(
+              id: null,
+              error: RpcError(
+                code: RpcErrorCode.invalidRequest,
+                message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                data: RpcErrorCode.buildErrorData(
+                  code: RpcErrorCode.invalidRequest,
+                  technicalMessage:
+                      'Batch contains duplicate request IDs: $duplicateIds',
+                  reason: 'batch_duplicate_ids',
+                  extra: {'duplicate_ids': duplicateIds},
+                ),
+              ),
+            );
+            await _emitRpcResponse(errorResponse);
+            return;
+          case RpcBatchExceedsLimit(:final size, :final limit):
+            final errorResponse = RpcResponse.error(
+              id: null,
+              error: RpcError(
+                code: RpcErrorCode.invalidRequest,
+                message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                data: RpcErrorCode.buildErrorData(
+                  code: RpcErrorCode.invalidRequest,
+                  technicalMessage: 'Batch exceeds limit: $size > $limit',
+                  reason: 'batch_exceeds_limit',
+                  extra: {'size': size, 'limit': limit},
+                ),
+              ),
+            );
+            await _emitRpcResponse(errorResponse);
+            return;
+          case RpcBatchValid():
+            break;
+        }
+      }
+
       final responses = <RpcResponse>[];
 
       for (final request in requests) {
+        if (_featureFlags.enableSocketNotificationsContract &&
+            request.isNotification) {
+          continue;
+        }
+
         final guardResult = _rpcRequestGuard.evaluate(request);
         if (guardResult != RpcRequestGuardResult.allow) {
           responses.add(
@@ -392,9 +614,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       // Send batch response
-      final batchResponse = responses.map((r) => r.toJson()).toList();
-      _logMessage('SENT', 'rpc:response', batchResponse);
-      _socket!.emit('rpc:response', batchResponse);
+      final batchResponse = responses;
+      await _emitRpcResponse(batchResponse);
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC batch request',
@@ -556,8 +777,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             )
           : RpcResponse.success(id: response.requestId, result: result);
 
-      _logMessage('SENT', 'rpc:response', rpcResponse.toJson());
-      _socket!.emit('rpc:response', rpcResponse.toJson());
+      await _emitRpcResponse(rpcResponse);
 
       return const Success<Object, Exception>(Object());
     } on Exception catch (e) {
@@ -765,6 +985,33 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
+  Map<String, dynamic> _prepareResponseForSend(RpcResponse response) {
+    if (!_featureFlags.enableSocketApiVersionMeta) {
+      return response.toJson();
+    }
+    final json = Map<String, dynamic>.from(response.toJson());
+    json['api_version'] = '2.1';
+    json['meta'] = <String, dynamic>{
+      'agent_id': _agentId,
+      'request_id': response.id?.toString(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    };
+    return json;
+  }
+
+  Future<void> _sendSchemaValidationError(
+    dynamic id,
+    int code,
+    String technicalMessage,
+  ) async {
+    final errorResponse = _buildRpcErrorResponse(
+      id: id,
+      code: code,
+      technicalMessage: technicalMessage,
+    );
+    await _emitRpcResponse(errorResponse);
+  }
+
   RpcResponse _buildRpcErrorResponse({
     required dynamic id,
     required int code,
@@ -832,5 +1079,26 @@ class SocketIOTransportClientV2 implements ITransportClient {
       contentType: 'json',
       payloadBytes: response.data,
     );
+  }
+}
+
+class _SocketRpcStreamEmitter implements IRpcStreamEmitter {
+  _SocketRpcStreamEmitter(this._socket, this._logMessage);
+
+  final io.Socket? _socket;
+  final void Function(String direction, String event, dynamic data) _logMessage;
+
+  @override
+  void emitChunk(RpcStreamChunk chunk) {
+    final payload = chunk.toJson();
+    _logMessage('SENT', 'rpc:chunk', payload);
+    _socket?.emit('rpc:chunk', payload);
+  }
+
+  @override
+  void emitComplete(RpcStreamComplete complete) {
+    final payload = complete.toJson();
+    _logMessage('SENT', 'rpc:complete', payload);
+    _socket?.emit('rpc:complete', payload);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
@@ -47,20 +48,20 @@ class GeneralConfigSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SettingsSectionTitle(title: 'Aparência'),
+            const SettingsSectionTitle(title: AppStrings.gsSectionAppearance),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: 'Tema escuro',
+              label: AppStrings.gsToggleDarkTheme,
               value: isDarkThemeEnabled,
               onChanged: onDarkThemeChanged,
             ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: 'Sistema'),
+            const SettingsSectionTitle(title: AppStrings.gsSectionSystem),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: 'Iniciar com o Windows',
+              label: AppStrings.gsToggleStartWithWindows,
               value: startWithWindows,
               onChanged: startupSupported ? onStartWithWindowsChanged : null,
             ),
@@ -73,32 +74,32 @@ class GeneralConfigSection extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: 'Iniciar minimizado',
+              label: AppStrings.gsToggleStartMinimized,
               value: startMinimized,
               onChanged: onStartMinimizedChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: 'Minimizar para bandeja',
+              label: AppStrings.gsToggleMinimizeToTray,
               value: minimizeToTray,
               onChanged: onMinimizeToTrayChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: 'Fechar para bandeja',
+              label: AppStrings.gsToggleCloseToTray,
               value: closeToTray,
               onChanged: onCloseToTrayChanged,
             ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: 'Atualizações'),
+            const SettingsSectionTitle(title: AppStrings.gsSectionUpdates),
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    'Verificar atualizações\n$lastUpdateCheck',
+                    '${AppStrings.gsCheckUpdatesWithDate}\n$lastUpdateCheck',
                     style: theme.typography.body,
                   ),
                 ),
@@ -111,16 +112,16 @@ class GeneralConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: 'Sobre'),
+            const SettingsSectionTitle(title: AppStrings.gsSectionAbout),
             const SizedBox(height: AppSpacing.md),
             const SettingsKeyValue(
-              label: 'Versão',
+              label: AppStrings.gsLabelVersion,
               value: AppConstants.appVersion,
             ),
             const SizedBox(height: AppSpacing.md),
             const SettingsKeyValue(
-              label: 'Licença',
-              value: 'MIT License',
+              label: AppStrings.gsLabelLicense,
+              value: AppStrings.gsLicenseMit,
             ),
           ],
         ),
@@ -182,7 +183,7 @@ class _StartupErrorMessage extends StatelessWidget {
                 ),
               ),
             ),
-            child: const Text('Abrir configurações'),
+            child: const Text(AppStrings.gsButtonOpenSettings),
           ),
         ],
       ),

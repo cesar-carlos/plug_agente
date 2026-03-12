@@ -35,8 +35,8 @@ class AuthorizeSqlOperation {
                 final userMessage = policy.isRevoked
                     ? 'Token revogado. Gere um novo token para continuar.'
                     : 'Seu cliente nao possui permissao para '
-                        '${_operationLabel(classification.operation)} '
-                        'neste recurso.';
+                          '${_operationLabel(classification.operation)} '
+                          'neste recurso.';
                 return Failure(
                   domain.ConfigurationFailure.withContext(
                     message:

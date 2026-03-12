@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 
 class ConfigNavigationTabs extends StatelessWidget {
@@ -26,14 +27,14 @@ class ConfigNavigationTabs extends StatelessWidget {
       child: Row(
         children: [
           _TabButton(
-            label: 'Geral',
+            label: AppStrings.configTabGeneral,
             icon: FluentIcons.settings,
             isSelected: currentPage == 0,
             onTap: onGeneralTabTap,
           ),
           _TabSeparator(color: theme.resources.controlStrokeColorDefault),
           _TabButton(
-            label: 'WebSocket',
+            label: AppStrings.configTabWebSocket,
             icon: FluentIcons.plug_connected,
             isSelected: currentPage == 1,
             onTap: onWebSocketTabTap,

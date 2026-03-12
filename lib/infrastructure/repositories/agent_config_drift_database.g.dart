@@ -106,7 +106,8 @@ class $ConfigTableTable extends ConfigTable
     aliasedName,
     false,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _connectionStringMeta = const VerificationMeta(
     'connectionString',
@@ -290,8 +291,6 @@ class $ConfigTableTable extends ConfigTable
           _odbcDriverNameMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_odbcDriverNameMeta);
     }
     if (data.containsKey('connection_string')) {
       context.handle(
@@ -786,7 +785,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.authUsername = const Value.absent(),
     this.authPassword = const Value.absent(),
     required String driverName,
-    required String odbcDriverName,
+    this.odbcDriverName = const Value.absent(),
     required String connectionString,
     required String username,
     this.password = const Value.absent(),
@@ -798,7 +797,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        driverName = Value(driverName),
-       odbcDriverName = Value(odbcDriverName),
        connectionString = Value(connectionString),
        username = Value(username),
        databaseName = Value(databaseName),
@@ -976,15 +974,689 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
   }
 }
 
+class $ClientTokenCacheTableTable extends ClientTokenCacheTable
+    with TableInfo<$ClientTokenCacheTableTable, ClientTokenCacheData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ClientTokenCacheTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isRevokedMeta = const VerificationMeta(
+    'isRevoked',
+  );
+  @override
+  late final GeneratedColumn<bool> isRevoked = GeneratedColumn<bool>(
+    'is_revoked',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_revoked" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _agentIdMeta = const VerificationMeta(
+    'agentId',
+  );
+  @override
+  late final GeneratedColumn<String> agentId = GeneratedColumn<String>(
+    'agent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _allTablesMeta = const VerificationMeta(
+    'allTables',
+  );
+  @override
+  late final GeneratedColumn<bool> allTables = GeneratedColumn<bool>(
+    'all_tables',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_tables" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _allViewsMeta = const VerificationMeta(
+    'allViews',
+  );
+  @override
+  late final GeneratedColumn<bool> allViews = GeneratedColumn<bool>(
+    'all_views',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_views" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _allPermissionsMeta = const VerificationMeta(
+    'allPermissions',
+  );
+  @override
+  late final GeneratedColumn<bool> allPermissions = GeneratedColumn<bool>(
+    'all_permissions',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_permissions" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _rulesJsonMeta = const VerificationMeta(
+    'rulesJson',
+  );
+  @override
+  late final GeneratedColumn<String> rulesJson = GeneratedColumn<String>(
+    'rules_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
+    'syncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+    'synced_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clientId,
+    isRevoked,
+    agentId,
+    createdAt,
+    payloadJson,
+    allTables,
+    allViews,
+    allPermissions,
+    rulesJson,
+    syncedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'client_token_cache_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ClientTokenCacheData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('is_revoked')) {
+      context.handle(
+        _isRevokedMeta,
+        isRevoked.isAcceptableOrUnknown(data['is_revoked']!, _isRevokedMeta),
+      );
+    }
+    if (data.containsKey('agent_id')) {
+      context.handle(
+        _agentIdMeta,
+        agentId.isAcceptableOrUnknown(data['agent_id']!, _agentIdMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('all_tables')) {
+      context.handle(
+        _allTablesMeta,
+        allTables.isAcceptableOrUnknown(data['all_tables']!, _allTablesMeta),
+      );
+    }
+    if (data.containsKey('all_views')) {
+      context.handle(
+        _allViewsMeta,
+        allViews.isAcceptableOrUnknown(data['all_views']!, _allViewsMeta),
+      );
+    }
+    if (data.containsKey('all_permissions')) {
+      context.handle(
+        _allPermissionsMeta,
+        allPermissions.isAcceptableOrUnknown(
+          data['all_permissions']!,
+          _allPermissionsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rules_json')) {
+      context.handle(
+        _rulesJsonMeta,
+        rulesJson.isAcceptableOrUnknown(data['rules_json']!, _rulesJsonMeta),
+      );
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(
+        _syncedAtMeta,
+        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_syncedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ClientTokenCacheData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ClientTokenCacheData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      )!,
+      isRevoked: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_revoked'],
+      )!,
+      agentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}agent_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      allTables: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_tables'],
+      )!,
+      allViews: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_views'],
+      )!,
+      allPermissions: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_permissions'],
+      )!,
+      rulesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rules_json'],
+      )!,
+      syncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}synced_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ClientTokenCacheTableTable createAlias(String alias) {
+    return $ClientTokenCacheTableTable(attachedDatabase, alias);
+  }
+}
+
+class ClientTokenCacheData extends DataClass
+    implements Insertable<ClientTokenCacheData> {
+  final String id;
+  final String clientId;
+  final bool isRevoked;
+  final String? agentId;
+  final DateTime createdAt;
+  final String payloadJson;
+  final bool allTables;
+  final bool allViews;
+  final bool allPermissions;
+  final String rulesJson;
+  final DateTime syncedAt;
+  const ClientTokenCacheData({
+    required this.id,
+    required this.clientId,
+    required this.isRevoked,
+    this.agentId,
+    required this.createdAt,
+    required this.payloadJson,
+    required this.allTables,
+    required this.allViews,
+    required this.allPermissions,
+    required this.rulesJson,
+    required this.syncedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['client_id'] = Variable<String>(clientId);
+    map['is_revoked'] = Variable<bool>(isRevoked);
+    if (!nullToAbsent || agentId != null) {
+      map['agent_id'] = Variable<String>(agentId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['all_tables'] = Variable<bool>(allTables);
+    map['all_views'] = Variable<bool>(allViews);
+    map['all_permissions'] = Variable<bool>(allPermissions);
+    map['rules_json'] = Variable<String>(rulesJson);
+    map['synced_at'] = Variable<DateTime>(syncedAt);
+    return map;
+  }
+
+  ClientTokenCacheTableCompanion toCompanion(bool nullToAbsent) {
+    return ClientTokenCacheTableCompanion(
+      id: Value(id),
+      clientId: Value(clientId),
+      isRevoked: Value(isRevoked),
+      agentId: agentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(agentId),
+      createdAt: Value(createdAt),
+      payloadJson: Value(payloadJson),
+      allTables: Value(allTables),
+      allViews: Value(allViews),
+      allPermissions: Value(allPermissions),
+      rulesJson: Value(rulesJson),
+      syncedAt: Value(syncedAt),
+    );
+  }
+
+  factory ClientTokenCacheData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ClientTokenCacheData(
+      id: serializer.fromJson<String>(json['id']),
+      clientId: serializer.fromJson<String>(json['clientId']),
+      isRevoked: serializer.fromJson<bool>(json['isRevoked']),
+      agentId: serializer.fromJson<String?>(json['agentId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      allTables: serializer.fromJson<bool>(json['allTables']),
+      allViews: serializer.fromJson<bool>(json['allViews']),
+      allPermissions: serializer.fromJson<bool>(json['allPermissions']),
+      rulesJson: serializer.fromJson<String>(json['rulesJson']),
+      syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clientId': serializer.toJson<String>(clientId),
+      'isRevoked': serializer.toJson<bool>(isRevoked),
+      'agentId': serializer.toJson<String?>(agentId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'allTables': serializer.toJson<bool>(allTables),
+      'allViews': serializer.toJson<bool>(allViews),
+      'allPermissions': serializer.toJson<bool>(allPermissions),
+      'rulesJson': serializer.toJson<String>(rulesJson),
+      'syncedAt': serializer.toJson<DateTime>(syncedAt),
+    };
+  }
+
+  ClientTokenCacheData copyWith({
+    String? id,
+    String? clientId,
+    bool? isRevoked,
+    Value<String?> agentId = const Value.absent(),
+    DateTime? createdAt,
+    String? payloadJson,
+    bool? allTables,
+    bool? allViews,
+    bool? allPermissions,
+    String? rulesJson,
+    DateTime? syncedAt,
+  }) => ClientTokenCacheData(
+    id: id ?? this.id,
+    clientId: clientId ?? this.clientId,
+    isRevoked: isRevoked ?? this.isRevoked,
+    agentId: agentId.present ? agentId.value : this.agentId,
+    createdAt: createdAt ?? this.createdAt,
+    payloadJson: payloadJson ?? this.payloadJson,
+    allTables: allTables ?? this.allTables,
+    allViews: allViews ?? this.allViews,
+    allPermissions: allPermissions ?? this.allPermissions,
+    rulesJson: rulesJson ?? this.rulesJson,
+    syncedAt: syncedAt ?? this.syncedAt,
+  );
+  ClientTokenCacheData copyWithCompanion(ClientTokenCacheTableCompanion data) {
+    return ClientTokenCacheData(
+      id: data.id.present ? data.id.value : this.id,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
+      agentId: data.agentId.present ? data.agentId.value : this.agentId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      allTables: data.allTables.present ? data.allTables.value : this.allTables,
+      allViews: data.allViews.present ? data.allViews.value : this.allViews,
+      allPermissions: data.allPermissions.present
+          ? data.allPermissions.value
+          : this.allPermissions,
+      rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClientTokenCacheData(')
+          ..write('id: $id, ')
+          ..write('clientId: $clientId, ')
+          ..write('isRevoked: $isRevoked, ')
+          ..write('agentId: $agentId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('allTables: $allTables, ')
+          ..write('allViews: $allViews, ')
+          ..write('allPermissions: $allPermissions, ')
+          ..write('rulesJson: $rulesJson, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clientId,
+    isRevoked,
+    agentId,
+    createdAt,
+    payloadJson,
+    allTables,
+    allViews,
+    allPermissions,
+    rulesJson,
+    syncedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ClientTokenCacheData &&
+          other.id == this.id &&
+          other.clientId == this.clientId &&
+          other.isRevoked == this.isRevoked &&
+          other.agentId == this.agentId &&
+          other.createdAt == this.createdAt &&
+          other.payloadJson == this.payloadJson &&
+          other.allTables == this.allTables &&
+          other.allViews == this.allViews &&
+          other.allPermissions == this.allPermissions &&
+          other.rulesJson == this.rulesJson &&
+          other.syncedAt == this.syncedAt);
+}
+
+class ClientTokenCacheTableCompanion
+    extends UpdateCompanion<ClientTokenCacheData> {
+  final Value<String> id;
+  final Value<String> clientId;
+  final Value<bool> isRevoked;
+  final Value<String?> agentId;
+  final Value<DateTime> createdAt;
+  final Value<String> payloadJson;
+  final Value<bool> allTables;
+  final Value<bool> allViews;
+  final Value<bool> allPermissions;
+  final Value<String> rulesJson;
+  final Value<DateTime> syncedAt;
+  final Value<int> rowid;
+  const ClientTokenCacheTableCompanion({
+    this.id = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.isRevoked = const Value.absent(),
+    this.agentId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.allTables = const Value.absent(),
+    this.allViews = const Value.absent(),
+    this.allPermissions = const Value.absent(),
+    this.rulesJson = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ClientTokenCacheTableCompanion.insert({
+    required String id,
+    required String clientId,
+    this.isRevoked = const Value.absent(),
+    this.agentId = const Value.absent(),
+    required DateTime createdAt,
+    this.payloadJson = const Value.absent(),
+    this.allTables = const Value.absent(),
+    this.allViews = const Value.absent(),
+    this.allPermissions = const Value.absent(),
+    this.rulesJson = const Value.absent(),
+    required DateTime syncedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clientId = Value(clientId),
+       createdAt = Value(createdAt),
+       syncedAt = Value(syncedAt);
+  static Insertable<ClientTokenCacheData> custom({
+    Expression<String>? id,
+    Expression<String>? clientId,
+    Expression<bool>? isRevoked,
+    Expression<String>? agentId,
+    Expression<DateTime>? createdAt,
+    Expression<String>? payloadJson,
+    Expression<bool>? allTables,
+    Expression<bool>? allViews,
+    Expression<bool>? allPermissions,
+    Expression<String>? rulesJson,
+    Expression<DateTime>? syncedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clientId != null) 'client_id': clientId,
+      if (isRevoked != null) 'is_revoked': isRevoked,
+      if (agentId != null) 'agent_id': agentId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (allTables != null) 'all_tables': allTables,
+      if (allViews != null) 'all_views': allViews,
+      if (allPermissions != null) 'all_permissions': allPermissions,
+      if (rulesJson != null) 'rules_json': rulesJson,
+      if (syncedAt != null) 'synced_at': syncedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ClientTokenCacheTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clientId,
+    Value<bool>? isRevoked,
+    Value<String?>? agentId,
+    Value<DateTime>? createdAt,
+    Value<String>? payloadJson,
+    Value<bool>? allTables,
+    Value<bool>? allViews,
+    Value<bool>? allPermissions,
+    Value<String>? rulesJson,
+    Value<DateTime>? syncedAt,
+    Value<int>? rowid,
+  }) {
+    return ClientTokenCacheTableCompanion(
+      id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
+      isRevoked: isRevoked ?? this.isRevoked,
+      agentId: agentId ?? this.agentId,
+      createdAt: createdAt ?? this.createdAt,
+      payloadJson: payloadJson ?? this.payloadJson,
+      allTables: allTables ?? this.allTables,
+      allViews: allViews ?? this.allViews,
+      allPermissions: allPermissions ?? this.allPermissions,
+      rulesJson: rulesJson ?? this.rulesJson,
+      syncedAt: syncedAt ?? this.syncedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (isRevoked.present) {
+      map['is_revoked'] = Variable<bool>(isRevoked.value);
+    }
+    if (agentId.present) {
+      map['agent_id'] = Variable<String>(agentId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (allTables.present) {
+      map['all_tables'] = Variable<bool>(allTables.value);
+    }
+    if (allViews.present) {
+      map['all_views'] = Variable<bool>(allViews.value);
+    }
+    if (allPermissions.present) {
+      map['all_permissions'] = Variable<bool>(allPermissions.value);
+    }
+    if (rulesJson.present) {
+      map['rules_json'] = Variable<String>(rulesJson.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClientTokenCacheTableCompanion(')
+          ..write('id: $id, ')
+          ..write('clientId: $clientId, ')
+          ..write('isRevoked: $isRevoked, ')
+          ..write('agentId: $agentId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('allTables: $allTables, ')
+          ..write('allViews: $allViews, ')
+          ..write('allPermissions: $allPermissions, ')
+          ..write('rulesJson: $rulesJson, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
+  late final $ClientTokenCacheTableTable clientTokenCacheTable =
+      $ClientTokenCacheTableTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [configTable];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    configTable,
+    clientTokenCacheTable,
+  ];
 }
 
 typedef $$ConfigTableTableCreateCompanionBuilder =
@@ -997,7 +1669,7 @@ typedef $$ConfigTableTableCreateCompanionBuilder =
       Value<String?> authUsername,
       Value<String?> authPassword,
       required String driverName,
-      required String odbcDriverName,
+      Value<String> odbcDriverName,
       required String connectionString,
       required String username,
       Value<String?> password,
@@ -1374,7 +2046,7 @@ class $$ConfigTableTableTableManager
                 Value<String?> authUsername = const Value.absent(),
                 Value<String?> authPassword = const Value.absent(),
                 required String driverName,
-                required String odbcDriverName,
+                Value<String> odbcDriverName = const Value.absent(),
                 required String connectionString,
                 required String username,
                 Value<String?> password = const Value.absent(),
@@ -1429,10 +2101,349 @@ typedef $$ConfigTableTableProcessedTableManager =
       ConfigData,
       PrefetchHooks Function()
     >;
+typedef $$ClientTokenCacheTableTableCreateCompanionBuilder =
+    ClientTokenCacheTableCompanion Function({
+      required String id,
+      required String clientId,
+      Value<bool> isRevoked,
+      Value<String?> agentId,
+      required DateTime createdAt,
+      Value<String> payloadJson,
+      Value<bool> allTables,
+      Value<bool> allViews,
+      Value<bool> allPermissions,
+      Value<String> rulesJson,
+      required DateTime syncedAt,
+      Value<int> rowid,
+    });
+typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
+    ClientTokenCacheTableCompanion Function({
+      Value<String> id,
+      Value<String> clientId,
+      Value<bool> isRevoked,
+      Value<String?> agentId,
+      Value<DateTime> createdAt,
+      Value<String> payloadJson,
+      Value<bool> allTables,
+      Value<bool> allViews,
+      Value<bool> allPermissions,
+      Value<String> rulesJson,
+      Value<DateTime> syncedAt,
+      Value<int> rowid,
+    });
+
+class $$ClientTokenCacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+  $$ClientTokenCacheTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isRevoked => $composableBuilder(
+    column: $table.isRevoked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get agentId => $composableBuilder(
+    column: $table.agentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allTables => $composableBuilder(
+    column: $table.allTables,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allViews => $composableBuilder(
+    column: $table.allViews,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allPermissions => $composableBuilder(
+    column: $table.allPermissions,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rulesJson => $composableBuilder(
+    column: $table.rulesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ClientTokenCacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+  $$ClientTokenCacheTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isRevoked => $composableBuilder(
+    column: $table.isRevoked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get agentId => $composableBuilder(
+    column: $table.agentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allTables => $composableBuilder(
+    column: $table.allTables,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allViews => $composableBuilder(
+    column: $table.allViews,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allPermissions => $composableBuilder(
+    column: $table.allPermissions,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rulesJson => $composableBuilder(
+    column: $table.rulesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ClientTokenCacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+  $$ClientTokenCacheTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<bool> get isRevoked =>
+      $composableBuilder(column: $table.isRevoked, builder: (column) => column);
+
+  GeneratedColumn<String> get agentId =>
+      $composableBuilder(column: $table.agentId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get allTables =>
+      $composableBuilder(column: $table.allTables, builder: (column) => column);
+
+  GeneratedColumn<bool> get allViews =>
+      $composableBuilder(column: $table.allViews, builder: (column) => column);
+
+  GeneratedColumn<bool> get allPermissions => $composableBuilder(
+    column: $table.allPermissions,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get rulesJson =>
+      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$ClientTokenCacheTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ClientTokenCacheTableTable,
+          ClientTokenCacheData,
+          $$ClientTokenCacheTableTableFilterComposer,
+          $$ClientTokenCacheTableTableOrderingComposer,
+          $$ClientTokenCacheTableTableAnnotationComposer,
+          $$ClientTokenCacheTableTableCreateCompanionBuilder,
+          $$ClientTokenCacheTableTableUpdateCompanionBuilder,
+          (
+            ClientTokenCacheData,
+            BaseReferences<
+              _$AppDatabase,
+              $ClientTokenCacheTableTable,
+              ClientTokenCacheData
+            >,
+          ),
+          ClientTokenCacheData,
+          PrefetchHooks Function()
+        > {
+  $$ClientTokenCacheTableTableTableManager(
+    _$AppDatabase db,
+    $ClientTokenCacheTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ClientTokenCacheTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ClientTokenCacheTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ClientTokenCacheTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clientId = const Value.absent(),
+                Value<bool> isRevoked = const Value.absent(),
+                Value<String?> agentId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<bool> allTables = const Value.absent(),
+                Value<bool> allViews = const Value.absent(),
+                Value<bool> allPermissions = const Value.absent(),
+                Value<String> rulesJson = const Value.absent(),
+                Value<DateTime> syncedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ClientTokenCacheTableCompanion(
+                id: id,
+                clientId: clientId,
+                isRevoked: isRevoked,
+                agentId: agentId,
+                createdAt: createdAt,
+                payloadJson: payloadJson,
+                allTables: allTables,
+                allViews: allViews,
+                allPermissions: allPermissions,
+                rulesJson: rulesJson,
+                syncedAt: syncedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clientId,
+                Value<bool> isRevoked = const Value.absent(),
+                Value<String?> agentId = const Value.absent(),
+                required DateTime createdAt,
+                Value<String> payloadJson = const Value.absent(),
+                Value<bool> allTables = const Value.absent(),
+                Value<bool> allViews = const Value.absent(),
+                Value<bool> allPermissions = const Value.absent(),
+                Value<String> rulesJson = const Value.absent(),
+                required DateTime syncedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ClientTokenCacheTableCompanion.insert(
+                id: id,
+                clientId: clientId,
+                isRevoked: isRevoked,
+                agentId: agentId,
+                createdAt: createdAt,
+                payloadJson: payloadJson,
+                allTables: allTables,
+                allViews: allViews,
+                allPermissions: allPermissions,
+                rulesJson: rulesJson,
+                syncedAt: syncedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ClientTokenCacheTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ClientTokenCacheTableTable,
+      ClientTokenCacheData,
+      $$ClientTokenCacheTableTableFilterComposer,
+      $$ClientTokenCacheTableTableOrderingComposer,
+      $$ClientTokenCacheTableTableAnnotationComposer,
+      $$ClientTokenCacheTableTableCreateCompanionBuilder,
+      $$ClientTokenCacheTableTableUpdateCompanionBuilder,
+      (
+        ClientTokenCacheData,
+        BaseReferences<
+          _$AppDatabase,
+          $ClientTokenCacheTableTable,
+          ClientTokenCacheData
+        >,
+      ),
+      ClientTokenCacheData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$ConfigTableTableTableManager get configTable =>
       $$ConfigTableTableTableManager(_db, _db.configTable);
+  $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
+      $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
 }

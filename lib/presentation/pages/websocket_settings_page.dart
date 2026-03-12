@@ -2,11 +2,13 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:provider/provider.dart';
 
 class WebSocketSettingsPage extends StatefulWidget {
@@ -22,6 +24,7 @@ class WebSocketSettingsPage extends StatefulWidget {
 }
 
 class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
+  int _selectedTabIndex = 0;
   AuthStatus? _previousAuthStatus;
   String _previousAuthError = '';
   ConnectionStatus? _previousConnectionStatus;
@@ -133,63 +136,69 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   void _showSuccessModal() {
-    MessageModal.show<void>(
-      context: context,
-      title: 'Sucesso',
-      message: 'Autenticado com sucesso!',
-      type: MessageType.success,
-      confirmText: 'OK',
+    _showSuccessMessage(
+      title: AppStrings.modalTitleSuccess,
+      message: AppStrings.msgAuthenticatedSuccessfully,
     );
   }
 
   void _showConnectionSuccessModal() {
-    MessageModal.show<void>(
+    _showSuccessMessage(
+      title: AppStrings.modalTitleConnectionEstablished,
+      message: AppStrings.msgWebSocketConnectedSuccessfully,
+    );
+  }
+
+  void _showSuccessMessage({
+    required String title,
+    required String message,
+  }) {
+    SettingsFeedback.showSuccess(
       context: context,
-      title: 'Conexão Estabelecida',
-      message: 'Conectado ao servidor WebSocket com sucesso!',
-      type: MessageType.success,
-      confirmText: 'OK',
+      title: title,
+      message: message,
+    );
+  }
+
+  void _showErrorWithClear({
+    required String title,
+    required String message,
+    required VoidCallback onClear,
+  }) {
+    SettingsFeedback.showError(
+      context: context,
+      title: title,
+      message: message,
+      onConfirm: onClear,
     );
   }
 
   void _showConnectionErrorModal(String error) {
-    MessageModal.show<void>(
-      context: context,
-      title: 'Erro de Conexão',
+    _showErrorWithClear(
+      title: AppStrings.modalTitleConnectionError,
       message: error,
-      type: MessageType.error,
-      confirmText: 'OK',
-      onConfirm: () {
-        final connectionProvider = context.read<ConnectionProvider>();
-        connectionProvider.clearError();
+      onClear: () {
+        context.read<ConnectionProvider>().clearError();
       },
     );
   }
 
   void _showConfigErrorModal(String error) {
-    MessageModal.show<void>(
-      context: context,
-      title: 'Erro de Configuração',
+    _showErrorWithClear(
+      title: AppStrings.modalTitleConfigError,
       message: error,
-      type: MessageType.error,
-      confirmText: 'OK',
-      onConfirm: () {
-        final configProvider = context.read<ConfigProvider>();
-        configProvider.clearError();
+      onClear: () {
+        context.read<ConfigProvider>().clearError();
       },
     );
   }
 
   void _showErrorModal(String error) {
-    MessageModal.show<void>(
-      context: context,
-      title: 'Erro de Autenticação',
+    _showErrorWithClear(
+      title: AppStrings.modalTitleAuthError,
       message: error,
-      type: MessageType.error,
-      confirmText: 'OK',
-      onConfirm: () {
-        final authProvider = context.read<AuthProvider>();
-        authProvider.clearError();
+      onClear: () {
+        context.read<AuthProvider>().clearError();
       },
     );
   }
@@ -236,15 +245,69 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
           maxWidth: AppLayout.maxSettingsWidth,
-          child: WebSocketConfigSection(
-            formController: _formController,
-            configProvider: configProvider,
-            onSaveConfig: () {
-              _formController.updateAllFieldsToProvider(configProvider);
-              configProvider.saveConfig();
+          child: SettingsTabView(
+            currentIndex: _selectedTabIndex,
+            onChanged: (index) {
+              setState(() {
+                _selectedTabIndex = index;
+              });
             },
+            items: [
+              SettingsTabItem(
+                icon: FluentIcons.plug_connected,
+                text: AppStrings.tabWebSocketConnection,
+                body: WebSocketConfigSection(
+                  formController: _formController,
+                  configProvider: configProvider,
+                  onSaveConfig: () {
+                    _formController.updateAllFieldsToProvider(configProvider);
+                    configProvider.saveConfig();
+                  },
+                ),
+              ),
+              const SettingsTabItem(
+                icon: FluentIcons.permissions,
+                text: AppStrings.tabClientTokenAuthorization,
+                body: _ClientTokenTabContent(),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ClientTokenTabContent extends StatefulWidget {
+  const _ClientTokenTabContent();
+
+  @override
+  State<_ClientTokenTabContent> createState() => _ClientTokenTabContentState();
+}
+
+class _ClientTokenTabContentState extends State<_ClientTokenTabContent> {
+  final ScrollController _tokenListScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _tokenListScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.settingsSectionHorizontal,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ClientTokenSection(
+            scrollController: _tokenListScrollController,
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

@@ -63,8 +63,9 @@ void main() {
       mockCompressionService = MockCompressionService();
       mockAuthorize = MockAuthorizeSqlOperation();
       mockFeatureFlags = MockFeatureFlags();
-      when(() => mockFeatureFlags.enableClientTokenAuthorization)
-          .thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(false);
 
       useCase = HandleQueryRequest(
         mockDatabaseGateway,

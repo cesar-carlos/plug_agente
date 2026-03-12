@@ -52,6 +52,56 @@ class MessageModal extends StatelessWidget {
     );
   }
 
+  static Future<T?> showInfo<T>({
+    required BuildContext context,
+    required String title,
+    required String message,
+    VoidCallback? onConfirm,
+    String? confirmText,
+  }) {
+    return show<T>(
+      context: context,
+      title: title,
+      message: message,
+      onConfirm: onConfirm,
+      confirmText: confirmText,
+    );
+  }
+
+  static Future<T?> showSuccess<T>({
+    required BuildContext context,
+    required String title,
+    required String message,
+    VoidCallback? onConfirm,
+    String? confirmText,
+  }) {
+    return show<T>(
+      context: context,
+      title: title,
+      message: message,
+      type: MessageType.success,
+      onConfirm: onConfirm,
+      confirmText: confirmText,
+    );
+  }
+
+  static Future<T?> showError<T>({
+    required BuildContext context,
+    required String title,
+    required String message,
+    VoidCallback? onConfirm,
+    String? confirmText,
+  }) {
+    return show<T>(
+      context: context,
+      title: title,
+      message: message,
+      type: MessageType.error,
+      onConfirm: onConfirm,
+      confirmText: confirmText,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Color accentColor;

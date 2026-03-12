@@ -94,14 +94,12 @@ class _MainWindowState extends State<MainWindow> {
     final runtimeMode = context.watch<RuntimeModeProvider>();
 
     return InfoBar(
-      title: const Text('Modo Degradado Ativo'),
+      title: const Text(AppStrings.mainDegradedModeTitle),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'O aplicativo está rodando com recursos limitados:',
-          ),
+          const Text(AppStrings.mainDegradedModeDescription),
           const SizedBox(height: AppSpacing.sm),
           ...runtimeMode.degradationReasons.map(
             (reason) => Padding(

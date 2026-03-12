@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/services/query_processing_service.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -145,7 +146,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Dashboard')),
+      header: const PageHeader(title: Text(AppStrings.navDashboard)),
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
@@ -153,12 +154,12 @@ class _DashboardPageState extends State<DashboardPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Plug Database',
+                AppConstants.appName,
                 style: context.pageTitle,
               ),
               const SizedBox(height: 16),
               Text(
-                'Monitor your agent status and database connections here.',
+                AppStrings.dashboardDescription,
                 style: context.bodyMuted,
               ),
               const SizedBox(height: 32),

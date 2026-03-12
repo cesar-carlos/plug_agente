@@ -7,7 +7,9 @@ import 'package:plug_agente/infrastructure/models/envelope_model.dart';
 class LegacyToRpcAdapter {
   /// Converts a legacy envelope to an RPC request.
   static RpcRequest envelopeToRpcRequest(EnvelopeModel envelope) {
-    final payload = envelope.payloadBytes.isNotEmpty ? envelope.payloadBytes.first : <String, dynamic>{};
+    final payload = envelope.payloadBytes.isNotEmpty
+        ? envelope.payloadBytes.first
+        : <String, dynamic>{};
 
     final sql = payload['query'] as String? ?? '';
     final params = payload['parameters'] as Map<String, dynamic>?;
@@ -18,7 +20,7 @@ class LegacyToRpcAdapter {
       id: envelope.requestId,
       params: {
         'sql': sql,
-        'params': ?params,
+        'params': params,
       },
     );
   }
@@ -67,7 +69,9 @@ class LegacyToRpcAdapter {
       data: rows?.map((e) => e as Map<String, dynamic>).toList() ?? [],
       affectedRows: affectedRows,
       timestamp: DateTime.now(),
-      columnMetadata: columnMetadata?.map((e) => e as Map<String, dynamic>).toList(),
+      columnMetadata: columnMetadata
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList(),
     );
   }
 

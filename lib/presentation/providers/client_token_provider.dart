@@ -21,6 +21,7 @@ class ClientTokenProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isCreating = false;
   bool _isRevoking = false;
+  String? _revokingTokenId;
   String _error = '';
   String? _lastCreatedToken;
   bool _hasLoaded = false;
@@ -29,6 +30,7 @@ class ClientTokenProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isCreating => _isCreating;
   bool get isRevoking => _isRevoking;
+  String? get revokingTokenId => _revokingTokenId;
   String get error => _error;
   String? get lastCreatedToken => _lastCreatedToken;
   bool get hasLoaded => _hasLoaded;
@@ -67,7 +69,10 @@ class ClientTokenProvider extends ChangeNotifier {
     return isSuccess;
   }
 
-  Future<bool> createToken(ClientTokenCreateRequest request) async {
+  Future<bool> createToken(
+    ClientTokenCreateRequest request, {
+    bool refreshTokens = true,
+  }) async {
     _isCreating = true;
     _error = '';
     _lastCreatedToken = null;
@@ -81,7 +86,9 @@ class ClientTokenProvider extends ChangeNotifier {
         _lastCreatedToken = token;
         _error = '';
         isSuccess = true;
-        await loadTokens(silent: true);
+        if (refreshTokens) {
+          await loadTokens(silent: true);
+        }
       },
       (failure) async {
         _error = failure.toDisplayMessage();
@@ -95,6 +102,7 @@ class ClientTokenProvider extends ChangeNotifier {
 
   Future<bool> revokeToken(String tokenId) async {
     _isRevoking = true;
+    _revokingTokenId = tokenId;
     _error = '';
     notifyListeners();
 
@@ -113,8 +121,13 @@ class ClientTokenProvider extends ChangeNotifier {
     );
 
     _isRevoking = false;
+    _revokingTokenId = null;
     notifyListeners();
     return isSuccess;
+  }
+
+  bool isRevokingToken(String tokenId) {
+    return _isRevoking && _revokingTokenId == tokenId;
   }
 
   void clearError() {

@@ -5,6 +5,9 @@ import 'package:result_dart/result_dart.dart';
 /// Permite processar queries grandes que retornam milhões de linhas
 /// sem carregar tudo na memória de uma vez.
 abstract class IStreamingDatabaseGateway {
+  /// Whether there is an active streaming execution that can be cancelled.
+  bool get hasActiveStream;
+
   /// Executa query em streaming, processando em chunks.
   ///
   /// [onChunk] é chamado para cada lote de linhas processado.

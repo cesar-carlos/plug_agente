@@ -21,6 +21,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   bool _initialized = false;
   static const Duration _cancelDisconnectTimeout = Duration(seconds: 3);
 
+  @override
+  bool get hasActiveStream => _activeConnectionId != null;
+
   ConnectionOptions _buildStreamingConnectionOptions(int chunkSizeBytes) {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
     final maxResultBufferBytes = max(

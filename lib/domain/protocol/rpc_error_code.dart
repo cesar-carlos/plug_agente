@@ -80,6 +80,12 @@ abstract class RpcErrorCode {
   /// Invalid database configuration.
   static const int invalidDatabaseConfig = -32108;
 
+  /// Execution not found for cancel operation.
+  static const int executionNotFound = -32109;
+
+  /// Query execution was cancelled.
+  static const int executionCancelled = -32110;
+
   // ============================================================================
   // Error data catalog helpers
   // ============================================================================
@@ -121,6 +127,8 @@ abstract class RpcErrorCode {
       databaseConnectionFailed => 'Database connection failed',
       queryTimeout => 'Query timeout',
       invalidDatabaseConfig => 'Invalid database configuration',
+      executionNotFound => 'Execution not found',
+      executionCancelled => 'Execution cancelled',
       _ => 'Server error',
     };
   }
@@ -174,7 +182,9 @@ abstract class RpcErrorCode {
       connectionPoolExhausted ||
       resultTooLarge ||
       networkError ||
-      databaseConnectionFailed => 500,
+      databaseConnectionFailed ||
+      executionNotFound ||
+      executionCancelled => 500,
       _ => 500,
     };
   }
@@ -200,7 +210,9 @@ abstract class RpcErrorCode {
       queryTimeout => categorySql,
       connectionPoolExhausted ||
       databaseConnectionFailed ||
-      invalidDatabaseConfig => categoryDatabase,
+      invalidDatabaseConfig ||
+      executionNotFound ||
+      executionCancelled => categoryDatabase,
       _ => categoryInternal,
     };
   }
@@ -230,6 +242,8 @@ abstract class RpcErrorCode {
       databaseConnectionFailed => 'database_connection_failed',
       queryTimeout => 'query_timeout',
       invalidDatabaseConfig => 'invalid_database_config',
+      executionNotFound => 'execution_not_found',
+      executionCancelled => 'execution_cancelled',
       _ => 'internal_error',
     };
   }
@@ -265,6 +279,9 @@ abstract class RpcErrorCode {
         'Nao foi possivel conectar ao banco de dados.',
       invalidDatabaseConfig =>
         'Configuracao do banco invalida. Revise os dados de conexao.',
+      executionNotFound =>
+        'Execucao nao encontrada. Pode ter sido finalizada ou nunca iniciada.',
+      executionCancelled => 'Execucao cancelada pelo usuario.',
       _ => 'Falha interna no processamento da requisicao.',
     };
   }

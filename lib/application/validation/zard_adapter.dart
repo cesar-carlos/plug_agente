@@ -10,7 +10,6 @@ extension ZardResultExtension<T extends Object> on ZardResult<T> {
 
     final errorMsg =
         error?.messages ?? error?.toString() ?? 'Validation failed';
-
     return Failure(domain.ValidationFailure(errorMsg));
   }
 }
@@ -47,7 +46,6 @@ class ZardAdapter {
         zardResult.error?.messages ??
         zardResult.error?.toString() ??
         'Validation failed';
-
     return Failure(domain.ValidationFailure(errorMsg));
   }
 }

@@ -46,6 +46,24 @@ class HandleQueryRequest {
   Future<Result<void>> call(QueryRequest request) async {
     try {
       if (_featureFlags.enableClientTokenAuthorization &&
+          (request.clientToken == null || request.clientToken!.isEmpty)) {
+        final authFailure = domain.ConfigurationFailure.withContext(
+          message: 'Client token is required for authorized SQL operations',
+          context: {
+            'authentication': true,
+            'reason': 'missing_client_token',
+            'user_message':
+                'Client token obrigatorio. Gere um token e envie na requisicao.',
+          },
+        );
+        final errorResponse = _buildErrorResponse(
+          request,
+          authFailure.context['user_message'] as String,
+        );
+        return _transportClient.sendResponse(errorResponse);
+      }
+
+      if (_featureFlags.enableClientTokenAuthorization &&
           request.clientToken != null &&
           request.clientToken!.isNotEmpty) {
         final authResult = await _authorizeSqlOperation(
@@ -61,7 +79,8 @@ class HandleQueryRequest {
             resource: ctx['resource'] as String?,
             reason: ctx['reason'] as String?,
           );
-          final errorMessage = failure is domain.ConfigurationFailure &&
+          final errorMessage =
+              failure is domain.ConfigurationFailure &&
                   failure.context.containsKey('user_message')
               ? failure.context['user_message'] as String
               : failure.message;

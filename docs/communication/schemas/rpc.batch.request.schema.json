@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.batch.request.v1.json",
+  "title": "RPC Batch Request",
+  "description": "Array of RPC requests. Strict mode: unique IDs, max 32 items.",
+  "type": "array",
+  "items": { "$ref": "./rpc.request.schema.json" },
+  "minItems": 1,
+  "maxItems": 32
+}

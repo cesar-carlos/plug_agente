@@ -5,5 +5,7 @@ export 'protocol_capabilities.dart';
 export 'rpc_batch.dart';
 export 'rpc_error.dart';
 export 'rpc_error_code.dart';
+export 'rpc_protocol_meta.dart';
 export 'rpc_request.dart';
 export 'rpc_response.dart';
+export 'rpc_stream.dart';

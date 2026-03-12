@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -48,17 +49,21 @@ import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/compression/gzip_compressor.dart';
-import 'package:plug_agente/infrastructure/datasources/client_token_data_source.dart';
+import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
+import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
@@ -76,6 +81,10 @@ import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
+import 'package:plug_agente/infrastructure/stores/in_memory_idempotency_store.dart';
+import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -150,8 +159,10 @@ Future<void> setupDependencies({
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(SocketDataSource.new)
-    ..registerLazySingleton(() => ClientTokenDataSource(DioFactory.createDio()))
     ..registerLazySingleton(AppDatabase.new)
+    ..registerLazySingleton(
+      () => ClientTokenLocalDataSource(getIt<AppDatabase>()),
+    )
     ..registerLazySingleton(ProtocolNegotiator.new)
     ..registerLazySingleton(ProtocolMetricsCollector.new)
     ..registerLazySingleton(AuthorizationMetricsCollector.new)
@@ -167,6 +178,13 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
     ..registerLazySingleton(() => MetricsCollector.instance)
+    ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
+    ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
+    ..registerLazySingleton<ITokenAuditStore>(
+      () => getIt<FeatureFlags>().enableTokenAudit
+          ? FileTokenAuditStore()
+          : NoopTokenAuditStore(),
+    )
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
@@ -175,7 +193,10 @@ Future<void> setupDependencies({
         uuid: getIt<Uuid>(),
         authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
         featureFlags: getIt<FeatureFlags>(),
+        configRepository: getIt<IAgentConfigRepository>(),
+        idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<AuthorizationMetricsCollector>(),
+        streamingGateway: getIt<IStreamingDatabaseGateway>(),
       ),
     )
     ..registerLazySingleton<ITransportClient>(
@@ -207,13 +228,53 @@ Future<void> setupDependencies({
       () => AuthClient(DioFactory.createDio()),
     )
     ..registerLazySingleton<IAuthorizationPolicyResolver>(
-      AuthorizationPolicyResolver.new,
+      () => AuthorizationPolicyResolver(
+        getIt<FeatureFlags>(),
+        jwksVerifier: getIt<JwtJwksVerifier>(),
+        localDataSource: getIt<ClientTokenLocalDataSource>(),
+        revokedTokenStore: getIt<IRevokedTokenStore>(),
+        tokenAuditStore: getIt<ITokenAuditStore>(),
+      ),
+    )
+    ..registerLazySingleton<JwtJwksVerifier>(
+      () => JwtJwksVerifier(() async {
+        final jwksUrlOverride = dotenv.env['JWKS_URL']?.trim();
+        if (jwksUrlOverride != null && jwksUrlOverride.isNotEmpty) {
+          return JwksConfig(
+            jwksUrl: jwksUrlOverride,
+            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_ISSUER']
+                : null,
+            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_AUDIENCE']
+                : null,
+          );
+        }
+        final configResult = await getIt<IAgentConfigRepository>()
+            .getCurrentConfig();
+        return configResult.fold(
+          (config) {
+            final base = config.serverUrl.trim();
+            if (base.isEmpty) return null;
+            final normalized = base.endsWith('/')
+                ? base.substring(0, base.length - 1)
+                : base;
+            return JwksConfig(
+              jwksUrl: '$normalized/.well-known/jwks.json',
+              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_ISSUER']
+                  : null,
+              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_AUDIENCE']
+                  : null,
+            );
+          },
+          (_) => null,
+        );
+      }),
     )
     ..registerLazySingleton<IClientTokenRepository>(
-      () => ClientTokenRepository(
-        getIt<ClientTokenDataSource>(),
-        getIt<IAgentConfigRepository>(),
-      ),
+      () => ClientTokenRepository(getIt<ClientTokenLocalDataSource>()),
     )
     ..registerLazySingleton(
       () => ConnectionService(
@@ -294,13 +355,19 @@ Future<void> setupDependencies({
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
     ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()))
     ..registerLazySingleton(
-      () => CreateClientToken(getIt<IClientTokenRepository>()),
+      () => CreateClientToken(
+        getIt<IClientTokenRepository>(),
+        auditStore: getIt<ITokenAuditStore>(),
+      ),
     )
     ..registerLazySingleton(
       () => ListClientTokens(getIt<IClientTokenRepository>()),
     )
     ..registerLazySingleton(
-      () => RevokeClientToken(getIt<IClientTokenRepository>()),
+      () => RevokeClientToken(
+        getIt<IClientTokenRepository>(),
+        auditStore: getIt<ITokenAuditStore>(),
+      ),
     )
     ..registerLazySingleton(
       () => AuthorizeSqlOperation(

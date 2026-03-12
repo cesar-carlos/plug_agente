@@ -5,10 +5,17 @@ import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 /// Maps domain Failures to RPC errors.
 class FailureToRpcErrorMapper {
   /// Converts a Failure to an RpcError with Problem Details data.
-  static RpcError map(Failure failure, {String? instance}) {
-    final code = _getErrorCode(failure);
+  ///
+  /// When [useTimeoutByStage] is true, uses `timeout_stage` from failure
+  /// context to classify timeouts (sql, transport, ack) for finer error codes.
+  static RpcError map(
+    Failure failure, {
+    String? instance,
+    bool useTimeoutByStage = false,
+  }) {
+    final code = _getErrorCode(failure, useTimeoutByStage);
     final message = RpcErrorCode.getMessage(code);
-    final data = _buildErrorData(failure, code, instance);
+    final data = _buildErrorData(failure, code, instance, useTimeoutByStage);
 
     return RpcError(
       code: code,
@@ -18,7 +25,7 @@ class FailureToRpcErrorMapper {
   }
 
   /// Determines the RPC error code based on failure type.
-  static int _getErrorCode(Failure failure) {
+  static int _getErrorCode(Failure failure, bool useTimeoutByStage) {
     if (failure is ValidationFailure) {
       // Check context for SQL-specific validation
       if (failure.context['operation'] == 'sql_validation') {
@@ -28,8 +35,10 @@ class FailureToRpcErrorMapper {
     }
 
     if (failure is QueryExecutionFailure) {
-      // Check context for specific SQL errors
       if (failure.context['timeout'] == true) {
+        return RpcErrorCode.queryTimeout;
+      }
+      if (useTimeoutByStage && failure.context['timeout_stage'] == 'sql') {
         return RpcErrorCode.queryTimeout;
       }
       return RpcErrorCode.sqlExecutionFailed;
@@ -48,6 +57,12 @@ class FailureToRpcErrorMapper {
     if (failure is NetworkFailure) {
       if (failure.context['timeout'] == true) {
         return RpcErrorCode.timeout;
+      }
+      if (useTimeoutByStage) {
+        final stage = failure.context['timeout_stage'] as String?;
+        if (stage == 'transport' || stage == 'ack') {
+          return RpcErrorCode.timeout;
+        }
       }
       return RpcErrorCode.networkError;
     }
@@ -93,9 +108,15 @@ class FailureToRpcErrorMapper {
     Failure failure,
     int code,
     String? instance,
+    bool useTimeoutByStage,
   ) {
     final correlationId = instance ?? RpcErrorCode.createCorrelationId();
     final safeContext = _sanitizeContext(failure.context);
+    final timeoutReason = _getTimeoutReasonOverride(
+      failure,
+      code,
+      useTimeoutByStage,
+    );
     final extra = <String, dynamic>{
       // Legacy/problem-details-compatible fields for transition.
       'type': _getTypeUri(failure),
@@ -107,6 +128,7 @@ class FailureToRpcErrorMapper {
       'recoverable': failure.isRecoverable,
       'failure_code': failure.code,
       ...safeContext,
+      ...?(timeoutReason != null ? {'reason': timeoutReason} : null),
     };
 
     return RpcErrorCode.buildErrorData(
@@ -136,6 +158,23 @@ class FailureToRpcErrorMapper {
     if (failure is NotFoundFailure) return '$baseUri/not-found';
 
     return '$baseUri/internal-error';
+  }
+
+  /// Returns reason override for timeout-by-stage classification.
+  static String? _getTimeoutReasonOverride(
+    Failure failure,
+    int code,
+    bool useTimeoutByStage,
+  ) {
+    if (!useTimeoutByStage || code != RpcErrorCode.timeout) {
+      return null;
+    }
+    final stage = failure.context['timeout_stage'] as String?;
+    return switch (stage) {
+      'transport' => 'transport_timeout',
+      'ack' => 'ack_timeout',
+      _ => null,
+    };
   }
 
   /// Removes sensitive information from context.

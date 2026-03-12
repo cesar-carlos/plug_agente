@@ -196,7 +196,12 @@ class SocketIOTransportClient implements ITransportClient {
           _socket?.dispose();
           _socket = null;
           completer.complete(
-            Failure(domain.NetworkFailure('Connection timeout')),
+            Failure(
+              domain.NetworkFailure.withContext(
+                message: 'Connection timeout',
+                context: {'timeout': true, 'timeout_stage': 'transport'},
+              ),
+            ),
           );
         }
       });

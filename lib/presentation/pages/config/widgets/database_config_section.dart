@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
@@ -7,6 +8,7 @@ import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
@@ -42,52 +44,49 @@ class DatabaseConfigSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _DatabaseSectionHeader(),
-            const SizedBox(height: 16),
-            _DriverSection(
-              driverNameController: formController.driverNameController,
-              odbcDriverNameController: formController.odbcDriverNameController,
-              onDriverChanged: onDriverChanged,
-              fieldsInitialized: formController.fieldsInitialized,
+            SettingsSectionBlock(
+              title: AppStrings.dbSectionTitle,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DriverSection(
+                    driverNameController: formController.driverNameController,
+                    odbcDriverNameController:
+                        formController.odbcDriverNameController,
+                    onDriverChanged: onDriverChanged,
+                    fieldsInitialized: formController.fieldsInitialized,
+                  ),
+                  const SizedBox(height: 16),
+                  _ConnectionSection(
+                    hostController: formController.hostController,
+                    portController: formController.portController,
+                  ),
+                  const SizedBox(height: 16),
+                  _DatabaseCredentialsSection(
+                    databaseNameController: formController.databaseNameController,
+                    usernameController: formController.usernameController,
+                    passwordController: formController.passwordController,
+                  ),
+                  const SizedBox(height: 24),
+                  _ActionButtons(
+                    driverNameController: formController.driverNameController,
+                    odbcDriverNameController:
+                        formController.odbcDriverNameController,
+                    hostController: formController.hostController,
+                    portController: formController.portController,
+                    onTestConnection: onTestConnection,
+                    onSaveConfig: onSaveConfig,
+                    isLoading: configProvider.isLoading,
+                    isCheckingDriver: connectionProvider.isCheckingDriver,
+                  ),
+                  const SizedBox(height: 16),
+                  const _StatusSection(),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            _ConnectionSection(
-              hostController: formController.hostController,
-              portController: formController.portController,
-            ),
-            const SizedBox(height: 16),
-            _DatabaseCredentialsSection(
-              databaseNameController: formController.databaseNameController,
-              usernameController: formController.usernameController,
-              passwordController: formController.passwordController,
-            ),
-            const SizedBox(height: 24),
-            _ActionButtons(
-              driverNameController: formController.driverNameController,
-              odbcDriverNameController: formController.odbcDriverNameController,
-              hostController: formController.hostController,
-              portController: formController.portController,
-              onTestConnection: onTestConnection,
-              onSaveConfig: onSaveConfig,
-              isLoading: configProvider.isLoading,
-              isCheckingDriver: connectionProvider.isCheckingDriver,
-            ),
-            const SizedBox(height: 16),
-            const _StatusSection(),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DatabaseSectionHeader extends StatelessWidget {
-  const _DatabaseSectionHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SettingsSectionTitle(
-      title: 'Configuração do banco de dados',
     );
   }
 }
@@ -112,7 +111,7 @@ class _DriverSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppDropdown<String>(
-            label: 'Driver do Banco de Dados',
+            label: AppStrings.dbFieldDatabaseDriver,
             value: driverNameController.text,
             items: [
               ComboBoxItem(
@@ -137,7 +136,7 @@ class _DriverSection extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           AppTextField(
-            label: 'Nome do Driver ODBC',
+            label: AppStrings.dbFieldOdbcDriverName,
             controller: odbcDriverNameController,
             hint: OdbcDrivers.sqlServerNativeClient,
           ),
@@ -163,17 +162,17 @@ class _ConnectionSection extends StatelessWidget {
         Expanded(
           flex: 3,
           child: AppTextField(
-            label: 'Host',
+            label: AppStrings.dbFieldHost,
             controller: hostController,
-            hint: 'localhost',
+            hint: AppStrings.dbHintHost,
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: NumericField(
-            label: 'Porta',
+            label: AppStrings.dbFieldPort,
             controller: portController,
-            hint: '1433',
+            hint: AppStrings.dbHintPort,
             minValue: 1,
             maxValue: 65535,
           ),
@@ -200,20 +199,20 @@ class _DatabaseCredentialsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppTextField(
-          label: 'Nome do Banco de Dados',
+          label: AppStrings.dbFieldDatabaseName,
           controller: databaseNameController,
-          hint: 'Nome da Base',
+          hint: AppStrings.dbHintDatabaseName,
         ),
         const SizedBox(height: 16),
         AppTextField(
-          label: 'Usuário',
+          label: AppStrings.dbFieldUsername,
           controller: usernameController,
-          hint: 'Usuário',
+          hint: AppStrings.dbHintUsername,
         ),
         const SizedBox(height: 16),
         PasswordField(
           controller: passwordController,
-          hint: 'Senha',
+          hint: AppStrings.dbHintPassword,
         ),
       ],
     );
@@ -243,35 +242,32 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        AppButton(
-          label: 'Testar Conexão com Banco',
-          isPrimary: false,
-          isLoading: isCheckingDriver,
-          onPressed: () {
-            if (driverNameController.text.isNotEmpty &&
-                hostController.text.isNotEmpty &&
-                portController.text.isNotEmpty &&
-                odbcDriverNameController.text.isNotEmpty) {
-              onTestConnection();
-            }
-          },
-        ),
-        const SizedBox(width: 16),
-        AppButton(
-          label: 'Salvar Configuração',
-          isLoading: isLoading || isCheckingDriver,
-          onPressed: () {
-            if (driverNameController.text.isNotEmpty &&
-                hostController.text.isNotEmpty &&
-                portController.text.isNotEmpty &&
-                odbcDriverNameController.text.isNotEmpty) {
-              onSaveConfig();
-            }
-          },
-        ),
-      ],
+    return SettingsActionRow(
+      leading: AppButton(
+        label: AppStrings.dbButtonTestConnection,
+        isPrimary: false,
+        isLoading: isCheckingDriver,
+        onPressed: () {
+          if (driverNameController.text.isNotEmpty &&
+              hostController.text.isNotEmpty &&
+              portController.text.isNotEmpty &&
+              odbcDriverNameController.text.isNotEmpty) {
+            onTestConnection();
+          }
+        },
+      ),
+      trailing: AppButton(
+        label: AppStrings.wsButtonSaveConfig,
+        isLoading: isLoading || isCheckingDriver,
+        onPressed: () {
+          if (driverNameController.text.isNotEmpty &&
+              hostController.text.isNotEmpty &&
+              portController.text.isNotEmpty &&
+              odbcDriverNameController.text.isNotEmpty) {
+            onSaveConfig();
+          }
+        },
+      ),
     );
   }
 }

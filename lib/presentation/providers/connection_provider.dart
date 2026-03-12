@@ -26,13 +26,16 @@ class ConnectionProvider extends ChangeNotifier {
     this._checkOdbcDriverUseCase, {
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
+    ITransportClient? transportClient,
   }) : _authProvider = authProvider,
-       _configProvider = configProvider;
+       _configProvider = configProvider,
+       _transportClientOverride = transportClient;
   final ConnectToHub _connectToHubUseCase;
   final TestDbConnection _testDbConnectionUseCase;
   final CheckOdbcDriver _checkOdbcDriverUseCase;
   AuthProvider? _authProvider;
   ConfigProvider? _configProvider;
+  final ITransportClient? _transportClientOverride;
 
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
@@ -79,7 +82,8 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    final transportClient = getIt<ITransportClient>();
+    final transportClient =
+        _transportClientOverride ?? getIt<ITransportClient>();
     transportClient.setOnTokenExpired(_handleTokenExpired);
     transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
@@ -110,7 +114,8 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
-    final transportClient = getIt<ITransportClient>();
+    final transportClient =
+        _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
     _error = '';
@@ -191,7 +196,8 @@ class ConnectionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final transportClient = getIt<ITransportClient>();
+      final transportClient =
+          _transportClientOverride ?? getIt<ITransportClient>();
       await transportClient.disconnect();
 
       final context = _resolveConnectionContext();

@@ -1,14 +1,16 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
@@ -48,8 +50,6 @@ class WebSocketConfigSection extends StatelessWidget {
               onSaveConfig: onSaveConfig,
             ),
             const SizedBox(height: 16),
-            const ClientTokenSection(),
-            const SizedBox(height: 16),
             const _StatusSection(),
           ],
         ),
@@ -63,14 +63,14 @@ class WebSocketConfigSection extends StatelessWidget {
     if (authProvider.isAuthenticated) {
       authProvider.logout();
     } else {
-      final serverUrl = formController.serverUrlController.text.trim();
+      final serverUrl = normalizeServerUrl(
+        formController.serverUrlController.text,
+      );
       if (serverUrl.isEmpty) {
-        MessageModal.show<void>(
+        SettingsFeedback.showError(
           context: context,
-          title: 'Erro',
-          message: 'URL do Servidor é obrigatória',
-          type: MessageType.error,
-          confirmText: 'OK',
+          title: AppStrings.modalTitleError,
+          message: AppStrings.msgServerUrlRequired,
         );
         return;
       }
@@ -83,12 +83,10 @@ class WebSocketConfigSection extends StatelessWidget {
         );
         authProvider.login(serverUrl, credentials);
       } else {
-        MessageModal.show<void>(
+        SettingsFeedback.showError(
           context: context,
-          title: 'Erro',
-          message: 'Usuário e senha são obrigatórios',
-          type: MessageType.error,
-          confirmText: 'OK',
+          title: AppStrings.modalTitleError,
+          message: AppStrings.msgAuthCredentialsRequired,
         );
       }
     }
@@ -112,42 +110,52 @@ class _ServerSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SettingsSectionTitle(title: 'Conexão WebSocket'),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'URL do Servidor',
-                controller: formController.serverUrlController,
-                hint: 'https://api.example.com',
-              ),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'ID do Agente',
-                controller: formController.agentIdController,
-                hint: 'UUID ou Nome Único',
+              SettingsSectionBlock(
+                title: AppStrings.wsSectionConnection,
+                child: Column(
+                  children: [
+                    AppTextField(
+                      label: AppStrings.wsFieldServerUrl,
+                      controller: formController.serverUrlController,
+                      hint: AppStrings.wsHintServerUrl,
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: AppStrings.wsFieldAgentId,
+                      controller: formController.agentIdController,
+                      hint: AppStrings.wsHintAgentId,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
-              const SettingsSectionTitle(title: 'Autenticação (Opcional)'),
-              const SizedBox(height: 16),
-              AppTextField(
-                label: 'Usuário',
-                controller: formController.authUsernameController,
-                hint: 'Usuário para autenticação',
-              ),
-              const SizedBox(height: 16),
-              PasswordField(
-                controller: formController.authPasswordController,
-                hint: 'Senha para autenticação',
-              ),
-              const SizedBox(height: 16),
-              AppButton(
-                label: authProvider.status == AuthStatus.authenticating
-                    ? 'Autenticando...'
-                    : authProvider.isAuthenticated
-                    ? 'Logout'
-                    : 'Login',
-                isPrimary: false,
-                isLoading: authProvider.status == AuthStatus.authenticating,
-                onPressed: onLoginOrLogout,
+              SettingsSectionBlock(
+                title: AppStrings.wsSectionOptionalAuth,
+                child: Column(
+                  children: [
+                    AppTextField(
+                      label: AppStrings.wsFieldUsername,
+                      controller: formController.authUsernameController,
+                      hint: AppStrings.wsHintUsername,
+                    ),
+                    const SizedBox(height: 16),
+                    PasswordField(
+                      controller: formController.authPasswordController,
+                      hint: AppStrings.wsHintPassword,
+                    ),
+                    const SizedBox(height: 16),
+                    AppButton(
+                      label: authProvider.status == AuthStatus.authenticating
+                          ? AppStrings.wsButtonAuthenticating
+                          : authProvider.isAuthenticated
+                          ? AppStrings.wsButtonLogout
+                          : AppStrings.wsButtonLogin,
+                      isPrimary: false,
+                      isLoading: authProvider.status == AuthStatus.authenticating,
+                      onPressed: onLoginOrLogout,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -174,25 +182,22 @@ class _WebSocketActionButtons extends StatelessWidget {
       builder: (context, connectionProvider, _) {
         return Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
-            return Row(
-              children: [
-                AppButton(
-                  label: connectionProvider.isConnected
-                      ? 'Desconectar'
-                      : 'Conectar',
-                  onPressed: () => _handleConnectOrDisconnect(
-                    context,
-                    connectionProvider,
-                    authProvider,
-                  ),
+            return SettingsActionRow(
+              leading: AppButton(
+                label: connectionProvider.isConnected
+                    ? AppStrings.wsButtonDisconnect
+                    : AppStrings.wsButtonConnect,
+                onPressed: () => _handleConnectOrDisconnect(
+                  context,
+                  connectionProvider,
+                  authProvider,
                 ),
-                const SizedBox(width: 16),
-                AppButton(
-                  label: 'Salvar Configuração',
-                  isLoading: configProvider.isLoading,
-                  onPressed: onSaveConfig,
-                ),
-              ],
+              ),
+              trailing: AppButton(
+                label: AppStrings.wsButtonSaveConfig,
+                isLoading: configProvider.isLoading,
+                onPressed: onSaveConfig,
+              ),
             );
           },
         );
@@ -208,7 +213,9 @@ class _WebSocketActionButtons extends StatelessWidget {
     if (connectionProvider.isConnected) {
       connectionProvider.disconnect();
     } else {
-      final serverUrl = formController.serverUrlController.text.trim();
+      final serverUrl = normalizeServerUrl(
+        formController.serverUrlController.text,
+      );
       final agentId = formController.agentIdController.text.trim();
       final authToken = authProvider.currentToken?.token;
 

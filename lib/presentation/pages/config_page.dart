@@ -1,11 +1,12 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:provider/provider.dart';
 
 class ConfigPage extends StatefulWidget {
@@ -18,7 +19,7 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  String _lastUpdateCheck = 'Nunca verificado';
+  String _lastUpdateCheck = AppStrings.configLastUpdateNever;
 
   @override
   void initState() {
@@ -26,13 +27,10 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   void _checkUpdates() {
-    MessageModal.show<void>(
+    SettingsFeedback.showInfo(
       context: context,
-      title: 'Atualizações',
-      message:
-          'A verificação automática de atualizações será implementada '
-          'na próxima etapa.',
-      confirmText: 'OK',
+      title: AppStrings.gsSectionUpdates,
+      message: AppStrings.configUpdatesNotImplemented,
     );
   }
 
@@ -45,7 +43,7 @@ class _ConfigPageState extends State<ConfigPage> {
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          'Configurações',
+          AppStrings.navSettings,
           style: context.sectionTitle,
         ),
       ),
@@ -70,7 +68,9 @@ class _ConfigPageState extends State<ConfigPage> {
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
             onCheckUpdates: () {
-              setState(() => _lastUpdateCheck = 'Verificação manual');
+              setState(
+                () => _lastUpdateCheck = AppStrings.configLastUpdateManual,
+              );
               _checkUpdates();
             },
           ),

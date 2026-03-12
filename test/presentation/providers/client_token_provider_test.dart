@@ -47,6 +47,10 @@ void main() {
           clientId: 'client-1',
           createdAt: DateTime(2026, 3, 12),
           isRevoked: false,
+          allTables: false,
+          allViews: false,
+          allPermissions: false,
+          rules: <ClientTokenRule>[],
         ),
       ];
       when(
@@ -75,6 +79,10 @@ void main() {
             clientId: 'client-1',
             createdAt: DateTime(2026, 3, 12),
             isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: <ClientTokenRule>[],
           ),
         ]),
       );

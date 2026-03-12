@@ -25,8 +25,8 @@ class FailureConverter {
     String? operation,
     Map<String, dynamic> additionalContext = const {},
   }) {
-    final context = {
-      'operation': ?operation,
+    final context = <String, dynamic>{
+      ...?(operation != null ? {'operation': operation} : null),
       ...additionalContext,
     };
 
@@ -83,10 +83,15 @@ class FailureConverter {
       if (errorString.contains('query') ||
           errorString.contains('execute') ||
           errorString.contains('syntax')) {
+        final isTimeout = errorString.contains('timeout');
         return QueryExecutionFailure.withContext(
           message: _extractMessage(exception),
           cause: exception,
-          context: context,
+          context: {
+            ...context,
+            if (isTimeout) 'timeout': true,
+            if (isTimeout) 'timeout_stage': 'sql',
+          },
         );
       }
       return DatabaseFailure.withContext(
@@ -96,15 +101,20 @@ class FailureConverter {
       );
     }
 
-    // For network-related errors
+    // For network-related errors (incl. transport timeout)
     if (errorString.contains('network') ||
         errorString.contains('socket') ||
         errorString.contains('connection') ||
         errorString.contains('timeout')) {
+      final isTimeout = errorString.contains('timeout');
       return NetworkFailure.withContext(
         message: _extractMessage(exception),
         cause: exception,
-        context: context,
+        context: {
+          ...context,
+          if (isTimeout) 'timeout': true,
+          if (isTimeout) 'timeout_stage': 'transport',
+        },
       );
     }
 
@@ -150,7 +160,7 @@ class FailureConverter {
       // Enrich context with additional information
       final enrichedContext = {
         ...failure.context,
-        'originalCode': ?code,
+        ...?(code != null ? {'originalCode': code} : null),
         ...context,
       };
 
@@ -204,7 +214,7 @@ class FailureConverter {
     // Enrich context with additional information
     final enrichedContext = {
       ...baseFailure.context,
-      'originalCode': ?code,
+      ...?(code != null ? {'originalCode': code} : null),
       ...context,
     };
 

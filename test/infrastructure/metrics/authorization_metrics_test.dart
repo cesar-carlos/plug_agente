@@ -4,7 +4,7 @@ import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 
 void main() {
   group('AuthorizationMetric', () {
-      test('toJson should include all fields when present', () {
+    test('toJson should include all fields when present', () {
       final metric = AuthorizationMetric(
         timestamp: DateTime.utc(2025, 3, 12, 10),
         authorized: true,
@@ -23,7 +23,7 @@ void main() {
       check(json.containsKey('reason')).isFalse();
     });
 
-      test('toJson should omit null optional fields', () {
+    test('toJson should omit null optional fields', () {
       final metric = AuthorizationMetric(
         timestamp: DateTime.utc(2025, 3, 12),
         authorized: false,
@@ -178,10 +178,14 @@ void main() {
     test('metrics list should be unmodifiable', () {
       collector.recordAuthorized(clientId: 'c1');
 
-      check(() => collector.metrics.add(AuthorizationMetric(
+      check(
+        () => collector.metrics.add(
+          AuthorizationMetric(
             timestamp: DateTime.now(),
             authorized: false,
-          ))).throws<UnsupportedError>();
+          ),
+        ),
+      ).throws<UnsupportedError>();
     });
   });
 }

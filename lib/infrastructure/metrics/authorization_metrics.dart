@@ -40,7 +40,9 @@ class AuthorizationMetricsSummary {
     required this.deniedByReason,
   });
 
-  factory AuthorizationMetricsSummary.fromList(List<AuthorizationMetric> metrics) {
+  factory AuthorizationMetricsSummary.fromList(
+    List<AuthorizationMetric> metrics,
+  ) {
     var authorized = 0;
     var denied = 0;
     final byOperation = <String, int>{};

@@ -46,6 +46,31 @@ class SettingsSectionTitle extends StatelessWidget {
   }
 }
 
+class SettingsSectionBlock extends StatelessWidget {
+  const SettingsSectionBlock({
+    required this.title,
+    required this.child,
+    super.key,
+    this.spacing = AppSpacing.md,
+  });
+
+  final String title;
+  final Widget child;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SettingsSectionTitle(title: title),
+        SizedBox(height: spacing),
+        child,
+      ],
+    );
+  }
+}
+
 class SettingsToggleTile extends StatelessWidget {
   const SettingsToggleTile({
     required this.label,

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.response.v1.json",
+  "title": "RPC Response",
+  "description": "JSON-RPC 2.0 response with optional v2.1 extensions",
+  "type": "object",
+  "required": ["jsonrpc", "id"],
+  "properties": {
+    "jsonrpc": { "const": "2.0" },
+    "id": {},
+    "result": {},
+    "error": { "$ref": "./rpc.error.schema.json" },
+    "api_version": { "type": "string" },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "trace_id": { "type": "string" },
+        "request_id": { "type": "string" },
+        "agent_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "oneOf": [
+    { "required": ["result"], "not": { "required": ["error"] } },
+    { "required": ["error"], "not": { "required": ["result"] } }
+  ]
+}

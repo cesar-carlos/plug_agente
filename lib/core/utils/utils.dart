@@ -1,1 +1,1 @@
-// Utils serão exportados aqui quando criados
+export 'url_utils.dart';

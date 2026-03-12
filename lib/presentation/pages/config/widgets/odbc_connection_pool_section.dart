@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -6,7 +7,8 @@ import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
@@ -58,23 +60,23 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     final streamingChunkSize = int.tryParse(_streamingChunkSizeController.text);
 
     if (poolSize == null || poolSize < 1 || poolSize > 20) {
-      _showError('Tamanho do pool deve ser entre 1 e 20');
+      _showError(AppStrings.odbcErrorPoolRange);
       return;
     }
     if (loginTimeout == null || loginTimeout < 1 || loginTimeout > 120) {
-      _showError('Login timeout deve ser entre 1 e 120 segundos');
+      _showError(AppStrings.odbcErrorLoginTimeoutRange);
       return;
     }
     if (maxResultBuffer == null ||
         maxResultBuffer < 8 ||
         maxResultBuffer > 128) {
-      _showError('Buffer de resultados deve ser entre 8 e 128 MB');
+      _showError(AppStrings.odbcErrorBufferRange);
       return;
     }
     if (streamingChunkSize == null ||
         streamingChunkSize < 64 ||
         streamingChunkSize > 8192) {
-      _showError('Chunk do streaming deve ser entre 64 e 8192 KB');
+      _showError(AppStrings.odbcErrorChunkRange);
       return;
     }
 
@@ -97,9 +99,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
         error,
         stackTrace,
       );
-      _showError(
-        'Falha ao salvar configurações avançadas. Tente novamente.',
-      );
+      _showError(AppStrings.odbcErrorSaveFailed);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -125,31 +125,23 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   void _showError(String message) {
     if (!mounted) return;
-    MessageModal.show<void>(
+    SettingsFeedback.showError(
       context: context,
-      title: 'Erro',
+      title: AppStrings.modalTitleError,
       message: message,
-      type: MessageType.error,
-      confirmText: 'OK',
     );
   }
 
   void _showSuccess(bool settingsAppliedNow) {
     if (!mounted) return;
     final message = settingsAppliedNow
-        ? 'As configurações de pool, timeout e streaming foram salvas '
-              'e aplicadas '
-              'para novas conexões.'
-        : 'As configurações de pool, timeout e streaming foram salvas. '
-              'As novas opções serão aplicadas gradualmente em '
-              'novas conexões.';
+        ? AppStrings.odbcSuccessAppliedNow
+        : AppStrings.odbcSuccessAppliedGradually;
 
-    MessageModal.show<void>(
+    SettingsFeedback.showSuccess(
       context: context,
-      title: 'Configurações salvas',
+      title: AppStrings.odbcModalTitleSaved,
       message: message,
-      type: MessageType.success,
-      confirmText: 'OK',
     );
   }
 
@@ -176,113 +168,106 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SettingsSectionTitle(title: 'Pool de conexões e timeouts'),
-            const SizedBox(height: 16),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            SettingsSectionBlock(
+              title: AppStrings.odbcSectionTitle,
+              child: AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Text(
-                    'Pool de Conexões',
+                    AppStrings.odbcBlockPool,
                     style: FluentTheme.of(context).typography.bodyStrong,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Múltiplas conexões são reutilizadas automaticamente. '
-                    'Melhora performance em cenários de alta concorrência.',
+                    AppStrings.odbcBlockPoolDescription,
                     style: FluentTheme.of(context).typography.body,
                   ),
                   const SizedBox(height: 16),
                   NumericField(
-                    label: 'Tamanho máximo do pool',
+                    label: AppStrings.odbcFieldPoolSize,
                     controller: _poolSizeController,
-                    hint: '4',
+                    hint: AppStrings.odbcHintPoolSize,
                     minValue: 1,
                     maxValue: 20,
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Timeouts',
+                    AppStrings.odbcBlockTimeouts,
                     style: FluentTheme.of(context).typography.bodyStrong,
                   ),
                   const SizedBox(height: 8),
                   NumericField(
-                    label: 'Login timeout (segundos)',
+                    label: AppStrings.odbcFieldLoginTimeout,
                     controller: _loginTimeoutController,
-                    hint: '30',
+                    hint: AppStrings.odbcHintLoginTimeout,
                     minValue: 1,
                     maxValue: 120,
                   ),
                   const SizedBox(height: 16),
                   NumericField(
-                    label: 'Buffer de resultados (MB)',
+                    label: AppStrings.odbcFieldResultBuffer,
                     controller: _maxResultBufferController,
-                    hint: '32',
+                    hint: AppStrings.odbcHintResultBuffer,
                     minValue: 8,
                     maxValue: 128,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tamanho máximo do buffer em memória para resultados de queries. '
-                    'Aumentar pode melhorar performance em queries grandes.',
+                    AppStrings.odbcTextResultBufferHelp,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Streaming',
+                    AppStrings.odbcBlockStreaming,
                     style: FluentTheme.of(context).typography.bodyStrong,
                   ),
                   const SizedBox(height: 8),
                   NumericField(
-                    label: 'Tamanho do chunk (KB)',
+                    label: AppStrings.odbcFieldChunkSize,
                     controller: _streamingChunkSizeController,
-                    hint: '1024',
+                    hint: AppStrings.odbcHintChunkSize,
                     minValue: 64,
                     maxValue: 8192,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Controla o tamanho dos chunks enviados para a UI durante '
-                    'queries em streaming. Valores maiores reduzem eventos de '
-                    'atualização e podem melhorar throughput.',
+                    AppStrings.odbcTextStreamingHelp,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Recomendação rápida:',
+                    AppStrings.odbcTextQuickRecommendation,
                     style: FluentTheme.of(context).typography.caption?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '• 256-512 KB: feedback visual mais frequente\n'
-                    '• 1024 KB: equilíbrio geral (padrão)\n'
-                    '• 2048-4096 KB: maior throughput em datasets grandes',
+                    AppStrings.odbcTextQuickRecommendationItems,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Se houver travamentos de UI ou uso alto de memória, reduza o chunk.',
+                    AppStrings.odbcTextChunkWarning,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      AppButton(
-                        label: 'Restaurar padrão',
-                        isPrimary: false,
-                        onPressed: _isSaving ? null : _restoreDefaults,
-                      ),
-                      const SizedBox(width: 12),
-                      AppButton(
-                        label: 'Salvar configurações avançadas',
-                        isLoading: _isSaving,
-                        onPressed: _saveSettings,
-                      ),
-                    ],
+                  SettingsActionRow(
+                    spacing: 12,
+                    leading: AppButton(
+                      label: AppStrings.odbcButtonRestoreDefault,
+                      isPrimary: false,
+                      onPressed: _isSaving ? null : _restoreDefaults,
+                    ),
+                    trailing: AppButton(
+                      label: AppStrings.odbcButtonSaveAdvanced,
+                      isLoading: _isSaving,
+                      onPressed: _saveSettings,
+                    ),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],

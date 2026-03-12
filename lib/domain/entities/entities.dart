@@ -7,3 +7,4 @@ export 'client_token_summary.dart';
 export 'config.dart';
 export 'query_request.dart';
 export 'query_response.dart';
+export 'token_audit_event.dart';

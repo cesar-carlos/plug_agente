@@ -306,15 +306,23 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             error: error,
           );
 
+          final msg = _odbcErrorMessage(error);
           _metrics.recordFailure(
             queryId: request.id,
             query: request.query,
             executionDuration: stopwatch.elapsed,
-            errorMessage: _odbcErrorMessage(error),
+            errorMessage: msg,
           );
 
+          final isTimeout = msg.toLowerCase().contains('timeout');
           return Failure(
-            domain.QueryExecutionFailure(_odbcErrorMessage(error)),
+            domain.QueryExecutionFailure.withContext(
+              message: msg,
+              context: {
+                if (isTimeout) 'timeout': true,
+                if (isTimeout) 'timeout_stage': 'sql',
+              },
+            ),
           );
         },
       );
