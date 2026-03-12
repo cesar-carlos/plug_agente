@@ -1,5 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
@@ -11,72 +13,172 @@ class WebSocketLogViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<WebSocketLogProvider>(
       builder: (context, logProvider, child) {
+        final authSummary = _getAuthSummary();
+
         return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final spacing = constraints.maxHeight < 50
+                  ? AppSpacing.sm
+                  : AppSpacing.md;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'WebSocket Messages',
-                    style: context.sectionTitle,
-                  ),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ToggleSwitch(
-                        checked: logProvider.isEnabled,
-                        onChanged: (value) => logProvider.setEnabled(value),
-                        content: const Text('Enabled'),
-                      ),
-                      const SizedBox(width: 16),
-                      Button(
-                        child: Text(
-                          'Clear',
-                          style: context.bodyText,
-                        ),
-                        onPressed: () => logProvider.clearMessages(),
+                      Text('WebSocket Messages', style: context.sectionTitle),
+                      Row(
+                        children: [
+                          ToggleSwitch(
+                            checked: logProvider.isEnabled,
+                            onChanged: logProvider.setEnabled,
+                            content: const Text('Enabled'),
+                          ),
+                          const SizedBox(width: 16),
+                          Button(
+                            onPressed: logProvider.clearMessages,
+                            child: Text('Clear', style: context.bodyText),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                  SizedBox(height: spacing),
+                  _AuthorizationSummaryCard(summary: authSummary),
+                  const SizedBox(height: AppSpacing.sm),
+                  Expanded(
+                    child: logProvider.messages.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No messages yet',
+                              style: context.bodyMuted,
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: logProvider.messages.length,
+                            itemBuilder: (context, index) {
+                              final message = logProvider.messages[index];
+                              return _MessageItem(message: message);
+                            },
+                          ),
+                  ),
                 ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Expanded(
-                child: logProvider.messages.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No messages yet',
-                          style: context.bodyMuted,
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: logProvider.messages.length,
-                        itemBuilder: (context, index) {
-                          final message = logProvider.messages[index];
-                          return _buildMessageItem(context, message);
-                        },
-                      ),
-              ),
-            ],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  Widget _buildMessageItem(BuildContext context, WebSocketMessage message) {
-    final isSent = message.direction == 'SENT';
+  AuthorizationMetricsSummary? _getAuthSummary() {
+    if (!getIt.isRegistered<AuthorizationMetricsCollector>()) {
+      return null;
+    }
+
+    final collector = getIt<AuthorizationMetricsCollector>();
+    return collector.getSummary();
+  }
+}
+
+class _AuthorizationSummaryCard extends StatelessWidget {
+  const _AuthorizationSummaryCard({required this.summary});
+
+  final AuthorizationMetricsSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (summary == null) {
+      return const SizedBox.shrink();
+    }
+
+    final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(
+          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+        ),
+      ),
+      child: Wrap(
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.xs,
+        children: [
+          _SummaryChip(
+            label: 'Auth checks',
+            value: summary!.total.toString(),
+          ),
+          _SummaryChip(
+            label: 'Allowed',
+            value: summary!.totalAuthorized.toString(),
+            valueColor: Colors.green,
+          ),
+          _SummaryChip(
+            label: 'Denied',
+            value: summary!.totalDenied.toString(),
+            valueColor: summary!.totalDenied > 0 ? Colors.red : null,
+          ),
+          _SummaryChip(
+            label: 'Denial rate',
+            value: '$denialRate%',
+            valueColor: summary!.totalDenied > 0 ? Colors.red : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$label: ', style: context.bodyMuted),
+        Text(
+          value,
+          style: context.bodyText.copyWith(
+            fontWeight: FontWeight.w700,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MessageItem extends StatelessWidget {
+  const _MessageItem({required this.message});
+
+  final WebSocketMessage message;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final color = isSent
-        ? theme.accentColor
-        : (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+    final color = _resolveColor(theme, message.direction);
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md - 4),
       decoration: BoxDecoration(
-        color: FluentTheme.of(context).cardColor,
+        color: theme.cardColor,
         border: Border.all(color: color.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
@@ -104,9 +206,11 @@ class WebSocketLogViewer extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                message.event,
-                style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  message.event,
+                  style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -121,5 +225,19 @@ class WebSocketLogViewer extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _resolveColor(FluentThemeData theme, String direction) {
+    if (direction == 'SENT') {
+      return theme.accentColor;
+    }
+    if (direction == 'AUTH') {
+      return Colors.orange;
+    }
+    if (direction == 'ERROR') {
+      return Colors.red;
+    }
+
+    return theme.brightness == Brightness.dark ? Colors.white : Colors.black;
   }
 }

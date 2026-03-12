@@ -1,13 +1,17 @@
+export 'authorize_sql_operation.dart';
 export 'cancel_all_notifications.dart';
 export 'cancel_notification.dart';
 export 'check_for_updates.dart';
 export 'check_odbc_driver.dart';
 export 'connect_to_hub.dart';
+export 'create_client_token.dart';
 export 'execute_playground_query.dart';
 export 'handle_query_request.dart';
+export 'list_client_tokens.dart';
 export 'load_agent_config.dart';
 export 'login_user.dart';
 export 'refresh_auth_token.dart';
+export 'revoke_client_token.dart';
 export 'save_agent_config.dart';
 export 'save_auth_token.dart';
 export 'schedule_notification.dart';

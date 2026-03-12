@@ -8,12 +8,16 @@ class QueryRequest {
     required this.query,
     required this.timestamp,
     this.parameters,
+    this.clientToken,
   });
   final String id;
   final String agentId;
   final String query;
   final Map<String, dynamic>? parameters;
   final DateTime timestamp;
+
+  /// Optional client token for authorization (when feature is enabled).
+  final String? clientToken;
 
   @override
   bool operator ==(Object other) {

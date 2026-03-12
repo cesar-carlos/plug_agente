@@ -2,24 +2,32 @@ import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
+import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
+import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/query_processing_service.dart';
+import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/services/update_service.dart';
+import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_for_updates.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/handle_query_request.dart';
+import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
+import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
@@ -27,6 +35,7 @@ import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -35,6 +44,8 @@ import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
@@ -44,18 +55,23 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/compression/gzip_compressor.dart';
+import 'package:plug_agente/infrastructure/datasources/client_token_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
-import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client.dart';
+import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
+import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
@@ -124,6 +140,9 @@ Future<void> setupDependencies({
   await odbcSettings.load();
   getIt.registerSingleton<IOdbcConnectionSettings>(odbcSettings);
 
+  final featureFlags = FeatureFlags(prefs);
+  getIt.registerSingleton<FeatureFlags>(featureFlags);
+
   // External
   getIt
     ..registerLazySingleton<odbc.OdbcService>(() => _odbcLocator.asyncService)
@@ -131,12 +150,13 @@ Future<void> setupDependencies({
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(SocketDataSource.new)
+    ..registerLazySingleton(() => ClientTokenDataSource(DioFactory.createDio()))
     ..registerLazySingleton(AppDatabase.new)
+    ..registerLazySingleton(ProtocolNegotiator.new)
+    ..registerLazySingleton(ProtocolMetricsCollector.new)
+    ..registerLazySingleton(AuthorizationMetricsCollector.new)
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(getIt<AppDatabase>()),
-    )
-    ..registerLazySingleton<ITransportClient>(
-      () => SocketIOTransportClient(getIt<SocketDataSource>()),
     )
     ..registerLazySingleton(() => const Uuid())
     ..registerLazySingleton<IConnectionPool>(
@@ -147,6 +167,25 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
     ..registerLazySingleton(() => MetricsCollector.instance)
+    ..registerLazySingleton(
+      () => RpcMethodDispatcher(
+        databaseGateway: getIt<IDatabaseGateway>(),
+        normalizerService: getIt<QueryNormalizerService>(),
+        compressionService: getIt<CompressionService>(),
+        uuid: getIt<Uuid>(),
+        authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
+        featureFlags: getIt<FeatureFlags>(),
+        authMetrics: getIt<AuthorizationMetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton<ITransportClient>(
+      () => SocketIOTransportClientV2(
+        dataSource: getIt<SocketDataSource>(),
+        negotiator: getIt<ProtocolNegotiator>(),
+        rpcDispatcher: getIt<RpcMethodDispatcher>(),
+        featureFlags: getIt<FeatureFlags>(),
+      ),
+    )
     ..registerLazySingleton<IDatabaseGateway>(
       () => OdbcDatabaseGateway(
         getIt<IAgentConfigRepository>(),
@@ -167,6 +206,15 @@ Future<void> setupDependencies({
     ..registerLazySingleton<IAuthClient>(
       () => AuthClient(DioFactory.createDio()),
     )
+    ..registerLazySingleton<IAuthorizationPolicyResolver>(
+      AuthorizationPolicyResolver.new,
+    )
+    ..registerLazySingleton<IClientTokenRepository>(
+      () => ClientTokenRepository(
+        getIt<ClientTokenDataSource>(),
+        getIt<IAgentConfigRepository>(),
+      ),
+    )
     ..registerLazySingleton(
       () => ConnectionService(
         getIt<ITransportClient>(),
@@ -181,6 +229,12 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => CompressionService(getIt<GzipCompressor>()),
+    )
+    ..registerLazySingleton(
+      SqlOperationClassifier.new,
+    )
+    ..registerLazySingleton(
+      () => ClientTokenValidationService(getIt<IAuthorizationPolicyResolver>()),
     )
     ..registerLazySingleton(() => ConfigService(getIt<ConfigValidator>()))
     ..registerLazySingleton(
@@ -202,6 +256,9 @@ Future<void> setupDependencies({
         getIt<ITransportClient>(),
         getIt<QueryNormalizerService>(),
         getIt<CompressionService>(),
+        getIt<AuthorizeSqlOperation>(),
+        getIt<FeatureFlags>(),
+        authMetrics: getIt<AuthorizationMetricsCollector>(),
       ),
     )
     ..registerLazySingleton(
@@ -235,7 +292,22 @@ Future<void> setupDependencies({
     ..registerLazySingleton(() => CheckForUpdates(getIt<UpdateService>()))
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
-    ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()));
+    ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()))
+    ..registerLazySingleton(
+      () => CreateClientToken(getIt<IClientTokenRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListClientTokens(getIt<IClientTokenRepository>()),
+    )
+    ..registerLazySingleton(
+      () => RevokeClientToken(getIt<IClientTokenRepository>()),
+    )
+    ..registerLazySingleton(
+      () => AuthorizeSqlOperation(
+        getIt<SqlOperationClassifier>(),
+        getIt<ClientTokenValidationService>(),
+      ),
+    );
 
   // Conditional registrations based on capabilities
   if (capabilities.supportsTray) {

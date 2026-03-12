@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/handle_query_request.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -18,6 +20,10 @@ class MockQueryNormalizerService extends Mock
     implements QueryNormalizerService {}
 
 class MockCompressionService extends Mock implements CompressionService {}
+
+class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
+
+class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 void main() {
   group('HandleQueryRequest', () {
@@ -47,16 +53,26 @@ void main() {
       );
     });
 
+    late MockAuthorizeSqlOperation mockAuthorize;
+    late MockFeatureFlags mockFeatureFlags;
+
     setUp(() {
       mockDatabaseGateway = MockDatabaseGateway();
       mockTransportClient = MockTransportClient();
       mockNormalizerService = MockQueryNormalizerService();
       mockCompressionService = MockCompressionService();
+      mockAuthorize = MockAuthorizeSqlOperation();
+      mockFeatureFlags = MockFeatureFlags();
+      when(() => mockFeatureFlags.enableClientTokenAuthorization)
+          .thenReturn(false);
+
       useCase = HandleQueryRequest(
         mockDatabaseGateway,
         mockTransportClient,
         mockNormalizerService,
         mockCompressionService,
+        mockAuthorize,
+        mockFeatureFlags,
       );
     });
 
@@ -83,7 +99,7 @@ void main() {
               ).captured.single
               as QueryResponse;
       expect(captured.error, isNotNull);
-      expect(captured.error, contains('SELECT/WITH'));
+      expect(captured.error, contains('Unsupported'));
     });
 
     test('should send error response when gateway fails', () async {

@@ -4,11 +4,14 @@ import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart'
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
+import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
+import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
@@ -20,6 +23,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
+import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/providers/notification_provider.dart';
@@ -84,6 +88,13 @@ class AppRoot extends StatelessWidget {
             getIt<ConnectToHub>(),
             getIt<TestDbConnection>(),
             getIt<CheckOdbcDriver>(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => ClientTokenProvider(
+            getIt<CreateClientToken>(),
+            getIt<ListClientTokens>(),
+            getIt<RevokeClientToken>(),
           ),
         ),
         ChangeNotifierProvider(

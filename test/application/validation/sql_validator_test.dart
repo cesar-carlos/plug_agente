@@ -141,6 +141,46 @@ void main() {
       });
     });
 
+    group('validateSqlForExecution', () {
+      test('should accept UPDATE', () {
+        final r = SqlValidator.validateSqlForExecution(
+          "UPDATE dbo.users SET name = 'x'",
+        );
+        expect(r.isSuccess(), isTrue);
+      });
+
+      test('should accept DELETE', () {
+        final r = SqlValidator.validateSqlForExecution(
+          'DELETE FROM dbo.users WHERE id = 1',
+        );
+        expect(r.isSuccess(), isTrue);
+      });
+
+      test('should accept INSERT', () {
+        final r = SqlValidator.validateSqlForExecution(
+          "INSERT INTO dbo.users (name) VALUES ('x')",
+        );
+        expect(r.isSuccess(), isTrue);
+      });
+
+      test('should reject empty', () {
+        final r = SqlValidator.validateSqlForExecution('');
+        expect(r.isError(), isTrue);
+      });
+
+      test('should reject multiple statements', () {
+        final r = SqlValidator.validateSqlForExecution(
+          'SELECT 1; DROP TABLE x',
+        );
+        expect(r.isError(), isTrue);
+      });
+
+      test('should reject DROP', () {
+        final r = SqlValidator.validateSqlForExecution('DROP TABLE users');
+        expect(r.isError(), isTrue);
+      });
+    });
+
     group('extractNamedParameters', () {
       test('should extract single named parameter', () {
         // Arrange

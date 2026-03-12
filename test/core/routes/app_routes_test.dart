@@ -24,12 +24,26 @@ void main() {
     });
 
     test('should return correct destination from index 2', () {
-      expect(NavDestination.fromIndex(2), equals(NavDestination.config));
+      expect(
+        NavDestination.fromIndex(2),
+        equals(NavDestination.databaseSettings),
+      );
+    });
+
+    test('should return correct destination from index 3', () {
+      expect(
+        NavDestination.fromIndex(3),
+        equals(NavDestination.websocketSettings),
+      );
+    });
+
+    test('should return correct destination from index 4', () {
+      expect(NavDestination.fromIndex(4), equals(NavDestination.config));
     });
 
     test('should return dashboard for invalid index', () {
       expect(NavDestination.fromIndex(-1), equals(NavDestination.dashboard));
-      expect(NavDestination.fromIndex(3), equals(NavDestination.dashboard));
+      expect(NavDestination.fromIndex(5), equals(NavDestination.dashboard));
       expect(NavDestination.fromIndex(999), equals(NavDestination.dashboard));
     });
 
@@ -68,7 +82,9 @@ void main() {
     test('should have correct index values', () {
       expect(NavDestination.dashboard.index, equals(0));
       expect(NavDestination.playground.index, equals(1));
-      expect(NavDestination.config.index, equals(2));
+      expect(NavDestination.databaseSettings.index, equals(2));
+      expect(NavDestination.websocketSettings.index, equals(3));
+      expect(NavDestination.config.index, equals(4));
     });
   });
 

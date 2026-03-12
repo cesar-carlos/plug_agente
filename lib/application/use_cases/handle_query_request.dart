@@ -1,11 +1,14 @@
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 
 class HandleQueryRequest {
@@ -14,11 +17,17 @@ class HandleQueryRequest {
     this._transportClient,
     this._normalizerService,
     this._compressionService,
-  );
+    this._authorizeSqlOperation,
+    this._featureFlags, {
+    AuthorizationMetricsCollector? authMetrics,
+  }) : _authMetrics = authMetrics;
   final IDatabaseGateway _databaseGateway;
   final ITransportClient _transportClient;
   final QueryNormalizerService _normalizerService;
   final CompressionService _compressionService;
+  final AuthorizeSqlOperation _authorizeSqlOperation;
+  final FeatureFlags _featureFlags;
+  final AuthorizationMetricsCollector? _authMetrics;
 
   QueryResponse _buildErrorResponse(
     QueryRequest request,
@@ -36,7 +45,33 @@ class HandleQueryRequest {
 
   Future<Result<void>> call(QueryRequest request) async {
     try {
-      final validation = SqlValidator.validateSelectQuery(request.query);
+      if (_featureFlags.enableClientTokenAuthorization &&
+          request.clientToken != null &&
+          request.clientToken!.isNotEmpty) {
+        final authResult = await _authorizeSqlOperation(
+          token: request.clientToken!,
+          sql: request.query,
+        );
+        if (authResult.isError()) {
+          final failure = authResult.exceptionOrNull()! as domain.Failure;
+          final ctx = failure.context;
+          _authMetrics?.recordDenied(
+            clientId: ctx['client_id'] as String?,
+            operation: ctx['operation'] as String?,
+            resource: ctx['resource'] as String?,
+            reason: ctx['reason'] as String?,
+          );
+          final errorMessage = failure is domain.ConfigurationFailure &&
+                  failure.context.containsKey('user_message')
+              ? failure.context['user_message'] as String
+              : failure.message;
+          final errorResponse = _buildErrorResponse(request, errorMessage);
+          return _transportClient.sendResponse(errorResponse);
+        }
+        _authMetrics?.recordAuthorized();
+      }
+
+      final validation = SqlValidator.validateSqlForExecution(request.query);
       if (validation.isError()) {
         final failure = validation.exceptionOrNull()!;
         final errorMessage = failure is domain.Failure

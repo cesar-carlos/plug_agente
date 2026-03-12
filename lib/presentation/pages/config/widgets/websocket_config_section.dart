@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -46,6 +47,8 @@ class WebSocketConfigSection extends StatelessWidget {
               configProvider: configProvider,
               onSaveConfig: onSaveConfig,
             ),
+            const SizedBox(height: 16),
+            const ClientTokenSection(),
             const SizedBox(height: 16),
             const _StatusSection(),
           ],

@@ -47,6 +47,14 @@ class ConnectionProvider extends ChangeNotifier {
   bool _isDbConnected = false;
   bool _isReconnecting = false;
   bool _isCheckingDriver = false;
+  bool _isDisconnectRequested = false;
+  String? _lastServerUrl;
+  String? _lastAgentId;
+  String? _lastAuthToken;
+
+  static const int _maxReconnectAttempts = 3;
+  static const Duration _initialReconnectDelay = Duration(seconds: 2);
+  static const Duration _maxReconnectDelay = Duration(seconds: 10);
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -60,6 +68,13 @@ class ConnectionProvider extends ChangeNotifier {
     String agentId, {
     String? authToken,
   }) async {
+    _isDisconnectRequested = false;
+    _lastServerUrl = serverUrl;
+    _lastAgentId = agentId;
+    if (authToken != null && authToken.trim().isNotEmpty) {
+      _lastAuthToken = authToken.trim();
+    }
+
     _status = ConnectionStatus.connecting;
     _error = '';
     notifyListeners();
@@ -77,6 +92,7 @@ class ConnectionProvider extends ChangeNotifier {
     result.fold(
       (_) {
         _status = ConnectionStatus.connected;
+        _error = '';
         AppLogger.info('Connected to hub successfully');
       },
       (failure) {
@@ -93,6 +109,7 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _isDisconnectRequested = true;
     final transportClient = getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
@@ -163,7 +180,9 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> _handleTokenExpired() async {
-    if (_isReconnecting) return;
+    if (_isReconnecting || _isDisconnectRequested) {
+      return;
+    }
 
     _isReconnecting = true;
     _status = ConnectionStatus.reconnecting;
@@ -175,27 +194,27 @@ class ConnectionProvider extends ChangeNotifier {
       final transportClient = getIt<ITransportClient>();
       await transportClient.disconnect();
 
-      final serverUrl = _configProvider?.currentConfig?.serverUrl;
-      if (serverUrl != null && serverUrl.isNotEmpty && _authProvider != null) {
-        await _authProvider!.refreshToken(serverUrl);
-
-        final newToken = _authProvider!.currentToken;
-        final agentId = _configProvider?.currentConfig?.agentId ?? '';
-
-        if (newToken != null && agentId.isNotEmpty) {
-          await connect(serverUrl, agentId, authToken: newToken.token);
-          AppLogger.info('Reconnected with refreshed token successfully');
-        } else {
-          _status = ConnectionStatus.error;
-          _error = 'Failed to get new token or agent ID';
-          AppLogger.error('Failed to get new token or agent ID after refresh');
-        }
-      } else {
+      final context = _resolveConnectionContext();
+      if (context == null) {
         _status = ConnectionStatus.error;
-        _error = 'Server URL, AuthProvider or ConfigProvider not available';
-        AppLogger.error(
-          'Server URL, AuthProvider or ConfigProvider not available for token refresh',
-        );
+        _error = 'Connection context unavailable for token refresh';
+        AppLogger.error('Cannot refresh token without connection context');
+      } else {
+        final refreshedToken = await _tryRefreshToken(context.serverUrl);
+        if (refreshedToken == null) {
+          _status = ConnectionStatus.error;
+          _error = 'Failed to refresh authentication token';
+          AppLogger.error('Token refresh failed during reconnect policy');
+        } else {
+          final connected = await _attemptReconnect(
+            context.serverUrl,
+            context.agentId,
+            authToken: refreshedToken,
+          );
+          if (connected) {
+            AppLogger.info('Reconnected with refreshed token successfully');
+          }
+        }
       }
     } on Exception catch (error, stackTrace) {
       _status = ConnectionStatus.error;
@@ -217,34 +236,29 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> _handleReconnectionNeeded() async {
-    if (_isReconnecting) return;
+    if (_isReconnecting || _isDisconnectRequested) {
+      return;
+    }
 
     _isReconnecting = true;
     _status = ConnectionStatus.reconnecting;
+    _error = '';
     AppLogger.warning('Reconnection needed after failed attempts');
     notifyListeners();
 
-    await Future<void>.delayed(const Duration(seconds: 2));
-
     try {
-      final serverUrl = _configProvider?.currentConfig?.serverUrl;
-      final agentId = _configProvider?.currentConfig?.agentId;
-      final authToken =
-          _authProvider?.currentToken?.token ??
-          _configProvider?.currentConfig?.authToken;
-
-      if (serverUrl != null &&
-          serverUrl.isNotEmpty &&
-          agentId != null &&
-          agentId.isNotEmpty) {
-        await connect(serverUrl, agentId, authToken: authToken);
-        AppLogger.info('Attempted manual reconnection');
-      } else {
+      final context = _resolveConnectionContext();
+      if (context == null) {
         _status = ConnectionStatus.error;
         _error = 'Server URL or Agent ID not available for reconnection';
-        AppLogger.error(
-          'Server URL or Agent ID not available for reconnection',
-        );
+        AppLogger.error('Missing server URL or agent ID for reconnection');
+      } else {
+        final connected = await _recoverConnection(context);
+        if (!connected) {
+          _status = ConnectionStatus.error;
+          _error = 'Failed to recover connection after retries';
+          AppLogger.error('Connection recovery failed after retries');
+        }
       }
     } on Exception catch (error, stackTrace) {
       _status = ConnectionStatus.error;
@@ -264,4 +278,137 @@ class ConnectionProvider extends ChangeNotifier {
     _isReconnecting = false;
     notifyListeners();
   }
+
+  Future<bool> _recoverConnection(_ConnectionContext context) async {
+    var authToken = _resolveAuthTokenForReconnect();
+
+    for (var attempt = 1; attempt <= _maxReconnectAttempts; attempt++) {
+      final delay = _computeReconnectDelay(attempt);
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+
+      final connected = await _attemptReconnect(
+        context.serverUrl,
+        context.agentId,
+        authToken: authToken,
+      );
+      if (connected) {
+        AppLogger.info('Connection recovered on attempt $attempt');
+        return true;
+      }
+
+      final refreshedToken = await _tryRefreshToken(context.serverUrl);
+      if (refreshedToken != null) {
+        authToken = refreshedToken;
+      }
+    }
+
+    return false;
+  }
+
+  Future<bool> _attemptReconnect(
+    String serverUrl,
+    String agentId, {
+    String? authToken,
+  }) async {
+    final result = await _connectToHubUseCase(
+      serverUrl,
+      agentId,
+      authToken: authToken,
+    );
+
+    return result.fold(
+      (_) {
+        _status = ConnectionStatus.connected;
+        _error = '';
+        _lastServerUrl = serverUrl;
+        _lastAgentId = agentId;
+        if (authToken != null && authToken.trim().isNotEmpty) {
+          _lastAuthToken = authToken.trim();
+        }
+        AppLogger.info('Reconnection attempt succeeded');
+        return true;
+      },
+      (failure) {
+        _status = ConnectionStatus.reconnecting;
+        _error = failure.toDisplayMessage();
+        AppLogger.warning(
+          'Reconnection attempt failed: ${failure.toDisplayMessage()}',
+          failure.toTechnicalMessage(),
+        );
+        return false;
+      },
+    );
+  }
+
+  Future<String?> _tryRefreshToken(String serverUrl) async {
+    final authProvider = _authProvider;
+    if (authProvider == null) {
+      return null;
+    }
+
+    await authProvider.refreshToken(serverUrl);
+    final refreshedToken = authProvider.currentToken?.token;
+    if (refreshedToken == null || refreshedToken.trim().isEmpty) {
+      return null;
+    }
+
+    return _lastAuthToken = refreshedToken.trim();
+  }
+
+  _ConnectionContext? _resolveConnectionContext() {
+    final config = _configProvider?.currentConfig;
+    final configServerUrl = config?.serverUrl.trim();
+    final configAgentId = config?.agentId.trim();
+    final serverUrl =
+        _lastServerUrl ??
+        ((configServerUrl != null && configServerUrl.isNotEmpty)
+            ? configServerUrl
+            : null);
+    final agentId =
+        _lastAgentId ??
+        ((configAgentId != null && configAgentId.isNotEmpty)
+            ? configAgentId
+            : null);
+
+    if (serverUrl == null || agentId == null) {
+      return null;
+    }
+
+    return _ConnectionContext(serverUrl: serverUrl, agentId: agentId);
+  }
+
+  String? _resolveAuthTokenForReconnect() {
+    final liveToken = _authProvider?.currentToken?.token;
+    if (liveToken != null && liveToken.trim().isNotEmpty) {
+      return _lastAuthToken = liveToken.trim();
+    }
+
+    final configToken = _configProvider?.currentConfig?.authToken;
+    if (configToken != null && configToken.trim().isNotEmpty) {
+      return _lastAuthToken = configToken.trim();
+    }
+
+    return _lastAuthToken;
+  }
+
+  Duration _computeReconnectDelay(int attempt) {
+    final multiplier = 1 << (attempt - 1);
+    final seconds = _initialReconnectDelay.inSeconds * multiplier;
+    final cappedSeconds = seconds > _maxReconnectDelay.inSeconds
+        ? _maxReconnectDelay.inSeconds
+        : seconds;
+    return Duration(seconds: cappedSeconds);
+  }
+}
+
+class _ConnectionContext {
+  const _ConnectionContext({
+    required this.serverUrl,
+    required this.agentId,
+  });
+
+  final String serverUrl;
+  final String agentId;
 }
