@@ -21,6 +21,7 @@ import 'package:plug_agente/application/use_cases/check_for_updates.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
+import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/handle_query_request.dart';
@@ -365,6 +366,12 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => RevokeClientToken(
+        getIt<IClientTokenRepository>(),
+        auditStore: getIt<ITokenAuditStore>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => DeleteClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
       ),

@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
+import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -16,17 +17,21 @@ class MockListClientTokens extends Mock implements ListClientTokens {}
 
 class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 
+class MockDeleteClientToken extends Mock implements DeleteClientToken {}
+
 void main() {
   group('ClientTokenSection', () {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
     late MockRevokeClientToken mockRevokeClientToken;
+    late MockDeleteClientToken mockDeleteClientToken;
     late ClientTokenProvider provider;
 
     setUp(() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
       mockRevokeClientToken = MockRevokeClientToken();
+      mockDeleteClientToken = MockDeleteClientToken();
 
       when(
         () => mockListClientTokens(),
@@ -36,6 +41,7 @@ void main() {
         mockCreateClientToken,
         mockListClientTokens,
         mockRevokeClientToken,
+        mockDeleteClientToken,
       );
     });
 

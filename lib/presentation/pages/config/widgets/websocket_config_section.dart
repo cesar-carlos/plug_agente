@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
@@ -33,25 +33,26 @@ class WebSocketConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.settingsSectionHorizontal,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ServerSection(
-              formController: formController,
-              onLoginOrLogout: () => _handleLoginOrLogout(context),
-            ),
-            const SizedBox(height: 24),
-            _WebSocketActionButtons(
-              formController: formController,
-              configProvider: configProvider,
-              onSaveConfig: onSaveConfig,
-            ),
-            const SizedBox(height: 16),
-            const _StatusSection(),
-          ],
+        padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppLayout.maxFormWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ServerSection(
+                formController: formController,
+                onLoginOrLogout: () => _handleLoginOrLogout(context),
+              ),
+              const SizedBox(height: 24),
+              _WebSocketActionButtons(
+                formController: formController,
+                configProvider: configProvider,
+                onSaveConfig: onSaveConfig,
+              ),
+              const SizedBox(height: 16),
+              const _StatusSection(),
+            ],
+          ),
         ),
       ),
     );

@@ -13,7 +13,7 @@ Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
 }) {
   return showDialog<ClientTokenRuleDraft>(
     context: context,
-    builder: (_) => _ClientTokenRuleDialog(initialRule: initialRule),
+    builder: (context) => _ClientTokenRuleDialog(initialRule: initialRule),
   );
 }
 
@@ -71,7 +71,7 @@ class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
       return;
     }
 
-    Navigator.of(context).pop(
+    Navigator.of(context, rootNavigator: true).pop(
       ClientTokenRuleDraft(
         resource: resource,
         resourceType: _resourceType,
@@ -89,6 +89,10 @@ class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
     final dialogWidth = screenWidth > 760 ? 620.0 : screenWidth * 0.9;
 
     return ContentDialog(
+      constraints: BoxConstraints(
+        minWidth: dialogWidth,
+        maxWidth: dialogWidth,
+      ),
       title: Text(
         _isEditing
             ? AppStrings.ctDialogEditRuleTitle
@@ -204,7 +208,7 @@ class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
       ),
       actions: [
         Button(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           child: const Text(AppStrings.btnCancel),
         ),
         FilledButton(

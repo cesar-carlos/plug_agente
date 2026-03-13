@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
+import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
@@ -11,17 +12,21 @@ class ClientTokenProvider extends ChangeNotifier {
     this._createClientToken,
     this._listClientTokens,
     this._revokeClientToken,
+    this._deleteClientToken,
   );
 
   final CreateClientToken _createClientToken;
   final ListClientTokens _listClientTokens;
   final RevokeClientToken _revokeClientToken;
+  final DeleteClientToken _deleteClientToken;
 
   List<ClientTokenSummary> _tokens = const <ClientTokenSummary>[];
   bool _isLoading = false;
   bool _isCreating = false;
   bool _isRevoking = false;
+  bool _isDeleting = false;
   String? _revokingTokenId;
+  String? _deletingTokenId;
   String _error = '';
   String? _lastCreatedToken;
   bool _hasLoaded = false;
@@ -30,7 +35,9 @@ class ClientTokenProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isCreating => _isCreating;
   bool get isRevoking => _isRevoking;
+  bool get isDeleting => _isDeleting;
   String? get revokingTokenId => _revokingTokenId;
+  String? get deletingTokenId => _deletingTokenId;
   String get error => _error;
   String? get lastCreatedToken => _lastCreatedToken;
   bool get hasLoaded => _hasLoaded;
@@ -128,6 +135,36 @@ class ClientTokenProvider extends ChangeNotifier {
 
   bool isRevokingToken(String tokenId) {
     return _isRevoking && _revokingTokenId == tokenId;
+  }
+
+  Future<bool> deleteToken(String tokenId) async {
+    _isDeleting = true;
+    _deletingTokenId = tokenId;
+    _error = '';
+    notifyListeners();
+
+    final result = await _deleteClientToken(tokenId);
+    var isSuccess = false;
+
+    await result.fold(
+      (_) async {
+        _error = '';
+        isSuccess = true;
+        await loadTokens(silent: true);
+      },
+      (failure) async {
+        _error = failure.toDisplayMessage();
+      },
+    );
+
+    _isDeleting = false;
+    _deletingTokenId = null;
+    notifyListeners();
+    return isSuccess;
+  }
+
+  bool isDeletingToken(String tokenId) {
+    return _isDeleting && _deletingTokenId == tokenId;
   }
 
   void clearError() {

@@ -94,6 +94,14 @@ class ClientTokenLocalDataSource {
     return affectedRows > 0;
   }
 
+  Future<bool> deleteToken(String tokenId) async {
+    final affectedRows =
+        await (_database.delete(_database.clientTokenCacheTable)
+              ..where((table) => table.id.equals(tokenId)))
+            .go();
+    return affectedRows > 0;
+  }
+
   ClientTokenCacheTableCompanion _toCompanion(
     ClientTokenSummary token, {
     required DateTime syncedAt,

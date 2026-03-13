@@ -17,6 +17,7 @@ class AppTextField extends StatelessWidget {
     this.suffixIcon,
     this.prefixIcon,
     this.enabled = true,
+    this.readOnly = false,
     this.inputFormatters,
   });
   final String label;
@@ -31,6 +32,7 @@ class AppTextField extends StatelessWidget {
   final Widget? suffixIcon;
   final Widget? prefixIcon;
   final bool enabled;
+  final bool readOnly;
   final List<TextInputFormatter>? inputFormatters;
 
   Widget? _buildPrefixIcon() {
@@ -67,6 +69,7 @@ class AppTextField extends StatelessWidget {
       keyboardType: keyboardType,
       maxLines: maxLines,
       enabled: enabled,
+      readOnly: readOnly,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
       suffix: suffixIcon,

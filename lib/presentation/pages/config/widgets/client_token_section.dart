@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -54,6 +56,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       TextEditingController();
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
   Timer? _clientFilterDebounceTimer;
+  StateSetter? _createTokenDialogSetState;
 
   bool _allTables = false;
   bool _allViews = false;
@@ -63,6 +66,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   bool _autoRefreshAfterCreate = true;
   bool _keepConfigAfterCreate = false;
   String _formError = '';
+  String _ruleFeedbackMessage = '';
 
   @override
   void initState() {
@@ -86,7 +90,16 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _payloadController.dispose();
     _listClientFilterController.dispose();
     _clientFilterDebounceTimer?.cancel();
+    _createTokenDialogSetState = null;
     super.dispose();
+  }
+
+  void _refreshCreateTokenDialogContent() {
+    final dialogSetState = _createTokenDialogSetState;
+    if (dialogSetState == null) {
+      return;
+    }
+    dialogSetState(() {});
   }
 
   Future<void> _openAddRuleModal() async {
@@ -97,7 +110,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     setState(() {
       _rules.add(result);
+      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackAdded;
     });
+    _deferRefreshCreateTokenDialog();
   }
 
   Future<void> _openEditRuleModal(int index) async {
@@ -112,7 +127,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     setState(() {
       _rules[index] = result;
+      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackUpdated;
     });
+    _deferRefreshCreateTokenDialog();
+  }
+
+  void _deferRefreshCreateTokenDialog() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshCreateTokenDialogContent();
+    });
+  }
+
+  String _generateClientId() {
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    return 'client_$timestamp';
   }
 
   Future<void> _removeRule(int index) async {
@@ -132,7 +161,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     setState(() {
       _rules.removeAt(index);
+      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackRemoved;
     });
+    _deferRefreshCreateTokenDialog();
   }
 
   Future<void> _openCreateTokenModal() async {
@@ -141,6 +172,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
     setState(() {
       _formError = '';
+      _ruleFeedbackMessage = '';
+      _clientIdController.text = _generateClientId();
     });
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
@@ -159,70 +192,96 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         final dialogMaxHeight =
             screenSize.height * _createTokenDialogHeightFactor;
 
-        return Center(
-          child: SizedBox(
-            width: dialogWidth,
-            child: ContentDialog(
-              title: const Text(AppStrings.ctDialogCreateTokenTitle),
-              content: ConstrainedBox(
+        return StatefulBuilder(
+          builder: (context, dialogSetState) {
+            _createTokenDialogSetState = dialogSetState;
+            return ChangeNotifierProvider<ClientTokenProvider>.value(
+              value: provider,
+              child: ContentDialog(
                 constraints: BoxConstraints(
-                  maxHeight: dialogMaxHeight,
+                  minWidth: dialogWidth,
+                  maxWidth: dialogWidth,
                 ),
-                child: Consumer<ClientTokenProvider>(
-                  builder: (context, provider, _) {
-                    return _CreateTokenDialogContent(
-                      clientIdController: _clientIdController,
-                      agentIdController: _agentIdController,
-                      payloadController: _payloadController,
-                      rules: _rules,
-                      allTables: _allTables,
-                      allViews: _allViews,
-                      allPermissions: _allPermissions,
-                      formError: _formError,
-                      providerError: provider.error,
-                      lastCreatedToken: provider.lastCreatedToken,
-                      isCreating: provider.isCreating,
-                      keepConfigAfterCreate: _keepConfigAfterCreate,
-                      onToggleAllTables: (value) {
-                        setState(() {
-                          _allTables = value;
-                        });
-                      },
-                      onToggleAllViews: (value) {
-                        setState(() {
-                          _allViews = value;
-                        });
-                      },
-                      onToggleAllPermissions: (value) {
-                        setState(() {
-                          _allPermissions = value;
-                        });
-                      },
-                      onAddRule: _openAddRuleModal,
-                      onEditRule: _openEditRuleModal,
-                      onDeleteRule: _removeRule,
-                      onDismissCreatedToken: provider.clearLastCreatedToken,
-                      onToggleKeepConfigAfterCreate: (value) {
-                        setState(() {
-                          _keepConfigAfterCreate = value;
-                        });
-                      },
-                      onCreateToken: _handleCreateToken,
-                    );
-                  },
+                title: const Text(AppStrings.ctDialogCreateTokenTitle),
+                content: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: dialogMaxHeight,
+                  ),
+                  child: Consumer<ClientTokenProvider>(
+                    builder: (context, provider, _) {
+                      return _CreateTokenDialogContent(
+                        clientIdController: _clientIdController,
+                        agentIdController: _agentIdController,
+                        payloadController: _payloadController,
+                        rules: _rules,
+                        allTables: _allTables,
+                        allViews: _allViews,
+                        allPermissions: _allPermissions,
+                        ruleFeedbackMessage: _ruleFeedbackMessage,
+                        formError: _formError,
+                        providerError: provider.error,
+                        lastCreatedToken: provider.lastCreatedToken,
+                        isCreating: provider.isCreating,
+                        keepConfigAfterCreate: _keepConfigAfterCreate,
+                        onToggleAllTables: (value) {
+                          setState(() {
+                            _allTables = value;
+                          });
+                          _refreshCreateTokenDialogContent();
+                        },
+                        onToggleAllViews: (value) {
+                          setState(() {
+                            _allViews = value;
+                          });
+                          _refreshCreateTokenDialogContent();
+                        },
+                        onToggleAllPermissions: (value) {
+                          setState(() {
+                            _allPermissions = value;
+                          });
+                          _refreshCreateTokenDialogContent();
+                        },
+                        onAddRule: _openAddRuleModal,
+                        onEditRule: _openEditRuleModal,
+                        onDeleteRule: _removeRule,
+                        onDismissCreatedToken: provider.clearLastCreatedToken,
+                        onToggleKeepConfigAfterCreate: (value) {
+                          setState(() {
+                            _keepConfigAfterCreate = value;
+                          });
+                          _refreshCreateTokenDialogContent();
+                        },
+                      );
+                    },
+                  ),
                 ),
+                actions: [
+                  Button(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text(AppStrings.btnCancel),
+                  ),
+                  Consumer<ClientTokenProvider>(
+                    builder: (context, provider, _) {
+                      return FilledButton(
+                        onPressed: provider.isCreating ? null : _handleCreateToken,
+                        child: provider.isCreating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: ProgressRing(strokeWidth: 2),
+                              )
+                            : const Text(AppStrings.ctButtonCreateToken),
+                      );
+                    },
+                  ),
+                ],
               ),
-              actions: [
-                Button(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text(AppStrings.btnCancel),
-                ),
-              ],
-            ),
-          ),
+            );
+          },
         );
       },
     );
+    _createTokenDialogSetState = null;
   }
 
   Future<void> _handleCreateToken() async {
@@ -230,17 +289,12 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       _formError = '';
     });
 
+    final navigator = Navigator.of(context, rootNavigator: true);
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
     provider.clearLastCreatedToken();
 
     final clientId = _clientIdController.text.trim();
-    if (clientId.isEmpty) {
-      setState(() {
-        _formError = AppStrings.ctErrorClientIdRequired;
-      });
-      return;
-    }
 
     final payloadResult = _parsePayload();
     if (payloadResult == null) {
@@ -252,6 +306,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       setState(() {
         _formError = AppStrings.ctErrorRuleOrAllPermissionsRequired;
       });
+      _refreshCreateTokenDialogContent();
       return;
     }
 
@@ -276,17 +331,23 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       if (_autoRefreshAfterCreate) {
         await _refreshTokensPreservingPosition(previousOffset);
       }
+      if (!mounted) return;
       setState(() {
         _formError = '';
         if (!_keepConfigAfterCreate) {
           _clearTokenDraftForm();
         }
+        _ruleFeedbackMessage = '';
       });
+      _refreshCreateTokenDialogContent();
+      if (provider.error.isEmpty) {
+        navigator.pop();
+      }
     }
   }
 
   void _clearTokenDraftForm() {
-    _clientIdController.clear();
+    _clientIdController.text = _generateClientId();
     _agentIdController.clear();
     _payloadController.clear();
     _rules.clear();
@@ -309,11 +370,13 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       setState(() {
         _formError = AppStrings.ctErrorPayloadMustBeJsonObject;
       });
+      _refreshCreateTokenDialogContent();
       return null;
     } on FormatException {
       setState(() {
         _formError = AppStrings.ctErrorPayloadInvalidJson;
       });
+      _refreshCreateTokenDialogContent();
       return null;
     }
   }
@@ -399,45 +462,69 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _restoreTokenListPreferences() async {
-    final prefs = getIt<SharedPreferences>();
-    final clientFilter = prefs.getString(_tokenClientFilterKey) ?? '';
-    final statusFilter = _statusFilterFromStorage(
-      prefs.getString(_tokenStatusFilterKey),
-    );
-    final sortFilter = _sortFilterFromStorage(
-      prefs.getString(_tokenSortFilterKey),
-    );
-    final autoRefreshAfterCreate =
-        prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
-    if (!mounted) {
+    if (!getIt.isRegistered<SharedPreferences>()) {
       return;
     }
-    setState(() {
-      _listClientFilterController.text = clientFilter;
-      _tokenStatusFilter = statusFilter;
-      _tokenSortOption = sortFilter;
-      _autoRefreshAfterCreate = autoRefreshAfterCreate;
-    });
+    final prefs = getIt<SharedPreferences>();
+    try {
+      final clientFilter = prefs.getString(_tokenClientFilterKey) ?? '';
+      final statusFilter = _statusFilterFromStorage(
+        prefs.getString(_tokenStatusFilterKey),
+      );
+      final sortFilter = _sortFilterFromStorage(
+        prefs.getString(_tokenSortFilterKey),
+      );
+      final autoRefreshAfterCreate =
+          prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _listClientFilterController.text = clientFilter;
+        _tokenStatusFilter = statusFilter;
+        _tokenSortOption = sortFilter;
+        _autoRefreshAfterCreate = autoRefreshAfterCreate;
+      });
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to restore client token preferences',
+        name: 'client_token_section',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _saveTokenListPreferences() async {
+    if (!getIt.isRegistered<SharedPreferences>()) {
+      return;
+    }
     final prefs = getIt<SharedPreferences>();
-    await prefs.setString(
-      _tokenClientFilterKey,
-      _listClientFilterController.text.trim(),
-    );
-    await prefs.setString(
-      _tokenStatusFilterKey,
-      _statusFilterToStorage(_tokenStatusFilter),
-    );
-    await prefs.setString(
-      _tokenSortFilterKey,
-      _sortFilterToStorage(_tokenSortOption),
-    );
-    await prefs.setBool(
-      _tokenAutoRefreshAfterCreateKey,
-      _autoRefreshAfterCreate,
-    );
+    try {
+      await prefs.setString(
+        _tokenClientFilterKey,
+        _listClientFilterController.text.trim(),
+      );
+      await prefs.setString(
+        _tokenStatusFilterKey,
+        _statusFilterToStorage(_tokenStatusFilter),
+      );
+      await prefs.setString(
+        _tokenSortFilterKey,
+        _sortFilterToStorage(_tokenSortOption),
+      );
+      await prefs.setBool(
+        _tokenAutoRefreshAfterCreateKey,
+        _autoRefreshAfterCreate,
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to save client token preferences',
+        name: 'client_token_section',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   String _statusFilterToStorage(_TokenStatusFilter value) {
@@ -502,6 +589,58 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     });
   }
 
+  Future<void> _handleRevoke(
+    BuildContext context,
+    ClientTokenProvider provider,
+    ClientTokenSummary token,
+  ) async {
+    final confirmed = await SettingsFeedback.showConfirmation(
+      context: context,
+      title: AppStrings.ctConfirmRevokeTitle,
+      message: AppStrings.ctConfirmRevokeMessage,
+      confirmText: AppStrings.ctButtonRevoke,
+    );
+    if (!mounted || !confirmed) {
+      return;
+    }
+    await provider.revokeToken(token.id);
+    if (!context.mounted) return;
+    if (provider.error.isNotEmpty) {
+      await SettingsFeedback.showError(
+        context: context,
+        title: AppStrings.modalTitleError,
+        message: provider.error,
+        onConfirm: () => provider.clearError(),
+      );
+    }
+  }
+
+  Future<void> _handleDelete(
+    BuildContext context,
+    ClientTokenProvider provider,
+    ClientTokenSummary token,
+  ) async {
+    final confirmed = await SettingsFeedback.showConfirmation(
+      context: context,
+      title: AppStrings.ctConfirmDeleteTitle,
+      message: AppStrings.ctConfirmDeleteMessage,
+      confirmText: AppStrings.ctButtonDelete,
+    );
+    if (!mounted || !confirmed) {
+      return;
+    }
+    await provider.deleteToken(token.id);
+    if (!context.mounted) return;
+    if (provider.error.isNotEmpty) {
+      await SettingsFeedback.showError(
+        context: context,
+        title: AppStrings.modalTitleError,
+        message: provider.error,
+        onConfirm: () => provider.clearError(),
+      );
+    }
+  }
+
   void _handleClientFilterChanged(String _) {
     _clientFilterDebounceTimer?.cancel();
     _clientFilterDebounceTimer = Timer(
@@ -540,6 +679,15 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                 ],
               ),
+              if (provider.error.isNotEmpty) ...[
+                InfoBar(
+                  title: const Text(AppStrings.modalTitleError),
+                  content: Text(provider.error),
+                  severity: InfoBarSeverity.error,
+                  onClose: provider.clearError,
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
@@ -662,13 +810,19 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                         child: _TokenSummaryTile(
                           token: token,
                           isRevoking: provider.isRevokingToken(token.id),
+                          isDeleting: provider.isDeletingToken(token.id),
                           onViewDetails: () => showClientTokenDetailsDialog(
                             context: context,
                             token: token,
                           ),
                           onRevoke: token.isRevoked
                               ? null
-                              : () => provider.revokeToken(token.id),
+                              : () {
+                                  _handleRevoke(context, provider, token);
+                                },
+                          onDelete: () {
+                            _handleDelete(context, provider, token);
+                          },
                         ),
                       );
                     },
@@ -691,6 +845,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.allTables,
     required this.allViews,
     required this.allPermissions,
+    required this.ruleFeedbackMessage,
     required this.formError,
     required this.providerError,
     required this.lastCreatedToken,
@@ -704,7 +859,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
     required this.onToggleKeepConfigAfterCreate,
-    required this.onCreateToken,
   });
 
   final TextEditingController clientIdController;
@@ -714,6 +868,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final bool allTables;
   final bool allViews;
   final bool allPermissions;
+  final String ruleFeedbackMessage;
   final String formError;
   final String providerError;
   final String? lastCreatedToken;
@@ -727,7 +882,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final Future<void> Function(int index) onDeleteRule;
   final VoidCallback onDismissCreatedToken;
   final ValueChanged<bool> onToggleKeepConfigAfterCreate;
-  final Future<void> Function() onCreateToken;
 
   @override
   Widget build(BuildContext context) {
@@ -744,6 +898,15 @@ class _CreateTokenDialogContent extends StatelessWidget {
                   label: AppStrings.ctFieldClientId,
                   controller: clientIdController,
                   hint: AppStrings.ctHintClientId,
+                  readOnly: true,
+                  suffixIcon: IconButton(
+                    icon: const Icon(FluentIcons.copy, size: 16),
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: clientIdController.text),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
@@ -760,6 +923,15 @@ class _CreateTokenDialogContent extends StatelessWidget {
                         label: AppStrings.ctFieldClientId,
                         controller: clientIdController,
                         hint: AppStrings.ctHintClientId,
+                        readOnly: true,
+                        suffixIcon: IconButton(
+                          icon: const Icon(FluentIcons.copy, size: 16),
+                          onPressed: () {
+                            Clipboard.setData(
+                              ClipboardData(text: clientIdController.text),
+                            );
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
@@ -849,6 +1021,10 @@ class _CreateTokenDialogContent extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (ruleFeedbackMessage.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                _InfoSurface(message: ruleFeedbackMessage),
+              ],
               if (formError.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 _ErrorSurface(message: formError),
@@ -869,13 +1045,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
                 label: AppStrings.ctToggleKeepConfigAfterCreate,
                 value: keepConfigAfterCreate,
                 onChanged: onToggleKeepConfigAfterCreate,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: AppStrings.ctButtonCreateToken,
-                icon: FluentIcons.add_friend,
-                isLoading: isCreating,
-                onPressed: onCreateToken,
               ),
             ],
           ),
@@ -944,6 +1113,26 @@ class _ErrorSurface extends StatelessWidget {
   }
 }
 
+class _InfoSurface extends StatelessWidget {
+  const _InfoSurface({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.08),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Text(message),
+    );
+  }
+}
+
 class _CreatedTokenSurface extends StatelessWidget {
   const _CreatedTokenSurface({
     required this.token,
@@ -991,14 +1180,18 @@ class _TokenSummaryTile extends StatelessWidget {
   const _TokenSummaryTile({
     required this.token,
     required this.isRevoking,
+    required this.isDeleting,
     required this.onViewDetails,
     this.onRevoke,
+    this.onDelete,
   });
 
   final ClientTokenSummary token;
   final bool isRevoking;
+  final bool isDeleting;
   final VoidCallback onViewDetails;
   final VoidCallback? onRevoke;
+  final VoidCallback? onDelete;
 
   String _buildScopeLabel() {
     if (token.allPermissions) {
@@ -1089,6 +1282,14 @@ class _TokenSummaryTile extends StatelessWidget {
                 isPrimary: false,
                 isLoading: isRevoking,
                 onPressed: onRevoke,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              AppButton(
+                label: AppStrings.ctButtonDelete,
+                isPrimary: false,
+                icon: FluentIcons.delete,
+                isLoading: isDeleting,
+                onPressed: onDelete,
               ),
             ],
           ),

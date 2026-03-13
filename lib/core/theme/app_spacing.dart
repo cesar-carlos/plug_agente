@@ -12,7 +12,7 @@ class AppSpacing {
 
   // Desktop layout insets
   static const double pageHorizontal = 24;
-  static const double settingsSectionHorizontal = 80;
+  static const double settingsSectionHorizontal = 0;
   static const double settingsSectionVertical = 20;
 }
 

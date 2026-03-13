@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
+import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
@@ -95,6 +96,7 @@ class AppRoot extends StatelessWidget {
             getIt<CreateClientToken>(),
             getIt<ListClientTokens>(),
             getIt<RevokeClientToken>(),
+            getIt<DeleteClientToken>(),
           ),
         ),
         ChangeNotifierProvider(

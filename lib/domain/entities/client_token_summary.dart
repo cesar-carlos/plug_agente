@@ -18,19 +18,25 @@ class ClientTokenSummary {
     final policyJson = json['policy'] as Map<String, dynamic>?;
     final source = policyJson ?? json;
     final rawRules = source['rules'] as List<dynamic>? ?? const <dynamic>[];
-    final parsedRules = rawRules.whereType<Map<String, dynamic>>().map(ClientTokenRule.fromJson).toList();
+    final parsedRules = rawRules
+        .whereType<Map<dynamic, dynamic>>()
+        .map(Map<String, dynamic>.from)
+        .map(ClientTokenRule.fromJson)
+        .toList();
+    final createdAt = _parseDateTime(
+      source['created_at'] ?? json['created_at'],
+    );
+    final payload = _parsePayload(source['payload']);
 
     return ClientTokenSummary(
-      id: json['id'] as String? ?? '',
-      clientId: source['client_id'] as String? ?? json['client_id'] as String? ?? '',
-      createdAt:
-          DateTime.tryParse(
-            json['created_at'] as String? ?? '',
-          ) ??
-          DateTime.now(),
-      isRevoked: source['is_revoked'] as bool? ?? json['is_revoked'] as bool? ?? false,
+      id: source['id'] as String? ?? json['id'] as String? ?? '',
+      clientId:
+          source['client_id'] as String? ?? json['client_id'] as String? ?? '',
+      createdAt: createdAt,
+      isRevoked:
+          source['is_revoked'] as bool? ?? json['is_revoked'] as bool? ?? false,
       agentId: source['agent_id'] as String?,
-      payload: source['payload'] as Map<String, dynamic>? ?? const {},
+      payload: payload,
       allTables: source['all_tables'] as bool? ?? false,
       allViews: source['all_views'] as bool? ?? false,
       allPermissions: source['all_permissions'] as bool? ?? false,
@@ -62,5 +68,31 @@ class ClientTokenSummary {
       'all_permissions': allPermissions,
       'rules': rules.map((rule) => rule.toJson()).toList(),
     };
+  }
+
+  static DateTime _parseDateTime(Object? rawValue) {
+    if (rawValue is String) {
+      final parsed = DateTime.tryParse(rawValue);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    if (rawValue is int) {
+      final millisecondsSinceEpoch = rawValue > 9999999999
+          ? rawValue
+          : rawValue * 1000;
+      return DateTime.fromMillisecondsSinceEpoch(
+        millisecondsSinceEpoch,
+        isUtc: true,
+      );
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
+
+  static Map<String, dynamic> _parsePayload(Object? rawValue) {
+    if (rawValue is Map<dynamic, dynamic>) {
+      return Map<String, dynamic>.from(rawValue);
+    }
+    return const <String, dynamic>{};
   }
 }

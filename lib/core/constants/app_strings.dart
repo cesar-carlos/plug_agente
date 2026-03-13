@@ -73,10 +73,10 @@ class AppStrings {
 
   // Client Token Settings
   static const String ctSectionTitle = 'Client Token Authorization';
-  static const String ctFieldClientId = 'Client ID';
+  static const String ctFieldClientId = 'Client ID (gerado automaticamente)';
   static const String ctFieldAgentIdOptional = 'Agent ID (opcional)';
   static const String ctFieldPayloadJsonOptional = 'Payload JSON (opcional)';
-  static const String ctHintClientId = 'client-acme';
+  static const String ctHintClientId = 'Gerado automaticamente';
   static const String ctHintAgentId = 'agent-01';
   static const String ctHintPayloadJson =
       '{"display_name":"Acme ERP","env":"production"}';
@@ -126,6 +126,13 @@ class AppStrings {
   static const String ctStatusActive = 'ativo';
   static const String ctButtonRevoked = 'Revogado';
   static const String ctButtonRevoke = 'Revogar';
+  static const String ctButtonDelete = 'Excluir';
+  static const String ctConfirmRevokeTitle = 'Revogar token';
+  static const String ctConfirmRevokeMessage =
+      'Tem certeza que deseja revogar este token? O token deixará de funcionar imediatamente.';
+  static const String ctConfirmDeleteTitle = 'Excluir token';
+  static const String ctConfirmDeleteMessage =
+      'Tem certeza que deseja excluir este token? Esta ação não pode ser desfeita.';
   static const String ctErrorClientIdRequired =
       'Informe o client_id para criar o token.';
   static const String ctErrorRuleOrAllPermissionsRequired =
@@ -163,6 +170,9 @@ class AppStrings {
   static const String ctRuleNoPermission = 'Sem permissões';
   static const String ctToggleKeepConfigAfterCreate =
       'Manter configuração após criar token';
+  static const String ctRuleFeedbackAdded = 'Regra adicionada com sucesso.';
+  static const String ctRuleFeedbackUpdated = 'Regra atualizada com sucesso.';
+  static const String ctRuleFeedbackRemoved = 'Regra removida com sucesso.';
 
   // Config Navigation Tabs
   static const String configTabGeneral = 'Geral';

@@ -2,6 +2,7 @@ enum TokenAuditEventType {
   create,
   revoke,
   revokedInSession,
+  delete,
 }
 
 class TokenAuditEvent {

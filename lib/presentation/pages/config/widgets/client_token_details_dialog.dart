@@ -13,7 +13,8 @@ Future<void> showClientTokenDetailsDialog({
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _ClientTokenDetailsDialog(token: token),
+    barrierDismissible: true,
+    builder: (context) => _ClientTokenDetailsDialog(token: token),
   );
 }
 
@@ -53,6 +54,10 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
     final dialogWidth = screenWidth > 980 ? 820.0 : screenWidth * 0.92;
 
     return ContentDialog(
+      constraints: BoxConstraints(
+        minWidth: dialogWidth,
+        maxWidth: dialogWidth,
+      ),
       title: const Text(AppStrings.ctDialogTokenDetailsTitle),
       content: SizedBox(
         width: dialogWidth,
@@ -115,7 +120,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
       ),
       actions: [
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           child: const Text(AppStrings.btnOk),
         ),
       ],

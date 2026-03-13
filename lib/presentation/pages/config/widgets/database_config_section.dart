@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -38,13 +38,13 @@ class DatabaseConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.settingsSectionHorizontal,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SettingsSectionBlock(
+        padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppLayout.maxFormWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SettingsSectionBlock(
               title: AppStrings.dbSectionTitle,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,10 +81,11 @@ class DatabaseConfigSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const _StatusSection(),
-                ],
-              ),
+              ],
             ),
-          ],
+          ),
+        ],
+      ),
         ),
       ),
     );

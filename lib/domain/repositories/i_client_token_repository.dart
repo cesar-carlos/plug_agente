@@ -6,4 +6,5 @@ abstract class IClientTokenRepository {
   Future<Result<String>> createToken(ClientTokenCreateRequest request);
   Future<Result<List<ClientTokenSummary>>> listTokens();
   Future<Result<void>> revokeToken(String tokenId);
+  Future<Result<void>> deleteToken(String tokenId);
 }

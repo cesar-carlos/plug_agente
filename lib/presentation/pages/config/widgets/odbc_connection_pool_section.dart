@@ -3,7 +3,7 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -162,13 +162,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.settingsSectionHorizontal,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SettingsSectionBlock(
+        padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppLayout.maxFormWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SettingsSectionBlock(
               title: AppStrings.odbcSectionTitle,
               child: AppCard(
                 child: Column(
@@ -271,6 +271,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

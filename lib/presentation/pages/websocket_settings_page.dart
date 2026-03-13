@@ -244,13 +244,10 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          maxWidth: AppLayout.maxSettingsWidth,
           child: SettingsTabView(
             currentIndex: _selectedTabIndex,
             onChanged: (index) {
-              setState(() {
-                _selectedTabIndex = index;
-              });
+              setState(() => _selectedTabIndex = index);
             },
             items: [
               SettingsTabItem(
@@ -287,26 +284,28 @@ class _ClientTokenTabContent extends StatefulWidget {
 
 class _ClientTokenTabContentState extends State<_ClientTokenTabContent> {
   final ScrollController _tokenListScrollController = ScrollController();
+  final ScrollController _pageScrollController = ScrollController();
 
   @override
   void dispose() {
     _tokenListScrollController.dispose();
+    _pageScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.settingsSectionHorizontal,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
+    return Scrollbar(
+      controller: _pageScrollController,
+      child: ListView(
+        controller: _pageScrollController,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.pageHorizontal,
+        ),
+        children: [
           ClientTokenSection(
             scrollController: _tokenListScrollController,
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );

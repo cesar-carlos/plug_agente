@@ -50,7 +50,6 @@ class _ConfigPageState extends State<ConfigPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          maxWidth: AppLayout.maxSettingsWidth,
           child: GeneralConfigSection(
             isDarkThemeEnabled: themeProvider.isDarkMode,
             startWithWindows: systemSettingsProvider.startWithWindows,

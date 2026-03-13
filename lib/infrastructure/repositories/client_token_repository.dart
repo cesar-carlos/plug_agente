@@ -67,4 +67,30 @@ class ClientTokenRepository implements IClientTokenRepository {
       );
     }
   }
+
+  @override
+  Future<Result<void>> deleteToken(String tokenId) async {
+    try {
+      final didDelete = await _localDataSource.deleteToken(tokenId);
+      if (!didDelete) {
+        return Failure(
+          domain.ValidationFailure(
+            'Client token not found for delete operation',
+          ),
+        );
+      }
+      return const Success(unit);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to delete local client token',
+          cause: error,
+          context: {
+            'operation': 'delete_local_client_token',
+            'token_id': tokenId,
+          },
+        ),
+      );
+    }
+  }
 }

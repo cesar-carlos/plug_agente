@@ -158,7 +158,6 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          maxWidth: AppLayout.maxSettingsWidth,
           child: SettingsTabView(
             currentIndex: _selectedTabIndex,
             onChanged: (index) {
