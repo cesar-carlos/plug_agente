@@ -728,9 +728,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   severity: InfoBarSeverity.error,
                   onClose: provider.clearError,
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
               ],
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
                   AppButton(
@@ -756,11 +756,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               const SettingsSectionTitle(
                 title: AppStrings.ctSectionRegisteredTokens,
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -832,7 +832,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               if (provider.tokens.isEmpty && !provider.isLoading) const Text(AppStrings.ctMsgNoTokenFound),
               if (provider.tokens.isNotEmpty && filteredTokens.isEmpty) const Text(AppStrings.ctMsgNoTokenMatchFilter),
               if (filteredTokens.isNotEmpty)

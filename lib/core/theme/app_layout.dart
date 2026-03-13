@@ -8,32 +8,32 @@ class AppLayout {
   static const double mediumBreakpoint = 1280;
   static const double wideBreakpoint = 1600;
 
-  static const double maxContentWidth = 1280;
-  static const double maxSettingsWidth = 1120;
+  static const double maxContentWidth = 1440;
+  static const double maxSettingsWidth = 1320;
   static const double maxDataWidth = 1440;
   static const double maxFormWidth = 640;
-  static const double scrollbarPadding = 24;
+  static const double scrollbarPadding = 16;
 
   static EdgeInsets pagePadding(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
 
     if (width >= wideBreakpoint) {
       return const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
-        vertical: AppSpacing.md,
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
       );
     }
 
     if (width >= mediumBreakpoint) {
       return const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
       );
     }
 
     return const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
-      vertical: AppSpacing.md,
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.sm,
     );
   }
 

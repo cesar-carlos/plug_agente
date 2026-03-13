@@ -17,7 +17,7 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = Card(
-      padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+      padding: padding ?? const EdgeInsets.all(AppSpacing.sm),
       margin: margin ?? EdgeInsets.zero,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: child,

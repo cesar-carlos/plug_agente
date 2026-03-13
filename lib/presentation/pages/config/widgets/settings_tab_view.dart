@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class SettingsTabItem {
   const SettingsTabItem({
@@ -29,11 +30,15 @@ class SettingsTabView extends StatelessWidget {
     return TabView(
       currentIndex: currentIndex,
       onChanged: onChanged,
+      minTabWidth: 180,
       tabs: items
           .map(
             (item) => Tab(
               icon: Icon(item.icon),
-              text: Text(item.text),
+              text: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(item.text),
+              ),
               body: item.body,
             ),
           )
