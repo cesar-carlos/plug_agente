@@ -79,10 +79,7 @@ class _MainWindowState extends State<MainWindow> {
           children: [
             if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
             Expanded(
-              child: AppLayout.centeredContent(
-                maxWidth: AppLayout.maxDataWidth,
-                child: widget.child,
-              ),
+              child: AppLayout.centeredContent(child: widget.child),
             ),
           ],
         );

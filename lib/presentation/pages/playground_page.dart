@@ -203,7 +203,6 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
             child: Padding(
               padding: AppLayout.pagePadding(context),
               child: AppLayout.centeredContent(
-                maxWidth: AppLayout.maxDataWidth,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
