@@ -54,9 +54,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     }
 
     final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized &&
-        !configProvider.isLoading &&
-        configProvider.currentConfig != null) {
+    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
     } else if (configProvider.isLoading) {
       Future.delayed(
@@ -176,8 +174,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                   onDriverChanged: (value) {
                     setState(() {
                       configProvider.updateDriverName(value);
-                      final currentOdbcName =
-                          _formController.odbcDriverNameController.text;
+                      final currentOdbcName = _formController.odbcDriverNameController.text;
 
                       if (OdbcDrivers.isDefaultSuggestion(
                         currentOdbcName,
@@ -186,8 +183,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                           value,
                         );
                         if (suggestion.isNotEmpty) {
-                          _formController.odbcDriverNameController.text =
-                              suggestion;
+                          _formController.odbcDriverNameController.text = suggestion;
                           configProvider.updateOdbcDriverName(suggestion);
                         }
                       }
@@ -211,12 +207,10 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                     _formController.updateAllFieldsToProvider(
                       configProvider,
                     );
-                    final connectionString = configProvider
-                        .getConnectionString();
-                    final testResult = await connectionProvider
-                        .testDbConnection(
-                          connectionString,
-                        );
+                    final connectionString = configProvider.getConnectionString();
+                    final testResult = await connectionProvider.testDbConnection(
+                      connectionString,
+                    );
 
                     if (!mounted) {
                       return;

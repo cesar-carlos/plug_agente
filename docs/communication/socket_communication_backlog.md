@@ -11,13 +11,16 @@ Referencia de implementacao atual:
 ## Status atual
 
 - Todos os tickets do plano incremental original (`01` a `06`) foram concluidos.
-- Nao ha backlog tecnico pendente no momento para o ciclo atual.
+- Contratos formais (notifications, batch, api_version/meta, schemas, versionamento) publicados.
+- Limites de transporte negociados via `TransportLimits` no handshake.
+- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256) com feature flag `enablePayloadSigning`.
+- Feature flags estaveis promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
 
 ## Proximos itens (quando priorizado)
 
-- Limites negociados de transporte (`max_payload_bytes`, `max_rows`) no contrato.
-- Assinatura opcional de payload.
-- Politica formal de versao/deprecacao para contratos Socket.
+- Testes de integracao end-to-end para limites negociados e assinatura.
+- Rotacao automatica de chaves de assinatura sem downtime.
+- Monitoramento/alertas de payload signing failures.
 
 ## Regra de manutencao deste backlog
 

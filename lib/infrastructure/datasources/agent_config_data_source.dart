@@ -39,9 +39,15 @@ class ClientTokenCacheTable extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get rulesJson => text().withDefault(const Constant('[]'))();
   DateTimeColumn get syncedAt => dateTime()();
+  TextColumn get tokenHash => text().withDefault(const Constant(''))();
 
   @override
   Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {tokenHash},
+      ];
 }
 
 // AgentConfigDataSource interface is defined in agent_config_drift_database.dart

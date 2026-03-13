@@ -52,10 +52,14 @@ class ProtocolNegotiator {
         ? 'gzip'
         : (commonCompressions.isNotEmpty ? commonCompressions.first : 'none');
 
+    final effectiveLimits =
+        agentCapabilities.limits.negotiateWith(serverCapabilities.limits);
+
     return ProtocolConfig(
       protocol: selectedProtocol,
       encoding: selectedEncoding,
       compression: selectedCompression,
+      effectiveLimits: effectiveLimits,
     );
   }
 

@@ -23,7 +23,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,6 +67,9 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       }
       if (from < 6) {
         await m.createTable(clientTokenCacheTable);
+      }
+      if (from < 7) {
+        await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.tokenHash);
       }
     },
   );

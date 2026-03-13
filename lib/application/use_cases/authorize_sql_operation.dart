@@ -29,9 +29,7 @@ class AuthorizeSqlOperation {
                 resource: resource,
               );
               if (!allowed) {
-                final reason = policy.isRevoked
-                    ? 'token_revoked'
-                    : 'missing_permission';
+                final reason = policy.isRevoked ? 'token_revoked' : 'missing_permission';
                 final userMessage = policy.isRevoked
                     ? 'Token revogado. Gere um novo token para continuar.'
                     : 'Seu cliente nao possui permissao para '

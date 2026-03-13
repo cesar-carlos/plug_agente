@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.sql-cancel.v1.json",
+  "title": "sql.cancel params",
+  "description": "Parameters for the sql.cancel RPC method. At least one of execution_id or request_id is required.",
+  "type": "object",
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "description": "Execution ID of the streaming query to cancel"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Request ID of the streaming query to cancel"
+    }
+  },
+  "anyOf": [
+    { "required": ["execution_id"] },
+    { "required": ["request_id"] }
+  ],
+  "additionalProperties": false
+}

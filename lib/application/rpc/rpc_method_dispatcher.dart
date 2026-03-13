@@ -108,10 +108,7 @@ class RpcMethodDispatcher {
 
     final idempotencyKey = params['idempotency_key'] as String?;
     final store = _idempotencyStore;
-    if (_featureFlags.enableSocketIdempotency &&
-        store != null &&
-        idempotencyKey != null &&
-        idempotencyKey.isNotEmpty) {
+    if (_featureFlags.enableSocketIdempotency && store != null && idempotencyKey != null && idempotencyKey.isNotEmpty) {
       final cached = store.get(idempotencyKey);
       if (cached != null) {
         return RpcResponse(
@@ -125,8 +122,7 @@ class RpcMethodDispatcher {
       }
     }
 
-    if (_featureFlags.enableClientTokenAuthorization &&
-        (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -135,9 +131,7 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization &&
-        clientToken != null &&
-        clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
       final authResult = await _authorizeSqlOperation(
         token: clientToken,
         sql: sql,
@@ -216,10 +210,7 @@ class RpcMethodDispatcher {
               final totalChunks = (rows.length / _streamingChunkSize).ceil();
 
               for (var i = 0; i < rows.length; i += _streamingChunkSize) {
-                final chunkRows = rows
-                    .skip(i)
-                    .take(_streamingChunkSize)
-                    .toList();
+                final chunkRows = rows.skip(i).take(_streamingChunkSize).toList();
                 streamEmitter.emitChunk(
                   RpcStreamChunk(
                     streamId: streamId,
@@ -252,8 +243,7 @@ class RpcMethodDispatcher {
                 'rows': <Map<String, dynamic>>[],
                 'row_count': 0,
                 'affected_rows': compressed.affectedRows,
-                if (compressed.columnMetadata != null)
-                  'column_metadata': compressed.columnMetadata,
+                if (compressed.columnMetadata != null) 'column_metadata': compressed.columnMetadata,
               };
 
               return RpcResponse.success(id: request.id, result: resultData);
@@ -266,8 +256,7 @@ class RpcMethodDispatcher {
               'rows': compressed.data,
               'row_count': compressed.data.length,
               'affected_rows': compressed.affectedRows,
-              if (compressed.columnMetadata != null)
-                'column_metadata': compressed.columnMetadata,
+              if (compressed.columnMetadata != null) 'column_metadata': compressed.columnMetadata,
             };
 
             final response = RpcResponse.success(
@@ -347,9 +336,7 @@ class RpcMethodDispatcher {
       config.connectionString,
       (chunk) {
         if (columnMetadata == null && chunk.isNotEmpty) {
-          columnMetadata = chunk.first.keys
-              .map((k) => <String, dynamic>{'name': k, 'type': 'string'})
-              .toList();
+          columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
         }
         totalRows += chunk.length;
         streamEmitter.emitChunk(
@@ -388,9 +375,7 @@ class RpcMethodDispatcher {
             'rows': <Map<String, dynamic>>[],
             'row_count': 0,
             'affected_rows': totalRows,
-            ...?(columnMetadata != null
-                ? {'column_metadata': columnMetadata}
-                : null),
+            ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
           },
         );
       },
@@ -428,10 +413,7 @@ class RpcMethodDispatcher {
 
     final idempotencyKey = params['idempotency_key'] as String?;
     final store = _idempotencyStore;
-    if (_featureFlags.enableSocketIdempotency &&
-        store != null &&
-        idempotencyKey != null &&
-        idempotencyKey.isNotEmpty) {
+    if (_featureFlags.enableSocketIdempotency && store != null && idempotencyKey != null && idempotencyKey.isNotEmpty) {
       final cached = store.get(idempotencyKey);
       if (cached != null) {
         return RpcResponse(
@@ -446,12 +428,9 @@ class RpcMethodDispatcher {
     }
 
     // Parse commands
-    final commands = commandsJson
-        .map((c) => SqlCommand.fromJson(c as Map<String, dynamic>))
-        .toList();
+    final commands = commandsJson.map((c) => SqlCommand.fromJson(c as Map<String, dynamic>)).toList();
 
-    if (_featureFlags.enableClientTokenAuthorization &&
-        (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -460,9 +439,7 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization &&
-        clientToken != null &&
-        clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
       for (final cmd in commands) {
         final authResult = await _authorizeSqlOperation(
           token: clientToken,
@@ -490,9 +467,7 @@ class RpcMethodDispatcher {
 
     // Parse options
     final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null
-        ? SqlExecutionOptions.fromJson(optionsJson)
-        : const SqlExecutionOptions();
+    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
 
     // Execute batch
     final database = params['database'] as String?;
@@ -561,8 +536,7 @@ class RpcMethodDispatcher {
     final executionId = params['execution_id'] as String?;
     final requestId = params['request_id'] as String?;
 
-    if ((executionId == null || executionId.isEmpty) &&
-        (requestId == null || requestId.isEmpty)) {
+    if ((executionId == null || executionId.isEmpty) && (requestId == null || requestId.isEmpty)) {
       return _invalidParams(
         request,
         'At least one of execution_id or request_id is required',

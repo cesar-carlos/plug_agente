@@ -69,17 +69,17 @@ class ClientTokenPolicy {
       return true;
     }
 
+    if (allPermissions) {
+      return true;
+    }
+
     final supportsResource = switch (resource.resourceType) {
       DatabaseResourceType.table => allTables,
       DatabaseResourceType.view => allViews,
       DatabaseResourceType.unknown => allTables || allViews,
     };
 
-    if (allPermissions && supportsResource) {
-      return true;
-    }
-
-    return false;
+    return supportsResource;
   }
 
   Map<String, dynamic> toJson() {

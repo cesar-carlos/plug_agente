@@ -41,6 +41,7 @@ class FeatureFlags {
   static const _keyEnableSocketStreamingFromDb =
       'feature_enable_socket_streaming_from_db';
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
+  static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
 
   /// Whether JSON-RPC v2 protocol is enabled.
   bool get enableJsonRpcV2 => _prefs.getBool(_keyEnableJsonRpcV2) ?? false;
@@ -82,7 +83,7 @@ class FeatureFlags {
 
   /// Whether client token authorization is enabled (enforcement before SQL).
   bool get enableClientTokenAuthorization =>
-      _prefs.getBool(_keyEnableClientTokenAuthorization) ?? false;
+      _prefs.getBool(_keyEnableClientTokenAuthorization) ?? true;
 
   Future<void> setEnableClientTokenAuthorization(bool value) async {
     await _prefs.setBool(_keyEnableClientTokenAuthorization, value);
@@ -90,7 +91,7 @@ class FeatureFlags {
 
   /// Whether to include api_version and meta in RPC v2 requests/responses.
   bool get enableSocketApiVersionMeta =>
-      _prefs.getBool(_keyEnableSocketApiVersionMeta) ?? false;
+      _prefs.getBool(_keyEnableSocketApiVersionMeta) ?? true;
 
   Future<void> setEnableSocketApiVersionMeta(bool value) async {
     await _prefs.setBool(_keyEnableSocketApiVersionMeta, value);
@@ -98,7 +99,7 @@ class FeatureFlags {
 
   /// Whether to enforce notification contract (request without id, no response).
   bool get enableSocketNotificationsContract =>
-      _prefs.getBool(_keyEnableSocketNotificationsContract) ?? false;
+      _prefs.getBool(_keyEnableSocketNotificationsContract) ?? true;
 
   Future<void> setEnableSocketNotificationsContract(bool value) async {
     await _prefs.setBool(_keyEnableSocketNotificationsContract, value);
@@ -106,7 +107,7 @@ class FeatureFlags {
 
   /// Whether to enforce strict batch validation (unique IDs, limits).
   bool get enableSocketBatchStrictValidation =>
-      _prefs.getBool(_keyEnableSocketBatchStrictValidation) ?? false;
+      _prefs.getBool(_keyEnableSocketBatchStrictValidation) ?? true;
 
   Future<void> setEnableSocketBatchStrictValidation(bool value) async {
     await _prefs.setBool(_keyEnableSocketBatchStrictValidation, value);
@@ -138,7 +139,7 @@ class FeatureFlags {
 
   /// Whether sql.cancel method is enabled for cancelling in-flight queries.
   bool get enableSocketCancelMethod =>
-      _prefs.getBool(_keyEnableSocketCancelMethod) ?? false;
+      _prefs.getBool(_keyEnableSocketCancelMethod) ?? true;
 
   Future<void> setEnableSocketCancelMethod(bool value) async {
     await _prefs.setBool(_keyEnableSocketCancelMethod, value);
@@ -146,7 +147,7 @@ class FeatureFlags {
 
   /// Whether to validate RPC request payload against JSON schema at entry.
   bool get enableSocketSchemaValidation =>
-      _prefs.getBool(_keyEnableSocketSchemaValidation) ?? false;
+      _prefs.getBool(_keyEnableSocketSchemaValidation) ?? true;
 
   Future<void> setEnableSocketSchemaValidation(bool value) async {
     await _prefs.setBool(_keyEnableSocketSchemaValidation, value);
@@ -202,6 +203,14 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableTokenAudit, value);
   }
 
+  /// Whether to sign outgoing payloads and verify incoming signatures (HMAC-SHA256).
+  bool get enablePayloadSigning =>
+      _prefs.getBool(_keyEnablePayloadSigning) ?? false;
+
+  Future<void> setEnablePayloadSigning(bool value) async {
+    await _prefs.setBool(_keyEnablePayloadSigning, value);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableJsonRpcV2(false);
@@ -209,20 +218,21 @@ class FeatureFlags {
     await setEnableCompression(true);
     await setCompressionThreshold(1024);
     await setAutoFallbackToLegacy(true);
-    await setEnableClientTokenAuthorization(false);
-    await setEnableSocketApiVersionMeta(false);
-    await setEnableSocketNotificationsContract(false);
-    await setEnableSocketBatchStrictValidation(false);
+    await setEnableClientTokenAuthorization(true);
+    await setEnableSocketApiVersionMeta(true);
+    await setEnableSocketNotificationsContract(true);
+    await setEnableSocketBatchStrictValidation(true);
     await setEnableSocketIdempotency(false);
     await setEnableSocketTimeoutByStage(false);
     await setEnableSocketDeliveryGuarantees(false);
-    await setEnableSocketCancelMethod(false);
-    await setEnableSocketSchemaValidation(false);
+    await setEnableSocketCancelMethod(true);
+    await setEnableSocketSchemaValidation(true);
     await setEnableSocketJwksValidation(false);
     await setEnableSocketRevokedTokenInSession(false);
     await setEnableSocketStreamingChunks(false);
     await setEnableSocketBackpressure(false);
     await setEnableSocketStreamingFromDb(false);
     await setEnableTokenAudit(false);
+    await setEnablePayloadSigning(false);
   }
 }

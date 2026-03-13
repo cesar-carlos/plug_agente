@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -17,6 +18,8 @@ class ClientTokenLocalDataSource {
   Future<String> createToken(ClientTokenCreateRequest request) async {
     final now = DateTime.now().toUtc();
     final tokenId = _buildTokenId();
+    final opaqueToken = _generateOpaqueToken();
+    final tokenHash = _hashToken(opaqueToken);
     final summary = ClientTokenSummary(
       id: tokenId,
       clientId: request.clientId.trim(),
@@ -30,11 +33,11 @@ class ClientTokenLocalDataSource {
       payload: request.payload,
     );
 
-    await _database
-        .into(_database.clientTokenCacheTable)
-        .insertOnConflictUpdate(_toCompanion(summary, syncedAt: now));
+    await _database.into(_database.clientTokenCacheTable).insertOnConflictUpdate(
+          _toCompanion(summary, syncedAt: now, tokenHash: tokenHash),
+        );
 
-    return _buildClientToken(summary);
+    return opaqueToken;
   }
 
   Future<void> replaceTokens(List<ClientTokenSummary> tokens) async {
@@ -81,6 +84,22 @@ class ClientTokenLocalDataSource {
     return _toEntity(row);
   }
 
+  Future<ClientTokenSummary?> getTokenByHash(String tokenHash) async {
+    final row =
+        await (_database.select(_database.clientTokenCacheTable)
+              ..where((table) => table.tokenHash.equals(tokenHash))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _toEntity(row);
+  }
+
+  String hashTokenForLookup(String token) {
+    return _hashToken(token);
+  }
+
   Future<bool> markTokenRevoked(String tokenId) async {
     final affectedRows =
         await (_database.update(
@@ -105,6 +124,7 @@ class ClientTokenLocalDataSource {
   ClientTokenCacheTableCompanion _toCompanion(
     ClientTokenSummary token, {
     required DateTime syncedAt,
+    String? tokenHash,
   }) {
     return ClientTokenCacheTableCompanion.insert(
       id: token.id,
@@ -120,6 +140,7 @@ class ClientTokenLocalDataSource {
         jsonEncode(token.rules.map((rule) => rule.toJson()).toList()),
       ),
       syncedAt: syncedAt,
+      tokenHash: tokenHash == null ? const Value.absent() : Value(tokenHash),
     );
   }
 
@@ -178,25 +199,19 @@ class ClientTokenLocalDataSource {
     }
   }
 
-  String _buildClientToken(ClientTokenSummary token) {
-    final header = <String, dynamic>{
-      'alg': 'none',
-      'typ': 'JWT',
-    };
-    final payload = <String, dynamic>{
-      'jti': token.id,
-      'iat': token.createdAt.millisecondsSinceEpoch ~/ 1000,
-      'policy': token.toJson(),
-    };
-
-    final headerSegment = _encodeSegment(header);
-    final payloadSegment = _encodeSegment(payload);
-    return '$headerSegment.$payloadSegment.';
+  String _generateOpaqueToken() {
+    const tokenLength = 32;
+    final bytes = List<int>.generate(
+      tokenLength,
+      (_) => _random.nextInt(256),
+    );
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  String _encodeSegment(Map<String, dynamic> value) {
-    final json = jsonEncode(value);
-    return base64Url.encode(utf8.encode(json)).replaceAll('=', '');
+  String _hashToken(String token) {
+    final bytes = utf8.encode(token);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
   }
 
   String _buildTokenId() {

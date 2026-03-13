@@ -97,13 +97,8 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Future<Result<ClientTokenPolicy>> _resolvePolicyFromLocalStore(
     String rawToken,
   ) async {
-    final tokenIdResult = _extractTokenId(rawToken);
-    if (tokenIdResult.isError()) {
-      return Failure(tokenIdResult.exceptionOrNull()! as domain.Failure);
-    }
-
-    final tokenId = tokenIdResult.getOrNull()!;
-    final summary = await _localDataSource!.getTokenById(tokenId);
+    final tokenHash = _localDataSource!.hashTokenForLookup(rawToken);
+    final summary = await _localDataSource.getTokenByHash(tokenHash);
     if (summary == null) {
       return Failure(
         domain.ConfigurationFailure.withContext(
@@ -111,7 +106,6 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           context: {
             'authorization': true,
             'reason': 'token_not_found',
-            'token_id': tokenId,
           },
         ),
       );
@@ -202,62 +196,6 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     }
   }
 
-  Result<String> _extractTokenId(String rawToken) {
-    final segments = rawToken.split('.');
-    if (segments.length < 2) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Invalid token format',
-          context: {
-            'authentication': true,
-            'reason': 'invalid_token_signature',
-          },
-        ),
-      );
-    }
-
-    try {
-      final payloadSegment = segments[1];
-      final normalized = base64Url.normalize(payloadSegment);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final payload = jsonDecode(decoded) as Map<String, dynamic>;
-      final tokenId = payload['jti'] as String?;
-      if (tokenId == null || tokenId.trim().isEmpty) {
-        return Failure(
-          domain.ConfigurationFailure.withContext(
-            message: 'Invalid token payload: missing jti',
-            context: {
-              'authentication': true,
-              'reason': 'invalid_token_signature',
-            },
-          ),
-        );
-      }
-      return Success(tokenId.trim());
-    } on FormatException catch (error) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Invalid token payload encoding',
-          cause: error,
-          context: {
-            'authentication': true,
-            'reason': 'invalid_token_signature',
-          },
-        ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Failed to parse token payload',
-          cause: error,
-          context: {
-            'authentication': true,
-            'reason': 'invalid_token_signature',
-          },
-        ),
-      );
-    }
-  }
 
   Result<ClientTokenPolicy> _extractPolicyFromPayload(
     Map<String, dynamic> payload,

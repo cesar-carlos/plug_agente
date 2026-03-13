@@ -30,17 +30,23 @@ projeto para comunicacao Socket.IO entre hub e agente.
 | Streaming chunked | implemented (via feature flag; >500 rows) |
 | Streaming direto do banco (SELECT sem params) | implemented (via enableSocketStreamingFromDb) |
 | Backpressure | implemented (window_size em rpc:stream.pull controla envio) |
-| Notification JSON-RPC (sem resposta) | implemented (via feature flag) |
-| Regras estritas de batch (IDs unicos/ordem) | implemented (via feature flag) |
+| Notification JSON-RPC (sem resposta) | implemented (via feature flag); contrato formal |
+| Regras estritas de batch (IDs unicos/ordem) | implemented (via feature flag); contrato formal |
 | Garantia de entrega por evento (ack/retry) | implemented (via feature flag) |
 | Timeout por etapa (SQL, transporte, ack) | implemented (via feature flag) |
 | Idempotencia por `idempotency_key` (sql.execute/batch) | implemented (via feature flag) |
 | Connection state recovery | implemented (agent-side retry/backoff) |
 | Politica de auth no reconnect | implemented (agent-side) |
 | Rate limiting por evento | implemented (agent-side) |
-| Schema JSON oficial de contrato | implemented (docs/communication/schemas/) |
+| Schema JSON oficial de contrato | implemented (envelope + params + streaming) |
+| Schema de params por metodo (sql.execute/batch/cancel) | implemented (docs/communication/schemas/) |
+| Schema de streaming (chunk/complete/pull) | implemented (docs/communication/schemas/) |
+| Politica de versao e deprecacao | implemented (neste documento) |
+| Limites negociados por transporte | implemented (negociacao via TransportLimits no handshake) |
+| Assinatura opcional de payload | implemented (HMAC-SHA256; feature flag `enablePayloadSigning`) |
 | Validacao de schema na entrada (rpc:request) | implemented (via feature flag) |
-| Validacao criptografica de token (JWKS) | implemented (via feature flag) |
+| Client token authorization (opaco + hash lookup) | implemented (default on) |
+| Validacao criptografica de token (JWKS) | implemented (via feature flag; fallback) |
 | Revogacao em sessao ativa | implemented (via feature flag) |
 | Paridade de enforcement no legado | implemented |
 | Observabilidade de autorizacao (collector allow/deny) | implemented |
@@ -116,6 +122,138 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 | Request critico hub -> agente | at least once | `rpc:request_ack` / `rpc:batch_ack` + retry hub + idempotencia |
 | Response critico agente -> hub | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack |
 
+## Notification JSON-RPC (contrato formal)
+
+Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
+**nao deve** retornar response para notifications.
+
+### Regras
+
+- Request sem `id` (ou `id: null`) e tratado como notification.
+- O agente processa a notification mas **nao emite** `rpc:response`.
+- Notifications nao contam para idempotencia (`idempotency_key` ignorado).
+- Notifications nao recebem `rpc:request_ack` (delivery guarantee = best effort).
+- Em batch, notifications sao processadas mas nao geram item no array de response.
+
+### Exemplo
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.execute",
+  "params": {
+    "sql": "INSERT INTO logs (msg) VALUES ('ping')"
+  }
+}
+```
+
+### Feature flag
+
+- `enableSocketNotificationsContract`: quando ativo, o agente aplica
+  as regras acima de forma estrita. Quando desativado, notifications
+  ainda sao aceitas mas podem gerar response vazio.
+
+## Regras formais de batch (contrato)
+
+### Limites
+
+| Parametro | Valor | Descricao |
+| --- | --- | --- |
+| Max itens por batch | 32 | Acima disso, retorna `-32600` (invalid request) |
+| IDs unicos | obrigatorio | IDs duplicados retornam `-32600` (quando strict mode) |
+| Ordem de processamento | sequencial | Respostas na mesma ordem dos requests |
+| Notifications em batch | permitido | Itens sem `id` nao geram response |
+
+### Regras de validacao (strict mode)
+
+Quando `enableSocketBatchStrictValidation` esta ativo:
+
+1. Batch vazio: rejeitado com `-32600`.
+2. Batch com mais de 32 itens: rejeitado com `-32600`.
+3. IDs duplicados (excluindo notifications): rejeitado com `-32600`.
+4. Cada item deve ser um objeto JSON-RPC 2.0 valido.
+
+### Atomicidade
+
+- Batch **nao** e atomico por padrao. Cada comando e executado independentemente.
+- Para atomicidade, use `options.transaction: true` em `sql.executeBatch`.
+- Se um item falha, os demais continuam sendo processados (exceto em modo transacional).
+
+### Exemplo de batch com notification
+
+```json
+[
+  { "jsonrpc": "2.0", "method": "sql.execute", "id": "q1", "params": { "sql": "SELECT 1" } },
+  { "jsonrpc": "2.0", "method": "sql.execute", "params": { "sql": "INSERT INTO logs (msg) VALUES ('ok')" } },
+  { "jsonrpc": "2.0", "method": "sql.execute", "id": "q2", "params": { "sql": "SELECT 2" } }
+]
+```
+
+Response (notification nao gera item):
+
+```json
+[
+  { "jsonrpc": "2.0", "id": "q1", "result": { "rows": [{ "1": 1 }], "row_count": 1 } },
+  { "jsonrpc": "2.0", "id": "q2", "result": { "rows": [{ "2": 2 }], "row_count": 1 } }
+]
+```
+
+## `api_version` e `meta` (contrato formal)
+
+### Definicao
+
+| Campo | Tipo | Obrigatorio | Descricao |
+| --- | --- | --- | --- |
+| `api_version` | string | sim (v2.1+) | Versao do contrato (ex.: `"2.1"`) |
+| `meta.trace_id` | string | recomendado | ID de rastreamento distribuido |
+| `meta.request_id` | string | recomendado | ID unico do request (correlacao) |
+| `meta.agent_id` | string | sim (response) | Identificador do agente |
+| `meta.timestamp` | string (ISO-8601) | sim | Instante UTC do envio |
+
+### Politica de obrigatoriedade
+
+- Quando `enableSocketApiVersionMeta` esta ativo, `api_version` e `meta`
+  sao **incluidos automaticamente** pelo agente em toda response.
+- Requests do hub **devem** incluir `api_version` e `meta` para rastreabilidade.
+- Se o hub envia request sem `api_version`, o agente aceita e trata como v2.0 implicito.
+- Responses sempre incluem `api_version` e `meta` quando a feature flag esta ativa.
+
+### Exemplo completo (request + response)
+
+Request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.execute",
+  "id": "req-456",
+  "params": { "sql": "SELECT 1", "client_token": "abc123" },
+  "api_version": "2.1",
+  "meta": {
+    "trace_id": "trace-7f3a",
+    "request_id": "req-456",
+    "agent_id": "agent-01",
+    "timestamp": "2026-03-13T10:00:00Z"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "req-456",
+  "result": { "rows": [{ "1": 1 }], "row_count": 1 },
+  "api_version": "2.1",
+  "meta": {
+    "agent_id": "agent-01",
+    "request_id": "req-456",
+    "timestamp": "2026-03-13T10:00:01Z"
+  }
+}
+```
+
 ## Contrato JSON-RPC 2.0 (v2)
 
 ### Fluxo completo (exemplo unico)
@@ -136,6 +274,7 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
   "params": {
     "sql": "SELECT * FROM users WHERE id = :id",
     "params": { "id": 1 },
+    "client_token": "a1b2c3d4e5f6...",
     "options": {
       "timeout_ms": 30000,
       "max_rows": 50000
@@ -143,6 +282,9 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
   }
 }
 ```
+
+- `client_token` (ou `clientToken`): obrigatorio quando `enableClientTokenAuthorization`
+  esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
 
 Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
@@ -230,6 +372,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
       { "sql": "SELECT * FROM users" },
       { "sql": "SELECT COUNT(*) AS total FROM orders" }
     ],
+    "client_token": "a1b2c3d4e5f6...",
     "options": {
       "timeout_ms": 30000,
       "max_rows": 50000,
@@ -238,6 +381,9 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
   }
 }
 ```
+
+- `client_token` (ou `clientToken`): obrigatorio quando `enableClientTokenAuthorization`
+  esta ativo.
 
 ### Response de batch (exemplo)
 
@@ -304,8 +450,8 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 | `-32601` | metodo inexistente | ajustar nome do metodo para um suportado |
 | `-32602` | parametros invalidos | corrigir payload antes de reenviar |
 | `-32603` | erro interno | retry com backoff; se persistir, acionar suporte |
-| `-32001` | falha de autenticacao | renovar credencial/token e reconectar |
-| `-32002` | sem permissao para operacao | ocultar acao na UI e orientar contato com admin |
+| `-32001` | falha de autenticacao ou token ausente | incluir `client_token` em params ou renovar credencial |
+| `-32002` | sem permissao (token revogado, nao encontrado, ou negado) | ocultar acao na UI e orientar contato com admin |
 | `-32008` | timeout | retry com backoff e observabilidade |
 | `-32009` | payload invalido | validar schema e encoding antes do envio |
 | `-32010` | falha de decode | verificar content-type/encoding e compatibilidade |
@@ -442,8 +588,8 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 | `-32601` | `method_not_found` |
 | `-32602` | `invalid_params` |
 | `-32603` | `internal_error` |
-| `-32001` | `authentication_failed` |
-| `-32002` | `unauthorized` |
+| `-32001` | `authentication_failed` ou `missing_client_token` |
+| `-32002` | `unauthorized` (ex.: `token_revoked`, `token_not_found`) |
 | `-32008` | `timeout` |
 | `-32009` | `invalid_payload` |
 | `-32010` | `decoding_failed` |
@@ -579,10 +725,42 @@ Exemplo de capacidades anunciadas:
   "cmp": "none",
   "contentType": "json",
   "payloadBytes": [
-    { "query": "SELECT * FROM users", "parameters": {} }
+    {
+      "query": "SELECT * FROM users",
+      "parameters": {},
+      "client_token": "a1b2c3d4e5f6..."
+    }
   ]
 }
 ```
+
+- `client_token` (ou `auth` ou `token`) no payload: obrigatorio quando auth ativo.
+
+## Client Token Authorization (implementado)
+
+### Fluxo
+
+1. Cliente envia token em `params.client_token` ou `params.clientToken` ou `params.auth`.
+2. Agente normaliza (aceita `Bearer <token>` ou token direto).
+3. Lookup local: hash SHA-256 do token -> SQLite -> politica (regras, all_tables, all_views, all_permissions).
+4. Se nao encontrado localmente: fallback opcional para JWKS (JWT) quando `enableSocketJwksValidation` ativo.
+5. Politica define se a operacao SQL e permitida; deny tem precedencia sobre allow.
+
+### Formato do token
+
+- **Tokens criados no agente**: opacos (string hex aleatoria). Permissoes ficam no banco local, nao no token.
+- **Fallback externo**: JWT com payload `policy` quando JWKS ativo.
+
+### Onde passar o token
+
+| Protocolo | Local |
+| --- | --- |
+| v2 (`rpc:request`) | `params.client_token` ou `params.clientToken` ou `params.auth` |
+| Legado (`query:request`) | `payloadBytes[0].client_token` ou `.auth` ou `.token` |
+
+### Feature flag
+
+- `enableClientTokenAuthorization`: default **true**. Quando ativo, token vazio ou ausente retorna `-32001` (authentication failed) ou `-32002` (unauthorized).
 
 ## Observabilidade de autorizacao (implementado)
 
@@ -592,12 +770,138 @@ Exemplo de capacidades anunciadas:
 - Quando o RPC retorna `authentication_failed` ou `token_revoked`, o transporte
   dispara callback de refresh de token/reconexao.
 
+## Politica de versao e deprecacao
+
+### Versionamento
+
+| Versao | Descricao | Status |
+| --- | --- | --- |
+| `2.0` | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros) | stable |
+| `2.1` | Extensoes: api_version, meta, client_token auth, notifications | stable |
+| `1.0` (legado) | Envelope v1 (query_request/query_response) | deprecated (dual-stack) |
+
+### Regras de versionamento
+
+- **Semver no contrato**: versoes `major.minor`. Major = breaking change; minor = extensao compativel.
+- **`api_version`** no payload indica a versao do contrato que o emissor espera.
+- Se o agente recebe uma `api_version` desconhecida, processa como a versao mais recente suportada e inclui sua propria `api_version` na response.
+- Novas features sao introduzidas como **extensoes opcionais** (feature flags) e promovidas a default apos validacao.
+
+### Deprecacao
+
+- Uma versao e marcada como `deprecated` quando sua substituicao esta estavel.
+- Periodo de deprecacao minimo: **90 dias** apos anuncio.
+- Durante deprecacao, dual-stack permanece ativo (legado + v2 em paralelo).
+- Apos o periodo, a versao deprecated pode ser removida em uma release futura.
+- O agente emite log `WARN` quando recebe requests em versao deprecated.
+
+### Ciclo de vida de feature flag
+
+1. **Experimental**: flag desativado por default; funcionalidade disponivel para opt-in.
+2. **Stable**: flag ativado por default; funcionalidade validada com clientes.
+3. **Mandatory**: flag removido; funcionalidade sempre ativa.
+4. **Deprecated flag**: flag ignorado; funcionalidade revertida ou absorvida.
+
+## Limites negociados por transporte
+
+### Limites do agente (defaults atuais)
+
+| Parametro | Valor padrao | Descricao |
+| --- | --- | --- |
+| `max_payload_bytes` | 10 MB | Tamanho maximo de um unico payload (request ou response) |
+| `max_rows` | 50.000 | Maximo de linhas retornadas por `sql.execute` (sem streaming) |
+| `max_batch_size` | 32 | Maximo de comandos em `sql.executeBatch` |
+| `max_concurrent_streams` | 1 | Maximo de streams de resultado ativos simultaneamente |
+| `streaming_chunk_size` | 500 | Linhas por chunk em streaming |
+| `streaming_row_threshold` | 500 | Acima deste limite, resultado e streamed automaticamente |
+
+### Negociacao (implementado)
+
+O agente anuncia limites em `agent:register` via campo `limits` dentro de `capabilities`:
+
+```json
+{
+  "protocols": ["jsonrpc-v2"],
+  "encodings": ["json"],
+  "compressions": ["gzip", "none"],
+  "extensions": { "batchSupport": true },
+  "limits": {
+    "max_payload_bytes": 10485760,
+    "max_rows": 50000,
+    "max_batch_size": 32,
+    "max_concurrent_streams": 1
+  }
+}
+```
+
+- O hub responde com `agent:capabilities` incluindo limites ajustados.
+- O valor efetivo e o **minimo** entre o que o agente e o hub suportam (`TransportLimits.negotiateWith`).
+- Os limites efetivos ficam armazenados em `ProtocolConfig.effectiveLimits`.
+
+### Enforcement
+
+- Request que excede `max_payload_bytes`: rejeitado com `-32009` (invalid payload).
+- Response que excede `max_rows`: truncado ou streamed (conforme feature flags).
+- Batch que excede `max_batch_size`: rejeitado com `-32600` (invalid request).
+
+## Assinatura opcional de payload
+
+### Objetivo
+
+Garantir integridade e autenticidade de payloads em transito entre hub e agente.
+
+### Mecanismo (implementado)
+
+Quando ativo, o emissor inclui um campo `signature` no envelope:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.execute",
+  "id": "req-123",
+  "params": { "sql": "SELECT 1" },
+  "signature": {
+    "alg": "hmac-sha256",
+    "value": "base64-encoded-hmac",
+    "key_id": "shared-key-01"
+  }
+}
+```
+
+### Campos
+
+| Campo | Tipo | Descricao |
+| --- | --- | --- |
+| `signature.alg` | string | Algoritmo (ex.: `hmac-sha256`) |
+| `signature.value` | string | Assinatura codificada em base64 |
+| `signature.key_id` | string | Identificador da chave usada |
+
+### Regras
+
+- **Opcional**: o emissor pode omitir `signature`; o receptor aceita sem verificar.
+- **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida, retorna `-32001` (authentication failed) com `reason: invalid_signature`.
+- **Escopo**: a assinatura cobre `method`, `id`, `params` (canonicalizados em JSON).
+- **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
+- **Key management**: chaves compartilhadas configuradas no agente via settings. Rotacao por `key_id`.
+
+### Feature flag
+
+- `enablePayloadSigning`: quando ativo, o agente verifica assinaturas em requests recebidos e assina responses enviados.
+
+### Implementacao
+
+- Classe `PayloadSigner` em `infrastructure/security/payload_signer.dart`.
+- Chaves configuradas via `.env` (`PAYLOAD_SIGNING_KEY`, `PAYLOAD_SIGNING_KEY_ID`).
+- Integrado ao `SocketIOTransportClientV2`: assina responses, verifica requests.
+- Comparacao constant-time para prevenir timing attacks.
+- Feature flag `enablePayloadSigning` (default `false`).
+
 ## Limites operacionais atuais
 
 - `options.timeout_ms` suportado em `sql.execute` e `sql.executeBatch`.
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
 - Para fluxos sem streaming, payload segue request/response unico.
-- Limites finos por transporte ainda nao sao negociados no contrato atual.
+- Limites de transporte documentados na secao "Limites negociados" acima.
 
 ## Limitacoes e observacoes do estado atual
 
@@ -609,9 +913,12 @@ Exemplo de capacidades anunciadas:
 - Backpressure: implementado quando `enableSocketBackpressure`; o hub envia
   `rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
   envia por vez; credito inicial de 1 chunk.
-- `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`.
-- Notification JSON-RPC (sem `id`) formalizada via `enableSocketNotificationsContract`.
-- Regras estritas de batch (IDs unicos, limite 32) via `enableSocketBatchStrictValidation`.
+- `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
+  contrato formal na secao "api_version e meta".
+- Notification JSON-RPC (sem `id`) formalizada na secao "Notification JSON-RPC";
+  enforcement via `enableSocketNotificationsContract`.
+- Regras estritas de batch formalizadas na secao "Regras formais de batch";
+  enforcement via `enableSocketBatchStrictValidation`.
 - Timeout por etapa (SQL, transporte, ack) disponivel via
   `enableSocketTimeoutByStage`; erros incluem `reason` especifico
   (`query_timeout`, `transport_timeout`, `ack_timeout`).
@@ -622,9 +929,11 @@ Exemplo de capacidades anunciadas:
 - Rate limits/quotas por evento estao ativos agent-side.
 - Schemas JSON publicados em `docs/communication/schemas/`. Validacao automatica
   na entrada disponivel via `enableSocketSchemaValidation`.
+- Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
+  Permissoes armazenadas em SQLite local; token usado apenas para validacao e lookup.
 - Validacao criptografica de token (issuer/audience/kid/alg) disponivel via
-  `enableSocketJwksValidation`; JWKS URL derivado de `serverUrl/.well-known/jwks.json`
-  ou override por `JWKS_URL` (env). Opcional: `JWKS_ISSUER`, `JWKS_AUDIENCE`.
+  `enableSocketJwksValidation` como fallback para JWT externos; JWKS URL derivado de
+  `serverUrl/.well-known/jwks.json` ou override por `JWKS_URL` (env). Opcional: `JWKS_ISSUER`, `JWKS_AUDIENCE`.
 - Revogacao de token com efeito em sessao ativa disponivel via
   `enableSocketRevokedTokenInSession`; tokens revogados sao armazenados em
   memoria com TTL e rejeitados em novas requests sem exigir reconexao.
@@ -633,16 +942,35 @@ Exemplo de capacidades anunciadas:
 
 ## Checklist de homologacao do cliente
 
+### Fluxo basico
+
 - [ ] Executa fluxo v2 completo (`agent:register` -> `rpc:request` -> `rpc:response`).
 - [ ] Trata erro JSON-RPC em vez de assumir sempre `result`.
 - [ ] Homologa `sql.execute` com sucesso e com falha SQL.
 - [ ] Homologa `sql.executeBatch` com itens de retorno.
 - [ ] Valida fallback para protocolo legado quando v2 nao estiver disponivel.
+
+### Erros e retry
+
 - [ ] Homologa erros de payload invalido (`-32009`) e decode (`-32010`).
 - [ ] Homologa falha de auth (`-32001`) e permissao (`-32002`).
 - [ ] Valida regra de retry somente quando `retryable=true`.
 - [ ] Exibe `user_message` ao usuario e registra `correlation_id` para suporte.
 - [ ] Garante equivalencia de comportamento entre legado e v2 para mesmos cenarios.
+
+### Autorizacao
+
+- [ ] Envia `client_token` em `params` para toda request quando auth ativo.
+- [ ] Trata `-32001` (missing/invalid token) e `-32002` (unauthorized).
+- [ ] Valida que token revogado retorna `-32002` com `reason: token_revoked`.
+
+### Contrato v2.1
+
+- [ ] Inclui `api_version` e `meta` em requests (quando feature ativa).
+- [ ] Valida que responses incluem `api_version` e `meta`.
+- [ ] Trata notifications (request sem `id`) sem esperar response.
+- [ ] Respeita limite de 32 itens por batch com IDs unicos.
+- [ ] Valida schemas de params conforme schemas publicados.
 
 ## Changelog do protocolo (implementado)
 
@@ -653,7 +981,30 @@ Exemplo de capacidades anunciadas:
 - Catalogo de erros padronizado e mapeamento de failures.
 - Negociacao de capacidades com fallback para legado.
 
+### `v2.1` (auth + contratos formais)
+
+- Client token authorization com tokens opacos (hash SHA-256 em SQLite local).
+- Permissoes armazenadas no banco; token usado apenas para lookup.
+- `params.client_token` (ou `clientToken`, `auth`) obrigatorio quando auth ativo.
+- Contrato formal de notifications JSON-RPC (request sem `id`, sem response).
+- Contrato formal de batch (IDs unicos, max 32, ordenacao, atomicidade).
+- `api_version` + `meta` formalizados como contrato obrigatorio.
+- Schemas JSON de params por metodo (`sql.execute`, `sql.executeBatch`, `sql.cancel`).
+- Schemas JSON de streaming (`rpc:chunk`, `rpc:complete`, `rpc:stream.pull`).
+- Politica de versao e deprecacao publicada.
+- Limites de transporte documentados (defaults fixos).
+- Assinatura de payload especificada.
+
+### `v2.2` (hardening)
+
+- Negociacao real de limites via `TransportLimits` no handshake (`agent:register` / `agent:capabilities`).
+- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256, constant-time verify).
+- Feature flag `enablePayloadSigning` adicionada (default `false`).
+- Feature flags promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
+
 ## Schemas JSON (contrato)
+
+### Envelope
 
 - `docs/communication/schemas/rpc.request.schema.json`
 - `docs/communication/schemas/rpc.response.schema.json`
@@ -662,6 +1013,18 @@ Exemplo de capacidades anunciadas:
 - `docs/communication/schemas/rpc.batch.response.schema.json`
 - `docs/communication/schemas/legacy.envelope.v1.schema.json`
 
+### Params por metodo
+
+- `docs/communication/schemas/rpc.params.sql-execute.schema.json`
+- `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
+- `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
+
+### Streaming
+
+- `docs/communication/schemas/rpc.stream.chunk.schema.json`
+- `docs/communication/schemas/rpc.stream.complete.schema.json`
+- `docs/communication/schemas/rpc.stream.pull.schema.json`
+
 ## Referencias internas
 
 - Modelos RPC: `lib/domain/protocol/`
@@ -669,8 +1032,4 @@ Exemplo de capacidades anunciadas:
 - Transporte: `lib/infrastructure/external_services/socket_io_transport_client_v2.dart`
 - Negociacao: `lib/application/services/protocol_negotiator.dart`
 - Evolucao pendente: `docs/communication/socket_communication_roadmap.md`
-
-
-
-
 

@@ -94,76 +94,42 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     super.dispose();
   }
 
-  void _refreshCreateTokenDialogContent() {
+  void _notifyCreateTokenDialogChanged() {
     final dialogSetState = _createTokenDialogSetState;
-    if (dialogSetState == null) {
+    if (dialogSetState != null) {
+      dialogSetState(() {});
       return;
     }
-    dialogSetState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _openAddRuleModal() async {
     final result = await showClientTokenRuleDialog(context: context);
-    if (!mounted || result == null) {
-      return;
-    }
+    if (!mounted || result == null) return;
 
-    setState(() {
-      _rules.add(result);
-      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackAdded;
-    });
-    _deferRefreshCreateTokenDialog();
+    _rules.add(result);
+    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackAdded;
+    _notifyCreateTokenDialogChanged();
   }
 
   Future<void> _openEditRuleModal(int index) async {
-    final currentRule = _rules[index];
     final result = await showClientTokenRuleDialog(
       context: context,
-      initialRule: currentRule,
+      initialRule: _rules[index],
     );
-    if (!mounted || result == null) {
-      return;
-    }
+    if (!mounted || result == null) return;
 
-    setState(() {
-      _rules[index] = result;
-      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackUpdated;
-    });
-    _deferRefreshCreateTokenDialog();
+    _rules[index] = result;
+    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackUpdated;
+    _notifyCreateTokenDialogChanged();
   }
 
-  void _deferRefreshCreateTokenDialog() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _refreshCreateTokenDialogContent();
-    });
-  }
-
-  String _generateClientId() {
-    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    return 'client_$timestamp';
-  }
-
-  Future<void> _removeRule(int index) async {
-    final rule = _rules[index];
-    final confirmed = await SettingsFeedback.showConfirmation(
-      context: context,
-      title: AppStrings.ctDialogDeleteRuleTitle,
-      message: AppStrings.ctDeleteRuleConfirmation(
-        resourceType: rule.resourceType.name,
-        resourceName: rule.resource,
-      ),
-      confirmText: AppStrings.ctButtonDeleteRule,
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _rules.removeAt(index);
-      _ruleFeedbackMessage = AppStrings.ctRuleFeedbackRemoved;
-    });
-    _deferRefreshCreateTokenDialog();
+  void _removeRule(int index) {
+    _rules.removeAt(index);
+    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackRemoved;
+    _notifyCreateTokenDialogChanged();
   }
 
   Future<void> _openCreateTokenModal() async {
@@ -224,32 +190,24 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                         isCreating: provider.isCreating,
                         keepConfigAfterCreate: _keepConfigAfterCreate,
                         onToggleAllTables: (value) {
-                          setState(() {
-                            _allTables = value;
-                          });
-                          _refreshCreateTokenDialogContent();
+                          _allTables = value;
+                          _notifyCreateTokenDialogChanged();
                         },
                         onToggleAllViews: (value) {
-                          setState(() {
-                            _allViews = value;
-                          });
-                          _refreshCreateTokenDialogContent();
+                          _allViews = value;
+                          _notifyCreateTokenDialogChanged();
                         },
                         onToggleAllPermissions: (value) {
-                          setState(() {
-                            _allPermissions = value;
-                          });
-                          _refreshCreateTokenDialogContent();
+                          _allPermissions = value;
+                          _notifyCreateTokenDialogChanged();
                         },
                         onAddRule: _openAddRuleModal,
                         onEditRule: _openEditRuleModal,
                         onDeleteRule: _removeRule,
                         onDismissCreatedToken: provider.clearLastCreatedToken,
                         onToggleKeepConfigAfterCreate: (value) {
-                          setState(() {
-                            _keepConfigAfterCreate = value;
-                          });
-                          _refreshCreateTokenDialogContent();
+                          _keepConfigAfterCreate = value;
+                          _notifyCreateTokenDialogChanged();
                         },
                       );
                     },
@@ -263,7 +221,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   Consumer<ClientTokenProvider>(
                     builder: (context, provider, _) {
                       return FilledButton(
-                        onPressed: provider.isCreating ? null : _handleCreateToken,
+                        onPressed: provider.isCreating
+                            ? null
+                            : _handleCreateToken,
                         child: provider.isCreating
                             ? const SizedBox(
                                 width: 16,
@@ -285,9 +245,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _handleCreateToken() async {
-    setState(() {
-      _formError = '';
-    });
+    _formError = '';
+    _notifyCreateTokenDialogChanged();
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final provider = context.read<ClientTokenProvider>();
@@ -303,10 +262,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     final rules = _buildRules();
     if (!_allPermissions && rules.isEmpty) {
-      setState(() {
-        _formError = AppStrings.ctErrorRuleOrAllPermissionsRequired;
-      });
-      _refreshCreateTokenDialogContent();
+      _formError = AppStrings.ctErrorRuleOrAllPermissionsRequired;
+      _notifyCreateTokenDialogChanged();
       return;
     }
 
@@ -332,14 +289,12 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         await _refreshTokensPreservingPosition(previousOffset);
       }
       if (!mounted) return;
-      setState(() {
-        _formError = '';
-        if (!_keepConfigAfterCreate) {
-          _clearTokenDraftForm();
-        }
-        _ruleFeedbackMessage = '';
-      });
-      _refreshCreateTokenDialogContent();
+      _formError = '';
+      if (!_keepConfigAfterCreate) {
+        _clearTokenDraftForm();
+      }
+      _ruleFeedbackMessage = '';
+      _notifyCreateTokenDialogChanged();
       if (provider.error.isEmpty) {
         navigator.pop();
       }
@@ -367,18 +322,19 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       if (decoded is Map<String, dynamic>) {
         return decoded;
       }
-      setState(() {
-        _formError = AppStrings.ctErrorPayloadMustBeJsonObject;
-      });
-      _refreshCreateTokenDialogContent();
+      _formError = AppStrings.ctErrorPayloadMustBeJsonObject;
+      _notifyCreateTokenDialogChanged();
       return null;
     } on FormatException {
-      setState(() {
-        _formError = AppStrings.ctErrorPayloadInvalidJson;
-      });
-      _refreshCreateTokenDialogContent();
+      _formError = AppStrings.ctErrorPayloadInvalidJson;
+      _notifyCreateTokenDialogChanged();
       return null;
     }
+  }
+
+  String _generateClientId() {
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    return 'client_$timestamp';
   }
 
   List<ClientTokenRule> _buildRules() {
@@ -877,9 +833,9 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final ValueChanged<bool> onToggleAllTables;
   final ValueChanged<bool> onToggleAllViews;
   final ValueChanged<bool> onToggleAllPermissions;
-  final Future<void> Function() onAddRule;
-  final Future<void> Function(int index) onEditRule;
-  final Future<void> Function(int index) onDeleteRule;
+  final VoidCallback onAddRule;
+  final ValueChanged<int> onEditRule;
+  final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
   final ValueChanged<bool> onToggleKeepConfigAfterCreate;
 
@@ -987,7 +943,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
                     label: AppStrings.ctButtonAddRule,
                     isPrimary: false,
                     icon: FluentIcons.add,
-                    onPressed: onAddRule,
+                    onPressed: allPermissions ? null : onAddRule,
                   ),
                 ],
               ),

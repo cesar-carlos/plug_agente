@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/models/envelope_model.dart';
+import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 import 'package:result_dart/result_dart.dart';
@@ -28,15 +29,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required ProtocolNegotiator negotiator,
     required RpcMethodDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
+    PayloadSigner? payloadSigner,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
-       _featureFlags = featureFlags;
+       _featureFlags = featureFlags,
+       _payloadSigner = payloadSigner;
 
   final SocketDataSource _dataSource;
   final ProtocolNegotiator _negotiator;
   final RpcMethodDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
+  final PayloadSigner? _payloadSigner;
 
   io.Socket? _socket;
   String _agentId = '';
@@ -345,10 +349,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
         preferJsonRpcV2: _featureFlags.enableJsonRpcV2,
       );
 
+      final limits = _currentProtocol.effectiveLimits;
       AppLogger.info(
         'Protocol negotiated: ${_currentProtocol.protocol}, '
         'encoding: ${_currentProtocol.encoding}, '
-        'compression: ${_currentProtocol.compression}',
+        'compression: ${_currentProtocol.compression}, '
+        'limits: payload=${limits.maxPayloadBytes}B, '
+        'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
       );
 
       if (_currentProtocol.isJsonRpcV2) {
@@ -425,7 +432,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
-      // Single request
+      if (!_verifyIncomingSignature(requestMap)) {
+        await _sendSchemaValidationError(
+          requestMap['id'],
+          RpcErrorCode.authenticationFailed,
+          'Invalid payload signature',
+        );
+        socketAck?.call();
+        return;
+      }
+
       final request = RpcRequest.fromJson(requestMap);
 
       if (_featureFlags.enableSocketDeliveryGuarantees) {
@@ -986,17 +1002,29 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   Map<String, dynamic> _prepareResponseForSend(RpcResponse response) {
-    if (!_featureFlags.enableSocketApiVersionMeta) {
-      return response.toJson();
-    }
     final json = Map<String, dynamic>.from(response.toJson());
-    json['api_version'] = '2.1';
-    json['meta'] = <String, dynamic>{
-      'agent_id': _agentId,
-      'request_id': response.id?.toString(),
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-    };
+    if (_featureFlags.enableSocketApiVersionMeta) {
+      json['api_version'] = '2.1';
+      json['meta'] = <String, dynamic>{
+        'agent_id': _agentId,
+        'request_id': response.id?.toString(),
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      };
+    }
+    if (_featureFlags.enablePayloadSigning && _payloadSigner != null) {
+      json['signature'] = _payloadSigner.sign(json).toJson();
+    }
     return json;
+  }
+
+  bool _verifyIncomingSignature(Map<String, dynamic> payload) {
+    if (!_featureFlags.enablePayloadSigning || _payloadSigner == null) {
+      return true;
+    }
+    final sigJson = payload['signature'] as Map<String, dynamic>?;
+    if (sigJson == null) return true;
+    final signature = PayloadSignature.fromJson(sigJson);
+    return _payloadSigner.verify(payload, signature);
   }
 
   Future<void> _sendSchemaValidationError(

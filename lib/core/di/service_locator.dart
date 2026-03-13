@@ -77,6 +77,7 @@ import 'package:plug_agente/infrastructure/repositories/agent_config_drift_datab
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
+import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
@@ -201,12 +202,24 @@ Future<void> setupDependencies({
       ),
     )
     ..registerLazySingleton<ITransportClient>(
-      () => SocketIOTransportClientV2(
-        dataSource: getIt<SocketDataSource>(),
-        negotiator: getIt<ProtocolNegotiator>(),
-        rpcDispatcher: getIt<RpcMethodDispatcher>(),
-        featureFlags: getIt<FeatureFlags>(),
-      ),
+      () {
+        final signingKey = dotenv.env['PAYLOAD_SIGNING_KEY']?.trim();
+        final signingKeyId = dotenv.env['PAYLOAD_SIGNING_KEY_ID']?.trim();
+        PayloadSigner? payloadSigner;
+        if (signingKey != null &&
+            signingKey.isNotEmpty &&
+            signingKeyId != null &&
+            signingKeyId.isNotEmpty) {
+          payloadSigner = PayloadSigner(keys: {signingKeyId: signingKey});
+        }
+        return SocketIOTransportClientV2(
+          dataSource: getIt<SocketDataSource>(),
+          negotiator: getIt<ProtocolNegotiator>(),
+          rpcDispatcher: getIt<RpcMethodDispatcher>(),
+          featureFlags: getIt<FeatureFlags>(),
+          payloadSigner: payloadSigner,
+        );
+      },
     )
     ..registerLazySingleton<IDatabaseGateway>(
       () => OdbcDatabaseGateway(

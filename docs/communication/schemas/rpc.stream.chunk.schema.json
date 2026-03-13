@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.stream.chunk.v1.json",
+  "title": "rpc:chunk event payload",
+  "description": "Payload emitted by agent for each chunk of a streaming result",
+  "type": "object",
+  "required": ["stream_id", "request_id", "chunk_index", "rows"],
+  "properties": {
+    "stream_id": {
+      "type": "string",
+      "description": "Unique identifier for the stream session"
+    },
+    "request_id": {
+      "type": ["string", "number"],
+      "description": "Original request ID that initiated the stream"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based index of this chunk in the stream"
+    },
+    "rows": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Array of row objects in this chunk"
+    },
+    "total_chunks": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total expected chunks (when known in advance)"
+    },
+    "column_metadata": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Column metadata (sent on first chunk only)"
+    }
+  },
+  "additionalProperties": false
+}

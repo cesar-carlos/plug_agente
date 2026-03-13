@@ -1117,6 +1117,18 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _tokenHashMeta = const VerificationMeta(
+    'tokenHash',
+  );
+  @override
+  late final GeneratedColumn<String> tokenHash = GeneratedColumn<String>(
+    'token_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1130,6 +1142,7 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     allPermissions,
     rulesJson,
     syncedAt,
+    tokenHash,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1220,11 +1233,21 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     } else if (isInserting) {
       context.missing(_syncedAtMeta);
     }
+    if (data.containsKey('token_hash')) {
+      context.handle(
+        _tokenHashMeta,
+        tokenHash.isAcceptableOrUnknown(data['token_hash']!, _tokenHashMeta),
+      );
+    }
     return context;
   }
 
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {tokenHash},
+  ];
   @override
   ClientTokenCacheData map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -1273,6 +1296,10 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         DriftSqlType.dateTime,
         data['${effectivePrefix}synced_at'],
       )!,
+      tokenHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token_hash'],
+      )!,
     );
   }
 
@@ -1295,6 +1322,7 @@ class ClientTokenCacheData extends DataClass
   final bool allPermissions;
   final String rulesJson;
   final DateTime syncedAt;
+  final String tokenHash;
   const ClientTokenCacheData({
     required this.id,
     required this.clientId,
@@ -1307,6 +1335,7 @@ class ClientTokenCacheData extends DataClass
     required this.allPermissions,
     required this.rulesJson,
     required this.syncedAt,
+    required this.tokenHash,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1324,6 +1353,7 @@ class ClientTokenCacheData extends DataClass
     map['all_permissions'] = Variable<bool>(allPermissions);
     map['rules_json'] = Variable<String>(rulesJson);
     map['synced_at'] = Variable<DateTime>(syncedAt);
+    map['token_hash'] = Variable<String>(tokenHash);
     return map;
   }
 
@@ -1342,6 +1372,7 @@ class ClientTokenCacheData extends DataClass
       allPermissions: Value(allPermissions),
       rulesJson: Value(rulesJson),
       syncedAt: Value(syncedAt),
+      tokenHash: Value(tokenHash),
     );
   }
 
@@ -1362,6 +1393,7 @@ class ClientTokenCacheData extends DataClass
       allPermissions: serializer.fromJson<bool>(json['allPermissions']),
       rulesJson: serializer.fromJson<String>(json['rulesJson']),
       syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+      tokenHash: serializer.fromJson<String>(json['tokenHash']),
     );
   }
   @override
@@ -1379,6 +1411,7 @@ class ClientTokenCacheData extends DataClass
       'allPermissions': serializer.toJson<bool>(allPermissions),
       'rulesJson': serializer.toJson<String>(rulesJson),
       'syncedAt': serializer.toJson<DateTime>(syncedAt),
+      'tokenHash': serializer.toJson<String>(tokenHash),
     };
   }
 
@@ -1394,6 +1427,7 @@ class ClientTokenCacheData extends DataClass
     bool? allPermissions,
     String? rulesJson,
     DateTime? syncedAt,
+    String? tokenHash,
   }) => ClientTokenCacheData(
     id: id ?? this.id,
     clientId: clientId ?? this.clientId,
@@ -1406,6 +1440,7 @@ class ClientTokenCacheData extends DataClass
     allPermissions: allPermissions ?? this.allPermissions,
     rulesJson: rulesJson ?? this.rulesJson,
     syncedAt: syncedAt ?? this.syncedAt,
+    tokenHash: tokenHash ?? this.tokenHash,
   );
   ClientTokenCacheData copyWithCompanion(ClientTokenCacheTableCompanion data) {
     return ClientTokenCacheData(
@@ -1424,6 +1459,7 @@ class ClientTokenCacheData extends DataClass
           : this.allPermissions,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+      tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
     );
   }
 
@@ -1440,7 +1476,8 @@ class ClientTokenCacheData extends DataClass
           ..write('allViews: $allViews, ')
           ..write('allPermissions: $allPermissions, ')
           ..write('rulesJson: $rulesJson, ')
-          ..write('syncedAt: $syncedAt')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('tokenHash: $tokenHash')
           ..write(')'))
         .toString();
   }
@@ -1458,6 +1495,7 @@ class ClientTokenCacheData extends DataClass
     allPermissions,
     rulesJson,
     syncedAt,
+    tokenHash,
   );
   @override
   bool operator ==(Object other) =>
@@ -1473,7 +1511,8 @@ class ClientTokenCacheData extends DataClass
           other.allViews == this.allViews &&
           other.allPermissions == this.allPermissions &&
           other.rulesJson == this.rulesJson &&
-          other.syncedAt == this.syncedAt);
+          other.syncedAt == this.syncedAt &&
+          other.tokenHash == this.tokenHash);
 }
 
 class ClientTokenCacheTableCompanion
@@ -1489,6 +1528,7 @@ class ClientTokenCacheTableCompanion
   final Value<bool> allPermissions;
   final Value<String> rulesJson;
   final Value<DateTime> syncedAt;
+  final Value<String> tokenHash;
   final Value<int> rowid;
   const ClientTokenCacheTableCompanion({
     this.id = const Value.absent(),
@@ -1502,6 +1542,7 @@ class ClientTokenCacheTableCompanion
     this.allPermissions = const Value.absent(),
     this.rulesJson = const Value.absent(),
     this.syncedAt = const Value.absent(),
+    this.tokenHash = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ClientTokenCacheTableCompanion.insert({
@@ -1516,6 +1557,7 @@ class ClientTokenCacheTableCompanion
     this.allPermissions = const Value.absent(),
     this.rulesJson = const Value.absent(),
     required DateTime syncedAt,
+    this.tokenHash = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        clientId = Value(clientId),
@@ -1533,6 +1575,7 @@ class ClientTokenCacheTableCompanion
     Expression<bool>? allPermissions,
     Expression<String>? rulesJson,
     Expression<DateTime>? syncedAt,
+    Expression<String>? tokenHash,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1547,6 +1590,7 @@ class ClientTokenCacheTableCompanion
       if (allPermissions != null) 'all_permissions': allPermissions,
       if (rulesJson != null) 'rules_json': rulesJson,
       if (syncedAt != null) 'synced_at': syncedAt,
+      if (tokenHash != null) 'token_hash': tokenHash,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1563,6 +1607,7 @@ class ClientTokenCacheTableCompanion
     Value<bool>? allPermissions,
     Value<String>? rulesJson,
     Value<DateTime>? syncedAt,
+    Value<String>? tokenHash,
     Value<int>? rowid,
   }) {
     return ClientTokenCacheTableCompanion(
@@ -1577,6 +1622,7 @@ class ClientTokenCacheTableCompanion
       allPermissions: allPermissions ?? this.allPermissions,
       rulesJson: rulesJson ?? this.rulesJson,
       syncedAt: syncedAt ?? this.syncedAt,
+      tokenHash: tokenHash ?? this.tokenHash,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1617,6 +1663,9 @@ class ClientTokenCacheTableCompanion
     if (syncedAt.present) {
       map['synced_at'] = Variable<DateTime>(syncedAt.value);
     }
+    if (tokenHash.present) {
+      map['token_hash'] = Variable<String>(tokenHash.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1637,6 +1686,7 @@ class ClientTokenCacheTableCompanion
           ..write('allPermissions: $allPermissions, ')
           ..write('rulesJson: $rulesJson, ')
           ..write('syncedAt: $syncedAt, ')
+          ..write('tokenHash: $tokenHash, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2114,6 +2164,7 @@ typedef $$ClientTokenCacheTableTableCreateCompanionBuilder =
       Value<bool> allPermissions,
       Value<String> rulesJson,
       required DateTime syncedAt,
+      Value<String> tokenHash,
       Value<int> rowid,
     });
 typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
@@ -2129,6 +2180,7 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<bool> allPermissions,
       Value<String> rulesJson,
       Value<DateTime> syncedAt,
+      Value<String> tokenHash,
       Value<int> rowid,
     });
 
@@ -2193,6 +2245,11 @@ class $$ClientTokenCacheTableTableFilterComposer
 
   ColumnFilters<DateTime> get syncedAt => $composableBuilder(
     column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tokenHash => $composableBuilder(
+    column: $table.tokenHash,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2260,6 +2317,11 @@ class $$ClientTokenCacheTableTableOrderingComposer
     column: $table.syncedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get tokenHash => $composableBuilder(
+    column: $table.tokenHash,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ClientTokenCacheTableTableAnnotationComposer
@@ -2307,6 +2369,9 @@ class $$ClientTokenCacheTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get syncedAt =>
       $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get tokenHash =>
+      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
 }
 
 class $$ClientTokenCacheTableTableTableManager
@@ -2366,6 +2431,7 @@ class $$ClientTokenCacheTableTableTableManager
                 Value<bool> allPermissions = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
                 Value<DateTime> syncedAt = const Value.absent(),
+                Value<String> tokenHash = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ClientTokenCacheTableCompanion(
                 id: id,
@@ -2379,6 +2445,7 @@ class $$ClientTokenCacheTableTableTableManager
                 allPermissions: allPermissions,
                 rulesJson: rulesJson,
                 syncedAt: syncedAt,
+                tokenHash: tokenHash,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2394,6 +2461,7 @@ class $$ClientTokenCacheTableTableTableManager
                 Value<bool> allPermissions = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
                 required DateTime syncedAt,
+                Value<String> tokenHash = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ClientTokenCacheTableCompanion.insert(
                 id: id,
@@ -2407,6 +2475,7 @@ class $$ClientTokenCacheTableTableTableManager
                 allPermissions: allPermissions,
                 rulesJson: rulesJson,
                 syncedAt: syncedAt,
+                tokenHash: tokenHash,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

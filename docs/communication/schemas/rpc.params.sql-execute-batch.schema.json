@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.sql-execute-batch.v1.json",
+  "title": "sql.executeBatch params",
+  "description": "Parameters for the sql.executeBatch RPC method",
+  "type": "object",
+  "required": ["commands"],
+  "properties": {
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "description": "Array of SQL commands to execute sequentially",
+      "items": {
+        "type": "object",
+        "required": ["sql"],
+        "properties": {
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "description": "SQL statement to execute"
+          },
+          "params": {
+            "type": "object",
+            "description": "Named parameters for the SQL statement",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "client_token": {
+      "type": "string",
+      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Unique key for request deduplication (TTL 5min)"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000,
+          "description": "Maximum execution time in milliseconds"
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50000,
+          "description": "Maximum number of rows per command"
+        },
+        "transaction": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to wrap commands in a single transaction"
+        }
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "string",
+      "description": "Optional target database/DSN override"
+    }
+  },
+  "additionalProperties": false
+}

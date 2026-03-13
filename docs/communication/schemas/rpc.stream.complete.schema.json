@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.stream.complete.v1.json",
+  "title": "rpc:complete event payload",
+  "description": "Payload emitted by agent when a streaming result finishes",
+  "type": "object",
+  "required": ["stream_id", "request_id", "total_rows"],
+  "properties": {
+    "stream_id": {
+      "type": "string",
+      "description": "Unique identifier for the stream session"
+    },
+    "request_id": {
+      "type": ["string", "number"],
+      "description": "Original request ID that initiated the stream"
+    },
+    "total_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total rows sent across all chunks"
+    },
+    "affected_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of affected rows (for DML operations)"
+    },
+    "execution_id": {
+      "type": "string",
+      "description": "Execution identifier for correlation"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when execution started"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when execution finished"
+    }
+  },
+  "additionalProperties": false
+}

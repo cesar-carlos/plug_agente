@@ -8,6 +8,7 @@ class ProtocolCapabilities {
     required this.encodings,
     required this.compressions,
     this.extensions = const {},
+    this.limits = const TransportLimits(),
   });
 
   factory ProtocolCapabilities.fromJson(Map<String, dynamic> json) {
@@ -16,10 +17,12 @@ class ProtocolCapabilities {
       encodings: (json['encodings'] as List<dynamic>).cast<String>(),
       compressions: (json['compressions'] as List<dynamic>).cast<String>(),
       extensions: json['extensions'] as Map<String, dynamic>? ?? const {},
+      limits: json['limits'] != null
+          ? TransportLimits.fromJson(json['limits'] as Map<String, dynamic>)
+          : const TransportLimits(),
     );
   }
 
-  /// Default capabilities for the agent (v2 preferred, v1 fallback).
   factory ProtocolCapabilities.defaultCapabilities() {
     return const ProtocolCapabilities(
       protocols: ['jsonrpc-v2', 'legacy-envelope-v1'],
@@ -33,7 +36,6 @@ class ProtocolCapabilities {
     );
   }
 
-  /// Legacy-only capabilities (for fallback compatibility).
   factory ProtocolCapabilities.legacyOnly() {
     return const ProtocolCapabilities(
       protocols: ['legacy-envelope-v1'],
@@ -46,17 +48,11 @@ class ProtocolCapabilities {
     );
   }
 
-  /// Supported protocol versions (e.g., 'jsonrpc-v2', 'legacy-envelope-v1').
   final List<String> protocols;
-
-  /// Supported encoding formats (e.g., 'json', 'msgpack').
   final List<String> encodings;
-
-  /// Supported compression algorithms (e.g., 'gzip', 'none').
   final List<String> compressions;
-
-  /// Optional extension features.
   final Map<String, dynamic> extensions;
+  final TransportLimits limits;
 
   Map<String, dynamic> toJson() {
     return {
@@ -64,6 +60,7 @@ class ProtocolCapabilities {
       'encodings': encodings,
       'compressions': compressions,
       'extensions': extensions,
+      'limits': limits.toJson(),
     };
   }
 
@@ -98,22 +95,73 @@ class ProtocolConfig {
     required this.encoding,
     required this.compression,
     this.compressionThreshold = 1024,
+    this.effectiveLimits = const TransportLimits(),
   });
 
-  /// Selected protocol version.
   final String protocol;
-
-  /// Selected encoding format.
   final String encoding;
-
-  /// Selected compression algorithm.
   final String compression;
-
-  /// Minimum payload size (bytes) to trigger compression.
   final int compressionThreshold;
+  final TransportLimits effectiveLimits;
 
   bool get isJsonRpcV2 => protocol == 'jsonrpc-v2';
   bool get isLegacyV1 => protocol == 'legacy-envelope-v1';
   bool get usesCompression => compression != 'none';
   bool get usesBinaryPayload => encoding == 'msgpack';
+}
+
+/// Transport-level operational limits announced during handshake.
+class TransportLimits {
+  const TransportLimits({
+    this.maxPayloadBytes = defaultMaxPayloadBytes,
+    this.maxRows = defaultMaxRows,
+    this.maxBatchSize = defaultMaxBatchSize,
+    this.maxConcurrentStreams = defaultMaxConcurrentStreams,
+  });
+
+  factory TransportLimits.fromJson(Map<String, dynamic> json) {
+    return TransportLimits(
+      maxPayloadBytes:
+          json['max_payload_bytes'] as int? ?? defaultMaxPayloadBytes,
+      maxRows: json['max_rows'] as int? ?? defaultMaxRows,
+      maxBatchSize: json['max_batch_size'] as int? ?? defaultMaxBatchSize,
+      maxConcurrentStreams:
+          json['max_concurrent_streams'] as int? ?? defaultMaxConcurrentStreams,
+    );
+  }
+
+  static const int defaultMaxPayloadBytes = 10 * 1024 * 1024; // 10 MB
+  static const int defaultMaxRows = 50000;
+  static const int defaultMaxBatchSize = 32;
+  static const int defaultMaxConcurrentStreams = 1;
+
+  final int maxPayloadBytes;
+  final int maxRows;
+  final int maxBatchSize;
+  final int maxConcurrentStreams;
+
+  TransportLimits negotiateWith(TransportLimits other) {
+    return TransportLimits(
+      maxPayloadBytes:
+          maxPayloadBytes < other.maxPayloadBytes
+              ? maxPayloadBytes
+              : other.maxPayloadBytes,
+      maxRows: maxRows < other.maxRows ? maxRows : other.maxRows,
+      maxBatchSize:
+          maxBatchSize < other.maxBatchSize ? maxBatchSize : other.maxBatchSize,
+      maxConcurrentStreams:
+          maxConcurrentStreams < other.maxConcurrentStreams
+              ? maxConcurrentStreams
+              : other.maxConcurrentStreams,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'max_payload_bytes': maxPayloadBytes,
+      'max_rows': maxRows,
+      'max_batch_size': maxBatchSize,
+      'max_concurrent_streams': maxConcurrentStreams,
+    };
+  }
 }

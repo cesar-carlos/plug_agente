@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.stream.pull.v1.json",
+  "title": "rpc:stream.pull event payload",
+  "description": "Payload sent by hub to request more chunks from a streaming result (backpressure)",
+  "type": "object",
+  "required": ["stream_id"],
+  "properties": {
+    "stream_id": {
+      "type": "string",
+      "description": "Unique identifier for the stream session"
+    },
+    "window_size": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Number of chunks the agent is allowed to send"
+    }
+  },
+  "additionalProperties": false
+}

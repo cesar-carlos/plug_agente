@@ -7,26 +7,50 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
+const _ruleDialogWidth = 620.0;
+const _ruleDialogCompactBreakpoint = 760.0;
+const _barrierOpacity = 0.4;
+const _scaleStart = 0.95;
+
 Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
   required BuildContext context,
   ClientTokenRuleDraft? initialRule,
 }) {
-  return showDialog<ClientTokenRuleDraft>(
+  return showGeneralDialog<ClientTokenRuleDraft>(
     context: context,
-    builder: (context) => _ClientTokenRuleDialog(initialRule: initialRule),
+    barrierDismissible: true,
+    barrierLabel: 'Dismiss rule dialog',
+    barrierColor: Colors.black.withValues(alpha: _barrierOpacity),
+    pageBuilder: (dialogContext, primaryAnimation, secondaryAnimation) {
+      return _ClientTokenRuleOverlay(initialRule: initialRule);
+    },
+    transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOut,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: curved.drive(Tween(begin: _scaleStart, end: 1)),
+          child: child,
+        ),
+      );
+    },
   );
 }
 
-class _ClientTokenRuleDialog extends StatefulWidget {
-  const _ClientTokenRuleDialog({this.initialRule});
+class _ClientTokenRuleOverlay extends StatefulWidget {
+  const _ClientTokenRuleOverlay({this.initialRule});
 
   final ClientTokenRuleDraft? initialRule;
 
   @override
-  State<_ClientTokenRuleDialog> createState() => _ClientTokenRuleDialogState();
+  State<_ClientTokenRuleOverlay> createState() =>
+      _ClientTokenRuleOverlayState();
 }
 
-class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
+class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   late final TextEditingController _resourceController;
   late DatabaseResourceType _resourceType;
   late ClientTokenRuleEffect _effect;
@@ -58,20 +82,15 @@ class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
   void _handleSave() {
     final resource = _resourceController.text.trim();
     if (resource.isEmpty) {
-      setState(() {
-        _formError = AppStrings.ctErrorRuleResourceRequired;
-      });
+      setState(() => _formError = AppStrings.ctErrorRuleResourceRequired);
       return;
     }
-
     if (!(_canRead || _canUpdate || _canDelete)) {
-      setState(() {
-        _formError = AppStrings.ctErrorRulePermissionRequired;
-      });
+      setState(() => _formError = AppStrings.ctErrorRulePermissionRequired);
       return;
     }
 
-    Navigator.of(context, rootNavigator: true).pop(
+    Navigator.of(context).pop(
       ClientTokenRuleDraft(
         resource: resource,
         resourceType: _resourceType,
@@ -85,137 +104,133 @@ class _ClientTokenRuleDialogState extends State<_ClientTokenRuleDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final dialogWidth = screenWidth > 760 ? 620.0 : screenWidth * 0.9;
+    final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint
+        ? _ruleDialogWidth
+        : screenWidth * 0.9;
 
-    return ContentDialog(
-      constraints: BoxConstraints(
-        minWidth: dialogWidth,
-        maxWidth: dialogWidth,
-      ),
-      title: Text(
-        _isEditing
-            ? AppStrings.ctDialogEditRuleTitle
-            : AppStrings.ctDialogAddRuleTitle,
-      ),
-      content: SizedBox(
-        width: dialogWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: AppDropdown<DatabaseResourceType>(
-                    label: AppStrings.ctRuleFieldType,
-                    value: _resourceType,
-                    items: DatabaseResourceType.values
-                        .where((item) => item != DatabaseResourceType.unknown)
-                        .map(
-                          (item) => ComboBoxItem<DatabaseResourceType>(
-                            value: item,
-                            child: Text(item.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _resourceType = value;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppDropdown<ClientTokenRuleEffect>(
-                    label: AppStrings.ctRuleFieldEffect,
-                    value: _effect,
-                    items: ClientTokenRuleEffect.values
-                        .map(
-                          (item) => ComboBoxItem<ClientTokenRuleEffect>(
-                            value: item,
-                            child: Text(item.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _effect = value;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              label: AppStrings.ctRuleFieldResource,
-              controller: _resourceController,
-              hint: AppStrings.ctRuleHintResource,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.lg,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _PermissionToggle(
-                  label: AppStrings.ctPermissionRead,
-                  value: _canRead,
-                  onChanged: (value) {
-                    setState(() {
-                      _canRead = value;
-                    });
-                  },
-                ),
-                _PermissionToggle(
-                  label: AppStrings.ctPermissionUpdate,
-                  value: _canUpdate,
-                  onChanged: (value) {
-                    setState(() {
-                      _canUpdate = value;
-                    });
-                  },
-                ),
-                _PermissionToggle(
-                  label: AppStrings.ctPermissionDelete,
-                  value: _canDelete,
-                  onChanged: (value) {
-                    setState(() {
-                      _canDelete = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-            if (_formError.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: dialogWidth,
+          minWidth: dialogWidth,
+        ),
+        child: Card(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          backgroundColor: theme.resources.solidBackgroundFillColorBase,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                _formError,
-                style: TextStyle(
-                  color: Colors.red.normal,
+                _isEditing
+                    ? AppStrings.ctDialogEditRuleTitle
+                    : AppStrings.ctDialogAddRuleTitle,
+                style: theme.typography.subtitle,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppDropdown<DatabaseResourceType>(
+                      label: AppStrings.ctRuleFieldType,
+                      value: _resourceType,
+                      items: DatabaseResourceType.values
+                          .where(
+                            (item) => item != DatabaseResourceType.unknown,
+                          )
+                          .map(
+                            (item) => ComboBoxItem<DatabaseResourceType>(
+                              value: item,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _resourceType = value);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: AppDropdown<ClientTokenRuleEffect>(
+                      label: AppStrings.ctRuleFieldEffect,
+                      value: _effect,
+                      items: ClientTokenRuleEffect.values
+                          .map(
+                            (item) => ComboBoxItem<ClientTokenRuleEffect>(
+                              value: item,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _effect = value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                label: AppStrings.ctRuleFieldResource,
+                controller: _resourceController,
+                hint: AppStrings.ctRuleHintResource,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.lg,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  _PermissionToggle(
+                    label: AppStrings.ctPermissionRead,
+                    value: _canRead,
+                    onChanged: (v) => setState(() => _canRead = v),
+                  ),
+                  _PermissionToggle(
+                    label: AppStrings.ctPermissionUpdate,
+                    value: _canUpdate,
+                    onChanged: (v) => setState(() => _canUpdate = v),
+                  ),
+                  _PermissionToggle(
+                    label: AppStrings.ctPermissionDelete,
+                    value: _canDelete,
+                    onChanged: (v) => setState(() => _canDelete = v),
+                  ),
+                ],
+              ),
+              if (_formError.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  _formError,
+                  style: TextStyle(color: Colors.red.normal),
                 ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(AppStrings.btnCancel),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton(
+                    onPressed: _handleSave,
+                    child: const Text(AppStrings.ctDialogSaveRule),
+                  ),
+                ],
               ),
             ],
-          ],
+          ),
         ),
       ),
-      actions: [
-        Button(
-          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
-          child: const Text(AppStrings.btnCancel),
-        ),
-        FilledButton(
-          onPressed: _handleSave,
-          child: const Text(AppStrings.ctDialogSaveRule),
-        ),
-      ],
     );
   }
 }

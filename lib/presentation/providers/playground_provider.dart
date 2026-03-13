@@ -185,8 +185,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _affectedRows = _rowsProcessed;
 
           // Atualizar progresso (estimativa simples)
-          _progress =
-              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
 
           _notifyStreamingProgressIfNeeded();
         },
@@ -260,8 +259,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _notifyStreamingProgressIfNeeded() {
     final now = DateTime.now();
-    final shouldNotify =
-        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
     if (!shouldNotify) {
       return;
     }

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.sql-execute.v1.json",
+  "title": "sql.execute params",
+  "description": "Parameters for the sql.execute RPC method",
+  "type": "object",
+  "required": ["sql"],
+  "properties": {
+    "sql": {
+      "type": "string",
+      "minLength": 1,
+      "description": "SQL statement to execute (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH)"
+    },
+    "params": {
+      "type": "object",
+      "description": "Named parameters for the SQL statement (e.g. { \"id\": 1 })",
+      "additionalProperties": true
+    },
+    "client_token": {
+      "type": "string",
+      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return cached response (TTL 5min)"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000,
+          "description": "Maximum execution time in milliseconds"
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50000,
+          "description": "Maximum number of rows to return"
+        }
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "string",
+      "description": "Optional target database/DSN override"
+    }
+  },
+  "additionalProperties": false
+}

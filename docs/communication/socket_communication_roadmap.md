@@ -12,36 +12,41 @@ Estado implementado atual:
 
 | Item | Status | Fase alvo |
 | --- | --- | --- |
-| `api_version` + `meta` obrigatorios por contrato | planned | Fase 1 |
-| Semantica formal de notification JSON-RPC | planned | Fase 1 |
-| Regras formais de batch (ordem, IDs, atomicidade) | planned | Fase 1 |
-| Politica de versao e deprecacao | planned | Fase 1 |
-| Limites negociados (`max_payload_bytes`, `max_rows`) | planned | Fase 5 |
-| Assinatura opcional de payload | planned | Fase 5 |
+| Testes de integracao end-to-end para limites negociados | planned | Fase 6 |
+| Rotacao automatica de chaves de assinatura | planned | Fase 6 |
+| Monitoramento/alertas de payload signing failures | planned | Fase 6 |
 
-## Fase 1 - Contrato e governanca
+## Itens concluidos (removidos do backlog)
+
+| Item | Concluido em |
+| --- | --- |
+| `api_version` + `meta` obrigatorios por contrato | v2.1 |
+| Semantica formal de notification JSON-RPC | v2.1 |
+| Regras formais de batch (ordem, IDs, atomicidade) | v2.1 |
+| Politica de versao e deprecacao | v2.1 |
+| Schema de params para sql.execute/batch/cancel | v2.1 |
+| Schemas de streaming (chunk/complete/pull) | v2.1 |
+| Limites negociados documentados (defaults) | v2.1 |
+| Assinatura de payload especificada | v2.1 |
+| Negociacao de limites no handshake (TransportLimits) | v2.2 |
+| Assinatura de payload implementada (hmac-sha256, PayloadSigner) | v2.2 |
+| Feature flags estaveis promovidas para mandatory | v2.2 |
+
+## Fase 5 - Hardening residual (concluida)
+
+Todos os itens da Fase 5 foram implementados:
+
+- Negociacao real de limites via `TransportLimits` em `ProtocolCapabilities`.
+- `PayloadSigner` com HMAC-SHA256, verificacao constant-time, feature flag `enablePayloadSigning`.
+- Feature flags promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
+
+## Fase 6 - Observabilidade e operacao
 
 Objetivo:
 
-- Formalizar requisitos de contrato que ainda estao opcionais.
-
-Escopo:
-
-- Tornar `api_version` + `meta` obrigatorios.
-- Formalizar notification (request sem `id`) no contrato.
-- Formalizar regras de batch (IDs unicos, ordenacao, limites).
-- Publicar politica de versao e deprecacao.
-
-## Fase 5 - Hardening residual
-
-Objetivo:
-
-- Completar hardening de seguranca/operacao ainda nao entregue.
-
-Escopo:
-
-- Definir limites negociados por transporte (`max_payload_bytes`, `max_rows`).
-- Definir assinatura opcional de payload.
+- Testes de integracao de ponta a ponta.
+- Rotacao de chaves de assinatura sem downtime.
+- Alertas operacionais para falhas de assinatura.
 
 ## Criterio de rollout
 

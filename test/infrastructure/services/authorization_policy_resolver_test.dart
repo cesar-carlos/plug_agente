@@ -136,16 +136,8 @@ void main() {
       'should resolve policy from local database when datasource provided',
       () async {
         const tokenId = 'token-123';
-        final token = _buildToken(<String, dynamic>{
-          'jti': tokenId,
-          'policy': <String, dynamic>{
-            'client_id': 'wrong-client',
-            'all_tables': false,
-            'all_views': false,
-            'all_permissions': false,
-            'rules': const <Map<String, dynamic>>[],
-          },
-        });
+        const opaqueToken = 'abc123def456';
+        const tokenHash = 'hash-of-abc123def456';
 
         final summary = ClientTokenSummary(
           id: tokenId,
@@ -172,7 +164,10 @@ void main() {
         );
 
         when(
-          () => mockLocalDataSource.getTokenById(tokenId),
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
         ).thenAnswer((_) async => summary);
 
         resolver = AuthorizationPolicyResolver(
@@ -180,34 +175,30 @@ void main() {
           localDataSource: mockLocalDataSource,
         );
 
-        final result = await resolver.resolvePolicy(token);
+        final result = await resolver.resolvePolicy(opaqueToken);
 
         expect(result.isSuccess(), isTrue);
         result.fold((policy) {
           expect(policy.clientId, equals('local-client'));
           expect(policy.allPermissions, isTrue);
         }, (_) => fail('Expected success'));
-        verify(() => mockLocalDataSource.getTokenById(tokenId)).called(1);
+        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
+            .called(1);
+        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
       },
     );
 
     test(
       'should return token_not_found when token is absent in local database',
       () async {
-        const tokenId = 'missing-token';
-        final token = _buildToken(<String, dynamic>{
-          'jti': tokenId,
-          'policy': <String, dynamic>{
-            'client_id': 'client-acme',
-            'all_tables': true,
-            'all_views': true,
-            'all_permissions': true,
-            'rules': const <Map<String, dynamic>>[],
-          },
-        });
+        const opaqueToken = 'missing-token-xyz';
+        const tokenHash = 'hash-of-missing-token';
 
         when(
-          () => mockLocalDataSource.getTokenById(tokenId),
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
         ).thenAnswer((_) async => null);
 
         resolver = AuthorizationPolicyResolver(
@@ -215,7 +206,7 @@ void main() {
           localDataSource: mockLocalDataSource,
         );
 
-        final result = await resolver.resolvePolicy(token);
+        final result = await resolver.resolvePolicy(opaqueToken);
 
         expect(result.isError(), isTrue);
         result.fold(
@@ -225,7 +216,9 @@ void main() {
             expect(authFailure.context['reason'], equals('token_not_found'));
           },
         );
-        verify(() => mockLocalDataSource.getTokenById(tokenId)).called(1);
+        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
+            .called(1);
+        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
       },
     );
 
@@ -233,16 +226,8 @@ void main() {
       'should return token_revoked when token is revoked in local database',
       () async {
         const tokenId = 'revoked-token';
-        final token = _buildToken(<String, dynamic>{
-          'jti': tokenId,
-          'policy': <String, dynamic>{
-            'client_id': 'client-acme',
-            'all_tables': true,
-            'all_views': true,
-            'all_permissions': true,
-            'rules': const <Map<String, dynamic>>[],
-          },
-        });
+        const opaqueToken = 'revoked-abc123';
+        const tokenHash = 'hash-of-revoked-abc123';
 
         final summary = ClientTokenSummary(
           id: tokenId,
@@ -256,7 +241,10 @@ void main() {
         );
 
         when(
-          () => mockLocalDataSource.getTokenById(tokenId),
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
         ).thenAnswer((_) async => summary);
 
         resolver = AuthorizationPolicyResolver(
@@ -264,7 +252,7 @@ void main() {
           localDataSource: mockLocalDataSource,
         );
 
-        final result = await resolver.resolvePolicy(token);
+        final result = await resolver.resolvePolicy(opaqueToken);
 
         expect(result.isError(), isTrue);
         result.fold(
@@ -274,7 +262,9 @@ void main() {
             expect(authFailure.context['reason'], equals('token_revoked'));
           },
         );
-        verify(() => mockLocalDataSource.getTokenById(tokenId)).called(1);
+        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
+            .called(1);
+        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
       },
     );
   });

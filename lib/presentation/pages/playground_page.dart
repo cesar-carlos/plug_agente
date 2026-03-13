@@ -166,9 +166,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed &&
-        isShiftPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
