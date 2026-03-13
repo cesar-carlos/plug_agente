@@ -3,6 +3,7 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
+import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -10,12 +11,14 @@ import 'package:plug_agente/domain/errors/failure_extensions.dart';
 class ClientTokenProvider extends ChangeNotifier {
   ClientTokenProvider(
     this._createClientToken,
+    this._updateClientToken,
     this._listClientTokens,
     this._revokeClientToken,
     this._deleteClientToken,
   );
 
   final CreateClientToken _createClientToken;
+  final UpdateClientToken _updateClientToken;
   final ListClientTokens _listClientTokens;
   final RevokeClientToken _revokeClientToken;
   final DeleteClientToken _deleteClientToken;
@@ -129,6 +132,37 @@ class ClientTokenProvider extends ChangeNotifier {
 
     _isRevoking = false;
     _revokingTokenId = null;
+    notifyListeners();
+    return isSuccess;
+  }
+
+  Future<bool> updateToken(
+    String tokenId,
+    ClientTokenCreateRequest request, {
+    bool refreshTokens = true,
+  }) async {
+    _isCreating = true;
+    _error = '';
+    _lastCreatedToken = null;
+    notifyListeners();
+
+    final result = await _updateClientToken(tokenId, request);
+    var isSuccess = false;
+
+    await result.fold(
+      (_) async {
+        _error = '';
+        isSuccess = true;
+        if (refreshTokens) {
+          await loadTokens(silent: true);
+        }
+      },
+      (failure) async {
+        _error = failure.toDisplayMessage();
+      },
+    );
+
+    _isCreating = false;
     notifyListeners();
     return isSuccess;
   }

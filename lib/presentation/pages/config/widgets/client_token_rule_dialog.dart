@@ -10,7 +10,7 @@ import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 const _ruleDialogWidth = 620.0;
 const _ruleDialogCompactBreakpoint = 760.0;
 const _barrierOpacity = 0.4;
-const _scaleStart = 0.95;
+const _ruleDialogTransition = Duration(milliseconds: 120);
 
 Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
   required BuildContext context,
@@ -21,20 +21,18 @@ Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
     barrierDismissible: true,
     barrierLabel: 'Dismiss rule dialog',
     barrierColor: Colors.black.withValues(alpha: _barrierOpacity),
+    transitionDuration: _ruleDialogTransition,
     pageBuilder: (dialogContext, primaryAnimation, secondaryAnimation) {
       return _ClientTokenRuleOverlay(initialRule: initialRule);
     },
     transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOut,
+        curve: Curves.easeOutCubic,
       );
       return FadeTransition(
         opacity: curved,
-        child: ScaleTransition(
-          scale: curved.drive(Tween(begin: _scaleStart, end: 1)),
-          child: child,
-        ),
+        child: child,
       );
     },
   );
@@ -89,17 +87,15 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
       setState(() => _formError = AppStrings.ctErrorRulePermissionRequired);
       return;
     }
-
-    Navigator.of(context).pop(
-      ClientTokenRuleDraft(
-        resource: resource,
-        resourceType: _resourceType,
-        effect: _effect,
-        canRead: _canRead,
-        canUpdate: _canUpdate,
-        canDelete: _canDelete,
-      ),
+    final draft = ClientTokenRuleDraft(
+      resource: resource,
+      resourceType: _resourceType,
+      effect: _effect,
+      canRead: _canRead,
+      canUpdate: _canUpdate,
+      canDelete: _canDelete,
     );
+    Navigator.of(context).pop(draft);
   }
 
   @override

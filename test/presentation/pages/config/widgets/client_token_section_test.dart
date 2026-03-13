@@ -5,6 +5,8 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
+import 'package:plug_agente/application/use_cases/update_client_token.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -15,6 +17,8 @@ class MockCreateClientToken extends Mock implements CreateClientToken {}
 
 class MockListClientTokens extends Mock implements ListClientTokens {}
 
+class MockUpdateClientToken extends Mock implements UpdateClientToken {}
+
 class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 
 class MockDeleteClientToken extends Mock implements DeleteClientToken {}
@@ -23,6 +27,7 @@ void main() {
   group('ClientTokenSection', () {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
+    late MockUpdateClientToken mockUpdateClientToken;
     late MockRevokeClientToken mockRevokeClientToken;
     late MockDeleteClientToken mockDeleteClientToken;
     late ClientTokenProvider provider;
@@ -30,6 +35,7 @@ void main() {
     setUp(() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
+      mockUpdateClientToken = MockUpdateClientToken();
       mockRevokeClientToken = MockRevokeClientToken();
       mockDeleteClientToken = MockDeleteClientToken();
 
@@ -39,47 +45,78 @@ void main() {
 
       provider = ClientTokenProvider(
         mockCreateClientToken,
+        mockUpdateClientToken,
         mockListClientTokens,
         mockRevokeClientToken,
         mockDeleteClientToken,
       );
     });
 
-    testWidgets('should add and remove rule rows', (tester) async {
+    testWidgets('should add rule and render it in rules grid', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      expect(find.text('Regra 1'), findsOneWidget);
-      expect(find.text('Regra 2'), findsNothing);
-
-      await tester.tap(find.text('Adicionar regra'));
+      await tester.tap(find.text(AppStrings.ctButtonNewToken));
       await tester.pumpAndSettle();
 
-      expect(find.text('Regra 2'), findsOneWidget);
+      expect(find.text(AppStrings.ctNoRulesAdded), findsOneWidget);
+
+      await tester.tap(find.text(AppStrings.ctButtonAddRule));
+      await tester.pumpAndSettle();
+
+      expect(find.text(AppStrings.ctDialogSaveRule), findsOneWidget);
+
+      await tester.enterText(find.byType(TextBox).last, 'dbo.clientes');
+      await tester.tap(find.text(AppStrings.ctDialogSaveRule));
+      await tester.pumpAndSettle();
+
+      expect(find.text('dbo.clientes'), findsOneWidget);
+      expect(find.text(AppStrings.ctNoRulesAdded), findsNothing);
+    });
+
+    testWidgets('should remove existing rule row', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(AppStrings.ctButtonNewToken));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(AppStrings.ctButtonAddRule));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextBox).last, 'dbo.clientes');
+      await tester.tap(find.text(AppStrings.ctDialogSaveRule));
+      await tester.pumpAndSettle();
 
       final removeButtons = find.byIcon(FluentIcons.delete);
       await tester.ensureVisible(removeButtons.last);
       await tester.tap(removeButtons.last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Regra 2'), findsNothing);
-      expect(find.text('Regra 1'), findsOneWidget);
+      expect(find.text('dbo.clientes'), findsNothing);
     });
 
     testWidgets(
-      'should show validation error when client id is empty',
+      'should show validation error when payload is invalid json',
       (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1600, 1200));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.ensureVisible(find.text('Criar token'));
-        await tester.tap(find.text('Criar token'));
+        await tester.tap(find.text(AppStrings.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        expect(
-          find.text('Informe o client_id para criar o token.'),
-          findsOneWidget,
-        );
+        final payloadField = find.byWidgetPredicate((widget) {
+          return widget is TextBox && widget.maxLines == 4;
+        });
+        await tester.enterText(payloadField, '{invalid json');
+        await tester.ensureVisible(find.text(AppStrings.ctButtonCreateToken));
+        await tester.tap(find.text(AppStrings.ctButtonCreateToken));
+        await tester.pumpAndSettle();
+
+        expect(find.text(AppStrings.ctErrorPayloadInvalidJson), findsOneWidget);
       },
     );
   });

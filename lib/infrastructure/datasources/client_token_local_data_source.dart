@@ -113,6 +113,32 @@ class ClientTokenLocalDataSource {
     return affectedRows > 0;
   }
 
+  Future<bool> updateToken(
+    String tokenId,
+    ClientTokenCreateRequest request,
+  ) async {
+    final affectedRows =
+        await (_database.update(
+          _database.clientTokenCacheTable,
+        )..where((table) => table.id.equals(tokenId))).write(
+          ClientTokenCacheTableCompanion(
+            clientId: Value(request.clientId.trim()),
+            agentId: Value(
+              request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
+            ),
+            payloadJson: Value(jsonEncode(request.payload)),
+            allTables: Value(request.allTables),
+            allViews: Value(request.allViews),
+            allPermissions: Value(request.allPermissions),
+            rulesJson: Value(
+              jsonEncode(request.rules.map((rule) => rule.toJson()).toList()),
+            ),
+            syncedAt: Value(DateTime.now().toUtc()),
+          ),
+        );
+    return affectedRows > 0;
+  }
+
   Future<bool> deleteToken(String tokenId) async {
     final affectedRows =
         await (_database.delete(_database.clientTokenCacheTable)

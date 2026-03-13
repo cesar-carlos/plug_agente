@@ -185,9 +185,7 @@ class _WebSocketActionButtons extends StatelessWidget {
           builder: (context, authProvider, _) {
             return SettingsActionRow(
               leading: AppButton(
-                label: connectionProvider.isConnected
-                    ? AppStrings.wsButtonDisconnect
-                    : AppStrings.wsButtonConnect,
+                label: connectionProvider.isConnected ? AppStrings.wsButtonDisconnect : AppStrings.wsButtonConnect,
                 onPressed: () => _handleConnectOrDisconnect(
                   context,
                   connectionProvider,

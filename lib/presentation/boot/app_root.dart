@@ -18,6 +18,7 @@ import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -94,6 +95,7 @@ class AppRoot extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => ClientTokenProvider(
             getIt<CreateClientToken>(),
+            getIt<UpdateClientToken>(),
             getIt<ListClientTokens>(),
             getIt<RevokeClientToken>(),
             getIt<DeleteClientToken>(),

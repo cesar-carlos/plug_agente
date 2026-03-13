@@ -294,16 +294,19 @@ class _ClientTokenTabContentState extends State<_ClientTokenTabContent> {
   Widget build(BuildContext context) {
     return Scrollbar(
       controller: _pageScrollController,
-      child: ListView(
+      child: SingleChildScrollView(
         controller: _pageScrollController,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.pageHorizontal,
-        ),
-        children: [
-          ClientTokenSection(
-            scrollController: _tokenListScrollController,
+        child: Padding(
+          padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.maxSettingsWidth,
+            ),
+            child: ClientTokenSection(
+              scrollController: _tokenListScrollController,
+            ),
           ),
-        ],
+        ),
       ),
     );
   }

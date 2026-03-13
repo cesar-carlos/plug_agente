@@ -4,6 +4,7 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
+import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -17,6 +18,8 @@ class MockCreateClientToken extends Mock implements CreateClientToken {}
 
 class MockListClientTokens extends Mock implements ListClientTokens {}
 
+class MockUpdateClientToken extends Mock implements UpdateClientToken {}
+
 class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 
 class MockDeleteClientToken extends Mock implements DeleteClientToken {}
@@ -29,6 +32,7 @@ void main() {
   group('ClientTokenProvider', () {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
+    late MockUpdateClientToken mockUpdateClientToken;
     late MockRevokeClientToken mockRevokeClientToken;
     late MockDeleteClientToken mockDeleteClientToken;
     late ClientTokenProvider provider;
@@ -36,10 +40,12 @@ void main() {
     setUp(() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
+      mockUpdateClientToken = MockUpdateClientToken();
       mockRevokeClientToken = MockRevokeClientToken();
       mockDeleteClientToken = MockDeleteClientToken();
       provider = ClientTokenProvider(
         mockCreateClientToken,
+        mockUpdateClientToken,
         mockListClientTokens,
         mockRevokeClientToken,
         mockDeleteClientToken,
@@ -124,6 +130,22 @@ void main() {
       final success = await provider.revokeToken('token-1');
 
       expect(success, isTrue);
+      expect(provider.tokens, isEmpty);
+      expect(provider.error, isEmpty);
+    });
+
+    test('should update token and refresh list', () async {
+      when(
+        () => mockUpdateClientToken('token-1', any()),
+      ).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockListClientTokens(),
+      ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
+
+      final success = await provider.updateToken('token-1', _buildRequest());
+
+      expect(success, isTrue);
+      expect(provider.lastCreatedToken, isNull);
       expect(provider.tokens, isEmpty);
       expect(provider.error, isEmpty);
     });

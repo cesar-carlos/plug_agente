@@ -18,3 +18,4 @@ export 'save_auth_token.dart';
 export 'schedule_notification.dart';
 export 'send_notification.dart';
 export 'test_db_connection.dart';
+export 'update_client_token.dart';

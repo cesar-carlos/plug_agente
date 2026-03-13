@@ -35,6 +35,7 @@ import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -376,6 +377,9 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => ListClientTokens(getIt<IClientTokenRepository>()),
+    )
+    ..registerLazySingleton(
+      () => UpdateClientToken(getIt<IClientTokenRepository>()),
     )
     ..registerLazySingleton(
       () => RevokeClientToken(

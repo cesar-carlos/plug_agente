@@ -45,47 +45,45 @@ class DatabaseConfigSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsSectionBlock(
-              title: AppStrings.dbSectionTitle,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DriverSection(
-                    driverNameController: formController.driverNameController,
-                    odbcDriverNameController:
-                        formController.odbcDriverNameController,
-                    onDriverChanged: onDriverChanged,
-                    fieldsInitialized: formController.fieldsInitialized,
-                  ),
-                  const SizedBox(height: 16),
-                  _ConnectionSection(
-                    hostController: formController.hostController,
-                    portController: formController.portController,
-                  ),
-                  const SizedBox(height: 16),
-                  _DatabaseCredentialsSection(
-                    databaseNameController: formController.databaseNameController,
-                    usernameController: formController.usernameController,
-                    passwordController: formController.passwordController,
-                  ),
-                  const SizedBox(height: 24),
-                  _ActionButtons(
-                    driverNameController: formController.driverNameController,
-                    odbcDriverNameController:
-                        formController.odbcDriverNameController,
-                    hostController: formController.hostController,
-                    portController: formController.portController,
-                    onTestConnection: onTestConnection,
-                    onSaveConfig: onSaveConfig,
-                    isLoading: configProvider.isLoading,
-                    isCheckingDriver: connectionProvider.isCheckingDriver,
-                  ),
-                  const SizedBox(height: 16),
-                  const _StatusSection(),
-              ],
-            ),
+                title: AppStrings.dbSectionTitle,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _DriverSection(
+                      driverNameController: formController.driverNameController,
+                      odbcDriverNameController: formController.odbcDriverNameController,
+                      onDriverChanged: onDriverChanged,
+                      fieldsInitialized: formController.fieldsInitialized,
+                    ),
+                    const SizedBox(height: 16),
+                    _ConnectionSection(
+                      hostController: formController.hostController,
+                      portController: formController.portController,
+                    ),
+                    const SizedBox(height: 16),
+                    _DatabaseCredentialsSection(
+                      databaseNameController: formController.databaseNameController,
+                      usernameController: formController.usernameController,
+                      passwordController: formController.passwordController,
+                    ),
+                    const SizedBox(height: 24),
+                    _ActionButtons(
+                      driverNameController: formController.driverNameController,
+                      odbcDriverNameController: formController.odbcDriverNameController,
+                      hostController: formController.hostController,
+                      portController: formController.portController,
+                      onTestConnection: onTestConnection,
+                      onSaveConfig: onSaveConfig,
+                      isLoading: configProvider.isLoading,
+                      isCheckingDriver: connectionProvider.isCheckingDriver,
+                    ),
+                    const SizedBox(height: 16),
+                    const _StatusSection(),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );

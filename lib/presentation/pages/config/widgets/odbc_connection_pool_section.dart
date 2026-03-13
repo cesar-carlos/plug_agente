@@ -17,8 +17,7 @@ class OdbcConnectionPoolSection extends StatefulWidget {
   const OdbcConnectionPoolSection({super.key});
 
   @override
-  State<OdbcConnectionPoolSection> createState() =>
-      _OdbcConnectionPoolSectionState();
+  State<OdbcConnectionPoolSection> createState() => _OdbcConnectionPoolSectionState();
 }
 
 class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
@@ -47,8 +46,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _poolSizeController.text = settings.poolSize.toString();
       _loginTimeoutController.text = settings.loginTimeoutSeconds.toString();
       _maxResultBufferController.text = settings.maxResultBufferMb.toString();
-      _streamingChunkSizeController.text = settings.streamingChunkSizeKb
-          .toString();
+      _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
       _isLoading = false;
     });
   }
@@ -67,15 +65,11 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _showError(AppStrings.odbcErrorLoginTimeoutRange);
       return;
     }
-    if (maxResultBuffer == null ||
-        maxResultBuffer < 8 ||
-        maxResultBuffer > 128) {
+    if (maxResultBuffer == null || maxResultBuffer < 8 || maxResultBuffer > 128) {
       _showError(AppStrings.odbcErrorBufferRange);
       return;
     }
-    if (streamingChunkSize == null ||
-        streamingChunkSize < 64 ||
-        streamingChunkSize > 8192) {
+    if (streamingChunkSize == null || streamingChunkSize < 64 || streamingChunkSize > 8192) {
       _showError(AppStrings.odbcErrorChunkRange);
       return;
     }
@@ -109,16 +103,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   Future<void> _restoreDefaults() async {
     _poolSizeController.text = ConnectionConstants.defaultPoolSize.toString();
-    _loginTimeoutController.text = ConnectionConstants
-        .defaultLoginTimeout
-        .inSeconds
-        .toString();
-    _maxResultBufferController.text =
-        (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024))
-            .toString();
-    _streamingChunkSizeController.text = ConnectionConstants
-        .defaultStreamingChunkSizeKb
-        .toString();
+    _loginTimeoutController.text = ConnectionConstants.defaultLoginTimeout.inSeconds.toString();
+    _maxResultBufferController.text = (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024)).toString();
+    _streamingChunkSizeController.text = ConnectionConstants.defaultStreamingChunkSizeKb.toString();
 
     await _saveSettings();
   }
@@ -134,9 +121,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   void _showSuccess(bool settingsAppliedNow) {
     if (!mounted) return;
-    final message = settingsAppliedNow
-        ? AppStrings.odbcSuccessAppliedNow
-        : AppStrings.odbcSuccessAppliedGradually;
+    final message = settingsAppliedNow ? AppStrings.odbcSuccessAppliedNow : AppStrings.odbcSuccessAppliedGradually;
 
     SettingsFeedback.showSuccess(
       context: context,
@@ -169,109 +154,109 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsSectionBlock(
-              title: AppStrings.odbcSectionTitle,
-              child: AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  Text(
-                    AppStrings.odbcBlockPool,
-                    style: FluentTheme.of(context).typography.bodyStrong,
+                title: AppStrings.odbcSectionTitle,
+                child: AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.odbcBlockPool,
+                        style: FluentTheme.of(context).typography.bodyStrong,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcBlockPoolDescription,
+                        style: FluentTheme.of(context).typography.body,
+                      ),
+                      const SizedBox(height: 16),
+                      NumericField(
+                        label: AppStrings.odbcFieldPoolSize,
+                        controller: _poolSizeController,
+                        hint: AppStrings.odbcHintPoolSize,
+                        minValue: 1,
+                        maxValue: 20,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        AppStrings.odbcBlockTimeouts,
+                        style: FluentTheme.of(context).typography.bodyStrong,
+                      ),
+                      const SizedBox(height: 8),
+                      NumericField(
+                        label: AppStrings.odbcFieldLoginTimeout,
+                        controller: _loginTimeoutController,
+                        hint: AppStrings.odbcHintLoginTimeout,
+                        minValue: 1,
+                        maxValue: 120,
+                      ),
+                      const SizedBox(height: 16),
+                      NumericField(
+                        label: AppStrings.odbcFieldResultBuffer,
+                        controller: _maxResultBufferController,
+                        hint: AppStrings.odbcHintResultBuffer,
+                        minValue: 8,
+                        maxValue: 128,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcTextResultBufferHelp,
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        AppStrings.odbcBlockStreaming,
+                        style: FluentTheme.of(context).typography.bodyStrong,
+                      ),
+                      const SizedBox(height: 8),
+                      NumericField(
+                        label: AppStrings.odbcFieldChunkSize,
+                        controller: _streamingChunkSizeController,
+                        hint: AppStrings.odbcHintChunkSize,
+                        minValue: 64,
+                        maxValue: 8192,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcTextStreamingHelp,
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcTextQuickRecommendation,
+                        style: FluentTheme.of(context).typography.caption?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        AppStrings.odbcTextQuickRecommendationItems,
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        AppStrings.odbcTextChunkWarning,
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                      const SizedBox(height: 24),
+                      SettingsActionRow(
+                        spacing: 12,
+                        leading: AppButton(
+                          label: AppStrings.odbcButtonRestoreDefault,
+                          isPrimary: false,
+                          onPressed: _isSaving ? null : _restoreDefaults,
+                        ),
+                        trailing: AppButton(
+                          label: AppStrings.odbcButtonSaveAdvanced,
+                          isLoading: _isSaving,
+                          onPressed: _saveSettings,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppStrings.odbcBlockPoolDescription,
-                    style: FluentTheme.of(context).typography.body,
-                  ),
-                  const SizedBox(height: 16),
-                  NumericField(
-                    label: AppStrings.odbcFieldPoolSize,
-                    controller: _poolSizeController,
-                    hint: AppStrings.odbcHintPoolSize,
-                    minValue: 1,
-                    maxValue: 20,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    AppStrings.odbcBlockTimeouts,
-                    style: FluentTheme.of(context).typography.bodyStrong,
-                  ),
-                  const SizedBox(height: 8),
-                  NumericField(
-                    label: AppStrings.odbcFieldLoginTimeout,
-                    controller: _loginTimeoutController,
-                    hint: AppStrings.odbcHintLoginTimeout,
-                    minValue: 1,
-                    maxValue: 120,
-                  ),
-                  const SizedBox(height: 16),
-                  NumericField(
-                    label: AppStrings.odbcFieldResultBuffer,
-                    controller: _maxResultBufferController,
-                    hint: AppStrings.odbcHintResultBuffer,
-                    minValue: 8,
-                    maxValue: 128,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppStrings.odbcTextResultBufferHelp,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    AppStrings.odbcBlockStreaming,
-                    style: FluentTheme.of(context).typography.bodyStrong,
-                  ),
-                  const SizedBox(height: 8),
-                  NumericField(
-                    label: AppStrings.odbcFieldChunkSize,
-                    controller: _streamingChunkSizeController,
-                    hint: AppStrings.odbcHintChunkSize,
-                    minValue: 64,
-                    maxValue: 8192,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppStrings.odbcTextStreamingHelp,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppStrings.odbcTextQuickRecommendation,
-                    style: FluentTheme.of(context).typography.caption?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    AppStrings.odbcTextQuickRecommendationItems,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    AppStrings.odbcTextChunkWarning,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                  const SizedBox(height: 24),
-                  SettingsActionRow(
-                    spacing: 12,
-                    leading: AppButton(
-                      label: AppStrings.odbcButtonRestoreDefault,
-                      isPrimary: false,
-                      onPressed: _isSaving ? null : _restoreDefaults,
-                    ),
-                    trailing: AppButton(
-                      label: AppStrings.odbcButtonSaveAdvanced,
-                      isLoading: _isSaving,
-                      onPressed: _saveSettings,
-                    ),
-                  ),
-                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );

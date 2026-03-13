@@ -27,6 +27,35 @@ class ClientTokenRepository implements IClientTokenRepository {
   }
 
   @override
+  Future<Result<void>> updateToken(
+    String tokenId,
+    ClientTokenCreateRequest request,
+  ) async {
+    try {
+      final didUpdate = await _localDataSource.updateToken(tokenId, request);
+      if (!didUpdate) {
+        return Failure(
+          domain.ValidationFailure(
+            'Client token not found for update operation',
+          ),
+        );
+      }
+      return const Success(unit);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to update local client token',
+          cause: error,
+          context: {
+            'operation': 'update_local_client_token',
+            'token_id': tokenId,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
   Future<Result<List<ClientTokenSummary>>> listTokens() async {
     try {
       final tokens = await _localDataSource.listTokens();

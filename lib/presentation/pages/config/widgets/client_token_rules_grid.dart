@@ -3,6 +3,7 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/shared/widgets/common/layout_components.dart';
 
 class ClientTokenRuleDraft {
   const ClientTokenRuleDraft({
@@ -50,6 +51,16 @@ class ClientTokenRuleDraft {
   }
 }
 
+const _columns = [
+  AppGridColumn(label: AppStrings.ctGridColumnType, flex: 2),
+  AppGridColumn(label: AppStrings.ctGridColumnResource, flex: 4),
+  AppGridColumn(label: AppStrings.ctGridColumnEffect, flex: 2),
+  AppGridColumn(label: AppStrings.ctGridColumnPermissions, flex: 4),
+  AppGridColumn(label: AppStrings.ctGridColumnActions, flex: 2),
+];
+
+const _compactGridBreakpoint = 900.0;
+
 class ClientTokenRulesGrid extends StatelessWidget {
   const ClientTokenRulesGrid({
     required this.rules,
@@ -64,130 +75,191 @@ class ClientTokenRulesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strokeColor = FluentTheme.of(context).resources.controlStrokeColorDefault;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.hasBoundedWidth &&
+            constraints.maxWidth < _compactGridBreakpoint;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: strokeColor),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Column(
-        children: [
-          _GridHeader(strokeColor: strokeColor),
-          ...List<Widget>.generate(
-            rules.length,
-            (index) => _GridRow(
-              rule: rules[index],
-              index: index,
-              strokeColor: strokeColor,
-              onEdit: () => onEdit(index),
-              onDelete: () => onDelete(index),
+        if (isCompact) {
+          return Column(
+            children: List<Widget>.generate(
+              rules.length,
+              (index) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == rules.length - 1 ? 0 : AppSpacing.sm,
+                ),
+                child: _CompactRuleCard(
+                  rule: rules[index],
+                  onEdit: () => onEdit(index),
+                  onDelete: () => onDelete(index),
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
+          );
+        }
+
+        return AppDataGrid<ClientTokenRuleDraft>(
+          columns: _columns,
+          rows: rules,
+          rowCells: (rule) => [
+            Text(rule.resourceType.name),
+            SelectableText(rule.resource),
+            Text(rule.effect.name),
+            Text(rule.permissionsLabel),
+            _RuleActions(
+              onEdit: () => onEdit(rules.indexOf(rule)),
+              onDelete: () => onDelete(rules.indexOf(rule)),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _GridHeader extends StatelessWidget {
-  const _GridHeader({required this.strokeColor});
+class _RuleActions extends StatelessWidget {
+  const _RuleActions({required this.onEdit, required this.onDelete});
 
-  final Color strokeColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: strokeColor)),
-        color: FluentTheme.of(context).resources.subtleFillColorSecondary,
-      ),
-      child: const Row(
-        children: [
-          Expanded(flex: 2, child: Text(AppStrings.ctGridColumnType)),
-          Expanded(flex: 4, child: Text(AppStrings.ctGridColumnResource)),
-          Expanded(flex: 2, child: Text(AppStrings.ctGridColumnEffect)),
-          Expanded(flex: 4, child: Text(AppStrings.ctGridColumnPermissions)),
-          Expanded(flex: 2, child: Text(AppStrings.ctGridColumnActions)),
-        ],
-      ),
-    );
-  }
-}
-
-class _GridRow extends StatelessWidget {
-  const _GridRow({
-    required this.rule,
-    required this.index,
-    required this.strokeColor,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final ClientTokenRuleDraft rule;
-  final int index;
-  final Color strokeColor;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final rowColor = index.isEven
-        ? Colors.transparent
-        : FluentTheme.of(context).resources.subtleFillColorSecondary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: rowColor,
-        border: Border(
-          bottom: BorderSide(
-            color: strokeColor.withValues(alpha: 0.4),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: Text(rule.resourceType.name)),
-          Expanded(flex: 4, child: SelectableText(rule.resource)),
-          Expanded(flex: 2, child: Text(rule.effect.name)),
-          Expanded(flex: 4, child: Text(rule.permissionsLabel)),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Tooltip(
-                  message: AppStrings.ctTooltipEditRule,
-                  child: Semantics(
-                    button: true,
-                    label: AppStrings.ctTooltipEditRule,
-                    child: IconButton(
-                      icon: const Icon(FluentIcons.edit),
-                      onPressed: onEdit,
-                    ),
-                  ),
-                ),
-                Tooltip(
-                  message: AppStrings.ctTooltipDeleteRule,
-                  child: Semantics(
-                    button: true,
-                    label: AppStrings.ctTooltipDeleteRule,
-                    child: IconButton(
-                      icon: const Icon(FluentIcons.delete),
-                      onPressed: onDelete,
-                    ),
-                  ),
-                ),
-              ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: AppStrings.ctTooltipEditRule,
+          child: Semantics(
+            button: true,
+            label: AppStrings.ctTooltipEditRule,
+            child: IconButton(
+              icon: const Icon(FluentIcons.edit),
+              onPressed: onEdit,
             ),
           ),
+        ),
+        Tooltip(
+          message: AppStrings.ctTooltipDeleteRule,
+          child: Semantics(
+            button: true,
+            label: AppStrings.ctTooltipDeleteRule,
+            child: IconButton(
+              icon: const Icon(FluentIcons.delete),
+              onPressed: onDelete,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactRuleCard extends StatelessWidget {
+  const _CompactRuleCard({
+    required this.rule,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final ClientTokenRuleDraft rule;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final strokeColor =
+        FluentTheme.of(context).resources.controlStrokeColorDefault;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: strokeColor),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CompactValueRow(
+            label: AppStrings.ctGridColumnType,
+            value: rule.resourceType.name,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _CompactValueRow(
+            label: AppStrings.ctGridColumnResource,
+            value: rule.resource,
+            isSelectable: true,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _CompactValueRow(
+            label: AppStrings.ctGridColumnEffect,
+            value: rule.effect.name,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _CompactValueRow(
+            label: AppStrings.ctGridColumnPermissions,
+            value: rule.permissionsLabel,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Tooltip(
+                message: AppStrings.ctTooltipEditRule,
+                child: Semantics(
+                  button: true,
+                  label: AppStrings.ctTooltipEditRule,
+                  child: IconButton(
+                    icon: const Icon(FluentIcons.edit),
+                    onPressed: onEdit,
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: AppStrings.ctTooltipDeleteRule,
+                child: Semantics(
+                  button: true,
+                  label: AppStrings.ctTooltipDeleteRule,
+                  child: IconButton(
+                    icon: const Icon(FluentIcons.delete),
+                    onPressed: onDelete,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactValueRow extends StatelessWidget {
+  const _CompactValueRow({
+    required this.label,
+    required this.value,
+    this.isSelectable = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isSelectable;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: DefaultTextStyle.of(context).style,
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (isSelectable)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: SelectableText(value),
+            )
+          else
+            TextSpan(text: value),
         ],
       ),
     );

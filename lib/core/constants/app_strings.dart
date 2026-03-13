@@ -92,6 +92,7 @@ class AppStrings {
   static const String ctButtonAutoRefreshOn = 'Auto refresh: ligado';
   static const String ctButtonAutoRefreshOff = 'Auto refresh: desligado';
   static const String ctButtonViewDetails = 'Ver detalhes';
+  static const String ctButtonEdit = 'Editar';
   static const String ctButtonClearFilters = 'Limpar filtros';
   static const String ctSectionRegisteredTokens = 'Tokens cadastrados';
   static const String ctMsgNoTokenFound = 'Nenhum token encontrado.';
@@ -156,13 +157,21 @@ class AppStrings {
       'Nenhuma regra adicionada. Clique em "Adicionar regra".';
   static const String ctDialogAddRuleTitle = 'Adicionar regra';
   static const String ctDialogCreateTokenTitle = 'Criar token do cliente';
+  static const String ctDialogEditTokenTitle = 'Editar token do cliente';
+  static const String ctButtonSaveTokenChanges = 'Salvar alterações';
   static const String ctDialogEditRuleTitle = 'Editar regra';
   static const String ctDialogSaveRule = 'Salvar regra';
+  static const String ctEditUpdatesTokenHint =
+      'As alteracoes serao aplicadas ao token selecionado.';
+  static const String ctEditCreatesNewTokenHint =
+      'Editar preenche os campos para criar um novo token. '
+      'O token original nao e alterado.';
   static const String ctDialogTokenDetailsTitle = 'Detalhes do token';
   static const String ctDialogDeleteRuleTitle = 'Excluir regra';
   static const String ctButtonDeleteRule = 'Excluir regra';
   static const String ctTooltipEditRule = 'Editar regra';
   static const String ctTooltipDeleteRule = 'Excluir regra';
+  static const String ctTooltipEditToken = 'Editar token';
   static const String ctErrorRuleResourceRequired =
       'Informe o recurso (schema.nome).';
   static const String ctErrorRulePermissionRequired =

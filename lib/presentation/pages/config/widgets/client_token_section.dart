@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -21,6 +22,7 @@ import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dar
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,13 +30,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _tokenClientFilterKey = 'client_token_list_client_filter';
 const _tokenStatusFilterKey = 'client_token_list_status_filter';
 const _tokenSortFilterKey = 'client_token_list_sort_filter';
-const _tokenAutoRefreshAfterCreateKey =
-    'client_token_auto_refresh_after_create';
+const _tokenAutoRefreshAfterCreateKey = 'client_token_auto_refresh_after_create';
 const _createTokenDialogMaxWidth = 1120.0;
 const _createTokenDialogHorizontalMargin = 40.0;
 const _createTokenDialogHeightFactor = 0.84;
-const _createTokenRulesMaxHeight = 280.0;
-const _createTokenRulesMinTableWidth = 780.0;
+const _createTokenBarrierOpacity = 0.4;
+const _createTokenScaleStart = 0.95;
 
 class ClientTokenSection extends StatefulWidget {
   const ClientTokenSection({
@@ -52,11 +53,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   final TextEditingController _clientIdController = TextEditingController();
   final TextEditingController _agentIdController = TextEditingController();
   final TextEditingController _payloadController = TextEditingController();
-  final TextEditingController _listClientFilterController =
-      TextEditingController();
+  final TextEditingController _listClientFilterController = TextEditingController();
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
   Timer? _clientFilterDebounceTimer;
-  StateSetter? _createTokenDialogSetState;
+  final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
+  bool _isCreateTokenDialogOpen = false;
 
   bool _allTables = false;
   bool _allViews = false;
@@ -64,9 +65,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   _TokenStatusFilter _tokenStatusFilter = _TokenStatusFilter.all;
   _TokenSortOption _tokenSortOption = _TokenSortOption.newest;
   bool _autoRefreshAfterCreate = true;
-  bool _keepConfigAfterCreate = false;
   String _formError = '';
-  String _ruleFeedbackMessage = '';
+  String? _editingTokenId;
 
   @override
   void initState() {
@@ -90,14 +90,13 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _payloadController.dispose();
     _listClientFilterController.dispose();
     _clientFilterDebounceTimer?.cancel();
-    _createTokenDialogSetState = null;
+    _createTokenDialogRevision.dispose();
     super.dispose();
   }
 
   void _notifyCreateTokenDialogChanged() {
-    final dialogSetState = _createTokenDialogSetState;
-    if (dialogSetState != null) {
-      dialogSetState(() {});
+    if (_isCreateTokenDialogOpen) {
+      _createTokenDialogRevision.value++;
       return;
     }
     if (mounted) {
@@ -110,8 +109,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (!mounted || result == null) return;
 
     _rules.add(result);
-    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackAdded;
-    _notifyCreateTokenDialogChanged();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _notifyCreateTokenDialogChanged();
+    });
   }
 
   Future<void> _openEditRuleModal(int index) async {
@@ -122,129 +123,213 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (!mounted || result == null) return;
 
     _rules[index] = result;
-    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackUpdated;
     _notifyCreateTokenDialogChanged();
   }
 
   void _removeRule(int index) {
     _rules.removeAt(index);
-    _ruleFeedbackMessage = AppStrings.ctRuleFeedbackRemoved;
     _notifyCreateTokenDialogChanged();
   }
 
-  Future<void> _openCreateTokenModal() async {
+  Future<void> _openCreateTokenModal([ClientTokenSummary? baseToken]) async {
     if (!mounted) {
       return;
     }
+    final isEditingToken = baseToken != null;
+
+    final initialRules = baseToken?.rules
+            .map(
+              (rule) => ClientTokenRuleDraft(
+                resource: rule.resource.name,
+                resourceType: rule.resource.resourceType,
+                effect: rule.effect,
+                canRead: rule.permissions.canRead,
+                canUpdate: rule.permissions.canUpdate,
+                canDelete: rule.permissions.canDelete,
+              ),
+            )
+            .toList() ??
+        <ClientTokenRuleDraft>[];
+
     setState(() {
       _formError = '';
-      _ruleFeedbackMessage = '';
-      _clientIdController.text = _generateClientId();
+      _editingTokenId = baseToken?.id;
+      _clientIdController.text = baseToken?.clientId ?? _generateClientId();
+      _agentIdController.text = baseToken?.agentId ?? '';
+      _payloadController.text = baseToken?.payload.isEmpty ?? true
+          ? ''
+          : jsonEncode(baseToken!.payload);
+      _rules
+        ..clear()
+        ..addAll(initialRules);
+      _allTables = baseToken?.allTables ?? false;
+      _allViews = baseToken?.allViews ?? false;
+      _allPermissions = baseToken?.allPermissions ?? false;
     });
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
     provider.clearLastCreatedToken();
 
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final screenSize = MediaQuery.sizeOf(dialogContext);
-        final availableWidth =
-            screenSize.width - (_createTokenDialogHorizontalMargin * 2);
-        final dialogWidth = availableWidth.clamp(
-          420.0,
-          _createTokenDialogMaxWidth,
-        );
-        final dialogMaxHeight =
-            screenSize.height * _createTokenDialogHeightFactor;
+    _isCreateTokenDialogOpen = true;
+    try {
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Dismiss create token dialog',
+        barrierColor: Colors.black.withValues(alpha: _createTokenBarrierOpacity),
+        pageBuilder: (_, primaryAnimation, secondaryAnimation) {
+          return ValueListenableBuilder<int>(
+            valueListenable: _createTokenDialogRevision,
+            builder: (dialogContext, revision, child) {
+              final screenSize = MediaQuery.sizeOf(dialogContext);
+              final availableWidth = screenSize.width - (_createTokenDialogHorizontalMargin * 2);
+              final dialogWidth = availableWidth.clamp(
+                420.0,
+                _createTokenDialogMaxWidth,
+              );
+              final dialogMaxHeight = screenSize.height * _createTokenDialogHeightFactor;
+              final theme = FluentTheme.of(dialogContext);
 
-        return StatefulBuilder(
-          builder: (context, dialogSetState) {
-            _createTokenDialogSetState = dialogSetState;
-            return ChangeNotifierProvider<ClientTokenProvider>.value(
-              value: provider,
-              child: ContentDialog(
-                constraints: BoxConstraints(
-                  minWidth: dialogWidth,
-                  maxWidth: dialogWidth,
+              return ChangeNotifierProvider<ClientTokenProvider>.value(
+                value: provider,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: dialogWidth,
+                      maxWidth: dialogWidth,
+                    ),
+                    child: Card(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      backgroundColor: theme.resources.solidBackgroundFillColorBase,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isEditingToken
+                                ? AppStrings.ctDialogEditTokenTitle
+                                : AppStrings.ctDialogCreateTokenTitle,
+                            style: theme.typography.subtitle,
+                          ),
+                          if (isEditingToken) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(AppSpacing.sm),
+                              decoration: BoxDecoration(
+                                color: theme.resources.subtleFillColorSecondary,
+                                border: Border.all(
+                                  color: theme.resources.controlStrokeColorDefault,
+                                ),
+                                borderRadius: BorderRadius.circular(AppRadius.md),
+                              ),
+                              child: const Text(
+                                AppStrings.ctEditUpdatesTokenHint,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.lg),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: dialogMaxHeight,
+                            ),
+                            child: Consumer<ClientTokenProvider>(
+                              builder: (context, provider, _) {
+                                return _CreateTokenDialogContent(
+                                  clientIdController: _clientIdController,
+                                  agentIdController: _agentIdController,
+                                  payloadController: _payloadController,
+                                  rules: _rules,
+                                  allTables: _allTables,
+                                  allViews: _allViews,
+                                  allPermissions: _allPermissions,
+                                  formError: _formError,
+                                  providerError: provider.error,
+                                  lastCreatedToken: provider.lastCreatedToken,
+                                  isCreating: provider.isCreating,
+                                  onToggleAllTables: (value) {
+                                    _allTables = value;
+                                    _notifyCreateTokenDialogChanged();
+                                  },
+                                  onToggleAllViews: (value) {
+                                    _allViews = value;
+                                    _notifyCreateTokenDialogChanged();
+                                  },
+                                  onToggleAllPermissions: (value) {
+                                    _allPermissions = value;
+                                    _notifyCreateTokenDialogChanged();
+                                  },
+                                  onAddRule: _openAddRuleModal,
+                                  onEditRule: _openEditRuleModal,
+                                  onDeleteRule: _removeRule,
+                                  onDismissCreatedToken: provider.clearLastCreatedToken,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Consumer<ClientTokenProvider>(
+                            builder: (context, provider, _) {
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Button(
+                                    onPressed: () => Navigator.of(dialogContext).pop(),
+                                    child: const Text(AppStrings.btnCancel),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  FilledButton(
+                                    onPressed: provider.isCreating
+                                        ? null
+                                        : _handleSubmitToken,
+                                    child: provider.isCreating
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: ProgressRing(strokeWidth: 2),
+                                          )
+                                        : Text(
+                                            isEditingToken
+                                                ? AppStrings.ctButtonSaveTokenChanges
+                                                : AppStrings.ctButtonCreateToken,
+                                          ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                title: const Text(AppStrings.ctDialogCreateTokenTitle),
-                content: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: dialogMaxHeight,
-                  ),
-                  child: Consumer<ClientTokenProvider>(
-                    builder: (context, provider, _) {
-                      return _CreateTokenDialogContent(
-                        clientIdController: _clientIdController,
-                        agentIdController: _agentIdController,
-                        payloadController: _payloadController,
-                        rules: _rules,
-                        allTables: _allTables,
-                        allViews: _allViews,
-                        allPermissions: _allPermissions,
-                        ruleFeedbackMessage: _ruleFeedbackMessage,
-                        formError: _formError,
-                        providerError: provider.error,
-                        lastCreatedToken: provider.lastCreatedToken,
-                        isCreating: provider.isCreating,
-                        keepConfigAfterCreate: _keepConfigAfterCreate,
-                        onToggleAllTables: (value) {
-                          _allTables = value;
-                          _notifyCreateTokenDialogChanged();
-                        },
-                        onToggleAllViews: (value) {
-                          _allViews = value;
-                          _notifyCreateTokenDialogChanged();
-                        },
-                        onToggleAllPermissions: (value) {
-                          _allPermissions = value;
-                          _notifyCreateTokenDialogChanged();
-                        },
-                        onAddRule: _openAddRuleModal,
-                        onEditRule: _openEditRuleModal,
-                        onDeleteRule: _removeRule,
-                        onDismissCreatedToken: provider.clearLastCreatedToken,
-                        onToggleKeepConfigAfterCreate: (value) {
-                          _keepConfigAfterCreate = value;
-                          _notifyCreateTokenDialogChanged();
-                        },
-                      );
-                    },
-                  ),
-                ),
-                actions: [
-                  Button(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text(AppStrings.btnCancel),
-                  ),
-                  Consumer<ClientTokenProvider>(
-                    builder: (context, provider, _) {
-                      return FilledButton(
-                        onPressed: provider.isCreating
-                            ? null
-                            : _handleCreateToken,
-                        child: provider.isCreating
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: ProgressRing(strokeWidth: 2),
-                              )
-                            : const Text(AppStrings.ctButtonCreateToken),
-                      );
-                    },
-                  ),
-                ],
+              );
+            },
+          );
+        },
+        transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: curved.drive(
+                Tween(begin: _createTokenScaleStart, end: 1),
               ),
-            );
-          },
-        );
-      },
-    );
-    _createTokenDialogSetState = null;
+              child: child,
+            ),
+          );
+        },
+      );
+    } finally {
+      _isCreateTokenDialogOpen = false;
+    }
   }
 
-  Future<void> _handleCreateToken() async {
+  Future<void> _handleSubmitToken() async {
     _formError = '';
     _notifyCreateTokenDialogChanged();
 
@@ -269,9 +354,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     final request = ClientTokenCreateRequest(
       clientId: clientId,
-      agentId: _agentIdController.text.trim().isEmpty
-          ? null
-          : _agentIdController.text.trim(),
+      agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
       payload: payloadResult,
       allTables: _allTables,
       allViews: _allViews,
@@ -280,28 +363,34 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     );
 
     final previousOffset = _getCurrentScrollOffset();
-    final created = await provider.createToken(
-      request,
-      refreshTokens: false,
-    );
-    if (created && mounted) {
+    final currentEditingTokenId = _editingTokenId;
+    final isSuccess = currentEditingTokenId == null
+        ? await provider.createToken(
+            request,
+            refreshTokens: false,
+          )
+        : await provider.updateToken(
+            currentEditingTokenId,
+            request,
+            refreshTokens: false,
+          );
+
+    if (isSuccess && mounted) {
       if (_autoRefreshAfterCreate) {
         await _refreshTokensPreservingPosition(previousOffset);
       }
       if (!mounted) return;
       _formError = '';
-      if (!_keepConfigAfterCreate) {
-        _clearTokenDraftForm();
-      }
-      _ruleFeedbackMessage = '';
       _notifyCreateTokenDialogChanged();
       if (provider.error.isEmpty) {
+        _clearTokenDraftForm();
         navigator.pop();
       }
     }
   }
 
   void _clearTokenDraftForm() {
+    _editingTokenId = null;
     _clientIdController.text = _generateClientId();
     _agentIdController.clear();
     _payloadController.clear();
@@ -364,9 +453,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   List<ClientTokenSummary> _applyTokenFilters(List<ClientTokenSummary> tokens) {
     final clientFilter = _listClientFilterController.text.trim().toLowerCase();
     final filtered = tokens.where((token) {
-      final matchesClient =
-          clientFilter.isEmpty ||
-          token.clientId.toLowerCase().contains(clientFilter);
+      final matchesClient = clientFilter.isEmpty || token.clientId.toLowerCase().contains(clientFilter);
       final matchesStatus = switch (_tokenStatusFilter) {
         _TokenStatusFilter.all => true,
         _TokenStatusFilter.active => !token.isRevoked,
@@ -430,8 +517,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       final sortFilter = _sortFilterFromStorage(
         prefs.getString(_tokenSortFilterKey),
       );
-      final autoRefreshAfterCreate =
-          prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
+      final autoRefreshAfterCreate = prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
       if (!mounted) {
         return;
       }
@@ -659,9 +745,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     label: _autoRefreshAfterCreate
                         ? AppStrings.ctButtonAutoRefreshOn
                         : AppStrings.ctButtonAutoRefreshOff,
-                    icon: _autoRefreshAfterCreate
-                        ? FluentIcons.sync
-                        : FluentIcons.pause,
+                    icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
                     isPrimary: false,
                     onPressed: () {
                       setState(() {
@@ -749,38 +833,26 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              if (provider.tokens.isEmpty && !provider.isLoading)
-                const Text(AppStrings.ctMsgNoTokenFound),
-              if (provider.tokens.isNotEmpty && filteredTokens.isEmpty)
-                const Text(AppStrings.ctMsgNoTokenMatchFilter),
+              if (provider.tokens.isEmpty && !provider.isLoading) const Text(AppStrings.ctMsgNoTokenFound),
+              if (provider.tokens.isNotEmpty && filteredTokens.isEmpty) const Text(AppStrings.ctMsgNoTokenMatchFilter),
               if (filteredTokens.isNotEmpty)
                 SizedBox(
                   height: 440,
-                  child: ListView.builder(
-                    controller: widget.scrollController,
-                    itemCount: filteredTokens.length,
-                    itemBuilder: (context, index) {
-                      final token = filteredTokens[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _TokenSummaryTile(
-                          token: token,
-                          isRevoking: provider.isRevokingToken(token.id),
-                          isDeleting: provider.isDeletingToken(token.id),
-                          onViewDetails: () => showClientTokenDetailsDialog(
-                            context: context,
-                            token: token,
-                          ),
-                          onRevoke: token.isRevoked
-                              ? null
-                              : () {
-                                  _handleRevoke(context, provider, token);
-                                },
-                          onDelete: () {
-                            _handleDelete(context, provider, token);
-                          },
-                        ),
-                      );
+                  child: _TokenSummaryGrid(
+                    tokens: filteredTokens,
+                    scrollController: widget.scrollController,
+                    isRevokingToken: provider.isRevokingToken,
+                    isDeletingToken: provider.isDeletingToken,
+                    onViewDetails: (token) => showClientTokenDetailsDialog(
+                      context: context,
+                      token: token,
+                    ),
+                    onEdit: _openCreateTokenModal,
+                    onRevoke: (token) {
+                      _handleRevoke(context, provider, token);
+                    },
+                    onDelete: (token) {
+                      _handleDelete(context, provider, token);
                     },
                   ),
                 ),
@@ -801,12 +873,10 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.allTables,
     required this.allViews,
     required this.allPermissions,
-    required this.ruleFeedbackMessage,
     required this.formError,
     required this.providerError,
     required this.lastCreatedToken,
     required this.isCreating,
-    required this.keepConfigAfterCreate,
     required this.onToggleAllTables,
     required this.onToggleAllViews,
     required this.onToggleAllPermissions,
@@ -814,7 +884,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.onEditRule,
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
-    required this.onToggleKeepConfigAfterCreate,
   });
 
   final TextEditingController clientIdController;
@@ -824,12 +893,10 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final bool allTables;
   final bool allViews;
   final bool allPermissions;
-  final String ruleFeedbackMessage;
   final String formError;
   final String providerError;
   final String? lastCreatedToken;
   final bool isCreating;
-  final bool keepConfigAfterCreate;
   final ValueChanged<bool> onToggleAllTables;
   final ValueChanged<bool> onToggleAllViews;
   final ValueChanged<bool> onToggleAllPermissions;
@@ -837,7 +904,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final ValueChanged<int> onEditRule;
   final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
-  final ValueChanged<bool> onToggleKeepConfigAfterCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -951,36 +1017,11 @@ class _CreateTokenDialogContent extends StatelessWidget {
               if (rules.isEmpty)
                 const Text(AppStrings.ctNoRulesAdded)
               else
-                Scrollbar(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth:
-                            constraints.maxWidth >=
-                                _createTokenRulesMinTableWidth
-                            ? constraints.maxWidth
-                            : _createTokenRulesMinTableWidth,
-                      ),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxHeight: _createTokenRulesMaxHeight,
-                        ),
-                        child: SingleChildScrollView(
-                          child: ClientTokenRulesGrid(
-                            rules: rules,
-                            onEdit: onEditRule,
-                            onDelete: onDeleteRule,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                ClientTokenRulesGrid(
+                  rules: rules,
+                  onEdit: onEditRule,
+                  onDelete: onDeleteRule,
                 ),
-              if (ruleFeedbackMessage.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                _InfoSurface(message: ruleFeedbackMessage),
-              ],
               if (formError.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 _ErrorSurface(message: formError),
@@ -996,12 +1037,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
                   onDismiss: onDismissCreatedToken,
                 ),
               ],
-              const SizedBox(height: AppSpacing.md),
-              _FlagCheckbox(
-                label: AppStrings.ctToggleKeepConfigAfterCreate,
-                value: keepConfigAfterCreate,
-                onChanged: onToggleKeepConfigAfterCreate,
-              ),
             ],
           ),
         );
@@ -1069,26 +1104,6 @@ class _ErrorSurface extends StatelessWidget {
   }
 }
 
-class _InfoSurface extends StatelessWidget {
-  const _InfoSurface({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.08),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Text(message),
-    );
-  }
-}
-
 class _CreatedTokenSurface extends StatelessWidget {
   const _CreatedTokenSurface({
     required this.token,
@@ -1132,125 +1147,183 @@ class _CreatedTokenSurface extends StatelessWidget {
   }
 }
 
-class _TokenSummaryTile extends StatelessWidget {
-  const _TokenSummaryTile({
+const _tokenGridColumns = [
+  AppGridColumn(label: AppStrings.ctLabelClient, flex: 3),
+  AppGridColumn(label: AppStrings.ctLabelId, flex: 4),
+  AppGridColumn(label: AppStrings.ctLabelStatus, flex: 2),
+  AppGridColumn(label: AppStrings.ctLabelScope, flex: 2),
+  AppGridColumn(
+    label: AppStrings.ctLabelCreatedAt,
+    flex: 3,
+    alignment: Alignment.center,
+  ),
+  AppGridColumn(
+    label: AppStrings.ctGridColumnActions,
+    flex: 4,
+    alignment: Alignment.center,
+  ),
+];
+
+class _TokenSummaryGrid extends StatelessWidget {
+  const _TokenSummaryGrid({
+    required this.tokens,
+    required this.isRevokingToken,
+    required this.isDeletingToken,
+    required this.onViewDetails,
+    required this.onEdit,
+    required this.onRevoke,
+    required this.onDelete,
+    this.scrollController,
+  });
+
+  final List<ClientTokenSummary> tokens;
+  final ScrollController? scrollController;
+  final bool Function(String tokenId) isRevokingToken;
+  final bool Function(String tokenId) isDeletingToken;
+  final ValueChanged<ClientTokenSummary> onViewDetails;
+  final ValueChanged<ClientTokenSummary> onEdit;
+  final ValueChanged<ClientTokenSummary> onRevoke;
+  final ValueChanged<ClientTokenSummary> onDelete;
+
+  String _buildScopeLabel(ClientTokenSummary token) {
+    if (token.allPermissions) return AppStrings.ctScopeAllPermissions;
+    final scopes = <String>[
+      if (token.allTables) AppStrings.ctScopeTables,
+      if (token.allViews) AppStrings.ctScopeViews,
+    ];
+    return scopes.isEmpty ? AppStrings.ctScopeRestricted : scopes.join(', ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDataGridScrollable<ClientTokenSummary>(
+      columns: _tokenGridColumns,
+      rows: tokens,
+      scrollController: scrollController,
+      rowCells: (token) => [
+        SelectableText(token.clientId),
+        SelectableText(token.id),
+        Text(
+          token.isRevoked
+              ? AppStrings.ctStatusRevoked
+              : AppStrings.ctStatusActive,
+        ),
+        Text(_buildScopeLabel(token)),
+        Text(
+          DateFormat('dd/MM/yyyy HH:mm').format(token.createdAt.toLocal()),
+        ),
+        _TokenRowActions(
+          token: token,
+          isRevoking: isRevokingToken(token.id),
+          isDeleting: isDeletingToken(token.id),
+          onViewDetails: () => onViewDetails(token),
+          onEdit: () => onEdit(token),
+          onRevoke: token.isRevoked ? null : () => onRevoke(token),
+          onDelete: () => onDelete(token),
+        ),
+      ],
+    );
+  }
+}
+
+class _TokenRowActions extends StatelessWidget {
+  const _TokenRowActions({
     required this.token,
     required this.isRevoking,
     required this.isDeleting,
     required this.onViewDetails,
+    required this.onEdit,
+    required this.onDelete,
     this.onRevoke,
-    this.onDelete,
   });
 
   final ClientTokenSummary token;
   final bool isRevoking;
   final bool isDeleting;
   final VoidCallback onViewDetails;
+  final VoidCallback onEdit;
   final VoidCallback? onRevoke;
-  final VoidCallback? onDelete;
-
-  String _buildScopeLabel() {
-    if (token.allPermissions) {
-      return AppStrings.ctScopeAllPermissions;
-    }
-    final scopes = <String>[];
-    if (token.allTables) {
-      scopes.add(AppStrings.ctScopeTables);
-    }
-    if (token.allViews) {
-      scopes.add(AppStrings.ctScopeViews);
-    }
-    if (scopes.isEmpty) {
-      return AppStrings.ctScopeRestricted;
-    }
-    return '${AppStrings.ctScopeRestricted} (${scopes.join(', ')})';
-  }
-
-  String _buildRulesLabel() {
-    if (token.rules.isEmpty) {
-      return AppStrings.ctScopeNotInformed;
-    }
-    return '${token.rules.length}';
-  }
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
-        ),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectableText(
-                  '${AppStrings.ctLabelClient}: ${token.clientId}',
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                SelectableText('${AppStrings.ctLabelId}: ${token.id}'),
-                if (token.agentId != null &&
-                    token.agentId!.trim().isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  SelectableText(
-                    '${AppStrings.ctLabelAgent}: ${token.agentId}',
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${AppStrings.ctLabelCreatedAt}: '
-                  '${token.createdAt.toLocal().toIso8601String()}',
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${AppStrings.ctLabelStatus}: '
-                  '${token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive}',
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text('${AppStrings.ctLabelScope}: ${_buildScopeLabel()}'),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${AppStrings.ctLabelRules}: ${_buildRulesLabel()}',
-                ),
-              ],
+    final revokeTooltip = token.isRevoked
+        ? AppStrings.ctButtonRevoked
+        : AppStrings.ctButtonRevoke;
+
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        Tooltip(
+          message: AppStrings.ctTooltipEditToken,
+          child: Semantics(
+            button: true,
+            label: AppStrings.ctButtonEdit,
+            child: IconButton(
+              icon: const Icon(FluentIcons.edit),
+              onPressed: onEdit,
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              AppButton(
-                label: AppStrings.ctButtonViewDetails,
-                isPrimary: false,
-                icon: FluentIcons.view,
-                onPressed: onViewDetails,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              AppButton(
-                label: token.isRevoked
-                    ? AppStrings.ctButtonRevoked
-                    : AppStrings.ctButtonRevoke,
-                isPrimary: false,
-                isLoading: isRevoking,
-                onPressed: onRevoke,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              AppButton(
-                label: AppStrings.ctButtonDelete,
-                isPrimary: false,
-                icon: FluentIcons.delete,
-                isLoading: isDeleting,
-                onPressed: onDelete,
-              ),
-            ],
+        ),
+        Tooltip(
+          message: AppStrings.ctButtonViewDetails,
+          child: Semantics(
+            button: true,
+            label: AppStrings.ctButtonViewDetails,
+            child: IconButton(
+              icon: const Icon(FluentIcons.view),
+              onPressed: onViewDetails,
+            ),
           ),
-        ],
-      ),
+        ),
+        Tooltip(
+          message: revokeTooltip,
+          child: Semantics(
+            button: true,
+            label: revokeTooltip,
+            child: isRevoking
+                ? const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: ProgressRing(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(FluentIcons.block_contact),
+                    onPressed: onRevoke,
+                  ),
+          ),
+        ),
+        Tooltip(
+          message: AppStrings.ctButtonDelete,
+          child: Semantics(
+            button: true,
+            label: AppStrings.ctButtonDelete,
+            child: isDeleting
+                ? const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: ProgressRing(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(FluentIcons.delete),
+                    onPressed: onDelete,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
