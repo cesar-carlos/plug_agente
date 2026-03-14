@@ -4,6 +4,8 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
@@ -44,8 +46,7 @@ class _ClientTokenRuleOverlay extends StatefulWidget {
   final ClientTokenRuleDraft? initialRule;
 
   @override
-  State<_ClientTokenRuleOverlay> createState() =>
-      _ClientTokenRuleOverlayState();
+  State<_ClientTokenRuleOverlay> createState() => _ClientTokenRuleOverlayState();
 }
 
 class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
@@ -102,9 +103,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint
-        ? _ruleDialogWidth
-        : screenWidth * 0.9;
+    final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint ? _ruleDialogWidth : screenWidth * 0.9;
 
     return Center(
       child: ConstrainedBox(
@@ -121,9 +120,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _isEditing
-                    ? AppStrings.ctDialogEditRuleTitle
-                    : AppStrings.ctDialogAddRuleTitle,
+                _isEditing ? AppStrings.ctDialogEditRuleTitle : AppStrings.ctDialogAddRuleTitle,
                 style: theme.typography.subtitle,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -203,23 +200,24 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
               ),
               if (_formError.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                Text(
-                  _formError,
-                  style: TextStyle(color: Colors.red.normal),
+                InlineFeedbackCard(
+                  severity: InfoBarSeverity.error,
+                  message: _formError,
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Button(
+                  AppButton(
+                    label: AppStrings.btnCancel,
+                    isPrimary: false,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(AppStrings.btnCancel),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  FilledButton(
+                  AppButton(
+                    label: AppStrings.ctDialogSaveRule,
                     onPressed: _handleSave,
-                    child: const Text(AppStrings.ctDialogSaveRule),
                   ),
                 ],
               ),

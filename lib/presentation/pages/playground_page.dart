@@ -107,15 +107,6 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     } else {
       await provider.executeQuery(resetPagination: true);
     }
-
-    if (!mounted) return;
-
-    final error = provider.error;
-    if (error != null && error.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showErrorModal(error);
-      });
-    }
   }
 
   Future<void> _handleTestConnection(

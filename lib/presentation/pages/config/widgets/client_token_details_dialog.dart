@@ -6,6 +6,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 Future<void> showClientTokenDetailsDialog({
   required BuildContext context,
@@ -87,9 +88,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
               label: AppStrings.ctLabelStatus,
-              value: token.isRevoked
-                  ? AppStrings.ctStatusRevoked
-                  : AppStrings.ctStatusActive,
+              value: token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
@@ -119,9 +118,9 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        FilledButton(
+        AppButton(
+          label: AppStrings.btnOk,
           onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
-          child: const Text(AppStrings.btnOk),
         ),
       ],
     );

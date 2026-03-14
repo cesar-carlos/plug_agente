@@ -18,6 +18,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
@@ -258,7 +259,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                                   formError: _formError,
                                   providerError: provider.error,
                                   lastCreatedToken: provider.lastCreatedToken,
-                                  isCreating: provider.isCreating,
                                   onToggleAllTables: (value) {
                                     _allTables = value;
                                     _notifyCreateTokenDialogChanged();
@@ -283,34 +283,14 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                           const SizedBox(height: AppSpacing.lg),
                           Consumer<ClientTokenProvider>(
                             builder: (context, provider, _) {
-                              return Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Button(
-                                    onPressed: () =>
-                                        Navigator.of(dialogContext).pop(),
-                                    child: const Text(AppStrings.btnCancel),
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  FilledButton(
-                                    onPressed: provider.isCreating
-                                        ? null
-                                        : _handleSubmitToken,
-                                    child: provider.isCreating
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: ProgressRing(strokeWidth: 2),
-                                          )
-                                        : Text(
-                                            isEditingToken
-                                                ? AppStrings
-                                                      .ctButtonSaveTokenChanges
-                                                : AppStrings
-                                                      .ctButtonCreateToken,
-                                          ),
-                                  ),
-                                ],
+                              return _CreateTokenDialogFooter(
+                                isCreating: provider.isCreating,
+                                submitLabel: isEditingToken
+                                    ? AppStrings.ctButtonSaveTokenChanges
+                                    : AppStrings.ctButtonCreateToken,
+                                onCancel: () =>
+                                    Navigator.of(dialogContext).pop(),
+                                onSubmit: _handleSubmitToken,
                               );
                             },
                           ),
@@ -743,11 +723,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 ],
               ),
               if (provider.error.isNotEmpty) ...[
-                InfoBar(
-                  title: const Text(AppStrings.modalTitleError),
-                  content: Text(provider.error),
+                InlineFeedbackCard(
                   severity: InfoBarSeverity.error,
-                  onClose: provider.clearError,
+                  title: AppStrings.modalTitleError,
+                  message: provider.error,
+                  onDismiss: provider.clearError,
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
@@ -784,76 +764,26 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 title: AppStrings.ctSectionRegisteredTokens,
               ),
               const SizedBox(height: AppSpacing.sm),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: AppTextField(
-                      label: AppStrings.ctFilterClientId,
-                      controller: _listClientFilterController,
-                      hint: AppStrings.ctHintClientId,
-                      onChanged: _handleClientFilterChanged,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    flex: 2,
-                    child: AppDropdown<_TokenStatusFilter>(
-                      label: AppStrings.ctFilterStatus,
-                      value: _tokenStatusFilter,
-                      items: _TokenStatusFilter.values
-                          .map(
-                            (item) => ComboBoxItem<_TokenStatusFilter>(
-                              value: item,
-                              child: Text(_statusFilterLabel(item)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _tokenStatusFilter = value;
-                        });
-                        _saveTokenListPreferences();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    flex: 2,
-                    child: AppDropdown<_TokenSortOption>(
-                      label: AppStrings.ctFilterSort,
-                      value: _tokenSortOption,
-                      items: _TokenSortOption.values
-                          .map(
-                            (item) => ComboBoxItem<_TokenSortOption>(
-                              value: item,
-                              child: Text(_sortFilterLabel(item)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _tokenSortOption = value;
-                        });
-                        _saveTokenListPreferences();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  AppButton(
-                    label: AppStrings.ctButtonClearFilters,
-                    isPrimary: false,
-                    icon: FluentIcons.clear_filter,
-                    onPressed: _clearTokenFilters,
-                  ),
-                ],
+              _TokenListFilters(
+                clientFilterController: _listClientFilterController,
+                tokenStatusFilter: _tokenStatusFilter,
+                tokenSortOption: _tokenSortOption,
+                onClientFilterChanged: _handleClientFilterChanged,
+                statusLabelBuilder: _statusFilterLabel,
+                sortLabelBuilder: _sortFilterLabel,
+                onStatusChanged: (value) {
+                  setState(() {
+                    _tokenStatusFilter = value;
+                  });
+                  _saveTokenListPreferences();
+                },
+                onSortChanged: (value) {
+                  setState(() {
+                    _tokenSortOption = value;
+                  });
+                  _saveTokenListPreferences();
+                },
+                onClearFilters: _clearTokenFilters,
               ),
               const SizedBox(height: AppSpacing.sm),
               if (provider.tokens.isEmpty && !provider.isLoading)
@@ -911,7 +841,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.formError,
     required this.providerError,
     required this.lastCreatedToken,
-    required this.isCreating,
     required this.onToggleAllTables,
     required this.onToggleAllViews,
     required this.onToggleAllPermissions,
@@ -931,7 +860,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final String formError;
   final String providerError;
   final String? lastCreatedToken;
-  final bool isCreating;
   final ValueChanged<bool> onToggleAllTables;
   final ValueChanged<bool> onToggleAllViews;
   final ValueChanged<bool> onToggleAllPermissions;
@@ -950,59 +878,11 @@ class _CreateTokenDialogContent extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isCompact) ...[
-                AppTextField(
-                  label: AppStrings.ctFieldClientId,
-                  controller: clientIdController,
-                  hint: AppStrings.ctHintClientId,
-                  readOnly: true,
-                  suffixIcon: IconButton(
-                    icon: const Icon(FluentIcons.copy, size: 16),
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: clientIdController.text),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  label: AppStrings.ctFieldAgentIdOptional,
-                  controller: agentIdController,
-                  hint: AppStrings.ctHintAgentId,
-                ),
-              ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: AppTextField(
-                        label: AppStrings.ctFieldClientId,
-                        controller: clientIdController,
-                        hint: AppStrings.ctHintClientId,
-                        readOnly: true,
-                        suffixIcon: IconButton(
-                          icon: const Icon(FluentIcons.copy, size: 16),
-                          onPressed: () {
-                            Clipboard.setData(
-                              ClipboardData(text: clientIdController.text),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      flex: 2,
-                      child: AppTextField(
-                        label: AppStrings.ctFieldAgentIdOptional,
-                        controller: agentIdController,
-                        hint: AppStrings.ctHintAgentId,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              _TokenIdentityFields(
+                clientIdController: clientIdController,
+                agentIdController: agentIdController,
+                isCompact: isCompact,
+              ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 label: AppStrings.ctFieldPayloadJsonOptional,
@@ -1057,25 +937,259 @@ class _CreateTokenDialogContent extends StatelessWidget {
                   onEdit: onEditRule,
                   onDelete: onDeleteRule,
                 ),
-              if (formError.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorSurface(message: formError),
-              ],
-              if (providerError.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorSurface(message: providerError),
-              ],
-              if (lastCreatedToken != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _CreatedTokenSurface(
-                  token: lastCreatedToken!,
-                  onDismiss: onDismissCreatedToken,
-                ),
-              ],
+              _TokenFeedbackPanel(
+                formError: formError,
+                providerError: providerError,
+                lastCreatedToken: lastCreatedToken,
+                onDismissCreatedToken: onDismissCreatedToken,
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _CreateTokenDialogFooter extends StatelessWidget {
+  const _CreateTokenDialogFooter({
+    required this.isCreating,
+    required this.submitLabel,
+    required this.onCancel,
+    required this.onSubmit,
+  });
+
+  final bool isCreating;
+  final String submitLabel;
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        AppButton(
+          label: AppStrings.btnCancel,
+          isPrimary: false,
+          onPressed: onCancel,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        AppButton(
+          label: submitLabel,
+          isLoading: isCreating,
+          onPressed: isCreating ? null : onSubmit,
+        ),
+      ],
+    );
+  }
+}
+
+class _TokenListFilters extends StatelessWidget {
+  const _TokenListFilters({
+    required this.clientFilterController,
+    required this.tokenStatusFilter,
+    required this.tokenSortOption,
+    required this.onClientFilterChanged,
+    required this.statusLabelBuilder,
+    required this.sortLabelBuilder,
+    required this.onStatusChanged,
+    required this.onSortChanged,
+    required this.onClearFilters,
+  });
+
+  final TextEditingController clientFilterController;
+  final _TokenStatusFilter tokenStatusFilter;
+  final _TokenSortOption tokenSortOption;
+  final ValueChanged<String> onClientFilterChanged;
+  final String Function(_TokenStatusFilter) statusLabelBuilder;
+  final String Function(_TokenSortOption) sortLabelBuilder;
+  final ValueChanged<_TokenStatusFilter> onStatusChanged;
+  final ValueChanged<_TokenSortOption> onSortChanged;
+  final VoidCallback onClearFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          flex: 3,
+          child: AppTextField(
+            label: AppStrings.ctFilterClientId,
+            controller: clientFilterController,
+            hint: AppStrings.ctHintClientId,
+            onChanged: onClientFilterChanged,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          flex: 2,
+          child: AppDropdown<_TokenStatusFilter>(
+            label: AppStrings.ctFilterStatus,
+            value: tokenStatusFilter,
+            items: _TokenStatusFilter.values
+                .map(
+                  (item) => ComboBoxItem<_TokenStatusFilter>(
+                    value: item,
+                    child: Text(statusLabelBuilder(item)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onStatusChanged(value);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          flex: 2,
+          child: AppDropdown<_TokenSortOption>(
+            label: AppStrings.ctFilterSort,
+            value: tokenSortOption,
+            items: _TokenSortOption.values
+                .map(
+                  (item) => ComboBoxItem<_TokenSortOption>(
+                    value: item,
+                    child: Text(sortLabelBuilder(item)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onSortChanged(value);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        AppButton(
+          label: AppStrings.ctButtonClearFilters,
+          isPrimary: false,
+          icon: FluentIcons.clear_filter,
+          onPressed: onClearFilters,
+        ),
+      ],
+    );
+  }
+}
+
+class _TokenIdentityFields extends StatelessWidget {
+  const _TokenIdentityFields({
+    required this.clientIdController,
+    required this.agentIdController,
+    required this.isCompact,
+  });
+
+  final TextEditingController clientIdController;
+  final TextEditingController agentIdController;
+  final bool isCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget clientField = AppTextField(
+      label: AppStrings.ctFieldClientId,
+      controller: clientIdController,
+      hint: AppStrings.ctHintClientId,
+      readOnly: true,
+      suffixIcon: _CopyValueButton(value: clientIdController.text),
+    );
+
+    final Widget agentField = AppTextField(
+      label: AppStrings.ctFieldAgentIdOptional,
+      controller: agentIdController,
+      hint: AppStrings.ctHintAgentId,
+    );
+
+    if (isCompact) {
+      return Column(
+        children: [
+          clientField,
+          const SizedBox(height: AppSpacing.md),
+          agentField,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(flex: 3, child: clientField),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(flex: 2, child: agentField),
+      ],
+    );
+  }
+}
+
+class _CopyValueButton extends StatelessWidget {
+  const _CopyValueButton({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(FluentIcons.copy, size: 16),
+      onPressed: () {
+        Clipboard.setData(ClipboardData(text: value));
+      },
+    );
+  }
+}
+
+class _TokenFeedbackPanel extends StatelessWidget {
+  const _TokenFeedbackPanel({
+    required this.formError,
+    required this.providerError,
+    required this.lastCreatedToken,
+    required this.onDismissCreatedToken,
+  });
+
+  final String formError;
+  final String providerError;
+  final String? lastCreatedToken;
+  final VoidCallback onDismissCreatedToken;
+
+  @override
+  Widget build(BuildContext context) {
+    final feedbackWidgets = <Widget>[
+      if (formError.isNotEmpty)
+        InlineFeedbackCard(
+          severity: InfoBarSeverity.error,
+          message: formError,
+        ),
+      if (providerError.isNotEmpty)
+        InlineFeedbackCard(
+          severity: InfoBarSeverity.error,
+          message: providerError,
+        ),
+      if (lastCreatedToken != null)
+        InlineFeedbackCard(
+          severity: InfoBarSeverity.success,
+          title: AppStrings.ctMsgTokenCreatedCopyNow,
+          content: SelectableText(lastCreatedToken!),
+          onDismiss: onDismissCreatedToken,
+        ),
+    ];
+
+    if (feedbackWidgets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        children: List<Widget>.generate(feedbackWidgets.length, (index) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: index == feedbackWidgets.length - 1 ? 0 : AppSpacing.md,
+            ),
+            child: feedbackWidgets[index],
+          );
+        }),
+      ),
     );
   }
 }
@@ -1110,74 +1224,6 @@ class _FlagCheckbox extends StatelessWidget {
       checked: value,
       onChanged: (isChecked) => onChanged(isChecked ?? false),
       content: Text(label),
-    );
-  }
-}
-
-class _ErrorSurface extends StatelessWidget {
-  const _ErrorSurface({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: SelectableText(
-        message,
-        style: TextStyle(
-          color: Colors.red.normal,
-        ),
-      ),
-    );
-  }
-}
-
-class _CreatedTokenSurface extends StatelessWidget {
-  const _CreatedTokenSurface({
-    required this.token,
-    required this.onDismiss,
-  });
-
-  final String token;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.08),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  AppStrings.ctMsgTokenCreatedCopyNow,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(FluentIcons.clear),
-                onPressed: onDismiss,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          SelectableText(token),
-        ],
-      ),
     );
   }
 }

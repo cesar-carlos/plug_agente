@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -328,5 +329,153 @@ void main() {
       // Assert
       expect(result.isSuccess(), isTrue);
     });
+
+    test(
+      'should enrich pagination metadata when query declares ORDER BY',
+      () async {
+        const validQuery = 'SELECT * FROM users ORDER BY id';
+        final config = Config(
+          id: 'config-1',
+          agentId: 'agent-123',
+          driverName: 'MySQL',
+          odbcDriverName: 'ODBC Driver for MySQL',
+          connectionString: 'DSN=Test',
+          username: 'root',
+          databaseName: 'testdb',
+          host: 'localhost',
+          port: 3306,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final expectedResponse = QueryResponse(
+          id: 'response-1',
+          requestId: 'test-uuid-123',
+          agentId: 'agent-123',
+          data: const [],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockConfigRepository.getCurrentConfig(),
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockDatabaseGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(expectedResponse));
+
+        await useCase.call(
+          validQuery,
+          pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
+        );
+
+        final captured =
+            verify(
+                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                ).captured.single
+                as QueryRequest;
+
+        expect(captured.pagination, isNotNull);
+        expect(captured.pagination!.orderBy, hasLength(1));
+        expect(captured.pagination!.orderBy.single.expression, 'id');
+        expect(captured.pagination!.queryHash, isNotNull);
+      },
+    );
+
+    test(
+      'should disable pagination when query has no explicit ORDER BY',
+      () async {
+        const validQuery = 'SELECT * FROM users';
+        final config = Config(
+          id: 'config-1',
+          agentId: 'agent-123',
+          driverName: 'MySQL',
+          odbcDriverName: 'ODBC Driver for MySQL',
+          connectionString: 'DSN=Test',
+          username: 'root',
+          databaseName: 'testdb',
+          host: 'localhost',
+          port: 3306,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final expectedResponse = QueryResponse(
+          id: 'response-1',
+          requestId: 'test-uuid-123',
+          agentId: 'agent-123',
+          data: const [],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockConfigRepository.getCurrentConfig(),
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockDatabaseGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(expectedResponse));
+
+        await useCase.call(
+          validQuery,
+          pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
+        );
+
+        final captured =
+            verify(
+                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                ).captured.single
+                as QueryRequest;
+
+        expect(captured.pagination, isNull);
+      },
+    );
+
+    test(
+      'should disable pagination when query expects multiple result sets',
+      () async {
+        const validQuery = 'SELECT 1; SELECT 2;';
+        final config = Config(
+          id: 'config-1',
+          agentId: 'agent-123',
+          driverName: 'MySQL',
+          odbcDriverName: 'ODBC Driver for MySQL',
+          connectionString: 'DSN=Test',
+          username: 'root',
+          databaseName: 'testdb',
+          host: 'localhost',
+          port: 3306,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final expectedResponse = QueryResponse(
+          id: 'response-1',
+          requestId: 'test-uuid-123',
+          agentId: 'agent-123',
+          data: const [],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockConfigRepository.getCurrentConfig(),
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockDatabaseGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(expectedResponse));
+
+        await useCase.call(
+          validQuery,
+          pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
+        );
+
+        final captured =
+            verify(
+                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                ).captured.single
+                as QueryRequest;
+
+        expect(captured.expectMultipleResults, isTrue);
+        expect(captured.pagination, isNull);
+      },
+    );
   });
 }

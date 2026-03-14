@@ -67,9 +67,7 @@ class SqlOperationClassifier {
     if (sql.startsWith('select ') || sql.startsWith('with ')) {
       return SqlOperation.read;
     }
-    if (sql.startsWith('update ') ||
-        sql.startsWith('insert ') ||
-        sql.startsWith('merge ')) {
+    if (sql.startsWith('update ') || sql.startsWith('insert ') || sql.startsWith('merge ')) {
       return SqlOperation.update;
     }
     if (sql.startsWith('delete ')) {

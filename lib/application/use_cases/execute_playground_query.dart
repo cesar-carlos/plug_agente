@@ -29,6 +29,14 @@ class ExecutePlaygroundQuery {
     }
 
     final validation = SqlValidator.validateSelectQuery(trimmedQuery);
+    final expectMultipleResults = SqlValidator.containsMultipleStatements(
+      trimmedQuery,
+    );
+    final resolvedPagination = _resolvePagination(
+      trimmedQuery,
+      pagination,
+      expectMultipleResults: expectMultipleResults,
+    );
 
     return validation.fold(
       (_) async {
@@ -41,10 +49,8 @@ class ExecutePlaygroundQuery {
               agentId: config.agentId,
               query: query,
               timestamp: DateTime.now(),
-              pagination: pagination,
-              expectMultipleResults: SqlValidator.containsMultipleStatements(
-                trimmedQuery,
-              ),
+              pagination: resolvedPagination,
+              expectMultipleResults: expectMultipleResults,
             );
 
             return _databaseGateway.executeQuery(request);
@@ -64,6 +70,32 @@ class ExecutePlaygroundQuery {
       (failure) {
         return Failure(failure);
       },
+    );
+  }
+
+  QueryPaginationRequest? _resolvePagination(
+    String query,
+    QueryPaginationRequest? pagination, {
+    required bool expectMultipleResults,
+  }) {
+    if (pagination == null || expectMultipleResults) {
+      return null;
+    }
+
+    final paginationPlan = SqlValidator.validatePaginationQuery(query);
+    if (paginationPlan.isError()) {
+      return null;
+    }
+
+    final plan = paginationPlan.getOrNull()!;
+    return QueryPaginationRequest(
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      cursor: pagination.cursor,
+      queryHash: plan.queryFingerprint,
+      orderBy: plan.orderBy,
+      lastRowValues: pagination.lastRowValues,
+      offset: pagination.isCursorMode ? pagination.offset : null,
     );
   }
 }

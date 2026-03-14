@@ -1,7 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/sql/query_result_data_grid.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
@@ -368,13 +370,14 @@ class _QueryPaginationControls extends StatelessWidget {
             },
           ),
         ),
-        Button(
+        AppButton(
+          label: AppStrings.queryPaginationPrevious,
+          isPrimary: false,
           onPressed: hasPreviousPage ? onPreviousPage : null,
-          child: const Text(AppStrings.queryPaginationPrevious),
         ),
-        FilledButton(
+        AppButton(
+          label: AppStrings.queryPaginationNext,
           onPressed: hasNextPage ? onNextPage : null,
-          child: const Text(AppStrings.queryPaginationNext),
         ),
       ],
     );
@@ -415,8 +418,6 @@ class _QueryErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -434,25 +435,15 @@ class _QueryErrorState extends StatelessWidget {
               style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: theme.resources.subtleFillColorSecondary,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(
-                  color: AppColors.error.withValues(alpha: 0.5),
-                ),
-              ),
-              child: SelectableText(
-                error,
-                style: context.bodyText,
-              ),
+            InlineFeedbackCard(
+              severity: InfoBarSeverity.error,
+              message: error,
             ),
             if (onShowDetails != null) ...[
               const SizedBox(height: AppSpacing.md),
-              FilledButton(
+              AppButton(
+                label: AppStrings.queryErrorShowDetails,
                 onPressed: onShowDetails,
-                child: const Text(AppStrings.queryErrorShowDetails),
               ),
             ],
           ],

@@ -20,6 +20,14 @@
       "type": "string",
       "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
     },
+    "clientToken": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
     "idempotency_key": {
       "type": "string",
       "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return cached response (TTL 5min)"
@@ -98,5 +106,24 @@
       "description": "Optional target database/DSN override"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "multi_result": { "const": true }
+            },
+            "required": ["multi_result"]
+          }
+        },
+        "required": ["options"]
+      },
+      "then": {
+        "not": { "required": ["params"] }
+      }
+    }
+  ],
   "additionalProperties": false
 }

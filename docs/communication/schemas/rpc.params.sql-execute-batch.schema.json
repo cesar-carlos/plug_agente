@@ -33,6 +33,14 @@
       "type": "string",
       "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
     },
+    "clientToken": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
     "idempotency_key": {
       "type": "string",
       "description": "Unique key for request deduplication (TTL 5min)"

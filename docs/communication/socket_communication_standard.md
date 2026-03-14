@@ -65,7 +65,7 @@ Esse profile formaliza extensoes que nao fazem parte do JSON-RPC puro:
 - compatibilidade opcional para notification com `id: null`
 - batch com validacao estrita e ordenacao estavel de responses
 - metadata operacional em `api_version` + `meta`
-- payload de erro em formato **Problem Details-inspired**
+- payload de erro estruturado em `error.data`
 - limites negociados no handshake
 - paginacao por `page/page_size` com ordem deterministica e por `cursor` keyset
 
@@ -322,7 +322,7 @@ Response:
   }
 ```
 
-- `client_token` (ou `clientToken`): obrigatorio quando `enableClientTokenAuthorization`
+- `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
   esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
 - `options.page` e `options.page_size`: habilitam paginacao server-side para
   `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
@@ -455,11 +455,13 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
     "code": -32102,
     "message": "SQL execution failed",
     "data": {
-      "type": "https://plugagente.dev/problems/sql-execution-failed",
-      "title": "SQL execution failed",
-      "status": 500,
-      "detail": "Falha ao executar comando SQL",
-      "instance": "req-123"
+      "reason": "sql_execution_failed",
+      "category": "sql",
+      "retryable": false,
+      "user_message": "Nao foi possivel executar a consulta.",
+      "technical_message": "Database driver returned an execution error.",
+      "correlation_id": "corr-req-123",
+      "timestamp": "2026-03-12T10:00:01Z"
     }
   }
 }
@@ -471,7 +473,19 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 {
   "jsonrpc": "2.0",
   "id": "req-123",
-  "result": { "execution_id": "exec-456", "rows": [], "row_count": 0 },
+  "error": {
+    "code": -32102,
+    "message": "SQL execution failed",
+    "data": {
+      "reason": "sql_execution_failed",
+      "category": "sql",
+      "retryable": false,
+      "user_message": "Nao foi possivel executar a consulta.",
+      "technical_message": "Database driver returned an execution error.",
+      "correlation_id": "corr-req-123",
+      "timestamp": "2026-03-12T10:00:01Z"
+    }
+  },
   "api_version": "2.1",
   "meta": {
     "agent_id": "agent-01",
@@ -505,7 +519,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 }
 ```
 
-- `client_token` (ou `clientToken`): obrigatorio quando `enableClientTokenAuthorization`
+- `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
   esta ativo.
 
 ### Response de batch (exemplo)
@@ -585,22 +599,15 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 ### Formato de erro
 
-O objeto `error.data` segue um formato **Problem Details-inspired**:
+O objeto `error.data` segue um formato estruturado para UX e troubleshooting:
 
-- `type`, `title`, `status`, `detail` e `instance` sao usados como convencao
-  interna de interoperabilidade
-- isso nao implica conformidade literal com RFC 9457, pois o transporte aqui e
-  Socket.IO/JSON-RPC e nao HTTP puro
-  | `-32101` | SQL invalido | ajustar query no cliente |
-  | `-32102` | erro de execucao SQL | exibir erro tecnico e permitir retry manual |
-  | `-32103` | falha transacional | revisar lote/ordem e repetir operacao com cautela |
-  | `-32104` | pool de conexoes esgotado | retry com backoff e limitar concorrencia |
-  | `-32105` | resultado muito grande | reduzir escopo, pagina ou filtrar query |
-  | `-32106` | falha de conexao ao banco | verificar DSN/credenciais e status do banco |
-  | `-32107` | query muito demorada | otimizar query ou reduzir escopo |
-  | `-32108` | configuracao de banco invalida | revisar configuracao e salvar novamente |
-  | `-32109` | execucao nao encontrada para cancelar | execucao pode ter finalizado ou nunca iniciado |
-  | `-32110` | execucao cancelada | informar usuario e encerrar fluxo |
+- `reason`: identificador estavel do motivo do erro
+- `category`: classe do erro para automacao e roteamento
+- `retryable`: indica se retry automatico faz sentido
+- `user_message`: mensagem amigavel para exibicao
+- `technical_message`: detalhe tecnico para logs e suporte
+- `correlation_id`: identificador para correlacionar logs
+- `timestamp`: instante UTC da falha
 
 ## Metodo `sql.cancel` (via feature flag)
 
@@ -648,10 +655,12 @@ Pelo menos um de `execution_id` ou `request_id` e obrigatorio.
     "message": "Execution not found",
     "data": {
       "reason": "execution_not_found",
-      "category": "database",
+      "category": "sql",
       "retryable": false,
       "user_message": "Execucao nao encontrada. Pode ter sido finalizada ou nunca iniciada.",
-      "technical_message": "No in-flight execution found to cancel."
+      "technical_message": "No in-flight execution found to cancel.",
+      "correlation_id": "corr-cancel-req-1",
+      "timestamp": "2026-03-12T10:00:03Z"
     }
   }
 }
@@ -665,7 +674,7 @@ Execucoes via `sql.execute` (nao-streaming) nao sao cancelaveis por este metodo.
 Para padronizar UX e troubleshooting, toda resposta de erro deve incluir:
 
 - `reason`: motivo estruturado do erro (enum estavel para automacao)
-- `category`: classe do erro (`validation`, `auth`, `network`, `sql`, `internal`)
+- `category`: classe do erro (`validation`, `auth`, `network`, `transport`, `sql`, `database`, `internal`)
 - `retryable`: boolean indicando se retry automatico faz sentido
 - `user_message`: mensagem amigavel para exibicao na UI
 - `technical_message`: detalhe tecnico para log
@@ -828,7 +837,7 @@ Exemplo de capacidades anunciadas:
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset"],
     "traceContext": ["w3c-trace-context", "legacy-trace-id"],
-    "errorFormat": "problem-details-inspired"
+    "errorFormat": "structured-error-data"
   }
 }
 ```
@@ -860,7 +869,7 @@ Exemplo de capacidades anunciadas:
 }
 ```
 
-- `client_token` (ou `auth` ou `token`) no payload: obrigatorio quando auth ativo.
+- `client_token` (ou `auth`) no payload: obrigatorio quando auth ativo.
 
 ## Client Token Authorization (implementado)
 
@@ -903,6 +912,9 @@ Exemplo de capacidades anunciadas:
 | -------------- | -------------------------------------------------------------- | ----------------------- |
 | `2.0`          | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros)       | stable                  |
 | `2.1`          | Extensoes: api_version, meta, client_token auth, notifications | stable                  |
+| `2.2`          | Hardening de limites negociados e assinatura de payload        | stable                  |
+| `2.3`          | Profile formal, OpenRPC, observabilidade e cursor opaco        | stable                  |
+| `2.4`          | Cursor keyset, output validation e `rpc.discover`              | stable                  |
 
 ### Regras de versionamento
 

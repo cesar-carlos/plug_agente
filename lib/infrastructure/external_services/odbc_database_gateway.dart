@@ -886,6 +886,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     QueryRequest request,
     _PreparedQueryExecution preparedExecution,
   ) {
+    if (!request.expectMultipleResults) {
+      return false;
+    }
     if (request.pagination != null) {
       return false;
     }

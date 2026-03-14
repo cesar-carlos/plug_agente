@@ -32,10 +32,10 @@
               "additionalProperties": true
             }
           },
-          "rowCount": { "type": "integer", "minimum": 0 },
-          "affectedRows": { "type": "integer", "minimum": 0 },
+          "row_count": { "type": "integer", "minimum": 0 },
+          "affected_rows": { "type": "integer", "minimum": 0 },
           "error": { "type": "string" },
-          "columnMetadata": {
+          "column_metadata": {
             "type": "array",
             "items": {
               "type": "object",

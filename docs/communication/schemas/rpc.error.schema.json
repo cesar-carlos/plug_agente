@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.error.v1.json",
   "title": "RPC Error",
-  "description": "JSON-RPC 2.0 error with Problem Details data",
+  "description": "JSON-RPC 2.0 error with structured error.data fields",
   "type": "object",
   "required": ["code", "message"],
   "properties": {
