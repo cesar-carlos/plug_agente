@@ -4,7 +4,12 @@ import 'package:plug_agente/domain/errors/failures.dart';
 extension ObjectFailureExtension on Object {
   String toUserMessage() {
     if (this is Failure) {
-      return (this as Failure).message;
+      final failure = this as Failure;
+      final userMessage = failure.context['user_message'] as String?;
+      if (userMessage != null && userMessage.trim().isNotEmpty) {
+        return userMessage;
+      }
+      return failure.message;
     }
     return toString();
   }
@@ -15,6 +20,9 @@ extension ObjectFailureExtension on Object {
       return 'Resultado muito grande para o buffer atual. '
           'Ative o modo streaming ou aumente "Buffer de resultados (MB)" '
           'nas configurações avançadas.';
+    }
+    if (_isCancelledMessage(message)) {
+      return 'A consulta foi cancelada.';
     }
     return message;
   }
@@ -32,6 +40,13 @@ extension ObjectFailureExtension on Object {
 
   bool _isBufferTooSmallMessage(String message) {
     return message.toLowerCase().contains('buffer too small');
+  }
+
+  bool _isCancelledMessage(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('cancelado pelo usuário') ||
+        normalized.contains('consulta foi cancelada') ||
+        normalized.contains('streaming cancelado');
   }
 }
 

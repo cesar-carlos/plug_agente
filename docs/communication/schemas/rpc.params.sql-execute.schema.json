@@ -38,9 +38,60 @@
           "minimum": 1,
           "default": 50000,
           "description": "Maximum number of rows to return"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based page number for paginated SELECT execution"
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of rows to return for the current page"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque continuation cursor returned in result.pagination.next_cursor"
+        },
+        "multi_result": {
+          "type": "boolean",
+          "description": "Enables multi-result execution for SQL batches that can return multiple result sets. Cannot be combined with pagination or named parameters."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "required": ["page"] },
+          "then": { "required": ["page_size"] }
+        },
+        {
+          "if": { "required": ["page_size"] },
+          "then": { "required": ["page"] }
+        },
+        {
+          "if": { "required": ["cursor"] },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["page"] },
+                { "required": ["page_size"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "multi_result": { "const": true } } },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["page"] },
+                { "required": ["page_size"] },
+                { "required": ["cursor"] }
+              ]
+            }
+          }
+        }
+      ]
     },
     "database": {
       "type": "string",

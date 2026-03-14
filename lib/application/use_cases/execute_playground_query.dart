@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -17,7 +18,10 @@ class ExecutePlaygroundQuery {
   final IAgentConfigRepository _configRepository;
   final Uuid _uuid;
 
-  Future<Result<QueryResponse>> call(String query) async {
+  Future<Result<QueryResponse>> call(
+    String query, {
+    QueryPaginationRequest? pagination,
+  }) async {
     final trimmedQuery = query.trim();
 
     if (trimmedQuery.isEmpty) {
@@ -37,6 +41,10 @@ class ExecutePlaygroundQuery {
               agentId: config.agentId,
               query: query,
               timestamp: DateTime.now(),
+              pagination: pagination,
+              expectMultipleResults: SqlValidator.containsMultipleStatements(
+                trimmedQuery,
+              ),
             );
 
             return _databaseGateway.executeQuery(request);

@@ -16,6 +16,24 @@ void main() {
       expect(failure.toDisplayMessage(), isNot(contains('operation')));
     });
 
+    test('toDisplayMessage should prefer user_message from context', () {
+      final failure = ConnectionFailure.withContext(
+        message: 'Login failed for user sa',
+        context: {
+          'reason': 'authentication_failed',
+          'user_message':
+              'Não foi possível autenticar no banco de dados. '
+              'Verifique usuário, senha e permissões.',
+        },
+      );
+
+      expect(
+        failure.toDisplayMessage(),
+        'Não foi possível autenticar no banco de dados. '
+        'Verifique usuário, senha e permissões.',
+      );
+    });
+
     test(
       'toDisplayMessage should show user guidance for buffer too small',
       () {

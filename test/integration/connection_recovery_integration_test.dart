@@ -3,7 +3,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
-import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -35,9 +34,6 @@ class FakeTransportClient implements ITransportClient {
   @override
   Future<Result<void>> sendResponse(QueryResponse response) async =>
       const Success(unit);
-
-  @override
-  Stream<QueryRequest> get queryRequestStream => const Stream.empty();
 
   @override
   bool get isConnected => false;

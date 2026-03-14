@@ -10,29 +10,15 @@ class ProtocolNegotiator {
     required ProtocolCapabilities serverCapabilities,
     bool preferJsonRpcV2 = true,
   }) {
-    // 1. Select protocol (prefer v2 if both support it and preferJsonRpcV2 is true)
-    String selectedProtocol;
-
-    if (preferJsonRpcV2 &&
-        agentCapabilities.supportsJsonRpcV2 &&
-        serverCapabilities.supportsJsonRpcV2) {
-      selectedProtocol = 'jsonrpc-v2';
-    } else if (agentCapabilities.supportsLegacyV1 &&
-        serverCapabilities.supportsLegacyV1) {
-      selectedProtocol = 'legacy-envelope-v1';
-    } else {
-      // Fallback to first common protocol
-      final commonProtocols = agentCapabilities.protocols
-          .where(serverCapabilities.protocols.contains)
-          .toList();
-
-      if (commonProtocols.isEmpty) {
-        // No common protocol, use legacy as last resort
-        selectedProtocol = 'legacy-envelope-v1';
-      } else {
-        selectedProtocol = commonProtocols.first;
-      }
-    }
+    final commonProtocols = agentCapabilities.protocols
+        .where(serverCapabilities.protocols.contains)
+        .toList();
+    final selectedProtocol =
+        preferJsonRpcV2 &&
+            commonProtocols.contains('jsonrpc-v2') &&
+            agentCapabilities.supportsJsonRpcV2
+        ? 'jsonrpc-v2'
+        : (commonProtocols.isNotEmpty ? commonProtocols.first : 'jsonrpc-v2');
 
     // 2. Select encoding (prefer json for compatibility)
     final commonEncodings = agentCapabilities.encodings
@@ -52,14 +38,20 @@ class ProtocolNegotiator {
         ? 'gzip'
         : (commonCompressions.isNotEmpty ? commonCompressions.first : 'none');
 
-    final effectiveLimits =
-        agentCapabilities.limits.negotiateWith(serverCapabilities.limits);
+    final effectiveLimits = agentCapabilities.limits.negotiateWith(
+      serverCapabilities.limits,
+    );
+    final negotiatedExtensions = _negotiateExtensions(
+      agentCapabilities.extensions,
+      serverCapabilities.extensions,
+    );
 
     return ProtocolConfig(
       protocol: selectedProtocol,
       encoding: selectedEncoding,
       compression: selectedCompression,
       effectiveLimits: effectiveLimits,
+      negotiatedExtensions: negotiatedExtensions,
     );
   }
 
@@ -73,12 +65,72 @@ class ProtocolNegotiator {
         agentCapabilities.supportsCompression(config.compression);
   }
 
-  /// Creates a fallback configuration (legacy-only).
+  /// Creates a fallback configuration using the current v2 contract.
   ProtocolConfig createFallbackConfig() {
     return const ProtocolConfig(
-      protocol: 'legacy-envelope-v1',
+      protocol: 'jsonrpc-v2',
       encoding: 'json',
       compression: 'none',
     );
+  }
+
+  Map<String, dynamic> _negotiateExtensions(
+    Map<String, dynamic> agentExtensions,
+    Map<String, dynamic> serverExtensions,
+  ) {
+    final negotiated = <String, dynamic>{};
+
+    final orderedBatchResponses =
+        (agentExtensions['orderedBatchResponses'] as bool? ?? false) &&
+        (serverExtensions['orderedBatchResponses'] as bool? ?? false);
+    if (orderedBatchResponses) {
+      negotiated['orderedBatchResponses'] = true;
+    }
+
+    final notificationNullIdCompatibility =
+        (agentExtensions['notificationNullIdCompatibility'] as bool? ??
+            false) &&
+        (serverExtensions['notificationNullIdCompatibility'] as bool? ?? false);
+    if (notificationNullIdCompatibility) {
+      negotiated['notificationNullIdCompatibility'] = true;
+    }
+
+    final paginationModes = _intersectStringLists(
+      agentExtensions['paginationModes'],
+      serverExtensions['paginationModes'],
+    );
+    if (paginationModes.isNotEmpty) {
+      negotiated['paginationModes'] = paginationModes;
+    }
+
+    final traceContext = _intersectStringLists(
+      agentExtensions['traceContext'],
+      serverExtensions['traceContext'],
+    );
+    if (traceContext.isNotEmpty) {
+      negotiated['traceContext'] = traceContext;
+    }
+
+    final errorFormat = agentExtensions['errorFormat'];
+    if (errorFormat != null && errorFormat == serverExtensions['errorFormat']) {
+      negotiated['errorFormat'] = errorFormat;
+    }
+
+    final plugProfile = agentExtensions['plugProfile'];
+    if (plugProfile != null && plugProfile == serverExtensions['plugProfile']) {
+      negotiated['plugProfile'] = plugProfile;
+    }
+
+    return negotiated;
+  }
+
+  List<String> _intersectStringLists(dynamic a, dynamic b) {
+    if (a is! List<dynamic> || b is! List<dynamic>) {
+      return const [];
+    }
+
+    final left = a.whereType<String>().toSet();
+    final right = b.whereType<String>().toSet();
+    return left.intersection(right).toList()..sort();
   }
 }

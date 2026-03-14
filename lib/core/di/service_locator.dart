@@ -11,7 +11,6 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
-import 'package:plug_agente/application/services/query_processing_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/services/update_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -24,7 +23,6 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
-import 'package:plug_agente/application/use_cases/handle_query_request.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
@@ -319,24 +317,7 @@ Future<void> setupDependencies({
         DioFactory.createDio(),
       ),
     )
-    ..registerLazySingleton(
-      () => QueryProcessingService(
-        getIt<ITransportClient>(),
-        getIt<HandleQueryRequest>(),
-      ),
-    )
     ..registerLazySingleton(() => ConnectToHub(getIt<ConnectionService>()))
-    ..registerLazySingleton(
-      () => HandleQueryRequest(
-        getIt<IDatabaseGateway>(),
-        getIt<ITransportClient>(),
-        getIt<QueryNormalizerService>(),
-        getIt<CompressionService>(),
-        getIt<AuthorizeSqlOperation>(),
-        getIt<FeatureFlags>(),
-        authMetrics: getIt<AuthorizationMetricsCollector>(),
-      ),
-    )
     ..registerLazySingleton(
       () => TestDbConnection(getIt<ConnectionService>()),
     )

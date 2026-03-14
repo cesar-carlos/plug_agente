@@ -21,6 +21,6 @@ docs/
 
 ## Links Rápidos
 
-| Documento | Descrição |
-|-----------|-----------|
+| Documento                              | Descrição                        |
+| -------------------------------------- | -------------------------------- |
 | [install/README.md](install/README.md) | Instalação, release, auto-update |

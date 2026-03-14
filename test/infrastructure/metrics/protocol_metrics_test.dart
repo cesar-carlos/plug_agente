@@ -21,7 +21,7 @@ void main() {
     test('should handle no compression case', () {
       final metrics = ProtocolMetrics(
         timestamp: DateTime.now(),
-        protocol: 'legacy-envelope-v1',
+        protocol: 'jsonrpc-v2',
         encoding: 'json',
         compression: 'none',
         originalSize: 1000,
@@ -119,7 +119,7 @@ void main() {
         ),
         ProtocolMetrics(
           timestamp: DateTime.now(),
-          protocol: 'legacy-envelope-v1',
+          protocol: 'jsonrpc-v2',
           encoding: 'json',
           compression: 'none',
           originalSize: 500,
@@ -134,8 +134,7 @@ void main() {
       expect(summary.totalOriginalBytes, equals(3500));
       expect(summary.totalCompressedBytes, equals(2000));
       expect(summary.totalBytesSaved, equals(1500));
-      expect(summary.protocolUsage['jsonrpc-v2'], equals(2));
-      expect(summary.protocolUsage['legacy-envelope-v1'], equals(1));
+      expect(summary.protocolUsage['jsonrpc-v2'], equals(3));
       expect(summary.compressionUsage['gzip'], equals(2));
       expect(summary.compressionUsage['none'], equals(1));
     });

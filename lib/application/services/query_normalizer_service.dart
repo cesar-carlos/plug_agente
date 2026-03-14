@@ -6,9 +6,45 @@ class QueryNormalizerService {
   final QueryNormalizer _normalizer;
 
   Future<QueryResponse> normalize(QueryResponse response) async {
+    final normalizedData = _normalizeRows(response.data);
+    final normalizedResultSets = response.resultSets
+        .map(
+          (resultSet) => resultSet.copyWith(
+            rows: _normalizeRows(resultSet.rows),
+          ),
+        )
+        .toList(growable: false);
+    final normalizedItems = response.items
+        .map((item) {
+          if (item.resultSet == null) {
+            return item;
+          }
+          return QueryResponseItem.resultSet(
+            index: item.index,
+            resultSet: normalizedResultSets[item.resultSet!.index],
+          );
+        })
+        .toList(growable: false);
+
+    return QueryResponse(
+      id: response.id,
+      requestId: response.requestId,
+      agentId: response.agentId,
+      data: normalizedData,
+      affectedRows: response.affectedRows,
+      timestamp: response.timestamp,
+      error: response.error,
+      columnMetadata: response.columnMetadata,
+      pagination: response.pagination,
+      resultSets: normalizedResultSets,
+      items: normalizedItems,
+    );
+  }
+
+  List<Map<String, dynamic>> _normalizeRows(List<Map<String, dynamic>> rows) {
     final normalizedData = <Map<String, dynamic>>[];
 
-    for (final row in response.data) {
+    for (final row in rows) {
       final normalizedRow = <String, dynamic>{};
 
       for (final entry in row.entries) {
@@ -20,15 +56,7 @@ class QueryNormalizerService {
       normalizedData.add(normalizedRow);
     }
 
-    return QueryResponse(
-      id: response.id,
-      requestId: response.requestId,
-      agentId: response.agentId,
-      data: normalizedData,
-      affectedRows: response.affectedRows,
-      timestamp: response.timestamp,
-      error: response.error,
-    );
+    return normalizedData;
   }
 
   String _normalizeColumnName(String columnName) {

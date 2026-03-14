@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/delivery_guarantee.dart';
@@ -13,16 +14,14 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
-import 'package:plug_agente/infrastructure/models/envelope_model.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
-/// Socket.IO transport client with dual protocol support (v1 legacy + v2 RPC).
-///
-/// Supports protocol negotiation, compression, and automatic fallback to legacy.
+/// Socket.IO transport client for the v2 RPC contract.
 class SocketIOTransportClientV2 implements ITransportClient {
   SocketIOTransportClientV2({
     required SocketDataSource dataSource,
@@ -45,13 +44,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   io.Socket? _socket;
   String _agentId = '';
   ProtocolConfig _currentProtocol = const ProtocolConfig(
-    protocol: 'legacy-envelope-v1',
+    protocol: 'jsonrpc-v2',
     encoding: 'json',
     compression: 'none',
   );
-
-  final StreamController<QueryRequest> _queryRequestController =
-      StreamController<QueryRequest>.broadcast();
 
   void Function(String direction, String event, dynamic data)? _onMessage;
   void Function()? _onTokenExpired;
@@ -68,7 +64,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcRequestGuard _rpcRequestGuard = RpcRequestGuard();
   final RpcRequestSchemaValidator _schemaValidator =
       const RpcRequestSchemaValidator();
+  final RpcContractValidator _contractValidator = const RpcContractValidator();
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
+  Map<String, dynamic>? _cachedOpenRpcDocument;
 
   @override
   void setMessageCallback(
@@ -94,17 +92,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   IRpcStreamEmitter _createStreamEmitter() {
     if (_featureFlags.enableSocketBackpressure) {
       return BackpressureStreamEmitter(
-        emit: (event, payload) {
-          _logMessage('SENT', event, payload);
-          _socket?.emit(event, payload);
-        },
+        emit: _emitValidatedEvent,
         onRegister: (streamId, emitter) {
           _streamEmitters[streamId] = emitter;
         },
         onUnregister: _streamEmitters.remove,
       );
     }
-    return _SocketRpcStreamEmitter(_socket, _logMessage);
+    return _SocketRpcStreamEmitter(_emitValidatedEvent);
   }
 
   void _handleStreamPull(dynamic data) {
@@ -148,10 +143,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final prepared = responseData is List<RpcResponse>
         ? responseData.map(_prepareResponseForSend).toList()
         : _prepareResponseForSend(responseData as RpcResponse);
+    final validatedPayload = _validateOutgoingRpcPayload(prepared);
+    if (validatedPayload == null) {
+      return;
+    }
 
     if (!_featureFlags.enableSocketDeliveryGuarantees || _socket == null) {
-      _logMessage('SENT', 'rpc:response', prepared);
-      _socket?.emit('rpc:response', prepared);
+      _logMessage('SENT', 'rpc:response', validatedPayload);
+      _socket?.emit('rpc:response', validatedPayload);
       return;
     }
 
@@ -160,10 +159,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        _logMessage('SENT', 'rpc:response', prepared);
+        _logMessage('SENT', 'rpc:response', validatedPayload);
         await _socket!
             .timeout(timeoutMs)
-            .emitWithAckAsync('rpc:response', prepared);
+            .emitWithAckAsync('rpc:response', validatedPayload);
         return;
       } on Exception catch (e) {
         if (attempt < maxRetries) {
@@ -176,7 +175,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'rpc:response ack failed after $maxRetries retries, sending without ack',
             e,
           );
-          _socket?.emit('rpc:response', prepared);
+          _socket?.emit('rpc:response', validatedPayload);
         }
       }
     }
@@ -187,9 +186,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   @override
   String get agentId => _agentId;
-
-  @override
-  Stream<QueryRequest> get queryRequestStream => _queryRequestController.stream;
 
   @override
   Future<Result<void>> connect(
@@ -264,13 +260,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       _socket!.on('hub:heartbeat_ack', _handleHeartbeatAck);
 
-      // Legacy protocol events
-      _socket!.on('query:request', (data) {
-        _logMessage('RECEIVED', 'query:request', data);
-        _handleLegacyQueryRequest(data as Map<String, dynamic>);
-      });
-
-      // RPC v2 protocol events
       _socket!.on('rpc:request', (data) {
         _logMessage('RECEIVED', 'rpc:request', data);
         _handleRpcRequest(data);
@@ -316,15 +305,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   /// Sends agent registration with protocol capabilities.
   void _sendAgentRegister() {
-    final agentCapabilities = _featureFlags.enableJsonRpcV2
-        ? ProtocolCapabilities.defaultCapabilities()
-        : ProtocolCapabilities.legacyOnly();
+    final agentCapabilities = ProtocolCapabilities.defaultCapabilities();
 
     final registerData = {
       'agentId': _agentId,
       'timestamp': DateTime.now().toIso8601String(),
       'capabilities': agentCapabilities.toJson(),
     };
+
+    if (_featureFlags.enableSocketSchemaValidation) {
+      final validation = _contractValidator.validateAgentRegister(registerData);
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()! as domain.Failure;
+        AppLogger.error('Invalid agent:register payload: ${failure.message}');
+        return;
+      }
+    }
 
     _logMessage('SENT', 'agent:register', registerData);
     _socket!.emit('agent:register', registerData);
@@ -333,20 +329,25 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// Handles protocol capabilities negotiation.
   void _handleCapabilitiesNegotiation(Map<String, dynamic> data) {
     try {
+      if (_featureFlags.enableSocketSchemaValidation) {
+        final validation = _contractValidator.validateAgentCapabilitiesEnvelope(
+          data,
+        );
+        if (validation.isError()) {
+          final failure = validation.exceptionOrNull()! as domain.Failure;
+          throw StateError(failure.message);
+        }
+      }
+
       final serverCapabilities = data['capabilities'] != null
           ? ProtocolCapabilities.fromJson(
               data['capabilities'] as Map<String, dynamic>,
             )
-          : ProtocolCapabilities.legacyOnly();
-
-      final agentCapabilities = _featureFlags.enableJsonRpcV2
-          ? ProtocolCapabilities.defaultCapabilities()
-          : ProtocolCapabilities.legacyOnly();
+          : ProtocolCapabilities.defaultCapabilities();
 
       _currentProtocol = _negotiator.negotiate(
-        agentCapabilities: agentCapabilities,
+        agentCapabilities: ProtocolCapabilities.defaultCapabilities(),
         serverCapabilities: serverCapabilities,
-        preferJsonRpcV2: _featureFlags.enableJsonRpcV2,
       );
 
       final limits = _currentProtocol.effectiveLimits;
@@ -358,33 +359,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
       );
 
-      if (_currentProtocol.isJsonRpcV2) {
-        _startHeartbeat();
-      } else {
-        _stopHeartbeat();
-      }
+      _startHeartbeat();
     } on Exception catch (error, stackTrace) {
       AppLogger.warning(
-        'Failed to negotiate protocol, falling back to legacy',
+        'Failed to negotiate protocol, using local v2 defaults',
         error,
         stackTrace,
       );
-      _fallbackToLegacy();
-    }
-  }
-
-  /// Handles legacy query:request event.
-  void _handleLegacyQueryRequest(Map<String, dynamic> data) {
-    try {
-      final envelope = EnvelopeModel.fromJson(data);
-      final request = _envelopeToQueryRequest(envelope);
-      _queryRequestController.add(request);
-    } on Exception catch (error, stackTrace) {
-      AppLogger.error(
-        'Error processing legacy query request',
-        error,
-        stackTrace,
-      );
+      _currentProtocol = _negotiator.createFallbackConfig();
+      _startHeartbeat();
     }
   }
 
@@ -416,17 +399,30 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       final requestMap = payload;
+      if (_exceedsPayloadLimit(requestMap)) {
+        await _sendSchemaValidationError(
+          requestMap['id'],
+          RpcErrorCode.invalidPayload,
+          'Request exceeds negotiated payload limit',
+        );
+        socketAck?.call();
+        return;
+      }
 
       if (_featureFlags.enableSocketSchemaValidation) {
-        final validation = _schemaValidator.validateSingle(requestMap);
+        final validation = _schemaValidator.validateSingle(
+          requestMap,
+          limits: _currentProtocol.effectiveLimits,
+        );
         if (validation.isError()) {
           final failure = validation.exceptionOrNull() as domain.Failure?;
           if (failure != null) {
             await _sendSchemaValidationError(
               requestMap['id'],
-              RpcErrorCode.invalidRequest,
+              _validationFailureCode(failure),
               failure.message,
             );
+            socketAck?.call();
             return;
           }
         }
@@ -443,16 +439,21 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       final request = RpcRequest.fromJson(requestMap);
+      if (_hasNullIdCompatibilityViolation(requestMap)) {
+        await _sendSchemaValidationError(
+          null,
+          RpcErrorCode.invalidRequest,
+          'id: null notifications require negotiated compatibility',
+        );
+        socketAck?.call();
+        return;
+      }
 
-      if (_featureFlags.enableSocketDeliveryGuarantees) {
+      if (_featureFlags.enableSocketDeliveryGuarantees &&
+          !request.isNotification) {
         _emitRequestAck(request.id);
       }
       socketAck?.call();
-
-      if (_featureFlags.enableSocketNotificationsContract &&
-          request.isNotification) {
-        return;
-      }
 
       final guardResult = _rpcRequestGuard.evaluate(request);
       if (guardResult != RpcRequestGuardResult.allow) {
@@ -464,8 +465,24 @@ class SocketIOTransportClientV2 implements ITransportClient {
         await _emitRpcResponse(errorResponse);
         return;
       }
+
+      if (request.method == 'rpc.discover') {
+        if (!_featureFlags.enableSocketNotificationsContract ||
+            !request.isNotification) {
+          final response = _attachRequestTraceToResponse(
+            request,
+            RpcResponse.success(
+              id: request.id,
+              result: _loadOpenRpcDocument(),
+            ),
+          );
+          await _emitRpcResponse(response);
+        }
+        return;
+      }
       final clientToken = _extractClientTokenFromRpcParams(request.params);
-      final streamEmitter = _featureFlags.enableSocketStreamingChunks
+      final streamEmitter =
+          !request.isNotification && _featureFlags.enableSocketStreamingChunks
           ? _createStreamEmitter()
           : null;
       final response = await _rpcDispatcher.dispatch(
@@ -473,14 +490,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _agentId,
         clientToken: clientToken,
         streamEmitter: streamEmitter,
+        limits: _currentProtocol.effectiveLimits,
+        negotiatedExtensions: _currentProtocol.negotiatedExtensions,
       );
+      final tracedResponse = _attachRequestTraceToResponse(request, response);
       _logAuthorizationDecision(
         request: request,
-        response: response,
+        response: tracedResponse,
         clientToken: clientToken,
       );
 
-      await _emitRpcResponse(response);
+      if (_featureFlags.enableSocketNotificationsContract &&
+          request.isNotification) {
+        return;
+      }
+
+      await _emitRpcResponse(tracedResponse);
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC request',
@@ -530,14 +555,26 @@ class SocketIOTransportClientV2 implements ITransportClient {
         return;
       }
 
+      if (_exceedsPayloadLimit(data)) {
+        await _sendSchemaValidationError(
+          null,
+          RpcErrorCode.invalidPayload,
+          'Batch request exceeds negotiated payload limit',
+        );
+        return;
+      }
+
       if (_featureFlags.enableSocketSchemaValidation) {
-        final validation = _schemaValidator.validateBatch(data);
+        final validation = _schemaValidator.validateBatch(
+          data,
+          limits: _currentProtocol.effectiveLimits,
+        );
         if (validation.isError()) {
           final failure = validation.exceptionOrNull() as domain.Failure?;
           if (failure != null) {
             await _sendSchemaValidationError(
               null,
-              RpcErrorCode.invalidRequest,
+              _validationFailureCode(failure),
               failure.message,
             );
             return;
@@ -545,9 +582,34 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
+      for (final item in data) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        if (!_verifyIncomingSignature(item)) {
+          await _sendSchemaValidationError(
+            item['id'],
+            RpcErrorCode.authenticationFailed,
+            'Invalid payload signature',
+          );
+          return;
+        }
+      }
+
       final requests = data
           .map((e) => RpcRequest.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      for (final item in data.whereType<Map<String, dynamic>>()) {
+        if (_hasNullIdCompatibilityViolation(item)) {
+          await _sendSchemaValidationError(
+            null,
+            RpcErrorCode.invalidRequest,
+            'id: null notifications require negotiated compatibility',
+          );
+          return;
+        }
+      }
 
       if (_featureFlags.enableSocketDeliveryGuarantees) {
         _emitBatchRequestAck(requests);
@@ -555,7 +617,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       if (_featureFlags.enableSocketBatchStrictValidation) {
         final batch = RpcBatchRequest(requests);
-        final validation = batch.validateStrict();
+        final validation = batch.validateStrict(
+          maxSize: _currentProtocol.effectiveLimits.maxBatchSize,
+        );
         switch (validation) {
           case RpcBatchDuplicateIds(:final duplicateIds):
             final errorResponse = RpcResponse.error(
@@ -595,23 +659,37 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
-      final responses = <RpcResponse>[];
+      final responses = <({int index, RpcResponse response})>[];
 
-      for (final request in requests) {
-        if (_featureFlags.enableSocketNotificationsContract &&
-            request.isNotification) {
+      for (var index = 0; index < requests.length; index++) {
+        final request = requests[index];
+        final guardResult = _rpcRequestGuard.evaluate(request);
+        if (guardResult != RpcRequestGuardResult.allow) {
+          final errorResponse = _buildRpcErrorResponse(
+            id: request.id,
+            code: _guardResultToCode(guardResult),
+            technicalMessage: _guardResultToTechnicalMessage(guardResult),
+          );
+          if (!request.isNotification) {
+            responses.add((index: index, response: errorResponse));
+          }
           continue;
         }
 
-        final guardResult = _rpcRequestGuard.evaluate(request);
-        if (guardResult != RpcRequestGuardResult.allow) {
-          responses.add(
-            _buildRpcErrorResponse(
-              id: request.id,
-              code: _guardResultToCode(guardResult),
-              technicalMessage: _guardResultToTechnicalMessage(guardResult),
-            ),
-          );
+        if (request.method == 'rpc.discover') {
+          if (!_featureFlags.enableSocketNotificationsContract ||
+              !request.isNotification) {
+            responses.add((
+              index: index,
+              response: _attachRequestTraceToResponse(
+                request,
+                RpcResponse.success(
+                  id: request.id,
+                  result: _loadOpenRpcDocument(),
+                ),
+              ),
+            ));
+          }
           continue;
         }
 
@@ -620,17 +698,33 @@ class SocketIOTransportClientV2 implements ITransportClient {
           request,
           _agentId,
           clientToken: clientToken,
+          limits: _currentProtocol.effectiveLimits,
+          negotiatedExtensions: _currentProtocol.negotiatedExtensions,
         );
+        final tracedResponse = _attachRequestTraceToResponse(request, response);
         _logAuthorizationDecision(
           request: request,
-          response: response,
+          response: tracedResponse,
           clientToken: clientToken,
         );
-        responses.add(response);
+        if (_featureFlags.enableSocketNotificationsContract &&
+            request.isNotification) {
+          continue;
+        }
+        responses.add((index: index, response: tracedResponse));
       }
 
-      // Send batch response
-      final batchResponse = responses;
+      if (responses.isEmpty) {
+        return;
+      }
+
+      final orderedResponses = _supportsOrderedBatchResponses()
+          ? (responses.toList()
+                  ..sort((left, right) => left.index.compareTo(right.index)))
+                .map((entry) => entry.response)
+                .toList()
+          : responses.map((entry) => entry.response).toList();
+      final batchResponse = orderedResponses;
       await _emitRpcResponse(batchResponse);
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
@@ -639,6 +733,52 @@ class SocketIOTransportClientV2 implements ITransportClient {
         stackTrace,
       );
     }
+  }
+
+  int _validationFailureCode(domain.Failure failure) {
+    final code = failure.context['rpc_error_code'];
+    return code is int ? code : RpcErrorCode.invalidRequest;
+  }
+
+  bool _exceedsPayloadLimit(dynamic payload) {
+    final bytes = utf8.encode(jsonEncode(payload)).length;
+    return bytes > _currentProtocol.effectiveLimits.maxPayloadBytes;
+  }
+
+  dynamic _validateOutgoingRpcPayload(dynamic payload) {
+    if (!_featureFlags.enableSocketSchemaValidation) {
+      return payload;
+    }
+
+    final validation = payload is List<dynamic>
+        ? _contractValidator.validateBatchResponse(payload)
+        : _contractValidator.validateResponse(payload as Map<String, dynamic>);
+    if (validation.isSuccess()) {
+      return payload;
+    }
+
+    final failure = validation.exceptionOrNull()! as domain.Failure;
+    AppLogger.error(
+      'Outgoing rpc:response payload is invalid: ${failure.message}',
+    );
+    final fallback = _prepareResponseForSend(
+      _buildRpcErrorResponse(
+        id: null,
+        code: RpcErrorCode.internalError,
+        technicalMessage: 'Outgoing rpc:response failed contract validation',
+      ),
+    );
+
+    final fallbackValidation = _contractValidator.validateResponse(fallback);
+    if (fallbackValidation.isError()) {
+      final fallbackFailure =
+          fallbackValidation.exceptionOrNull()! as domain.Failure;
+      AppLogger.error(
+        'Fallback rpc:response payload is invalid: ${fallbackFailure.message}',
+      );
+      return null;
+    }
+    return fallback;
   }
 
   void _handleConnectionError(
@@ -697,18 +837,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     );
   }
 
-  /// Fallback to legacy protocol.
-  void _fallbackToLegacy() {
-    _currentProtocol = const ProtocolConfig(
-      protocol: 'legacy-envelope-v1',
-      encoding: 'json',
-      compression: 'none',
-    );
-    _stopHeartbeat();
-
-    AppLogger.info('Fell back to legacy protocol');
-  }
-
   @override
   Future<Result<void>> disconnect() async {
     try {
@@ -738,12 +866,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         return Failure(domain.NetworkFailure('Not connected to server'));
       }
 
-      // Use protocol-aware sending
-      if (_currentProtocol.isJsonRpcV2) {
-        return await _sendRpcResponse(response);
-      } else {
-        return await _sendLegacyResponse(response);
-      }
+      return await _sendRpcResponse(response);
     } on Exception catch (e) {
       return Failure(
         domain.NetworkFailure.withContext(
@@ -774,6 +897,57 @@ class SocketIOTransportClientV2 implements ITransportClient {
           'affected_rows': response.affectedRows,
         if (response.columnMetadata != null)
           'column_metadata': response.columnMetadata,
+        if (response.hasMultiResult) ...{
+          'multi_result': true,
+          'result_set_count': response.resultSets.length,
+          'item_count': response.items.length,
+          'result_sets': response.resultSets
+              .map(
+                (resultSet) => {
+                  'index': resultSet.index,
+                  'rows': resultSet.rows,
+                  'row_count': resultSet.rowCount,
+                  if (resultSet.affectedRows != null)
+                    'affected_rows': resultSet.affectedRows,
+                  if (resultSet.columnMetadata != null)
+                    'column_metadata': resultSet.columnMetadata,
+                },
+              )
+              .toList(growable: false),
+          'items': response.items
+              .map(
+                (item) => item.resultSet != null
+                    ? {
+                        'type': 'result_set',
+                        'index': item.index,
+                        'result_set_index': item.resultSet!.index,
+                        'rows': item.resultSet!.rows,
+                        'row_count': item.resultSet!.rowCount,
+                        if (item.resultSet!.affectedRows != null)
+                          'affected_rows': item.resultSet!.affectedRows,
+                        if (item.resultSet!.columnMetadata != null)
+                          'column_metadata': item.resultSet!.columnMetadata,
+                      }
+                    : {
+                        'type': 'row_count',
+                        'index': item.index,
+                        'affected_rows': item.rowCount,
+                      },
+              )
+              .toList(growable: false),
+        },
+        if (response.pagination != null)
+          'pagination': {
+            'page': response.pagination!.page,
+            'page_size': response.pagination!.pageSize,
+            'returned_rows': response.pagination!.returnedRows,
+            'has_next_page': response.pagination!.hasNextPage,
+            'has_previous_page': response.pagination!.hasPreviousPage,
+            if (response.pagination!.currentCursor != null)
+              'current_cursor': response.pagination!.currentCursor,
+            if (response.pagination!.nextCursor != null)
+              'next_cursor': response.pagination!.nextCursor,
+          },
       };
 
       final rpcResponse = response.error != null
@@ -802,26 +976,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
           message: 'Failed to send RPC response',
           cause: e,
           context: {'operation': 'sendRpcResponse'},
-        ),
-      );
-    }
-  }
-
-  /// Sends response using legacy envelope protocol.
-  Future<Result<void>> _sendLegacyResponse(QueryResponse response) async {
-    try {
-      final envelope = _queryResponseToEnvelope(response);
-      final envelopeData = envelope.toJson();
-      _logMessage('SENT', 'query:response', envelopeData);
-      _socket!.emit('query:response', envelopeData);
-
-      return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
-      return Failure(
-        domain.NetworkFailure.withContext(
-          message: 'Failed to send legacy response',
-          cause: e,
-          context: {'operation': 'sendLegacyResponse'},
         ),
       );
     }
@@ -1001,11 +1155,68 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
+  void _emitValidatedEvent(String event, dynamic payload) {
+    if (_socket == null) {
+      return;
+    }
+
+    if (_featureFlags.enableSocketSchemaValidation) {
+      Result<void> validation;
+      if (event == 'rpc:chunk') {
+        validation = _contractValidator.validateStreamChunk(
+          payload as Map<String, dynamic>,
+        );
+      } else if (event == 'rpc:complete') {
+        validation = _contractValidator.validateStreamComplete(
+          payload as Map<String, dynamic>,
+        );
+      } else {
+        validation = const Success(unit);
+      }
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()! as domain.Failure;
+        AppLogger.error('Invalid $event payload: ${failure.message}');
+        return;
+      }
+    }
+
+    _logMessage('SENT', event, payload);
+    _socket?.emit(event, payload);
+  }
+
+  bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {
+    return requestMap.containsKey('id') &&
+        requestMap['id'] == null &&
+        !_allowsNullIdNotifications();
+  }
+
+  bool _allowsNullIdNotifications() {
+    final extensionValue = _currentProtocol
+        .negotiatedExtensions['notificationNullIdCompatibility'];
+    if (extensionValue is bool) {
+      return extensionValue;
+    }
+    return true;
+  }
+
+  bool _supportsOrderedBatchResponses() {
+    final extensionValue =
+        _currentProtocol.negotiatedExtensions['orderedBatchResponses'];
+    if (extensionValue is bool) {
+      return extensionValue;
+    }
+    return true;
+  }
+
   Map<String, dynamic> _prepareResponseForSend(RpcResponse response) {
     final json = Map<String, dynamic>.from(response.toJson());
     if (_featureFlags.enableSocketApiVersionMeta) {
-      json['api_version'] = '2.1';
+      final existingMeta = Map<String, dynamic>.from(
+        response.meta?.toJson() ?? const <String, dynamic>{},
+      );
+      json['api_version'] = '2.4';
       json['meta'] = <String, dynamic>{
+        ...existingMeta,
         'agent_id': _agentId,
         'request_id': response.id?.toString(),
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -1015,6 +1226,49 @@ class SocketIOTransportClientV2 implements ITransportClient {
       json['signature'] = _payloadSigner.sign(json).toJson();
     }
     return json;
+  }
+
+  RpcResponse _attachRequestTraceToResponse(
+    RpcRequest request,
+    RpcResponse response,
+  ) {
+    final requestMeta = request.meta;
+    final responseMeta = response.meta;
+    final supportedTraceContext =
+        _currentProtocol.negotiatedExtensions['traceContext'];
+    final traceModes = supportedTraceContext is List<dynamic>
+        ? supportedTraceContext.whereType<String>().toSet()
+        : {'w3c-trace-context', 'legacy-trace-id'};
+    final mergedMeta = RpcProtocolMeta(
+      traceId: traceModes.contains('legacy-trace-id')
+          ? responseMeta?.traceId ?? requestMeta?.traceId
+          : null,
+      traceParent: traceModes.contains('w3c-trace-context')
+          ? responseMeta?.traceParent ?? requestMeta?.traceParent
+          : null,
+      traceState: traceModes.contains('w3c-trace-context')
+          ? responseMeta?.traceState ?? requestMeta?.traceState
+          : null,
+      requestId: responseMeta?.requestId ?? requestMeta?.requestId,
+      agentId: responseMeta?.agentId,
+      timestamp: responseMeta?.timestamp,
+    );
+
+    if (response.isError) {
+      return RpcResponse.error(
+        id: response.id,
+        error: response.error!,
+        apiVersion: response.apiVersion,
+        meta: mergedMeta,
+      );
+    }
+
+    return RpcResponse.success(
+      id: response.id,
+      result: response.result,
+      apiVersion: response.apiVersion,
+      meta: mergedMeta,
+    );
   }
 
   bool _verifyIncomingSignature(Map<String, dynamic> payload) {
@@ -1067,66 +1321,51 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
   }
 
-  QueryRequest _envelopeToQueryRequest(EnvelopeModel envelope) {
-    final payload = envelope.payloadBytes.isNotEmpty
-        ? envelope.payloadBytes.first
-        : <String, dynamic>{};
+  Map<String, dynamic> _loadOpenRpcDocument() {
+    final cached = _cachedOpenRpcDocument;
+    if (cached != null) {
+      return Map<String, dynamic>.from(cached);
+    }
 
-    final rawToken =
-        payload['client_token'] as String? ??
-        payload['auth'] as String? ??
-        payload['token'] as String?;
-    final clientToken = rawToken != null && rawToken.trim().isNotEmpty
-        ? rawToken.trim()
-        : null;
-
-    return QueryRequest(
-      id: envelope.requestId,
-      agentId: envelope.agentId,
-      query: payload['query'] as String? ?? '',
-      parameters: payload['parameters'] as Map<String, dynamic>?,
-      timestamp: envelope.timestamp,
-      clientToken: clientToken,
-    );
-  }
-
-  EnvelopeModel _queryResponseToEnvelope(QueryResponse response) {
-    // Detect if data is compressed
-    final isCompressed =
-        response.data.length == 1 &&
-        response.data.first.containsKey('compressed_data') &&
-        (response.data.first['is_compressed'] as bool? ?? false);
-
-    return EnvelopeModel(
-      v: 1,
-      type: 'query_response',
-      requestId: response.id,
-      agentId: response.agentId,
-      timestamp: response.timestamp,
-      cmp: isCompressed ? 'gzip' : 'none',
-      contentType: 'json',
-      payloadBytes: response.data,
-    );
+    try {
+      final file = File(
+        '${Directory.current.path}\\docs\\communication\\openrpc.json',
+      );
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      _cachedOpenRpcDocument = json;
+      return Map<String, dynamic>.from(json);
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Failed to load OpenRPC document from disk, using fallback',
+        error,
+        stackTrace,
+      );
+      const fallback = {
+        'openrpc': '1.3.2',
+        'info': {
+          'title': 'Plug Agente Socket RPC',
+          'version': '2.4.0',
+        },
+        'methods': <Map<String, dynamic>>[],
+      };
+      _cachedOpenRpcDocument = fallback;
+      return Map<String, dynamic>.from(fallback);
+    }
   }
 }
 
 class _SocketRpcStreamEmitter implements IRpcStreamEmitter {
-  _SocketRpcStreamEmitter(this._socket, this._logMessage);
+  _SocketRpcStreamEmitter(this._emit);
 
-  final io.Socket? _socket;
-  final void Function(String direction, String event, dynamic data) _logMessage;
+  final void Function(String event, dynamic payload) _emit;
 
   @override
   void emitChunk(RpcStreamChunk chunk) {
-    final payload = chunk.toJson();
-    _logMessage('SENT', 'rpc:chunk', payload);
-    _socket?.emit('rpc:chunk', payload);
+    _emit('rpc:chunk', chunk.toJson());
   }
 
   @override
   void emitComplete(RpcStreamComplete complete) {
-    final payload = complete.toJson();
-    _logMessage('SENT', 'rpc:complete', payload);
-    _socket?.emit('rpc:complete', payload);
+    _emit('rpc:complete', complete.toJson());
   }
 }

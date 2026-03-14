@@ -1,9 +1,9 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Pool de conexões ODBC usando pool nativo do odbc_fast.
@@ -76,8 +76,9 @@ class OdbcConnectionPool implements IConnectionPool {
           error: error,
         );
         return Failure(
-          domain.ConnectionFailure(
-            'Failed to create pool: ${_odbcErrorMessage(error)}',
+          OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_create',
           ),
         );
       },
@@ -103,8 +104,9 @@ class OdbcConnectionPool implements IConnectionPool {
             return Success(connection.id);
           },
           (error) => Failure(
-            domain.ConnectionFailure(
-              'Failed to acquire connection: ${_odbcErrorMessage(error)}',
+            OdbcFailureMapper.mapPoolError(
+              error,
+              operation: 'pool_acquire',
             ),
           ),
         );
@@ -127,8 +129,9 @@ class OdbcConnectionPool implements IConnectionPool {
     return result.fold(
       (_) => const Success(unit),
       (error) => Failure(
-        domain.ConnectionFailure(
-          'Failed to release connection: ${_odbcErrorMessage(error)}',
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_release',
         ),
       ),
     );
@@ -157,7 +160,10 @@ class OdbcConnectionPool implements IConnectionPool {
 
     if (errors.isNotEmpty) {
       return Failure(
-        domain.ConnectionFailure('Errors closing pools: ${errors.join(', ')}'),
+        OdbcFailureMapper.mapPoolError(
+          Exception(errors.join(', ')),
+          operation: 'pool_close_all',
+        ),
       );
     }
     return const Success(unit);
@@ -181,8 +187,9 @@ class OdbcConnectionPool implements IConnectionPool {
     return closeResult.fold(
       (_) => const Success(unit),
       (error) => Failure(
-        domain.ConnectionFailure(
-          'Failed to recycle pool: ${_odbcErrorMessage(error)}',
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_recycle',
         ),
       ),
     );
@@ -224,7 +231,10 @@ class OdbcConnectionPool implements IConnectionPool {
 
     if (errors.isNotEmpty) {
       return Failure(
-        domain.ConnectionFailure('Health check failures: ${errors.join(', ')}'),
+        OdbcFailureMapper.mapPoolError(
+          Exception(errors.join(', ')),
+          operation: 'pool_health_check',
+        ),
       );
     }
 

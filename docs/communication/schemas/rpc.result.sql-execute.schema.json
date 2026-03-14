@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.sql-execute.v1.json",
+  "title": "sql.execute result",
+  "description": "Result payload for successful sql.execute responses",
+  "type": "object",
+  "required": ["execution_id", "started_at", "finished_at", "rows", "row_count"],
+  "properties": {
+    "execution_id": { "type": "string" },
+    "stream_id": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "row_count": { "type": "integer", "minimum": 0 },
+    "returned_rows": { "type": "integer", "minimum": 0 },
+    "affected_rows": { "type": "integer", "minimum": 0 },
+    "truncated": { "type": "boolean" },
+    "multi_result": { "type": "boolean" },
+    "result_set_count": { "type": "integer", "minimum": 0 },
+    "item_count": { "type": "integer", "minimum": 0 },
+    "column_metadata": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "result_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "rows", "row_count"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "row_count": { "type": "integer", "minimum": 0 },
+          "affected_rows": { "type": "integer", "minimum": 0 },
+          "column_metadata": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "index"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["result_set", "row_count"]
+          },
+          "index": { "type": "integer", "minimum": 0 },
+          "result_set_index": { "type": "integer", "minimum": 0 },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "row_count": { "type": "integer", "minimum": 0 },
+          "affected_rows": { "type": "integer", "minimum": 0 },
+          "column_metadata": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "required": [
+        "page",
+        "page_size",
+        "returned_rows",
+        "has_next_page",
+        "has_previous_page"
+      ],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "page_size": { "type": "integer", "minimum": 1 },
+        "returned_rows": { "type": "integer", "minimum": 0 },
+        "has_next_page": { "type": "boolean" },
+        "has_previous_page": { "type": "boolean" },
+        "current_cursor": { "type": "string" },
+        "next_cursor": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

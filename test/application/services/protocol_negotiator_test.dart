@@ -22,21 +22,29 @@ void main() {
       expect(config.protocol, equals('jsonrpc-v2'));
     });
 
-    test('should fallback to legacy when server only supports legacy', () {
+    test('should keep jsonrpc-v2 when there is no common protocol', () {
       final agentCaps = ProtocolCapabilities.defaultCapabilities();
-      final serverCaps = ProtocolCapabilities.legacyOnly();
+      const serverCaps = ProtocolCapabilities(
+        protocols: ['custom-v3'],
+        encodings: ['json'],
+        compressions: ['none'],
+      );
 
       final config = negotiator.negotiate(
         agentCapabilities: agentCaps,
         serverCapabilities: serverCaps,
       );
 
-      expect(config.protocol, equals('legacy-envelope-v1'));
+      expect(config.protocol, equals('jsonrpc-v2'));
     });
 
-    test('should fallback to legacy when preferJsonRpcV2 is false', () {
+    test('should keep the first common protocol when v2 is not preferred', () {
       final agentCaps = ProtocolCapabilities.defaultCapabilities();
-      final serverCaps = ProtocolCapabilities.defaultCapabilities();
+      const serverCaps = ProtocolCapabilities(
+        protocols: ['jsonrpc-v2'],
+        encodings: ['json'],
+        compressions: ['gzip', 'none'],
+      );
 
       final config = negotiator.negotiate(
         agentCapabilities: agentCaps,
@@ -44,7 +52,7 @@ void main() {
         preferJsonRpcV2: false,
       );
 
-      expect(config.protocol, equals('legacy-envelope-v1'));
+      expect(config.protocol, equals('jsonrpc-v2'));
     });
 
     test('should select gzip compression when both support it', () {
@@ -85,7 +93,11 @@ void main() {
     });
 
     test('should return false when configuration is not supported', () {
-      final agentCaps = ProtocolCapabilities.legacyOnly();
+      const agentCaps = ProtocolCapabilities(
+        protocols: ['custom-v3'],
+        encodings: ['json'],
+        compressions: ['none'],
+      );
       const config = ProtocolConfig(
         protocol: 'jsonrpc-v2',
         encoding: 'json',
@@ -100,9 +112,44 @@ void main() {
     test('should create fallback configuration', () {
       final config = negotiator.createFallbackConfig();
 
-      expect(config.protocol, equals('legacy-envelope-v1'));
+      expect(config.protocol, equals('jsonrpc-v2'));
       expect(config.encoding, equals('json'));
       expect(config.compression, equals('none'));
+    });
+
+    test('should negotiate plug profile extensions intersection', () {
+      final agentCaps = ProtocolCapabilities.defaultCapabilities();
+      const serverCaps = ProtocolCapabilities(
+        protocols: ['jsonrpc-v2'],
+        encodings: ['json'],
+        compressions: ['none'],
+        extensions: {
+          'orderedBatchResponses': true,
+          'notificationNullIdCompatibility': true,
+          'paginationModes': ['cursor-keyset'],
+          'traceContext': ['w3c-trace-context'],
+          'errorFormat': 'problem-details-inspired',
+          'plugProfile': 'plug-jsonrpc-profile/2.4',
+        },
+      );
+
+      final config = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(
+        config.negotiatedExtensions['paginationModes'],
+        equals(['cursor-keyset']),
+      );
+      expect(
+        config.negotiatedExtensions['traceContext'],
+        equals(['w3c-trace-context']),
+      );
+      expect(
+        config.negotiatedExtensions['plugProfile'],
+        equals('plug-jsonrpc-profile/2.4'),
+      );
     });
   });
 }

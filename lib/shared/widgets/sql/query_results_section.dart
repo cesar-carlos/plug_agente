@@ -18,6 +18,17 @@ class QueryResultsSection extends StatelessWidget {
     this.columnMetadata,
     this.error,
     this.onShowErrorDetails,
+    this.currentPage = 1,
+    this.pageSize = 50,
+    this.hasNextPage = false,
+    this.hasPreviousPage = false,
+    this.showPagination = false,
+    this.onPreviousPage,
+    this.onNextPage,
+    this.onPageSizeChanged,
+    this.resultSetCount = 0,
+    this.selectedResultSetIndex = 0,
+    this.onResultSetChanged,
   });
   final List<Map<String, dynamic>> results;
   final bool isLoading;
@@ -29,6 +40,17 @@ class QueryResultsSection extends StatelessWidget {
   final List<Map<String, dynamic>>? columnMetadata;
   final String? error;
   final VoidCallback? onShowErrorDetails;
+  final int currentPage;
+  final int pageSize;
+  final bool hasNextPage;
+  final bool hasPreviousPage;
+  final bool showPagination;
+  final VoidCallback? onPreviousPage;
+  final VoidCallback? onNextPage;
+  final ValueChanged<int>? onPageSizeChanged;
+  final int resultSetCount;
+  final int selectedResultSetIndex;
+  final ValueChanged<int>? onResultSetChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +104,17 @@ class QueryResultsSection extends StatelessWidget {
           totalRecords: results.length,
           executionDuration: executionDuration,
           affectedRows: affectedRows,
+          currentPage: currentPage,
+          pageSize: pageSize,
+          hasNextPage: hasNextPage,
+          hasPreviousPage: hasPreviousPage,
+          showPagination: showPagination,
+          onPreviousPage: onPreviousPage,
+          onNextPage: onNextPage,
+          onPageSizeChanged: onPageSizeChanged,
+          resultSetCount: resultSetCount,
+          selectedResultSetIndex: selectedResultSetIndex,
+          onResultSetChanged: onResultSetChanged,
         ),
       ],
     );
@@ -135,12 +168,34 @@ class _StreamingProgressBar extends StatelessWidget {
 class _QueryResultsFooter extends StatelessWidget {
   const _QueryResultsFooter({
     required this.totalRecords,
+    required this.currentPage,
+    required this.pageSize,
+    required this.hasNextPage,
+    required this.hasPreviousPage,
+    required this.showPagination,
+    required this.resultSetCount,
+    required this.selectedResultSetIndex,
     this.executionDuration,
     this.affectedRows,
+    this.onPreviousPage,
+    this.onNextPage,
+    this.onPageSizeChanged,
+    this.onResultSetChanged,
   });
   final int totalRecords;
   final Duration? executionDuration;
   final int? affectedRows;
+  final int currentPage;
+  final int pageSize;
+  final bool hasNextPage;
+  final bool hasPreviousPage;
+  final bool showPagination;
+  final int resultSetCount;
+  final int selectedResultSetIndex;
+  final VoidCallback? onPreviousPage;
+  final VoidCallback? onNextPage;
+  final ValueChanged<int>? onPageSizeChanged;
+  final ValueChanged<int>? onResultSetChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +218,7 @@ class _QueryResultsFooter extends StatelessWidget {
         children: [
           _ResultMetric(
             icon: FluentIcons.table,
-            text: '${AppStrings.queryTotalRecords}: $totalRecords',
+            text: '${AppStrings.queryPaginationShowing}: $totalRecords',
             textStyle: context.bodyText,
           ),
           if (executionDuration != null) ...[
@@ -184,6 +239,25 @@ class _QueryResultsFooter extends StatelessWidget {
               textStyle: context.bodyText,
             ),
           ],
+          if (resultSetCount > 1) ...[
+            const SizedBox(width: AppSpacing.lg),
+            _QueryResultSetSelector(
+              resultSetCount: resultSetCount,
+              selectedResultSetIndex: selectedResultSetIndex,
+              onChanged: onResultSetChanged,
+            ),
+          ],
+          const Spacer(),
+          if (showPagination)
+            _QueryPaginationControls(
+              currentPage: currentPage,
+              pageSize: pageSize,
+              hasNextPage: hasNextPage,
+              hasPreviousPage: hasPreviousPage,
+              onPreviousPage: onPreviousPage,
+              onNextPage: onNextPage,
+              onPageSizeChanged: onPageSizeChanged,
+            ),
         ],
       ),
     );
@@ -204,6 +278,106 @@ class _QueryResultsFooter extends StatelessWidget {
       final seconds = duration.inSeconds % 60;
       return '${minutes}m ${seconds}s';
     }
+  }
+}
+
+class _QueryResultSetSelector extends StatelessWidget {
+  const _QueryResultSetSelector({
+    required this.resultSetCount,
+    required this.selectedResultSetIndex,
+    this.onChanged,
+  });
+
+  final int resultSetCount;
+  final int selectedResultSetIndex;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 180,
+      child: ComboBox<int>(
+        value: selectedResultSetIndex,
+        placeholder: const Text(AppStrings.queryResultSetLabel),
+        items: List<ComboBoxItem<int>>.generate(
+          resultSetCount,
+          (index) => ComboBoxItem<int>(
+            value: index,
+            child: Text(
+              '${AppStrings.queryResultSetLabel} ${index + 1}',
+            ),
+          ),
+        ),
+        onChanged: (value) {
+          if (value != null) {
+            onChanged?.call(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _QueryPaginationControls extends StatelessWidget {
+  const _QueryPaginationControls({
+    required this.currentPage,
+    required this.pageSize,
+    required this.hasNextPage,
+    required this.hasPreviousPage,
+    this.onPreviousPage,
+    this.onNextPage,
+    this.onPageSizeChanged,
+  });
+
+  final int currentPage;
+  final int pageSize;
+  final bool hasNextPage;
+  final bool hasPreviousPage;
+  final VoidCallback? onPreviousPage;
+  final VoidCallback? onNextPage;
+  final ValueChanged<int>? onPageSizeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
+      children: [
+        Text(
+          '${AppStrings.queryPaginationPage} $currentPage',
+          style: context.bodyText,
+        ),
+        SizedBox(
+          width: 140,
+          child: ComboBox<int>(
+            value: pageSize,
+            placeholder: const Text(AppStrings.queryPaginationPageSize),
+            items: const [25, 50, 100, 250]
+                .map(
+                  (value) => ComboBoxItem<int>(
+                    value: value,
+                    child: Text('$value'),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onPageSizeChanged?.call(value);
+              }
+            },
+          ),
+        ),
+        Button(
+          onPressed: hasPreviousPage ? onPreviousPage : null,
+          child: const Text(AppStrings.queryPaginationPrevious),
+        ),
+        FilledButton(
+          onPressed: hasNextPage ? onNextPage : null,
+          child: const Text(AppStrings.queryPaginationNext),
+        ),
+      ],
+    );
   }
 }
 

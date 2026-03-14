@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 
 void main() {
@@ -25,6 +27,7 @@ void main() {
           'jsonrpc': '2.0',
           'method': 'sql.execute',
           'id': null,
+          'params': {'sql': 'SELECT 1'},
         };
 
         final result = validator.validateSingle(data);
@@ -106,16 +109,246 @@ void main() {
         expect((err! as domain.ValidationFailure).message, contains('id'));
       });
 
+      test('should fail when traceparent is malformed', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {'sql': 'SELECT 1'},
+          'meta': {
+            'traceparent': 'invalid-traceparent',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+      });
+
+      test('should fail when tracestate is malformed', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {'sql': 'SELECT 1'},
+          'meta': {
+            'tracestate': 'invalid tracestate without separator',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+      });
+
+      test(
+        'should fail with invalidParams for sql.execute schema violations',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {
+              'sql': '',
+              'unexpected': true,
+            },
+          };
+
+          final result = validator.validateSingle(data);
+
+          expect(result.isError(), isTrue);
+          final err = result.exceptionOrNull()! as domain.ValidationFailure;
+          expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+        },
+      );
+
+      test(
+        'should fail when sql.executeBatch exceeds negotiated batch size',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.executeBatch',
+            'id': 'req-1',
+            'params': {
+              'commands': List.generate(
+                3,
+                (index) => {'sql': 'SELECT $index'},
+              ),
+            },
+          };
+
+          final result = validator.validateSingle(
+            data,
+            limits: const TransportLimits(maxBatchSize: 2),
+          );
+
+          expect(result.isError(), isTrue);
+          final err = result.exceptionOrNull()! as domain.ValidationFailure;
+          expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+        },
+      );
+
+      test('should fail when sql.cancel omits execution identifiers', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.cancel',
+          'id': 'req-1',
+          'params': <String, dynamic>{},
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
       test('should succeed when id is number', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',
           'method': 'sql.execute',
           'id': 1,
+          'params': {'sql': 'SELECT 1'},
         };
 
         final result = validator.validateSingle(data);
 
         expect(result.isSuccess(), isTrue);
+      });
+
+      test('should succeed for sql.execute pagination options', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT 1',
+            'options': {'page': 2, 'page_size': 100},
+          },
+        };
+
+        final result = validator.validateSingle(
+          data,
+          limits: const TransportLimits(maxRows: 200),
+        );
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should fail when page_size exceeds negotiated max_rows', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT 1',
+            'options': {'page': 1, 'page_size': 500},
+          },
+        };
+
+        final result = validator.validateSingle(
+          data,
+          limits: const TransportLimits(maxRows: 100),
+        );
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should succeed for sql.execute cursor pagination option', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT 1',
+            'options': {'cursor': 'opaque-token'},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should succeed for sql.execute multi_result option', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT 1; SELECT 2;',
+            'options': {'multi_result': true},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test(
+        'should fail when multi_result is combined with pagination options',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {
+              'sql': 'SELECT 1; SELECT 2;',
+              'options': {
+                'multi_result': true,
+                'page': 1,
+                'page_size': 100,
+              },
+            },
+          };
+
+          final result = validator.validateSingle(data);
+
+          expect(result.isError(), isTrue);
+        },
+      );
+
+      test(
+        'should fail when multi_result is combined with named parameters',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {
+              'sql': 'SELECT * FROM users WHERE id = :id; SELECT 2;',
+              'params': {'id': 1},
+              'options': {'multi_result': true},
+            },
+          };
+
+          final result = validator.validateSingle(data);
+
+          expect(result.isError(), isTrue);
+        },
+      );
+
+      test('should fail when cursor is combined with page options', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT 1',
+            'options': {
+              'cursor': 'opaque-token',
+              'page': 1,
+              'page_size': 100,
+            },
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
       });
     });
 
@@ -126,11 +359,13 @@ void main() {
             'jsonrpc': '2.0',
             'method': 'sql.execute',
             'id': 'r-1',
+            'params': {'sql': 'SELECT 1'},
           },
           <String, dynamic>{
             'jsonrpc': '2.0',
             'method': 'sql.execute',
             'id': 'r-2',
+            'params': {'sql': 'SELECT 2'},
           },
         ];
 
@@ -145,6 +380,7 @@ void main() {
             'jsonrpc': '2.0',
             'method': 'sql.execute',
             'id': 'r-1',
+            'params': {'sql': 'SELECT 1'},
           },
           'invalid',
         ];
@@ -163,6 +399,7 @@ void main() {
             'jsonrpc': '2.0',
             'method': 'sql.execute',
             'id': 'r-1',
+            'params': {'sql': 'SELECT 1'},
           },
           <String, dynamic>{
             'jsonrpc': '2.0',
@@ -177,6 +414,25 @@ void main() {
         final err = result.exceptionOrNull();
         expect(err, isA<domain.ValidationFailure>());
         expect((err! as domain.ValidationFailure).message, contains('index 1'));
+      });
+
+      test('should fail when batch exceeds negotiated limit', () {
+        final data = List.generate(
+          3,
+          (index) => <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'r-$index',
+            'params': {'sql': 'SELECT $index'},
+          },
+        );
+
+        final result = validator.validateBatch(
+          data,
+          limits: const TransportLimits(maxBatchSize: 2),
+        );
+
+        expect(result.isError(), isTrue);
       });
     });
   });

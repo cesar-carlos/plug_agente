@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -211,6 +215,281 @@ void main() {
       expect(result['row_count'], equals(1));
     });
 
+    test('should return multi-result payload for sql.execute', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-1',
+        params: {
+          'sql': 'SELECT 1; SELECT 2;',
+          'options': {'multi_result': true},
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'first_value': 1},
+        ],
+        timestamp: DateTime.now(),
+        columnMetadata: const [
+          {'name': 'first_value'},
+        ],
+        resultSets: const [
+          QueryResultSet(
+            index: 0,
+            rows: [
+              {'first_value': 1},
+            ],
+            rowCount: 1,
+            columnMetadata: [
+              {'name': 'first_value'},
+            ],
+          ),
+          QueryResultSet(
+            index: 1,
+            rows: [
+              {'second_value': 2},
+            ],
+            rowCount: 1,
+            columnMetadata: [
+              {'name': 'second_value'},
+            ],
+          ),
+        ],
+        items: const [
+          QueryResponseItem.resultSet(
+            index: 0,
+            resultSet: QueryResultSet(
+              index: 0,
+              rows: [
+                {'first_value': 1},
+              ],
+              rowCount: 1,
+              columnMetadata: [
+                {'name': 'first_value'},
+              ],
+            ),
+          ),
+          QueryResponseItem.rowCount(
+            index: 1,
+            rowCount: 3,
+          ),
+          QueryResponseItem.resultSet(
+            index: 2,
+            resultSet: QueryResultSet(
+              index: 1,
+              rows: [
+                {'second_value': 2},
+              ],
+              rowCount: 1,
+              columnMetadata: [
+                {'name': 'second_value'},
+              ],
+            ),
+          ),
+        ],
+      );
+
+      when(
+        () => mockGateway.executeQuery(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) async => queryResponse);
+      when(
+        () => mockCompression.compress(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      final result = response.result as Map<String, dynamic>;
+      expect(result['multi_result'], isTrue);
+      expect(result['result_set_count'], 2);
+      expect(result['item_count'], 3);
+      expect(result['result_sets'] as List<dynamic>, hasLength(2));
+      expect(result['items'] as List<dynamic>, hasLength(3));
+    });
+
+    test(
+      'should reject multi_result execution when named parameters are used',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users WHERE id = :id; SELECT 2;',
+            'params': {'id': 1},
+            'options': {'multi_result': true},
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, RpcErrorCode.invalidParams);
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should pass pagination to gateway and return pagination metadata',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users ORDER BY id',
+            'options': {'page': 2, 'page_size': 25},
+          },
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 26},
+          ],
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationInfo(
+            page: 2,
+            pageSize: 25,
+            returnedRows: 1,
+            hasNextPage: true,
+            hasPreviousPage: true,
+          ),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) async => queryResponse);
+        when(
+          () => mockCompression.compress(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          limits: const TransportLimits(maxRows: 100),
+        );
+
+        expect(response.isSuccess, isTrue);
+        final captured =
+            verify(() => mockGateway.executeQuery(captureAny())).captured.single
+                as QueryRequest;
+        expect(captured.pagination, isNotNull);
+        expect(captured.pagination!.page, 2);
+        expect(captured.pagination!.pageSize, 25);
+
+        final result = response.result as Map<String, dynamic>;
+        expect(result['pagination'], isA<Map<String, dynamic>>());
+        expect((result['pagination'] as Map<String, dynamic>)['page'], 2);
+      },
+    );
+
+    test('should reject paginated query without explicit order by', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-1',
+        params: {
+          'sql': 'SELECT * FROM users',
+          'options': {'page': 1, 'page_size': 25},
+        },
+      );
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isError, isTrue);
+      expect(response.error!.code, RpcErrorCode.invalidParams);
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(
+        data['technical_message'],
+        'Paginated queries must declare an explicit ORDER BY clause',
+      );
+      verifyNever(() => mockGateway.executeQuery(any()));
+    });
+
+    test(
+      'should decode cursor pagination and return next cursor metadata',
+      () async {
+        final paginationPlan = SqlValidator.validatePaginationQuery(
+          'SELECT * FROM users ORDER BY id',
+        ).getOrNull()!;
+        final cursor = QueryPaginationCursor(
+          page: 3,
+          pageSize: 25,
+          queryHash: paginationPlan.queryFingerprint,
+          orderBy: paginationPlan.orderBy,
+          lastRowValues: [50],
+        ).toToken();
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 51},
+          ],
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationInfo(
+            page: 3,
+            pageSize: 25,
+            returnedRows: 1,
+            hasNextPage: true,
+            hasPreviousPage: true,
+            currentCursor: 'cursor-current',
+            nextCursor: 'cursor-next',
+          ),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) async => queryResponse);
+        when(
+          () => mockCompression.compress(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+
+        final response = await dispatcher.dispatch(
+          RpcRequest(
+            jsonrpc: '2.0',
+            method: 'sql.execute',
+            id: 'req-1',
+            params: {
+              'sql': 'SELECT * FROM users ORDER BY id',
+              'options': {'cursor': cursor},
+            },
+          ),
+          'agent-1',
+        );
+
+        expect(response.isSuccess, isTrue);
+        final captured =
+            verify(() => mockGateway.executeQuery(captureAny())).captured.single
+                as QueryRequest;
+        expect(captured.pagination, isNotNull);
+        expect(captured.pagination!.cursor, cursor);
+        expect(captured.pagination!.usesStableCursor, isTrue);
+        expect(captured.pagination!.lastRowValues, [50]);
+        final result = response.result as Map<String, dynamic>;
+        expect(
+          (result['pagination'] as Map<String, dynamic>)['next_cursor'],
+          'cursor-next',
+        );
+      },
+    );
+
     test(
       'should stream from DB when enableSocketStreamingFromDb and SELECT without params',
       () async {
@@ -294,6 +573,100 @@ void main() {
         verify(() => mockEmitter.emitChunk(any())).called(2);
         verify(() => mockEmitter.emitComplete(any())).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should skip DB streaming path when paginated request is provided',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-1',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(
+          mockConfigRepo.getCurrentConfig,
+        ).thenAnswer((_) async => Success(config));
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          normalizerService: mockNormalizer,
+          compressionService: mockCompression,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 1},
+          ],
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationInfo(
+            page: 1,
+            pageSize: 50,
+            returnedRows: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          ),
+        );
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) async => queryResponse);
+        when(
+          () => mockCompression.compress(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users ORDER BY id',
+            'options': {'page': 1, 'page_size': 50},
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: MockRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        verifyNever(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+          ),
+        );
+        verify(() => mockGateway.executeQuery(any())).called(1);
       },
     );
 
@@ -555,6 +928,99 @@ void main() {
       },
     );
 
+    test('should ignore idempotency cache for notifications', () async {
+      final mockStore = MockIdempotencyStore();
+      when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        normalizerService: mockNormalizer,
+        compressionService: mockCompression,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        featureFlags: mockFeatureFlags,
+        idempotencyStore: mockStore,
+        streamingGateway: mockStreamingGateway,
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: null,
+        params: <String, dynamic>{
+          'sql': 'SELECT 1',
+          'idempotency_key': 'key-abc',
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'x': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockGateway.executeQuery(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) async => queryResponse);
+      when(
+        () => mockCompression.compress(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      verifyNever(() => mockStore.get(any()));
+      verifyNever(() => mockStore.set(any(), any(), any()));
+    });
+
+    test('should cap rows using negotiated maxRows', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-1',
+        params: {
+          'sql': 'SELECT * FROM users',
+          'options': {'max_rows': 10},
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: List.generate(20, _userAt),
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockGateway.executeQuery(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) async => queryResponse);
+      when(
+        () => mockCompression.compress(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        limits: const TransportLimits(maxRows: 5),
+      );
+
+      expect(response.isSuccess, isTrue);
+      final result = response.result as Map<String, dynamic>;
+      expect((result['rows'] as List<dynamic>).length, 5);
+      expect(result['truncated'], isTrue);
+    });
+
     group('sql.cancel', () {
       test('should return methodNotFound when flag is disabled', () async {
         when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
@@ -617,6 +1083,12 @@ void main() {
         'should cancel and return success when active stream exists',
         () async {
           when(
+            () => mockFeatureFlags.enableSocketStreamingChunks,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketStreamingFromDb,
+          ).thenReturn(true);
+          when(
             () => mockFeatureFlags.enableSocketCancelMethod,
           ).thenReturn(true);
           when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
@@ -624,24 +1096,166 @@ void main() {
             () => mockStreamingGateway.cancelActiveStream(),
           ).thenAnswer((_) async => const Success(unit));
 
-          const request = RpcRequest(
-            jsonrpc: '2.0',
-            method: 'sql.cancel',
-            id: 'req-cancel',
-            params: {
-              'execution_id': 'exec-1',
-              'request_id': 'req-1',
-            },
+          final mockConfigRepo = MockAgentConfigRepository();
+          final config = Config(
+            id: 'cfg-1',
+            driverName: 'SQL Server',
+            odbcDriverName: 'ODBC Driver 17',
+            connectionString: 'DSN=Test',
+            username: 'u',
+            databaseName: 'db',
+            host: 'localhost',
+            port: 1433,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          when(
+            mockConfigRepo.getCurrentConfig,
+          ).thenAnswer((_) async => Success(config));
+
+          final completer = Completer<Result<void>>();
+          when(
+            () => mockStreamingGateway.executeQueryStream(
+              any(),
+              any(),
+              any(),
+              fetchSize: any(named: 'fetchSize'),
+              chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            ),
+          ).thenAnswer((_) => completer.future);
+
+          dispatcher = RpcMethodDispatcher(
+            databaseGateway: mockGateway,
+            normalizerService: mockNormalizer,
+            compressionService: mockCompression,
+            uuid: const Uuid(),
+            authorizeSqlOperation: mockAuthorize,
+            featureFlags: mockFeatureFlags,
+            configRepository: mockConfigRepo,
+            streamingGateway: mockStreamingGateway,
           );
 
-          final response = await dispatcher.dispatch(request, 'agent-1');
+          final dispatchFuture = dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.execute',
+              id: 'req-1',
+              params: {'sql': 'SELECT * FROM users'},
+            ),
+            'agent-1',
+            streamEmitter: MockRpcStreamEmitter(),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          final response = await dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.cancel',
+              id: 'req-cancel',
+              params: {
+                'request_id': 'req-1',
+              },
+            ),
+            'agent-1',
+          );
 
           expect(response.isSuccess, isTrue);
           final result = response.result as Map<String, dynamic>;
           expect(result['cancelled'], isTrue);
-          expect(result['execution_id'], equals('exec-1'));
           expect(result['request_id'], equals('req-1'));
           verify(() => mockStreamingGateway.cancelActiveStream()).called(1);
+
+          completer.complete(const Success(unit));
+          await dispatchFuture;
+        },
+      );
+
+      test(
+        'should return executionNotFound when ids do not match active stream',
+        () async {
+          when(
+            () => mockFeatureFlags.enableSocketStreamingChunks,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketStreamingFromDb,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketCancelMethod,
+          ).thenReturn(true);
+          when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
+
+          final mockConfigRepo = MockAgentConfigRepository();
+          final config = Config(
+            id: 'cfg-1',
+            driverName: 'SQL Server',
+            odbcDriverName: 'ODBC Driver 17',
+            connectionString: 'DSN=Test',
+            username: 'u',
+            databaseName: 'db',
+            host: 'localhost',
+            port: 1433,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          when(
+            mockConfigRepo.getCurrentConfig,
+          ).thenAnswer((_) async => Success(config));
+
+          final completer = Completer<Result<void>>();
+          when(
+            () => mockStreamingGateway.executeQueryStream(
+              any(),
+              any(),
+              any(),
+              fetchSize: any(named: 'fetchSize'),
+              chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            ),
+          ).thenAnswer((_) => completer.future);
+
+          dispatcher = RpcMethodDispatcher(
+            databaseGateway: mockGateway,
+            normalizerService: mockNormalizer,
+            compressionService: mockCompression,
+            uuid: const Uuid(),
+            authorizeSqlOperation: mockAuthorize,
+            featureFlags: mockFeatureFlags,
+            configRepository: mockConfigRepo,
+            streamingGateway: mockStreamingGateway,
+          );
+
+          final dispatchFuture = dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.execute',
+              id: 'req-stream',
+              params: {'sql': 'SELECT * FROM users'},
+            ),
+            'agent-1',
+            streamEmitter: MockRpcStreamEmitter(),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          final cancelResponse = await dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.cancel',
+              id: 'req-cancel',
+              params: {'request_id': 'another-request'},
+            ),
+            'agent-1',
+          );
+
+          expect(cancelResponse.isError, isTrue);
+          expect(
+            cancelResponse.error!.code,
+            equals(RpcErrorCode.executionNotFound),
+          );
+          verifyNever(() => mockStreamingGateway.cancelActiveStream());
+
+          completer.complete(const Success(unit));
+          await dispatchFuture;
         },
       );
     });

@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -46,6 +47,56 @@ class MockDatabaseGateway implements IDatabaseGateway {
       ];
     }
 
+    final resultSets = request.query.contains(';')
+        ? const [
+            QueryResultSet(
+              index: 0,
+              rows: [
+                {'id': 1, 'name': 'Test User 1'},
+              ],
+              rowCount: 1,
+              columnMetadata: [
+                {'name': 'id'},
+                {'name': 'name'},
+              ],
+            ),
+            QueryResultSet(
+              index: 1,
+              rows: [
+                {'total': 3},
+              ],
+              rowCount: 1,
+              columnMetadata: [
+                {'name': 'total'},
+              ],
+            ),
+          ]
+        : const <QueryResultSet>[];
+
+    QueryPaginationInfo? pagination;
+    if (request.pagination != null) {
+      final pageSize = request.pagination!.pageSize;
+      final offset = request.pagination!.offset;
+      final end = offset + pageSize;
+      final hasNextPage = end < mockData.length;
+      mockData = mockData.skip(offset).take(pageSize).toList();
+      pagination = QueryPaginationInfo(
+        page: request.pagination!.page,
+        pageSize: pageSize,
+        returnedRows: mockData.length,
+        hasNextPage: hasNextPage,
+        hasPreviousPage: request.pagination!.page > 1,
+        currentCursor: request.pagination!.cursor,
+        nextCursor: hasNextPage
+            ? QueryPaginationCursor(
+                offset: offset + pageSize,
+                page: request.pagination!.page + 1,
+                pageSize: pageSize,
+              ).toToken()
+            : null,
+      );
+    }
+
     final response = QueryResponse(
       id: _uuid.v4(),
       requestId: request.id,
@@ -53,6 +104,8 @@ class MockDatabaseGateway implements IDatabaseGateway {
       data: mockData,
       affectedRows: mockData.length,
       timestamp: DateTime.now(),
+      pagination: pagination,
+      resultSets: resultSets,
     );
 
     return Success(response);

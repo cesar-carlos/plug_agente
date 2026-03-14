@@ -105,7 +105,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
         config.connectionString,
       );
     } else {
-      await provider.executeQuery();
+      await provider.executeQuery(resetPagination: true);
     }
 
     if (!mounted) return;
@@ -166,7 +166,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed &&
+        isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
@@ -246,6 +248,27 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         affectedRows: playgroundProvider.affectedRows,
                         columnMetadata: playgroundProvider.columnMetadata,
                         error: playgroundProvider.error,
+                        currentPage: playgroundProvider.currentPage,
+                        pageSize: playgroundProvider.pageSize,
+                        hasNextPage: playgroundProvider.hasNextPage,
+                        hasPreviousPage: playgroundProvider.hasPreviousPage,
+                        showPagination: playgroundProvider.hasPagination,
+                        resultSetCount: playgroundProvider.resultSets.length,
+                        selectedResultSetIndex:
+                            playgroundProvider.selectedResultSetIndex,
+                        onPreviousPage: playgroundProvider.hasPreviousPage
+                            ? () => playgroundProvider.goToPreviousPage()
+                            : null,
+                        onNextPage: playgroundProvider.hasNextPage
+                            ? () => playgroundProvider.goToNextPage()
+                            : null,
+                        onResultSetChanged:
+                            playgroundProvider.hasMultipleResultSets
+                            ? playgroundProvider.setSelectedResultSetIndex
+                            : null,
+                        onPageSizeChanged: (value) {
+                          unawaited(playgroundProvider.setPageSize(value));
+                        },
                         onShowErrorDetails: playgroundProvider.error != null
                             ? () => _showErrorModal(playgroundProvider.error!)
                             : null,

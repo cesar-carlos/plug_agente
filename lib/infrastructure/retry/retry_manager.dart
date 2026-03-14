@@ -76,6 +76,13 @@ class RetryManager implements IRetryManager {
   bool isTransientFailure(Exception exception) {
     // Verificar se é um Failure do domínio com mensagem transitória
     if (exception is domain.Failure) {
+      if (exception.context['poolExhausted'] == true) {
+        return true;
+      }
+      if (exception.context['retryable'] == true) {
+        return true;
+      }
+
       // Erros de conexão podem ser transientes
       if (exception is domain.ConnectionFailure) {
         final message = exception.message.toLowerCase();

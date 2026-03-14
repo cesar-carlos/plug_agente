@@ -8,6 +8,8 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 
 class PlaygroundProvider extends ChangeNotifier {
@@ -22,6 +24,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   String _query = '';
   List<Map<String, dynamic>> _results = [];
+  List<QueryResultSet> _resultSets = [];
   bool _isLoading = false;
   String? _error;
   String? _connectionStatus;
@@ -29,6 +32,7 @@ class PlaygroundProvider extends ChangeNotifier {
   Duration? _executionDuration;
   int? _affectedRows;
   List<Map<String, dynamic>>? _columnMetadata;
+  int _selectedResultSetIndex = 0;
   final CancellationToken _cancellationToken = CancellationToken();
 
   // Streaming support
@@ -36,47 +40,96 @@ class PlaygroundProvider extends ChangeNotifier {
   int _rowsProcessed = 0;
   double _progress = 0;
   DateTime _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _currentPage = 1;
+  int _pageSize = 50;
+  bool _hasNextPage = false;
+  bool _hasExecutedQuery = false;
+  bool _paginationAvailable = false;
 
   static const Duration _streamingUiUpdateInterval = Duration(
     milliseconds: 200,
   );
   static const int _progressEstimateOffset = 100;
+  static const List<int> _pageSizeOptions = [25, 50, 100, 250];
 
   String get query => _query;
-  List<Map<String, dynamic>> get results => _results;
+  List<Map<String, dynamic>> get results => selectedResultSet?.rows ?? _results;
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get connectionStatus => _connectionStatus;
   bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
   int? get affectedRows => _affectedRows;
-  List<Map<String, dynamic>>? get columnMetadata => _columnMetadata;
+  List<Map<String, dynamic>>? get columnMetadata =>
+      selectedResultSet?.columnMetadata ?? _columnMetadata;
   CancellationToken get cancellationToken => _cancellationToken;
+  List<QueryResultSet> get resultSets => _resultSets;
+  QueryResultSet? get selectedResultSet {
+    if (_resultSets.isEmpty) {
+      return null;
+    }
+    if (_selectedResultSetIndex < 0 ||
+        _selectedResultSetIndex >= _resultSets.length) {
+      return _resultSets.first;
+    }
+    return _resultSets[_selectedResultSetIndex];
+  }
+
+  bool get hasMultipleResultSets => _resultSets.length > 1;
+  int get selectedResultSetIndex => _selectedResultSetIndex;
 
   // Streaming getters
   bool get isStreaming => _isStreaming;
   int get rowsProcessed => _rowsProcessed;
   double get progress => _progress;
+  int get currentPage => _currentPage;
+  int get pageSize => _pageSize;
+  bool get hasNextPage => _hasNextPage;
+  bool get hasPreviousPage => _currentPage > 1;
+  bool get hasPagination =>
+      _paginationAvailable &&
+      _hasExecutedQuery &&
+      !_isStreaming &&
+      _error == null;
+  List<int> get pageSizeOptions => _pageSizeOptions;
 
   void setQuery(String value) {
+    final shouldResetPagination = value != _query;
     _query = value;
+    if (shouldResetPagination) {
+      _currentPage = 1;
+      _hasNextPage = false;
+    }
     _clearError();
     notifyListeners();
   }
 
-  Future<void> executeQuery() async {
+  Future<void> executeQuery({bool resetPagination = false}) async {
+    if (resetPagination) {
+      _currentPage = 1;
+    }
     _clearError();
     _isLoading = true;
+    _hasExecutedQuery = true;
+    _paginationAvailable = true;
     _results = [];
+    _resultSets = [];
     _executionDuration = null;
     _affectedRows = null;
     _columnMetadata = null;
+    _selectedResultSetIndex = 0;
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
 
     try {
-      final result = await _executePlaygroundQuery(_query);
+      final result = await _executePlaygroundQuery(
+        _query,
+        pagination: QueryPaginationRequest(
+          page: _currentPage,
+          pageSize: _pageSize,
+        ),
+      );
       stopwatch.stop();
       _isLoading = false;
 
@@ -85,11 +138,18 @@ class PlaygroundProvider extends ChangeNotifier {
           if (response.error != null) {
             _error = response.error;
             _results = [];
+            _resultSets = [];
             _columnMetadata = null;
+            _hasNextPage = false;
+            _paginationAvailable = false;
           } else {
+            _resultSets = response.resultSets;
+            _selectedResultSetIndex = 0;
             _results = response.data;
             _affectedRows = response.affectedRows ?? 0;
-            _columnMetadata = response.columnMetadata;
+            _columnMetadata =
+                selectedResultSet?.columnMetadata ?? response.columnMetadata;
+            _syncPaginationState(response.pagination);
           }
           _executionDuration = stopwatch.elapsed;
         },
@@ -100,7 +160,10 @@ class PlaygroundProvider extends ChangeNotifier {
             failure.toTechnicalMessage(),
           );
           _columnMetadata = null;
+          _resultSets = [];
           _executionDuration = stopwatch.elapsed;
+          _hasNextPage = false;
+          _paginationAvailable = false;
         },
       );
     } on Exception catch (error, stackTrace) {
@@ -112,7 +175,10 @@ class PlaygroundProvider extends ChangeNotifier {
       );
       _error = failure.toDisplayMessage();
       _columnMetadata = null;
+      _resultSets = [];
       _executionDuration = stopwatch.elapsed;
+      _hasNextPage = false;
+      _paginationAvailable = false;
       AppLogger.error(
         'Query execution threw: ${failure.message}',
         error,
@@ -162,12 +228,18 @@ class PlaygroundProvider extends ChangeNotifier {
     _cancellationToken.reset();
     _isLoading = true;
     _isStreaming = true;
+    _hasExecutedQuery = true;
+    _paginationAvailable = false;
     _rowsProcessed = 0;
     _results = [];
+    _resultSets = [];
     _executionDuration = null;
     _affectedRows = null;
     _columnMetadata = null;
+    _selectedResultSetIndex = 0;
     _progress = 0.0;
+    _currentPage = 1;
+    _hasNextPage = false;
     _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
     notifyListeners();
 
@@ -185,7 +257,8 @@ class PlaygroundProvider extends ChangeNotifier {
           _affectedRows = _rowsProcessed;
 
           // Atualizar progresso (estimativa simples)
-          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+          _progress =
+              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
 
           _notifyStreamingProgressIfNeeded();
         },
@@ -238,9 +311,15 @@ class PlaygroundProvider extends ChangeNotifier {
     _connectionStatus = null;
     _isConnectionStatusSuccess = null;
     _columnMetadata = null;
+    _resultSets = [];
     _isStreaming = false;
     _rowsProcessed = 0;
     _progress = 0.0;
+    _selectedResultSetIndex = 0;
+    _currentPage = 1;
+    _hasNextPage = false;
+    _hasExecutedQuery = false;
+    _paginationAvailable = false;
     _cancellationToken.reset();
     notifyListeners();
   }
@@ -259,7 +338,8 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _notifyStreamingProgressIfNeeded() {
     final now = DateTime.now();
-    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    final shouldNotify =
+        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
     if (!shouldNotify) {
       return;
     }
@@ -270,5 +350,57 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _clearError() {
     _error = null;
+  }
+
+  Future<void> goToNextPage() async {
+    if (_isLoading || !_hasNextPage) {
+      return;
+    }
+    _currentPage++;
+    await executeQuery();
+  }
+
+  Future<void> goToPreviousPage() async {
+    if (_isLoading || _currentPage <= 1) {
+      return;
+    }
+    _currentPage--;
+    await executeQuery();
+  }
+
+  Future<void> setPageSize(int pageSize) async {
+    if (_pageSize == pageSize) {
+      return;
+    }
+    _pageSize = pageSize;
+    _currentPage = 1;
+    _hasNextPage = false;
+    notifyListeners();
+
+    if (_hasExecutedQuery && _query.trim().isNotEmpty && !_isStreaming) {
+      await executeQuery();
+    }
+  }
+
+  void setSelectedResultSetIndex(int index) {
+    if (index < 0 || index >= _resultSets.length) {
+      return;
+    }
+    _selectedResultSetIndex = index;
+    _columnMetadata = _resultSets[index].columnMetadata;
+    notifyListeners();
+  }
+
+  void _syncPaginationState(QueryPaginationInfo? pagination) {
+    if (pagination == null) {
+      _hasNextPage = false;
+      _paginationAvailable = false;
+      return;
+    }
+
+    _currentPage = pagination.page;
+    _pageSize = pagination.pageSize;
+    _hasNextPage = pagination.hasNextPage;
+    _paginationAvailable = true;
   }
 }

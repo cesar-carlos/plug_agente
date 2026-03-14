@@ -25,25 +25,19 @@ class ProtocolCapabilities {
 
   factory ProtocolCapabilities.defaultCapabilities() {
     return const ProtocolCapabilities(
-      protocols: ['jsonrpc-v2', 'legacy-envelope-v1'],
-      encodings: ['json', 'msgpack'],
+      protocols: ['jsonrpc-v2'],
+      encodings: ['json'],
       compressions: ['gzip', 'none'],
       extensions: {
         'batchSupport': true,
-        'binaryPayload': true,
-        'streamingResults': false,
-      },
-    );
-  }
-
-  factory ProtocolCapabilities.legacyOnly() {
-    return const ProtocolCapabilities(
-      protocols: ['legacy-envelope-v1'],
-      encodings: ['json'],
-      compressions: ['none'],
-      extensions: {
-        'batchSupport': false,
         'binaryPayload': false,
+        'streamingResults': false,
+        'plugProfile': 'plug-jsonrpc-profile/2.4',
+        'orderedBatchResponses': true,
+        'notificationNullIdCompatibility': true,
+        'paginationModes': ['page-offset', 'cursor-keyset'],
+        'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
+        'errorFormat': 'problem-details-inspired',
       },
     );
   }
@@ -77,9 +71,6 @@ class ProtocolCapabilities {
   /// Checks if JSON-RPC v2 is supported.
   bool get supportsJsonRpcV2 => protocols.contains('jsonrpc-v2');
 
-  /// Checks if legacy envelope v1 is supported.
-  bool get supportsLegacyV1 => protocols.contains('legacy-envelope-v1');
-
   /// Checks if batch requests are supported.
   bool get supportsBatch => extensions['batchSupport'] as bool? ?? false;
 
@@ -96,6 +87,7 @@ class ProtocolConfig {
     required this.compression,
     this.compressionThreshold = 1024,
     this.effectiveLimits = const TransportLimits(),
+    this.negotiatedExtensions = const {},
   });
 
   final String protocol;
@@ -103,9 +95,9 @@ class ProtocolConfig {
   final String compression;
   final int compressionThreshold;
   final TransportLimits effectiveLimits;
+  final Map<String, dynamic> negotiatedExtensions;
 
   bool get isJsonRpcV2 => protocol == 'jsonrpc-v2';
-  bool get isLegacyV1 => protocol == 'legacy-envelope-v1';
   bool get usesCompression => compression != 'none';
   bool get usesBinaryPayload => encoding == 'msgpack';
 }
@@ -117,6 +109,8 @@ class TransportLimits {
     this.maxRows = defaultMaxRows,
     this.maxBatchSize = defaultMaxBatchSize,
     this.maxConcurrentStreams = defaultMaxConcurrentStreams,
+    this.streamingChunkSize = defaultStreamingChunkSize,
+    this.streamingRowThreshold = defaultStreamingRowThreshold,
   });
 
   factory TransportLimits.fromJson(Map<String, dynamic> json) {
@@ -127,6 +121,11 @@ class TransportLimits {
       maxBatchSize: json['max_batch_size'] as int? ?? defaultMaxBatchSize,
       maxConcurrentStreams:
           json['max_concurrent_streams'] as int? ?? defaultMaxConcurrentStreams,
+      streamingChunkSize:
+          json['streaming_chunk_size'] as int? ?? defaultStreamingChunkSize,
+      streamingRowThreshold:
+          json['streaming_row_threshold'] as int? ??
+          defaultStreamingRowThreshold,
     );
   }
 
@@ -134,25 +133,34 @@ class TransportLimits {
   static const int defaultMaxRows = 50000;
   static const int defaultMaxBatchSize = 32;
   static const int defaultMaxConcurrentStreams = 1;
+  static const int defaultStreamingChunkSize = 500;
+  static const int defaultStreamingRowThreshold = 500;
 
   final int maxPayloadBytes;
   final int maxRows;
   final int maxBatchSize;
   final int maxConcurrentStreams;
+  final int streamingChunkSize;
+  final int streamingRowThreshold;
 
   TransportLimits negotiateWith(TransportLimits other) {
     return TransportLimits(
-      maxPayloadBytes:
-          maxPayloadBytes < other.maxPayloadBytes
-              ? maxPayloadBytes
-              : other.maxPayloadBytes,
+      maxPayloadBytes: maxPayloadBytes < other.maxPayloadBytes
+          ? maxPayloadBytes
+          : other.maxPayloadBytes,
       maxRows: maxRows < other.maxRows ? maxRows : other.maxRows,
-      maxBatchSize:
-          maxBatchSize < other.maxBatchSize ? maxBatchSize : other.maxBatchSize,
-      maxConcurrentStreams:
-          maxConcurrentStreams < other.maxConcurrentStreams
-              ? maxConcurrentStreams
-              : other.maxConcurrentStreams,
+      maxBatchSize: maxBatchSize < other.maxBatchSize
+          ? maxBatchSize
+          : other.maxBatchSize,
+      maxConcurrentStreams: maxConcurrentStreams < other.maxConcurrentStreams
+          ? maxConcurrentStreams
+          : other.maxConcurrentStreams,
+      streamingChunkSize: streamingChunkSize < other.streamingChunkSize
+          ? streamingChunkSize
+          : other.streamingChunkSize,
+      streamingRowThreshold: streamingRowThreshold < other.streamingRowThreshold
+          ? streamingRowThreshold
+          : other.streamingRowThreshold,
     );
   }
 
@@ -162,6 +170,8 @@ class TransportLimits {
       'max_rows': maxRows,
       'max_batch_size': maxBatchSize,
       'max_concurrent_streams': maxConcurrentStreams,
+      'streaming_chunk_size': streamingChunkSize,
+      'streaming_row_threshold': streamingRowThreshold,
     };
   }
 }

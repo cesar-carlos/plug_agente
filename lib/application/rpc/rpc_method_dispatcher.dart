@@ -4,7 +4,9 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -30,6 +32,7 @@ class RpcMethodDispatcher {
     IIdempotencyStore? idempotencyStore,
     AuthorizationMetricsCollector? authMetrics,
     IStreamingDatabaseGateway? streamingGateway,
+    TransportLimits defaultLimits = const TransportLimits(),
   }) : _databaseGateway = databaseGateway,
        _normalizerService = normalizerService,
        _compressionService = compressionService,
@@ -40,6 +43,7 @@ class RpcMethodDispatcher {
        _idempotencyStore = idempotencyStore,
        _authMetrics = authMetrics,
        _streamingGateway = streamingGateway,
+       _defaultLimits = defaultLimits,
        _executeSqlBatch = ExecuteSqlBatch(
          databaseGateway,
          normalizerService,
@@ -56,12 +60,11 @@ class RpcMethodDispatcher {
   final IIdempotencyStore? _idempotencyStore;
   final AuthorizationMetricsCollector? _authMetrics;
   final IStreamingDatabaseGateway? _streamingGateway;
+  final TransportLimits _defaultLimits;
 
   static const _idempotencyTtl = Duration(minutes: 5);
   final ExecuteSqlBatch _executeSqlBatch;
-
-  static const int _streamingChunkSize = 500;
-  static const int _streamingRowThreshold = 500;
+  _ActiveStreamExecution? _activeStreamExecution;
 
   /// Dispatches an RPC request to the appropriate handler.
   Future<RpcResponse> dispatch(
@@ -69,18 +72,25 @@ class RpcMethodDispatcher {
     String agentId, {
     String? clientToken,
     IRpcStreamEmitter? streamEmitter,
+    TransportLimits? limits,
+    Map<String, dynamic> negotiatedExtensions = const {},
   }) async {
+    final effectiveLimits = limits ?? _defaultLimits;
     return switch (request.method) {
       'sql.execute' => await _handleSqlExecute(
         request,
         agentId,
         clientToken,
         streamEmitter: streamEmitter,
+        limits: effectiveLimits,
+        negotiatedExtensions: negotiatedExtensions,
       ),
       'sql.executeBatch' => await _handleSqlExecuteBatch(
         request,
         agentId,
         clientToken,
+        limits: effectiveLimits,
+        negotiatedExtensions: negotiatedExtensions,
       ),
       'sql.cancel' => await _handleSqlCancel(request),
       _ => _methodNotFound(request),
@@ -92,6 +102,8 @@ class RpcMethodDispatcher {
     RpcRequest request,
     String agentId,
     String? clientToken, {
+    required TransportLimits limits,
+    required Map<String, dynamic> negotiatedExtensions,
     IRpcStreamEmitter? streamEmitter,
   }) async {
     // Validate params
@@ -101,14 +113,46 @@ class RpcMethodDispatcher {
 
     final params = request.params as Map<String, dynamic>;
     final sql = params['sql'] as String?;
+    final maxRows = _resolveMaxRows(params, limits.maxRows);
 
     if (sql == null || sql.isEmpty) {
       return _invalidParams(request, 'sql is required');
     }
+    final paginationResolution = _resolvePagination(
+      params,
+      sql,
+      maxRows,
+      negotiatedExtensions,
+    );
+    if (paginationResolution.hasError) {
+      return _invalidParams(request, paginationResolution.errorMessage!);
+    }
+    final pagination = paginationResolution.pagination;
+    final multiResultRequested = _resolveMultiResult(params);
+    final requestParameters = params['params'] as Map<String, dynamic>?;
+
+    if (multiResultRequested &&
+        requestParameters != null &&
+        requestParameters.isNotEmpty) {
+      return _invalidParams(
+        request,
+        'multi_result is not supported with named parameters',
+      );
+    }
+    if (multiResultRequested && pagination != null) {
+      return _invalidParams(
+        request,
+        'multi_result cannot be combined with pagination',
+      );
+    }
 
     final idempotencyKey = params['idempotency_key'] as String?;
     final store = _idempotencyStore;
-    if (_featureFlags.enableSocketIdempotency && store != null && idempotencyKey != null && idempotencyKey.isNotEmpty) {
+    if (!request.isNotification &&
+        _featureFlags.enableSocketIdempotency &&
+        store != null &&
+        idempotencyKey != null &&
+        idempotencyKey.isNotEmpty) {
       final cached = store.get(idempotencyKey);
       if (cached != null) {
         return RpcResponse(
@@ -122,7 +166,8 @@ class RpcMethodDispatcher {
       }
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -131,7 +176,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       final authResult = await _authorizeSqlOperation(
         token: clientToken,
         sql: sql,
@@ -156,7 +203,10 @@ class RpcMethodDispatcher {
     }
 
     // Validate SQL (allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE)
-    final validation = SqlValidator.validateSqlForExecution(sql);
+    final validation = SqlValidator.validateSqlForExecution(
+      sql,
+      allowMultipleStatements: multiResultRequested,
+    );
     if (validation.isError()) {
       final failure = validation.exceptionOrNull()! as domain.Failure;
       final rpcError = FailureToRpcErrorMapper.map(
@@ -171,15 +221,18 @@ class RpcMethodDispatcher {
       id: _uuid.v4(),
       agentId: agentId,
       query: sql,
-      parameters: params['params'] as Map<String, dynamic>?,
+      parameters: requestParameters,
       timestamp: DateTime.now(),
+      pagination: pagination,
+      expectMultipleResults: multiResultRequested,
     );
 
     final streamingFromDbResponse = await _tryStreamingFromDb(
       request,
       queryRequest,
       sql,
-      streamEmitter,
+      request.isNotification ? null : streamEmitter,
+      limits: limits,
     );
     if (streamingFromDbResponse != null) {
       return streamingFromDbResponse;
@@ -199,23 +252,32 @@ class RpcMethodDispatcher {
 
         return await compressionResult.fold(
           (compressed) async {
+            final limitedRows = _applyMaxRows(compressed.data, maxRows);
+            final wasTruncated = limitedRows.length != compressed.data.length;
             final useStreaming =
                 _featureFlags.enableSocketStreamingChunks &&
                 streamEmitter != null &&
-                compressed.data.length > _streamingRowThreshold;
+                !request.isNotification &&
+                pagination == null &&
+                !compressed.hasMultiResult &&
+                limitedRows.length > limits.streamingRowThreshold;
 
             if (useStreaming) {
               final streamId = 'stream-${queryRequest.id}';
-              final rows = compressed.data;
-              final totalChunks = (rows.length / _streamingChunkSize).ceil();
+              final rows = limitedRows;
+              final totalChunks = (rows.length / limits.streamingChunkSize)
+                  .ceil();
 
-              for (var i = 0; i < rows.length; i += _streamingChunkSize) {
-                final chunkRows = rows.skip(i).take(_streamingChunkSize).toList();
+              for (var i = 0; i < rows.length; i += limits.streamingChunkSize) {
+                final chunkRows = rows
+                    .skip(i)
+                    .take(limits.streamingChunkSize)
+                    .toList();
                 streamEmitter.emitChunk(
                   RpcStreamChunk(
                     streamId: streamId,
                     requestId: request.id,
-                    chunkIndex: i ~/ _streamingChunkSize,
+                    chunkIndex: i ~/ limits.streamingChunkSize,
                     rows: chunkRows,
                     totalChunks: totalChunks,
                     columnMetadata: compressed.columnMetadata,
@@ -243,27 +305,32 @@ class RpcMethodDispatcher {
                 'rows': <Map<String, dynamic>>[],
                 'row_count': 0,
                 'affected_rows': compressed.affectedRows,
-                if (compressed.columnMetadata != null) 'column_metadata': compressed.columnMetadata,
+                'returned_rows': rows.length,
+                if (wasTruncated) 'truncated': true,
+                if (compressed.columnMetadata != null)
+                  'column_metadata': compressed.columnMetadata,
+                if (compressed.pagination != null)
+                  'pagination': _buildPaginationResult(compressed.pagination!),
               };
 
               return RpcResponse.success(id: request.id, result: resultData);
             }
 
-            final resultData = {
-              'execution_id': compressed.id,
-              'started_at': queryRequest.timestamp.toIso8601String(),
-              'finished_at': compressed.timestamp.toIso8601String(),
-              'rows': compressed.data,
-              'row_count': compressed.data.length,
-              'affected_rows': compressed.affectedRows,
-              if (compressed.columnMetadata != null) 'column_metadata': compressed.columnMetadata,
-            };
+            final resultData = _buildExecuteResultData(
+              compressed,
+              startedAt: queryRequest.timestamp,
+              finishedAt: compressed.timestamp,
+              limitedRows: limitedRows,
+              wasTruncated: wasTruncated,
+              forceMultiResultEnvelope: multiResultRequested,
+            );
 
             final response = RpcResponse.success(
               id: request.id,
               result: resultData,
             );
-            if (_featureFlags.enableSocketIdempotency &&
+            if (!request.isNotification &&
+                _featureFlags.enableSocketIdempotency &&
                 store != null &&
                 idempotencyKey != null &&
                 idempotencyKey.isNotEmpty) {
@@ -301,11 +368,18 @@ class RpcMethodDispatcher {
     RpcRequest request,
     QueryRequest queryRequest,
     String sql,
-    IRpcStreamEmitter? streamEmitter,
-  ) async {
+    IRpcStreamEmitter? streamEmitter, {
+    required TransportLimits limits,
+  }) async {
     if (!_featureFlags.enableSocketStreamingFromDb ||
         !_featureFlags.enableSocketStreamingChunks ||
         streamEmitter == null) {
+      return null;
+    }
+    if (queryRequest.pagination != null) {
+      return null;
+    }
+    if (queryRequest.expectMultipleResults) {
       return null;
     }
     final configRepo = _configRepository;
@@ -322,80 +396,96 @@ class RpcMethodDispatcher {
 
     final configResult = await configRepo.getCurrentConfig();
     final config = configResult.getOrNull();
-    if (config == null || config.connectionString.trim().isEmpty) {
+    if (config == null || config.resolveConnectionString().trim().isEmpty) {
       return null;
     }
 
     final streamId = 'stream-${queryRequest.id}';
+    final executionId = _uuid.v4();
     var totalRows = 0;
     var chunkIndex = 0;
     List<Map<String, dynamic>>? columnMetadata;
-
-    final streamResult = await gateway.executeQueryStream(
-      sql.trim(),
-      config.connectionString,
-      (chunk) {
-        if (columnMetadata == null && chunk.isNotEmpty) {
-          columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
-        }
-        totalRows += chunk.length;
-        streamEmitter.emitChunk(
-          RpcStreamChunk(
-            streamId: streamId,
-            requestId: request.id,
-            chunkIndex: chunkIndex++,
-            rows: chunk,
-            columnMetadata: columnMetadata,
-          ),
-        );
-      },
+    _activeStreamExecution = _ActiveStreamExecution(
+      streamId: streamId,
+      requestId: request.id?.toString(),
+      executionId: executionId,
     );
 
-    return streamResult.fold(
-      (_) {
-        final executionId = _uuid.v4();
-        streamEmitter.emitComplete(
-          RpcStreamComplete(
-            streamId: streamId,
-            requestId: request.id,
-            totalRows: totalRows,
-            affectedRows: totalRows,
-            executionId: executionId,
-            startedAt: queryRequest.timestamp.toIso8601String(),
-            finishedAt: DateTime.now().toUtc().toIso8601String(),
-          ),
-        );
-        return RpcResponse.success(
-          id: request.id,
-          result: {
-            'stream_id': streamId,
-            'execution_id': executionId,
-            'started_at': queryRequest.timestamp.toIso8601String(),
-            'finished_at': DateTime.now().toUtc().toIso8601String(),
-            'rows': <Map<String, dynamic>>[],
-            'row_count': 0,
-            'affected_rows': totalRows,
-            ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
-          },
-        );
-      },
-      (failure) {
-        final rpcError = FailureToRpcErrorMapper.map(
-          failure as domain.Failure,
-          instance: request.id?.toString(),
-          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-        );
-        return RpcResponse.error(id: request.id, error: rpcError);
-      },
-    );
+    try {
+      final streamResult = await gateway.executeQueryStream(
+        sql.trim(),
+        config.resolveConnectionString(),
+        (chunk) {
+          if (columnMetadata == null && chunk.isNotEmpty) {
+            columnMetadata = chunk.first.keys
+                .map((k) => <String, dynamic>{'name': k, 'type': 'string'})
+                .toList();
+          }
+          totalRows += chunk.length;
+          streamEmitter.emitChunk(
+            RpcStreamChunk(
+              streamId: streamId,
+              requestId: request.id,
+              chunkIndex: chunkIndex++,
+              rows: chunk,
+              columnMetadata: columnMetadata,
+            ),
+          );
+        },
+        fetchSize: limits.streamingChunkSize,
+      );
+
+      return streamResult.fold(
+        (_) {
+          streamEmitter.emitComplete(
+            RpcStreamComplete(
+              streamId: streamId,
+              requestId: request.id,
+              totalRows: totalRows,
+              affectedRows: totalRows,
+              executionId: executionId,
+              startedAt: queryRequest.timestamp.toIso8601String(),
+              finishedAt: DateTime.now().toUtc().toIso8601String(),
+            ),
+          );
+          return RpcResponse.success(
+            id: request.id,
+            result: {
+              'stream_id': streamId,
+              'execution_id': executionId,
+              'started_at': queryRequest.timestamp.toIso8601String(),
+              'finished_at': DateTime.now().toUtc().toIso8601String(),
+              'rows': <Map<String, dynamic>>[],
+              'row_count': 0,
+              'affected_rows': totalRows,
+              ...?(columnMetadata != null
+                  ? {'column_metadata': columnMetadata}
+                  : null),
+            },
+          );
+        },
+        (failure) {
+          final rpcError = FailureToRpcErrorMapper.map(
+            failure as domain.Failure,
+            instance: request.id?.toString(),
+            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          return RpcResponse.error(id: request.id, error: rpcError);
+        },
+      );
+    } finally {
+      _activeStreamExecution = null;
+    }
   }
 
   /// Handles sql.executeBatch method (multiple commands).
   Future<RpcResponse> _handleSqlExecuteBatch(
     RpcRequest request,
     String agentId,
-    String? clientToken,
-  ) async {
+    String? clientToken, {
+    required TransportLimits limits,
+    required Map<String, dynamic> negotiatedExtensions,
+  }) async {
     // Validate params
     if (request.params is! Map<String, dynamic>) {
       return _invalidParams(request, 'params must be an object');
@@ -403,6 +493,15 @@ class RpcMethodDispatcher {
 
     final params = request.params as Map<String, dynamic>;
     final commandsJson = params['commands'] as List<dynamic>?;
+    if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
+      final options = params['options'] as Map<String, dynamic>?;
+      if (options?['page'] != null || options?['page_size'] != null) {
+        return _invalidParams(
+          request,
+          'Negotiated protocol does not allow page-offset pagination',
+        );
+      }
+    }
 
     if (commandsJson == null || commandsJson.isEmpty) {
       return _invalidParams(
@@ -411,9 +510,21 @@ class RpcMethodDispatcher {
       );
     }
 
+    if (commandsJson.length > limits.maxBatchSize) {
+      return _invalidParams(
+        request,
+        'commands exceeds negotiated limit: '
+        '${commandsJson.length} > ${limits.maxBatchSize}',
+      );
+    }
+
     final idempotencyKey = params['idempotency_key'] as String?;
     final store = _idempotencyStore;
-    if (_featureFlags.enableSocketIdempotency && store != null && idempotencyKey != null && idempotencyKey.isNotEmpty) {
+    if (!request.isNotification &&
+        _featureFlags.enableSocketIdempotency &&
+        store != null &&
+        idempotencyKey != null &&
+        idempotencyKey.isNotEmpty) {
       final cached = store.get(idempotencyKey);
       if (cached != null) {
         return RpcResponse(
@@ -428,9 +539,12 @@ class RpcMethodDispatcher {
     }
 
     // Parse commands
-    final commands = commandsJson.map((c) => SqlCommand.fromJson(c as Map<String, dynamic>)).toList();
+    final commands = commandsJson
+        .map((c) => SqlCommand.fromJson(c as Map<String, dynamic>))
+        .toList();
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -439,7 +553,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       for (final cmd in commands) {
         final authResult = await _authorizeSqlOperation(
           token: clientToken,
@@ -467,7 +583,16 @@ class RpcMethodDispatcher {
 
     // Parse options
     final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
+    final options = optionsJson != null
+        ? SqlExecutionOptions.fromJson(optionsJson)
+        : const SqlExecutionOptions();
+    final effectiveOptions = SqlExecutionOptions(
+      timeoutMs: options.timeoutMs,
+      maxRows: options.maxRows < limits.maxRows
+          ? options.maxRows
+          : limits.maxRows,
+      transaction: options.transaction,
+    );
 
     // Execute batch
     final database = params['database'] as String?;
@@ -475,7 +600,7 @@ class RpcMethodDispatcher {
       agentId,
       commands,
       database: database,
-      options: options,
+      options: effectiveOptions,
     );
 
     return result.fold(
@@ -494,7 +619,8 @@ class RpcMethodDispatcher {
           id: request.id,
           result: resultData,
         );
-        if (_featureFlags.enableSocketIdempotency &&
+        if (!request.isNotification &&
+            _featureFlags.enableSocketIdempotency &&
             store != null &&
             idempotencyKey != null &&
             idempotencyKey.isNotEmpty) {
@@ -536,14 +662,24 @@ class RpcMethodDispatcher {
     final executionId = params['execution_id'] as String?;
     final requestId = params['request_id'] as String?;
 
-    if ((executionId == null || executionId.isEmpty) && (requestId == null || requestId.isEmpty)) {
+    if ((executionId == null || executionId.isEmpty) &&
+        (requestId == null || requestId.isEmpty)) {
       return _invalidParams(
         request,
         'At least one of execution_id or request_id is required',
       );
     }
 
-    if (!gateway.hasActiveStream) {
+    final activeExecution = _activeStreamExecution;
+    if (!gateway.hasActiveStream || activeExecution == null) {
+      return _executionNotFound(request);
+    }
+
+    if (!_matchesActiveExecution(
+      executionId: executionId,
+      requestId: requestId,
+      activeExecution: activeExecution,
+    )) {
       return _executionNotFound(request);
     }
 
@@ -638,4 +774,300 @@ class RpcMethodDispatcher {
       },
     );
   }
+
+  int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {
+    final options = params['options'] as Map<String, dynamic>?;
+    final requestedMaxRows = options?['max_rows'] as int?;
+    if (requestedMaxRows == null || requestedMaxRows < 1) {
+      return negotiatedMaxRows;
+    }
+    return requestedMaxRows < negotiatedMaxRows
+        ? requestedMaxRows
+        : negotiatedMaxRows;
+  }
+
+  bool _resolveMultiResult(Map<String, dynamic> params) {
+    final options = params['options'] as Map<String, dynamic>?;
+    return options?['multi_result'] == true;
+  }
+
+  _ResolvedPagination _resolvePagination(
+    Map<String, dynamic> params,
+    String sql,
+    int negotiatedMaxRows,
+    Map<String, dynamic> negotiatedExtensions,
+  ) {
+    final options = params['options'] as Map<String, dynamic>?;
+    final page = options?['page'] as int?;
+    final pageSize = options?['page_size'] as int?;
+    final cursor = options?['cursor'] as String?;
+    if (page == null && pageSize == null && cursor == null) {
+      return const _ResolvedPagination();
+    }
+
+    final paginationPlan = SqlValidator.validatePaginationQuery(sql);
+    if (paginationPlan.isError()) {
+      final failure = paginationPlan.exceptionOrNull()! as domain.Failure;
+      return _ResolvedPagination(errorMessage: failure.message);
+    }
+
+    final plan = paginationPlan.getOrNull()!;
+    if (cursor != null) {
+      if (page != null || pageSize != null) {
+        return const _ResolvedPagination(
+          errorMessage: 'cursor cannot be combined with page or page_size',
+        );
+      }
+      if (!_supportsCursorKeysetPagination(negotiatedExtensions)) {
+        return const _ResolvedPagination(
+          errorMessage: 'Negotiated protocol does not allow cursor pagination',
+        );
+      }
+
+      try {
+        final decodedCursor = QueryPaginationCursor.fromToken(cursor);
+        if (decodedCursor.pageSize > negotiatedMaxRows) {
+          return _ResolvedPagination(
+            errorMessage:
+                'cursor page_size exceeds negotiated limit: '
+                '${decodedCursor.pageSize} > $negotiatedMaxRows',
+          );
+        }
+        if (decodedCursor.isStableCursor) {
+          if (decodedCursor.queryHash != plan.queryFingerprint) {
+            return const _ResolvedPagination(
+              errorMessage: 'cursor does not match the SQL query fingerprint',
+            );
+          }
+          if (!_orderByMatchesPlan(decodedCursor.orderBy, plan.orderBy)) {
+            return const _ResolvedPagination(
+              errorMessage: 'cursor ordering does not match the SQL ORDER BY',
+            );
+          }
+        }
+
+        return _ResolvedPagination(
+          pagination: QueryPaginationRequest(
+            page: decodedCursor.page,
+            pageSize: decodedCursor.pageSize,
+            cursor: cursor,
+            offset: decodedCursor.offset,
+            queryHash: decodedCursor.queryHash ?? plan.queryFingerprint,
+            orderBy: plan.orderBy,
+            lastRowValues: decodedCursor.lastRowValues,
+          ),
+        );
+      } on Exception {
+        return const _ResolvedPagination(
+          errorMessage: 'cursor is invalid or malformed',
+        );
+      }
+    }
+
+    if (page == null || pageSize == null || page < 1 || pageSize < 1) {
+      return const _ResolvedPagination(
+        errorMessage:
+            'page and page_size must be provided together and be >= 1',
+      );
+    }
+    if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
+      return const _ResolvedPagination(
+        errorMessage:
+            'Negotiated protocol does not allow page-offset pagination',
+      );
+    }
+    if (pageSize > negotiatedMaxRows) {
+      return _ResolvedPagination(
+        errorMessage:
+            'page_size exceeds negotiated limit: '
+            '$pageSize > $negotiatedMaxRows',
+      );
+    }
+
+    return _ResolvedPagination(
+      pagination: QueryPaginationRequest(
+        page: page,
+        pageSize: pageSize,
+        queryHash: plan.queryFingerprint,
+        orderBy: plan.orderBy,
+      ),
+    );
+  }
+
+  Map<String, dynamic> _buildPaginationResult(QueryPaginationInfo pagination) {
+    return {
+      'page': pagination.page,
+      'page_size': pagination.pageSize,
+      'returned_rows': pagination.returnedRows,
+      'has_next_page': pagination.hasNextPage,
+      'has_previous_page': pagination.hasPreviousPage,
+      if (pagination.currentCursor != null)
+        'current_cursor': pagination.currentCursor,
+      if (pagination.nextCursor != null) 'next_cursor': pagination.nextCursor,
+    };
+  }
+
+  Map<String, dynamic> _buildExecuteResultData(
+    QueryResponse response, {
+    required DateTime startedAt,
+    required DateTime finishedAt,
+    required List<Map<String, dynamic>> limitedRows,
+    required bool wasTruncated,
+    bool forceMultiResultEnvelope = false,
+  }) {
+    final resultData = <String, dynamic>{
+      'execution_id': response.id,
+      'started_at': startedAt.toIso8601String(),
+      'finished_at': finishedAt.toIso8601String(),
+      'rows': limitedRows,
+      'row_count': limitedRows.length,
+    };
+
+    if (response.affectedRows != null) {
+      resultData['affected_rows'] = response.affectedRows;
+    }
+    if (wasTruncated) {
+      resultData['truncated'] = true;
+    }
+    if (response.columnMetadata != null) {
+      resultData['column_metadata'] = response.columnMetadata;
+    }
+    if (response.pagination != null) {
+      resultData['pagination'] = _buildPaginationResult(response.pagination!);
+    }
+    if (forceMultiResultEnvelope || response.hasMultiResult) {
+      resultData['multi_result'] = true;
+      resultData['result_set_count'] = response.resultSets.length;
+      resultData['item_count'] = response.items.length;
+      resultData['result_sets'] = response.resultSets
+          .map(_buildResultSetPayload)
+          .toList(growable: false);
+      resultData['items'] = response.items
+          .map(_buildResponseItemPayload)
+          .toList(growable: false);
+    }
+
+    return resultData;
+  }
+
+  Map<String, dynamic> _buildResultSetPayload(
+    QueryResultSet resultSet, {
+    bool includeIndex = true,
+  }) {
+    return {
+      if (includeIndex) 'index': resultSet.index,
+      'rows': resultSet.rows,
+      'row_count': resultSet.rowCount,
+      if (resultSet.affectedRows != null)
+        'affected_rows': resultSet.affectedRows,
+      if (resultSet.columnMetadata != null)
+        'column_metadata': resultSet.columnMetadata,
+    };
+  }
+
+  Map<String, dynamic> _buildResponseItemPayload(QueryResponseItem item) {
+    if (item.resultSet != null) {
+      return {
+        'type': 'result_set',
+        'index': item.index,
+        'result_set_index': item.resultSet!.index,
+        ..._buildResultSetPayload(item.resultSet!, includeIndex: false),
+      };
+    }
+    return {
+      'type': 'row_count',
+      'index': item.index,
+      'affected_rows': item.rowCount,
+    };
+  }
+
+  List<Map<String, dynamic>> _applyMaxRows(
+    List<Map<String, dynamic>> rows,
+    int maxRows,
+  ) {
+    if (rows.length <= maxRows) {
+      return rows;
+    }
+    return rows.take(maxRows).toList();
+  }
+
+  bool _matchesActiveExecution({
+    required String? executionId,
+    required String? requestId,
+    required _ActiveStreamExecution activeExecution,
+  }) {
+    final executionMatches =
+        executionId != null && executionId == activeExecution.executionId;
+    final requestMatches =
+        requestId != null && requestId == activeExecution.requestId;
+    return executionMatches || requestMatches;
+  }
+
+  bool _supportsPageOffsetPagination(
+    Map<String, dynamic> negotiatedExtensions,
+  ) {
+    final modes = _negotiatedPaginationModes(negotiatedExtensions);
+    return modes.contains('page-offset');
+  }
+
+  bool _supportsCursorKeysetPagination(
+    Map<String, dynamic> negotiatedExtensions,
+  ) {
+    final modes = _negotiatedPaginationModes(negotiatedExtensions);
+    return modes.contains('cursor-keyset') || modes.contains('cursor-offset');
+  }
+
+  Set<String> _negotiatedPaginationModes(
+    Map<String, dynamic> negotiatedExtensions,
+  ) {
+    final rawModes = negotiatedExtensions['paginationModes'];
+    if (rawModes is! List<dynamic> || rawModes.isEmpty) {
+      return {'page-offset', 'cursor-keyset'};
+    }
+    return rawModes.whereType<String>().toSet();
+  }
+
+  bool _orderByMatchesPlan(
+    List<QueryPaginationOrderTerm> cursorOrderBy,
+    List<QueryPaginationOrderTerm> planOrderBy,
+  ) {
+    if (cursorOrderBy.length != planOrderBy.length) {
+      return false;
+    }
+
+    for (var i = 0; i < cursorOrderBy.length; i++) {
+      final left = cursorOrderBy[i];
+      final right = planOrderBy[i];
+      if (left.expression != right.expression ||
+          left.lookupKey != right.lookupKey ||
+          left.descending != right.descending) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+class _ResolvedPagination {
+  const _ResolvedPagination({
+    this.pagination,
+    this.errorMessage,
+  });
+
+  final QueryPaginationRequest? pagination;
+  final String? errorMessage;
+
+  bool get hasError => errorMessage != null;
+}
+
+class _ActiveStreamExecution {
+  const _ActiveStreamExecution({
+    required this.streamId,
+    required this.executionId,
+    required this.requestId,
+  });
+
+  final String streamId;
+  final String executionId;
+  final String? requestId;
 }

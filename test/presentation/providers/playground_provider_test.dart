@@ -5,6 +5,8 @@ import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -21,6 +23,12 @@ void main() {
     late MockTestDbConnection mockTestDbConnection;
     late MockExecuteStreamingQuery mockExecuteStreamingQuery;
     late PlaygroundProvider provider;
+
+    setUpAll(() {
+      registerFallbackValue(
+        const QueryPaginationRequest(page: 1, pageSize: 50),
+      );
+    });
 
     setUp(() {
       mockExecutePlaygroundQuery = MockExecutePlaygroundQuery();
@@ -83,6 +91,147 @@ void main() {
         expect(provider.error, isNull);
       },
     );
+
+    test(
+      'should execute paginated query and expose pagination state',
+      () async {
+        provider.setQuery('SELECT * FROM users');
+
+        when(
+          () => mockExecutePlaygroundQuery(
+            any(),
+            pagination: any(named: 'pagination'),
+          ),
+        ).thenAnswer((_) async {
+          return Success(
+            QueryResponse(
+              id: 'resp-1',
+              requestId: 'req-1',
+              agentId: 'agent-1',
+              data: const [
+                {'id': 1},
+                {'id': 2},
+              ],
+              affectedRows: 2,
+              timestamp: DateTime.now(),
+              pagination: const QueryPaginationInfo(
+                page: 1,
+                pageSize: 50,
+                returnedRows: 2,
+                hasNextPage: true,
+                hasPreviousPage: false,
+              ),
+            ),
+          );
+        });
+
+        await provider.executeQuery(resetPagination: true);
+
+        expect(provider.results, hasLength(2));
+        expect(provider.currentPage, 1);
+        expect(provider.pageSize, 50);
+        expect(provider.hasNextPage, isTrue);
+        expect(provider.hasPagination, isTrue);
+      },
+    );
+
+    test('should move to next page using current pagination state', () async {
+      provider.setQuery('SELECT * FROM users');
+
+      when(
+        () => mockExecutePlaygroundQuery(
+          any(),
+          pagination: any(named: 'pagination'),
+        ),
+      ).thenAnswer((invocation) async {
+        final pagination =
+            invocation.namedArguments[#pagination] as QueryPaginationRequest;
+        return Success(
+          QueryResponse(
+            id: 'resp-${pagination.page}',
+            requestId: 'req-${pagination.page}',
+            agentId: 'agent-1',
+            data: [
+              {'page': pagination.page},
+            ],
+            affectedRows: 1,
+            timestamp: DateTime.now(),
+            pagination: QueryPaginationInfo(
+              page: pagination.page,
+              pageSize: pagination.pageSize,
+              returnedRows: 1,
+              hasNextPage: pagination.page == 1,
+              hasPreviousPage: pagination.page > 1,
+            ),
+          ),
+        );
+      });
+
+      await provider.executeQuery(resetPagination: true);
+      await provider.goToNextPage();
+
+      expect(provider.currentPage, 2);
+      expect(provider.hasPreviousPage, isTrue);
+      expect(provider.results.single['page'], 2);
+    });
+
+    test('should expose and switch between multiple result sets', () async {
+      provider.setQuery('SELECT 1; SELECT 2;');
+
+      when(
+        () => mockExecutePlaygroundQuery(
+          any(),
+          pagination: any(named: 'pagination'),
+        ),
+      ).thenAnswer((_) async {
+        return Success(
+          QueryResponse(
+            id: 'resp-1',
+            requestId: 'req-1',
+            agentId: 'agent-1',
+            data: const [
+              {'first_value': 1},
+            ],
+            affectedRows: 1,
+            timestamp: DateTime.now(),
+            resultSets: const [
+              QueryResultSet(
+                index: 0,
+                rows: [
+                  {'first_value': 1},
+                ],
+                rowCount: 1,
+                columnMetadata: [
+                  {'name': 'first_value'},
+                ],
+              ),
+              QueryResultSet(
+                index: 1,
+                rows: [
+                  {'second_value': 2},
+                ],
+                rowCount: 1,
+                columnMetadata: [
+                  {'name': 'second_value'},
+                ],
+              ),
+            ],
+          ),
+        );
+      });
+
+      await provider.executeQuery(resetPagination: true);
+
+      expect(provider.hasMultipleResultSets, isTrue);
+      expect(provider.results.single['first_value'], 1);
+      expect(provider.columnMetadata!.single['name'], 'first_value');
+
+      provider.setSelectedResultSetIndex(1);
+
+      expect(provider.selectedResultSetIndex, 1);
+      expect(provider.results.single['second_value'], 2);
+      expect(provider.columnMetadata!.single['name'], 'second_value');
+    });
   });
 }
 

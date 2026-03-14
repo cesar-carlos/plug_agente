@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 // Reason: QueryRequest uses ID-based equality for request tracking.
 
+import 'package:plug_agente/domain/entities/query_pagination.dart';
+
 class QueryRequest {
   const QueryRequest({
     required this.id,
@@ -9,6 +11,8 @@ class QueryRequest {
     required this.timestamp,
     this.parameters,
     this.clientToken,
+    this.pagination,
+    this.expectMultipleResults = false,
   });
   final String id;
   final String agentId;
@@ -18,6 +22,8 @@ class QueryRequest {
 
   /// Optional client token for authorization (when feature is enabled).
   final String? clientToken;
+  final QueryPaginationRequest? pagination;
+  final bool expectMultipleResults;
 
   @override
   bool operator ==(Object other) {

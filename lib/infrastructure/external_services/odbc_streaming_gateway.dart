@@ -6,6 +6,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gateway com suporte a streaming real para grandes datasets.
@@ -66,9 +67,13 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
         return const Success(unit);
       },
       (error) => Failure(
-        domain.ConnectionFailure(
-          'Falha ao inicializar ODBC para streaming: '
-          '${_odbcErrorMessage(error)}',
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'initialize_streaming_odbc',
+          context: {
+            'reason': 'odbc_initialization_failed',
+            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
+          },
         ),
       ),
     );
@@ -112,8 +117,11 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           )) {
             if (_isCancelRequested) {
               return Failure(
-                domain.QueryExecutionFailure(
-                  'Streaming cancelado pelo usuário',
+                OdbcFailureMapper.mapStreamingError(
+                  StateError('stream_cancelled'),
+                  operation: 'executeQueryStream',
+                  context: {'connectionId': connection.id},
+                  cancelledByUser: true,
                 ),
               );
             }
@@ -135,11 +143,10 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           return const Success(unit);
         } on Exception catch (e) {
           return Failure(
-            domain.QueryExecutionFailure.withContext(
-              message: 'Streaming error',
-              cause: e,
+            OdbcFailureMapper.mapStreamingError(
+              e,
+              operation: 'executeQueryStream',
               context: {
-                'operation': 'executeQueryStream',
                 'connectionId': connection.id,
               },
             ),
@@ -152,7 +159,12 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
         }
       },
       (error) {
-        return Failure(domain.ConnectionFailure(_odbcErrorMessage(error)));
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'connect_streaming',
+          ),
+        );
       },
     );
   }
@@ -166,14 +178,19 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
     _isCancelRequested = true;
     try {
-      final result = await _service
-          .disconnect(activeConnectionId)
-          .timeout(_cancelDisconnectTimeout);
+      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(
-          domain.ConnectionFailure(
-            'Falha ao cancelar streaming: ${_odbcErrorMessage(error)}',
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'cancel_streaming_disconnect',
+            context: {
+              'reason': 'stream_cancel_disconnect_failed',
+              'user_message':
+                  'A consulta foi marcada para cancelamento, mas a desconexão '
+                  'do streaming não foi confirmada imediatamente.',
+            },
           ),
         ),
       );

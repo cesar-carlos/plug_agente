@@ -65,9 +65,7 @@ class MetricsCollector {
 
   /// Obtém resumo das últimas N métricas.
   MetricsSummary getSummary({int limit = 100}) {
-    final recent = _metrics.length > limit
-        ? _metrics.sublist(_metrics.length - limit)
-        : _metrics;
+    final recent = _metrics.length > limit ? _metrics.sublist(_metrics.length - limit) : _metrics;
 
     return MetricsSummary.fromList(recent);
   }
@@ -95,9 +93,7 @@ class MetricsCollector {
     developer.log(
       'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, rows: ${metric.rowsAffected}, success: ${metric.success}',
       name: 'metrics',
-      level: metric.success
-          ? 500
-          : 1000, // INFO para sucesso, SEVERE para falha
+      level: metric.success ? 500 : 1000, // INFO para sucesso, SEVERE para falha
     );
 
     // Notificar listeners

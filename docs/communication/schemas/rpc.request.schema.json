@@ -15,6 +15,8 @@
       "type": "object",
       "properties": {
         "trace_id": { "type": "string" },
+        "traceparent": { "type": "string" },
+        "tracestate": { "type": "string" },
         "request_id": { "type": "string" },
         "agent_id": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }

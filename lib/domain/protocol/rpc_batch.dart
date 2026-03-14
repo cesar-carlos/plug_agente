@@ -49,9 +49,9 @@ class RpcBatchRequest {
   int get length => requests.length;
 
   /// Validates batch for strict mode: unique IDs and size limit.
-  RpcBatchValidationResult validateStrict() {
-    if (requests.length > rpcBatchMaxSize) {
-      return RpcBatchExceedsLimit(requests.length, rpcBatchMaxSize);
+  RpcBatchValidationResult validateStrict({int maxSize = rpcBatchMaxSize}) {
+    if (requests.length > maxSize) {
+      return RpcBatchExceedsLimit(requests.length, maxSize);
     }
 
     final seenIds = <String>{};

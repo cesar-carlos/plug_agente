@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.sql-execute-batch.v1.json",
+  "title": "sql.executeBatch result",
+  "description": "Result payload for successful sql.executeBatch responses",
+  "type": "object",
+  "required": [
+    "execution_id",
+    "started_at",
+    "finished_at",
+    "items",
+    "total_commands",
+    "successful_commands",
+    "failed_commands"
+  ],
+  "properties": {
+    "execution_id": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "ok"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "ok": { "type": "boolean" },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "rowCount": { "type": "integer", "minimum": 0 },
+          "affectedRows": { "type": "integer", "minimum": 0 },
+          "error": { "type": "string" },
+          "columnMetadata": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "total_commands": { "type": "integer", "minimum": 0 },
+    "successful_commands": { "type": "integer", "minimum": 0 },
+    "failed_commands": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

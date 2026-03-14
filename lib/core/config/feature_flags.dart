@@ -7,11 +7,9 @@ class FeatureFlags {
   final SharedPreferences _prefs;
 
   // Keys
-  static const _keyEnableJsonRpcV2 = 'feature_enable_jsonrpc_v2';
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';
   static const _keyEnableCompression = 'feature_enable_compression';
   static const _keyCompressionThreshold = 'feature_compression_threshold';
-  static const _keyAutoFallbackToLegacy = 'feature_auto_fallback_legacy';
   static const _keyEnableClientTokenAuthorization =
       'feature_enable_client_token_authorization';
   static const _keyEnableSocketApiVersionMeta =
@@ -43,13 +41,6 @@ class FeatureFlags {
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
 
-  /// Whether JSON-RPC v2 protocol is enabled.
-  bool get enableJsonRpcV2 => _prefs.getBool(_keyEnableJsonRpcV2) ?? false;
-
-  Future<void> setEnableJsonRpcV2(bool value) async {
-    await _prefs.setBool(_keyEnableJsonRpcV2, value);
-  }
-
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload =>
       _prefs.getBool(_keyEnableBinaryPayload) ?? false;
@@ -71,14 +62,6 @@ class FeatureFlags {
 
   Future<void> setCompressionThreshold(int value) async {
     await _prefs.setInt(_keyCompressionThreshold, value);
-  }
-
-  /// Whether to automatically fallback to legacy protocol on error.
-  bool get autoFallbackToLegacy =>
-      _prefs.getBool(_keyAutoFallbackToLegacy) ?? true;
-
-  Future<void> setAutoFallbackToLegacy(bool value) async {
-    await _prefs.setBool(_keyAutoFallbackToLegacy, value);
   }
 
   /// Whether client token authorization is enabled (enforcement before SQL).
@@ -213,11 +196,9 @@ class FeatureFlags {
 
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
-    await setEnableJsonRpcV2(false);
     await setEnableBinaryPayload(false);
     await setEnableCompression(true);
     await setCompressionThreshold(1024);
-    await setAutoFallbackToLegacy(true);
     await setEnableClientTokenAuthorization(true);
     await setEnableSocketApiVersionMeta(true);
     await setEnableSocketNotificationsContract(true);

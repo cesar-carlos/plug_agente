@@ -13,9 +13,7 @@ class AuthClient implements IAuthClient {
   final Dio _dio;
 
   String _normalizeUrl(String baseUrl, String path) {
-    final normalizedBase = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
+    final normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     return '$normalizedBase$path';
   }
 

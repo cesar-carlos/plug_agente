@@ -13,8 +13,6 @@ class AppConstants {
   static const String databaseConfigFileName = 'database_config.json';
   static const String agentConfigFileName = 'agent_config.json';
 
-  static const String socketEventQueryRequest = 'query:request';
-  static const String socketEventQueryResponse = 'query:response';
   static const String socketEventAgentRegister = 'agent:register';
   static const String socketEventAgentUnregister = 'agent:unregister';
 

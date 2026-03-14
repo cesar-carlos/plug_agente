@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 
@@ -94,6 +95,68 @@ void main() {
 
         // Assert
         expect(request.parameters, equals(parameters));
+      });
+
+      test('should support pagination request', () {
+        final request = QueryRequest(
+          id: 'query-1',
+          agentId: 'agent-1',
+          query: 'SELECT * FROM users ORDER BY id',
+          timestamp: timestamp,
+          pagination: const QueryPaginationRequest(
+            page: 2,
+            pageSize: 50,
+            cursor: 'opaque-cursor',
+            queryHash: 'query-hash',
+            orderBy: [
+              QueryPaginationOrderTerm(
+                expression: 'id',
+                lookupKey: 'id',
+              ),
+            ],
+            lastRowValues: [50],
+          ),
+        );
+
+        expect(request.pagination, isNotNull);
+        expect(request.pagination!.offset, 50);
+        expect(request.pagination!.isCursorMode, isTrue);
+        expect(request.pagination!.usesStableCursor, isTrue);
+      });
+
+      test('should track multi-result expectation', () {
+        final request = QueryRequest(
+          id: 'query-1',
+          agentId: 'agent-1',
+          query: 'SELECT 1; SELECT 2;',
+          timestamp: timestamp,
+          expectMultipleResults: true,
+        );
+
+        expect(request.expectMultipleResults, isTrue);
+      });
+
+      test('should round-trip pagination cursor token', () {
+        final token = const QueryPaginationCursor(
+          page: 5,
+          pageSize: 25,
+          queryHash: 'query-hash',
+          orderBy: [
+            QueryPaginationOrderTerm(
+              expression: 'id',
+              lookupKey: 'id',
+            ),
+          ],
+          lastRowValues: [100],
+        ).toToken();
+
+        final decoded = QueryPaginationCursor.fromToken(token);
+
+        expect(decoded.page, 5);
+        expect(decoded.pageSize, 25);
+        expect(decoded.queryHash, 'query-hash');
+        expect(decoded.lastRowValues, [100]);
+        expect(decoded.orderBy.single.expression, 'id');
       });
 
       test('should have timestamp', () {
@@ -204,6 +267,54 @@ void main() {
         expect(response.affectedRows, 5);
       });
 
+      test('should expose multi-result metadata', () {
+        final response = QueryResponse(
+          id: 'response-1',
+          requestId: 'query-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 1},
+          ],
+          timestamp: timestamp,
+          resultSets: const [
+            QueryResultSet(
+              index: 0,
+              rows: [
+                {'id': 1},
+              ],
+              rowCount: 1,
+            ),
+            QueryResultSet(
+              index: 1,
+              rows: [
+                {'id': 2},
+              ],
+              rowCount: 1,
+            ),
+          ],
+          items: const [
+            QueryResponseItem.resultSet(
+              index: 0,
+              resultSet: QueryResultSet(
+                index: 0,
+                rows: [
+                  {'id': 1},
+                ],
+                rowCount: 1,
+              ),
+            ),
+            QueryResponseItem.rowCount(
+              index: 1,
+              rowCount: 3,
+            ),
+          ],
+        );
+
+        expect(response.hasMultiResult, isTrue);
+        expect(response.resultSets, hasLength(2));
+        expect(response.items, hasLength(2));
+      });
+
       test('should have timestamp', () {
         // Arrange & Act
         final response = QueryResponse(
@@ -267,6 +378,32 @@ void main() {
         expect(response.affectedRows, isNull);
         expect(response.error, isNull);
         expect(response.columnMetadata, isNull);
+        expect(response.pagination, isNull);
+      });
+
+      test('should expose pagination metadata', () {
+        final response = QueryResponse(
+          id: 'response-1',
+          requestId: 'query-1',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: timestamp,
+          pagination: const QueryPaginationInfo(
+            page: 3,
+            pageSize: 25,
+            returnedRows: 25,
+            hasNextPage: true,
+            hasPreviousPage: true,
+            currentCursor: 'cursor-current',
+            nextCursor: 'cursor-next',
+          ),
+        );
+
+        expect(response.pagination, isNotNull);
+        expect(response.pagination!.page, 3);
+        expect(response.pagination!.pageSize, 25);
+        expect(response.pagination!.hasNextPage, isTrue);
+        expect(response.pagination!.nextCursor, 'cursor-next');
       });
     });
   });

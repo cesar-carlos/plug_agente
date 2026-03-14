@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/application/services/query_processing_service.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -28,7 +27,6 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  late final QueryProcessingService _queryProcessingService;
   MetricsSummary _metricsSummary = MetricsSummary.fromList([]);
   _MetricsPeriod _selectedPeriod = _MetricsPeriod.all;
   Timer? _metricsTimer;
@@ -37,8 +35,6 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _queryProcessingService = getIt<QueryProcessingService>();
-    _queryProcessingService.start();
     _setupWebSocketLogging();
     _updateMetrics();
     unawaited(_restoreMetricsPeriod());
@@ -92,7 +88,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ? now.subtract(const Duration(hours: 1))
         : now.subtract(const Duration(hours: 24));
 
-    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
+    final filtered = metrics
+        .where((metric) => metric.timestamp.isAfter(cutoff))
+        .toList();
 
     return MetricsSummary.fromList(filtered);
   }
@@ -137,7 +135,6 @@ class _DashboardPageState extends State<DashboardPage> {
   void dispose() {
     _metricsTimer?.cancel();
     _metricsSubscription?.cancel();
-    _queryProcessingService.stop();
     super.dispose();
   }
 
@@ -257,7 +254,9 @@ class _OdbcMetricsCard extends StatelessWidget {
                   icon: FluentIcons.error_badge,
                   label: AppStrings.dashboardMetricsErrors,
                   value: summary.failedQueries.toString(),
-                  valueColor: summary.failedQueries > 0 ? AppColors.error : null,
+                  valueColor: summary.failedQueries > 0
+                      ? AppColors.error
+                      : null,
                 ),
                 _MetricChip(
                   icon: FluentIcons.completed_solid,

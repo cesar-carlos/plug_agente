@@ -8,13 +8,62 @@
   "properties": {
     "jsonrpc": { "const": "2.0" },
     "id": {},
-    "result": {},
+    "result": {
+      "type": "object",
+      "properties": {
+        "execution_id": { "type": "string" },
+        "stream_id": { "type": "string" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "row_count": { "type": "integer", "minimum": 0 },
+        "returned_rows": { "type": "integer", "minimum": 0 },
+        "affected_rows": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "column_metadata": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "pagination": {
+          "type": "object",
+          "required": [
+            "page",
+            "page_size",
+            "returned_rows",
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "properties": {
+            "page": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1 },
+            "returned_rows": { "type": "integer", "minimum": 0 },
+            "has_next_page": { "type": "boolean" },
+            "has_previous_page": { "type": "boolean" },
+            "current_cursor": { "type": "string" },
+            "next_cursor": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
     "error": { "$ref": "./rpc.error.schema.json" },
     "api_version": { "type": "string" },
     "meta": {
       "type": "object",
       "properties": {
         "trace_id": { "type": "string" },
+        "traceparent": { "type": "string" },
+        "tracestate": { "type": "string" },
         "request_id": { "type": "string" },
         "agent_id": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }

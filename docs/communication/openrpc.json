@@ -1,0 +1,106 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "Plug Agente Socket RPC",
+    "version": "2.5.0",
+    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO."
+  },
+  "servers": [
+    {
+      "name": "socketio-hub",
+      "url": "socket.io",
+      "summary": "Logical Socket.IO transport negotiated during agent registration"
+    }
+  ],
+  "methods": [
+    {
+      "name": "sql.execute",
+      "summary": "Execute a SQL statement, optionally returning multiple result sets",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-execute.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.sql-execute.schema.json"
+        }
+      }
+    },
+    {
+      "name": "sql.executeBatch",
+      "summary": "Execute multiple SQL statements in a batch",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-execute-batch.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.sql-execute-batch.schema.json"
+        }
+      }
+    },
+    {
+      "name": "sql.cancel",
+      "summary": "Cancel an in-flight streaming SQL execution",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-cancel.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "cancelled": { "type": "boolean" },
+            "execution_id": { "type": "string" },
+            "request_id": { "type": "string" }
+          },
+          "required": ["cancelled"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "name": "rpc.discover",
+      "summary": "Return the published OpenRPC contract for the active Plug profile",
+      "paramStructure": "by-name",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "required": ["openrpc", "info", "methods"],
+          "properties": {
+            "openrpc": { "type": "string" },
+            "info": { "type": "object" },
+            "methods": {
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -74,9 +75,9 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executeQueryMultiFull(
+            pooledConnectionId,
             any(),
-            connectionId: pooledConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Failure(
@@ -96,18 +97,24 @@ void main() {
           );
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executeQueryMultiFull(
+            directConnectionId,
             any(),
-            connectionId: directConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Success(
-            QueryResult(
-              columns: ['id'],
-              rows: [
-                [1],
+            QueryResultMulti(
+              items: [
+                QueryResultMultiItem.resultSet(
+                  QueryResult(
+                    columns: ['id'],
+                    rows: [
+                      [1],
+                    ],
+                    rowCount: 1,
+                  ),
+                ),
               ],
-              rowCount: 1,
             ),
           );
         });
@@ -159,18 +166,24 @@ void main() {
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQuery(
+        () => mockService.executeQueryMultiFull(
+          pooledConnectionId,
           any(),
-          connectionId: pooledConnectionId,
         ),
       ).thenAnswer((_) async {
         return const Success(
-          QueryResult(
-            columns: ['id'],
-            rows: [
-              [1],
+          QueryResultMulti(
+            items: [
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['id'],
+                  rows: [
+                    [1],
+                  ],
+                  rowCount: 1,
+                ),
+              ),
             ],
-            rowCount: 1,
           ),
         );
       });
@@ -213,9 +226,9 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executeQueryMultiFull(
+            pooledConnectionId,
             any(),
-            connectionId: pooledConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Failure(
@@ -237,18 +250,24 @@ void main() {
           );
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executeQueryMultiFull(
+            directConnectionId,
             any(),
-            connectionId: directConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Success(
-            QueryResult(
-              columns: ['id'],
-              rows: [
-                [1],
+            QueryResultMulti(
+              items: [
+                QueryResultMultiItem.resultSet(
+                  QueryResult(
+                    columns: ['id'],
+                    rows: [
+                      [1],
+                    ],
+                    rowCount: 1,
+                  ),
+                ),
               ],
-              rowCount: 1,
             ),
           );
         });
@@ -273,15 +292,379 @@ void main() {
         verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
       },
     );
+
+    test('should apply SQL Server pagination and expose hasNextPage', () async {
+      const pooledConnectionId = 'pool-page';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-page',
+        agentId: config.agentId,
+        query: 'SELECT * FROM users ORDER BY id',
+        timestamp: DateTime.now(),
+        pagination: const QueryPaginationRequest(
+          page: 2,
+          pageSize: 2,
+          queryHash: 'query-hash',
+          orderBy: [
+            QueryPaginationOrderTerm(
+              expression: 'id',
+              lookupKey: 'id',
+            ),
+          ],
+        ),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQuery(
+          any(),
+          connectionId: pooledConnectionId,
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [3],
+              [4],
+              [5],
+            ],
+            rowCount: 3,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+        _,
+      ) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      final response = result.getOrNull()!;
+      expect(response.data, hasLength(2));
+      expect(response.pagination, isNotNull);
+      expect(response.pagination!.page, 2);
+      expect(response.pagination!.hasNextPage, isTrue);
+      expect(response.pagination!.nextCursor, isNotNull);
+      final capturedSql =
+          verify(
+                () => mockService.executeQuery(
+                  captureAny(),
+                  connectionId: pooledConnectionId,
+                ),
+              ).captured.single
+              as String;
+      expect(capturedSql, contains('OFFSET 2 ROWS'));
+      expect(capturedSql, contains('FETCH NEXT 3 ROWS ONLY'));
+      expect(capturedSql, contains('ORDER BY id ASC'));
+    });
+
+    test('should apply PostgreSQL pagination syntax', () async {
+      const pooledConnectionId = 'pool-pg';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      final config = _buildConfig(
+        connectionString,
+        driverName: 'PostgreSQL',
+        odbcDriverName: 'PostgreSQL Unicode',
+      );
+      final request = QueryRequest(
+        id: 'req-pg',
+        agentId: config.agentId,
+        query: 'SELECT * FROM users ORDER BY id',
+        timestamp: DateTime.now(),
+        pagination: const QueryPaginationRequest(
+          page: 1,
+          pageSize: 10,
+          queryHash: 'query-hash',
+          orderBy: [
+            QueryPaginationOrderTerm(
+              expression: 'id',
+              lookupKey: 'id',
+            ),
+          ],
+        ),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQuery(
+          any(),
+          connectionId: pooledConnectionId,
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+        _,
+      ) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      final capturedSql =
+          verify(
+                () => mockService.executeQuery(
+                  captureAny(),
+                  connectionId: pooledConnectionId,
+                ),
+              ).captured.single
+              as String;
+      expect(capturedSql, contains('ORDER BY id ASC'));
+      expect(capturedSql, contains('LIMIT 11 OFFSET 0'));
+    });
+
+    test(
+      'should prefer persisted connection string instead of rebuilding one',
+      () async {
+        const persistedConnectionString =
+            'DSN=PersistedConnection;Encrypt=yes;';
+        final config = _buildConfig(persistedConnectionString);
+        final request = QueryRequest(
+          id: 'req-conn-string',
+          agentId: config.agentId,
+          query: 'SELECT 1',
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success('pool-1');
+        });
+        when(
+          () => mockService.executeQueryMultiFull(
+            'pool-1',
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResultMulti(
+              items: [
+                QueryResultMultiItem.resultSet(
+                  QueryResult(
+                    columns: ['value'],
+                    rows: [
+                      [1],
+                    ],
+                    rowCount: 1,
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release('pool-1')).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => mockConnectionPool.acquire(persistedConnectionString),
+        ).called(1);
+      },
+    );
+
+    test('should apply keyset cursor pagination syntax', () async {
+      const pooledConnectionId = 'pool-cursor';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-cursor',
+        agentId: config.agentId,
+        query: 'SELECT * FROM users ORDER BY id',
+        timestamp: DateTime.now(),
+        pagination: const QueryPaginationRequest(
+          page: 2,
+          pageSize: 2,
+          cursor: 'cursor-1',
+          queryHash: 'query-hash',
+          orderBy: [
+            QueryPaginationOrderTerm(
+              expression: 'id',
+              lookupKey: 'id',
+            ),
+          ],
+          lastRowValues: [2],
+        ),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQuery(
+          any(),
+          connectionId: pooledConnectionId,
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [3],
+              [4],
+              [5],
+            ],
+            rowCount: 3,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+        _,
+      ) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      final capturedSql =
+          verify(
+                () => mockService.executeQuery(
+                  captureAny(),
+                  connectionId: pooledConnectionId,
+                ),
+              ).captured.single
+              as String;
+      expect(capturedSql, contains('WHERE (id > 2)'));
+      expect(capturedSql, contains('ORDER BY id ASC'));
+      expect(capturedSql, contains('FETCH NEXT 3 ROWS ONLY'));
+    });
+
+    test('should map multiple result sets and row counts', () async {
+      const pooledConnectionId = 'pool-multi';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-multi',
+        agentId: config.agentId,
+        query:
+            'SELECT 1 AS first_value; UPDATE users SET active = 1; SELECT 2 AS second_value;',
+        timestamp: DateTime.now(),
+        expectMultipleResults: true,
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQueryMultiFull(
+          pooledConnectionId,
+          any(),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResultMulti(
+            items: [
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['first_value'],
+                  rows: [
+                    [1],
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+              QueryResultMultiItem.rowCount(3),
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['second_value'],
+                  rows: [
+                    [2],
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+            ],
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+        _,
+      ) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      final response = result.getOrNull()!;
+      expect(response.data.single['first_value'], 1);
+      expect(response.resultSets, hasLength(2));
+      expect(response.items, hasLength(3));
+      expect(response.items[1].rowCount, 3);
+      expect(response.columnMetadata, [
+        {'name': 'first_value'},
+      ]);
+      verify(
+        () => mockService.executeQueryMultiFull(
+          pooledConnectionId,
+          request.query,
+        ),
+      ).called(1);
+    });
   });
 }
 
-Config _buildConfig(String connectionString) {
+Config _buildConfig(
+  String connectionString, {
+  String driverName = 'SQL Server',
+  String odbcDriverName = 'ODBC Driver 17 for SQL Server',
+}) {
   final now = DateTime.now();
   return Config(
     id: 'cfg-1',
-    driverName: 'SQL Server',
-    odbcDriverName: 'ODBC Driver 17 for SQL Server',
+    driverName: driverName,
+    odbcDriverName: odbcDriverName,
     connectionString: connectionString,
     username: 'sa',
     databaseName: 'master',

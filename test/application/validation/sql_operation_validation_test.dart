@@ -125,6 +125,31 @@ void main() {
     });
   });
 
+  group('SqlValidator.validatePaginationQuery', () {
+    test('should require explicit order by', () {
+      final result = SqlValidator.validatePaginationQuery(
+        'SELECT * FROM dbo.users',
+      );
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('should parse simple order by terms for deterministic pagination', () {
+      final result = SqlValidator.validatePaginationQuery(
+        'SELECT id, created_at FROM dbo.users ORDER BY created_at DESC, id ASC',
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final plan = result.getOrNull()!;
+      expect(plan.orderBy, hasLength(2));
+      expect(plan.orderBy.first.expression, 'created_at');
+      expect(plan.orderBy.first.lookupKey, 'created_at');
+      expect(plan.orderBy.first.descending, isTrue);
+      expect(plan.orderBy.last.expression, 'id');
+      expect(plan.orderBy.last.descending, isFalse);
+    });
+  });
+
   group('SqlOperationClassifier', () {
     late SqlOperationClassifier classifier;
 

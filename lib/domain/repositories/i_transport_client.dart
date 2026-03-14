@@ -1,4 +1,3 @@
-import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -10,7 +9,6 @@ abstract class ITransportClient {
   });
   Future<Result<void>> disconnect();
   Future<Result<void>> sendResponse(QueryResponse response);
-  Stream<QueryRequest> get queryRequestStream;
   bool get isConnected;
   String get agentId;
 

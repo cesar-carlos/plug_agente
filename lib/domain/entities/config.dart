@@ -87,4 +87,25 @@ class Config {
 
   @override
   int get hashCode => id.hashCode;
+
+  String resolveConnectionString() {
+    final persisted = connectionString.trim();
+    if (persisted.isNotEmpty) {
+      return persisted;
+    }
+
+    final passwordSegment = password != null ? ';PWD=$password' : '';
+
+    return switch (driverName) {
+      'SQL Server' =>
+        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : 'ODBC Driver 17 for SQL Server'}};'
+            'SERVER=$host,$port;DATABASE=$databaseName;UID=$username$passwordSegment',
+      'PostgreSQL' =>
+        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : 'PostgreSQL Unicode'}};'
+            'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',
+      _ =>
+        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : driverName}};'
+            'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',
+    };
+  }
 }

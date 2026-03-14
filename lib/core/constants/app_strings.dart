@@ -92,6 +92,9 @@ class AppStrings {
   static const String ctButtonAutoRefreshOn = 'Auto refresh: ligado';
   static const String ctButtonAutoRefreshOff = 'Auto refresh: desligado';
   static const String ctButtonViewDetails = 'Ver detalhes';
+  static const String ctButtonCopyTokenId = 'Copiar ID';
+  static const String ctTooltipCopyTokenId = 'Copiar ID do token';
+  static const String ctInfoTokenIdCopied = 'ID do token copiado';
   static const String ctButtonEdit = 'Editar';
   static const String ctButtonClearFilters = 'Limpar filtros';
   static const String ctSectionRegisteredTokens = 'Tokens cadastrados';
@@ -337,6 +340,12 @@ class AppStrings {
       'Para grandes datasets (milhares de linhas)';
   static const String queryStreamingProgress = 'Processando';
   static const String queryStreamingRows = 'linhas';
+  static const String queryPaginationPage = 'Pagina';
+  static const String queryPaginationPageSize = 'Linhas por pagina';
+  static const String queryPaginationPrevious = 'Anterior';
+  static const String queryPaginationNext = 'Proxima';
+  static const String queryPaginationShowing = 'Exibindo';
+  static const String queryResultSetLabel = 'Result set';
 
   // Dashboard
   static const String dashboardDescription =
