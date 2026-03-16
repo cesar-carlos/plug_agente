@@ -8,6 +8,12 @@ void main() {
       const limits = TransportLimits();
 
       check(
+        limits.maxCompressedPayloadBytes,
+      ).equals(TransportLimits.defaultMaxCompressedPayloadBytes);
+      check(
+        limits.maxDecodedPayloadBytes,
+      ).equals(TransportLimits.defaultMaxDecodedPayloadBytes);
+      check(
         limits.maxPayloadBytes,
       ).equals(TransportLimits.defaultMaxPayloadBytes);
       check(limits.maxRows).equals(TransportLimits.defaultMaxRows);
@@ -26,6 +32,7 @@ void main() {
     test('fromJson should parse all fields', () {
       final json = {
         'max_payload_bytes': 5 * 1024 * 1024,
+        'max_decoded_payload_bytes': 8 * 1024 * 1024,
         'max_rows': 10000,
         'max_batch_size': 16,
         'max_concurrent_streams': 4,
@@ -35,6 +42,8 @@ void main() {
 
       final limits = TransportLimits.fromJson(json);
 
+      check(limits.maxCompressedPayloadBytes).equals(5 * 1024 * 1024);
+      check(limits.maxDecodedPayloadBytes).equals(8 * 1024 * 1024);
       check(limits.maxPayloadBytes).equals(5 * 1024 * 1024);
       check(limits.maxRows).equals(10000);
       check(limits.maxBatchSize).equals(16);
@@ -65,6 +74,8 @@ void main() {
       final json = limits.toJson();
 
       check(json['max_payload_bytes']).equals(1024);
+      check(json['max_compressed_payload_bytes']).equals(1024);
+      check(json['max_decoded_payload_bytes']).equals(1024);
       check(json['max_rows']).equals(100);
       check(json['max_batch_size']).equals(8);
       check(json['max_concurrent_streams']).equals(2);
@@ -74,6 +85,7 @@ void main() {
 
     test('negotiateWith should pick the minimum of each field', () {
       const agent = TransportLimits(
+        maxDecodedPayloadBytes: 6 * 1024 * 1024,
         maxRows: 30000,
         maxConcurrentStreams: 4,
         streamingChunkSize: 250,
@@ -81,6 +93,7 @@ void main() {
       );
       const server = TransportLimits(
         maxPayloadBytes: 5 * 1024 * 1024,
+        maxDecodedPayloadBytes: 4 * 1024 * 1024,
         maxRows: 100000,
         maxBatchSize: 16,
         maxConcurrentStreams: 2,
@@ -89,6 +102,8 @@ void main() {
 
       final effective = agent.negotiateWith(server);
 
+      check(effective.maxCompressedPayloadBytes).equals(5 * 1024 * 1024);
+      check(effective.maxDecodedPayloadBytes).equals(4 * 1024 * 1024);
       check(effective.maxPayloadBytes).equals(5 * 1024 * 1024);
       check(effective.maxRows).equals(30000);
       check(effective.maxBatchSize).equals(16);
@@ -115,6 +130,10 @@ void main() {
       check(ab.maxRows).equals(ba.maxRows);
       check(ab.maxBatchSize).equals(ba.maxBatchSize);
       check(ab.streamingChunkSize).equals(ba.streamingChunkSize);
+      check(
+        ab.maxCompressedPayloadBytes,
+      ).equals(ba.maxCompressedPayloadBytes);
+      check(ab.maxDecodedPayloadBytes).equals(ba.maxDecodedPayloadBytes);
     });
   });
 
@@ -156,7 +175,10 @@ void main() {
       final caps = ProtocolCapabilities.fromJson(json);
 
       check(
-        caps.limits.maxPayloadBytes,
+        caps.limits.maxCompressedPayloadBytes,
+      ).equals(TransportLimits.defaultMaxPayloadBytes);
+      check(
+        caps.limits.maxDecodedPayloadBytes,
       ).equals(TransportLimits.defaultMaxPayloadBytes);
     });
   });

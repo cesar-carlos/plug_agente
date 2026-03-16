@@ -1,4 +1,3 @@
-import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -24,7 +23,6 @@ class RpcMethodDispatcher {
   RpcMethodDispatcher({
     required IDatabaseGateway databaseGateway,
     required QueryNormalizerService normalizerService,
-    required CompressionService compressionService,
     required Uuid uuid,
     required AuthorizeSqlOperation authorizeSqlOperation,
     required FeatureFlags featureFlags,
@@ -35,7 +33,6 @@ class RpcMethodDispatcher {
     TransportLimits defaultLimits = const TransportLimits(),
   }) : _databaseGateway = databaseGateway,
        _normalizerService = normalizerService,
-       _compressionService = compressionService,
        _uuid = uuid,
        _authorizeSqlOperation = authorizeSqlOperation,
        _featureFlags = featureFlags,
@@ -52,7 +49,6 @@ class RpcMethodDispatcher {
 
   final IDatabaseGateway _databaseGateway;
   final QueryNormalizerService _normalizerService;
-  final CompressionService _compressionService;
   final Uuid _uuid;
   final AuthorizeSqlOperation _authorizeSqlOperation;
   final FeatureFlags _featureFlags;
@@ -241,116 +237,98 @@ class RpcMethodDispatcher {
     final result = await _databaseGateway.executeQuery(queryRequest);
 
     return await result.fold(
-      (response) async {
+      (queryResponse) async {
         // Normalize
-        final normalized = await _normalizerService.normalize(response);
+        final normalized = await _normalizerService.normalize(queryResponse);
 
-        // Compress
-        final compressionResult = await _compressionService.compress(
+        final limitedRows = _applyMaxRows(normalized.data, maxRows);
+        final wasTruncated = limitedRows.length != normalized.data.length;
+        final useStreaming =
+            _featureFlags.enableSocketStreamingChunks &&
+            streamEmitter != null &&
+            !request.isNotification &&
+            pagination == null &&
+            !normalized.hasMultiResult &&
+            limitedRows.length > limits.streamingRowThreshold;
+
+        if (useStreaming) {
+          final streamId = 'stream-${queryRequest.id}';
+          final rows = limitedRows;
+          final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
+
+          for (var i = 0; i < rows.length; i += limits.streamingChunkSize) {
+            final chunkRows = rows
+                .skip(i)
+                .take(limits.streamingChunkSize)
+                .toList();
+            streamEmitter.emitChunk(
+              RpcStreamChunk(
+                streamId: streamId,
+                requestId: request.id,
+                chunkIndex: i ~/ limits.streamingChunkSize,
+                rows: chunkRows,
+                totalChunks: totalChunks,
+                columnMetadata: normalized.columnMetadata,
+              ),
+            );
+          }
+
+          streamEmitter.emitComplete(
+            RpcStreamComplete(
+              streamId: streamId,
+              requestId: request.id,
+              totalRows: rows.length,
+              affectedRows: normalized.affectedRows,
+              executionId: normalized.id,
+              startedAt: queryRequest.timestamp.toIso8601String(),
+              finishedAt: normalized.timestamp.toIso8601String(),
+            ),
+          );
+
+          final resultData = {
+            'stream_id': streamId,
+            'execution_id': normalized.id,
+            'started_at': queryRequest.timestamp.toIso8601String(),
+            'finished_at': normalized.timestamp.toIso8601String(),
+            'rows': <Map<String, dynamic>>[],
+            'row_count': 0,
+            'affected_rows': normalized.affectedRows,
+            'returned_rows': rows.length,
+            if (wasTruncated) 'truncated': true,
+            if (normalized.columnMetadata != null)
+              'column_metadata': normalized.columnMetadata,
+            if (normalized.pagination != null)
+              'pagination': _buildPaginationResult(normalized.pagination!),
+          };
+
+          return RpcResponse.success(id: request.id, result: resultData);
+        }
+
+        final resultData = _buildExecuteResultData(
           normalized,
+          startedAt: queryRequest.timestamp,
+          finishedAt: normalized.timestamp,
+          limitedRows: limitedRows,
+          wasTruncated: wasTruncated,
+          forceMultiResultEnvelope: multiResultRequested,
         );
 
-        return await compressionResult.fold(
-          (compressed) async {
-            final limitedRows = _applyMaxRows(compressed.data, maxRows);
-            final wasTruncated = limitedRows.length != compressed.data.length;
-            final useStreaming =
-                _featureFlags.enableSocketStreamingChunks &&
-                streamEmitter != null &&
-                !request.isNotification &&
-                pagination == null &&
-                !compressed.hasMultiResult &&
-                limitedRows.length > limits.streamingRowThreshold;
-
-            if (useStreaming) {
-              final streamId = 'stream-${queryRequest.id}';
-              final rows = limitedRows;
-              final totalChunks = (rows.length / limits.streamingChunkSize)
-                  .ceil();
-
-              for (var i = 0; i < rows.length; i += limits.streamingChunkSize) {
-                final chunkRows = rows
-                    .skip(i)
-                    .take(limits.streamingChunkSize)
-                    .toList();
-                streamEmitter.emitChunk(
-                  RpcStreamChunk(
-                    streamId: streamId,
-                    requestId: request.id,
-                    chunkIndex: i ~/ limits.streamingChunkSize,
-                    rows: chunkRows,
-                    totalChunks: totalChunks,
-                    columnMetadata: compressed.columnMetadata,
-                  ),
-                );
-              }
-
-              streamEmitter.emitComplete(
-                RpcStreamComplete(
-                  streamId: streamId,
-                  requestId: request.id,
-                  totalRows: rows.length,
-                  affectedRows: compressed.affectedRows,
-                  executionId: compressed.id,
-                  startedAt: queryRequest.timestamp.toIso8601String(),
-                  finishedAt: compressed.timestamp.toIso8601String(),
-                ),
-              );
-
-              final resultData = {
-                'stream_id': streamId,
-                'execution_id': compressed.id,
-                'started_at': queryRequest.timestamp.toIso8601String(),
-                'finished_at': compressed.timestamp.toIso8601String(),
-                'rows': <Map<String, dynamic>>[],
-                'row_count': 0,
-                'affected_rows': compressed.affectedRows,
-                'returned_rows': rows.length,
-                if (wasTruncated) 'truncated': true,
-                if (compressed.columnMetadata != null)
-                  'column_metadata': compressed.columnMetadata,
-                if (compressed.pagination != null)
-                  'pagination': _buildPaginationResult(compressed.pagination!),
-              };
-
-              return RpcResponse.success(id: request.id, result: resultData);
-            }
-
-            final resultData = _buildExecuteResultData(
-              compressed,
-              startedAt: queryRequest.timestamp,
-              finishedAt: compressed.timestamp,
-              limitedRows: limitedRows,
-              wasTruncated: wasTruncated,
-              forceMultiResultEnvelope: multiResultRequested,
-            );
-
-            final response = RpcResponse.success(
-              id: request.id,
-              result: resultData,
-            );
-            if (!request.isNotification &&
-                _featureFlags.enableSocketIdempotency &&
-                store != null &&
-                idempotencyKey != null &&
-                idempotencyKey.isNotEmpty) {
-              store.set(
-                idempotencyKey,
-                response,
-                _idempotencyTtl,
-              );
-            }
-            return response;
-          },
-          (failure) {
-            final rpcError = FailureToRpcErrorMapper.map(
-              failure as domain.Failure,
-              instance: request.id?.toString(),
-              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-            );
-            return RpcResponse.error(id: request.id, error: rpcError);
-          },
+        final rpcResponse = RpcResponse.success(
+          id: request.id,
+          result: resultData,
         );
+        if (!request.isNotification &&
+            _featureFlags.enableSocketIdempotency &&
+            store != null &&
+            idempotencyKey != null &&
+            idempotencyKey.isNotEmpty) {
+          store.set(
+            idempotencyKey,
+            rpcResponse,
+            _idempotencyTtl,
+          );
+        }
+        return rpcResponse;
       },
       (failure) {
         final rpcError = FailureToRpcErrorMapper.map(

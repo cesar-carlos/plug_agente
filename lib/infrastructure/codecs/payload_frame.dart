@@ -15,6 +15,7 @@ class PayloadFrame {
     required this.payload,
     this.traceId,
     this.requestId,
+    this.signature,
   });
 
   factory PayloadFrame.fromJson(Map<String, dynamic> json) {
@@ -28,6 +29,7 @@ class PayloadFrame {
       payload: json['payload'],
       traceId: json['traceId'] as String?,
       requestId: json['requestId'] as String?,
+      signature: json['signature'] as Map<String, dynamic>?,
     );
   }
 
@@ -58,6 +60,9 @@ class PayloadFrame {
   /// Optional request ID for correlation.
   final String? requestId;
 
+  /// Optional transport-level signature.
+  final Map<String, dynamic>? signature;
+
   Map<String, dynamic> toJson() {
     return {
       'schemaVersion': schemaVersion,
@@ -69,7 +74,35 @@ class PayloadFrame {
       'payload': payload,
       if (traceId != null) 'traceId': traceId,
       if (requestId != null) 'requestId': requestId,
+      if (signature != null) 'signature': signature,
     };
+  }
+
+  PayloadFrame copyWith({
+    String? schemaVersion,
+    String? enc,
+    String? cmp,
+    String? contentType,
+    int? originalSize,
+    int? compressedSize,
+    dynamic payload,
+    String? traceId,
+    String? requestId,
+    Map<String, dynamic>? signature,
+    bool clearSignature = false,
+  }) {
+    return PayloadFrame(
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      enc: enc ?? this.enc,
+      cmp: cmp ?? this.cmp,
+      contentType: contentType ?? this.contentType,
+      originalSize: originalSize ?? this.originalSize,
+      compressedSize: compressedSize ?? this.compressedSize,
+      payload: payload ?? this.payload,
+      traceId: traceId ?? this.traceId,
+      requestId: requestId ?? this.requestId,
+      signature: clearSignature ? null : (signature ?? this.signature),
+    );
   }
 
   bool get isCompressed => cmp != 'none';

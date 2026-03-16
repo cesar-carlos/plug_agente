@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
-import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -39,8 +38,6 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 class MockQueryNormalizerService extends Mock
     implements QueryNormalizerService {}
 
-class MockCompressionService extends Mock implements CompressionService {}
-
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -68,7 +65,6 @@ void main() {
   late MockFeatureFlags mockFeatureFlags;
   late MockClientTokenLocalDataSource mockLocalDataSource;
   late MockQueryNormalizerService mockNormalizer;
-  late MockCompressionService mockCompression;
   late AuthorizationMetricsCollector authMetrics;
 
   ClientTokenPolicy policyAllowReadOnUsers() {
@@ -123,7 +119,6 @@ void main() {
     mockFeatureFlags = MockFeatureFlags();
     mockLocalDataSource = MockClientTokenLocalDataSource();
     mockNormalizer = MockQueryNormalizerService();
-    mockCompression = MockCompressionService();
     authMetrics = AuthorizationMetricsCollector();
 
     when(
@@ -150,7 +145,6 @@ void main() {
     dispatcher = RpcMethodDispatcher(
       databaseGateway: mockGateway,
       normalizerService: mockNormalizer,
-      compressionService: mockCompression,
       uuid: const Uuid(),
       authorizeSqlOperation: authorizeSqlOperation,
       featureFlags: mockFeatureFlags,
@@ -179,9 +173,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         const request = RpcRequest(
           jsonrpc: '2.0',
@@ -300,9 +291,6 @@ void main() {
       when(
         () => mockNormalizer.normalize(any()),
       ).thenAnswer((_) async => queryResponse);
-      when(
-        () => mockCompression.compress(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
 
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -325,8 +313,12 @@ void main() {
       'should deny rpc request when token jti is not found in local store',
       () async {
         const tokenId = 'missing-local-token';
+        const tokenHash = 'hash-missing-local-token';
         when(
-          () => mockLocalDataSource.getTokenById(tokenId),
+          () => mockLocalDataSource.hashTokenForLookup(any()),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
         ).thenAnswer((_) async => null);
 
         final resolver = AuthorizationPolicyResolver(
@@ -340,7 +332,6 @@ void main() {
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
-          compressionService: mockCompression,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
           featureFlags: mockFeatureFlags,
@@ -373,7 +364,8 @@ void main() {
         check(response.error?.code).equals(RpcErrorCode.unauthorized);
         final data = response.error!.data as Map<String, dynamic>;
         check(data['reason']).equals('token_not_found');
-        verify(() => mockLocalDataSource.getTokenById(tokenId)).called(1);
+        verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
+        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
@@ -382,6 +374,7 @@ void main() {
       'should authorize rpc request using local policy over token payload',
       () async {
         const tokenId = 'local-token-allow';
+        const tokenHash = 'hash-local-token-allow';
         final localSummary = ClientTokenSummary(
           id: tokenId,
           clientId: 'local-client',
@@ -406,7 +399,10 @@ void main() {
           ],
         );
         when(
-          () => mockLocalDataSource.getTokenById(tokenId),
+          () => mockLocalDataSource.hashTokenForLookup(any()),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
         ).thenAnswer((_) async => localSummary);
 
         final resolver = AuthorizationPolicyResolver(
@@ -420,7 +416,6 @@ void main() {
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
-          compressionService: mockCompression,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
           featureFlags: mockFeatureFlags,
@@ -440,9 +435,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         final response = await dispatcherWithLocalResolver.dispatch(
           const RpcRequest(
@@ -465,7 +457,8 @@ void main() {
         );
 
         check(response.isError).isFalse();
-        verify(() => mockLocalDataSource.getTokenById(tokenId)).called(1);
+        verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
+        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
         verify(() => mockGateway.executeQuery(any())).called(1);
       },
     );

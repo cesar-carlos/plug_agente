@@ -5,8 +5,11 @@ import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class MockSocketDataSource extends Mock implements SocketDataSource {}
@@ -45,11 +48,48 @@ void main() {
     late Map<String, Function> handlers;
     late List<({String event, dynamic data})> emitted;
 
+    const defaultNegotiatedConfig = ProtocolConfig(
+      protocol: 'jsonrpc-v2',
+      encoding: 'json',
+      compression: 'gzip',
+      signatureAlgorithms: ['hmac-sha256'],
+      negotiatedExtensions: {
+        'binaryPayload': true,
+        'transportFrame': 'payload-frame/1.0',
+        'notificationNullIdCompatibility': true,
+        'signatureRequired': false,
+        'signatureAlgorithms': ['hmac-sha256'],
+      },
+    );
+
     void emitEvent(String event, [dynamic data]) {
       final handler = handlers[event];
       if (handler != null) {
         Function.apply(handler, [data]);
       }
+    }
+
+    dynamic decodeWirePayload(dynamic payload) {
+      if (payload is! Map<String, dynamic> ||
+          !payload.containsKey('schemaVersion')) {
+        return payload;
+      }
+      final frame = PayloadFrame.fromJson(payload);
+      final decoded = TransportPipeline(
+        encoding: frame.enc,
+        compression: frame.cmp,
+        schemaVersion: frame.schemaVersion,
+      ).receiveProcess(frame);
+      expect(decoded.isSuccess(), isTrue);
+      return decoded.getOrThrow();
+    }
+
+    Map<String, dynamic> encodeWirePayload(dynamic payload) {
+      final frame = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+      ).prepareSend(payload).getOrThrow();
+      return frame.toJson();
     }
 
     setUp(() {
@@ -86,6 +126,9 @@ void main() {
       when(() => mockSocket.dispose()).thenReturn(null);
 
       when(() => mockFeatureFlags.enableSocketBackpressure).thenReturn(false);
+      when(() => mockFeatureFlags.enableBinaryPayload).thenReturn(true);
+      when(() => mockFeatureFlags.enableCompression).thenReturn(true);
+      when(() => mockFeatureFlags.compressionThreshold).thenReturn(1024);
       when(
         () => mockFeatureFlags.enableSocketSchemaValidation,
       ).thenReturn(false);
@@ -106,6 +149,13 @@ void main() {
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
       ).thenReturn(false);
+      when(
+        () => mockNegotiator.negotiate(
+          agentCapabilities: any(named: 'agentCapabilities'),
+          serverCapabilities: any(named: 'serverCapabilities'),
+          preferJsonRpcV2: any(named: 'preferJsonRpcV2'),
+        ),
+      ).thenReturn(defaultNegotiatedConfig);
 
       when(
         () => mockDispatcher.dispatch(
@@ -140,10 +190,18 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(emitted.any((item) => item.event == 'agent:register'), isTrue);
       final registerPayload =
-          emitted.firstWhere((item) => item.event == 'agent:register').data
+          decodeWirePayload(
+                emitted
+                    .firstWhere((item) => item.event == 'agent:register')
+                    .data,
+              )
               as Map<String, dynamic>;
       expect(registerPayload['agentId'], 'agent-1');
       expect(registerPayload['capabilities'], isA<Map<String, dynamic>>());
+      expect(
+        (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
+        isA<Map<String, dynamic>>(),
+      );
     });
 
     test(
@@ -173,11 +231,14 @@ void main() {
         await connectFuture;
         emitted.clear();
 
-        emitEvent('rpc:request', <String, dynamic>{
-          'jsonrpc': '2.0',
-          'method': 'sql.execute',
-          'params': {'sql': "INSERT INTO logs (msg) VALUES ('ok')"},
-        });
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'params': {'sql': "INSERT INTO logs (msg) VALUES ('ok')"},
+          }),
+        );
 
         await Future<void>.delayed(Duration.zero);
 
@@ -214,7 +275,15 @@ void main() {
           protocol: 'jsonrpc-v2',
           encoding: 'json',
           compression: 'none',
-          effectiveLimits: TransportLimits(maxPayloadBytes: 100),
+          signatureAlgorithms: ['hmac-sha256'],
+          effectiveLimits: TransportLimits(maxPayloadBytes: 400),
+          negotiatedExtensions: {
+            'binaryPayload': true,
+            'transportFrame': 'payload-frame/1.0',
+            'notificationNullIdCompatibility': true,
+            'signatureRequired': false,
+            'signatureAlgorithms': ['hmac-sha256'],
+          },
         ),
       );
       when(
@@ -224,17 +293,23 @@ void main() {
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
       await connectFuture;
-      emitEvent('agent:capabilities', {
-        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
-      });
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
       emitted.clear();
 
-      emitEvent('rpc:request', <String, dynamic>{
-        'jsonrpc': '2.0',
-        'method': 'sql.execute',
-        'id': 'req-big',
-        'params': {'sql': 'SELECT ${'x' * 300}'},
-      });
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-big',
+          'params': {'sql': 'SELECT ${'x' * 600}'},
+        }),
+      );
 
       await Future<void>.delayed(Duration.zero);
 
@@ -249,7 +324,9 @@ void main() {
         ),
       );
       final responsePayload =
-          emitted.firstWhere((item) => item.event == 'rpc:response').data
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
               as Map<String, dynamic>;
       final error = responsePayload['error'] as Map<String, dynamic>;
       expect(error['code'], RpcErrorCode.invalidPayload);
@@ -268,9 +345,14 @@ void main() {
           const ProtocolConfig(
             protocol: 'jsonrpc-v2',
             encoding: 'json',
-            compression: 'none',
+            compression: 'gzip',
+            signatureAlgorithms: ['hmac-sha256'],
             negotiatedExtensions: {
+              'binaryPayload': true,
+              'transportFrame': 'payload-frame/1.0',
               'notificationNullIdCompatibility': false,
+              'signatureRequired': false,
+              'signatureAlgorithms': ['hmac-sha256'],
             },
           ),
         );
@@ -278,22 +360,34 @@ void main() {
         final connectFuture = client.connect('https://hub.test', 'agent-1');
         emitEvent('connect');
         await connectFuture;
-        emitEvent('agent:capabilities', {
-          'capabilities': const ProtocolCapabilities(
-            protocols: ['jsonrpc-v2'],
-            encodings: ['json'],
-            compressions: ['none'],
-            extensions: {'notificationNullIdCompatibility': false},
-          ).toJson(),
-        });
+        emitEvent(
+          'agent:capabilities',
+          encodeWirePayload({
+            'capabilities': const ProtocolCapabilities(
+              protocols: ['jsonrpc-v2'],
+              encodings: ['json'],
+              compressions: ['none'],
+              extensions: {
+                'binaryPayload': true,
+                'transportFrame': 'payload-frame/1.0',
+                'notificationNullIdCompatibility': false,
+                'signatureRequired': false,
+                'signatureAlgorithms': ['hmac-sha256'],
+              },
+            ).toJson(),
+          }),
+        );
         emitted.clear();
 
-        emitEvent('rpc:request', <String, dynamic>{
-          'jsonrpc': '2.0',
-          'method': 'sql.execute',
-          'id': null,
-          'params': {'sql': 'SELECT 1'},
-        });
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': null,
+            'params': {'sql': 'SELECT 1'},
+          }),
+        );
 
         await Future<void>.delayed(Duration.zero);
 
@@ -308,7 +402,11 @@ void main() {
           ),
         );
         final responsePayload =
-            emitted.firstWhere((item) => item.event == 'rpc:response').data
+            decodeWirePayload(
+                  emitted
+                      .firstWhere((item) => item.event == 'rpc:response')
+                      .data,
+                )
                 as Map<String, dynamic>;
         final error = responsePayload['error'] as Map<String, dynamic>;
         expect(error['code'], RpcErrorCode.invalidRequest);
@@ -321,11 +419,14 @@ void main() {
       await connectFuture;
       emitted.clear();
 
-      emitEvent('rpc:request', <String, dynamic>{
-        'jsonrpc': '2.0',
-        'method': 'rpc.discover',
-        'id': 'req-discover',
-      });
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'rpc.discover',
+          'id': 'req-discover',
+        }),
+      );
 
       await Future<void>.delayed(Duration.zero);
 
@@ -340,11 +441,123 @@ void main() {
         ),
       );
       final responsePayload =
-          emitted.firstWhere((item) => item.event == 'rpc:response').data
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
               as Map<String, dynamic>;
       expect(
         (responsePayload['result'] as Map<String, dynamic>)['openrpc'],
         '1.3.2',
+      );
+    });
+
+    test(
+      'should disconnect when capabilities do not support mandatory binary transport',
+      () async {
+        var reconnectionRequested = false;
+        client.setOnReconnectionNeeded(() {
+          reconnectionRequested = true;
+        });
+
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        await connectFuture;
+
+        emitEvent(
+          'agent:capabilities',
+          encodeWirePayload({
+            'capabilities': ProtocolCapabilities.defaultCapabilities(
+              binaryPayload: false,
+            ).toJson(),
+          }),
+        );
+
+        verify(() => mockSocket.disconnect()).called(greaterThanOrEqualTo(1));
+        expect(reconnectionRequested, isTrue);
+      },
+    );
+
+    test(
+      'should disconnect when mandatory transport signature is required and missing',
+      () async {
+        when(() => mockFeatureFlags.enablePayloadSigning).thenReturn(true);
+        when(
+          () => mockNegotiator.negotiate(
+            agentCapabilities: any(named: 'agentCapabilities'),
+            serverCapabilities: any(named: 'serverCapabilities'),
+            preferJsonRpcV2: any(named: 'preferJsonRpcV2'),
+          ),
+        ).thenReturn(
+          const ProtocolConfig(
+            protocol: 'jsonrpc-v2',
+            encoding: 'json',
+            compression: 'gzip',
+            signatureRequired: true,
+            signatureAlgorithms: ['hmac-sha256'],
+            negotiatedExtensions: {
+              'binaryPayload': true,
+              'transportFrame': 'payload-frame/1.0',
+              'notificationNullIdCompatibility': true,
+              'signatureRequired': true,
+              'signatureAlgorithms': ['hmac-sha256'],
+            },
+          ),
+        );
+
+        client = SocketIOTransportClientV2(
+          dataSource: mockDataSource,
+          negotiator: mockNegotiator,
+          rpcDispatcher: mockDispatcher,
+          featureFlags: mockFeatureFlags,
+          payloadSigner: PayloadSigner(keys: {'kid-1': 'secret'}),
+        );
+
+        var reconnectionRequested = false;
+        client.setOnReconnectionNeeded(() {
+          reconnectionRequested = true;
+        });
+
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        await connectFuture;
+
+        emitEvent(
+          'agent:capabilities',
+          encodeWirePayload({
+            'capabilities': ProtocolCapabilities.defaultCapabilities(
+              signatureRequired: true,
+            ).toJson(),
+          }),
+        );
+
+        verify(() => mockSocket.disconnect()).called(greaterThanOrEqualTo(1));
+        expect(reconnectionRequested, isTrue);
+      },
+    );
+
+    test('should reject rpc request that is not a PayloadFrame', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitted.clear();
+
+      emitEvent('rpc:request', <String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'sql.execute',
+        'id': 'req-invalid',
+        'params': {'sql': 'SELECT 1'},
+      });
+
+      await Future<void>.delayed(Duration.zero);
+
+      final responsePayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
+              as Map<String, dynamic>;
+      expect(
+        (responsePayload['error'] as Map<String, dynamic>)['code'],
+        RpcErrorCode.invalidPayload,
       );
     });
   });

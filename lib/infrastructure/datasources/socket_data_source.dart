@@ -5,9 +5,14 @@ class SocketDataSource {
     final options = io.OptionBuilder()
         .setTransports(['websocket'])
         .disableAutoConnect()
+        .enableForceNew()
+        .setRememberUpgrade(true)
+        .setTimeout(10000)
+        .setAckTimeout(8000)
         .setReconnectionAttempts(5)
         .setReconnectionDelay(1000)
         .setReconnectionDelayMax(5000)
+        .setRandomizationFactor(0.2)
         .setExtraHeaders({'Connection': 'Upgrade'});
 
     if (authToken != null && authToken.isNotEmpty) {

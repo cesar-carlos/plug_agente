@@ -12,6 +12,8 @@ import 'package:plug_agente/domain/protocol/delivery_guarantee.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
@@ -67,6 +69,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcContractValidator _contractValidator = const RpcContractValidator();
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
   Map<String, dynamic>? _cachedOpenRpcDocument;
+  bool _hasReceivedCapabilities = false;
 
   @override
   void setMessageCallback(
@@ -89,6 +92,55 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _onMessage?.call(direction, event, data);
   }
 
+  ProtocolCapabilities _localCapabilities() {
+    return ProtocolCapabilities.defaultCapabilities(
+      binaryPayload: _featureFlags.enableBinaryPayload,
+      compressions: _featureFlags.enableCompression
+          ? const ['gzip', 'none']
+          : const ['none'],
+      compressionThreshold: _featureFlags.compressionThreshold,
+      signatureRequired: _localSignatureRequired,
+      signatureAlgorithms: _localSignatureAlgorithms,
+    );
+  }
+
+  bool get _localSignatureRequired =>
+      _featureFlags.enablePayloadSigning && _payloadSigner != null;
+
+  List<String> get _localSignatureAlgorithms => _payloadSigner == null
+      ? const []
+      : const [PayloadSigner.supportedAlgorithm];
+
+  bool get _usesBinaryTransport {
+    if (!_hasReceivedCapabilities) {
+      return _featureFlags.enableBinaryPayload;
+    }
+    return _currentProtocol.usesBinaryPayload &&
+        _currentProtocol.usesTransportFrame;
+  }
+
+  TransportPipeline _createSendPipeline() {
+    final compression = !_featureFlags.enableCompression
+        ? 'none'
+        : (_hasReceivedCapabilities ? _currentProtocol.compression : 'gzip');
+    return TransportPipeline(
+      encoding: _currentProtocol.encoding,
+      compression: compression,
+      compressionThreshold: _hasReceivedCapabilities
+          ? _currentProtocol.compressionThreshold
+          : _featureFlags.compressionThreshold,
+    );
+  }
+
+  TransportPipeline _createReceivePipeline(PayloadFrame frame) {
+    return TransportPipeline(
+      encoding: frame.enc,
+      compression: frame.cmp,
+      compressionThreshold: _currentProtocol.compressionThreshold,
+      schemaVersion: frame.schemaVersion,
+    );
+  }
+
   IRpcStreamEmitter _createStreamEmitter() {
     if (_featureFlags.enableSocketBackpressure) {
       return BackpressureStreamEmitter(
@@ -103,9 +155,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _handleStreamPull(dynamic data) {
-    if (data is! Map<String, dynamic>) return;
     try {
-      final pull = RpcStreamPull.fromJson(data);
+      final payload = _decodeIncomingPayloadOrThrow(data);
+      if (payload is! Map<String, dynamic>) {
+        return;
+      }
+      final pull = RpcStreamPull.fromJson(payload);
       _logMessage('INFO', 'rpc:stream.pull', {
         'stream_id': pull.streamId,
         'window_size': pull.windowSize,
@@ -120,8 +175,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       'request_id': requestId.toString(),
       'received_at': DateTime.now().toIso8601String(),
     };
-    _logMessage('SENT', 'rpc:request_ack', ackPayload);
-    _socket!.emit('rpc:request_ack', ackPayload);
+    _emitEvent('rpc:request_ack', ackPayload);
   }
 
   void _emitBatchRequestAck(List<RpcRequest> requests) {
@@ -135,8 +189,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       'request_ids': ids,
       'received_at': DateTime.now().toIso8601String(),
     };
-    _logMessage('SENT', 'rpc:batch_ack', ackPayload);
-    _socket!.emit('rpc:batch_ack', ackPayload);
+    _emitEvent('rpc:batch_ack', ackPayload);
   }
 
   Future<void> _emitRpcResponse(dynamic responseData) async {
@@ -147,10 +200,17 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (validatedPayload == null) {
       return;
     }
+    final outgoingPayload = _prepareOutgoingPayload(
+      'rpc:response',
+      validatedPayload,
+    );
+    if (outgoingPayload == null) {
+      return;
+    }
 
     if (!_featureFlags.enableSocketDeliveryGuarantees || _socket == null) {
       _logMessage('SENT', 'rpc:response', validatedPayload);
-      _socket?.emit('rpc:response', validatedPayload);
+      _socket?.emit('rpc:response', outgoingPayload);
       return;
     }
 
@@ -162,7 +222,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _logMessage('SENT', 'rpc:response', validatedPayload);
         await _socket!
             .timeout(timeoutMs)
-            .emitWithAckAsync('rpc:response', validatedPayload);
+            .emitWithAckAsync('rpc:response', outgoingPayload);
         return;
       } on Exception catch (e) {
         if (attempt < maxRetries) {
@@ -175,7 +235,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'rpc:response ack failed after $maxRetries retries, sending without ack',
             e,
           );
-          _socket?.emit('rpc:response', validatedPayload);
+          _socket?.emit('rpc:response', outgoingPayload);
         }
       }
     }
@@ -203,6 +263,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       _agentId = agentId;
+      _hasReceivedCapabilities = false;
+      _currentProtocol = const ProtocolConfig(
+        protocol: 'jsonrpc-v2',
+        encoding: 'json',
+        compression: 'none',
+      );
 
       _socket = _dataSource.createSocket(serverUrl, authToken: authToken);
 
@@ -255,7 +321,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       // Protocol negotiation response
       _socket!.on('agent:capabilities', (data) {
         _logMessage('RECEIVED', 'agent:capabilities', data);
-        _handleCapabilitiesNegotiation(data as Map<String, dynamic>);
+        _handleCapabilitiesNegotiation(data);
       });
 
       _socket!.on('hub:heartbeat_ack', _handleHeartbeatAck);
@@ -305,7 +371,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   /// Sends agent registration with protocol capabilities.
   void _sendAgentRegister() {
-    final agentCapabilities = ProtocolCapabilities.defaultCapabilities();
+    final agentCapabilities = _localCapabilities();
 
     final registerData = {
       'agentId': _agentId,
@@ -322,16 +388,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    _logMessage('SENT', 'agent:register', registerData);
-    _socket!.emit('agent:register', registerData);
+    _emitEvent('agent:register', registerData);
   }
 
   /// Handles protocol capabilities negotiation.
-  void _handleCapabilitiesNegotiation(Map<String, dynamic> data) {
+  void _handleCapabilitiesNegotiation(dynamic data) {
     try {
+      final payload = _decodeIncomingPayloadOrThrow(data);
+      if (payload is! Map<String, dynamic>) {
+        throw StateError('agent:capabilities payload must be an object');
+      }
       if (_featureFlags.enableSocketSchemaValidation) {
         final validation = _contractValidator.validateAgentCapabilitiesEnvelope(
-          data,
+          payload,
         );
         if (validation.isError()) {
           final failure = validation.exceptionOrNull()! as domain.Failure;
@@ -339,16 +408,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
-      final serverCapabilities = data['capabilities'] != null
+      final agentCapabilities = _localCapabilities();
+      final serverCapabilities = payload['capabilities'] != null
           ? ProtocolCapabilities.fromJson(
-              data['capabilities'] as Map<String, dynamic>,
+              payload['capabilities'] as Map<String, dynamic>,
             )
-          : ProtocolCapabilities.defaultCapabilities();
+          : agentCapabilities;
 
       _currentProtocol = _negotiator.negotiate(
-        agentCapabilities: ProtocolCapabilities.defaultCapabilities(),
+        agentCapabilities: agentCapabilities,
         serverCapabilities: serverCapabilities,
       );
+      _validateNegotiatedTransportContract(
+        agentCapabilities: agentCapabilities,
+        serverCapabilities: serverCapabilities,
+      );
+      _hasReceivedCapabilities = true;
 
       final limits = _currentProtocol.effectiveLimits;
       AppLogger.info(
@@ -360,14 +435,17 @@ class SocketIOTransportClientV2 implements ITransportClient {
       );
 
       _startHeartbeat();
-    } on Exception catch (error, stackTrace) {
-      AppLogger.warning(
-        'Failed to negotiate protocol, using local v2 defaults',
+    } on Object catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to negotiate mandatory transport contract',
         error,
         stackTrace,
       );
-      _currentProtocol = _negotiator.createFallbackConfig();
-      _startHeartbeat();
+      _stopHeartbeat();
+      _socket?.disconnect();
+      _socket?.dispose();
+      _socket = null;
+      _onReconnectionNeeded?.call();
     }
   }
 
@@ -380,6 +458,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
       if (data is List && data.length == 2 && data[1] is Function) {
         payload = data[0];
         socketAck = data[1] as void Function();
+      }
+
+      try {
+        payload = _decodeIncomingPayloadOrThrow(payload);
+      } on domain.Failure catch (failure) {
+        await _sendSchemaValidationError(
+          _extractRequestIdFromWirePayload(payload),
+          RpcErrorCode.invalidPayload,
+          failure.message,
+        );
+        socketAck?.call();
+        return;
       }
 
       if (payload is List) {
@@ -740,9 +830,190 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return code is int ? code : RpcErrorCode.invalidRequest;
   }
 
+  void _emitEvent(String event, dynamic logicalPayload) {
+    if (_socket == null) {
+      return;
+    }
+    final outgoingPayload = _prepareOutgoingPayload(event, logicalPayload);
+    if (outgoingPayload == null) {
+      return;
+    }
+    _logMessage('SENT', event, logicalPayload);
+    _socket!.emit(event, outgoingPayload);
+  }
+
+  dynamic _prepareOutgoingPayload(String event, dynamic logicalPayload) {
+    if (!_usesBinaryTransport) {
+      AppLogger.error(
+        'Attempted to emit $event without negotiated binary PayloadFrame transport',
+      );
+      return null;
+    }
+
+    final prepareResult = _createSendPipeline().prepareSend(
+      logicalPayload,
+      traceId: _extractTraceId(logicalPayload),
+      requestId: _extractRequestId(logicalPayload),
+    );
+    if (prepareResult.isError()) {
+      final failure = prepareResult.exceptionOrNull();
+      AppLogger.error(
+        'Failed to frame $event payload for transport: $failure',
+      );
+      return null;
+    }
+
+    var frame = prepareResult.getOrThrow();
+    if (frame.compressedSize >
+        _currentProtocol.effectiveLimits.maxCompressedPayloadBytes) {
+      AppLogger.error(
+        '$event payload exceeds negotiated transport limit after framing',
+      );
+      return null;
+    }
+    if (frame.originalSize >
+        _currentProtocol.effectiveLimits.maxDecodedPayloadBytes) {
+      AppLogger.error(
+        '$event payload exceeds negotiated decoded payload limit',
+      );
+      return null;
+    }
+    if (_shouldSignTransportFrames) {
+      final signer = _payloadSigner;
+      if (signer == null) {
+        AppLogger.error(
+          'Attempted to sign $event transport frame without configured signer',
+        );
+        return null;
+      }
+      frame = frame.copyWith(
+        signature: signer.signFrame(frame).toJson(),
+      );
+    }
+    return frame.toJson();
+  }
+
+  dynamic _decodeIncomingPayloadOrThrow(dynamic payload) {
+    if (!_looksLikePayloadFrame(payload)) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Application payload must be a PayloadFrame',
+        context: {'payloadType': payload.runtimeType.toString()},
+      );
+    }
+
+    try {
+      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
+      final localCapabilities = _localCapabilities();
+      if (!localCapabilities.supportsEncoding(frame.enc)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Unsupported payload encoding: ${frame.enc}',
+          context: {'encoding': frame.enc},
+        );
+      }
+      if (!localCapabilities.supportsCompression(frame.cmp)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Unsupported payload compression: ${frame.cmp}',
+          context: {'compression': frame.cmp},
+        );
+      }
+      if (!_verifyIncomingFrameSignature(frame)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Invalid transport frame signature',
+          context: {'request_id': frame.requestId},
+        );
+      }
+
+      final processed = _createReceivePipeline(frame).receiveProcess(
+        frame,
+        maxCompressedBytes:
+            _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
+        maxOriginalBytes:
+            _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
+        maxInflationRatio: _currentProtocol.maxInflationRatio,
+      );
+      if (processed.isError()) {
+        throw processed.exceptionOrNull()! as domain.Failure;
+      }
+      return processed.getOrThrow();
+    } on domain.Failure {
+      rethrow;
+    } on Exception catch (error) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Failed to decode transport frame',
+        cause: error,
+        context: {'payloadType': payload.runtimeType.toString()},
+      );
+    }
+  }
+
+  bool _looksLikePayloadFrame(dynamic payload) {
+    return payload is Map<String, dynamic> &&
+        payload.containsKey('schemaVersion') &&
+        payload.containsKey('enc') &&
+        payload.containsKey('cmp') &&
+        payload.containsKey('payload') &&
+        payload.containsKey('originalSize') &&
+        payload.containsKey('compressedSize');
+  }
+
+  bool get _shouldSignTransportFrames =>
+      _payloadSigner != null &&
+      (_localSignatureRequired ||
+          (_hasReceivedCapabilities && _currentProtocol.signatureRequired));
+
+  void _validateNegotiatedTransportContract({
+    required ProtocolCapabilities agentCapabilities,
+    required ProtocolCapabilities serverCapabilities,
+  }) {
+    if (!agentCapabilities.supportsBinaryPayload ||
+        !serverCapabilities.supportsBinaryPayload ||
+        !_currentProtocol.usesBinaryPayload ||
+        !_currentProtocol.usesTransportFrame) {
+      throw StateError(
+        'Negotiated protocol does not satisfy mandatory binary PayloadFrame transport',
+      );
+    }
+
+    final localCompressionThreshold =
+        agentCapabilities.extensions['compressionThreshold'];
+    if (localCompressionThreshold is! int || localCompressionThreshold < 1) {
+      throw StateError('Local compressionThreshold capability is invalid');
+    }
+    if (_currentProtocol.compressionThreshold < 1) {
+      throw StateError('Negotiated compressionThreshold is invalid');
+    }
+    if (_currentProtocol.maxInflationRatio < 1) {
+      throw StateError('Negotiated maxInflationRatio is invalid');
+    }
+
+    final agentRequiresSignature =
+        agentCapabilities.extensions['signatureRequired'] as bool? ?? false;
+    final serverRequiresSignature =
+        serverCapabilities.extensions['signatureRequired'] as bool? ?? false;
+    if ((agentRequiresSignature || serverRequiresSignature) &&
+        _currentProtocol.signatureAlgorithms.isEmpty) {
+      throw StateError(
+        'Negotiated protocol requires signature but no shared algorithm was found',
+      );
+    }
+    if (_currentProtocol.signatureRequired && _payloadSigner == null) {
+      throw StateError(
+        'Negotiated protocol requires transport signing but no signer is configured',
+      );
+    }
+    if (_currentProtocol.signatureRequired &&
+        !_currentProtocol.signatureAlgorithms.contains(
+          PayloadSigner.supportedAlgorithm,
+        )) {
+      throw StateError(
+        'Negotiated protocol requires unsupported signature algorithm',
+      );
+    }
+  }
+
   bool _exceedsPayloadLimit(dynamic payload) {
     final bytes = utf8.encode(jsonEncode(payload)).length;
-    return bytes > _currentProtocol.effectiveLimits.maxPayloadBytes;
+    return bytes > _currentProtocol.effectiveLimits.maxDecodedPayloadBytes;
   }
 
   dynamic _validateOutgoingRpcPayload(dynamic payload) {
@@ -1096,18 +1367,28 @@ class SocketIOTransportClientV2 implements ITransportClient {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
       'protocol': _currentProtocol.protocol,
     };
-    _logMessage('SENT', 'agent:heartbeat', payload);
-    _socket!.emit('agent:heartbeat', payload);
+    _emitEvent('agent:heartbeat', payload);
 
     _heartbeatAckTimer?.cancel();
     _heartbeatAckTimer = Timer(_heartbeatAckTimeout, _handleHeartbeatTimeout);
   }
 
   void _handleHeartbeatAck(dynamic data) {
+    dynamic payload = data;
+    try {
+      payload = _decodeIncomingPayloadOrThrow(data);
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Invalid hub:heartbeat_ack payload',
+        error,
+        stackTrace,
+      );
+      return;
+    }
     _heartbeatAckTimer?.cancel();
     _isWaitingHeartbeatAck = false;
     _missedHeartbeats = 0;
-    _logMessage('RECEIVED', 'hub:heartbeat_ack', data);
+    _logMessage('RECEIVED', 'hub:heartbeat_ack', payload);
   }
 
   void _handleHeartbeatTimeout() {
@@ -1180,8 +1461,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    _logMessage('SENT', event, payload);
-    _socket?.emit(event, payload);
+    _emitEvent(event, payload);
   }
 
   bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {
@@ -1222,7 +1502,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       };
     }
-    if (_featureFlags.enablePayloadSigning && _payloadSigner != null) {
+    if (!_usesBinaryTransport &&
+        _featureFlags.enablePayloadSigning &&
+        _payloadSigner != null) {
       json['signature'] = _payloadSigner.sign(json).toJson();
     }
     return json;
@@ -1279,6 +1561,60 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (sigJson == null) return true;
     final signature = PayloadSignature.fromJson(sigJson);
     return _payloadSigner.verify(payload, signature);
+  }
+
+  bool _verifyIncomingFrameSignature(PayloadFrame frame) {
+    final signatureRequired = _hasReceivedCapabilities
+        ? _currentProtocol.signatureRequired
+        : _localSignatureRequired;
+    if (_payloadSigner == null) {
+      return !signatureRequired;
+    }
+    final sigJson = frame.signature;
+    if (sigJson == null) {
+      return !signatureRequired;
+    }
+    final signature = PayloadSignature.fromJson(sigJson);
+    return _payloadSigner.verifyFrame(frame, signature);
+  }
+
+  String? _extractTraceId(dynamic payload) {
+    if (payload is! Map<String, dynamic>) {
+      return null;
+    }
+    final meta = payload['meta'];
+    if (meta is! Map<String, dynamic>) {
+      return payload['trace_id'] as String?;
+    }
+    return meta['trace_id'] as String?;
+  }
+
+  String? _extractRequestId(dynamic payload) {
+    if (payload is! Map<String, dynamic>) {
+      return null;
+    }
+    final requestId = payload['id'] ?? payload['request_id'];
+    if (requestId != null) {
+      return requestId.toString();
+    }
+    final meta = payload['meta'];
+    if (meta is Map<String, dynamic>) {
+      final metaRequestId = meta['request_id'];
+      if (metaRequestId != null) {
+        return metaRequestId.toString();
+      }
+    }
+    return null;
+  }
+
+  dynamic _extractRequestIdFromWirePayload(dynamic payload) {
+    if (_looksLikePayloadFrame(payload)) {
+      return (payload as Map<String, dynamic>)['requestId'];
+    }
+    if (payload is Map<String, dynamic>) {
+      return payload['id'] ?? payload['request_id'];
+    }
+    return null;
   }
 
   Future<void> _sendSchemaValidationError(

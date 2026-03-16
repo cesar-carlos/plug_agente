@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
-import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
@@ -27,8 +26,6 @@ class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 class MockQueryNormalizerService extends Mock
     implements QueryNormalizerService {}
 
-class MockCompressionService extends Mock implements CompressionService {}
-
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
@@ -49,7 +46,6 @@ void main() {
   group('RpcMethodDispatcher', () {
     late MockDatabaseGateway mockGateway;
     late MockQueryNormalizerService mockNormalizer;
-    late MockCompressionService mockCompression;
     late MockStreamingDatabaseGateway mockStreamingGateway;
     late RpcMethodDispatcher dispatcher;
 
@@ -99,7 +95,6 @@ void main() {
     setUp(() {
       mockGateway = MockDatabaseGateway();
       mockNormalizer = MockQueryNormalizerService();
-      mockCompression = MockCompressionService();
       mockStreamingGateway = MockStreamingDatabaseGateway();
       mockAuthorize = MockAuthorizeSqlOperation();
       mockFeatureFlags = MockFeatureFlags();
@@ -119,7 +114,6 @@ void main() {
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
         normalizerService: mockNormalizer,
-        compressionService: mockCompression,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
         featureFlags: mockFeatureFlags,
@@ -202,9 +196,6 @@ void main() {
       when(
         () => mockNormalizer.normalize(any()),
       ).thenAnswer((_) async => queryResponse);
-      when(
-        () => mockCompression.compress(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -299,9 +290,6 @@ void main() {
       when(
         () => mockNormalizer.normalize(any()),
       ).thenAnswer((_) async => queryResponse);
-      when(
-        () => mockCompression.compress(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -372,9 +360,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         final response = await dispatcher.dispatch(
           request,
@@ -457,9 +442,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         final response = await dispatcher.dispatch(
           RpcRequest(
@@ -542,7 +524,6 @@ void main() {
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
-          compressionService: mockCompression,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
           featureFlags: mockFeatureFlags,
@@ -606,7 +587,6 @@ void main() {
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
-          compressionService: mockCompression,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
           featureFlags: mockFeatureFlags,
@@ -636,9 +616,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         const request = RpcRequest(
           jsonrpc: '2.0',
@@ -699,9 +676,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         final mockEmitter = MockRpcStreamEmitter();
         final response = await dispatcher.dispatch(
@@ -875,7 +849,6 @@ void main() {
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
-          compressionService: mockCompression,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
           featureFlags: mockFeatureFlags,
@@ -909,9 +882,6 @@ void main() {
         when(
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
-        when(
-          () => mockCompression.compress(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
 
         when(() => mockStore.get(any())).thenReturn(null);
 
@@ -935,7 +905,6 @@ void main() {
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
         normalizerService: mockNormalizer,
-        compressionService: mockCompression,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
         featureFlags: mockFeatureFlags,
@@ -969,9 +938,6 @@ void main() {
       when(
         () => mockNormalizer.normalize(any()),
       ).thenAnswer((_) async => queryResponse);
-      when(
-        () => mockCompression.compress(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -1005,9 +971,6 @@ void main() {
       when(
         () => mockNormalizer.normalize(any()),
       ).thenAnswer((_) async => queryResponse);
-      when(
-        () => mockCompression.compress(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
 
       final response = await dispatcher.dispatch(
         request,
@@ -1127,7 +1090,6 @@ void main() {
           dispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
             normalizerService: mockNormalizer,
-            compressionService: mockCompression,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
             featureFlags: mockFeatureFlags,
@@ -1216,7 +1178,6 @@ void main() {
           dispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
             normalizerService: mockNormalizer,
-            compressionService: mockCompression,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
             featureFlags: mockFeatureFlags,

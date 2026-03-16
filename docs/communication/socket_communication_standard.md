@@ -5,6 +5,10 @@
 Este documento descreve **somente o que ja esta implementado** no
 projeto para comunicacao Socket.IO entre hub e agente.
 
+O guia normativo para clientes que publicam ou consomem eventos no transporte
+binario esta documentado em
+`docs/communication/socketio_client_binary_transport.md`.
+
 ## Escopo Atual (implementado)
 
 - Protocolo principal: JSON-RPC 2.0 (`jsonrpc-v2`)
@@ -24,6 +28,9 @@ projeto para comunicacao Socket.IO entre hub e agente.
 | Metodo `sql.executeBatch`                                            | implemented                                                        |
 | Catalogo de erros RPC                                                | implemented                                                        |
 | Negociacao de capacidades                                            | implemented                                                        |
+| Transporte binario em `PayloadFrame`                                 | implemented (default com `enableBinaryPayload`)                    |
+| Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                  |
+| Compatibilidade de leitura para payload JSON cru                     | implemented (temporario para rollout/homologacao)                  |
 | `sql.cancel`                                                         | implemented (via feature flag)                                     |
 | Streaming chunked                                                    | implemented (via feature flag; acima de `streaming_row_threshold`) |
 | Streaming direto do banco (SELECT sem params)                        | implemented (via enableSocketStreamingFromDb)                      |
@@ -100,14 +107,61 @@ handshake.
 
 | Evento               | Direcao       | Payload esperado                               | Resposta                                  |
 | -------------------- | ------------- | ---------------------------------------------- | ----------------------------------------- |
-| `agent:register`     | agente -> hub | identificacao + capacidades                    | `agent:capabilities`                      |
-| `agent:capabilities` | hub -> agente | capacidades do hub                             | define protocolo efetivo                  |
-| `rpc:request`        | hub -> agente | JSON-RPC 2.0 (`method`, `id`, `params`)        | `rpc:response`                            |
-| `rpc:request_ack`    | agente -> hub | `{ request_id, received_at }`                  | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:batch_ack`      | agente -> hub | `{ request_ids, received_at }`                 | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:chunk`          | agente -> hub | `{ stream_id, request_id, chunk_index, rows }` | (quando `enableSocketStreamingChunks`)    |
-| `rpc:complete`       | agente -> hub | `{ stream_id, request_id, total_rows }`        | (quando `enableSocketStreamingChunks`)    |
-| `rpc:stream.pull`    | hub -> agente | `{ stream_id, window_size }`                   | (quando `enableSocketBackpressure`)       |
+| `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>` | `agent:capabilities`                 |
+| `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`               | define protocolo efetivo                  |
+| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`           | `rpc:response`                            |
+| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
+| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
+| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>` | (quando `enableSocketStreamingChunks`) |
+| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows }>` | (quando `enableSocketStreamingChunks`) |
+| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`     | (quando `enableSocketBackpressure`)       |
+
+## Camadas do transporte
+
+O padrao fisico da comunicacao agora tem duas camadas:
+
+1. **Payload logico**
+   - envelope JSON-RPC, handshake, heartbeat, ack ou evento de streaming.
+2. **Payload fisico**
+   - o payload logico e serializado em JSON UTF-8, opcionalmente comprimido com
+     GZIP e empacotado em `PayloadFrame`.
+
+Fluxo de saida implementado:
+
+1. montar o payload logico;
+2. serializar em bytes (`enc: json`);
+3. aplicar compressao quando o tamanho atingir `compressionThreshold`;
+4. montar `PayloadFrame` com `originalSize`, `compressedSize`, `traceId` e
+   `requestId`;
+5. assinar o frame quando `enablePayloadSigning` estiver ativo;
+6. emitir via Socket.IO.
+
+Fluxo de entrada implementado:
+
+1. receber `PayloadFrame`;
+2. validar algoritmo, tamanhos e razao maxima de expansao;
+3. verificar assinatura do frame quando presente;
+4. descomprimir quando `cmp == gzip`;
+5. decodificar o payload logico;
+6. validar schema/contrato e despachar.
+
+## Arquivos e payloads binarios de negocio
+
+O transporte binario implementado e o **frame fisico** da mensagem. Ele nao
+significa que existe um metodo RPC generico de upload/download de arquivo.
+
+Regras atuais:
+
+- nao existe API dedicada de transferencia de arquivo no contrato publicado;
+- se um metodo de negocio precisar carregar conteudo de arquivo, esse conteudo
+  deve primeiro ser serializado no payload logico do metodo;
+- depois disso, **a mensagem inteira** segue o mesmo processo padrao:
+  serializacao -> compressao -> frame binario;
+- clientes nao devem tentar “pular” o `PayloadFrame` e enviar bytes crus fora
+  do contrato Socket.IO/JSON-RPC.
+
+Para cargas grandes, a recomendacao operacional e usar chunking no nivel do
+metodo de negocio, sem abrir excecao para o transporte.
 
 ## Streaming chunked (quando `enableSocketStreamingChunks` ativo)
 
@@ -309,17 +363,17 @@ Response:
   "method": "sql.execute",
   "id": "req-123",
   "params": {
-      "sql": "SELECT * FROM users WHERE id = :id",
-      "params": { "id": 1 },
-      "client_token": "a1b2c3d4e5f6...",
-      "options": {
-        "timeout_ms": 30000,
+    "sql": "SELECT * FROM users WHERE id = :id",
+    "params": { "id": 1 },
+    "client_token": "a1b2c3d4e5f6...",
+    "options": {
+      "timeout_ms": 30000,
       "max_rows": 50000,
-        "page": 1,
-        "page_size": 100
-      }
+      "page": 1,
+      "page_size": 100
     }
   }
+}
 ```
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
@@ -830,7 +884,7 @@ Exemplo de capacidades anunciadas:
   "compressions": ["gzip", "none"],
   "extensions": {
     "batchSupport": true,
-    "binaryPayload": false,
+    "binaryPayload": true,
     "streamingResults": false,
     "plugProfile": "plug-jsonrpc-profile/2.4",
     "orderedBatchResponses": true,
@@ -844,9 +898,12 @@ Exemplo de capacidades anunciadas:
 
 ## Compatibilidade e Fallback
 
-- O agente permanece escutando eventos legados e v2.
-- Se o hub nao suportar v2, o agente usa legado automaticamente.
-- Respostas seguem o protocolo da requisicao recebida.
+- O agente transmite eventos de aplicacao como `PayloadFrame` binario quando
+  `enableBinaryPayload` estiver ativo.
+- O agente ainda aceita payload logico JSON cru no recebimento como
+  compatibilidade temporaria de rollout/homologacao.
+- Eventos legados fora do contrato v2 continuam fora do escopo deste
+  documento.
 
 ### Exemplo de payload legado (v1)
 
@@ -888,9 +945,9 @@ Exemplo de capacidades anunciadas:
 
 ### Onde passar o token
 
-| Protocolo                | Local                                                          |
-| ------------------------ | -------------------------------------------------------------- |
-| v2 (`rpc:request`)       | `params.client_token` ou `params.clientToken` ou `params.auth` |
+| Protocolo          | Local                                                          |
+| ------------------ | -------------------------------------------------------------- |
+| v2 (`rpc:request`) | `params.client_token` ou `params.clientToken` ou `params.auth` |
 
 ### Feature flag
 
@@ -908,13 +965,13 @@ Exemplo de capacidades anunciadas:
 
 ### Versionamento
 
-| Versao         | Descricao                                                      | Status                  |
-| -------------- | -------------------------------------------------------------- | ----------------------- |
-| `2.0`          | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros)       | stable                  |
-| `2.1`          | Extensoes: api_version, meta, client_token auth, notifications | stable                  |
-| `2.2`          | Hardening de limites negociados e assinatura de payload        | stable                  |
-| `2.3`          | Profile formal, OpenRPC, observabilidade e cursor opaco        | stable                  |
-| `2.4`          | Cursor keyset, output validation e `rpc.discover`              | stable                  |
+| Versao | Descricao                                                      | Status |
+| ------ | -------------------------------------------------------------- | ------ |
+| `2.0`  | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros)       | stable |
+| `2.1`  | Extensoes: api_version, meta, client_token auth, notifications | stable |
+| `2.2`  | Hardening de limites negociados e assinatura de payload        | stable |
+| `2.3`  | Profile formal, OpenRPC, observabilidade e cursor opaco        | stable |
+| `2.4`  | Cursor keyset, output validation e `rpc.discover`              | stable |
 
 ### Regras de versionamento
 
@@ -979,7 +1036,7 @@ O agente anuncia limites em `agent:register` via campo `limits` dentro de `capab
 - Response que excede `max_rows`: truncado ou streamed (conforme feature flags).
 - Batch que excede `max_batch_size`: rejeitado com `-32600` (invalid request).
 
-## Assinatura opcional de payload
+## Assinatura opcional de transporte/payload
 
 ### Objetivo
 
@@ -987,14 +1044,19 @@ Garantir integridade e autenticidade de payloads em transito entre hub e agente.
 
 ### Mecanismo (implementado)
 
-Quando ativo, o emissor inclui um campo `signature` no envelope:
+Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "sql.execute",
-  "id": "req-123",
-  "params": { "sql": "SELECT 1" },
+  "schemaVersion": "1.0",
+  "enc": "json",
+  "cmp": "gzip",
+  "contentType": "application/json",
+  "originalSize": 1200,
+  "compressedSize": 340,
+  "payload": "<binary>",
+  "traceId": "trace-123",
+  "requestId": "req-123",
   "signature": {
     "alg": "hmac-sha256",
     "value": "base64-encoded-hmac",
@@ -1015,7 +1077,10 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 
 - **Opcional**: o emissor pode omitir `signature`; o receptor aceita sem verificar.
 - **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida, retorna `-32001` (authentication failed) com `reason: invalid_signature`.
-- **Escopo**: a assinatura cobre `method`, `id`, `params` (canonicalizados em JSON).
+- **Escopo principal**: a assinatura cobre `schemaVersion`, `enc`, `cmp`,
+  `contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
+- **Compatibilidade**: quando o modo binario estiver desativado por feature
+  flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
 - **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
 - **Key management**: chaves compartilhadas configuradas no agente via settings. Rotacao por `key_id`.
 
@@ -1027,7 +1092,8 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 
 - Classe `PayloadSigner` em `infrastructure/security/payload_signer.dart`.
 - Chaves configuradas via `.env` (`PAYLOAD_SIGNING_KEY`, `PAYLOAD_SIGNING_KEY_ID`).
-- Integrado ao `SocketIOTransportClientV2`: assina responses, verifica requests.
+- Integrado ao `SocketIOTransportClientV2`: assina frames enviados e verifica
+  frames recebidos.
 - Comparacao constant-time para prevenir timing attacks.
 - Feature flag `enablePayloadSigning` (default `false`).
 
@@ -1047,6 +1113,14 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 
 ## Limitacoes e observacoes do estado atual
 
+- O transporte ativo usa `PayloadFrame` binario como camada fisica padrao.
+- A leitura de payload logico JSON cru ainda existe apenas como compatibilidade
+  temporaria para rollout.
+- A compressao e decidida por threshold; clientes devem aceitar `cmp: gzip` e
+  `cmp: none`.
+- Nao existe metodo RPC generico de transferencia de arquivo no contrato atual;
+  qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
+  e, depois, transportado dentro do `PayloadFrame`.
 - Metodo `sql.cancel` disponivel via feature flag `enableSocketCancelMethod`
   (cancela execucao em streaming ativa; execucoes nao-streaming nao sao
   cancelaveis).
@@ -1089,7 +1163,8 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 
 ### Fluxo basico
 
-- [ ] Executa fluxo v2 completo (`agent:register` -> `rpc:request` -> `rpc:response`).
+- [ ] Executa fluxo v2 completo (`agent:register` -> `rpc:request` -> `rpc:response`) usando `PayloadFrame`.
+- [ ] Homologa encode/compress/decode/decompress no cliente.
 - [ ] Trata erro JSON-RPC em vez de assumir sempre `result`.
 - [ ] Homologa `sql.execute` com sucesso e com falha SQL.
 - [ ] Homologa `sql.executeBatch` com itens de retorno.
@@ -1098,6 +1173,7 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 ### Erros e retry
 
 - [ ] Homologa erros de payload invalido (`-32009`) e decode (`-32010`).
+- [ ] Homologa falha de frame/signature/descompressao (`-32011` e `invalid_signature`).
 - [ ] Homologa falha de auth (`-32001`) e permissao (`-32002`).
 - [ ] Valida regra de retry somente quando `retryable=true`.
 - [ ] Exibe `user_message` ao usuario e registra `correlation_id` para suporte.
@@ -1153,8 +1229,8 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 - `traceparent` e `tracestate` adicionados ao contrato de `meta`.
 - OpenRPC publicado para descoberta do contrato.
 - Schemas especificos de result por metodo (`sql.execute`, `sql.executeBatch`).
-- Paginação por cursor opaco adicionada a `sql.execute`.
-- Semantica de erro documentada como Problem Details-inspired.
+- Paginacao por cursor opaco adicionada a `sql.execute`.
+- Semantica de erro estruturado formalizada em `error.data`.
 
 ### `v2.4` (cursor keyset + output validation + discover)
 
@@ -1164,6 +1240,11 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 - Respostas `rpc:response`, `rpc:chunk`, `rpc:complete` e payloads de handshake
   sao validados antes do envio quando `enableSocketSchemaValidation` esta ativo.
 - `rpc.discover` retorna o documento OpenRPC publicado.
+- Todos os eventos de aplicacao passam a trafegar em `PayloadFrame` binario.
+- Compressao GZIP foi movida para a borda de transporte com fallback `cmp: none`
+  por threshold.
+- Assinatura passa a cobrir o frame de transporte quando o modo binario esta
+  ativo.
 
 ## Schemas JSON (contrato)
 
@@ -1204,4 +1285,5 @@ Quando ativo, o emissor inclui um campo `signature` no envelope:
 - Dispatcher RPC: `lib/application/rpc/rpc_method_dispatcher.dart`
 - Transporte: `lib/infrastructure/external_services/socket_io_transport_client_v2.dart`
 - Negociacao: `lib/application/services/protocol_negotiator.dart`
+- Guia de cliente: `docs/communication/socketio_client_binary_transport.md`
 - Evolucao pendente: `docs/communication/socket_communication_roadmap.md`

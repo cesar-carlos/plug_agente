@@ -1,5 +1,6 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
 void main() {
@@ -103,6 +104,30 @@ void main() {
       final p2 = {'method': 'sql.executeBatch', 'id': 1};
 
       check(signer.sign(p1).value).not((s) => s.equals(signer.sign(p2).value));
+    });
+
+    test('signFrame should verify transport metadata and binary payload', () {
+      const frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'gzip',
+        contentType: 'application/json',
+        originalSize: 128,
+        compressedSize: 64,
+        payload: [1, 2, 3, 4],
+        traceId: 'trace-1',
+        requestId: 'req-1',
+      );
+
+      final signature = signer.signFrame(frame);
+
+      check(signer.verifyFrame(frame, signature)).isTrue();
+      check(
+        signer.verifyFrame(
+          frame.copyWith(compressedSize: 65),
+          signature,
+        ),
+      ).isFalse();
     });
   });
 

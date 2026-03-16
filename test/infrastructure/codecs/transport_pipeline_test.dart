@@ -133,5 +133,23 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().traceId, equals(traceId));
     });
+
+    test('should reject payload inflation beyond configured ratio', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+        compressionThreshold: 1,
+      );
+
+      final originalData = {'message': 'Hello World! ' * 100};
+      final frame = pipeline.prepareSend(originalData).getOrThrow();
+
+      final result = pipeline.receiveProcess(
+        frame,
+        maxInflationRatio: 1.1,
+      );
+
+      expect(result.isError(), isTrue);
+    });
   });
 }

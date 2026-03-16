@@ -65,6 +65,10 @@ void main() {
       );
 
       expect(config.compression, equals('gzip'));
+      expect(config.compressionThreshold, equals(1024));
+      expect(config.maxInflationRatio, equals(20));
+      expect(config.negotiatedExtensions['binaryPayload'], isTrue);
+      expect(config.negotiatedExtensions['transportFrame'], 'payload-frame/1.0');
     });
 
     test('should select json encoding when both support it', () {
@@ -115,6 +119,8 @@ void main() {
       expect(config.protocol, equals('jsonrpc-v2'));
       expect(config.encoding, equals('json'));
       expect(config.compression, equals('none'));
+      expect(config.usesBinaryPayload, isTrue);
+      expect(config.usesTransportFrame, isTrue);
     });
 
     test('should negotiate plug profile extensions intersection', () {
@@ -128,7 +134,7 @@ void main() {
           'notificationNullIdCompatibility': true,
           'paginationModes': ['cursor-keyset'],
           'traceContext': ['w3c-trace-context'],
-          'errorFormat': 'problem-details-inspired',
+          'errorFormat': 'structured-error-data',
           'plugProfile': 'plug-jsonrpc-profile/2.4',
         },
       );
@@ -150,6 +156,47 @@ void main() {
         config.negotiatedExtensions['plugProfile'],
         equals('plug-jsonrpc-profile/2.4'),
       );
+    });
+
+    test('should negotiate signature policy and algorithms', () {
+      const agentCaps = ProtocolCapabilities(
+        protocols: ['jsonrpc-v2'],
+        encodings: ['json'],
+        compressions: ['gzip', 'none'],
+        extensions: {
+          'binaryPayload': true,
+          'transportFrame': 'payload-frame/1.0',
+          'compressionThreshold': 2048,
+          'maxInflationRatio': 10,
+          'signatureRequired': true,
+          'signatureScope': 'transport-frame',
+          'signatureAlgorithms': ['hmac-sha256'],
+        },
+      );
+      const serverCaps = ProtocolCapabilities(
+        protocols: ['jsonrpc-v2'],
+        encodings: ['json'],
+        compressions: ['gzip', 'none'],
+        extensions: {
+          'binaryPayload': true,
+          'transportFrame': 'payload-frame/1.0',
+          'compressionThreshold': 4096,
+          'maxInflationRatio': 20,
+          'signatureRequired': false,
+          'signatureScope': 'transport-frame',
+          'signatureAlgorithms': ['hmac-sha256', 'ed25519'],
+        },
+      );
+
+      final config = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(config.compressionThreshold, 2048);
+      expect(config.maxInflationRatio, 10);
+      expect(config.signatureRequired, isTrue);
+      expect(config.signatureAlgorithms, ['hmac-sha256']);
     });
   });
 }

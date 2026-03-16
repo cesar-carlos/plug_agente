@@ -15,9 +15,12 @@ Referencia de implementacao atual:
 - Limites de transporte negociados via `TransportLimits` no handshake.
 - Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256) com feature flag `enablePayloadSigning`.
 - Feature flags estaveis promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
+- Transporte binario com `PayloadFrame` implementado para todos os eventos de aplicacao.
+- Compressao GZIP movida para a borda de transporte com fallback por threshold.
 
 ## Proximos itens (quando priorizado)
 
+- Homologacao do guia de cliente para encode/compress/decode/decompress.
 - Testes de integracao end-to-end para limites negociados e assinatura.
 - Rotacao automatica de chaves de assinatura sem downtime.
 - Monitoramento/alertas de payload signing failures.

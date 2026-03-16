@@ -6,7 +6,6 @@ import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
-import 'package:plug_agente/application/services/compression_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
@@ -58,7 +57,6 @@ import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
-import 'package:plug_agente/infrastructure/compression/gzip_compressor.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
@@ -156,7 +154,6 @@ Future<void> setupDependencies({
   // External
   getIt
     ..registerLazySingleton<odbc.OdbcService>(() => _odbcLocator.asyncService)
-    ..registerLazySingleton(GzipCompressor.new)
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(SocketDataSource.new)
@@ -182,15 +179,12 @@ Future<void> setupDependencies({
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
-      () => getIt<FeatureFlags>().enableTokenAudit
-          ? FileTokenAuditStore()
-          : NoopTokenAuditStore(),
+      () => getIt<FeatureFlags>().enableTokenAudit ? FileTokenAuditStore() : NoopTokenAuditStore(),
     )
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
         normalizerService: getIt<QueryNormalizerService>(),
-        compressionService: getIt<CompressionService>(),
         uuid: getIt<Uuid>(),
         authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
         featureFlags: getIt<FeatureFlags>(),
@@ -205,10 +199,7 @@ Future<void> setupDependencies({
         final signingKey = dotenv.env['PAYLOAD_SIGNING_KEY']?.trim();
         final signingKeyId = dotenv.env['PAYLOAD_SIGNING_KEY_ID']?.trim();
         PayloadSigner? payloadSigner;
-        if (signingKey != null &&
-            signingKey.isNotEmpty &&
-            signingKeyId != null &&
-            signingKeyId.isNotEmpty) {
+        if (signingKey != null && signingKey.isNotEmpty && signingKeyId != null && signingKeyId.isNotEmpty) {
           payloadSigner = PayloadSigner(keys: {signingKeyId: signingKey});
         }
         return SocketIOTransportClientV2(
@@ -255,31 +246,20 @@ Future<void> setupDependencies({
         if (jwksUrlOverride != null && jwksUrlOverride.isNotEmpty) {
           return JwksConfig(
             jwksUrl: jwksUrlOverride,
-            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
-                ? dotenv.env['JWKS_ISSUER']
-                : null,
-            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
-                ? dotenv.env['JWKS_AUDIENCE']
-                : null,
+            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
+            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
           );
         }
-        final configResult = await getIt<IAgentConfigRepository>()
-            .getCurrentConfig();
+        final configResult = await getIt<IAgentConfigRepository>().getCurrentConfig();
         return configResult.fold(
           (config) {
             final base = config.serverUrl.trim();
             if (base.isEmpty) return null;
-            final normalized = base.endsWith('/')
-                ? base.substring(0, base.length - 1)
-                : base;
+            final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
             return JwksConfig(
               jwksUrl: '$normalized/.well-known/jwks.json',
-              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
-                  ? dotenv.env['JWKS_ISSUER']
-                  : null,
-              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
-                  ? dotenv.env['JWKS_AUDIENCE']
-                  : null,
+              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
+              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
             );
           },
           (_) => null,
@@ -300,9 +280,6 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => QueryNormalizerService(getIt<QueryNormalizer>()),
-    )
-    ..registerLazySingleton(
-      () => CompressionService(getIt<GzipCompressor>()),
     )
     ..registerLazySingleton(
       SqlOperationClassifier.new,

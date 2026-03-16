@@ -19,9 +19,7 @@ class WebSocketLogViewer extends StatelessWidget {
         return AppCard(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final spacing = constraints.maxHeight < 50
-                  ? AppSpacing.sm
-                  : AppSpacing.md;
+              final spacing = constraints.maxHeight < 50 ? AppSpacing.sm : AppSpacing.md;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

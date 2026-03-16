@@ -111,7 +111,12 @@ class TransportPipeline {
   /// Receives and processes a payload frame.
   ///
   /// Flow: frame -> decompress (if needed) -> decode -> data
-  Result<dynamic> receiveProcess(PayloadFrame frame) {
+  Result<dynamic> receiveProcess(
+    PayloadFrame frame, {
+    int? maxCompressedBytes,
+    int? maxOriginalBytes,
+    double maxInflationRatio = 30,
+  }) {
     try {
       // Validate frame encoding matches pipeline configuration
       if (frame.enc != encoding) {
@@ -143,6 +148,42 @@ class TransportPipeline {
         bytes = frame.payload as Uint8List;
       }
 
+      if (bytes.length != frame.compressedSize) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
+            context: {
+              'expectedCompressedSize': frame.compressedSize,
+              'actualCompressedSize': bytes.length,
+            },
+          ),
+        );
+      }
+      if (maxCompressedBytes != null &&
+          frame.compressedSize > maxCompressedBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Compressed payload exceeds negotiated limit',
+            context: {
+              'compressedSize': frame.compressedSize,
+              'limit': maxCompressedBytes,
+            },
+          ),
+        );
+      }
+      if (maxOriginalBytes != null && frame.originalSize > maxOriginalBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Original payload exceeds negotiated limit',
+            context: {
+              'originalSize': frame.originalSize,
+              'limit': maxOriginalBytes,
+            },
+          ),
+        );
+      }
+
       // 1. Decompress (if needed)
       Uint8List decodableBytes;
 
@@ -157,6 +198,44 @@ class TransportPipeline {
         decodableBytes = decompressResult.getOrThrow();
       } else {
         decodableBytes = bytes;
+      }
+
+      if (decodableBytes.length != frame.originalSize) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
+            context: {
+              'expectedOriginalSize': frame.originalSize,
+              'actualOriginalSize': decodableBytes.length,
+            },
+          ),
+        );
+      }
+      if (maxOriginalBytes != null &&
+          decodableBytes.length > maxOriginalBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Decoded payload exceeds negotiated limit',
+            context: {
+              'decodedSize': decodableBytes.length,
+              'limit': maxOriginalBytes,
+            },
+          ),
+        );
+      }
+      if (bytes.isNotEmpty &&
+          decodableBytes.length / bytes.length > maxInflationRatio) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Payload inflation ratio exceeds allowed maximum',
+            context: {
+              'decodedSize': decodableBytes.length,
+              'compressedSize': bytes.length,
+              'maxInflationRatio': maxInflationRatio,
+            },
+          ),
+        );
       }
 
       // 2. Decode

@@ -23,22 +23,39 @@ class ProtocolCapabilities {
     );
   }
 
-  factory ProtocolCapabilities.defaultCapabilities() {
-    return const ProtocolCapabilities(
+  factory ProtocolCapabilities.defaultCapabilities({
+    bool binaryPayload = true,
+    List<String> compressions = const ['gzip', 'none'],
+    int compressionThreshold = 1024,
+    double maxInflationRatio = 20,
+    bool signatureRequired = false,
+    List<String> signatureAlgorithms = const ['hmac-sha256'],
+  }) {
+    final extensions = <String, dynamic>{
+      'batchSupport': true,
+      'binaryPayload': binaryPayload,
+      'compressionThreshold': compressionThreshold,
+      'maxInflationRatio': maxInflationRatio,
+      'signatureRequired': signatureRequired,
+      'signatureScope': 'transport-frame',
+      'signatureAlgorithms': signatureAlgorithms,
+      'streamingResults': false,
+      'plugProfile': 'plug-jsonrpc-profile/2.4',
+      'orderedBatchResponses': true,
+      'notificationNullIdCompatibility': true,
+      'paginationModes': ['page-offset', 'cursor-keyset'],
+      'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
+      'errorFormat': 'structured-error-data',
+    };
+    if (binaryPayload) {
+      extensions['transportFrame'] = 'payload-frame/1.0';
+    }
+
+    return ProtocolCapabilities(
       protocols: ['jsonrpc-v2'],
       encodings: ['json'],
-      compressions: ['gzip', 'none'],
-      extensions: {
-        'batchSupport': true,
-        'binaryPayload': false,
-        'streamingResults': false,
-        'plugProfile': 'plug-jsonrpc-profile/2.4',
-        'orderedBatchResponses': true,
-        'notificationNullIdCompatibility': true,
-        'paginationModes': ['page-offset', 'cursor-keyset'],
-        'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
-        'errorFormat': 'problem-details-inspired',
-      },
+      compressions: compressions,
+      extensions: extensions,
     );
   }
 
@@ -86,6 +103,9 @@ class ProtocolConfig {
     required this.encoding,
     required this.compression,
     this.compressionThreshold = 1024,
+    this.maxInflationRatio = 20,
+    this.signatureRequired = false,
+    this.signatureAlgorithms = const [],
     this.effectiveLimits = const TransportLimits(),
     this.negotiatedExtensions = const {},
   });
@@ -94,29 +114,50 @@ class ProtocolConfig {
   final String encoding;
   final String compression;
   final int compressionThreshold;
+  final double maxInflationRatio;
+  final bool signatureRequired;
+  final List<String> signatureAlgorithms;
   final TransportLimits effectiveLimits;
   final Map<String, dynamic> negotiatedExtensions;
 
   bool get isJsonRpcV2 => protocol == 'jsonrpc-v2';
   bool get usesCompression => compression != 'none';
-  bool get usesBinaryPayload => encoding == 'msgpack';
+  bool get usesBinaryPayload =>
+      negotiatedExtensions['binaryPayload'] as bool? ?? false;
+  bool get usesTransportFrame =>
+      negotiatedExtensions['transportFrame'] == 'payload-frame/1.0';
 }
 
 /// Transport-level operational limits announced during handshake.
 class TransportLimits {
   const TransportLimits({
-    this.maxPayloadBytes = defaultMaxPayloadBytes,
+    int? maxPayloadBytes,
+    int? maxCompressedPayloadBytes,
+    int? maxDecodedPayloadBytes,
     this.maxRows = defaultMaxRows,
     this.maxBatchSize = defaultMaxBatchSize,
     this.maxConcurrentStreams = defaultMaxConcurrentStreams,
     this.streamingChunkSize = defaultStreamingChunkSize,
     this.streamingRowThreshold = defaultStreamingRowThreshold,
-  });
+  }) : maxCompressedPayloadBytes =
+           maxCompressedPayloadBytes ??
+           maxPayloadBytes ??
+           defaultMaxCompressedPayloadBytes,
+       maxDecodedPayloadBytes =
+           maxDecodedPayloadBytes ??
+           maxPayloadBytes ??
+           defaultMaxDecodedPayloadBytes;
 
   factory TransportLimits.fromJson(Map<String, dynamic> json) {
     return TransportLimits(
-      maxPayloadBytes:
-          json['max_payload_bytes'] as int? ?? defaultMaxPayloadBytes,
+      maxCompressedPayloadBytes:
+          json['max_compressed_payload_bytes'] as int? ??
+          json['max_payload_bytes'] as int? ??
+          defaultMaxCompressedPayloadBytes,
+      maxDecodedPayloadBytes:
+          json['max_decoded_payload_bytes'] as int? ??
+          json['max_payload_bytes'] as int? ??
+          defaultMaxDecodedPayloadBytes,
       maxRows: json['max_rows'] as int? ?? defaultMaxRows,
       maxBatchSize: json['max_batch_size'] as int? ?? defaultMaxBatchSize,
       maxConcurrentStreams:
@@ -130,24 +171,34 @@ class TransportLimits {
   }
 
   static const int defaultMaxPayloadBytes = 10 * 1024 * 1024; // 10 MB
+  static const int defaultMaxCompressedPayloadBytes = defaultMaxPayloadBytes;
+  static const int defaultMaxDecodedPayloadBytes = defaultMaxPayloadBytes;
   static const int defaultMaxRows = 50000;
   static const int defaultMaxBatchSize = 32;
   static const int defaultMaxConcurrentStreams = 1;
   static const int defaultStreamingChunkSize = 500;
   static const int defaultStreamingRowThreshold = 500;
 
-  final int maxPayloadBytes;
+  final int maxCompressedPayloadBytes;
+  final int maxDecodedPayloadBytes;
   final int maxRows;
   final int maxBatchSize;
   final int maxConcurrentStreams;
   final int streamingChunkSize;
   final int streamingRowThreshold;
 
+  int get maxPayloadBytes => maxCompressedPayloadBytes;
+
   TransportLimits negotiateWith(TransportLimits other) {
     return TransportLimits(
-      maxPayloadBytes: maxPayloadBytes < other.maxPayloadBytes
-          ? maxPayloadBytes
-          : other.maxPayloadBytes,
+      maxCompressedPayloadBytes:
+          maxCompressedPayloadBytes < other.maxCompressedPayloadBytes
+          ? maxCompressedPayloadBytes
+          : other.maxCompressedPayloadBytes,
+      maxDecodedPayloadBytes:
+          maxDecodedPayloadBytes < other.maxDecodedPayloadBytes
+          ? maxDecodedPayloadBytes
+          : other.maxDecodedPayloadBytes,
       maxRows: maxRows < other.maxRows ? maxRows : other.maxRows,
       maxBatchSize: maxBatchSize < other.maxBatchSize
           ? maxBatchSize
@@ -166,7 +217,9 @@ class TransportLimits {
 
   Map<String, dynamic> toJson() {
     return {
-      'max_payload_bytes': maxPayloadBytes,
+      'max_payload_bytes': maxCompressedPayloadBytes,
+      'max_compressed_payload_bytes': maxCompressedPayloadBytes,
+      'max_decoded_payload_bytes': maxDecodedPayloadBytes,
       'max_rows': maxRows,
       'max_batch_size': maxBatchSize,
       'max_concurrent_streams': maxConcurrentStreams,

@@ -10,11 +10,11 @@ Estado implementado atual:
 
 ## Itens planejados (pendentes)
 
-| Item                                                    | Status  | Fase alvo |
-| ------------------------------------------------------- | ------- | --------- |
-| Testes de integracao end-to-end para limites negociados | planned | Fase 6    |
-| Rotacao automatica de chaves de assinatura              | planned | Fase 6    |
-| Monitoramento/alertas de payload signing failures       | planned | Fase 6    |
+| Item                                                                         | Status  | Fase alvo |
+| ---------------------------------------------------------------------------- | ------- | --------- |
+| Testes de integracao end-to-end para limites negociados                      | planned | Fase 6    |
+| Rotacao automatica de chaves de assinatura                                   | planned | Fase 6    |
+| Monitoramento/alertas de payload signing failures                            | planned | Fase 6    |
 
 ## Itens concluidos (removidos do backlog)
 
@@ -31,6 +31,8 @@ Estado implementado atual:
 | Negociacao de limites no handshake (TransportLimits)            | v2.2         |
 | Assinatura de payload implementada (hmac-sha256, PayloadSigner) | v2.2         |
 | Feature flags estaveis promovidas para mandatory                | v2.2         |
+| Transporte binario em `PayloadFrame` para eventos de aplicacao  | v2.4         |
+| Compressao GZIP na borda de transporte com fallback por threshold | v2.4       |
 
 ## Fase 5 - Hardening residual (concluida)
 
@@ -44,6 +46,7 @@ Todos os itens da Fase 5 foram implementados:
 
 Objetivo:
 
+- Homologar clientes no fluxo encode/compress/decode/decompress.
 - Testes de integracao de ponta a ponta.
 - Rotacao de chaves de assinatura sem downtime.
 - Alertas operacionais para falhas de assinatura.

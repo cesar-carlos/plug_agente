@@ -43,7 +43,7 @@ class FeatureFlags {
 
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload =>
-      _prefs.getBool(_keyEnableBinaryPayload) ?? false;
+      _prefs.getBool(_keyEnableBinaryPayload) ?? true;
 
   Future<void> setEnableBinaryPayload(bool value) async {
     await _prefs.setBool(_keyEnableBinaryPayload, value);
@@ -196,7 +196,7 @@ class FeatureFlags {
 
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
-    await setEnableBinaryPayload(false);
+    await setEnableBinaryPayload(true);
     await setEnableCompression(true);
     await setCompressionThreshold(1024);
     await setEnableClientTokenAuthorization(true);

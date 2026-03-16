@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 
 class PayloadSignature {
   const PayloadSignature({
@@ -32,7 +34,7 @@ class PayloadSigner {
   PayloadSigner({required Map<String, String> keys}) : _keys = Map.of(keys);
 
   final Map<String, String> _keys;
-  static const _supportedAlg = 'hmac-sha256';
+  static const supportedAlgorithm = 'hmac-sha256';
 
   String get activeKeyId => _keys.keys.first;
 
@@ -41,16 +43,43 @@ class PayloadSigner {
     final secret = _keys[keyId]!;
     final canonical = _canonicalize(payload);
     final hmacValue = _computeHmac(canonical, secret);
-    return PayloadSignature(alg: _supportedAlg, value: hmacValue, keyId: keyId);
+    return PayloadSignature(
+      alg: supportedAlgorithm,
+      value: hmacValue,
+      keyId: keyId,
+    );
   }
 
   bool verify(Map<String, dynamic> payload, PayloadSignature signature) {
-    if (signature.alg != _supportedAlg) return false;
+    if (signature.alg != supportedAlgorithm) return false;
 
     final secret = _keys[signature.keyId];
     if (secret == null) return false;
 
     final canonical = _canonicalize(payload);
+    final expected = _computeHmac(canonical, secret);
+    return _constantTimeEquals(expected, signature.value);
+  }
+
+  PayloadSignature signFrame(PayloadFrame frame) {
+    final keyId = activeKeyId;
+    final secret = _keys[keyId]!;
+    final canonical = _canonicalizeFrame(frame.copyWith(clearSignature: true));
+    final hmacValue = _computeHmac(canonical, secret);
+    return PayloadSignature(
+      alg: supportedAlgorithm,
+      value: hmacValue,
+      keyId: keyId,
+    );
+  }
+
+  bool verifyFrame(PayloadFrame frame, PayloadSignature signature) {
+    if (signature.alg != supportedAlgorithm) return false;
+
+    final secret = _keys[signature.keyId];
+    if (secret == null) return false;
+
+    final canonical = _canonicalizeFrame(frame.copyWith(clearSignature: true));
     final expected = _computeHmac(canonical, secret);
     return _constantTimeEquals(expected, signature.value);
   }
@@ -63,6 +92,26 @@ class PayloadSigner {
     if (payload.containsKey('result')) signable['result'] = payload['result'];
     if (payload.containsKey('error')) signable['error'] = payload['error'];
     return jsonEncode(signable);
+  }
+
+  String _canonicalizeFrame(PayloadFrame frame) {
+    final payload = frame.payload;
+    final payloadBytes = switch (payload) {
+      final Uint8List value => value,
+      final List<int> value => Uint8List.fromList(value),
+      _ => Uint8List.fromList(utf8.encode(jsonEncode(payload))),
+    };
+    return jsonEncode({
+      'schemaVersion': frame.schemaVersion,
+      'enc': frame.enc,
+      'cmp': frame.cmp,
+      'contentType': frame.contentType,
+      'originalSize': frame.originalSize,
+      'compressedSize': frame.compressedSize,
+      'traceId': frame.traceId,
+      'requestId': frame.requestId,
+      'payload': base64Encode(payloadBytes),
+    });
   }
 
   String _computeHmac(String data, String secret) {
