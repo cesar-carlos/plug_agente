@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -962,8 +963,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     DatabaseType databaseType,
     QueryPaginationRequest pagination,
   ) {
-    final trimmedSql = originalSql.trim().replaceFirst(RegExp(r';+\s*$'), '');
-    final orderByClause = _buildOrderByClause(pagination.orderBy);
+    final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
+    final orderByClause = pagination.orderBy.isEmpty
+        ? null
+        : _buildOrderByClause(pagination.orderBy);
     return switch (databaseType) {
       DatabaseType.postgresql =>
         '''
@@ -971,7 +974,7 @@ SELECT *
 FROM (
   $trimmedSql
 ) AS plug_paginated_source
-ORDER BY $orderByClause
+${orderByClause != null ? 'ORDER BY $orderByClause' : ''}
 LIMIT ${pagination.fetchSizeWithLookAhead} OFFSET ${pagination.offset}
 ''',
       DatabaseType.sqlServer || DatabaseType.sybaseAnywhere =>
@@ -980,7 +983,7 @@ SELECT *
 FROM (
   $trimmedSql
 ) AS plug_paginated_source
-ORDER BY $orderByClause
+ORDER BY ${orderByClause ?? '(SELECT NULL)'}
 OFFSET ${pagination.offset} ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
 ''',
     };
@@ -991,7 +994,7 @@ OFFSET ${pagination.offset} ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead}
     DatabaseType databaseType,
     QueryPaginationRequest pagination,
   ) {
-    final trimmedSql = originalSql.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
     final orderByClause = _buildOrderByClause(pagination.orderBy);
     final whereClause = _buildKeysetWhereClause(
       pagination.orderBy,

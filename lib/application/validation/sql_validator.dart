@@ -194,6 +194,20 @@ class SqlValidator {
     );
   }
 
+  static String stripTopLevelOrderBy(String query) {
+    final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    if (normalizedQuery.isEmpty) {
+      return normalizedQuery;
+    }
+
+    final orderByIndex = _findTopLevelOrderBy(normalizedQuery);
+    if (orderByIndex < 0) {
+      return normalizedQuery;
+    }
+
+    return normalizedQuery.substring(0, orderByIndex).trimRight();
+  }
+
   static List<String> extractNamedParameters(String query) {
     final regex = RegExp(r':(\w+)');
     final matches = regex.allMatches(query);

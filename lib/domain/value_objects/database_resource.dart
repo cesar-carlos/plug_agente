@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
+
 enum DatabaseResourceType {
   table,
   view,
   unknown,
 }
 
+@immutable
 class DatabaseResource {
   const DatabaseResource({
     required this.resourceType,
@@ -30,6 +33,19 @@ class DatabaseResource {
   final String name;
 
   String get normalizedName => _normalizeName(name);
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is DatabaseResource &&
+        other.resourceType == resourceType &&
+        other.normalizedName == normalizedName;
+  }
+
+  @override
+  int get hashCode => Object.hash(resourceType, normalizedName);
 
   bool matches(String target) {
     final leftCandidates = _buildCandidates(normalizedName);

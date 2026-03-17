@@ -44,6 +44,22 @@ void main() {
       expect(result.isSuccess(), isTrue);
     });
 
+    test(
+      'should authorize CTE query using underlying table permission',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'WITH cte AS (SELECT * FROM dbo.users) SELECT * FROM cte',
+        );
+
+        expect(result.isSuccess(), isTrue);
+      },
+    );
+
     test('should deny operation when permission does not exist', () async {
       when(
         () => resolver.resolvePolicy(any()),

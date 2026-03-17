@@ -381,7 +381,7 @@ void main() {
       },
     );
 
-    test('should reject paginated query without explicit order by', () async {
+    test('should allow offset pagination without explicit order by', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
         method: 'sql.execute',
@@ -392,7 +392,52 @@ void main() {
         },
       );
 
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'id': 1},
+        ],
+        timestamp: DateTime.now(),
+        pagination: const QueryPaginationInfo(
+          page: 1,
+          pageSize: 25,
+          returnedRows: 1,
+          hasNextPage: true,
+          hasPreviousPage: false,
+        ),
+      );
+      when(
+        () => mockGateway.executeQuery(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) async => queryResponse);
+
       final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      final captured =
+          verify(() => mockGateway.executeQuery(captureAny())).captured.single
+              as QueryRequest;
+      expect(captured.pagination, isNotNull);
+      expect(captured.pagination!.orderBy, isEmpty);
+    });
+
+    test('should reject cursor pagination without explicit order by', () async {
+      final response = await dispatcher.dispatch(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users',
+            'options': {'cursor': 'YWJj'},
+          },
+        ),
+        'agent-1',
+      );
 
       expect(response.isError, isTrue);
       expect(response.error!.code, RpcErrorCode.invalidParams);

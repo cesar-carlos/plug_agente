@@ -1048,14 +1048,28 @@ class RpcMethodDispatcher {
       return const _ResolvedPagination();
     }
 
-    final paginationPlan = SqlValidator.validatePaginationQuery(sql);
-    if (paginationPlan.isError()) {
-      final failure = paginationPlan.exceptionOrNull()! as domain.Failure;
-      return _ResolvedPagination(errorMessage: failure.message);
+    final paginationPlanResult = SqlValidator.validatePaginationQuery(sql);
+    SqlPaginationPlan? plan;
+    if (paginationPlanResult.isSuccess()) {
+      plan = paginationPlanResult.getOrNull();
+    } else {
+      final failure = paginationPlanResult.exceptionOrNull()! as domain.Failure;
+      final isMissingOrderBy =
+          failure.message ==
+          'Paginated queries must declare an explicit ORDER BY clause';
+      if (cursor != null || !isMissingOrderBy) {
+        return _ResolvedPagination(errorMessage: failure.message);
+      }
     }
 
-    final plan = paginationPlan.getOrNull()!;
     if (cursor != null) {
+      final stablePlan = plan;
+      if (stablePlan == null) {
+        return const _ResolvedPagination(
+          errorMessage:
+              'Cursor pagination requires an explicit ORDER BY clause',
+        );
+      }
       if (page != null || pageSize != null) {
         return const _ResolvedPagination(
           errorMessage: 'cursor cannot be combined with page or page_size',
@@ -1077,12 +1091,12 @@ class RpcMethodDispatcher {
           );
         }
         if (decodedCursor.isStableCursor) {
-          if (decodedCursor.queryHash != plan.queryFingerprint) {
+          if (decodedCursor.queryHash != stablePlan.queryFingerprint) {
             return const _ResolvedPagination(
               errorMessage: 'cursor does not match the SQL query fingerprint',
             );
           }
-          if (!_orderByMatchesPlan(decodedCursor.orderBy, plan.orderBy)) {
+          if (!_orderByMatchesPlan(decodedCursor.orderBy, stablePlan.orderBy)) {
             return const _ResolvedPagination(
               errorMessage: 'cursor ordering does not match the SQL ORDER BY',
             );
@@ -1095,8 +1109,8 @@ class RpcMethodDispatcher {
             pageSize: decodedCursor.pageSize,
             cursor: cursor,
             offset: decodedCursor.offset,
-            queryHash: decodedCursor.queryHash ?? plan.queryFingerprint,
-            orderBy: plan.orderBy,
+            queryHash: decodedCursor.queryHash ?? stablePlan.queryFingerprint,
+            orderBy: stablePlan.orderBy,
             lastRowValues: decodedCursor.lastRowValues,
           ),
         );
@@ -1131,8 +1145,8 @@ class RpcMethodDispatcher {
       pagination: QueryPaginationRequest(
         page: page,
         pageSize: pageSize,
-        queryHash: plan.queryFingerprint,
-        orderBy: plan.orderBy,
+        queryHash: plan?.queryFingerprint,
+        orderBy: plan?.orderBy ?? const [],
       ),
     );
   }

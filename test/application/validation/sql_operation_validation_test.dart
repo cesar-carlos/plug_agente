@@ -148,6 +148,27 @@ void main() {
       expect(plan.orderBy.last.expression, 'id');
       expect(plan.orderBy.last.descending, isFalse);
     });
+
+    test('should strip top-level order by from query before pagination', () {
+      final stripped = SqlValidator.stripTopLevelOrderBy(
+        'SELECT * FROM dbo.Cliente ORDER BY CodCliente DESC;',
+      );
+
+      expect(stripped, equals('SELECT * FROM dbo.Cliente'));
+    });
+
+    test('should keep nested order by when stripping only top-level order by', () {
+      final stripped = SqlValidator.stripTopLevelOrderBy(
+        'SELECT * FROM (SELECT TOP 10 * FROM dbo.Cliente ORDER BY CodCliente DESC) q ORDER BY q.CodCliente ASC',
+      );
+
+      expect(
+        stripped,
+        equals(
+          'SELECT * FROM (SELECT TOP 10 * FROM dbo.Cliente ORDER BY CodCliente DESC) q',
+        ),
+      );
+    });
   });
 
   group('SqlOperationClassifier', () {
@@ -189,12 +210,57 @@ void main() {
 
       test('should classify SELECT with CTE', () {
         final r = classifier.classify(
-          'WITH cte AS (SELECT 1) SELECT * FROM cte',
+          'WITH cte AS (SELECT * FROM dbo.users) SELECT * FROM cte',
         );
         expect(r.isSuccess(), isTrue);
         r.fold(
           (c) {
             expect(c.operation, equals(SqlOperation.read));
+            expect(
+              c.resources.any((x) => x.normalizedName == 'dbo.users'),
+              isTrue,
+            );
+            expect(
+              c.resources.any((x) => x.normalizedName == 'cte'),
+              isFalse,
+            );
+          },
+          (_) => fail('Expected success'),
+        );
+      });
+
+      test('should classify JOIN with bracketed identifiers and spaces', () {
+        final r = classifier.classify(
+          'SELECT * FROM [dbo].[Order Details] od JOIN [dbo].[Cliente] c ON od.CodCliente = c.CodCliente',
+        );
+        expect(r.isSuccess(), isTrue);
+        r.fold(
+          (c) {
+            expect(c.operation, equals(SqlOperation.read));
+            expect(
+              c.resources.any((x) => x.normalizedName == 'dbo.orderdetails'),
+              isTrue,
+            );
+            expect(
+              c.resources.any((x) => x.normalizedName == 'dbo.cliente'),
+              isTrue,
+            );
+          },
+          (_) => fail('Expected success'),
+        );
+      });
+
+      test('should deduplicate repeated resources', () {
+        final r = classifier.classify(
+          'SELECT * FROM dbo.users u JOIN dbo.users u2 ON u.id = u2.id',
+        );
+        expect(r.isSuccess(), isTrue);
+        r.fold(
+          (c) {
+            final userResources = c.resources
+                .where((x) => x.normalizedName == 'dbo.users')
+                .toList();
+            expect(userResources.length, 1);
           },
           (_) => fail('Expected success'),
         );
@@ -210,7 +276,15 @@ void main() {
         r.fold(
           (c) {
             expect(c.operation, equals(SqlOperation.update));
-            expect(c.resources.length, greaterThanOrEqualTo(1));
+            expect(
+              c.resources.any((x) => x.normalizedName == 'dbo.users'),
+              isTrue,
+            );
+            expect(
+              c.resources.any((x) => x.normalizedName == 'dbo.orders'),
+              isTrue,
+            );
+            expect(c.resources.any((x) => x.normalizedName == 'u'), isFalse);
           },
           (_) => fail('Expected success'),
         );
