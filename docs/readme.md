@@ -1,26 +1,36 @@
-# Documentação - Plug Agente
+﻿# Documentacao - Plug Agente
 
-Índice da documentação do projeto.
+Indice principal da documentacao do projeto.
 
 ## Estrutura
 
-```
+```text
 docs/
-├── readme.md           # Este índice
-├── install/            # Instalação e release
-│   ├── README.md
-│   ├── installation_guide.md
-│   ├── requirements.md
-│   ├── path_setup.md
-│   ├── release_guide.md
-│   ├── auto_update_setup.md
-│   ├── testing_auto_update.md
-│   ├── VERSION_STRATEGY.md
-│   └── uninstall_monitor.bat
+|- readme.md
+|- project_overview.md
+|- migracao_plug_agente_namespaces.md
+|- communication/
+|  |- socket_communication_standard.md
+|  |- socketio_client_binary_transport.md
+|  |- openrpc.json
+|  \- schemas/
+|- install/
+|  |- README.md
+|  |- installation_guide.md
+|  |- requirements.md
+|  |- path_setup.md
+|  |- release_guide.md
+|  |- auto_update_setup.md
+|  |- testing_auto_update.md
+|  \- VERSION_STRATEGY.md
+\- notes/
 ```
 
-## Links Rápidos
+## Links rapidos
 
-| Documento                              | Descrição                        |
-| -------------------------------------- | -------------------------------- |
-| [install/README.md](install/README.md) | Instalação, release, auto-update |
+- [Visao geral do ecossistema](project_overview.md)
+- [Migracao para namespaces no agente_server](migracao_plug_agente_namespaces.md)
+- [Padrao de comunicacao Socket atual](communication/socket_communication_standard.md)
+- [Guia de cliente Socket com transporte binario](communication/socketio_client_binary_transport.md)
+- [OpenRPC do agente](communication/openrpc.json)
+- [Guia de instalacao](install/README.md)

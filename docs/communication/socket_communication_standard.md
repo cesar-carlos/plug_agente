@@ -15,6 +15,7 @@ binario esta documentado em
 - Metodos RPC:
   - `sql.execute`
   - `sql.executeBatch`
+  - `sql.cancel` (feature flag `enableSocketCancelMethod`)
   - `rpc.discover`
 - Catalogo padronizado de erros RPC
 - Negociacao de capacidades
@@ -74,7 +75,8 @@ Esse profile formaliza extensoes que nao fazem parte do JSON-RPC puro:
 - metadata operacional em `api_version` + `meta`
 - payload de erro estruturado em `error.data`
 - limites negociados no handshake
-- paginacao por `page/page_size` com ordem deterministica e por `cursor` keyset
+- paginacao por `page/page_size` (offset; `ORDER BY` opcional) e por `cursor`
+  keyset (`ORDER BY` obrigatorio para estabilidade)
 
 As semanticas ativas podem ser anunciadas em `capabilities.extensions` no
 handshake.
