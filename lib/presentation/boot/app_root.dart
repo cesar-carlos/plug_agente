@@ -23,6 +23,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -99,6 +100,7 @@ class AppRoot extends StatelessWidget {
             getIt<ListClientTokens>(),
             getIt<RevokeClientToken>(),
             getIt<DeleteClientToken>(),
+            tokenAuditStore: getIt<ITokenAuditStore>(),
           ),
         ),
         ChangeNotifierProvider(

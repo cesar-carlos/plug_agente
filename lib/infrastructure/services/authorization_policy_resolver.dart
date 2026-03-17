@@ -33,26 +33,26 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Future<Result<ClientTokenPolicy>> resolvePolicy(String token) async {
     final rawToken = _normalizeToken(token);
     if (rawToken.isEmpty) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Missing client token',
-          context: {'authentication': true},
-        ),
+      final failure = domain.ConfigurationFailure.withContext(
+        message: 'Missing client token',
+        context: {'authentication': true},
       );
+      await _recordAuthorizationDeniedAudit(failure);
+      return Failure(failure);
     }
 
     if (_featureFlags.enableSocketRevokedTokenInSession &&
         _revokedTokenStore != null &&
         _revokedTokenStore.isRevoked(rawToken)) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Token revoked',
-          context: {
-            'authorization': true,
-            'reason': 'token_revoked',
-          },
-        ),
+      final failure = domain.ConfigurationFailure.withContext(
+        message: 'Token revoked',
+        context: {
+          'authorization': true,
+          'reason': 'token_revoked',
+        },
       );
+      await _recordAuthorizationDeniedAudit(failure);
+      return Failure(failure);
     }
 
     if (_localDataSource != null) {
@@ -60,37 +60,45 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       if (localResult.isSuccess()) {
         return localResult;
       }
-      return Failure(localResult.exceptionOrNull()! as domain.Failure);
+      final localFailure = localResult.exceptionOrNull()! as domain.Failure;
+      final shouldFallbackToJwks =
+          localFailure.context['reason'] == 'token_not_found' &&
+          _featureFlags.enableSocketJwksValidation &&
+          _jwksVerifier != null;
+      if (!shouldFallbackToJwks) {
+        _addToRevokedStoreIfNeeded(rawToken, localFailure);
+        await _recordAuthorizationDeniedAudit(localFailure);
+        return Failure(localFailure);
+      }
     }
 
     if (_featureFlags.enableSocketJwksValidation && _jwksVerifier != null) {
       final verifyResult = await _jwksVerifier.verify(rawToken);
-      return verifyResult.fold(
+      final jwksResolved = verifyResult.fold<Result<ClientTokenPolicy>>(
         (payload) {
           final policyResult = _extractPolicyFromPayload(payload);
-          policyResult.fold(
-            (_) {},
-            (f) {
-              if (f is domain.Failure) {
-                _addToRevokedStoreIfNeeded(rawToken, f);
-              }
-            },
-          );
           return policyResult;
         },
         Failure.new,
       );
+      if (jwksResolved.isError()) {
+        final failure = jwksResolved.exceptionOrNull();
+        if (failure is domain.Failure) {
+          _addToRevokedStoreIfNeeded(rawToken, failure);
+          await _recordAuthorizationDeniedAudit(failure);
+        }
+      }
+      return jwksResolved;
     }
 
     final decodeResult = await _resolvePolicyDecodeOnly(token);
-    decodeResult.fold(
-      (_) {},
-      (f) {
-        if (f is domain.Failure) {
-          _addToRevokedStoreIfNeeded(rawToken, f);
-        }
-      },
-    );
+    if (decodeResult.isError()) {
+      final failure = decodeResult.exceptionOrNull();
+      if (failure is domain.Failure) {
+        _addToRevokedStoreIfNeeded(rawToken, failure);
+        await _recordAuthorizationDeniedAudit(failure);
+      }
+    }
     return decodeResult;
   }
 
@@ -230,7 +238,8 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   }
 
   void _addToRevokedStoreIfNeeded(String token, domain.Failure failure) {
-    if (!_featureFlags.enableSocketRevokedTokenInSession || _revokedTokenStore == null) {
+    if (!_featureFlags.enableSocketRevokedTokenInSession ||
+        _revokedTokenStore == null) {
       return;
     }
     final reason = failure.context['reason'] as String?;
@@ -245,6 +254,29 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           metadata: {'reason': 'token_revoked'},
         ),
       );
+    }
+  }
+
+  Future<void> _recordAuthorizationDeniedAudit(domain.Failure failure) async {
+    final auditStore = _tokenAuditStore;
+    if (auditStore == null) {
+      return;
+    }
+    try {
+      await auditStore.record(
+        TokenAuditEvent(
+          eventType: TokenAuditEventType.authorizationDenied,
+          timestamp: DateTime.now().toUtc(),
+          clientId: failure.context['client_id'] as String?,
+          tokenId: failure.context['token_id'] as String?,
+          metadata: {
+            'reason': failure.context['reason'] ?? 'authorization_denied',
+            'message': failure.message,
+          },
+        ),
+      );
+    } on Exception {
+      // Audit is best effort only.
     }
   }
 

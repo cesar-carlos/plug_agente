@@ -5,12 +5,16 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
+import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
@@ -18,20 +22,40 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 class MockClientTokenLocalDataSource extends Mock
     implements ClientTokenLocalDataSource {}
 
+class MockJwtJwksVerifier extends Mock implements JwtJwksVerifier {}
+
+class MockTokenAuditStore extends Mock implements ITokenAuditStore {}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      TokenAuditEvent(
+        eventType: TokenAuditEventType.create,
+        timestamp: DateTime.utc(2026, 1, 1),
+      ),
+    );
+  });
+
   group('AuthorizationPolicyResolver', () {
     late AuthorizationPolicyResolver resolver;
     late MockFeatureFlags mockFeatureFlags;
     late MockClientTokenLocalDataSource mockLocalDataSource;
+    late MockJwtJwksVerifier mockJwksVerifier;
+    late MockTokenAuditStore mockTokenAuditStore;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       mockFeatureFlags = MockFeatureFlags();
       mockLocalDataSource = MockClientTokenLocalDataSource();
+      mockJwksVerifier = MockJwtJwksVerifier();
+      mockTokenAuditStore = MockTokenAuditStore();
       when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(false);
       when(
         () => mockFeatureFlags.enableSocketRevokedTokenInSession,
       ).thenReturn(false);
+      when(
+        () => mockTokenAuditStore.record(any()),
+      ).thenAnswer((_) async {});
       resolver = AuthorizationPolicyResolver(mockFeatureFlags);
     });
 
@@ -182,8 +206,9 @@ void main() {
           expect(policy.clientId, equals('local-client'));
           expect(policy.allPermissions, isTrue);
         }, (_) => fail('Expected success'));
-        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
-            .called(1);
+        verify(
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
       },
     );
@@ -216,9 +241,88 @@ void main() {
             expect(authFailure.context['reason'], equals('token_not_found'));
           },
         );
-        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
-            .called(1);
+        verify(
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+      },
+    );
+
+    test(
+      'should fallback to JWKS when local token is not found and JWKS is enabled',
+      () async {
+        const opaqueToken = 'missing-local-token-fallback';
+        const tokenHash = 'hash-of-missing-token-fallback';
+        when(
+          () => mockFeatureFlags.enableSocketJwksValidation,
+        ).thenReturn(true);
+        when(
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockJwksVerifier.verify(opaqueToken),
+        ).thenAnswer(
+          (_) async => const Success(<String, dynamic>{
+            'policy': <String, dynamic>{
+              'client_id': 'jwks-client',
+              'all_tables': true,
+              'all_views': false,
+              'all_permissions': true,
+              'rules': <Map<String, dynamic>>[],
+            },
+          }),
+        );
+
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          localDataSource: mockLocalDataSource,
+          jwksVerifier: mockJwksVerifier,
+        );
+
+        final result = await resolver.resolvePolicy(opaqueToken);
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (policy) => expect(policy.clientId, equals('jwks-client')),
+          (_) => fail('Expected success'),
+        );
+        verify(() => mockJwksVerifier.verify(opaqueToken)).called(1);
+      },
+    );
+
+    test(
+      'should record authorization denied audit event on token_not_found',
+      () async {
+        const opaqueToken = 'missing-audit-token';
+        const tokenHash = 'hash-of-missing-audit-token';
+        when(
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
+        ).thenAnswer((_) async => null);
+
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          localDataSource: mockLocalDataSource,
+          tokenAuditStore: mockTokenAuditStore,
+        );
+
+        await resolver.resolvePolicy(opaqueToken);
+
+        final captured = verify(
+          () => mockTokenAuditStore.record(captureAny()),
+        ).captured;
+        expect(captured, isNotEmpty);
+        final event = captured.first as TokenAuditEvent;
+        expect(
+          event.eventType,
+          equals(TokenAuditEventType.authorizationDenied),
+        );
+        expect(event.metadata['reason'], equals('token_not_found'));
       },
     );
 
@@ -262,8 +366,9 @@ void main() {
             expect(authFailure.context['reason'], equals('token_revoked'));
           },
         );
-        verify(() => mockLocalDataSource.hashTokenForLookup(opaqueToken))
-            .called(1);
+        verify(
+          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
+        ).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
       },
     );

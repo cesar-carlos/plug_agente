@@ -20,15 +20,16 @@ abstract class AgentConfigDataSource {
 
 @DriftDatabase(tables: [ConfigTable, ClientTokenCacheTable])
 class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
-  AppDatabase() : super(_openConnection());
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
+      await _createClientTokenIndexes();
     },
     onUpgrade: (Migrator m, int from, int to) async {
       if (from < 2) {
@@ -69,10 +70,49 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         await m.createTable(clientTokenCacheTable);
       }
       if (from < 7) {
-        await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.tokenHash);
+        await m.addColumn(
+          clientTokenCacheTable,
+          clientTokenCacheTable.tokenHash,
+        );
       }
+      if (from < 8) {
+        await m.addColumn(
+          clientTokenCacheTable,
+          clientTokenCacheTable.tokenValue,
+        );
+      }
+      if (from < 9) {
+        await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.version);
+        await m.addColumn(
+          clientTokenCacheTable,
+          clientTokenCacheTable.updatedAt,
+        );
+        await customStatement(
+          '''
+          UPDATE client_token_cache_table
+          SET updated_at = COALESCE(updated_at, synced_at, created_at)
+          WHERE updated_at IS NULL
+          ''',
+        );
+      }
+      await _createClientTokenIndexes();
     },
   );
+
+  Future<void> _createClientTokenIndexes() async {
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_client_token_client_created
+      ON client_token_cache_table(client_id, created_at DESC)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_client_token_status_created
+      ON client_token_cache_table(is_revoked, created_at DESC)
+      ''',
+    );
+  }
 
   @override
   Future<List<ConfigData>> getAllConfigs() => select(configTable).get();
@@ -113,7 +153,8 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 
   @override
-  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) =>
+      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 }
 
 LazyDatabase _openConnection() {

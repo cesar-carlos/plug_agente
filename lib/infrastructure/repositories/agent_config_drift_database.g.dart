@@ -1015,12 +1015,35 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _agentIdMeta = const VerificationMeta(
     'agentId',
   );
   @override
   late final GeneratedColumn<String> agentId = GeneratedColumn<String>(
     'agent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tokenValueMeta = const VerificationMeta(
+    'tokenValue',
+  );
+  @override
+  late final GeneratedColumn<String> tokenValue = GeneratedColumn<String>(
+    'token_value',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -1036,6 +1059,17 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     false,
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
     'payloadJson',
@@ -1134,8 +1168,11 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     id,
     clientId,
     isRevoked,
+    version,
     agentId,
+    tokenValue,
     createdAt,
+    updatedAt,
     payloadJson,
     allTables,
     allViews,
@@ -1175,10 +1212,22 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         isRevoked.isAcceptableOrUnknown(data['is_revoked']!, _isRevokedMeta),
       );
     }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
     if (data.containsKey('agent_id')) {
       context.handle(
         _agentIdMeta,
         agentId.isAcceptableOrUnknown(data['agent_id']!, _agentIdMeta),
+      );
+    }
+    if (data.containsKey('token_value')) {
+      context.handle(
+        _tokenValueMeta,
+        tokenValue.isAcceptableOrUnknown(data['token_value']!, _tokenValueMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -1188,6 +1237,12 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
       );
     } else if (isInserting) {
       context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
     }
     if (data.containsKey('payload_json')) {
       context.handle(
@@ -1264,14 +1319,26 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         DriftSqlType.bool,
         data['${effectivePrefix}is_revoked'],
       )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
       agentId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}agent_id'],
+      ),
+      tokenValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token_value'],
       ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
       payloadJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payload_json'],
@@ -1314,8 +1381,11 @@ class ClientTokenCacheData extends DataClass
   final String id;
   final String clientId;
   final bool isRevoked;
+  final int version;
   final String? agentId;
+  final String? tokenValue;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final String payloadJson;
   final bool allTables;
   final bool allViews;
@@ -1327,8 +1397,11 @@ class ClientTokenCacheData extends DataClass
     required this.id,
     required this.clientId,
     required this.isRevoked,
+    required this.version,
     this.agentId,
+    this.tokenValue,
     required this.createdAt,
+    this.updatedAt,
     required this.payloadJson,
     required this.allTables,
     required this.allViews,
@@ -1343,10 +1416,17 @@ class ClientTokenCacheData extends DataClass
     map['id'] = Variable<String>(id);
     map['client_id'] = Variable<String>(clientId);
     map['is_revoked'] = Variable<bool>(isRevoked);
+    map['version'] = Variable<int>(version);
     if (!nullToAbsent || agentId != null) {
       map['agent_id'] = Variable<String>(agentId);
     }
+    if (!nullToAbsent || tokenValue != null) {
+      map['token_value'] = Variable<String>(tokenValue);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
     map['payload_json'] = Variable<String>(payloadJson);
     map['all_tables'] = Variable<bool>(allTables);
     map['all_views'] = Variable<bool>(allViews);
@@ -1362,10 +1442,17 @@ class ClientTokenCacheData extends DataClass
       id: Value(id),
       clientId: Value(clientId),
       isRevoked: Value(isRevoked),
+      version: Value(version),
       agentId: agentId == null && nullToAbsent
           ? const Value.absent()
           : Value(agentId),
+      tokenValue: tokenValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tokenValue),
       createdAt: Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
       payloadJson: Value(payloadJson),
       allTables: Value(allTables),
       allViews: Value(allViews),
@@ -1385,8 +1472,11 @@ class ClientTokenCacheData extends DataClass
       id: serializer.fromJson<String>(json['id']),
       clientId: serializer.fromJson<String>(json['clientId']),
       isRevoked: serializer.fromJson<bool>(json['isRevoked']),
+      version: serializer.fromJson<int>(json['version']),
       agentId: serializer.fromJson<String?>(json['agentId']),
+      tokenValue: serializer.fromJson<String?>(json['tokenValue']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
       payloadJson: serializer.fromJson<String>(json['payloadJson']),
       allTables: serializer.fromJson<bool>(json['allTables']),
       allViews: serializer.fromJson<bool>(json['allViews']),
@@ -1403,8 +1493,11 @@ class ClientTokenCacheData extends DataClass
       'id': serializer.toJson<String>(id),
       'clientId': serializer.toJson<String>(clientId),
       'isRevoked': serializer.toJson<bool>(isRevoked),
+      'version': serializer.toJson<int>(version),
       'agentId': serializer.toJson<String?>(agentId),
+      'tokenValue': serializer.toJson<String?>(tokenValue),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
       'payloadJson': serializer.toJson<String>(payloadJson),
       'allTables': serializer.toJson<bool>(allTables),
       'allViews': serializer.toJson<bool>(allViews),
@@ -1419,8 +1512,11 @@ class ClientTokenCacheData extends DataClass
     String? id,
     String? clientId,
     bool? isRevoked,
+    int? version,
     Value<String?> agentId = const Value.absent(),
+    Value<String?> tokenValue = const Value.absent(),
     DateTime? createdAt,
+    Value<DateTime?> updatedAt = const Value.absent(),
     String? payloadJson,
     bool? allTables,
     bool? allViews,
@@ -1432,8 +1528,11 @@ class ClientTokenCacheData extends DataClass
     id: id ?? this.id,
     clientId: clientId ?? this.clientId,
     isRevoked: isRevoked ?? this.isRevoked,
+    version: version ?? this.version,
     agentId: agentId.present ? agentId.value : this.agentId,
+    tokenValue: tokenValue.present ? tokenValue.value : this.tokenValue,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
     payloadJson: payloadJson ?? this.payloadJson,
     allTables: allTables ?? this.allTables,
     allViews: allViews ?? this.allViews,
@@ -1447,8 +1546,13 @@ class ClientTokenCacheData extends DataClass
       id: data.id.present ? data.id.value : this.id,
       clientId: data.clientId.present ? data.clientId.value : this.clientId,
       isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
+      version: data.version.present ? data.version.value : this.version,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
+      tokenValue: data.tokenValue.present
+          ? data.tokenValue.value
+          : this.tokenValue,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       payloadJson: data.payloadJson.present
           ? data.payloadJson.value
           : this.payloadJson,
@@ -1469,8 +1573,11 @@ class ClientTokenCacheData extends DataClass
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
           ..write('isRevoked: $isRevoked, ')
+          ..write('version: $version, ')
           ..write('agentId: $agentId, ')
+          ..write('tokenValue: $tokenValue, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('allTables: $allTables, ')
           ..write('allViews: $allViews, ')
@@ -1487,8 +1594,11 @@ class ClientTokenCacheData extends DataClass
     id,
     clientId,
     isRevoked,
+    version,
     agentId,
+    tokenValue,
     createdAt,
+    updatedAt,
     payloadJson,
     allTables,
     allViews,
@@ -1504,8 +1614,11 @@ class ClientTokenCacheData extends DataClass
           other.id == this.id &&
           other.clientId == this.clientId &&
           other.isRevoked == this.isRevoked &&
+          other.version == this.version &&
           other.agentId == this.agentId &&
+          other.tokenValue == this.tokenValue &&
           other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
           other.payloadJson == this.payloadJson &&
           other.allTables == this.allTables &&
           other.allViews == this.allViews &&
@@ -1520,8 +1633,11 @@ class ClientTokenCacheTableCompanion
   final Value<String> id;
   final Value<String> clientId;
   final Value<bool> isRevoked;
+  final Value<int> version;
   final Value<String?> agentId;
+  final Value<String?> tokenValue;
   final Value<DateTime> createdAt;
+  final Value<DateTime?> updatedAt;
   final Value<String> payloadJson;
   final Value<bool> allTables;
   final Value<bool> allViews;
@@ -1534,8 +1650,11 @@ class ClientTokenCacheTableCompanion
     this.id = const Value.absent(),
     this.clientId = const Value.absent(),
     this.isRevoked = const Value.absent(),
+    this.version = const Value.absent(),
     this.agentId = const Value.absent(),
+    this.tokenValue = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.payloadJson = const Value.absent(),
     this.allTables = const Value.absent(),
     this.allViews = const Value.absent(),
@@ -1549,8 +1668,11 @@ class ClientTokenCacheTableCompanion
     required String id,
     required String clientId,
     this.isRevoked = const Value.absent(),
+    this.version = const Value.absent(),
     this.agentId = const Value.absent(),
+    this.tokenValue = const Value.absent(),
     required DateTime createdAt,
+    this.updatedAt = const Value.absent(),
     this.payloadJson = const Value.absent(),
     this.allTables = const Value.absent(),
     this.allViews = const Value.absent(),
@@ -1567,8 +1689,11 @@ class ClientTokenCacheTableCompanion
     Expression<String>? id,
     Expression<String>? clientId,
     Expression<bool>? isRevoked,
+    Expression<int>? version,
     Expression<String>? agentId,
+    Expression<String>? tokenValue,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
     Expression<String>? payloadJson,
     Expression<bool>? allTables,
     Expression<bool>? allViews,
@@ -1582,8 +1707,11 @@ class ClientTokenCacheTableCompanion
       if (id != null) 'id': id,
       if (clientId != null) 'client_id': clientId,
       if (isRevoked != null) 'is_revoked': isRevoked,
+      if (version != null) 'version': version,
       if (agentId != null) 'agent_id': agentId,
+      if (tokenValue != null) 'token_value': tokenValue,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
       if (payloadJson != null) 'payload_json': payloadJson,
       if (allTables != null) 'all_tables': allTables,
       if (allViews != null) 'all_views': allViews,
@@ -1599,8 +1727,11 @@ class ClientTokenCacheTableCompanion
     Value<String>? id,
     Value<String>? clientId,
     Value<bool>? isRevoked,
+    Value<int>? version,
     Value<String?>? agentId,
+    Value<String?>? tokenValue,
     Value<DateTime>? createdAt,
+    Value<DateTime?>? updatedAt,
     Value<String>? payloadJson,
     Value<bool>? allTables,
     Value<bool>? allViews,
@@ -1614,8 +1745,11 @@ class ClientTokenCacheTableCompanion
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
       isRevoked: isRevoked ?? this.isRevoked,
+      version: version ?? this.version,
       agentId: agentId ?? this.agentId,
+      tokenValue: tokenValue ?? this.tokenValue,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       payloadJson: payloadJson ?? this.payloadJson,
       allTables: allTables ?? this.allTables,
       allViews: allViews ?? this.allViews,
@@ -1639,11 +1773,20 @@ class ClientTokenCacheTableCompanion
     if (isRevoked.present) {
       map['is_revoked'] = Variable<bool>(isRevoked.value);
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (agentId.present) {
       map['agent_id'] = Variable<String>(agentId.value);
     }
+    if (tokenValue.present) {
+      map['token_value'] = Variable<String>(tokenValue.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     if (payloadJson.present) {
       map['payload_json'] = Variable<String>(payloadJson.value);
@@ -1678,8 +1821,11 @@ class ClientTokenCacheTableCompanion
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
           ..write('isRevoked: $isRevoked, ')
+          ..write('version: $version, ')
           ..write('agentId: $agentId, ')
+          ..write('tokenValue: $tokenValue, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('allTables: $allTables, ')
           ..write('allViews: $allViews, ')
@@ -2156,8 +2302,11 @@ typedef $$ClientTokenCacheTableTableCreateCompanionBuilder =
       required String id,
       required String clientId,
       Value<bool> isRevoked,
+      Value<int> version,
       Value<String?> agentId,
+      Value<String?> tokenValue,
       required DateTime createdAt,
+      Value<DateTime?> updatedAt,
       Value<String> payloadJson,
       Value<bool> allTables,
       Value<bool> allViews,
@@ -2172,8 +2321,11 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> clientId,
       Value<bool> isRevoked,
+      Value<int> version,
       Value<String?> agentId,
+      Value<String?> tokenValue,
       Value<DateTime> createdAt,
+      Value<DateTime?> updatedAt,
       Value<String> payloadJson,
       Value<bool> allTables,
       Value<bool> allViews,
@@ -2208,13 +2360,28 @@ class $$ClientTokenCacheTableTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get agentId => $composableBuilder(
     column: $table.agentId,
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get tokenValue => $composableBuilder(
+    column: $table.tokenValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2278,13 +2445,28 @@ class $$ClientTokenCacheTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get agentId => $composableBuilder(
     column: $table.agentId,
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tokenValue => $composableBuilder(
+    column: $table.tokenValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -2342,11 +2524,22 @@ class $$ClientTokenCacheTableTableAnnotationComposer
   GeneratedColumn<bool> get isRevoked =>
       $composableBuilder(column: $table.isRevoked, builder: (column) => column);
 
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
   GeneratedColumn<String> get agentId =>
       $composableBuilder(column: $table.agentId, builder: (column) => column);
 
+  GeneratedColumn<String> get tokenValue => $composableBuilder(
+    column: $table.tokenValue,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get payloadJson => $composableBuilder(
     column: $table.payloadJson,
@@ -2423,8 +2616,11 @@ class $$ClientTokenCacheTableTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> clientId = const Value.absent(),
                 Value<bool> isRevoked = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<String?> agentId = const Value.absent(),
+                Value<String?> tokenValue = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<String> payloadJson = const Value.absent(),
                 Value<bool> allTables = const Value.absent(),
                 Value<bool> allViews = const Value.absent(),
@@ -2437,8 +2633,11 @@ class $$ClientTokenCacheTableTableTableManager
                 id: id,
                 clientId: clientId,
                 isRevoked: isRevoked,
+                version: version,
                 agentId: agentId,
+                tokenValue: tokenValue,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
                 payloadJson: payloadJson,
                 allTables: allTables,
                 allViews: allViews,
@@ -2453,8 +2652,11 @@ class $$ClientTokenCacheTableTableTableManager
                 required String id,
                 required String clientId,
                 Value<bool> isRevoked = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<String?> agentId = const Value.absent(),
+                Value<String?> tokenValue = const Value.absent(),
                 required DateTime createdAt,
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<String> payloadJson = const Value.absent(),
                 Value<bool> allTables = const Value.absent(),
                 Value<bool> allViews = const Value.absent(),
@@ -2467,8 +2669,11 @@ class $$ClientTokenCacheTableTableTableManager
                 id: id,
                 clientId: clientId,
                 isRevoked: isRevoked,
+                version: version,
                 agentId: agentId,
+                tokenValue: tokenValue,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
                 payloadJson: payloadJson,
                 allTables: allTables,
                 allViews: allViews,

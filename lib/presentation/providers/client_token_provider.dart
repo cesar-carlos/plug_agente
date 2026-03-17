@@ -5,8 +5,11 @@ import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 
 class ClientTokenProvider extends ChangeNotifier {
   ClientTokenProvider(
@@ -14,14 +17,16 @@ class ClientTokenProvider extends ChangeNotifier {
     this._updateClientToken,
     this._listClientTokens,
     this._revokeClientToken,
-    this._deleteClientToken,
-  );
+    this._deleteClientToken, {
+    ITokenAuditStore? tokenAuditStore,
+  }) : _tokenAuditStore = tokenAuditStore;
 
   final CreateClientToken _createClientToken;
   final UpdateClientToken _updateClientToken;
   final ListClientTokens _listClientTokens;
   final RevokeClientToken _revokeClientToken;
   final DeleteClientToken _deleteClientToken;
+  final ITokenAuditStore? _tokenAuditStore;
 
   List<ClientTokenSummary> _tokens = const <ClientTokenSummary>[];
   bool _isLoading = false;
@@ -33,6 +38,7 @@ class ClientTokenProvider extends ChangeNotifier {
   String _error = '';
   String? _lastCreatedToken;
   bool _hasLoaded = false;
+  ClientTokenListQuery _lastListQuery = const ClientTokenListQuery();
 
   List<ClientTokenSummary> get tokens => _tokens;
   bool get isLoading => _isLoading;
@@ -45,14 +51,20 @@ class ClientTokenProvider extends ChangeNotifier {
   String? get lastCreatedToken => _lastCreatedToken;
   bool get hasLoaded => _hasLoaded;
 
-  Future<bool> loadTokens({bool silent = false}) async {
+  Future<bool> loadTokens({
+    bool silent = false,
+    ClientTokenListQuery? query,
+  }) async {
+    final effectiveQuery = query ?? _lastListQuery;
+    _lastListQuery = effectiveQuery;
+
     if (!silent) {
       _isLoading = true;
       _error = '';
       notifyListeners();
     }
 
-    final result = await _listClientTokens();
+    final result = await _listClientTokens(query: effectiveQuery);
 
     var isSuccess = false;
     result.fold(
@@ -123,7 +135,7 @@ class ClientTokenProvider extends ChangeNotifier {
       (_) async {
         _error = '';
         isSuccess = true;
-        await loadTokens(silent: true);
+        _markTokenRevokedInMemory(tokenId);
       },
       (failure) async {
         _error = failure.toDisplayMessage();
@@ -140,20 +152,33 @@ class ClientTokenProvider extends ChangeNotifier {
     String tokenId,
     ClientTokenCreateRequest request, {
     bool refreshTokens = true,
+    int? expectedVersion,
   }) async {
     _isCreating = true;
     _error = '';
     _lastCreatedToken = null;
     notifyListeners();
 
-    final result = await _updateClientToken(tokenId, request);
+    final result = await _updateClientToken(
+      tokenId,
+      request,
+      expectedVersion: expectedVersion,
+    );
     var isSuccess = false;
 
     await result.fold(
-      (_) async {
+      (updateResult) async {
         _error = '';
+        _lastCreatedToken = updateResult.tokenValue;
         isSuccess = true;
-        if (refreshTokens) {
+        final patched = _applyUpdatedTokenInMemory(
+          tokenId: tokenId,
+          request: request,
+          nextVersion: updateResult.version,
+          updatedAt: updateResult.updatedAt,
+          rotatedToken: updateResult.tokenValue,
+        );
+        if (refreshTokens && !patched) {
           await loadTokens(silent: true);
         }
       },
@@ -184,7 +209,7 @@ class ClientTokenProvider extends ChangeNotifier {
       (_) async {
         _error = '';
         isSuccess = true;
-        await loadTokens(silent: true);
+        _tokens = _tokens.where((token) => token.id != tokenId).toList();
       },
       (failure) async {
         _error = failure.toDisplayMessage();
@@ -215,5 +240,75 @@ class ClientTokenProvider extends ChangeNotifier {
     }
     _lastCreatedToken = null;
     notifyListeners();
+  }
+
+  Future<void> recordCopiedToken({
+    required String tokenId,
+    required String clientId,
+  }) async {
+    final auditStore = _tokenAuditStore;
+    if (auditStore == null) {
+      return;
+    }
+    try {
+      await auditStore.record(
+        TokenAuditEvent(
+          eventType: TokenAuditEventType.copy,
+          timestamp: DateTime.now().toUtc(),
+          tokenId: tokenId,
+          clientId: clientId,
+        ),
+      );
+    } on Exception {
+      // Audit must not impact UI flow.
+    }
+  }
+
+  bool _applyUpdatedTokenInMemory({
+    required String tokenId,
+    required ClientTokenCreateRequest request,
+    required int nextVersion,
+    required DateTime updatedAt,
+    required String rotatedToken,
+  }) {
+    final index = _tokens.indexWhere((token) => token.id == tokenId);
+    if (index < 0) {
+      return false;
+    }
+
+    final current = _tokens[index];
+    final agentId = request.agentId?.trim();
+    final next = current.copyWith(
+      clientId: request.clientId.trim(),
+      agentId: agentId == null || agentId.isEmpty ? null : agentId,
+      payload: request.payload,
+      allTables: request.allTables,
+      allViews: request.allViews,
+      allPermissions: request.allPermissions,
+      rules: request.rules,
+      tokenValue: rotatedToken,
+      version: nextVersion,
+      updatedAt: updatedAt,
+    );
+
+    final mutable = List<ClientTokenSummary>.from(_tokens);
+    mutable[index] = next;
+    _tokens = mutable;
+    return true;
+  }
+
+  void _markTokenRevokedInMemory(String tokenId) {
+    final index = _tokens.indexWhere((token) => token.id == tokenId);
+    if (index < 0) {
+      return;
+    }
+    final current = _tokens[index];
+    final mutable = List<ClientTokenSummary>.from(_tokens);
+    mutable[index] = current.copyWith(
+      isRevoked: true,
+      version: current.version + 1,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _tokens = mutable;
   }
 }

@@ -56,6 +56,7 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -81,9 +82,11 @@ import 'package:plug_agente/infrastructure/services/noop_notification_service.da
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
+import 'package:plug_agente/infrastructure/stores/flutter_secure_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -158,8 +161,20 @@ Future<void> setupDependencies({
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(SocketDataSource.new)
     ..registerLazySingleton(AppDatabase.new)
+    ..registerLazySingleton<ITokenSecretStore>(
+      () {
+        try {
+          return FlutterSecureTokenSecretStore();
+        } on Object {
+          return NoopTokenSecretStore();
+        }
+      },
+    )
     ..registerLazySingleton(
-      () => ClientTokenLocalDataSource(getIt<AppDatabase>()),
+      () => ClientTokenLocalDataSource(
+        getIt<AppDatabase>(),
+        secretStore: getIt<ITokenSecretStore>(),
+      ),
     )
     ..registerLazySingleton(ProtocolNegotiator.new)
     ..registerLazySingleton(ProtocolMetricsCollector.new)
@@ -179,7 +194,9 @@ Future<void> setupDependencies({
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
-      () => getIt<FeatureFlags>().enableTokenAudit ? FileTokenAuditStore() : NoopTokenAuditStore(),
+      () => getIt<FeatureFlags>().enableTokenAudit
+          ? FileTokenAuditStore()
+          : NoopTokenAuditStore(),
     )
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
@@ -199,7 +216,10 @@ Future<void> setupDependencies({
         final signingKey = dotenv.env['PAYLOAD_SIGNING_KEY']?.trim();
         final signingKeyId = dotenv.env['PAYLOAD_SIGNING_KEY_ID']?.trim();
         PayloadSigner? payloadSigner;
-        if (signingKey != null && signingKey.isNotEmpty && signingKeyId != null && signingKeyId.isNotEmpty) {
+        if (signingKey != null &&
+            signingKey.isNotEmpty &&
+            signingKeyId != null &&
+            signingKeyId.isNotEmpty) {
           payloadSigner = PayloadSigner(keys: {signingKeyId: signingKey});
         }
         return SocketIOTransportClientV2(
@@ -246,20 +266,31 @@ Future<void> setupDependencies({
         if (jwksUrlOverride != null && jwksUrlOverride.isNotEmpty) {
           return JwksConfig(
             jwksUrl: jwksUrlOverride,
-            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_ISSUER']
+                : null,
+            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_AUDIENCE']
+                : null,
           );
         }
-        final configResult = await getIt<IAgentConfigRepository>().getCurrentConfig();
+        final configResult = await getIt<IAgentConfigRepository>()
+            .getCurrentConfig();
         return configResult.fold(
           (config) {
             final base = config.serverUrl.trim();
             if (base.isEmpty) return null;
-            final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+            final normalized = base.endsWith('/')
+                ? base.substring(0, base.length - 1)
+                : base;
             return JwksConfig(
               jwksUrl: '$normalized/.well-known/jwks.json',
-              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_ISSUER']
+                  : null,
+              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_AUDIENCE']
+                  : null,
             );
           },
           (_) => null,
@@ -337,7 +368,10 @@ Future<void> setupDependencies({
       () => ListClientTokens(getIt<IClientTokenRepository>()),
     )
     ..registerLazySingleton(
-      () => UpdateClientToken(getIt<IClientTokenRepository>()),
+      () => UpdateClientToken(
+        getIt<IClientTokenRepository>(),
+        auditStore: getIt<ITokenAuditStore>(),
+      ),
     )
     ..registerLazySingleton(
       () => RevokeClientToken(

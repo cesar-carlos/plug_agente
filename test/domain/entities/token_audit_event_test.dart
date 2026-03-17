@@ -3,14 +3,21 @@ import 'package:plug_agente/domain/entities/token_audit_event.dart';
 
 void main() {
   group('TokenAuditEventType', () {
-    test('should have create, revoke and revokedInSession', () {
-      expect(TokenAuditEventType.values.length, 3);
+    test('should include management and authorization audit event types', () {
+      expect(TokenAuditEventType.values.length, 7);
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.create));
+      expect(TokenAuditEventType.values, contains(TokenAuditEventType.copy));
+      expect(TokenAuditEventType.values, contains(TokenAuditEventType.rotate));
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.revoke));
       expect(
         TokenAuditEventType.values,
         contains(TokenAuditEventType.revokedInSession),
       );
+      expect(
+        TokenAuditEventType.values,
+        contains(TokenAuditEventType.authorizationDenied),
+      );
+      expect(TokenAuditEventType.values, contains(TokenAuditEventType.delete));
     });
   });
 

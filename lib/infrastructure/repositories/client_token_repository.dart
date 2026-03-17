@@ -1,5 +1,7 @@
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
@@ -27,20 +29,38 @@ class ClientTokenRepository implements IClientTokenRepository {
   }
 
   @override
-  Future<Result<void>> updateToken(
+  Future<Result<ClientTokenUpdateResult>> updateToken(
     String tokenId,
-    ClientTokenCreateRequest request,
-  ) async {
+    ClientTokenCreateRequest request, {
+    int? expectedVersion,
+  }) async {
     try {
-      final didUpdate = await _localDataSource.updateToken(tokenId, request);
-      if (!didUpdate) {
+      final updateResult = await _localDataSource.updateToken(
+        tokenId,
+        request,
+        expectedVersion: expectedVersion,
+      );
+      if (updateResult == null) {
         return Failure(
           domain.ValidationFailure(
             'Client token not found for update operation',
           ),
         );
       }
-      return const Success(unit);
+      return Success(updateResult);
+    } on ClientTokenVersionConflictException catch (error) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Client token was modified by another operation',
+          context: {
+            'operation': 'update_local_client_token',
+            'token_id': tokenId,
+            'reason': 'token_version_conflict',
+            'current_version': error.currentVersion,
+            if (expectedVersion != null) 'expected_version': expectedVersion,
+          },
+        ),
+      );
     } on Exception catch (error) {
       return Failure(
         domain.ServerFailure.withContext(
@@ -56,9 +76,11 @@ class ClientTokenRepository implements IClientTokenRepository {
   }
 
   @override
-  Future<Result<List<ClientTokenSummary>>> listTokens() async {
+  Future<Result<List<ClientTokenSummary>>> listTokens({
+    ClientTokenListQuery? query,
+  }) async {
     try {
-      final tokens = await _localDataSource.listTokens();
+      final tokens = await _localDataSource.listTokens(query: query);
       return Success(tokens);
     } on Exception catch (error) {
       return Failure(

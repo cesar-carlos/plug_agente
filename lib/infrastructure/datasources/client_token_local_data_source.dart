@@ -5,26 +5,44 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
+import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
+class ClientTokenVersionConflictException implements Exception {
+  const ClientTokenVersionConflictException({required this.currentVersion});
+
+  final int currentVersion;
+
+  @override
+  String toString() =>
+      'ClientTokenVersionConflictException(currentVersion: $currentVersion)';
+}
+
 class ClientTokenLocalDataSource {
-  ClientTokenLocalDataSource(this._database);
+  ClientTokenLocalDataSource(this._database, {ITokenSecretStore? secretStore})
+    : _secretStore = secretStore;
 
   final AppDatabase _database;
+  final ITokenSecretStore? _secretStore;
   final Random _random = Random.secure();
+  static const _secureStorageMarker = '__secure_storage__';
 
   Future<String> createToken(ClientTokenCreateRequest request) async {
     final now = DateTime.now().toUtc();
     final tokenId = _buildTokenId();
     final opaqueToken = _generateOpaqueToken();
     final tokenHash = _hashToken(opaqueToken);
+    await _saveSecretBestEffort(tokenId, opaqueToken);
     final summary = ClientTokenSummary(
       id: tokenId,
       clientId: request.clientId.trim(),
       createdAt: now,
       isRevoked: false,
+      tokenValue: opaqueToken,
       allTables: request.allTables,
       allViews: request.allViews,
       allPermissions: request.allPermissions,
@@ -33,7 +51,9 @@ class ClientTokenLocalDataSource {
       payload: request.payload,
     );
 
-    await _database.into(_database.clientTokenCacheTable).insertOnConflictUpdate(
+    await _database
+        .into(_database.clientTokenCacheTable)
+        .insertOnConflictUpdate(
           _toCompanion(summary, syncedAt: now, tokenHash: tokenHash),
         );
 
@@ -59,17 +79,59 @@ class ClientTokenLocalDataSource {
     });
   }
 
-  Future<List<ClientTokenSummary>> listTokens() async {
-    final rows =
-        await (_database.select(_database.clientTokenCacheTable)..orderBy([
-              (table) => OrderingTerm(
-                expression: table.createdAt,
-                mode: OrderingMode.desc,
-              ),
-            ]))
-            .get();
+  Future<List<ClientTokenSummary>> listTokens({
+    ClientTokenListQuery? query,
+  }) async {
+    final effectiveQuery = query ?? const ClientTokenListQuery();
+    final statement = _database.select(_database.clientTokenCacheTable);
 
-    return rows.map(_toEntity).toList();
+    final normalizedClientFilter = effectiveQuery.clientIdContains.trim();
+    if (normalizedClientFilter.isNotEmpty) {
+      statement.where(
+        (table) => table.clientId.like('%$normalizedClientFilter%'),
+      );
+    }
+
+    if (effectiveQuery.status == ClientTokenStatusFilter.active) {
+      statement.where((table) => table.isRevoked.equals(false));
+    } else if (effectiveQuery.status == ClientTokenStatusFilter.revoked) {
+      statement.where((table) => table.isRevoked.equals(true));
+    }
+
+    statement.orderBy([
+      switch (effectiveQuery.sort) {
+        ClientTokenSortOption.newest => (table) => OrderingTerm(
+          expression: table.createdAt,
+          mode: OrderingMode.desc,
+        ),
+        ClientTokenSortOption.oldest => (table) => OrderingTerm(
+          expression: table.createdAt,
+        ),
+        ClientTokenSortOption.clientAsc => (table) => OrderingTerm(
+          expression: table.clientId.lower(),
+        ),
+        ClientTokenSortOption.clientDesc => (table) => OrderingTerm(
+          expression: table.clientId.lower(),
+          mode: OrderingMode.desc,
+        ),
+      },
+      (table) => OrderingTerm(
+        expression: table.createdAt,
+        mode: OrderingMode.desc,
+      ),
+    ]);
+
+    if (effectiveQuery.hasPagination) {
+      statement.limit(effectiveQuery.pageSize!, offset: effectiveQuery.offset);
+    }
+
+    final rows = await statement.get();
+
+    final tokens = <ClientTokenSummary>[];
+    for (final row in rows) {
+      tokens.add(await _toEntity(row));
+    }
+    return tokens;
   }
 
   Future<ClientTokenSummary?> getTokenById(String tokenId) async {
@@ -101,49 +163,116 @@ class ClientTokenLocalDataSource {
   }
 
   Future<bool> markTokenRevoked(String tokenId) async {
+    final current =
+        await (_database.select(_database.clientTokenCacheTable)
+              ..where((table) => table.id.equals(tokenId))
+              ..limit(1))
+            .getSingleOrNull();
+    if (current == null) {
+      return false;
+    }
+    final now = DateTime.now().toUtc();
     final affectedRows =
         await (_database.update(
-          _database.clientTokenCacheTable,
-        )..where((table) => table.id.equals(tokenId))).write(
-          ClientTokenCacheTableCompanion(
-            isRevoked: const Value(true),
-            syncedAt: Value(DateTime.now().toUtc()),
-          ),
-        );
+              _database.clientTokenCacheTable,
+            )..where(
+              (table) =>
+                  table.id.equals(tokenId) &
+                  table.version.equals(current.version),
+            ))
+            .write(
+              ClientTokenCacheTableCompanion(
+                isRevoked: const Value(true),
+                version: Value(current.version + 1),
+                updatedAt: Value(now),
+                syncedAt: Value(now),
+              ),
+            );
     return affectedRows > 0;
   }
 
-  Future<bool> updateToken(
+  Future<ClientTokenUpdateResult?> updateToken(
     String tokenId,
-    ClientTokenCreateRequest request,
-  ) async {
+    ClientTokenCreateRequest request, {
+    int? expectedVersion,
+  }) async {
+    final current =
+        await (_database.select(_database.clientTokenCacheTable)
+              ..where((table) => table.id.equals(tokenId))
+              ..limit(1))
+            .getSingleOrNull();
+    if (current == null) {
+      return null;
+    }
+
+    if (expectedVersion != null && current.version != expectedVersion) {
+      throw ClientTokenVersionConflictException(
+        currentVersion: current.version,
+      );
+    }
+
+    final newTokenValue = _generateOpaqueToken();
+    final newTokenHash = _hashToken(newTokenValue);
+    await _saveSecretBestEffort(tokenId, newTokenValue);
+    final nextVersion = current.version + 1;
+    final now = DateTime.now().toUtc();
+
     final affectedRows =
         await (_database.update(
-          _database.clientTokenCacheTable,
-        )..where((table) => table.id.equals(tokenId))).write(
-          ClientTokenCacheTableCompanion(
-            clientId: Value(request.clientId.trim()),
-            agentId: Value(
-              request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
-            ),
-            payloadJson: Value(jsonEncode(request.payload)),
-            allTables: Value(request.allTables),
-            allViews: Value(request.allViews),
-            allPermissions: Value(request.allPermissions),
-            rulesJson: Value(
-              jsonEncode(request.rules.map((rule) => rule.toJson()).toList()),
-            ),
-            syncedAt: Value(DateTime.now().toUtc()),
-          ),
-        );
-    return affectedRows > 0;
+              _database.clientTokenCacheTable,
+            )..where(
+              (table) =>
+                  table.id.equals(tokenId) &
+                  table.version.equals(current.version),
+            ))
+            .write(
+              ClientTokenCacheTableCompanion(
+                clientId: Value(request.clientId.trim()),
+                agentId: Value(
+                  request.agentId?.trim().isEmpty ?? true
+                      ? null
+                      : request.agentId,
+                ),
+                tokenHash: Value(newTokenHash),
+                tokenValue: Value(_persistedTokenValue(newTokenValue)),
+                payloadJson: Value(jsonEncode(request.payload)),
+                allTables: Value(request.allTables),
+                allViews: Value(request.allViews),
+                allPermissions: Value(request.allPermissions),
+                rulesJson: Value(
+                  jsonEncode(
+                    request.rules.map((rule) => rule.toJson()).toList(),
+                  ),
+                ),
+                version: Value(nextVersion),
+                updatedAt: Value(now),
+                syncedAt: Value(now),
+              ),
+            );
+    if (affectedRows == 0) {
+      final latest =
+          await (_database.select(_database.clientTokenCacheTable)
+                ..where((table) => table.id.equals(tokenId))
+                ..limit(1))
+              .getSingleOrNull();
+      throw ClientTokenVersionConflictException(
+        currentVersion: latest?.version ?? current.version,
+      );
+    }
+    return ClientTokenUpdateResult(
+      tokenValue: newTokenValue,
+      version: nextVersion,
+      updatedAt: now,
+    );
   }
 
   Future<bool> deleteToken(String tokenId) async {
-    final affectedRows =
-        await (_database.delete(_database.clientTokenCacheTable)
-              ..where((table) => table.id.equals(tokenId)))
-            .go();
+    final affectedRows = await (_database.delete(
+      _database.clientTokenCacheTable,
+    )..where((table) => table.id.equals(tokenId))).go();
+    if (affectedRows > 0) {
+      await _deleteSecretBestEffort(tokenId);
+    }
     return affectedRows > 0;
   }
 
@@ -157,7 +286,10 @@ class ClientTokenLocalDataSource {
       clientId: token.clientId,
       isRevoked: Value(token.isRevoked),
       agentId: Value(token.agentId),
+      tokenValue: Value(_persistedTokenValue(token.tokenValue)),
       createdAt: token.createdAt.toUtc(),
+      updatedAt: Value(token.updatedAt),
+      version: Value(token.version),
       payloadJson: Value(jsonEncode(token.payload)),
       allTables: Value(token.allTables),
       allViews: Value(token.allViews),
@@ -170,13 +302,20 @@ class ClientTokenLocalDataSource {
     );
   }
 
-  ClientTokenSummary _toEntity(ClientTokenCacheData row) {
+  Future<ClientTokenSummary> _toEntity(ClientTokenCacheData row) async {
+    final tokenValue = await _resolveTokenValue(
+      tokenId: row.id,
+      persistedTokenValue: row.tokenValue,
+    );
     return ClientTokenSummary(
       id: row.id,
       clientId: row.clientId,
       createdAt: row.createdAt,
       isRevoked: row.isRevoked,
       agentId: row.agentId,
+      tokenValue: tokenValue,
+      version: row.version,
+      updatedAt: row.updatedAt,
       payload: _decodePayload(row.payloadJson),
       allTables: row.allTables,
       allViews: row.allViews,
@@ -244,5 +383,96 @@ class ClientTokenLocalDataSource {
     final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
     final suffix = _random.nextInt(1 << 20).toRadixString(16);
     return '${timestamp}_$suffix';
+  }
+
+  String? _persistedTokenValue(String? tokenValue) {
+    if (tokenValue == null || tokenValue.isEmpty) {
+      return null;
+    }
+    return _secretStore == null ? tokenValue : _secureStorageMarker;
+  }
+
+  Future<String?> _resolveTokenValue({
+    required String tokenId,
+    required String? persistedTokenValue,
+  }) async {
+    final secretStore = _secretStore;
+    if (secretStore != null) {
+      final secret = await _readSecretBestEffort(tokenId);
+      if (secret != null && secret.isNotEmpty) {
+        return secret;
+      }
+    }
+
+    if (persistedTokenValue == null || persistedTokenValue.isEmpty) {
+      return null;
+    }
+    if (persistedTokenValue == _secureStorageMarker) {
+      return null;
+    }
+
+    // Legacy token values were persisted in plaintext before secure storage.
+    await _migrateLegacyTokenValueToSecretStore(
+      tokenId: tokenId,
+      tokenValue: persistedTokenValue,
+    );
+    return persistedTokenValue;
+  }
+
+  Future<void> _migrateLegacyTokenValueToSecretStore({
+    required String tokenId,
+    required String tokenValue,
+  }) async {
+    if (_secretStore == null) {
+      return;
+    }
+    await _saveSecretBestEffort(tokenId, tokenValue);
+    try {
+      await (_database.update(
+        _database.clientTokenCacheTable,
+      )..where((table) => table.id.equals(tokenId))).write(
+        const ClientTokenCacheTableCompanion(
+          tokenValue: Value(_secureStorageMarker),
+        ),
+      );
+    } on Exception {
+      // Best effort migration only.
+    }
+  }
+
+  Future<void> _saveSecretBestEffort(String tokenId, String tokenValue) async {
+    final secretStore = _secretStore;
+    if (secretStore == null) {
+      return;
+    }
+    try {
+      await secretStore.saveSecret(tokenId, tokenValue);
+    } on Exception {
+      // Secret persistence must not block token operations.
+    }
+  }
+
+  Future<String?> _readSecretBestEffort(String tokenId) async {
+    final secretStore = _secretStore;
+    if (secretStore == null) {
+      return null;
+    }
+    try {
+      return await secretStore.readSecret(tokenId);
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<void> _deleteSecretBestEffort(String tokenId) async {
+    final secretStore = _secretStore;
+    if (secretStore == null) {
+      return;
+    }
+    try {
+      await secretStore.deleteSecret(tokenId);
+    } on Exception {
+      // Best effort cleanup only.
+    }
   }
 }

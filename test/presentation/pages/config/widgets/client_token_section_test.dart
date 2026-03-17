@@ -7,6 +7,7 @@ import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -24,6 +25,10 @@ class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 class MockDeleteClientToken extends Mock implements DeleteClientToken {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const ClientTokenListQuery());
+  });
+
   group('ClientTokenSection', () {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
@@ -40,7 +45,7 @@ void main() {
       mockDeleteClientToken = MockDeleteClientToken();
 
       when(
-        () => mockListClientTokens(),
+        () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
 
       provider = ClientTokenProvider(

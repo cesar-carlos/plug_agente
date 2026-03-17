@@ -6,8 +6,10 @@ import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -27,6 +29,7 @@ class MockDeleteClientToken extends Mock implements DeleteClientToken {}
 void main() {
   setUpAll(() {
     registerFallbackValue(_buildRequest());
+    registerFallbackValue(const ClientTokenListQuery());
   });
 
   group('ClientTokenProvider', () {
@@ -66,7 +69,7 @@ void main() {
         ),
       ];
       when(
-        () => mockListClientTokens(),
+        () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer((_) async => Success(tokens));
 
       final success = await provider.loadTokens();
@@ -83,7 +86,7 @@ void main() {
         () => mockCreateClientToken(any()),
       ).thenAnswer((_) async => const Success('new-token'));
       when(
-        () => mockListClientTokens(),
+        () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer(
         (_) async => Success(<ClientTokenSummary>[
           ClientTokenSummary(
@@ -124,7 +127,7 @@ void main() {
         () => mockRevokeClientToken('token-1'),
       ).thenAnswer((_) async => const Success(unit));
       when(
-        () => mockListClientTokens(),
+        () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
 
       final success = await provider.revokeToken('token-1');
@@ -136,17 +139,29 @@ void main() {
 
     test('should update token and refresh list', () async {
       when(
-        () => mockUpdateClientToken('token-1', any()),
-      ).thenAnswer((_) async => const Success(unit));
-      when(
-        () => mockListClientTokens(),
-      ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
+        () => mockUpdateClientToken(
+          'token-1',
+          any(),
+          expectedVersion: any(named: 'expectedVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          ClientTokenUpdateResult(
+            tokenValue: 'rotated-token-value',
+            version: 2,
+            updatedAt: DateTime(2026, 3, 12, 15),
+          ),
+        ),
+      );
 
-      final success = await provider.updateToken('token-1', _buildRequest());
+      final success = await provider.updateToken(
+        'token-1',
+        _buildRequest(),
+        refreshTokens: false,
+      );
 
       expect(success, isTrue);
-      expect(provider.lastCreatedToken, isNull);
-      expect(provider.tokens, isEmpty);
+      expect(provider.lastCreatedToken, equals('rotated-token-value'));
       expect(provider.error, isEmpty);
     });
   });

@@ -9,6 +9,7 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
@@ -65,25 +66,28 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   bool _allTables = false;
   bool _allViews = false;
   bool _allPermissions = false;
-  _TokenStatusFilter _tokenStatusFilter = _TokenStatusFilter.all;
-  _TokenSortOption _tokenSortOption = _TokenSortOption.newest;
+  ClientTokenStatusFilter _tokenStatusFilter = ClientTokenStatusFilter.all;
+  ClientTokenSortOption _tokenSortOption = ClientTokenSortOption.newest;
   bool _autoRefreshAfterCreate = true;
   String _formError = '';
   String? _editingTokenId;
+  int? _editingTokenVersion;
 
   @override
   void initState() {
     super.initState();
-    _restoreTokenListPreferences();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final provider = context.read<ClientTokenProvider>();
-      if (!provider.hasLoaded) {
-        provider.loadTokens(silent: true);
-      }
-    });
+    _initializeTokenListState();
+  }
+
+  Future<void> _initializeTokenListState() async {
+    await _restoreTokenListPreferences();
+    if (!mounted) {
+      return;
+    }
+    final provider = context.read<ClientTokenProvider>();
+    if (!provider.hasLoaded) {
+      await provider.loadTokens(silent: true, query: _buildListQuery());
+    }
   }
 
   @override
@@ -158,6 +162,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     setState(() {
       _formError = '';
       _editingTokenId = baseToken?.id;
+      _editingTokenVersion = baseToken?.version;
       _clientIdController.text = baseToken?.clientId ?? _generateClientId();
       _agentIdController.text = baseToken?.agentId ?? '';
       _payloadController.text = baseToken?.payload.isEmpty ?? true
@@ -371,6 +376,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             currentEditingTokenId,
             request,
             refreshTokens: false,
+            expectedVersion: _editingTokenVersion,
           );
 
     if (isSuccess && mounted) {
@@ -389,6 +395,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
   void _clearTokenDraftForm() {
     _editingTokenId = null;
+    _editingTokenVersion = null;
     _clientIdController.text = _generateClientId();
     _agentIdController.clear();
     _payloadController.clear();
@@ -448,60 +455,31 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     return rules;
   }
 
-  List<ClientTokenSummary> _applyTokenFilters(List<ClientTokenSummary> tokens) {
-    final clientFilter = _listClientFilterController.text.trim().toLowerCase();
-    final filtered = tokens.where((token) {
-      final matchesClient =
-          clientFilter.isEmpty ||
-          token.clientId.toLowerCase().contains(clientFilter);
-      final matchesStatus = switch (_tokenStatusFilter) {
-        _TokenStatusFilter.all => true,
-        _TokenStatusFilter.active => !token.isRevoked,
-        _TokenStatusFilter.revoked => token.isRevoked,
-      };
-      return matchesClient && matchesStatus;
-    }).toList();
-
-    filtered.sort((left, right) {
-      return switch (_tokenSortOption) {
-        _TokenSortOption.newest => right.createdAt.compareTo(left.createdAt),
-        _TokenSortOption.oldest => left.createdAt.compareTo(right.createdAt),
-        _TokenSortOption.clientAsc => left.clientId.toLowerCase().compareTo(
-          right.clientId.toLowerCase(),
-        ),
-        _TokenSortOption.clientDesc => right.clientId.toLowerCase().compareTo(
-          left.clientId.toLowerCase(),
-        ),
-      };
-    });
-
-    return filtered;
-  }
-
-  String _statusFilterLabel(_TokenStatusFilter value) {
+  String _statusFilterLabel(ClientTokenStatusFilter value) {
     return switch (value) {
-      _TokenStatusFilter.all => AppStrings.ctFilterStatusAll,
-      _TokenStatusFilter.active => AppStrings.ctFilterStatusActive,
-      _TokenStatusFilter.revoked => AppStrings.ctFilterStatusRevoked,
+      ClientTokenStatusFilter.all => AppStrings.ctFilterStatusAll,
+      ClientTokenStatusFilter.active => AppStrings.ctFilterStatusActive,
+      ClientTokenStatusFilter.revoked => AppStrings.ctFilterStatusRevoked,
     };
   }
 
-  String _sortFilterLabel(_TokenSortOption value) {
+  String _sortFilterLabel(ClientTokenSortOption value) {
     return switch (value) {
-      _TokenSortOption.newest => AppStrings.ctSortNewest,
-      _TokenSortOption.oldest => AppStrings.ctSortOldest,
-      _TokenSortOption.clientAsc => AppStrings.ctSortClientAsc,
-      _TokenSortOption.clientDesc => AppStrings.ctSortClientDesc,
+      ClientTokenSortOption.newest => AppStrings.ctSortNewest,
+      ClientTokenSortOption.oldest => AppStrings.ctSortOldest,
+      ClientTokenSortOption.clientAsc => AppStrings.ctSortClientAsc,
+      ClientTokenSortOption.clientDesc => AppStrings.ctSortClientDesc,
     };
   }
 
   void _clearTokenFilters() {
     _listClientFilterController.clear();
     setState(() {
-      _tokenStatusFilter = _TokenStatusFilter.all;
-      _tokenSortOption = _TokenSortOption.newest;
+      _tokenStatusFilter = ClientTokenStatusFilter.all;
+      _tokenSortOption = ClientTokenSortOption.newest;
     });
     _saveTokenListPreferences();
+    _reloadTokensForCurrentFilters();
   }
 
   Future<void> _restoreTokenListPreferences() async {
@@ -570,37 +548,37 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
   }
 
-  String _statusFilterToStorage(_TokenStatusFilter value) {
+  String _statusFilterToStorage(ClientTokenStatusFilter value) {
     return switch (value) {
-      _TokenStatusFilter.all => 'all',
-      _TokenStatusFilter.active => 'active',
-      _TokenStatusFilter.revoked => 'revoked',
+      ClientTokenStatusFilter.all => 'all',
+      ClientTokenStatusFilter.active => 'active',
+      ClientTokenStatusFilter.revoked => 'revoked',
     };
   }
 
-  _TokenStatusFilter _statusFilterFromStorage(String? value) {
+  ClientTokenStatusFilter _statusFilterFromStorage(String? value) {
     return switch (value) {
-      'active' => _TokenStatusFilter.active,
-      'revoked' => _TokenStatusFilter.revoked,
-      _ => _TokenStatusFilter.all,
+      'active' => ClientTokenStatusFilter.active,
+      'revoked' => ClientTokenStatusFilter.revoked,
+      _ => ClientTokenStatusFilter.all,
     };
   }
 
-  String _sortFilterToStorage(_TokenSortOption value) {
+  String _sortFilterToStorage(ClientTokenSortOption value) {
     return switch (value) {
-      _TokenSortOption.newest => 'newest',
-      _TokenSortOption.oldest => 'oldest',
-      _TokenSortOption.clientAsc => 'client_asc',
-      _TokenSortOption.clientDesc => 'client_desc',
+      ClientTokenSortOption.newest => 'newest',
+      ClientTokenSortOption.oldest => 'oldest',
+      ClientTokenSortOption.clientAsc => 'client_asc',
+      ClientTokenSortOption.clientDesc => 'client_desc',
     };
   }
 
-  _TokenSortOption _sortFilterFromStorage(String? value) {
+  ClientTokenSortOption _sortFilterFromStorage(String? value) {
     return switch (value) {
-      'oldest' => _TokenSortOption.oldest,
-      'client_asc' => _TokenSortOption.clientAsc,
-      'client_desc' => _TokenSortOption.clientDesc,
-      _ => _TokenSortOption.newest,
+      'oldest' => ClientTokenSortOption.oldest,
+      'client_asc' => ClientTokenSortOption.clientAsc,
+      'client_desc' => ClientTokenSortOption.clientDesc,
+      _ => ClientTokenSortOption.newest,
     };
   }
 
@@ -614,7 +592,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
   Future<void> _refreshTokensPreservingPosition(double? previousOffset) async {
     final provider = context.read<ClientTokenProvider>();
-    final refreshed = await provider.loadTokens(silent: true);
+    final refreshed = await provider.loadTokens(
+      silent: true,
+      query: _buildListQuery(),
+    );
     if (!refreshed || previousOffset == null || !mounted) {
       return;
     }
@@ -692,9 +673,31 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         if (!mounted) {
           return;
         }
-        setState(() {});
         _saveTokenListPreferences();
+        _reloadTokensForCurrentFilters();
       },
+    );
+  }
+
+  ClientTokenListQuery _buildListQuery() {
+    return ClientTokenListQuery(
+      clientIdContains: _listClientFilterController.text.trim(),
+      status: _tokenStatusFilter,
+      sort: _tokenSortOption,
+    );
+  }
+
+  bool _hasActiveFilters() {
+    return _listClientFilterController.text.trim().isNotEmpty ||
+        _tokenStatusFilter != ClientTokenStatusFilter.all ||
+        _tokenSortOption != ClientTokenSortOption.newest;
+  }
+
+  Future<void> _reloadTokensForCurrentFilters() async {
+    final provider = context.read<ClientTokenProvider>();
+    await provider.loadTokens(
+      silent: true,
+      query: _buildListQuery(),
     );
   }
 
@@ -702,7 +705,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   Widget build(BuildContext context) {
     return Consumer<ClientTokenProvider>(
       builder: (context, provider, _) {
-        final filteredTokens = _applyTokenFilters(provider.tokens);
+        final listedTokens = provider.tokens;
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -739,7 +742,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     icon: FluentIcons.refresh,
                     isPrimary: false,
                     isLoading: provider.isLoading,
-                    onPressed: () => provider.loadTokens(),
+                    onPressed: () =>
+                        provider.loadTokens(query: _buildListQuery()),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
@@ -776,25 +780,29 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     _tokenStatusFilter = value;
                   });
                   _saveTokenListPreferences();
+                  _reloadTokensForCurrentFilters();
                 },
                 onSortChanged: (value) {
                   setState(() {
                     _tokenSortOption = value;
                   });
                   _saveTokenListPreferences();
+                  _reloadTokensForCurrentFilters();
                 },
                 onClearFilters: _clearTokenFilters,
               ),
               const SizedBox(height: AppSpacing.sm),
-              if (provider.tokens.isEmpty && !provider.isLoading)
-                const Text(AppStrings.ctMsgNoTokenFound),
-              if (provider.tokens.isNotEmpty && filteredTokens.isEmpty)
-                const Text(AppStrings.ctMsgNoTokenMatchFilter),
-              if (filteredTokens.isNotEmpty)
+              if (listedTokens.isEmpty && !provider.isLoading)
+                Text(
+                  _hasActiveFilters()
+                      ? AppStrings.ctMsgNoTokenMatchFilter
+                      : AppStrings.ctMsgNoTokenFound,
+                ),
+              if (listedTokens.isNotEmpty)
                 SizedBox(
                   height: 440,
                   child: _TokenSummaryGrid(
-                    tokens: filteredTokens,
+                    tokens: listedTokens,
                     scrollController: widget.scrollController,
                     isRevokingToken: provider.isRevokingToken,
                     isDeletingToken: provider.isDeletingToken,
@@ -802,12 +810,30 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                       context: context,
                       token: token,
                     ),
-                    onCopyToken: (token) {
-                      Clipboard.setData(ClipboardData(text: token.id));
+                    onCopyClientToken: (token) {
+                      final tokenValue = token.tokenValue;
+                      if (tokenValue == null || tokenValue.trim().isEmpty) {
+                        displayInfoBar(
+                          context,
+                          builder: (context, close) => const InfoBar(
+                            title: Text(
+                              AppStrings.ctInfoClientTokenUnavailable,
+                            ),
+                            severity: InfoBarSeverity.warning,
+                          ),
+                        );
+                        return;
+                      }
+
+                      Clipboard.setData(ClipboardData(text: tokenValue));
+                      provider.recordCopiedToken(
+                        tokenId: token.id,
+                        clientId: token.clientId,
+                      );
                       displayInfoBar(
                         context,
                         builder: (context, close) => const InfoBar(
-                          title: Text(AppStrings.ctInfoTokenIdCopied),
+                          title: Text(AppStrings.ctInfoClientTokenCopied),
                           severity: InfoBarSeverity.success,
                         ),
                       );
@@ -999,13 +1025,13 @@ class _TokenListFilters extends StatelessWidget {
   });
 
   final TextEditingController clientFilterController;
-  final _TokenStatusFilter tokenStatusFilter;
-  final _TokenSortOption tokenSortOption;
+  final ClientTokenStatusFilter tokenStatusFilter;
+  final ClientTokenSortOption tokenSortOption;
   final ValueChanged<String> onClientFilterChanged;
-  final String Function(_TokenStatusFilter) statusLabelBuilder;
-  final String Function(_TokenSortOption) sortLabelBuilder;
-  final ValueChanged<_TokenStatusFilter> onStatusChanged;
-  final ValueChanged<_TokenSortOption> onSortChanged;
+  final String Function(ClientTokenStatusFilter) statusLabelBuilder;
+  final String Function(ClientTokenSortOption) sortLabelBuilder;
+  final ValueChanged<ClientTokenStatusFilter> onStatusChanged;
+  final ValueChanged<ClientTokenSortOption> onSortChanged;
   final VoidCallback onClearFilters;
 
   @override
@@ -1025,12 +1051,12 @@ class _TokenListFilters extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         Expanded(
           flex: 2,
-          child: AppDropdown<_TokenStatusFilter>(
+          child: AppDropdown<ClientTokenStatusFilter>(
             label: AppStrings.ctFilterStatus,
             value: tokenStatusFilter,
-            items: _TokenStatusFilter.values
+            items: ClientTokenStatusFilter.values
                 .map(
-                  (item) => ComboBoxItem<_TokenStatusFilter>(
+                  (item) => ComboBoxItem<ClientTokenStatusFilter>(
                     value: item,
                     child: Text(statusLabelBuilder(item)),
                   ),
@@ -1046,12 +1072,12 @@ class _TokenListFilters extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         Expanded(
           flex: 2,
-          child: AppDropdown<_TokenSortOption>(
+          child: AppDropdown<ClientTokenSortOption>(
             label: AppStrings.ctFilterSort,
             value: tokenSortOption,
-            items: _TokenSortOption.values
+            items: ClientTokenSortOption.values
                 .map(
-                  (item) => ComboBoxItem<_TokenSortOption>(
+                  (item) => ComboBoxItem<ClientTokenSortOption>(
                     value: item,
                     child: Text(sortLabelBuilder(item)),
                   ),
@@ -1194,19 +1220,6 @@ class _TokenFeedbackPanel extends StatelessWidget {
   }
 }
 
-enum _TokenStatusFilter {
-  all,
-  active,
-  revoked,
-}
-
-enum _TokenSortOption {
-  newest,
-  oldest,
-  clientAsc,
-  clientDesc,
-}
-
 class _FlagCheckbox extends StatelessWidget {
   const _FlagCheckbox({
     required this.label,
@@ -1251,7 +1264,7 @@ class _TokenSummaryGrid extends StatelessWidget {
     required this.isRevokingToken,
     required this.isDeletingToken,
     required this.onViewDetails,
-    required this.onCopyToken,
+    required this.onCopyClientToken,
     required this.onEdit,
     required this.onRevoke,
     required this.onDelete,
@@ -1263,7 +1276,7 @@ class _TokenSummaryGrid extends StatelessWidget {
   final bool Function(String tokenId) isRevokingToken;
   final bool Function(String tokenId) isDeletingToken;
   final ValueChanged<ClientTokenSummary> onViewDetails;
-  final ValueChanged<ClientTokenSummary> onCopyToken;
+  final ValueChanged<ClientTokenSummary> onCopyClientToken;
   final ValueChanged<ClientTokenSummary> onEdit;
   final ValueChanged<ClientTokenSummary> onRevoke;
   final ValueChanged<ClientTokenSummary> onDelete;
@@ -1300,7 +1313,7 @@ class _TokenSummaryGrid extends StatelessWidget {
           isRevoking: isRevokingToken(token.id),
           isDeleting: isDeletingToken(token.id),
           onViewDetails: () => onViewDetails(token),
-          onCopyToken: () => onCopyToken(token),
+          onCopyClientToken: () => onCopyClientToken(token),
           onEdit: () => onEdit(token),
           onRevoke: token.isRevoked ? null : () => onRevoke(token),
           onDelete: () => onDelete(token),
@@ -1316,7 +1329,7 @@ class _TokenRowActions extends StatelessWidget {
     required this.isRevoking,
     required this.isDeleting,
     required this.onViewDetails,
-    required this.onCopyToken,
+    required this.onCopyClientToken,
     required this.onEdit,
     required this.onDelete,
     this.onRevoke,
@@ -1326,7 +1339,7 @@ class _TokenRowActions extends StatelessWidget {
   final bool isRevoking;
   final bool isDeleting;
   final VoidCallback onViewDetails;
-  final VoidCallback onCopyToken;
+  final VoidCallback onCopyClientToken;
   final VoidCallback onEdit;
   final VoidCallback? onRevoke;
   final VoidCallback onDelete;
@@ -1364,13 +1377,13 @@ class _TokenRowActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: AppStrings.ctTooltipCopyTokenId,
+          message: AppStrings.ctTooltipCopyClientToken,
           child: Semantics(
             button: true,
-            label: AppStrings.ctButtonCopyTokenId,
+            label: AppStrings.ctButtonCopyClientToken,
             child: IconButton(
               icon: const Icon(FluentIcons.copy),
-              onPressed: onCopyToken,
+              onPressed: onCopyClientToken,
             ),
           ),
         ),

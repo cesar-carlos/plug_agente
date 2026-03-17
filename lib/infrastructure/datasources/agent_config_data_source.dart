@@ -30,8 +30,11 @@ class ClientTokenCacheTable extends Table {
   TextColumn get id => text()();
   TextColumn get clientId => text()();
   BoolColumn get isRevoked => boolean().withDefault(const Constant(false))();
+  IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get agentId => text().nullable()();
+  TextColumn get tokenValue => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime().nullable()();
   TextColumn get payloadJson => text().withDefault(const Constant('{}'))();
   BoolColumn get allTables => boolean().withDefault(const Constant(false))();
   BoolColumn get allViews => boolean().withDefault(const Constant(false))();
@@ -46,8 +49,8 @@ class ClientTokenCacheTable extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {tokenHash},
-      ];
+    {tokenHash},
+  ];
 }
 
 // AgentConfigDataSource interface is defined in agent_config_drift_database.dart
