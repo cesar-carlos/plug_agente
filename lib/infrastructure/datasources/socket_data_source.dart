@@ -1,7 +1,9 @@
+import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class SocketDataSource {
   io.Socket createSocket(String url, {String? authToken}) {
+    final socketUrl = ensureAgentsNamespaceUrl(url);
     final options = io.OptionBuilder()
         .setTransports(['websocket'])
         .disableAutoConnect()
@@ -19,6 +21,6 @@ class SocketDataSource {
       options.setAuth({'token': authToken});
     }
 
-    return io.io(url, options.build());
+    return io.io(socketUrl, options.build());
   }
 }

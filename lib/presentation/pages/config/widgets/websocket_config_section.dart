@@ -75,12 +75,22 @@ class WebSocketConfigSection extends StatelessWidget {
         );
         return;
       }
+      final agentId = formController.agentIdController.text.trim();
+      if (agentId.isEmpty) {
+        SettingsFeedback.showError(
+          context: context,
+          title: AppStrings.modalTitleError,
+          message: AppStrings.msgAgentIdRequired,
+        );
+        return;
+      }
 
       if (formController.authUsernameController.text.isNotEmpty &&
           formController.authPasswordController.text.isNotEmpty) {
         final credentials = AuthCredentials(
           username: formController.authUsernameController.text.trim(),
           password: formController.authPasswordController.text.trim(),
+          agentId: agentId,
         );
         authProvider.login(serverUrl, credentials);
       } else {

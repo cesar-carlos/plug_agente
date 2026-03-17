@@ -51,6 +51,7 @@ class AppStrings {
   static const String msgOdbcDriverNameRequired =
       'Nome do Driver ODBC é obrigatório';
   static const String msgServerUrlRequired = 'URL do Servidor é obrigatória';
+  static const String msgAgentIdRequired = 'ID do Agente é obrigatório';
   static const String msgAuthCredentialsRequired =
       'Usuário e senha são obrigatórios';
 

@@ -60,7 +60,7 @@ O `plug_agente` e o executador remoto das operacoes de negocio.
 No modelo arquitetural deste ecossistema, o agente:
 
 - conecta-se ao `plug_server` via Socket.IO no namespace `/agents` (o `plug_agente` deve usar `io("/agents")` ao conectar)
-  - no cliente atual, isso significa configurar a URL de conexao ja com sufixo `/agents`
+  - no cliente atual, a URL base informada pelo usuario e normalizada automaticamente para o namespace `/agents`
 - autentica-se no handshake
 - registra sua identidade e capacidades
 - mantem uma conexao persistente com heartbeat e reconexao
@@ -102,7 +102,7 @@ No projeto atual, a base HTTP inclui:
 - `POST /auth/agent-login` (quando habilitado no servidor)
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
-- `POST /api/v1/auth/agent-login` - login para agentes (emite JWT com `role: agent` e `agent_id`); ver `docs/migracao_plug_agente_namespaces.md`
+- `POST /api/v1/auth/agent-login` - login para agentes (emite JWT com `role: agent` e `agent_id`)
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/me`

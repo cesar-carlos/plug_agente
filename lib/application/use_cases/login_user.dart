@@ -18,7 +18,9 @@ class LoginUser {
 
     if (!credentials.isValid) {
       return Failure(
-        domain.ValidationFailure('Username and password are required'),
+        domain.ValidationFailure(
+          'Username, password, and agentId are required',
+        ),
       );
     }
 

@@ -8,7 +8,6 @@ Indice principal da documentacao do projeto.
 docs/
 |- readme.md
 |- project_overview.md
-|- migracao_plug_agente_namespaces.md
 |- communication/
 |  |- socket_communication_standard.md
 |  |- socketio_client_binary_transport.md
@@ -29,7 +28,6 @@ docs/
 ## Links rapidos
 
 - [Visao geral do ecossistema](project_overview.md)
-- [Migracao para namespaces no agente_server](migracao_plug_agente_namespaces.md)
 - [Padrao de comunicacao Socket atual](communication/socket_communication_standard.md)
 - [Guia de cliente Socket com transporte binario](communication/socketio_client_binary_transport.md)
 - [OpenRPC do agente](communication/openrpc.json)

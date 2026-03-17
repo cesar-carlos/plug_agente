@@ -256,11 +256,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     try {
       _stopHeartbeat();
 
-      if (_socket != null) {
-        _socket!.disconnect();
-        _socket!.dispose();
-        _socket = null;
-      }
+      _closeSocket();
 
       _agentId = agentId;
       _hasReceivedCapabilities = false;
@@ -1112,14 +1108,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<Result<void>> disconnect() async {
     try {
       _stopHeartbeat();
-      if (_socket != null) {
-        _socket!.disconnect();
-        _socket!.dispose();
-        _socket = null;
-      }
+      _closeSocket();
       _isTokenRefreshRequested = false;
       return const Success<Object, Exception>(Object());
-    } on Exception catch (e) {
+    } on Object catch (e) {
       return Failure(
         domain.NetworkFailure.withContext(
           message: 'Failed to disconnect',
@@ -1128,6 +1120,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
         ),
       );
     }
+  }
+
+  void _closeSocket() {
+    final socket = _socket;
+    _socket = null;
+    if (socket == null) {
+      return;
+    }
+    socket.disconnect();
+    socket.dispose();
   }
 
   @override

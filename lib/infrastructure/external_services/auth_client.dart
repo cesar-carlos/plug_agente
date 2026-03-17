@@ -24,40 +24,76 @@ class AuthClient implements IAuthClient {
     String serverUrl,
     AuthCredentials credentials,
   ) async {
+    DioException? lastFallbackError;
     try {
-      final url = _normalizeUrl(serverUrl, AppConstants.authLoginPath);
-      debugPrint(
-        'AuthClient: Attempting login to $url with username: ${credentials.username}',
-      );
+      final endpointAttempts = [
+        (
+          path: AppConstants.authAgentLoginPath,
+          payload: <String, dynamic>{
+            'username': credentials.username,
+            'password': credentials.password,
+            'agentId': credentials.agentId,
+          },
+        ),
+        (
+          path: AppConstants.authAgentLoginCompatPath,
+          payload: <String, dynamic>{
+            'username': credentials.username,
+            'password': credentials.password,
+            'agentId': credentials.agentId,
+          },
+        ),
+        (
+          path: AppConstants.authLoginPath,
+          payload: <String, dynamic>{
+            'username': credentials.username,
+            'password': credentials.password,
+          },
+        ),
+      ];
 
-      final response = await _dio.post<Map<String, dynamic>>(
-        url,
-        data: {
-          'username': credentials.username,
-          'password': credentials.password,
-        },
-      );
-
-      debugPrint('AuthClient: Response status: ${response.statusCode}');
-
-      if (response.statusCode == AppConstants.httpStatusOk) {
-        final data = response.data!;
-
-        if (data['success'] == true) {
-          final token = data['token'] as String;
-          final refreshToken = data['refreshToken'] as String;
-
-          return Success(AuthToken(token: token, refreshToken: refreshToken));
-        }
-
-        return Failure(
-          domain.ValidationFailure(data['error'] as String? ?? 'Login failed'),
+      for (final attempt in endpointAttempts) {
+        final url = _normalizeUrl(serverUrl, attempt.path);
+        debugPrint(
+          'AuthClient: Attempting login to $url with username: ${credentials.username}',
         );
+        try {
+          final response = await _dio.post<Map<String, dynamic>>(
+            url,
+            data: attempt.payload,
+          );
+
+          debugPrint('AuthClient: Response status: ${response.statusCode}');
+
+          if (response.statusCode == AppConstants.httpStatusOk) {
+            final data = response.data ?? const <String, dynamic>{};
+            final parsed = _parseAuthToken(
+              data,
+              fallbackErrorMessage: 'Login failed',
+            );
+            if (parsed.isSuccess()) {
+              return parsed;
+            }
+            return Failure(parsed.exceptionOrNull()! as domain.Failure);
+          }
+
+          return Failure(
+            domain.ServerFailure('Server error: ${response.statusCode}'),
+          );
+        } on DioException catch (e) {
+          if (_shouldTryNextEndpoint(e)) {
+            lastFallbackError = e;
+            continue;
+          }
+          rethrow;
+        }
       }
 
-      return Failure(
-        domain.ServerFailure('Server error: ${response.statusCode}'),
-      );
+      if (lastFallbackError != null) {
+        throw lastFallbackError;
+      }
+
+      return Failure(domain.ValidationFailure('Login failed'));
     } on DioException catch (e, stackTrace) {
       debugPrint(
         'AuthClient: DioException: ${e.message}, Type: ${e.type}, Response: ${e.response?.statusCode}',
@@ -99,35 +135,50 @@ class AuthClient implements IAuthClient {
     String serverUrl,
     String refreshToken,
   ) async {
+    DioException? lastFallbackError;
     try {
-      final url = _normalizeUrl(serverUrl, AppConstants.authRefreshPath);
-      final response = await _dio.post<Map<String, dynamic>>(
-        url,
-        data: {'refreshToken': refreshToken},
-      );
+      final endpointAttempts = [
+        AppConstants.authRefreshPath,
+        AppConstants.authRefreshCompatPath,
+      ];
 
-      if (response.statusCode == AppConstants.httpStatusOk) {
-        final data = response.data!;
-
-        if (data['success'] == true) {
-          final token = data['token'] as String;
-          final newRefreshToken = data['refreshToken'] as String;
-
-          return Success(
-            AuthToken(token: token, refreshToken: newRefreshToken),
+      for (final endpoint in endpointAttempts) {
+        final url = _normalizeUrl(serverUrl, endpoint);
+        try {
+          final response = await _dio.post<Map<String, dynamic>>(
+            url,
+            data: {'refreshToken': refreshToken},
           );
-        }
 
-        return Failure(
-          domain.ValidationFailure(
-            data['error'] as String? ?? 'Refresh failed',
-          ),
-        );
+          if (response.statusCode == AppConstants.httpStatusOk) {
+            final data = response.data ?? const <String, dynamic>{};
+            final parsed = _parseAuthToken(
+              data,
+              fallbackErrorMessage: 'Refresh failed',
+            );
+            if (parsed.isSuccess()) {
+              return parsed;
+            }
+            return Failure(parsed.exceptionOrNull()! as domain.Failure);
+          }
+
+          return Failure(
+            domain.ServerFailure('Server error: ${response.statusCode}'),
+          );
+        } on DioException catch (e) {
+          if (_shouldTryNextEndpoint(e)) {
+            lastFallbackError = e;
+            continue;
+          }
+          rethrow;
+        }
       }
 
-      return Failure(
-        domain.ServerFailure('Server error: ${response.statusCode}'),
-      );
+      if (lastFallbackError != null) {
+        throw lastFallbackError;
+      }
+
+      return Failure(domain.ValidationFailure('Refresh failed'));
     } on DioException catch (e, stackTrace) {
       if (e.response?.statusCode == AppConstants.httpStatusUnauthorized) {
         final data = e.response?.data as Map<String, dynamic>?;
@@ -158,5 +209,44 @@ class AuthClient implements IAuthClient {
         ),
       );
     }
+  }
+
+  bool _shouldTryNextEndpoint(DioException error) {
+    final statusCode = error.response?.statusCode;
+    return statusCode == 404 || statusCode == 405;
+  }
+
+  Result<AuthToken> _parseAuthToken(
+    Map<String, dynamic> data, {
+    required String fallbackErrorMessage,
+  }) {
+    final accessToken =
+        _readString(data, 'accessToken') ?? _readString(data, 'token');
+    final refreshToken = _readString(data, 'refreshToken');
+
+    if (accessToken != null &&
+        accessToken.trim().isNotEmpty &&
+        refreshToken != null &&
+        refreshToken.trim().isNotEmpty) {
+      return Success(
+        AuthToken(
+          token: accessToken,
+          refreshToken: refreshToken,
+        ),
+      );
+    }
+
+    return Failure(
+      domain.ValidationFailure(
+        _readString(data, 'error') ??
+            _readString(data, 'message') ??
+            fallbackErrorMessage,
+      ),
+    );
+  }
+
+  String? _readString(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value is String ? value : null;
   }
 }

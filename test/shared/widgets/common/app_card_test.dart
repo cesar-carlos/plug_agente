@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
@@ -52,7 +53,7 @@ void main() {
 
       // Assert
       final card = tester.widget<Card>(find.byType(Card));
-      expect(card.padding, const EdgeInsets.all(16));
+      expect(card.padding, const EdgeInsets.all(AppSpacing.sm));
     });
 
     testWidgets('should use custom padding when provided', (tester) async {

@@ -16,8 +16,11 @@ class AppConstants {
   static const String socketEventAgentRegister = 'agent:register';
   static const String socketEventAgentUnregister = 'agent:unregister';
 
-  static const String authLoginPath = '/auth/login';
-  static const String authRefreshPath = '/auth/refresh';
+  static const String authAgentLoginPath = '/api/v1/auth/agent-login';
+  static const String authAgentLoginCompatPath = '/auth/agent-login';
+  static const String authLoginPath = '/auth/login'; // Legacy fallback.
+  static const String authRefreshPath = '/api/v1/auth/refresh';
+  static const String authRefreshCompatPath = '/auth/refresh';
   static const int authTimeoutSeconds = 30;
   static const int refreshTokenExpiryHours = 24;
 

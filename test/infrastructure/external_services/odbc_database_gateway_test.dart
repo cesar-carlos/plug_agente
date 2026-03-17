@@ -75,9 +75,9 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQueryMultiFull(
-            pooledConnectionId,
+          () => mockService.executeQuery(
             any(),
+            connectionId: pooledConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Failure(
@@ -97,24 +97,18 @@ void main() {
           );
         });
         when(
-          () => mockService.executeQueryMultiFull(
-            directConnectionId,
+          () => mockService.executeQuery(
             any(),
+            connectionId: directConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Success(
-            QueryResultMulti(
-              items: [
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['id'],
-                    rows: [
-                      [1],
-                    ],
-                    rowCount: 1,
-                  ),
-                ),
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
               ],
+              rowCount: 1,
             ),
           );
         });
@@ -166,24 +160,18 @@ void main() {
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQueryMultiFull(
-          pooledConnectionId,
+        () => mockService.executeQuery(
           any(),
+          connectionId: pooledConnectionId,
         ),
       ).thenAnswer((_) async {
         return const Success(
-          QueryResultMulti(
-            items: [
-              QueryResultMultiItem.resultSet(
-                QueryResult(
-                  columns: ['id'],
-                  rows: [
-                    [1],
-                  ],
-                  rowCount: 1,
-                ),
-              ),
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
             ],
+            rowCount: 1,
           ),
         );
       });
@@ -226,9 +214,9 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQueryMultiFull(
-            pooledConnectionId,
+          () => mockService.executeQuery(
             any(),
+            connectionId: pooledConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Failure(
@@ -250,24 +238,18 @@ void main() {
           );
         });
         when(
-          () => mockService.executeQueryMultiFull(
-            directConnectionId,
+          () => mockService.executeQuery(
             any(),
+            connectionId: directConnectionId,
           ),
         ).thenAnswer((_) async {
           return const Success(
-            QueryResultMulti(
-              items: [
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['id'],
-                    rows: [
-                      [1],
-                    ],
-                    rowCount: 1,
-                  ),
-                ),
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
               ],
+              rowCount: 1,
             ),
           );
         });
@@ -467,24 +449,18 @@ void main() {
           return const Success('pool-1');
         });
         when(
-          () => mockService.executeQueryMultiFull(
-            'pool-1',
+          () => mockService.executeQuery(
             any(),
+            connectionId: 'pool-1',
           ),
         ).thenAnswer((_) async {
           return const Success(
-            QueryResultMulti(
-              items: [
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['value'],
-                    rows: [
-                      [1],
-                    ],
-                    rowCount: 1,
-                  ),
-                ),
+            QueryResult(
+              columns: ['value'],
+              rows: [
+                [1],
               ],
+              rowCount: 1,
             ),
           );
         });
