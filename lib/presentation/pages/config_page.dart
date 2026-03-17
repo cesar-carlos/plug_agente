@@ -60,7 +60,8 @@ class _ConfigPageState extends State<ConfigPage> {
             startupSupported: startupSupported,
             startupError: systemSettingsProvider.lastError,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
-            onStartWithWindowsChanged: systemSettingsProvider.setStartWithWindows,
+            onStartWithWindowsChanged:
+                systemSettingsProvider.setStartWithWindows,
             onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,

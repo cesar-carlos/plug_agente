@@ -19,7 +19,9 @@ class WebSocketLogViewer extends StatelessWidget {
         return AppCard(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final spacing = constraints.maxHeight < 50 ? AppSpacing.sm : AppSpacing.md;
+              final spacing = constraints.maxHeight < 50
+                  ? AppSpacing.sm
+                  : AppSpacing.md;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,6 +99,12 @@ class _AuthorizationSummaryCard extends StatelessWidget {
     }
 
     final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
+    final missingPermissionRate =
+        (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
+    final tokenNotFoundRate = (summary!.reasonRate('token_not_found') * 100)
+        .toStringAsFixed(1);
+    final tokenRevokedRate = (summary!.reasonRate('token_revoked') * 100)
+        .toStringAsFixed(1);
 
     return Container(
       width: double.infinity,
@@ -131,9 +139,36 @@ class _AuthorizationSummaryCard extends StatelessWidget {
             value: '$denialRate%',
             valueColor: summary!.totalDenied > 0 ? Colors.red : null,
           ),
+          _SummaryChip(
+            label: AppStrings.wsLogP95Latency,
+            value: _formatLatency(summary!.overallP95LatencyMs),
+          ),
+          _SummaryChip(
+            label: AppStrings.wsLogP99Latency,
+            value: _formatLatency(summary!.overallP99LatencyMs),
+          ),
+          _SummaryChip(
+            label: 'missing_permission',
+            value: '$missingPermissionRate%',
+          ),
+          _SummaryChip(
+            label: 'token_not_found',
+            value: '$tokenNotFoundRate%',
+          ),
+          _SummaryChip(
+            label: 'token_revoked',
+            value: '$tokenRevokedRate%',
+          ),
         ],
       ),
     );
+  }
+
+  String _formatLatency(int latencyMs) {
+    if (latencyMs <= 0) {
+      return 'n/a';
+    }
+    return '${latencyMs}ms';
   }
 }
 

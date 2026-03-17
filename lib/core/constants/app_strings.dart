@@ -374,4 +374,6 @@ class AppStrings {
   static const String wsLogAllowed = 'Allowed';
   static const String wsLogDenied = 'Denied';
   static const String wsLogDenialRate = 'Denial rate';
+  static const String wsLogP95Latency = 'P95 auth latency';
+  static const String wsLogP99Latency = 'P99 auth latency';
 }

@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/infrastructure/stores/in_memory_authorization_decision_cache.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockAuthorizationPolicyResolver extends Mock
@@ -18,12 +19,15 @@ void main() {
   group('AuthorizeSqlOperation', () {
     late MockAuthorizationPolicyResolver resolver;
     late AuthorizeSqlOperation useCase;
+    late InMemoryAuthorizationDecisionCache decisionCache;
 
     setUp(() {
       resolver = MockAuthorizationPolicyResolver();
+      decisionCache = InMemoryAuthorizationDecisionCache();
       useCase = AuthorizeSqlOperation(
         SqlOperationClassifier(),
         ClientTokenValidationService(resolver),
+        decisionCache: decisionCache,
       );
     });
 
@@ -58,6 +62,25 @@ void main() {
           expect(authFailure.context['reason'], equals('missing_permission'));
         },
       );
+    });
+
+    test('should reuse cached decision and avoid resolver call', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+      final first = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+      final second = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+
+      expect(first.isSuccess(), isTrue);
+      expect(second.isSuccess(), isTrue);
+      verify(() => resolver.resolvePolicy(any())).called(1);
     });
   });
 }

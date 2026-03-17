@@ -82,7 +82,8 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
+    final transportClient =
+        _transportClientOverride ?? getIt<ITransportClient>();
     transportClient.setOnTokenExpired(_handleTokenExpired);
     transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
@@ -113,7 +114,8 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
-    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
+    final transportClient =
+        _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
     _error = '';
@@ -194,7 +196,8 @@ class ConnectionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
+      final transportClient =
+          _transportClientOverride ?? getIt<ITransportClient>();
       await transportClient.disconnect();
 
       final context = _resolveConnectionContext();
@@ -365,8 +368,15 @@ class ConnectionProvider extends ChangeNotifier {
     final configServerUrl = config?.serverUrl.trim();
     final configAgentId = config?.agentId.trim();
     final serverUrl =
-        _lastServerUrl ?? ((configServerUrl != null && configServerUrl.isNotEmpty) ? configServerUrl : null);
-    final agentId = _lastAgentId ?? ((configAgentId != null && configAgentId.isNotEmpty) ? configAgentId : null);
+        _lastServerUrl ??
+        ((configServerUrl != null && configServerUrl.isNotEmpty)
+            ? configServerUrl
+            : null);
+    final agentId =
+        _lastAgentId ??
+        ((configAgentId != null && configAgentId.isNotEmpty)
+            ? configAgentId
+            : null);
 
     if (serverUrl == null || agentId == null) {
       return null;
@@ -392,7 +402,9 @@ class ConnectionProvider extends ChangeNotifier {
   Duration _computeReconnectDelay(int attempt) {
     final multiplier = 1 << (attempt - 1);
     final seconds = _initialReconnectDelay.inSeconds * multiplier;
-    final cappedSeconds = seconds > _maxReconnectDelay.inSeconds ? _maxReconnectDelay.inSeconds : seconds;
+    final cappedSeconds = seconds > _maxReconnectDelay.inSeconds
+        ? _maxReconnectDelay.inSeconds
+        : seconds;
     return Duration(seconds: cappedSeconds);
   }
 }

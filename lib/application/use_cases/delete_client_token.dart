@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:result_dart/result_dart.dart';
@@ -10,10 +11,13 @@ class DeleteClientToken {
   DeleteClientToken(
     this._repository, {
     ITokenAuditStore? auditStore,
-  }) : _auditStore = auditStore;
+    IAuthorizationDecisionCache? decisionCache,
+  }) : _auditStore = auditStore,
+       _decisionCache = decisionCache;
 
   final IClientTokenRepository _repository;
   final ITokenAuditStore? _auditStore;
+  final IAuthorizationDecisionCache? _decisionCache;
 
   Future<Result<void>> call(String tokenId) async {
     if (tokenId.trim().isEmpty) {
@@ -22,6 +26,7 @@ class DeleteClientToken {
 
     final result = await _repository.deleteToken(tokenId);
     if (result.isSuccess()) {
+      _decisionCache?.invalidateAll();
       await _recordDeleteAuditEvent(tokenId);
     }
     return result;

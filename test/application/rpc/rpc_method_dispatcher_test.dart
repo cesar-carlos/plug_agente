@@ -776,6 +776,8 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            requestId: any(named: 'requestId'),
+            method: any(named: 'method'),
           ),
         ).thenAnswer(
           (_) async => Failure(
@@ -818,6 +820,59 @@ void main() {
         verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
+
+    test('should return unauthorized on authorization stage timeout', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer(
+        (_) => Future<Result<void>>.delayed(
+          const Duration(milliseconds: 60),
+          () => const Success(unit),
+        ),
+      );
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+        sqlExecuteTotalBudget: const Duration(milliseconds: 80),
+        authorizationStageBudget: const Duration(milliseconds: 10),
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-timeout',
+        params: {
+          'sql': 'SELECT * FROM dbo.users',
+          'client_token': 'bearer-timeout',
+        },
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'bearer-timeout',
+      );
+
+      expect(response.isError, isTrue);
+      expect(response.error!.code, equals(RpcErrorCode.unauthorized));
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(data['reason'], equals('authorization_timeout'));
+      verifyNever(() => mockGateway.executeQuery(any()));
+    });
 
     test('should include instance in error data', () async {
       const request = RpcRequest(

@@ -84,7 +84,8 @@ class OdbcFailureMapper {
         'connectionFailed': true,
         'retryable': _isRetryableConnection(sqlState),
         'reason': 'database_connection_failed',
-        'user_message': 'Nao foi possivel estabelecer conexao com o banco de dados.',
+        'user_message':
+            'Nao foi possivel estabelecer conexao com o banco de dados.',
       },
     );
   }
@@ -121,7 +122,8 @@ class OdbcFailureMapper {
           'timeout': true,
           'timeout_stage': 'sql',
           'reason': 'query_timeout',
-          'user_message': 'A consulta demorou mais do que o permitido para concluir.',
+          'user_message':
+              'A consulta demorou mais do que o permitido para concluir.',
         },
       );
     }
@@ -148,12 +150,14 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'reason': 'sql_permission_denied',
-          'user_message': 'A consulta foi recusada por falta de permissao no banco de dados.',
+          'user_message':
+              'A consulta foi recusada por falta de permissao no banco de dados.',
         },
       );
     }
 
-    if (_isSyntaxOrValidationError(sqlState, detail) || error is ValidationError) {
+    if (_isSyntaxOrValidationError(sqlState, detail) ||
+        error is ValidationError) {
       return ValidationFailure.withContext(
         message: detail,
         cause: error,
@@ -174,7 +178,8 @@ class OdbcFailureMapper {
       context: {
         ...baseContext,
         'reason': 'sql_execution_failed',
-        'user_message': 'O banco de dados retornou um erro ao executar a consulta.',
+        'user_message':
+            'O banco de dados retornou um erro ao executar a consulta.',
       },
     );
   }
@@ -189,7 +194,9 @@ class OdbcFailureMapper {
     final isExhausted = _isPoolExhausted(detail);
 
     return ConnectionFailure.withContext(
-      message: isExhausted ? 'Pool de conexoes ODBC esgotado' : 'Falha ao obter conexao do pool ODBC',
+      message: isExhausted
+          ? 'Pool de conexoes ODBC esgotado'
+          : 'Falha ao obter conexao do pool ODBC',
       cause: error,
       context: {
         ...baseContext,
@@ -353,7 +360,10 @@ class OdbcFailureMapper {
   }
 
   static bool _isTransientQueryFailure(String? sqlState, String detail) {
-    if (sqlState != null && (sqlState.startsWith('40') || sqlState == 'HY008' || sqlState == 'HY117')) {
+    if (sqlState != null &&
+        (sqlState.startsWith('40') ||
+            sqlState == 'HY008' ||
+            sqlState == 'HY117')) {
       return true;
     }
 

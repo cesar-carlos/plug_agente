@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 
 void main() {
@@ -43,6 +44,62 @@ void main() {
 
       expect(result.isError(), isTrue);
     });
+
+    test(
+      'should open JWKS circuit breaker after consecutive failures',
+      () async {
+        final now = DateTime.utc(2026, 3, 17, 12);
+        final token = _buildTokenWithAlg('none');
+        final verifier = JwtJwksVerifier(
+          () async =>
+              const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
+          failureThreshold: 2,
+          now: () => now,
+        );
+
+        final first = await verifier.verify(token);
+        final second = await verifier.verify(token);
+        final third = await verifier.verify(token);
+
+        expect(first.isError(), isTrue);
+        expect(second.isError(), isTrue);
+        expect(third.isError(), isTrue);
+        final failure = third.exceptionOrNull()! as domain.Failure;
+        expect(failure.context['reason'], equals('jwks_circuit_open'));
+      },
+    );
+
+    test(
+      'should close JWKS circuit breaker after open duration expires',
+      () async {
+        var now = DateTime.utc(2026, 3, 17, 12);
+        final token = _buildTokenWithAlg('none');
+        final verifier = JwtJwksVerifier(
+          () async =>
+              const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
+          failureThreshold: 1,
+          circuitOpenDuration: const Duration(seconds: 10),
+          now: () => now,
+        );
+
+        final first = await verifier.verify(token);
+        final open = await verifier.verify(token);
+        now = now.add(const Duration(seconds: 11));
+        final afterWindow = await verifier.verify(token);
+
+        expect(first.isError(), isTrue);
+        expect(open.isError(), isTrue);
+        expect(afterWindow.isError(), isTrue);
+        final openFailure = open.exceptionOrNull()! as domain.Failure;
+        final afterWindowFailure =
+            afterWindow.exceptionOrNull()! as domain.Failure;
+        expect(openFailure.context['reason'], equals('jwks_circuit_open'));
+        expect(
+          afterWindowFailure.context['reason'],
+          isNot('jwks_circuit_open'),
+        );
+      },
+    );
   });
 }
 

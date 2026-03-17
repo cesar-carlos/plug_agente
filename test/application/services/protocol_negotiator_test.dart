@@ -68,7 +68,10 @@ void main() {
       expect(config.compressionThreshold, equals(1024));
       expect(config.maxInflationRatio, equals(20));
       expect(config.negotiatedExtensions['binaryPayload'], isTrue);
-      expect(config.negotiatedExtensions['transportFrame'], 'payload-frame/1.0');
+      expect(
+        config.negotiatedExtensions['transportFrame'],
+        'payload-frame/1.0',
+      );
     });
 
     test('should select json encoding when both support it', () {

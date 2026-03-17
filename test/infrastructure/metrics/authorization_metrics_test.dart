@@ -92,6 +92,25 @@ void main() {
       check(summary.deniedByOperation['delete']).equals(1);
     });
 
+    test('fromList should calculate p95 and p99 latency by method', () {
+      final metrics = [
+        for (final latency in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+          AuthorizationMetric(
+            timestamp: DateTime.now(),
+            authorized: true,
+            method: 'sql.execute',
+            latencyMs: latency,
+          ),
+      ];
+
+      final summary = AuthorizationMetricsSummary.fromList(metrics);
+
+      check(summary.p95LatencyByMethodMs['sql.execute']).equals(100);
+      check(summary.p99LatencyByMethodMs['sql.execute']).equals(100);
+      check(summary.overallP95LatencyMs).equals(100);
+      check(summary.overallP99LatencyMs).equals(100);
+    });
+
     test('denialRate should be 0 when total is 0', () {
       final summary = AuthorizationMetricsSummary.fromList([]);
 
@@ -123,6 +142,9 @@ void main() {
 
     test('recordDenied should add metric', () {
       collector.recordDenied(
+        requestId: 'req-1',
+        method: 'sql.execute',
+        latencyMs: 25,
         clientId: 'client-1',
         operation: 'read',
         resource: 'dbo.other',
@@ -132,6 +154,9 @@ void main() {
       check(collector.metrics.length).equals(1);
       check(collector.metrics.first.authorized).isFalse();
       check(collector.metrics.first.reason).equals('missing_permission');
+      check(collector.metrics.first.requestId).equals('req-1');
+      check(collector.metrics.first.method).equals('sql.execute');
+      check(collector.metrics.first.latencyMs).equals(25);
     });
 
     test('getSummary should return correct counts', () {

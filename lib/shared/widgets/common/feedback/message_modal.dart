@@ -168,7 +168,9 @@ class MessageModal extends StatelessWidget {
   List<Widget> _buildActions(BuildContext context, Color accentColor) {
     final actions = <Widget>[];
 
-    if (onCancel != null || type == MessageType.confirmation || cancelText != null) {
+    if (onCancel != null ||
+        type == MessageType.confirmation ||
+        cancelText != null) {
       actions.add(
         Button(
           onPressed: () {

@@ -88,7 +88,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ? now.subtract(const Duration(hours: 1))
         : now.subtract(const Duration(hours: 24));
 
-    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
+    final filtered = metrics
+        .where((metric) => metric.timestamp.isAfter(cutoff))
+        .toList();
 
     return MetricsSummary.fromList(filtered);
   }
@@ -252,7 +254,9 @@ class _OdbcMetricsCard extends StatelessWidget {
                   icon: FluentIcons.error_badge,
                   label: AppStrings.dashboardMetricsErrors,
                   value: summary.failedQueries.toString(),
-                  valueColor: summary.failedQueries > 0 ? AppColors.error : null,
+                  valueColor: summary.failedQueries > 0
+                      ? AppColors.error
+                      : null,
                 ),
                 _MetricChip(
                   icon: FluentIcons.completed_solid,

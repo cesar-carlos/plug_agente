@@ -157,7 +157,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed &&
+        isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
@@ -243,12 +245,16 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         hasPreviousPage: playgroundProvider.hasPreviousPage,
                         showPagination: playgroundProvider.hasPagination,
                         resultSetCount: playgroundProvider.resultSets.length,
-                        selectedResultSetIndex: playgroundProvider.selectedResultSetIndex,
+                        selectedResultSetIndex:
+                            playgroundProvider.selectedResultSetIndex,
                         onPreviousPage: playgroundProvider.hasPreviousPage
                             ? () => playgroundProvider.goToPreviousPage()
                             : null,
-                        onNextPage: playgroundProvider.hasNextPage ? () => playgroundProvider.goToNextPage() : null,
-                        onResultSetChanged: playgroundProvider.hasMultipleResultSets
+                        onNextPage: playgroundProvider.hasNextPage
+                            ? () => playgroundProvider.goToNextPage()
+                            : null,
+                        onResultSetChanged:
+                            playgroundProvider.hasMultipleResultSets
                             ? playgroundProvider.setSelectedResultSetIndex
                             : null,
                         onPageSizeChanged: (value) {

@@ -1,6 +1,7 @@
 export 'i_agent_config_repository.dart';
 export 'i_auth_client.dart';
 export 'i_auth_service.dart';
+export 'i_authorization_decision_cache.dart';
 export 'i_authorization_policy_resolver.dart';
 export 'i_client_token_repository.dart';
 export 'i_database_gateway.dart';
@@ -9,4 +10,5 @@ export 'i_notification_service.dart';
 export 'i_odbc_driver_checker.dart';
 export 'i_rpc_stream_emitter.dart';
 export 'i_token_audit_store.dart';
+export 'i_token_secret_store.dart';
 export 'i_transport_client.dart';

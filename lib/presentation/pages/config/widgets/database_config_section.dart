@@ -51,7 +51,8 @@ class DatabaseConfigSection extends StatelessWidget {
                   children: [
                     _DriverSection(
                       driverNameController: formController.driverNameController,
-                      odbcDriverNameController: formController.odbcDriverNameController,
+                      odbcDriverNameController:
+                          formController.odbcDriverNameController,
                       onDriverChanged: onDriverChanged,
                       fieldsInitialized: formController.fieldsInitialized,
                     ),
@@ -62,14 +63,16 @@ class DatabaseConfigSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     _DatabaseCredentialsSection(
-                      databaseNameController: formController.databaseNameController,
+                      databaseNameController:
+                          formController.databaseNameController,
                       usernameController: formController.usernameController,
                       passwordController: formController.passwordController,
                     ),
                     const SizedBox(height: 24),
                     _ActionButtons(
                       driverNameController: formController.driverNameController,
-                      odbcDriverNameController: formController.odbcDriverNameController,
+                      odbcDriverNameController:
+                          formController.odbcDriverNameController,
                       hostController: formController.hostController,
                       portController: formController.portController,
                       onTestConnection: onTestConnection,

@@ -49,16 +49,19 @@ class ClientTokenRepository implements IClientTokenRepository {
       }
       return Success(updateResult);
     } on ClientTokenVersionConflictException catch (error) {
+      final context = <String, dynamic>{
+        'operation': 'update_local_client_token',
+        'token_id': tokenId,
+        'reason': 'token_version_conflict',
+        'current_version': error.currentVersion,
+      };
+      if (expectedVersion != null) {
+        context['expected_version'] = expectedVersion;
+      }
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Client token was modified by another operation',
-          context: {
-            'operation': 'update_local_client_token',
-            'token_id': tokenId,
-            'reason': 'token_version_conflict',
-            'current_version': error.currentVersion,
-            if (expectedVersion != null) 'expected_version': expectedVersion,
-          },
+          context: context,
         ),
       );
     } on Exception catch (error) {

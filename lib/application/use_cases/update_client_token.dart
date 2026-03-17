@@ -4,6 +4,7 @@ import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:result_dart/result_dart.dart';
@@ -12,10 +13,13 @@ class UpdateClientToken {
   UpdateClientToken(
     this._repository, {
     ITokenAuditStore? auditStore,
-  }) : _auditStore = auditStore;
+    IAuthorizationDecisionCache? decisionCache,
+  }) : _auditStore = auditStore,
+       _decisionCache = decisionCache;
 
   final IClientTokenRepository _repository;
   final ITokenAuditStore? _auditStore;
+  final IAuthorizationDecisionCache? _decisionCache;
 
   Future<Result<ClientTokenUpdateResult>> call(
     String tokenId,
@@ -44,6 +48,7 @@ class UpdateClientToken {
       expectedVersion: expectedVersion,
     );
     if (result.isSuccess()) {
+      _decisionCache?.invalidateAll();
       await _recordRotateAuditEvent(tokenId, request.clientId);
     }
     return result;

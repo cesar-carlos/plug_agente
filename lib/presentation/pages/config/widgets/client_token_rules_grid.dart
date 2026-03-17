@@ -77,7 +77,8 @@ class ClientTokenRulesGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.hasBoundedWidth &&
+        final isCompact =
+            constraints.hasBoundedWidth &&
             constraints.maxWidth < _compactGridBreakpoint;
 
         if (isCompact) {
@@ -168,8 +169,9 @@ class _CompactRuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strokeColor =
-        FluentTheme.of(context).resources.controlStrokeColorDefault;
+    final strokeColor = FluentTheme.of(
+      context,
+    ).resources.controlStrokeColorDefault;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(

@@ -34,7 +34,8 @@ void main() {
         'api_version': '2.1',
         'meta': <String, dynamic>{
           'trace_id': 't-1',
-          'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+          'traceparent':
+              '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
           'agent_id': 'a-1',
         },
       };

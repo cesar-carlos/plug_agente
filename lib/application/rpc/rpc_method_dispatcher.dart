@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -16,6 +18,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/infrastructure/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 /// RPC method dispatcher for routing JSON-RPC requests to handlers.
@@ -31,6 +34,11 @@ class RpcMethodDispatcher {
     AuthorizationMetricsCollector? authMetrics,
     IStreamingDatabaseGateway? streamingGateway,
     TransportLimits defaultLimits = const TransportLimits(),
+    Duration sqlExecuteTotalBudget = _defaultSqlExecuteTotalBudget,
+    Duration sqlBatchTotalBudget = _defaultSqlBatchTotalBudget,
+    Duration authorizationStageBudget = _defaultAuthorizationStageBudget,
+    Duration queryStageBudget = _defaultQueryStageBudget,
+    Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
   }) : _databaseGateway = databaseGateway,
        _normalizerService = normalizerService,
        _uuid = uuid,
@@ -41,6 +49,11 @@ class RpcMethodDispatcher {
        _authMetrics = authMetrics,
        _streamingGateway = streamingGateway,
        _defaultLimits = defaultLimits,
+       _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
+       _sqlBatchTotalBudgetDuration = sqlBatchTotalBudget,
+       _authorizationStageBudgetDuration = authorizationStageBudget,
+       _queryStageBudgetDuration = queryStageBudget,
+       _batchExecutionStageBudgetDuration = batchExecutionStageBudget,
        _executeSqlBatch = ExecuteSqlBatch(
          databaseGateway,
          normalizerService,
@@ -57,8 +70,18 @@ class RpcMethodDispatcher {
   final AuthorizationMetricsCollector? _authMetrics;
   final IStreamingDatabaseGateway? _streamingGateway;
   final TransportLimits _defaultLimits;
+  final Duration _sqlExecuteTotalBudgetDuration;
+  final Duration _sqlBatchTotalBudgetDuration;
+  final Duration _authorizationStageBudgetDuration;
+  final Duration _queryStageBudgetDuration;
+  final Duration _batchExecutionStageBudgetDuration;
 
   static const _idempotencyTtl = Duration(minutes: 5);
+  static const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
+  static const _defaultSqlBatchTotalBudget = Duration(seconds: 45);
+  static const _defaultAuthorizationStageBudget = Duration(seconds: 3);
+  static const _defaultQueryStageBudget = Duration(seconds: 30);
+  static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
   final ExecuteSqlBatch _executeSqlBatch;
   _ActiveStreamExecution? _activeStreamExecution;
 
@@ -110,6 +133,9 @@ class RpcMethodDispatcher {
     final params = request.params as Map<String, dynamic>;
     final sql = params['sql'] as String?;
     final maxRows = _resolveMaxRows(params, limits.maxRows);
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_sqlExecuteTotalBudgetDuration)
+        : null;
 
     if (sql == null || sql.isEmpty) {
       return _invalidParams(request, 'sql is required');
@@ -164,6 +190,11 @@ class RpcMethodDispatcher {
 
     if (_featureFlags.enableClientTokenAuthorization &&
         (clientToken == null || clientToken.isEmpty)) {
+      _authMetrics?.recordDenied(
+        requestId: request.id?.toString(),
+        method: request.method,
+        reason: 'missing_client_token',
+      );
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -175,14 +206,22 @@ class RpcMethodDispatcher {
     if (_featureFlags.enableClientTokenAuthorization &&
         clientToken != null &&
         clientToken.isNotEmpty) {
-      final authResult = await _authorizeSqlOperation(
+      final authStopwatch = Stopwatch()..start();
+      final authResult = await _authorizeWithBudget(
         token: clientToken,
         sql: sql,
+        requestId: request.id?.toString(),
+        method: request.method,
+        deadline: deadline,
       );
+      authStopwatch.stop();
       if (authResult.isError()) {
         final failure = authResult.exceptionOrNull()! as domain.Failure;
         final ctx = failure.context;
         _authMetrics?.recordDenied(
+          requestId: request.id?.toString(),
+          method: request.method,
+          latencyMs: authStopwatch.elapsedMilliseconds,
           clientId: ctx['client_id'] as String?,
           operation: ctx['operation'] as String?,
           resource: ctx['resource'] as String?,
@@ -195,7 +234,11 @@ class RpcMethodDispatcher {
         );
         return RpcResponse.error(id: request.id, error: rpcError);
       }
-      _authMetrics?.recordAuthorized();
+      _authMetrics?.recordAuthorized(
+        requestId: request.id?.toString(),
+        method: request.method,
+        latencyMs: authStopwatch.elapsedMilliseconds,
+      );
     }
 
     // Validate SQL (allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE)
@@ -234,10 +277,14 @@ class RpcMethodDispatcher {
       return streamingFromDbResponse;
     }
 
-    final result = await _databaseGateway.executeQuery(queryRequest);
+    final result = await _executeQueryWithBudget(
+      queryRequest,
+      requestId: request.id?.toString(),
+      deadline: deadline,
+    );
 
-    return await result.fold(
-      (queryResponse) async {
+    return result.fold<Future<RpcResponse>>(
+      (QueryResponse queryResponse) async {
         // Normalize
         final normalized = await _normalizerService.normalize(queryResponse);
 
@@ -330,7 +377,7 @@ class RpcMethodDispatcher {
         }
         return rpcResponse;
       },
-      (failure) {
+      (Exception failure) async {
         final rpcError = FailureToRpcErrorMapper.map(
           failure as domain.Failure,
           instance: request.id?.toString(),
@@ -471,6 +518,9 @@ class RpcMethodDispatcher {
 
     final params = request.params as Map<String, dynamic>;
     final commandsJson = params['commands'] as List<dynamic>?;
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_sqlBatchTotalBudgetDuration)
+        : null;
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       final options = params['options'] as Map<String, dynamic>?;
       if (options?['page'] != null || options?['page_size'] != null) {
@@ -523,6 +573,11 @@ class RpcMethodDispatcher {
 
     if (_featureFlags.enableClientTokenAuthorization &&
         (clientToken == null || clientToken.isEmpty)) {
+      _authMetrics?.recordDenied(
+        requestId: request.id?.toString(),
+        method: request.method,
+        reason: 'missing_client_token',
+      );
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -535,14 +590,22 @@ class RpcMethodDispatcher {
         clientToken != null &&
         clientToken.isNotEmpty) {
       for (final cmd in commands) {
-        final authResult = await _authorizeSqlOperation(
+        final authStopwatch = Stopwatch()..start();
+        final authResult = await _authorizeWithBudget(
           token: clientToken,
           sql: cmd.sql,
+          requestId: request.id?.toString(),
+          method: request.method,
+          deadline: deadline,
         );
+        authStopwatch.stop();
         if (authResult.isError()) {
           final failure = authResult.exceptionOrNull()! as domain.Failure;
           final ctx = failure.context;
           _authMetrics?.recordDenied(
+            requestId: request.id?.toString(),
+            method: request.method,
+            latencyMs: authStopwatch.elapsedMilliseconds,
             clientId: ctx['client_id'] as String?,
             operation: ctx['operation'] as String?,
             resource: ctx['resource'] as String?,
@@ -555,7 +618,11 @@ class RpcMethodDispatcher {
           );
           return RpcResponse.error(id: request.id, error: rpcError);
         }
-        _authMetrics?.recordAuthorized();
+        _authMetrics?.recordAuthorized(
+          requestId: request.id?.toString(),
+          method: request.method,
+          latencyMs: authStopwatch.elapsedMilliseconds,
+        );
       }
     }
 
@@ -574,15 +641,17 @@ class RpcMethodDispatcher {
 
     // Execute batch
     final database = params['database'] as String?;
-    final result = await _executeSqlBatch(
+    final result = await _executeSqlBatchWithBudget(
       agentId,
       commands,
       database: database,
       options: effectiveOptions,
+      requestId: request.id?.toString(),
+      deadline: deadline,
     );
 
-    return result.fold(
-      (commandResults) {
+    return result.fold<RpcResponse>(
+      (List<SqlCommandResult> commandResults) {
         final resultData = {
           'execution_id': _uuid.v4(),
           'started_at': DateTime.now().toIso8601String(),
@@ -610,7 +679,7 @@ class RpcMethodDispatcher {
         }
         return response;
       },
-      (failure) {
+      (Exception failure) {
         final rpcError = FailureToRpcErrorMapper.map(
           failure as domain.Failure,
           instance: request.id?.toString(),
@@ -619,6 +688,202 @@ class RpcMethodDispatcher {
         return RpcResponse.error(id: request.id, error: rpcError);
       },
     );
+  }
+
+  Future<Result<void>> _authorizeWithBudget({
+    required String token,
+    required String sql,
+    required String? requestId,
+    required String method,
+    required DateTime? deadline,
+  }) async {
+    final timeout = _effectiveStageTimeout(
+      deadline: deadline,
+      stageBudget: _authorizationStageBudgetDuration,
+    );
+    if (timeout != null && timeout <= Duration.zero) {
+      final context = <String, dynamic>{
+        'authorization': true,
+        'reason': 'authorization_budget_exhausted',
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'authorization',
+        'method': method,
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Authorization budget exhausted before validation',
+          context: context,
+        ),
+      );
+    }
+
+    try {
+      if (timeout == null) {
+        return _authorizeSqlOperation(
+          token: token,
+          sql: sql,
+          requestId: requestId,
+          method: method,
+        );
+      }
+      return await _authorizeSqlOperation(
+        token: token,
+        sql: sql,
+        requestId: requestId,
+        method: method,
+      ).timeout(timeout);
+    } on TimeoutException {
+      final context = <String, dynamic>{
+        'authorization': true,
+        'reason': 'authorization_timeout',
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'authorization',
+        'method': method,
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Authorization stage timeout',
+          context: context,
+        ),
+      );
+    }
+  }
+
+  Future<Result<QueryResponse>> _executeQueryWithBudget(
+    QueryRequest queryRequest, {
+    required String? requestId,
+    required DateTime? deadline,
+  }) async {
+    final timeout = _effectiveStageTimeout(
+      deadline: deadline,
+      stageBudget: _queryStageBudgetDuration,
+    );
+    if (timeout != null && timeout <= Duration.zero) {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'query',
+        'reason': 'query_budget_exhausted',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL execution budget exhausted before database call',
+          context: context,
+        ),
+      );
+    }
+
+    try {
+      if (timeout == null) {
+        return await _databaseGateway.executeQuery(queryRequest);
+      }
+      return await _databaseGateway.executeQuery(queryRequest).timeout(timeout);
+    } on TimeoutException {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'query',
+        'reason': 'query_timeout',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL execution timeout',
+          context: context,
+        ),
+      );
+    }
+  }
+
+  Future<Result<List<SqlCommandResult>>> _executeSqlBatchWithBudget(
+    String agentId,
+    List<SqlCommand> commands, {
+    required String? database,
+    required SqlExecutionOptions options,
+    required String? requestId,
+    required DateTime? deadline,
+  }) async {
+    final timeout = _effectiveStageTimeout(
+      deadline: deadline,
+      stageBudget: _batchExecutionStageBudgetDuration,
+    );
+    if (timeout != null && timeout <= Duration.zero) {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'batch',
+        'reason': 'batch_budget_exhausted',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Batch execution budget exhausted before database call',
+          context: context,
+        ),
+      );
+    }
+
+    try {
+      if (timeout == null) {
+        return await _executeSqlBatch(
+          agentId,
+          commands,
+          database: database,
+          options: options,
+        );
+      }
+      return await _executeSqlBatch(
+        agentId,
+        commands,
+        database: database,
+        options: options,
+      ).timeout(timeout);
+    } on TimeoutException {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'batch',
+        'reason': 'query_timeout',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Batch SQL execution timeout',
+          context: context,
+        ),
+      );
+    }
+  }
+
+  Duration? _effectiveStageTimeout({
+    required DateTime? deadline,
+    required Duration stageBudget,
+  }) {
+    if (deadline == null) {
+      return null;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      return Duration.zero;
+    }
+    return remaining < stageBudget ? remaining : stageBudget;
   }
 
   /// Handles sql.cancel method (cancels in-flight streaming execution).

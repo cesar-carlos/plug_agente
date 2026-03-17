@@ -18,7 +18,8 @@ class AppTheme {
     },
   );
 
-  static String get fontFamily => GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
+  static String get fontFamily =>
+      GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
 
   static FluentThemeData light() {
     return _buildTheme(brightness: Brightness.light);

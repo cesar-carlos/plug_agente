@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -20,7 +21,13 @@ abstract class AgentConfigDataSource {
 
 @DriftDatabase(tables: [ConfigTable, ClientTokenCacheTable])
 class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
+  AppDatabase([QueryExecutor? executor])
+    : super(executor ?? _openConnection()) {
+    _startWalMaintenance();
+  }
+
+  Timer? _walCheckpointTimer;
+  static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
   int get schemaVersion => 9;
@@ -97,6 +104,13 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       }
       await _createClientTokenIndexes();
     },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await customStatement('PRAGMA journal_mode = WAL');
+      await customStatement('PRAGMA synchronous = NORMAL');
+      await customStatement('PRAGMA busy_timeout = 5000');
+      await customStatement('PRAGMA wal_autocheckpoint = 1000');
+    },
   );
 
   Future<void> _createClientTokenIndexes() async {
@@ -155,6 +169,28 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   @override
   Future<void> deleteConfig(String id) =>
       (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+
+  void _startWalMaintenance() {
+    _walCheckpointTimer?.cancel();
+    _walCheckpointTimer = Timer.periodic(_walCheckpointInterval, (_) {
+      _runWalCheckpoint();
+    });
+  }
+
+  Future<void> _runWalCheckpoint() async {
+    try {
+      await customStatement('PRAGMA wal_checkpoint(PASSIVE)');
+    } on Exception {
+      // Best effort maintenance task.
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    _walCheckpointTimer?.cancel();
+    _walCheckpointTimer = null;
+    await super.close();
+  }
 }
 
 LazyDatabase _openConnection() {

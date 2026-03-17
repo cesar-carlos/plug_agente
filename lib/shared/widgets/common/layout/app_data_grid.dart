@@ -57,7 +57,9 @@ class AppDataGrid<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strokeColor = FluentTheme.of(context).resources.controlStrokeColorDefault;
+    final strokeColor = FluentTheme.of(
+      context,
+    ).resources.controlStrokeColorDefault;
 
     return Container(
       decoration: BoxDecoration(
@@ -110,7 +112,9 @@ class AppDataGridScrollable<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strokeColor = FluentTheme.of(context).resources.controlStrokeColorDefault;
+    final strokeColor = FluentTheme.of(
+      context,
+    ).resources.controlStrokeColorDefault;
 
     return Container(
       decoration: BoxDecoration(
@@ -214,7 +218,9 @@ class _AppDataGridRow<T> extends StatelessWidget {
       'got ${cells.length}.',
     );
 
-    final rowColor = index.isEven ? Colors.transparent : FluentTheme.of(context).resources.subtleFillColorSecondary;
+    final rowColor = index.isEven
+        ? Colors.transparent
+        : FluentTheme.of(context).resources.subtleFillColorSecondary;
 
     final content = Row(
       children: List<Widget>.generate(

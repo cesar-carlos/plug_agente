@@ -31,7 +31,7 @@ void main() {
     registerFallbackValue(
       TokenAuditEvent(
         eventType: TokenAuditEventType.create,
-        timestamp: DateTime.utc(2026, 1, 1),
+        timestamp: DateTime.utc(2026),
       ),
     );
   });

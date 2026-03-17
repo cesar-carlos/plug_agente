@@ -44,6 +44,7 @@ import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -83,6 +84,7 @@ import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_token_secret_store.dart';
+import 'package:plug_agente/infrastructure/stores/in_memory_authorization_decision_cache.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
@@ -192,6 +194,9 @@ Future<void> setupDependencies({
     ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
     ..registerLazySingleton(() => MetricsCollector.instance)
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
+    ..registerLazySingleton<IAuthorizationDecisionCache>(
+      InMemoryAuthorizationDecisionCache.new,
+    )
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
       () => getIt<FeatureFlags>().enableTokenAudit
@@ -371,24 +376,28 @@ Future<void> setupDependencies({
       () => UpdateClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
       ),
     )
     ..registerLazySingleton(
       () => RevokeClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
       ),
     )
     ..registerLazySingleton(
       () => DeleteClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
       ),
     )
     ..registerLazySingleton(
       () => AuthorizeSqlOperation(
         getIt<SqlOperationClassifier>(),
         getIt<ClientTokenValidationService>(),
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
       ),
     );
 

@@ -54,7 +54,8 @@ class UpdateService {
     } on DioException catch (error) {
       return Failure(
         domain.NetworkFailure.withContext(
-          message: 'Unable to check for updates. Check your connection and try again.',
+          message:
+              'Unable to check for updates. Check your connection and try again.',
           cause: error,
           context: {'operation': 'checkForUpdates'},
         ),
