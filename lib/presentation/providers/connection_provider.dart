@@ -55,9 +55,9 @@ class ConnectionProvider extends ChangeNotifier {
   String? _lastAgentId;
   String? _lastAuthToken;
 
-  static const int _maxReconnectAttempts = 3;
-  static const Duration _initialReconnectDelay = Duration(seconds: 2);
-  static const Duration _maxReconnectDelay = Duration(seconds: 10);
+  static const Duration _initialReconnectDelay = Duration(seconds: 5);
+  static const Duration _maxReconnectDelay = Duration(seconds: 60);
+  static const int _tokenRefreshIntervalAttempts = 4;
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -260,6 +260,12 @@ class ConnectionProvider extends ChangeNotifier {
         AppLogger.error('Missing server URL or agent ID for reconnection');
       } else {
         final connected = await _recoverConnection(context);
+        if (_isDisconnectRequested) {
+          _status = ConnectionStatus.disconnected;
+          _error = '';
+          AppLogger.info('Reconnection loop cancelled by user disconnect');
+          return;
+        }
         if (!connected) {
           _status = ConnectionStatus.error;
           _error = 'Failed to recover connection after retries';
@@ -287,8 +293,10 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<bool> _recoverConnection(_ConnectionContext context) async {
     var authToken = _resolveAuthTokenForReconnect();
+    var attempt = 0;
 
-    for (var attempt = 1; attempt <= _maxReconnectAttempts; attempt++) {
+    while (!_isDisconnectRequested) {
+      attempt++;
       final delay = _computeReconnectDelay(attempt);
       if (delay > Duration.zero) {
         await Future<void>.delayed(delay);
@@ -304,9 +312,11 @@ class ConnectionProvider extends ChangeNotifier {
         return true;
       }
 
-      final refreshedToken = await _tryRefreshToken(context.serverUrl);
-      if (refreshedToken != null) {
-        authToken = refreshedToken;
+      if (attempt % _tokenRefreshIntervalAttempts == 0) {
+        final refreshedToken = await _tryRefreshToken(context.serverUrl);
+        if (refreshedToken != null) {
+          authToken = refreshedToken;
+        }
       }
     }
 
@@ -400,7 +410,11 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Duration _computeReconnectDelay(int attempt) {
-    final multiplier = 1 << (attempt - 1);
+    final attemptOffset = attempt - 1;
+    final safeExponent = attemptOffset < 0
+        ? 0
+        : (attemptOffset > 5 ? 5 : attemptOffset);
+    final multiplier = 1 << safeExponent;
     final seconds = _initialReconnectDelay.inSeconds * multiplier;
     final cappedSeconds = seconds > _maxReconnectDelay.inSeconds
         ? _maxReconnectDelay.inSeconds

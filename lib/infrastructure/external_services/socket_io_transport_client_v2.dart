@@ -311,7 +311,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('disconnect', (reason) {
         _logMessage('RECEIVED', 'disconnect', reason);
         _stopHeartbeat();
-        _socket = null;
       });
 
       // Protocol negotiation response
@@ -1057,8 +1056,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final failure = _buildConnectionFailure(errorMessage, errorObj);
     AppLogger.error('Connection error: ${failure.message}', error);
 
-    _socket?.dispose();
-    _socket = null;
+    if (!completer.isCompleted) {
+      _socket?.dispose();
+      _socket = null;
+    }
 
     if (errorMessage.contains('Authentication') ||
         errorMessage.contains('Invalid token') ||
@@ -1066,9 +1067,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _onTokenExpired?.call();
     }
 
-    if (!completer.isCompleted) {
-      completer.complete(Failure(failure));
+    if (completer.isCompleted) {
+      return;
     }
+
+    completer.complete(Failure(failure));
   }
 
   void _handleSocketError(dynamic error) {
