@@ -166,8 +166,8 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
+  image_path: "assets/app_image/Image app.png"
   windows:
     generate: true
-    image_path: "assets/icons/icon-512-maskable.png"
   android: false
   ios: false
