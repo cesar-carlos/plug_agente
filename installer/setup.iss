@@ -1,6 +1,7 @@
 ; Plug Agente - Inno Setup Script
 ; Version is updated by installer/update_version.py
 
+#include "constants.iss"
 #define MyAppName "Plug Agente"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "com.se7esistemas"
@@ -51,7 +52,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""{#AutostartArg}; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"

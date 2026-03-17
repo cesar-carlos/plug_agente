@@ -10,8 +10,7 @@ class AppStrings {
   static const String navPlayground = 'Playground';
   static const String navWebSocketSettings = 'Conexão WebSocket';
   static const String tabWebSocketConnection = 'Conexão WebSocket';
-  static const String tabClientTokenAuthorization =
-      'Autorização de Token do Cliente';
+  static const String tabClientTokenAuthorization = 'Autorização de Token do Cliente';
   static const String navSettings = 'Configurações';
   static const String navDatabaseSettings = 'Banco de dados';
 
@@ -30,30 +29,23 @@ class AppStrings {
   static const String modalTitleConnectionSuccessful = 'Conexão Bem-Sucedida';
   static const String modalTitleConnectionFailed = 'Falha na Conexão';
   static const String modalTitleConfigSaved = 'Configuração Salva';
-  static const String modalTitleErrorTestingConnection =
-      'Erro ao Testar Conexão';
-  static const String modalTitleErrorVerifyingDriver =
-      'Erro ao Verificar Driver';
+  static const String modalTitleErrorTestingConnection = 'Erro ao Testar Conexão';
+  static const String modalTitleErrorVerifyingDriver = 'Erro ao Verificar Driver';
   static const String modalTitleErrorSaving = 'Erro ao Salvar';
   static const String modalTitleConnectionStatus = 'Status da Conexão';
 
   // Success Messages
   static const String msgAuthenticatedSuccessfully = 'Autenticado com sucesso!';
-  static const String msgWebSocketConnectedSuccessfully =
-      'Conectado ao servidor WebSocket com sucesso!';
-  static const String msgDatabaseConnectionSuccessful =
-      'Conexão com o banco de dados estabelecida com sucesso!';
-  static const String msgConfigSavedSuccessfully =
-      'Configuração salva com sucesso!';
+  static const String msgWebSocketConnectedSuccessfully = 'Conectado ao servidor WebSocket com sucesso!';
+  static const String msgDatabaseConnectionSuccessful = 'Conexão com o banco de dados estabelecida com sucesso!';
+  static const String msgConfigSavedSuccessfully = 'Configuração salva com sucesso!';
   static const String msgConnectionSuccessful = 'sucesso';
 
   // Error Messages
-  static const String msgOdbcDriverNameRequired =
-      'Nome do Driver ODBC é obrigatório';
+  static const String msgOdbcDriverNameRequired = 'Nome do Driver ODBC é obrigatório';
   static const String msgServerUrlRequired = 'URL do Servidor é obrigatória';
   static const String msgAgentIdRequired = 'ID do Agente é obrigatório';
-  static const String msgAuthCredentialsRequired =
-      'Usuário e senha são obrigatórios';
+  static const String msgAuthCredentialsRequired = 'Usuário e senha são obrigatórios';
 
   // WebSocket Settings
   static const String wsSectionConnection = 'Conexão WebSocket';
@@ -79,8 +71,7 @@ class AppStrings {
   static const String ctFieldPayloadJsonOptional = 'Payload JSON (opcional)';
   static const String ctHintClientId = 'Gerado automaticamente';
   static const String ctHintAgentId = 'agent-01';
-  static const String ctHintPayloadJson =
-      '{"display_name":"Acme ERP","env":"production"}';
+  static const String ctHintPayloadJson = '{"display_name":"Acme ERP","env":"production"}';
   static const String ctFlagAllTables = 'all_tables';
   static const String ctFlagAllViews = 'all_views';
   static const String ctFlagAllPermissions = 'all_permissions';
@@ -102,8 +93,7 @@ class AppStrings {
   static const String ctButtonClearFilters = 'Limpar filtros';
   static const String ctSectionRegisteredTokens = 'Tokens cadastrados';
   static const String ctMsgNoTokenFound = 'Nenhum token encontrado.';
-  static const String ctMsgNoTokenMatchFilter =
-      'Nenhum token corresponde aos filtros aplicados.';
+  static const String ctMsgNoTokenMatchFilter = 'Nenhum token corresponde aos filtros aplicados.';
   static const String ctFilterClientId = 'Filtrar por Client ID';
   static const String ctFilterStatus = 'Filtrar por status';
   static const String ctFilterSort = 'Ordenar por';
@@ -114,8 +104,7 @@ class AppStrings {
   static const String ctSortOldest = 'Mais antigos';
   static const String ctSortClientAsc = 'Client A-Z';
   static const String ctSortClientDesc = 'Client Z-A';
-  static const String ctMsgTokenCreatedCopyNow =
-      'Token criado com sucesso (copie e guarde agora):';
+  static const String ctMsgTokenCreatedCopyNow = 'Token criado com sucesso (copie e guarde agora):';
   static const String ctLabelClient = 'Client';
   static const String ctLabelId = 'ID';
   static const String ctLabelAgent = 'Agent';
@@ -140,12 +129,10 @@ class AppStrings {
   static const String ctConfirmDeleteTitle = 'Excluir token';
   static const String ctConfirmDeleteMessage =
       'Tem certeza que deseja excluir este token? Esta ação não pode ser desfeita.';
-  static const String ctErrorClientIdRequired =
-      'Informe o client_id para criar o token.';
+  static const String ctErrorClientIdRequired = 'Informe o client_id para criar o token.';
   static const String ctErrorRuleOrAllPermissionsRequired =
       'Adicione ao menos uma regra valida ou marque all_permissions.';
-  static const String ctErrorPayloadMustBeJsonObject =
-      'Payload deve ser um objeto JSON valido.';
+  static const String ctErrorPayloadMustBeJsonObject = 'Payload deve ser um objeto JSON valido.';
   static const String ctErrorPayloadInvalidJson = 'Payload JSON invalido.';
   static const String ctRuleFieldType = 'Tipo';
   static const String ctRuleFieldEffect = 'Efeito';
@@ -159,16 +146,14 @@ class AppStrings {
   static const String ctGridColumnEffect = 'Efeito';
   static const String ctGridColumnPermissions = 'Permissões';
   static const String ctGridColumnActions = 'Ações';
-  static const String ctNoRulesAdded =
-      'Nenhuma regra adicionada. Clique em "Adicionar regra".';
+  static const String ctNoRulesAdded = 'Nenhuma regra adicionada. Clique em "Adicionar regra".';
   static const String ctDialogAddRuleTitle = 'Adicionar regra';
   static const String ctDialogCreateTokenTitle = 'Criar token do cliente';
   static const String ctDialogEditTokenTitle = 'Editar token do cliente';
   static const String ctButtonSaveTokenChanges = 'Salvar alterações';
   static const String ctDialogEditRuleTitle = 'Editar regra';
   static const String ctDialogSaveRule = 'Salvar regra';
-  static const String ctEditUpdatesTokenHint =
-      'As alteracoes serao aplicadas ao token selecionado.';
+  static const String ctEditUpdatesTokenHint = 'As alteracoes serao aplicadas ao token selecionado.';
   static const String ctEditCreatesNewTokenHint =
       'Editar preenche os campos para criar um novo token. '
       'O token original nao e alterado.';
@@ -178,13 +163,10 @@ class AppStrings {
   static const String ctTooltipEditRule = 'Editar regra';
   static const String ctTooltipDeleteRule = 'Excluir regra';
   static const String ctTooltipEditToken = 'Editar token';
-  static const String ctErrorRuleResourceRequired =
-      'Informe o recurso (schema.nome).';
-  static const String ctErrorRulePermissionRequired =
-      'Selecione ao menos uma permissão para a regra.';
+  static const String ctErrorRuleResourceRequired = 'Informe o recurso (schema.nome).';
+  static const String ctErrorRulePermissionRequired = 'Selecione ao menos uma permissão para a regra.';
   static const String ctRuleNoPermission = 'Sem permissões';
-  static const String ctToggleKeepConfigAfterCreate =
-      'Manter configuração após criar token';
+  static const String ctToggleKeepConfigAfterCreate = 'Manter configuração após criar token';
   static const String ctRuleFeedbackAdded = 'Regra adicionada com sucesso.';
   static const String ctRuleFeedbackUpdated = 'Regra atualizada com sucesso.';
   static const String ctRuleFeedbackRemoved = 'Regra removida com sucesso.';
@@ -214,6 +196,13 @@ class AppStrings {
   static const String gsLicenseMit = 'MIT License';
   static const String gsButtonOpenSettings = 'Abrir configurações';
 
+  // Single Instance (used by native runner; kept here for consistency)
+  // Must match constants/autostart_arg.txt and installer/constants.iss
+  static const String singleInstanceArgAutostart = '--autostart';
+  static const String singleInstanceTitle = 'Plug Agente';
+  static const String singleInstanceMessage = 'O aplicativo Plug Agente já está em execução.';
+  static const String singleInstanceMessageWithUser = 'O aplicativo Plug Agente já está em execução.\n\nUsuário: ';
+
   // Database Settings
   static const String dbSectionTitle = 'Configuração do banco de dados';
   static const String dbFieldDatabaseDriver = 'Driver do Banco de Dados';
@@ -233,20 +222,14 @@ class AppStrings {
 
   // Main Window
   static const String mainDegradedModeTitle = 'Modo Degradado Ativo';
-  static const String mainDegradedModeDescription =
-      'O aplicativo está rodando com recursos limitados:';
+  static const String mainDegradedModeDescription = 'O aplicativo está rodando com recursos limitados:';
 
   // ODBC Advanced Settings
-  static const String odbcErrorPoolRange =
-      'Tamanho do pool deve ser entre 1 e 20';
-  static const String odbcErrorLoginTimeoutRange =
-      'Login timeout deve ser entre 1 e 120 segundos';
-  static const String odbcErrorBufferRange =
-      'Buffer de resultados deve ser entre 8 e 128 MB';
-  static const String odbcErrorChunkRange =
-      'Chunk do streaming deve ser entre 64 e 8192 KB';
-  static const String odbcErrorSaveFailed =
-      'Falha ao salvar configurações avançadas. Tente novamente.';
+  static const String odbcErrorPoolRange = 'Tamanho do pool deve ser entre 1 e 20';
+  static const String odbcErrorLoginTimeoutRange = 'Login timeout deve ser entre 1 e 120 segundos';
+  static const String odbcErrorBufferRange = 'Buffer de resultados deve ser entre 8 e 128 MB';
+  static const String odbcErrorChunkRange = 'Chunk do streaming deve ser entre 64 e 8192 KB';
+  static const String odbcErrorSaveFailed = 'Falha ao salvar configurações avançadas. Tente novamente.';
   static const String odbcSuccessAppliedNow =
       'As configurações de pool, timeout e streaming foram salvas e '
       'aplicadas para novas conexões.';
@@ -281,8 +264,7 @@ class AppStrings {
       '• 256-512 KB: feedback visual mais frequente\n'
       '• 1024 KB: equilíbrio geral (padrão)\n'
       '• 2048-4096 KB: maior throughput em datasets grandes';
-  static const String odbcTextChunkWarning =
-      'Se houver travamentos de UI ou uso alto de memória, reduza o chunk.';
+  static const String odbcTextChunkWarning = 'Se houver travamentos de UI ou uso alto de memória, reduza o chunk.';
   static const String odbcButtonRestoreDefault = 'Restaurar padrão';
   static const String odbcButtonSaveAdvanced = 'Salvar configurações avançadas';
 
@@ -318,8 +300,7 @@ class AppStrings {
 
   // Query Results
   static const String queryNoResults = 'Sem resultados';
-  static const String queryNoResultsMessage =
-      'Execute uma consulta SELECT para ver os resultados aqui.';
+  static const String queryNoResultsMessage = 'Execute uma consulta SELECT para ver os resultados aqui.';
   static const String queryErrorTitle = 'Erro na Consulta';
   static const String queryErrorShowDetails = 'Ver Detalhes';
   static const String queryTotalRecords = 'Total de registros';
@@ -333,14 +314,12 @@ class AppStrings {
   static const String queryActionCancel = 'Cancelar';
   static const String queryConnectionStatusTitle = 'Status da Conexão';
   static const String queryConnectionTesting = 'Testando conexão...';
-  static const String queryConnectionSuccess =
-      'Conexão estabelecida com sucesso';
+  static const String queryConnectionSuccess = 'Conexão estabelecida com sucesso';
   static const String queryConnectionFailure = 'Falha na conexão';
   static const String queryCancelledByUser = 'Query cancelada pelo usuário';
   static const String queryStreamingErrorPrefix = 'Erro no streaming';
   static const String queryStreamingMode = 'Modo streaming';
-  static const String queryStreamingModeHint =
-      'Para grandes datasets (milhares de linhas)';
+  static const String queryStreamingModeHint = 'Para grandes datasets (milhares de linhas)';
   static const String queryStreamingProgress = 'Processando';
   static const String queryStreamingRows = 'linhas';
   static const String queryPaginationPage = 'Pagina';
@@ -351,8 +330,7 @@ class AppStrings {
   static const String queryResultSetLabel = 'Result set';
 
   // Dashboard
-  static const String dashboardDescription =
-      'Monitor your agent status and database connections here.';
+  static const String dashboardDescription = 'Monitor your agent status and database connections here.';
   static const String dashboardMetricsTitle = 'Métricas ODBC';
   static const String dashboardMetricsQueries = 'Queries executadas';
   static const String dashboardMetricsSuccess = 'Sucesso';
