@@ -32,15 +32,9 @@ class DatabaseResource {
   String get normalizedName => _normalizeName(name);
 
   bool matches(String target) {
-    final left = normalizedName;
-    final right = _normalizeName(target);
-    if (left == right) {
-      return true;
-    }
-
-    final leftBase = _baseName(left);
-    final rightBase = _baseName(right);
-    return leftBase == rightBase;
+    final leftCandidates = _buildCandidates(normalizedName);
+    final rightCandidates = _buildCandidates(_normalizeName(target));
+    return leftCandidates.any(rightCandidates.contains);
   }
 
   Map<String, dynamic> toJson() {
@@ -52,11 +46,23 @@ class DatabaseResource {
 
   static String _normalizeName(String value) {
     final trimmed = value.trim().toLowerCase();
-    return trimmed.replaceAll('[', '').replaceAll(']', '');
+    return trimmed
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll('`', '')
+        .replaceAll("'", '')
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp(r'\.+'), '.');
   }
 
   static String _baseName(String normalized) {
     final parts = normalized.split('.');
     return parts.isEmpty ? normalized : parts.last;
+  }
+
+  static Set<String> _buildCandidates(String normalized) {
+    final base = _baseName(normalized);
+    return <String>{normalized, base};
   }
 }

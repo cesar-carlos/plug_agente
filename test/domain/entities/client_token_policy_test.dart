@@ -147,6 +147,16 @@ void main() {
 
       check(
         policy.isAllowed(
+          operation: SqlOperation.read,
+          resource: const DatabaseResource(
+            resourceType: DatabaseResourceType.table,
+            name: '[DBO].[USERS]',
+          ),
+        ),
+      ).isTrue();
+
+      check(
+        policy.isAllowed(
           operation: SqlOperation.update,
           resource: const DatabaseResource(
             resourceType: DatabaseResourceType.table,
@@ -154,6 +164,39 @@ void main() {
           ),
         ),
       ).isFalse();
+    });
+
+    test('should match resource key ignoring case and quoting', () {
+      const policy = ClientTokenPolicy(
+        clientId: clientId,
+        allTables: false,
+        allViews: false,
+        allPermissions: false,
+        rules: [
+          ClientTokenRule(
+            resource: DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: '"Dbo"."Cliente"',
+            ),
+            permissions: ClientPermissionSet(
+              canRead: true,
+              canUpdate: false,
+              canDelete: false,
+            ),
+            effect: ClientTokenRuleEffect.allow,
+          ),
+        ],
+      );
+
+      check(
+        policy.isAllowed(
+          operation: SqlOperation.read,
+          resource: const DatabaseResource(
+            resourceType: DatabaseResourceType.table,
+            name: 'cliente',
+          ),
+        ),
+      ).isTrue();
     });
 
     test('should deny when operation does not match allow rule', () {
