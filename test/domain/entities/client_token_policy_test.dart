@@ -137,6 +137,16 @@ void main() {
 
       check(
         policy.isAllowed(
+          operation: SqlOperation.read,
+          resource: const DatabaseResource(
+            resourceType: DatabaseResourceType.table,
+            name: 'dbo.users',
+          ),
+        ),
+      ).isTrue();
+
+      check(
+        policy.isAllowed(
           operation: SqlOperation.update,
           resource: const DatabaseResource(
             resourceType: DatabaseResourceType.table,
@@ -239,44 +249,46 @@ void main() {
       ).isFalse();
     });
 
-    test('should allow unknown resources when allTables or allViews is true',
-        () {
-      const policyWithTables = ClientTokenPolicy(
-        clientId: clientId,
-        allTables: true,
-        allViews: false,
-        allPermissions: false,
-        rules: [],
-      );
+    test(
+      'should allow unknown resources when allTables or allViews is true',
+      () {
+        const policyWithTables = ClientTokenPolicy(
+          clientId: clientId,
+          allTables: true,
+          allViews: false,
+          allPermissions: false,
+          rules: [],
+        );
 
-      check(
-        policyWithTables.isAllowed(
-          operation: SqlOperation.read,
-          resource: const DatabaseResource(
-            resourceType: DatabaseResourceType.unknown,
-            name: 'unknown_resource',
+        check(
+          policyWithTables.isAllowed(
+            operation: SqlOperation.read,
+            resource: const DatabaseResource(
+              resourceType: DatabaseResourceType.unknown,
+              name: 'unknown_resource',
+            ),
           ),
-        ),
-      ).isTrue();
+        ).isTrue();
 
-      const policyWithViews = ClientTokenPolicy(
-        clientId: clientId,
-        allTables: false,
-        allViews: true,
-        allPermissions: false,
-        rules: [],
-      );
+        const policyWithViews = ClientTokenPolicy(
+          clientId: clientId,
+          allTables: false,
+          allViews: true,
+          allPermissions: false,
+          rules: [],
+        );
 
-      check(
-        policyWithViews.isAllowed(
-          operation: SqlOperation.read,
-          resource: const DatabaseResource(
-            resourceType: DatabaseResourceType.unknown,
-            name: 'unknown_resource',
+        check(
+          policyWithViews.isAllowed(
+            operation: SqlOperation.read,
+            resource: const DatabaseResource(
+              resourceType: DatabaseResourceType.unknown,
+              name: 'unknown_resource',
+            ),
           ),
-        ),
-      ).isTrue();
-    });
+        ).isTrue();
+      },
+    );
 
     test('should prioritize deny over allow rules', () {
       const policy = ClientTokenPolicy(
