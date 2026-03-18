@@ -279,7 +279,7 @@ Future<void> setupDependencies({
     ..registerLazySingleton(ProtocolMetricsCollector.new)
     ..registerLazySingleton(AuthorizationMetricsCollector.new)
     ..registerLazySingleton<IAuthorizationMetricsCollector>(
-      getIt.call,
+      getIt.get<AuthorizationMetricsCollector>,
     )
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(getIt<AppDatabase>()),
@@ -293,7 +293,7 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
-    ..registerLazySingleton<IMetricsCollector>(getIt.call)
+    ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       InMemoryAuthorizationDecisionCache.new,
@@ -410,7 +410,7 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => ConnectionService(
-        getIt<ITransportClient>(),
+        () => getIt<ITransportClient>(),
         getIt<IDatabaseGateway>(),
       ),
     )
