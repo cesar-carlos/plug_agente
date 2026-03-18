@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.0.12+13</title>
+   <pubDate>Wed, 18 Mar 2026 17:45:10 +0000</pubDate>
+   <description>Nova Versão 1.0.12+13 - Atualização automática via GitHub Release.</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.12/PlugAgente-Setup-1.0.12.exe" sparkle:version="1.0.12+13" sparkle:os="windows" length="35793978" type="application/octet-stream" sparkle:dsaSignature="MD0CHDsHa11jE/EqC26k91BPghCCgifvgWZTmX2TasQCHQCS5YBrEVjWX4hOkXEqnKCBEkRgeQeUqtcHMDN8" />
+  </item>
+  <item>
    <title>Version 1.0.11+12</title>
    <pubDate>Wed, 18 Mar 2026 15:32:38 +0000</pubDate>
    <description>Nova Versão 1.0.11+12 - Atualização automática via GitHub Release.</description>
