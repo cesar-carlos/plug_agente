@@ -229,6 +229,7 @@ o papel central do `plug_server` na arquitetura.
 O projeto exige autenticacao tanto para o `plug_agente` quanto para o `consumer`.
 
 Cada namespace aplica autenticacao no handshake e valida o `role` do JWT:
+
 - `/agents`: apenas roles em `SOCKET_AGENT_ROLES` (default: `agent`)
 - `/consumers`: apenas roles em `SOCKET_CONSUMER_ROLES` (default: `user`, `admin`), excluindo roles de agente
 
@@ -277,4 +278,3 @@ concentrando autenticacao, seguranca, comunicacao em tempo real e roteamento de
 comandos. O modelo de namespaces (`/agents` e `/consumers`) isola responsabilidades
 e evita acoplamento entre papeis. O `plug_agente` permanece como executador
 especializado das operacoes remotas.
-

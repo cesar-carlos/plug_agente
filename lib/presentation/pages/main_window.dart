@@ -74,7 +74,7 @@ class _MainWindowState extends State<MainWindow> {
           ),
         ],
       ),
-      transitionBuilder: (child, animation) {
+      paneBodyBuilder: (item, body) {
         return Column(
           children: [
             if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
