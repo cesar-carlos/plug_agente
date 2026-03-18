@@ -1,3 +1,4 @@
+import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -57,6 +58,20 @@ void main() {
 
       expect(rpcError.code, equals(RpcErrorCode.queryTimeout));
     });
+
+    test(
+      'should map QueryExecutionFailure transaction context to transactionFailed',
+      () {
+        final failure = QueryExecutionFailure.withContext(
+          message: 'Transaction aborted',
+          context: {'reason': 'transaction_failed'},
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+
+        check(rpcError.code).equals(RpcErrorCode.transactionFailed);
+      },
+    );
 
     test('should map NetworkFailure to networkError', () {
       final failure = NetworkFailure('Connection lost');

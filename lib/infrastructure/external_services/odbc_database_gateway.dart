@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
@@ -7,6 +8,7 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -42,6 +44,24 @@ class _QueryExecutionOutcome {
   bool get isSuccess => response != null;
 }
 
+class _BatchExecutionContext {
+  const _BatchExecutionContext({
+    required this.connectionId,
+    required this.connectionString,
+    required this.deadline,
+  });
+
+  final String connectionId;
+  final String connectionString;
+  final DateTime? deadline;
+}
+
+class _BatchTransactionStart {
+  const _BatchTransactionStart(this.transactionId);
+
+  final int? transactionId;
+}
+
 /// ODBC Database Gateway using odbc_fast package.
 ///
 /// This implementation provides:
@@ -70,6 +90,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   bool _initialized = false;
   static const int _bufferRetryMarginBytes = 1024 * 1024;
   static const int _maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
+  static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
 
   ConnectionOptions get _connectionOptions => ConnectionOptions(
     loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
@@ -255,7 +276,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   @override
-  Future<Result<QueryResponse>> executeQuery(QueryRequest request) async {
+  Future<Result<QueryResponse>> executeQuery(
+    QueryRequest request, {
+    Duration? timeout,
+    String? database,
+  }) async {
     developer.log('Executing query ${request.id}', name: 'database_gateway');
 
     final initResult = await _ensureInitialized();
@@ -270,12 +295,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             final connectionString = _resolveConnectionString(
               config,
               localConfig,
+              databaseOverride: database,
             );
 
             return _executeQueryWithRetry(
               request,
               connectionString,
               localConfig,
+              timeout: timeout,
             );
           },
           (domainFailure) => Failure(
@@ -314,10 +341,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<QueryResponse>> _executeQueryWithRetry(
     QueryRequest request,
     String connectionString,
-    DatabaseConfig databaseConfig,
-  ) async {
+    DatabaseConfig databaseConfig, {
+    Duration? timeout,
+  }) async {
     return _retryManager.execute(
-      () => _executeQueryInternal(request, connectionString, databaseConfig),
+      () => _executeQueryInternal(
+        request,
+        connectionString,
+        databaseConfig,
+        timeout: timeout,
+      ),
       maxAttempts: 3,
       initialDelayMs: 500,
       backoffMultiplier: 2,
@@ -327,8 +360,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<QueryResponse>> _executeQueryInternal(
     QueryRequest request,
     String connectionString,
-    DatabaseConfig databaseConfig,
-  ) async {
+    DatabaseConfig databaseConfig, {
+    Duration? timeout,
+  }) async {
     final stopwatch = Stopwatch()..start();
     final preparedExecution = _prepareQueryExecution(request, databaseConfig);
     final queryValidation = _validateQueryExecutionMode(
@@ -371,10 +405,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final connId = poolResult.getOrNull()!;
 
     try {
-      final outcome = await _runQueryExecution(
-        connId,
-        request,
-        preparedExecution,
+      final outcome = await _runQueryExecutionWithTimeout(
+        connId: connId,
+        request: request,
+        preparedExecution: preparedExecution,
+        connectionString: connectionString,
+        timeout: timeout,
       );
 
       if (!outcome.isSuccess) {
@@ -391,6 +427,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             connectionString,
             stopwatch,
             preparedExecution: preparedExecution,
+            timeout: timeout,
           );
         }
         if (_isBufferTooSmallError(error)) {
@@ -406,6 +443,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             stopwatch,
             options: _buildExpandedConnectionOptions(error),
             preparedExecution: preparedExecution,
+            timeout: timeout,
           );
         }
         stopwatch.stop();
@@ -452,6 +490,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
 
       return Success(response);
+    } on TimeoutException catch (error) {
+      stopwatch.stop();
+      _metrics.recordFailure(
+        queryId: request.id,
+        query: request.query,
+        executionDuration: stopwatch.elapsed,
+        errorMessage: 'Query execution timeout',
+      );
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL execution timeout',
+          cause: error,
+          context: {
+            'timeout': true,
+            'timeout_stage': 'sql',
+            'stage': 'query',
+            'reason': 'query_timeout',
+            if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+          },
+        ),
+      );
     } finally {
       // Always release connection back to pool, even if query fails
       await _releaseConnectionSafely(connId);
@@ -459,10 +518,315 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   @override
+  Future<Result<List<SqlCommandResult>>> executeBatch(
+    String agentId,
+    List<SqlCommand> commands, {
+    String? database,
+    SqlExecutionOptions options = const SqlExecutionOptions(),
+    Duration? timeout,
+  }) async {
+    final contextResult = await _prepareBatchExecutionContext(
+      database: database,
+      timeout: timeout,
+    );
+    if (contextResult.isError()) {
+      return Failure(contextResult.exceptionOrNull()!);
+    }
+
+    final context = contextResult.getOrNull()!;
+    int? transactionId;
+    try {
+      final beginResult = await _beginBatchTransactionIfNeeded(
+        connectionId: context.connectionId,
+        transactionEnabled: options.transaction,
+      );
+      if (beginResult.isError()) {
+        return Failure(beginResult.exceptionOrNull()!);
+      }
+      transactionId = beginResult.getOrNull()!.transactionId;
+
+      final commandResult = await _executeBatchCommands(
+        context: context,
+        agentId: agentId,
+        commands: commands,
+        options: options,
+        transactionId: transactionId,
+      );
+      if (commandResult.isError()) {
+        return Failure(commandResult.exceptionOrNull()!);
+      }
+
+      if (options.transaction && transactionId != null) {
+        final commitResult = await _commitBatchTransaction(
+          connectionId: context.connectionId,
+          transactionId: transactionId,
+        );
+        if (commitResult.isError()) {
+          return Failure(commitResult.exceptionOrNull()!);
+        }
+      }
+
+      return commandResult;
+    } finally {
+      await _releaseConnectionSafely(context.connectionId);
+    }
+  }
+
+  Future<Result<_BatchExecutionContext>> _prepareBatchExecutionContext({
+    required String? database,
+    required Duration? timeout,
+  }) async {
+    final initResult = await _ensureInitialized();
+    if (initResult.isError()) {
+      final failure = initResult.exceptionOrNull();
+      if (failure != null) {
+        return Failure(failure);
+      }
+      return Failure(
+        domain.ConnectionFailure('Failed to initialize ODBC for batch'),
+      );
+    }
+
+    final configResult = await _configRepository.getCurrentConfig();
+    if (configResult.isError()) {
+      return Failure(
+        domain.ConfigurationFailure(
+          'Failed to load database configuration for batch execution',
+        ),
+      );
+    }
+
+    final config = configResult.getOrNull()!;
+    final localConfig = _buildDatabaseConfig(config);
+    final connectionString = _resolveConnectionString(
+      config,
+      localConfig,
+      databaseOverride: database,
+    );
+    final poolResult = await _connectionPool.acquire(connectionString);
+    if (poolResult.isError()) {
+      final error = poolResult.exceptionOrNull()!;
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'acquire_connection',
+          context: {'operation': 'batch_execute'},
+        ),
+      );
+    }
+
+    return Success(
+      _BatchExecutionContext(
+        connectionId: poolResult.getOrNull()!,
+        connectionString: connectionString,
+        deadline: timeout == null ? null : DateTime.now().add(timeout),
+      ),
+    );
+  }
+
+  Future<Result<_BatchTransactionStart>> _beginBatchTransactionIfNeeded({
+    required String connectionId,
+    required bool transactionEnabled,
+  }) async {
+    if (!transactionEnabled) {
+      return const Success(_BatchTransactionStart(null));
+    }
+
+    final beginResult = await _service.beginTransaction(connectionId);
+    if (beginResult.isError()) {
+      final error = beginResult.exceptionOrNull()!;
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Failed to start transaction',
+          cause: error,
+          context: {
+            'reason': 'transaction_failed',
+            'operation': 'transaction_begin',
+            'error': _odbcErrorMessage(error),
+          },
+        ),
+      );
+    }
+
+    return Success(_BatchTransactionStart(beginResult.getOrNull()));
+  }
+
+  Future<Result<void>> _commitBatchTransaction({
+    required String connectionId,
+    required int transactionId,
+  }) async {
+    final commitResult = await _service.commitTransaction(
+      connectionId,
+      transactionId,
+    );
+    if (commitResult.isError()) {
+      final error = commitResult.exceptionOrNull()!;
+      await _rollbackTransactionIfNeeded(connectionId, transactionId);
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Failed to commit transaction',
+          cause: error,
+          context: {
+            'reason': 'transaction_failed',
+            'operation': 'transaction_commit',
+            'error': _odbcErrorMessage(error),
+          },
+        ),
+      );
+    }
+
+    return const Success(unit);
+  }
+
+  Future<Result<List<SqlCommandResult>>> _executeBatchCommands({
+    required _BatchExecutionContext context,
+    required String agentId,
+    required List<SqlCommand> commands,
+    required SqlExecutionOptions options,
+    required int? transactionId,
+  }) async {
+    final results = <SqlCommandResult>[];
+
+    for (var i = 0; i < commands.length; i++) {
+      final command = commands[i];
+      final validation = SqlValidator.validateSqlForExecution(command.sql);
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()! as domain.Failure;
+        if (options.transaction) {
+          await _rollbackTransactionIfNeeded(
+            context.connectionId,
+            transactionId,
+          );
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Transaction aborted due to command validation failure',
+              cause: failure,
+              context: {
+                'reason': 'transaction_failed',
+                'operation': 'transaction_validation',
+                'failedIndex': i,
+                'detail': failure.message,
+              },
+            ),
+          );
+        }
+        results.add(SqlCommandResult.failure(index: i, error: failure.message));
+        continue;
+      }
+
+      final commandRequest = QueryRequest(
+        id: _uuid.v4(),
+        agentId: agentId,
+        query: command.sql,
+        parameters: command.params,
+        timestamp: DateTime.now(),
+      );
+
+      final remainingTimeout = _remainingTimeout(context.deadline);
+      try {
+        final outcome = await _runQueryExecutionWithTimeout(
+          connId: context.connectionId,
+          request: commandRequest,
+          preparedExecution: _PreparedQueryExecution(
+            sql: command.sql,
+            parameters: command.params,
+          ),
+          connectionString: context.connectionString,
+          timeout: remainingTimeout,
+        );
+
+        if (!outcome.isSuccess) {
+          final error = outcome.error!;
+          final failure = OdbcFailureMapper.mapQueryError(
+            error,
+            operation: 'execute_batch_item',
+            context: {
+              'command_index': i,
+              'transaction': options.transaction,
+            },
+          );
+
+          if (options.transaction) {
+            await _rollbackTransactionIfNeeded(
+              context.connectionId,
+              transactionId,
+            );
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: 'Transaction aborted due to command failure',
+                cause: error,
+                context: {
+                  'reason': 'transaction_failed',
+                  'operation': 'transaction_execute',
+                  'failedIndex': i,
+                  'detail': failure.message,
+                },
+              ),
+            );
+          }
+
+          results.add(
+            SqlCommandResult.failure(index: i, error: failure.message),
+          );
+          continue;
+        }
+
+        final response = outcome.response!;
+        results.add(
+          SqlCommandResult.success(
+            index: i,
+            rows: response.data,
+            rowCount: response.data.length,
+            affectedRows: response.affectedRows,
+            columnMetadata: response.columnMetadata,
+          ),
+        );
+      } on TimeoutException catch (error) {
+        if (options.transaction) {
+          await _rollbackTransactionIfNeeded(
+            context.connectionId,
+            transactionId,
+          );
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Transaction aborted due to timeout',
+              cause: error,
+              context: {
+                'reason': 'transaction_failed',
+                'operation': 'transaction_timeout',
+                'failedIndex': i,
+                'timeout': true,
+                'timeout_stage': 'sql',
+                'stage': 'batch',
+              },
+            ),
+          );
+        }
+        return Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Batch SQL execution timeout',
+            cause: error,
+            context: {
+              'reason': 'query_timeout',
+              'timeout': true,
+              'timeout_stage': 'sql',
+              'stage': 'batch',
+            },
+          ),
+        );
+      }
+    }
+
+    return Success(results);
+  }
+
+  @override
   Future<Result<int>> executeNonQuery(
     String query,
-    Map<String, dynamic>? parameters,
-  ) async {
+    Map<String, dynamic>? parameters, {
+    Duration? timeout,
+    String? database,
+  }) async {
     final initResult = await _ensureInitialized();
 
     return initResult.fold(
@@ -475,12 +839,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             final connectionString = _resolveConnectionString(
               config,
               localConfig,
+              databaseOverride: database,
             );
 
             return _executeNonQueryWithRetry(
               query,
               parameters,
               connectionString,
+              timeout: timeout,
             );
           },
           (domainFailure) => Failure(
@@ -497,13 +863,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<int>> _executeNonQueryWithRetry(
     String query,
     Map<String, dynamic>? parameters,
-    String connectionString,
-  ) async {
+    String connectionString, {
+    Duration? timeout,
+  }) async {
     return _retryManager.execute(
       () => _executeNonQueryInternal(
         query,
         parameters,
         connectionString,
+        timeout: timeout,
       ),
       maxAttempts: 3,
       initialDelayMs: 500,
@@ -514,8 +882,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<int>> _executeNonQueryInternal(
     String query,
     Map<String, dynamic>? parameters,
-    String connectionString,
-  ) async {
+    String connectionString, {
+    Duration? timeout,
+  }) async {
     final poolResult = await _connectionPool.acquire(connectionString);
 
     if (poolResult.isError()) {
@@ -531,16 +900,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     try {
       // Use named parameters if available
-      final result = parameters != null && parameters.isNotEmpty
-          ? await _service.executeQueryNamed(
-              connId,
-              query,
-              parameters,
-            )
-          : await _service.executeQuery(
-              query,
-              connectionId: connId,
-            );
+      final result = await _runNonQueryWithTimeout(
+        connectionId: connId,
+        query: query,
+        parameters: parameters,
+        connectionString: connectionString,
+        timeout: timeout,
+      );
 
       if (result.isError()) {
         final error = result.exceptionOrNull()!;
@@ -555,6 +921,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             query,
             parameters,
             connectionString,
+            timeout: timeout,
           );
         }
       }
@@ -568,9 +935,156 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           ),
         ),
       );
+    } on TimeoutException catch (error) {
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Non-query execution timeout',
+          cause: error,
+          context: {
+            'timeout': true,
+            'timeout_stage': 'sql',
+            'stage': 'query',
+            'reason': 'query_timeout',
+            if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+          },
+        ),
+      );
     } finally {
       // Always release connection back to pool
       await _releaseConnectionSafely(connId);
+    }
+  }
+
+  Future<_QueryExecutionOutcome> _runQueryExecutionWithTimeout({
+    required String connId,
+    required QueryRequest request,
+    required _PreparedQueryExecution preparedExecution,
+    required String connectionString,
+    Duration? timeout,
+  }) async {
+    if (timeout == null) {
+      return _runQueryExecution(connId, request, preparedExecution);
+    }
+
+    try {
+      return await _runQueryExecution(
+        connId,
+        request,
+        preparedExecution,
+      ).timeout(timeout);
+    } on TimeoutException catch (error) {
+      await _cancelConnectionForTimeout(connId, connectionString);
+      developer.log(
+        'SQL query timed out before completion',
+        name: 'database_gateway',
+        level: 900,
+        error: error,
+      );
+      rethrow;
+    }
+  }
+
+  Future<Result<QueryResult>> _runNonQueryWithTimeout({
+    required String connectionId,
+    required String query,
+    required String connectionString,
+    Map<String, dynamic>? parameters,
+    Duration? timeout,
+  }) async {
+    Future<Result<QueryResult>> run() {
+      if (parameters != null && parameters.isNotEmpty) {
+        return _service.executeQueryNamed(
+          connectionId,
+          query,
+          parameters,
+        );
+      }
+      return _service.executeQuery(
+        query,
+        connectionId: connectionId,
+      );
+    }
+
+    if (timeout == null) {
+      return run();
+    }
+
+    try {
+      return await run().timeout(timeout);
+    } on TimeoutException catch (error) {
+      await _cancelConnectionForTimeout(connectionId, connectionString);
+      developer.log(
+        'SQL non-query timed out before completion',
+        name: 'database_gateway',
+        level: 900,
+        error: error,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _cancelConnectionForTimeout(
+    String connectionId,
+    String connectionString,
+  ) async {
+    try {
+      final disconnectResult = await _service
+          .disconnect(connectionId)
+          .timeout(_bestEffortCancelDisconnectTimeout);
+      if (disconnectResult.isSuccess()) {
+        _metrics.recordTimeoutCancelSuccess();
+      } else {
+        _metrics.recordTimeoutCancelFailure();
+        developer.log(
+          'Best-effort timeout cancellation returned error',
+          name: 'database_gateway',
+          level: 900,
+          error: disconnectResult.exceptionOrNull(),
+        );
+      }
+    } on Object catch (error, stackTrace) {
+      _metrics.recordTimeoutCancelFailure();
+      developer.log(
+        'Best-effort timeout cancellation failed',
+        name: 'database_gateway',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    await _tryRecoverPoolAfterInvalidConnectionId(connectionString);
+  }
+
+  Duration? _remainingTimeout(DateTime? deadline) {
+    if (deadline == null) {
+      return null;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      throw TimeoutException('Execution deadline exceeded');
+    }
+    return remaining;
+  }
+
+  Future<void> _rollbackTransactionIfNeeded(
+    String connectionId,
+    int? transactionId,
+  ) async {
+    if (transactionId == null) {
+      return;
+    }
+    final rollback = await _service.rollbackTransaction(
+      connectionId,
+      transactionId,
+    );
+    if (rollback.isError()) {
+      _metrics.recordTransactionRollbackFailure();
+      developer.log(
+        'Failed to rollback transaction',
+        name: 'database_gateway',
+        level: 900,
+        error: rollback.exceptionOrNull(),
+      );
     }
   }
 
@@ -580,6 +1094,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Stopwatch stopwatch, {
     required _PreparedQueryExecution preparedExecution,
     ConnectionOptions? options,
+    Duration? timeout,
   }) async {
     final connectResult = await _service.connect(
       connectionString,
@@ -589,10 +1104,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return connectResult.fold(
       (connection) async {
         try {
-          final outcome = await _runQueryExecution(
-            connection.id,
-            request,
-            preparedExecution,
+          final outcome = await _runQueryExecutionWithTimeout(
+            connId: connection.id,
+            request: request,
+            preparedExecution: preparedExecution,
+            connectionString: connectionString,
+            timeout: timeout,
           );
           if (!outcome.isSuccess) {
             final error = outcome.error!;
@@ -622,6 +1139,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             columnCount: response.columnMetadata?.length ?? 0,
           );
           return Success(response);
+        } on TimeoutException catch (error) {
+          stopwatch.stop();
+          _metrics.recordFailure(
+            queryId: request.id,
+            query: request.query,
+            executionDuration: stopwatch.elapsed,
+            errorMessage: 'Query execution timeout',
+          );
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'SQL execution timeout',
+              cause: error,
+              context: {
+                'timeout': true,
+                'timeout_stage': 'sql',
+                'stage': 'query',
+                'reason': 'query_timeout',
+                if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+              },
+            ),
+          );
         } finally {
           await _service.disconnect(connection.id);
         }
@@ -648,8 +1186,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<int>> _executeNonQueryWithoutPool(
     String query,
     Map<String, dynamic>? parameters,
-    String connectionString,
-  ) async {
+    String connectionString, {
+    Duration? timeout,
+  }) async {
     final connectResult = await _service.connect(
       connectionString,
       options: _connectionOptions,
@@ -658,16 +1197,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return connectResult.fold(
       (connection) async {
         try {
-          final result = parameters != null && parameters.isNotEmpty
-              ? await _service.executeQueryNamed(
-                  connection.id,
-                  query,
-                  parameters,
-                )
-              : await _service.executeQuery(
-                  query,
-                  connectionId: connection.id,
-                );
+          final result = await _runNonQueryWithTimeout(
+            connectionId: connection.id,
+            query: query,
+            parameters: parameters,
+            connectionString: connectionString,
+            timeout: timeout,
+          );
 
           return result.fold(
             (queryResult) => Success(queryResult.rowCount),
@@ -676,6 +1212,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 error,
                 operation: 'execute_non_query_direct',
               ),
+            ),
+          );
+        } on TimeoutException catch (error) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Non-query execution timeout',
+              cause: error,
+              context: {
+                'timeout': true,
+                'timeout_stage': 'sql',
+                'stage': 'query',
+                'reason': 'query_timeout',
+                if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+              },
             ),
           );
         } finally {
@@ -693,13 +1243,60 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   String _resolveConnectionString(
     Config config,
-    DatabaseConfig databaseConfig,
-  ) {
-    final resolved = config.resolveConnectionString();
-    if (resolved.trim().isNotEmpty) {
+    DatabaseConfig databaseConfig, {
+    String? databaseOverride,
+  }) {
+    final override = databaseOverride?.trim();
+    final resolved = config.resolveConnectionString().trim();
+
+    if (override != null && override.isNotEmpty) {
+      final overriddenDatabaseConfig = DatabaseConfig(
+        driverName: databaseConfig.driverName,
+        username: databaseConfig.username,
+        password: databaseConfig.password,
+        database: override,
+        server: databaseConfig.server,
+        port: databaseConfig.port,
+        databaseType: databaseConfig.databaseType,
+      );
+      if (resolved.isNotEmpty) {
+        return _overrideDatabaseInConnectionString(resolved, override);
+      }
+      return OdbcConnectionBuilder.build(overriddenDatabaseConfig);
+    }
+
+    if (resolved.isNotEmpty) {
       return resolved;
     }
     return OdbcConnectionBuilder.build(databaseConfig);
+  }
+
+  String _overrideDatabaseInConnectionString(
+    String connectionString,
+    String database,
+  ) {
+    var updated = connectionString;
+    final replacements = <RegExp>[
+      RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
+      RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
+    ];
+
+    var replaced = false;
+    for (final pattern in replacements) {
+      if (pattern.hasMatch(updated)) {
+        updated = updated.replaceAllMapped(pattern, (match) {
+          replaced = true;
+          return '${match.group(1)}=$database';
+        });
+      }
+    }
+
+    if (replaced) {
+      return updated;
+    }
+
+    final suffix = updated.endsWith(';') ? '' : ';';
+    return '$updated${suffix}DATABASE=$database';
   }
 
   Future<void> _releaseConnectionSafely(String connectionId) async {

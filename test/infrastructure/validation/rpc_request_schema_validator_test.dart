@@ -1,3 +1,4 @@
+import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
@@ -19,7 +20,7 @@ void main() {
 
         final result = validator.validateSingle(data);
 
-        expect(result.isSuccess(), isTrue);
+        check(result.isSuccess()).isTrue();
       });
 
       test('should succeed for notification (null id)', () {
@@ -187,6 +188,45 @@ void main() {
           expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
         },
       );
+
+      test('should succeed for sql.executeBatch with execution_order', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.executeBatch',
+          'id': 'req-1',
+          'params': {
+            'commands': [
+              {'sql': 'SELECT 1', 'execution_order': 2},
+              {'sql': 'SELECT 2', 'execution_order': 1},
+              {'sql': 'SELECT 3'},
+            ],
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should fail when sql.executeBatch execution_order is invalid', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.executeBatch',
+          'id': 'req-1',
+          'params': {
+            'commands': [
+              {'sql': 'SELECT 1', 'execution_order': -1},
+            ],
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        check(result.isError()).isTrue();
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        check(err.context['rpc_error_code']).equals(RpcErrorCode.invalidParams);
+        check(err.message).contains('execution_order');
+      });
 
       test('should fail when sql.cancel omits execution identifiers', () {
         final data = <String, dynamic>{

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -32,6 +34,7 @@ class RpcMethodDispatcher {
     IAgentConfigRepository? configRepository,
     IIdempotencyStore? idempotencyStore,
     AuthorizationMetricsCollector? authMetrics,
+    void Function()? onIdempotencyFingerprintMismatch,
     IStreamingDatabaseGateway? streamingGateway,
     TransportLimits defaultLimits = const TransportLimits(),
     Duration sqlExecuteTotalBudget = _defaultSqlExecuteTotalBudget,
@@ -47,6 +50,7 @@ class RpcMethodDispatcher {
        _configRepository = configRepository,
        _idempotencyStore = idempotencyStore,
        _authMetrics = authMetrics,
+       _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
        _streamingGateway = streamingGateway,
        _defaultLimits = defaultLimits,
        _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
@@ -68,6 +72,7 @@ class RpcMethodDispatcher {
   final IAgentConfigRepository? _configRepository;
   final IIdempotencyStore? _idempotencyStore;
   final AuthorizationMetricsCollector? _authMetrics;
+  final void Function()? _onIdempotencyFingerprintMismatch;
   final IStreamingDatabaseGateway? _streamingGateway;
   final TransportLimits _defaultLimits;
   final Duration _sqlExecuteTotalBudgetDuration;
@@ -152,6 +157,7 @@ class RpcMethodDispatcher {
     final pagination = paginationResolution.pagination;
     final multiResultRequested = _resolveMultiResult(params);
     final requestParameters = params['params'] as Map<String, dynamic>?;
+    final database = params['database'] as String?;
 
     if (multiResultRequested &&
         requestParameters != null &&
@@ -169,13 +175,27 @@ class RpcMethodDispatcher {
     }
 
     final idempotencyKey = params['idempotency_key'] as String?;
+    final idempotencyFingerprint = _buildIdempotencyFingerprint(
+      method: request.method,
+      params: params,
+    );
     final store = _idempotencyStore;
     if (!request.isNotification &&
         _featureFlags.enableSocketIdempotency &&
         store != null &&
         idempotencyKey != null &&
         idempotencyKey.isNotEmpty) {
-      final cached = store.get(idempotencyKey);
+      final cachedRecord = store.getRecord(idempotencyKey);
+      if (cachedRecord != null &&
+          cachedRecord.requestFingerprint != null &&
+          cachedRecord.requestFingerprint != idempotencyFingerprint) {
+        _onIdempotencyFingerprintMismatch?.call();
+        return _invalidParams(
+          request,
+          'idempotency_key was already used with a different request payload',
+        );
+      }
+      final cached = cachedRecord?.response;
       if (cached != null) {
         return RpcResponse(
           jsonrpc: cached.jsonrpc,
@@ -279,6 +299,7 @@ class RpcMethodDispatcher {
 
     final result = await _executeQueryWithBudget(
       queryRequest,
+      database: database,
       requestId: request.id?.toString(),
       deadline: deadline,
     );
@@ -373,6 +394,7 @@ class RpcMethodDispatcher {
             idempotencyKey,
             rpcResponse,
             _idempotencyTtl,
+            requestFingerprint: idempotencyFingerprint,
           );
         }
         return rpcResponse;
@@ -547,13 +569,27 @@ class RpcMethodDispatcher {
     }
 
     final idempotencyKey = params['idempotency_key'] as String?;
+    final idempotencyFingerprint = _buildIdempotencyFingerprint(
+      method: request.method,
+      params: params,
+    );
     final store = _idempotencyStore;
     if (!request.isNotification &&
         _featureFlags.enableSocketIdempotency &&
         store != null &&
         idempotencyKey != null &&
         idempotencyKey.isNotEmpty) {
-      final cached = store.get(idempotencyKey);
+      final cachedRecord = store.getRecord(idempotencyKey);
+      if (cachedRecord != null &&
+          cachedRecord.requestFingerprint != null &&
+          cachedRecord.requestFingerprint != idempotencyFingerprint) {
+        _onIdempotencyFingerprintMismatch?.call();
+        return _invalidParams(
+          request,
+          'idempotency_key was already used with a different request payload',
+        );
+      }
+      final cached = cachedRecord?.response;
       if (cached != null) {
         return RpcResponse(
           jsonrpc: cached.jsonrpc,
@@ -566,10 +602,58 @@ class RpcMethodDispatcher {
       }
     }
 
-    // Parse commands
-    final commands = commandsJson
-        .map((c) => SqlCommand.fromJson(c as Map<String, dynamic>))
-        .toList();
+    // Parse commands and build execution plan
+    final commandPlans = <_BatchCommandExecutionPlan>[];
+    for (var i = 0; i < commandsJson.length; i++) {
+      final commandJson = commandsJson[i];
+      if (commandJson is! Map<String, dynamic>) {
+        return _invalidParams(request, 'commands[$i] must be an object');
+      }
+
+      final executionOrder = commandJson['execution_order'];
+      if (executionOrder != null &&
+          (executionOrder is! int || executionOrder < 0)) {
+        return _invalidParams(
+          request,
+          'commands[$i].execution_order must be an integer >= 0',
+        );
+      }
+
+      commandPlans.add(
+        _BatchCommandExecutionPlan(
+          command: SqlCommand.fromJson(commandJson),
+          requestIndex: i,
+          executionOrder: executionOrder as int?,
+        ),
+      );
+    }
+
+    commandPlans.sort((left, right) {
+      final leftHasExplicitOrder = left.executionOrder != null;
+      final rightHasExplicitOrder = right.executionOrder != null;
+
+      if (leftHasExplicitOrder && rightHasExplicitOrder) {
+        final orderCompare = left.executionOrder!.compareTo(
+          right.executionOrder!,
+        );
+        if (orderCompare != 0) {
+          return orderCompare;
+        }
+        return left.requestIndex.compareTo(right.requestIndex);
+      }
+
+      if (leftHasExplicitOrder && !rightHasExplicitOrder) {
+        return -1;
+      }
+      if (!leftHasExplicitOrder && rightHasExplicitOrder) {
+        return 1;
+      }
+      return left.requestIndex.compareTo(right.requestIndex);
+    });
+
+    final commands = commandPlans
+        .map((plan) => plan.command)
+        .toList(growable: false);
 
     if (_featureFlags.enableClientTokenAuthorization &&
         (clientToken == null || clientToken.isEmpty)) {
@@ -589,7 +673,13 @@ class RpcMethodDispatcher {
     if (_featureFlags.enableClientTokenAuthorization &&
         clientToken != null &&
         clientToken.isNotEmpty) {
+      final authorizedSqlFingerprints = <String>{};
       for (final cmd in commands) {
+        final authFingerprint = _authorizationFingerprint(cmd.sql);
+        if (authorizedSqlFingerprints.contains(authFingerprint)) {
+          continue;
+        }
+
         final authStopwatch = Stopwatch()..start();
         final authResult = await _authorizeWithBudget(
           token: clientToken,
@@ -623,6 +713,7 @@ class RpcMethodDispatcher {
           method: request.method,
           latencyMs: authStopwatch.elapsedMilliseconds,
         );
+        authorizedSqlFingerprints.add(authFingerprint);
       }
     }
 
@@ -641,6 +732,7 @@ class RpcMethodDispatcher {
 
     // Execute batch
     final database = params['database'] as String?;
+    final batchStartedAt = DateTime.now().toUtc();
     final result = await _executeSqlBatchWithBudget(
       agentId,
       commands,
@@ -652,14 +744,35 @@ class RpcMethodDispatcher {
 
     return result.fold<RpcResponse>(
       (List<SqlCommandResult> commandResults) {
+        final batchFinishedAt = DateTime.now().toUtc();
+        final items =
+            commandResults
+                .map((result) {
+                  if (result.index < 0 || result.index >= commandPlans.length) {
+                    return result;
+                  }
+                  final requestIndex = commandPlans[result.index].requestIndex;
+                  return SqlCommandResult(
+                    index: requestIndex,
+                    ok: result.ok,
+                    rows: result.rows,
+                    rowCount: result.rowCount,
+                    affectedRows: result.affectedRows,
+                    error: result.error,
+                    columnMetadata: result.columnMetadata,
+                  );
+                })
+                .toList(growable: false)
+              ..sort((left, right) => left.index.compareTo(right.index));
+
         final resultData = {
           'execution_id': _uuid.v4(),
-          'started_at': DateTime.now().toIso8601String(),
-          'finished_at': DateTime.now().toIso8601String(),
-          'items': commandResults.map((r) => r.toJson()).toList(),
+          'started_at': batchStartedAt.toIso8601String(),
+          'finished_at': batchFinishedAt.toIso8601String(),
+          'items': items.map((r) => r.toJson()).toList(growable: false),
           'total_commands': commands.length,
-          'successful_commands': commandResults.where((r) => r.ok).length,
-          'failed_commands': commandResults.where((r) => !r.ok).length,
+          'successful_commands': items.where((r) => r.ok).length,
+          'failed_commands': items.where((r) => !r.ok).length,
         };
 
         final response = RpcResponse.success(
@@ -675,6 +788,7 @@ class RpcMethodDispatcher {
             idempotencyKey,
             response,
             _idempotencyTtl,
+            requestFingerprint: idempotencyFingerprint,
           );
         }
         return response;
@@ -736,7 +850,7 @@ class RpcMethodDispatcher {
         requestId: requestId,
         method: method,
       ).timeout(timeout);
-    } on TimeoutException {
+    } on TimeoutException catch (error) {
       final context = <String, dynamic>{
         'authorization': true,
         'reason': 'authorization_timeout',
@@ -751,6 +865,7 @@ class RpcMethodDispatcher {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Authorization stage timeout',
+          cause: error,
           context: context,
         ),
       );
@@ -759,6 +874,7 @@ class RpcMethodDispatcher {
 
   Future<Result<QueryResponse>> _executeQueryWithBudget(
     QueryRequest queryRequest, {
+    required String? database,
     required String? requestId,
     required DateTime? deadline,
   }) async {
@@ -786,10 +902,20 @@ class RpcMethodDispatcher {
 
     try {
       if (timeout == null) {
-        return await _databaseGateway.executeQuery(queryRequest);
+        if (database == null || database.isEmpty) {
+          return await _databaseGateway.executeQuery(queryRequest);
+        }
+        return await _databaseGateway.executeQuery(
+          queryRequest,
+          database: database,
+        );
       }
-      return await _databaseGateway.executeQuery(queryRequest).timeout(timeout);
-    } on TimeoutException {
+      return await _databaseGateway.executeQuery(
+        queryRequest,
+        timeout: timeout,
+        database: database,
+      );
+    } on TimeoutException catch (error) {
       final context = <String, dynamic>{
         'timeout': true,
         'timeout_stage': 'sql',
@@ -802,6 +928,7 @@ class RpcMethodDispatcher {
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'SQL execution timeout',
+          cause: error,
           context: context,
         ),
       );
@@ -839,21 +966,14 @@ class RpcMethodDispatcher {
     }
 
     try {
-      if (timeout == null) {
-        return await _executeSqlBatch(
-          agentId,
-          commands,
-          database: database,
-          options: options,
-        );
-      }
       return await _executeSqlBatch(
         agentId,
         commands,
         database: database,
         options: options,
-      ).timeout(timeout);
-    } on TimeoutException {
+        timeout: timeout,
+      );
+    } on TimeoutException catch (error) {
       final context = <String, dynamic>{
         'timeout': true,
         'timeout_stage': 'sql',
@@ -866,6 +986,7 @@ class RpcMethodDispatcher {
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'Batch SQL execution timeout',
+          cause: error,
           context: context,
         ),
       );
@@ -1016,6 +1137,45 @@ class RpcMethodDispatcher {
         'reason': 'missing_client_token',
       },
     );
+  }
+
+  String _authorizationFingerprint(String sql) {
+    return sql.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  }
+
+  String _buildIdempotencyFingerprint({
+    required String method,
+    required Map<String, dynamic> params,
+  }) {
+    final payload = <String, dynamic>{
+      'method': method,
+      'params': params,
+    };
+    final canonicalPayload = _canonicalizeJsonValue(payload);
+    final encoded = jsonEncode(canonicalPayload);
+    return sha256.convert(utf8.encode(encoded)).toString();
+  }
+
+  dynamic _canonicalizeJsonValue(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      final sortedKeys = value.keys.toList(growable: false)..sort();
+      return <String, dynamic>{
+        for (final key in sortedKeys) key: _canonicalizeJsonValue(value[key]),
+      };
+    }
+    if (value is Map) {
+      final normalized = value.map(
+        (key, v) => MapEntry(key.toString(), _canonicalizeJsonValue(v)),
+      );
+      final sortedKeys = normalized.keys.toList(growable: false)..sort();
+      return <String, dynamic>{
+        for (final key in sortedKeys) key: normalized[key],
+      };
+    }
+    if (value is List) {
+      return value.map(_canonicalizeJsonValue).toList(growable: false);
+    }
+    return value;
   }
 
   int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {
@@ -1315,6 +1475,18 @@ class _ResolvedPagination {
   final String? errorMessage;
 
   bool get hasError => errorMessage != null;
+}
+
+class _BatchCommandExecutionPlan {
+  const _BatchCommandExecutionPlan({
+    required this.command,
+    required this.requestIndex,
+    required this.executionOrder,
+  });
+
+  final SqlCommand command;
+  final int requestIndex;
+  final int? executionOrder;
 }
 
 class _ActiveStreamExecution {

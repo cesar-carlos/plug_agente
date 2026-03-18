@@ -216,6 +216,8 @@ Future<void> setupDependencies({
         configRepository: getIt<IAgentConfigRepository>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<AuthorizationMetricsCollector>(),
+        onIdempotencyFingerprintMismatch:
+            getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
       ),
     )

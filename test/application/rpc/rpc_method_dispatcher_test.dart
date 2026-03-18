@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -11,6 +12,7 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -87,6 +89,12 @@ void main() {
       );
       registerFallbackValue(Duration.zero);
       registerFallbackValue('');
+      registerFallbackValue(
+        const SqlCommand(
+          sql: 'SELECT 1',
+        ),
+      );
+      registerFallbackValue(const SqlExecutionOptions());
     });
 
     late MockAuthorizeSqlOperation mockAuthorize;
@@ -795,6 +803,206 @@ void main() {
       expect(result['total_commands'], equals(2));
     });
 
+    test(
+      'should deduplicate batch authorization checks for equivalent SQL commands',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+        when(
+          () => mockAuthorize(
+            token: any(named: 'token'),
+            sql: any(named: 'sql'),
+            requestId: any(named: 'requestId'),
+            method: any(named: 'method'),
+          ),
+        ).thenAnswer((_) async => const Success(unit));
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {'sql': 'SELECT * FROM users WHERE id = 1'},
+              {'sql': ' SELECT  *  FROM users WHERE id = 1 '},
+            ],
+          },
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 1, 'name': 'John'},
+          ],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          clientToken: 'token-abc',
+        );
+
+        check(response.isSuccess).isTrue();
+        verify(
+          () => mockAuthorize(
+            token: any(named: 'token'),
+            sql: any(named: 'sql'),
+            requestId: any(named: 'requestId'),
+            method: any(named: 'method'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'should execute sql.executeBatch following optional execution_order',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {'sql': 'SELECT * FROM users WHERE id = 2', 'execution_order': 2},
+              {'sql': 'SELECT * FROM users WHERE id = 1', 'execution_order': 1},
+              {'sql': 'SELECT * FROM users WHERE id = 3'},
+            ],
+          },
+        );
+
+        var callCount = 0;
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((invocation) async {
+          callCount++;
+          final query = invocation.positionalArguments[0] as QueryRequest;
+          return Success(
+            QueryResponse(
+              id: 'exec-$callCount',
+              requestId: 'req-1',
+              agentId: 'agent-1',
+              data: [
+                {'sql': query.query},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isSuccess).isTrue();
+        final captured = verify(
+          () => mockGateway.executeQuery(captureAny()),
+        ).captured.cast<QueryRequest>();
+        check(
+          captured.map((query) => query.query).join('|'),
+        ).equals(
+          'SELECT * FROM users WHERE id = 1|SELECT * FROM users '
+          'WHERE id = 2|SELECT * FROM users WHERE id = 3',
+        );
+
+        final result = response.result as Map<String, dynamic>;
+        final items = (result['items'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+        check(items.map((item) => item['index']).join(',')).equals('0,1,2');
+      },
+    );
+
+    test(
+      'should execute explicit execution_order commands before unordered ones',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {
+                'sql': 'SELECT * FROM users WHERE id = 10',
+                'execution_order': 10,
+              },
+              {'sql': 'SELECT * FROM users WHERE id = 20'},
+              {'sql': 'SELECT * FROM users WHERE id = 1', 'execution_order': 1},
+            ],
+          },
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((invocation) async {
+          final query = invocation.positionalArguments[0] as QueryRequest;
+          return Success(
+            QueryResponse(
+              id: 'exec-1',
+              requestId: 'req-1',
+              agentId: 'agent-1',
+              data: [
+                {'sql': query.query},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isSuccess).isTrue();
+        final captured = verify(
+          () => mockGateway.executeQuery(captureAny()),
+        ).captured.cast<QueryRequest>();
+        check(captured.map((query) => query.query).join('|')).equals(
+          [
+            'SELECT * FROM users WHERE id = 1',
+            'SELECT * FROM users WHERE id = 10',
+            'SELECT * FROM users WHERE id = 20',
+          ].join('|'),
+        );
+      },
+    );
+
+    test(
+      'should return invalidParams when batch execution_order is invalid',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {'sql': 'SELECT 1', 'execution_order': -1},
+            ],
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isError).isTrue();
+        check(response.error!.code).equals(RpcErrorCode.invalidParams);
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
     test('should return invalidParams when batch commands is empty', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -810,6 +1018,46 @@ void main() {
       expect(response.isError, isTrue);
       expect(response.error!.code, equals(RpcErrorCode.invalidParams));
     });
+
+    test(
+      'should map transactional batch failure to transactionFailed',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {'sql': 'UPDATE users SET active = 1'},
+              {'sql': 'UPDATE users SET active = 0'},
+            ],
+            'options': {'transaction': true},
+          },
+        );
+
+        when(
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Transaction aborted',
+              context: {'reason': 'transaction_failed'},
+            ),
+          ),
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isError).isTrue();
+        check(response.error!.code).equals(RpcErrorCode.transactionFailed);
+      },
+    );
 
     test(
       'should return unauthorized when auth enabled and token denies',
@@ -983,18 +1231,74 @@ void main() {
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) async => queryResponse);
 
-        when(() => mockStore.get(any())).thenReturn(null);
+        when(() => mockStore.getRecord(any())).thenReturn(null);
 
         final first = await dispatcher.dispatch(request, 'agent-1');
 
         expect(first.isSuccess, isTrue);
 
-        when(() => mockStore.get(any())).thenReturn(first);
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenReturn(
+          IdempotencyRecord(
+            response: first,
+            requestFingerprint: null,
+          ),
+        );
 
         final second = await dispatcher.dispatch(request, 'agent-1');
 
         expect(second.isSuccess, isTrue);
         expect(second.result, equals(first.result));
+      },
+    );
+
+    test(
+      'should reject idempotency key reuse with different payload fingerprint',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        var mismatchCount = 0;
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          onIdempotencyFingerprintMismatch: () => mismatchCount++,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: <String, dynamic>{
+            'sql': 'SELECT 2',
+            'idempotency_key': 'key-abc',
+          },
+        );
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenReturn(
+          IdempotencyRecord(
+            response: RpcResponse.success(
+              id: 'req-1',
+              result: const <String, dynamic>{'x': 1},
+            ),
+            requestFingerprint: 'different-fingerprint',
+          ),
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isError).isTrue();
+        check(response.error!.code).equals(RpcErrorCode.invalidParams);
+        check(mismatchCount).equals(1);
+        verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
 
@@ -1042,8 +1346,15 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      verifyNever(() => mockStore.get(any()));
-      verifyNever(() => mockStore.set(any(), any(), any()));
+      verifyNever(() => mockStore.getRecord(any()));
+      verifyNever(
+        () => mockStore.set(
+          any(),
+          any(),
+          any(),
+          requestFingerprint: any(named: 'requestFingerprint'),
+        ),
+      );
     });
 
     test('should cap rows using negotiated maxRows', () async {

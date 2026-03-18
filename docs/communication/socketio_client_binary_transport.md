@@ -150,6 +150,40 @@ Ordem recomendada no recebimento:
 5. validar schema logico
 6. despachar o evento
 
+## Ordem opcional em `sql.executeBatch`
+
+No payload logico de `sql.executeBatch`, cada item de `params.commands` pode
+incluir `execution_order` (inteiro `>= 0`) para definir a ordem de execucao.
+
+Regras para clientes:
+
+- quando `execution_order` nao for enviado, a execucao segue a ordem natural
+  da lista `commands` (comportamento atual);
+- quando houver mistura de comandos com e sem `execution_order`, os comandos
+  com ordem explicita executam primeiro (ordem crescente) e os sem ordem
+  executam depois, mantendo a ordem original da lista;
+- quando houver empate de `execution_order`, o desempate segue a ordem original
+  da lista;
+- `result.items[*].index` continua representando o indice original no array
+  `commands`, independentemente da ordem de execucao.
+
+Exemplo de payload logico:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.executeBatch",
+  "id": "batch-001",
+  "params": {
+    "commands": [
+      { "sql": "SELECT * FROM users", "execution_order": 2 },
+      { "sql": "SELECT COUNT(*) AS total FROM orders", "execution_order": 1 },
+      { "sql": "SELECT * FROM products" }
+    ]
+  }
+}
+```
+
 ## Arquivos e conteudo binario de negocio
 
 O `PayloadFrame` e o transporte binario da mensagem, nao uma API generica de
@@ -169,7 +203,10 @@ Regras para clientes:
 ```js
 import { gzipSync, gunzipSync } from "node:zlib";
 
-function encodeFrame(message, { requestId, traceId, compressionThreshold = 1024 }) {
+function encodeFrame(
+  message,
+  { requestId, traceId, compressionThreshold = 1024 },
+) {
   const plainBytes = Buffer.from(JSON.stringify(message), "utf8");
   const useCompression = plainBytes.length >= compressionThreshold;
   const wireBytes = useCompression ? gzipSync(plainBytes) : plainBytes;

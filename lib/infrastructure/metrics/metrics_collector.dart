@@ -1,33 +1,66 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 
-/// Serviço para coletar e gerenciar métricas de performance.
+/// Servico para coletar e gerenciar metricas de performance.
 class MetricsCollector {
   MetricsCollector._();
 
   static MetricsCollector? _instance;
   static MetricsCollector get instance => _instance ??= MetricsCollector._();
 
+  static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
+  static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
+  static const String _transactionRollbackFailureCounter =
+      'transaction_rollback_failure';
+  static const String _idempotencyFingerprintMismatchCounter =
+      'idempotency_fingerprint_mismatch';
+
   final List<QueryMetrics> _metrics = [];
   final _metricsController = StreamController<QueryMetrics>.broadcast();
+  final Map<String, int> _eventCounters = <String, int>{};
 
-  /// Stream de novas métricas.
+  /// Stream de novas metricas.
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
 
-  /// Lista de todas as métricas coletadas.
+  /// Lista de todas as metricas coletadas.
   List<QueryMetrics> get metrics => List.unmodifiable(_metrics);
 
-  /// Número de métricas coletadas.
+  /// Numero de metricas coletadas.
   int get count => _metrics.length;
+  int get timeoutCancelSuccessCount =>
+      _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
+  int get timeoutCancelFailureCount =>
+      _eventCounters[_timeoutCancelFailureCounter] ?? 0;
+  int get transactionRollbackFailureCount =>
+      _eventCounters[_transactionRollbackFailureCounter] ?? 0;
+  int get idempotencyFingerprintMismatchCount =>
+      _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
 
-  /// Limpa todas as métricas.
+  Map<String, int> get eventCounters =>
+      UnmodifiableMapView<String, int>(_eventCounters);
+
+  /// Limpa todas as metricas.
   void clear() {
     _metrics.clear();
+    _eventCounters.clear();
   }
 
-  /// Registra uma métrica de sucesso.
+  void recordTimeoutCancelSuccess() =>
+      _incrementEventCounter(_timeoutCancelSuccessCounter);
+
+  void recordTimeoutCancelFailure() =>
+      _incrementEventCounter(_timeoutCancelFailureCounter);
+
+  void recordTransactionRollbackFailure() =>
+      _incrementEventCounter(_transactionRollbackFailureCounter);
+
+  void recordIdempotencyFingerprintMismatch() =>
+      _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
+
+  /// Registra uma metrica de sucesso.
   void recordSuccess({
     required String queryId,
     required String query,
@@ -46,7 +79,7 @@ class MetricsCollector {
     _addMetric(metric);
   }
 
-  /// Registra uma métrica de falha.
+  /// Registra uma metrica de falha.
   void recordFailure({
     required String queryId,
     required String query,
@@ -63,7 +96,7 @@ class MetricsCollector {
     _addMetric(metric);
   }
 
-  /// Obtém resumo das últimas N métricas.
+  /// Obtem resumo das ultimas N metricas.
   MetricsSummary getSummary({int limit = 100}) {
     final recent = _metrics.length > limit
         ? _metrics.sublist(_metrics.length - limit)
@@ -72,14 +105,14 @@ class MetricsCollector {
     return MetricsSummary.fromList(recent);
   }
 
-  /// Obtém métricas filtradas por sucesso/falha.
+  /// Obtem metricas filtradas por sucesso/falha.
   List<QueryMetrics> getMetrics({bool? success}) {
     if (success == null) return List.unmodifiable(_metrics);
 
     return _metrics.where((m) => m.success == success).toList();
   }
 
-  /// Obtém métricas acima de um tempo de execução.
+  /// Obtem metricas acima de um tempo de execucao.
   List<QueryMetrics> getSlowQueries({
     Duration threshold = const Duration(seconds: 1),
   }) {
@@ -87,26 +120,32 @@ class MetricsCollector {
       ..sort((a, b) => b.executionDuration.compareTo(a.executionDuration));
   }
 
-  /// Registra métrica e notifica listeners.
+  /// Registra metrica e notifica listeners.
   void _addMetric(QueryMetrics metric) {
     _metrics.add(metric);
 
-    // Log estruturado para debugging
     developer.log(
-      'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, rows: ${metric.rowsAffected}, success: ${metric.success}',
+      'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, '
+      'rows: ${metric.rowsAffected}, success: ${metric.success}',
       name: 'metrics',
-      level: metric.success
-          ? 500
-          : 1000, // INFO para sucesso, SEVERE para falha
+      level: metric.success ? 500 : 1000,
     );
 
-    // Notificar listeners
     if (!_metricsController.isClosed) {
       _metricsController.add(metric);
     }
   }
 
-  /// Exporta métricas para JSON.
+  void _incrementEventCounter(String counter) {
+    _eventCounters[counter] = (_eventCounters[counter] ?? 0) + 1;
+    developer.log(
+      'MetricCounter: $counter=${_eventCounters[counter]}',
+      name: 'metrics',
+      level: 700,
+    );
+  }
+
+  /// Exporta metricas para JSON.
   List<Map<String, dynamic>> exportToJson() {
     return _metrics.map((m) => m.toMap()).toList();
   }

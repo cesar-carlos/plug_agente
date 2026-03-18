@@ -27,8 +27,20 @@ class ExecuteSqlBatch {
     List<SqlCommand> commands, {
     String? database,
     SqlExecutionOptions? options,
+    Duration? timeout,
   }) async {
     final opts = options ?? const SqlExecutionOptions();
+    final effectiveTimeout = timeout;
+
+    if (opts.transaction) {
+      return _databaseGateway.executeBatch(
+        agentId,
+        commands,
+        database: database,
+        options: opts,
+        timeout: effectiveTimeout,
+      );
+    }
 
     // Validate all commands first
     final validationResults = <int, domain.Failure>{};
@@ -72,15 +84,27 @@ class ExecuteSqlBatch {
 
       // Execute command
       final command = commands[i];
-      final request = QueryRequest(
-        id: _uuid.v4(),
+      final request = queryRequestForCommand(
+        command,
         agentId: agentId,
-        query: command.sql,
-        parameters: command.params,
-        timestamp: DateTime.now(),
+        requestId: _uuid.v4(),
       );
-
-      final executeResult = await _databaseGateway.executeQuery(request);
+      final executeResult = switch ((effectiveTimeout, database)) {
+        (null, null) => await _databaseGateway.executeQuery(request),
+        (null, final db?) => await _databaseGateway.executeQuery(
+          request,
+          database: db,
+        ),
+        (final t?, null) => await _databaseGateway.executeQuery(
+          request,
+          timeout: t,
+        ),
+        (final t?, final db?) => await _databaseGateway.executeQuery(
+          request,
+          timeout: t,
+          database: db,
+        ),
+      };
 
       await executeResult.fold(
         (response) async {
@@ -134,5 +158,19 @@ class ExecuteSqlBatch {
     }
 
     return Success(results);
+  }
+
+  QueryRequest queryRequestForCommand(
+    SqlCommand command, {
+    required String agentId,
+    required String requestId,
+  }) {
+    return QueryRequest(
+      id: requestId,
+      agentId: agentId,
+      query: command.sql,
+      parameters: command.params,
+      timestamp: DateTime.now(),
+    );
   }
 }

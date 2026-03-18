@@ -35,7 +35,7 @@
     },
     {
       "name": "sql.executeBatch",
-      "summary": "Execute multiple SQL statements in a batch",
+      "summary": "Execute multiple SQL statements in a batch with optional per-command execution order",
       "paramStructure": "by-name",
       "params": [
         {

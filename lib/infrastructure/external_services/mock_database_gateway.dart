@@ -1,6 +1,7 @@
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
@@ -21,7 +22,11 @@ class MockDatabaseGateway implements IDatabaseGateway {
   }
 
   @override
-  Future<Result<QueryResponse>> executeQuery(QueryRequest request) async {
+  Future<Result<QueryResponse>> executeQuery(
+    QueryRequest request, {
+    Duration? timeout,
+    String? database,
+  }) async {
     // Simulate query execution
     if (request.query.toLowerCase().contains('error')) {
       final errorResponse = QueryResponse(
@@ -112,10 +117,83 @@ class MockDatabaseGateway implements IDatabaseGateway {
   }
 
   @override
+  Future<Result<List<SqlCommandResult>>> executeBatch(
+    String agentId,
+    List<SqlCommand> commands, {
+    String? database,
+    SqlExecutionOptions options = const SqlExecutionOptions(),
+    Duration? timeout,
+  }) async {
+    final results = <SqlCommandResult>[];
+
+    for (var i = 0; i < commands.length; i++) {
+      final command = commands[i];
+      final response = await executeQuery(
+        QueryRequest(
+          id: _uuid.v4(),
+          agentId: agentId,
+          query: command.sql,
+          parameters: command.params,
+          timestamp: DateTime.now(),
+        ),
+        timeout: timeout,
+        database: database,
+      );
+
+      await response.fold(
+        (queryResponse) async {
+          if (queryResponse.error != null && queryResponse.error!.isNotEmpty) {
+            results.add(
+              SqlCommandResult.failure(index: i, error: queryResponse.error!),
+            );
+            if (options.transaction) {
+              return;
+            }
+            return;
+          }
+          results.add(
+            SqlCommandResult.success(
+              index: i,
+              rows: queryResponse.data,
+              rowCount: queryResponse.data.length,
+              affectedRows: queryResponse.affectedRows,
+              columnMetadata: queryResponse.columnMetadata,
+            ),
+          );
+        },
+        (failure) async {
+          results.add(
+            SqlCommandResult.failure(index: i, error: failure.toString()),
+          );
+        },
+      );
+
+      if (options.transaction && results.isNotEmpty && !results.last.ok) {
+        return Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Transaction aborted due to command failure',
+            context: {
+              'failedIndex': i,
+              'totalCommands': commands.length,
+              'completedCommands': results.length,
+              'reason': 'transaction_failed',
+              'operation': 'transaction',
+            },
+          ),
+        );
+      }
+    }
+
+    return Success(results);
+  }
+
+  @override
   Future<Result<int>> executeNonQuery(
     String query,
-    Map<String, dynamic>? parameters,
-  ) async {
+    Map<String, dynamic>? parameters, {
+    Duration? timeout,
+    String? database,
+  }) async {
     // Simulate non-query execution
     if (query.toLowerCase().contains('error')) {
       return Failure(

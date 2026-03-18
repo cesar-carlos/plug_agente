@@ -24,6 +24,11 @@
             "type": "object",
             "description": "Named parameters for the SQL statement",
             "additionalProperties": true
+          },
+          "execution_order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional command execution order (ascending). Commands with execution_order are executed first; commands without it execute afterwards in original list order."
           }
         },
         "additionalProperties": false
@@ -43,7 +48,7 @@
     },
     "idempotency_key": {
       "type": "string",
-      "description": "Unique key for request deduplication (TTL 5min)"
+      "description": "Unique key for request deduplication (TTL 5min). Reusing the same key with a different request payload is rejected."
     },
     "options": {
       "type": "object",
@@ -63,14 +68,14 @@
         "transaction": {
           "type": "boolean",
           "default": false,
-          "description": "Whether to wrap commands in a single transaction"
+          "description": "Whether to execute all commands in a single database transaction (begin/commit/rollback)"
         }
       },
       "additionalProperties": false
     },
     "database": {
       "type": "string",
-      "description": "Optional target database/DSN override"
+      "description": "Optional target database override for this batch request"
     }
   },
   "additionalProperties": false

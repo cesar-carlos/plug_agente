@@ -10,29 +10,29 @@ Estado implementado atual:
 
 ## Itens planejados (pendentes)
 
-| Item                                                                         | Status  | Fase alvo |
-| ---------------------------------------------------------------------------- | ------- | --------- |
-| Testes de integracao end-to-end para limites negociados                      | planned | Fase 6    |
-| Rotacao automatica de chaves de assinatura                                   | planned | Fase 6    |
-| Monitoramento/alertas de payload signing failures                            | planned | Fase 6    |
+| Item                                                    | Status  | Fase alvo |
+| ------------------------------------------------------- | ------- | --------- |
+| Testes de integracao end-to-end para limites negociados | planned | Fase 6    |
+| Rotacao automatica de chaves de assinatura              | planned | Fase 6    |
+| Monitoramento/alertas de payload signing failures       | planned | Fase 6    |
 
 ## Itens concluidos (removidos do backlog)
 
-| Item                                                            | Concluido em |
-| --------------------------------------------------------------- | ------------ |
-| `api_version` + `meta` obrigatorios por contrato                | v2.1         |
-| Semantica formal de notification JSON-RPC                       | v2.1         |
-| Regras formais de batch (ordem, IDs, atomicidade)               | v2.1         |
-| Politica de versao e deprecacao                                 | v2.1         |
-| Schema de params para sql.execute/batch/cancel                  | v2.1         |
-| Schemas de streaming (chunk/complete/pull)                      | v2.1         |
-| Limites negociados documentados (defaults)                      | v2.1         |
-| Assinatura de payload especificada                              | v2.1         |
-| Negociacao de limites no handshake (TransportLimits)            | v2.2         |
-| Assinatura de payload implementada (hmac-sha256, PayloadSigner) | v2.2         |
-| Feature flags estaveis promovidas para mandatory                | v2.2         |
-| Transporte binario em `PayloadFrame` para eventos de aplicacao  | v2.4         |
-| Compressao GZIP na borda de transporte com fallback por threshold | v2.4       |
+| Item                                                              | Concluido em |
+| ----------------------------------------------------------------- | ------------ |
+| `api_version` + `meta` obrigatorios por contrato                  | v2.1         |
+| Semantica formal de notification JSON-RPC                         | v2.1         |
+| Regras formais de batch (ordem, IDs, atomicidade)                 | v2.1         |
+| Politica de versao e deprecacao                                   | v2.1         |
+| Schema de params para sql.execute/batch/cancel                    | v2.1         |
+| Schemas de streaming (chunk/complete/pull)                        | v2.1         |
+| Limites negociados documentados (defaults)                        | v2.1         |
+| Assinatura de payload especificada                                | v2.1         |
+| Negociacao de limites no handshake (TransportLimits)              | v2.2         |
+| Assinatura de payload implementada (hmac-sha256, PayloadSigner)   | v2.2         |
+| Feature flags estaveis promovidas para mandatory                  | v2.2         |
+| Transporte binario em `PayloadFrame` para eventos de aplicacao    | v2.4         |
+| Compressao GZIP na borda de transporte com fallback por threshold | v2.4         |
 
 ## Fase 5 - Hardening residual (concluida)
 

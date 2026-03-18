@@ -61,6 +61,24 @@ class FakeTransportClient implements ITransportClient {
   void triggerTokenExpired() => onTokenExpired?.call();
 }
 
+Future<void> waitForStatus(
+  ConnectionProvider provider,
+  ConnectionStatus expected, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (provider.status == expected) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  fail(
+    'Expected status $expected within ${timeout.inMilliseconds}ms, '
+    'but got ${provider.status}',
+  );
+}
+
 void main() {
   group('ConnectionRecoveryIntegration', () {
     late MockConnectToHub mockConnectToHub;
@@ -101,6 +119,9 @@ void main() {
         mockCheckDriver,
         configProvider: mockConfigProvider,
         transportClient: fakeTransport,
+        initialReconnectDelay: const Duration(milliseconds: 10),
+        maxReconnectDelay: const Duration(milliseconds: 20),
+        maxReconnectAttempts: 6,
       );
 
       await provider.connect('https://hub.test', 'agent-1');
@@ -108,11 +129,8 @@ void main() {
 
       fakeTransport.triggerReconnectionNeeded();
 
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      expect(provider.status, ConnectionStatus.reconnecting);
-
-      await Future<void>.delayed(const Duration(seconds: 16));
-      expect(provider.status, ConnectionStatus.connected);
+      await waitForStatus(provider, ConnectionStatus.reconnecting);
+      await waitForStatus(provider, ConnectionStatus.connected);
       verify(
         () =>
             mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
@@ -140,6 +158,9 @@ void main() {
         mockCheckDriver,
         configProvider: mockConfigProvider,
         transportClient: fakeTransport,
+        initialReconnectDelay: const Duration(milliseconds: 10),
+        maxReconnectDelay: const Duration(milliseconds: 20),
+        maxReconnectAttempts: 3,
       );
 
       await provider.connect('https://hub.test', 'agent-1');
@@ -147,8 +168,7 @@ void main() {
 
       fakeTransport.triggerReconnectionNeeded();
 
-      await Future<void>.delayed(const Duration(seconds: 16));
-
+      await waitForStatus(provider, ConnectionStatus.error);
       expect(provider.status, ConnectionStatus.error);
       expect(provider.error, contains('Failed to recover'));
     });

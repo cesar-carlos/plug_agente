@@ -35,6 +35,14 @@ class FailureToRpcErrorMapper {
     }
 
     if (failure is QueryExecutionFailure) {
+      if (failure.context['reason'] == 'transaction_failed' ||
+          failure.context['operation'] == 'transaction' ||
+          ((failure.context['operation'] as String?)?.startsWith(
+                'transaction_',
+              ) ??
+              false)) {
+        return RpcErrorCode.transactionFailed;
+      }
       if (failure.context['timeout'] == true) {
         return RpcErrorCode.queryTimeout;
       }

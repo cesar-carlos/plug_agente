@@ -242,6 +242,8 @@ Quando `enableSocketBatchStrictValidation` esta ativo:
 
 - Batch **nao** e atomico por padrao. Cada comando e executado independentemente.
 - Para atomicidade, use `options.transaction: true` em `sql.executeBatch`.
+  Nesse modo, os comandos sao executados na **mesma conexao** e em
+  **transacao real de banco** (`begin/commit/rollback`).
 - Se um item falha, os demais continuam sendo processados (exceto em modo transacional).
 
 ### Exemplo de batch com notification
@@ -387,6 +389,11 @@ Response:
 - `options.multi_result`: habilita retorno explicito de multiplos result sets
   e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
   com paginacao nem com `params` nomeados.
+- `params.database`: override opcional do banco alvo para a request atual.
+- `idempotency_key`: reutilizacao da mesma chave com payload diferente e
+  rejeitada com `invalid_params`.
+- Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
+  para evitar crescimento sem limite.
 - Requests paginadas seguem o caminho request/response tradicional; nao usam
   streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ativo.
 - `options.cursor`: token opaco de continuacao retornado em
@@ -562,8 +569,8 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
   "id": "batch-001",
   "params": {
     "commands": [
-      { "sql": "SELECT * FROM users" },
-      { "sql": "SELECT COUNT(*) AS total FROM orders" }
+      { "sql": "SELECT * FROM users", "execution_order": 2 },
+      { "sql": "SELECT COUNT(*) AS total FROM orders", "execution_order": 1 }
     ],
     "client_token": "a1b2c3d4e5f6...",
     "options": {
@@ -577,6 +584,21 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
   esta ativo.
+- `commands[*].execution_order` e opcional (inteiro `>= 0`).
+- Quando `execution_order` nao e enviado, o comando segue a ordem da lista
+  recebida (comportamento atual).
+- Quando o batch mistura comandos com e sem `execution_order`, os comandos com
+  `execution_order` sao executados primeiro (ordem crescente), e os sem ordem
+  explicita sao executados depois, mantendo a ordem original da lista.
+- Quando ha empate de `execution_order`, o desempate usa a ordem original da
+  lista.
+- `result.items[*].index` continua representando o indice original do comando
+  no array `commands`.
+- `params.database`: override opcional do banco alvo para o batch atual.
+- `idempotency_key`: reutilizacao da mesma chave com payload diferente e
+  rejeitada com `invalid_params`.
+- Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
+  para evitar crescimento sem limite.
 
 ### Response de batch (exemplo)
 
@@ -962,6 +984,9 @@ Exemplo de capacidades anunciadas:
 - Exibicao de resumo de autorizacao no dashboard via `WebSocketLogViewer`.
 - Quando o RPC retorna `authentication_failed` ou `token_revoked`, o transporte
   dispara callback de refresh de token/reconexao.
+- Contadores operacionais em memoria para observabilidade de resiliencia:
+  `timeout_cancel_success`, `timeout_cancel_failure`,
+  `transaction_rollback_failure` e `idempotency_fingerprint_mismatch`.
 
 ## Politica de versao e deprecacao
 
@@ -1106,6 +1131,7 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
 - `options.multi_result` suportado em `sql.execute`.
+- `commands[*].execution_order` suportado em `sql.executeBatch`.
 - `result.pagination` retornado apenas para requests paginadas.
 - `result.result_sets` e `result.items` retornados apenas para execucoes
   multi-result.
@@ -1141,6 +1167,8 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - Timeout por etapa (SQL, transporte, ack) disponivel via
   `enableSocketTimeoutByStage`; erros incluem `reason` especifico
   (`query_timeout`, `transport_timeout`, `ack_timeout`).
+- Em timeout de SQL, o agente aplica cancelamento best-effort da execucao no
+  banco (desconexao/recuperacao de conexao) para evitar trabalho zumbi.
 - Garantia de entrega por tipo de evento disponivel via
   `enableSocketDeliveryGuarantees`; ver tabela abaixo quando ativo.
 - Connection state recovery com retry/backoff esta ativo agent-side.
@@ -1247,6 +1275,8 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   por threshold.
 - Assinatura passa a cobrir o frame de transporte quando o modo binario esta
   ativo.
+- `sql.executeBatch` aceita `commands[*].execution_order` opcional, com
+  fallback para ordem da lista quando ausente.
 
 ## Schemas JSON (contrato)
 

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -27,9 +28,32 @@ class ConnectionProvider extends ChangeNotifier {
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
     ITransportClient? transportClient,
+    Duration initialReconnectDelay = _defaultInitialReconnectDelay,
+    Duration maxReconnectDelay = _defaultMaxReconnectDelay,
+    int tokenRefreshIntervalAttempts = _defaultTokenRefreshIntervalAttempts,
+    int maxReconnectAttempts = _defaultMaxReconnectAttempts,
   }) : _authProvider = authProvider,
        _configProvider = configProvider,
-       _transportClientOverride = transportClient;
+       _transportClientOverride = transportClient,
+       _initialReconnectDelay = initialReconnectDelay,
+       _maxReconnectDelay = maxReconnectDelay,
+       _tokenRefreshIntervalAttempts = tokenRefreshIntervalAttempts,
+       _maxReconnectAttempts = maxReconnectAttempts {
+    if (_tokenRefreshIntervalAttempts < 1) {
+      throw ArgumentError.value(
+        tokenRefreshIntervalAttempts,
+        'tokenRefreshIntervalAttempts',
+        'must be >= 1',
+      );
+    }
+    if (_maxReconnectAttempts < 1) {
+      throw ArgumentError.value(
+        maxReconnectAttempts,
+        'maxReconnectAttempts',
+        'must be >= 1',
+      );
+    }
+  }
   final ConnectToHub _connectToHubUseCase;
   final TestDbConnection _testDbConnectionUseCase;
   final CheckOdbcDriver _checkOdbcDriverUseCase;
@@ -55,9 +79,17 @@ class ConnectionProvider extends ChangeNotifier {
   String? _lastAgentId;
   String? _lastAuthToken;
 
-  static const Duration _initialReconnectDelay = Duration(seconds: 5);
-  static const Duration _maxReconnectDelay = Duration(seconds: 60);
-  static const int _tokenRefreshIntervalAttempts = 4;
+  static const Duration _defaultInitialReconnectDelay = Duration(
+    seconds: AppConstants.reconnectIntervalSeconds,
+  );
+  static const Duration _defaultMaxReconnectDelay = Duration(seconds: 60);
+  static const int _defaultTokenRefreshIntervalAttempts = 4;
+  static const int _defaultMaxReconnectAttempts =
+      AppConstants.maxReconnectAttempts;
+  final Duration _initialReconnectDelay;
+  final Duration _maxReconnectDelay;
+  final int _tokenRefreshIntervalAttempts;
+  final int _maxReconnectAttempts;
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -293,10 +325,11 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<bool> _recoverConnection(_ConnectionContext context) async {
     var authToken = _resolveAuthTokenForReconnect();
-    var attempt = 0;
-
-    while (!_isDisconnectRequested) {
-      attempt++;
+    for (
+      var attempt = 1;
+      attempt <= _maxReconnectAttempts && !_isDisconnectRequested;
+      attempt++
+    ) {
       final delay = _computeReconnectDelay(attempt);
       if (delay > Duration.zero) {
         await Future<void>.delayed(delay);
@@ -320,6 +353,9 @@ class ConnectionProvider extends ChangeNotifier {
       }
     }
 
+    AppLogger.warning(
+      'Connection recovery exhausted maximum attempts ($_maxReconnectAttempts)',
+    );
     return false;
   }
 

@@ -301,6 +301,40 @@ void main() {
         expect(collector.count, 0);
         expect(collector.metrics, isEmpty);
       });
+
+      test('should reset event counters', () {
+        collector.recordTimeoutCancelSuccess();
+        collector.recordTimeoutCancelFailure();
+        collector.recordTransactionRollbackFailure();
+        collector.recordIdempotencyFingerprintMismatch();
+
+        collector.clear();
+
+        expect(collector.timeoutCancelSuccessCount, 0);
+        expect(collector.timeoutCancelFailureCount, 0);
+        expect(collector.transactionRollbackFailureCount, 0);
+        expect(collector.idempotencyFingerprintMismatchCount, 0);
+      });
+    });
+
+    group('event counters', () {
+      test('should increment timeout cancellation counters', () {
+        collector.recordTimeoutCancelSuccess();
+        collector.recordTimeoutCancelSuccess();
+        collector.recordTimeoutCancelFailure();
+
+        expect(collector.timeoutCancelSuccessCount, 2);
+        expect(collector.timeoutCancelFailureCount, 1);
+      });
+
+      test('should increment rollback and idempotency mismatch counters', () {
+        collector.recordTransactionRollbackFailure();
+        collector.recordIdempotencyFingerprintMismatch();
+        collector.recordIdempotencyFingerprintMismatch();
+
+        expect(collector.transactionRollbackFailureCount, 1);
+        expect(collector.idempotencyFingerprintMismatchCount, 2);
+      });
     });
 
     group('exportToJson', () {

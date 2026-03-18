@@ -30,7 +30,7 @@
     },
     "idempotency_key": {
       "type": "string",
-      "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return cached response (TTL 5min)"
+      "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return cached response (TTL 5min). Reusing the same key with a different request payload is rejected."
     },
     "options": {
       "type": "object",
@@ -103,7 +103,7 @@
     },
     "database": {
       "type": "string",
-      "description": "Optional target database/DSN override"
+      "description": "Optional target database override for this request"
     }
   },
   "allOf": [

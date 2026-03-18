@@ -289,7 +289,7 @@ class RpcRequestSchemaValidator {
           'Field "params.commands[$i]" must be an object',
         );
       }
-      const allowedCommandKeys = {'sql', 'params'};
+      const allowedCommandKeys = {'sql', 'params', 'execution_order'};
       final extraCommandKeys = command.keys.where(
         (key) => !allowedCommandKeys.contains(key),
       );
@@ -309,6 +309,14 @@ class RpcRequestSchemaValidator {
       if (commandParams != null && commandParams is! Map<String, dynamic>) {
         return _invalidParams(
           'Field "params.commands[$i].params" must be an object',
+        );
+      }
+      final executionOrder = command['execution_order'];
+      if (executionOrder != null &&
+          (executionOrder is! int || executionOrder < 0)) {
+        return _invalidParams(
+          'Field "params.commands[$i].execution_order" must be '
+          'an integer >= 0',
         );
       }
     }
