@@ -1,9 +1,10 @@
-; Plug Agente - Inno Setup Script
+﻿; Plug Agente - Inno Setup Script
 ; Version is updated by installer/update_version.py
+; Uses #$XXXX for Unicode chars to avoid encoding issues on build machines
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.0.13"
+#define MyAppVersion "1.0.14"
 #define MyAppPublisher "com.se7esistemas"
 #define MyAppURL "https://github.com/cesar-carlos/plug_agente"
 #define MyAppExeName "plug_agente.exe"
@@ -122,8 +123,8 @@ begin
     end
     else
     begin
-      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
-        'É necessário fechar o aplicativo para continuar. Deseja fechar agora?', mbConfirmation, MB_YESNO) = IDYES then
+      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' est' + Chr(225) + ' em execu' + Chr(231) + Chr(227) + 'o.' + #13#10 + #13#10 +
+        Chr(201) + ' necess' + Chr(225) + 'rio fechar o aplicativo para continuar. Deseja fechar agora?', mbConfirmation, MB_YESNO) = IDYES then
       begin
         CloseApp(AppExe);
         WaitCount := 0;
@@ -134,7 +135,7 @@ begin
         end;
         if IsAppRunning(AppExe) then
         begin
-          if MsgBox('O aplicativo ainda está em execução. Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
+          if MsgBox('O aplicativo ainda est' + Chr(225) + ' em execu' + Chr(231) + Chr(227) + 'o. Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
             Result := False;
         end;
       end
