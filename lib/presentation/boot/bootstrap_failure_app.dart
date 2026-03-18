@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
@@ -68,16 +69,16 @@ class _BootstrapFailurePageState extends State<_BootstrapFailurePage> {
 
     await MessageModal.show<void>(
       context: context,
-      title: 'Falha na inicializacao',
+      title: AppStrings.bootstrapFailureTitle,
       message: userMessage,
       type: MessageType.error,
-      confirmText: 'Fechar aplicativo',
+      confirmText: AppStrings.bootstrapFailureButtonClose,
       onConfirm: _requestClose,
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const SizedBox(height: 12),
-          const Text('Detalhes tecnicos:'),
+          const Text(AppStrings.bootstrapFailureTechnicalDetails),
           const SizedBox(height: 8),
           SizedBox(
             width: 720,
@@ -120,15 +121,10 @@ class BootstrapFailureMessageBuilder {
 
   static String userMessage(Object error) {
     if (error is GlobalStorageBootstrapException) {
-      return 'Nao foi possivel iniciar porque o aplicativo nao conseguiu '
-          'acessar um diretorio global de configuracao.\n\n'
-          'Execute o Plug Agente como administrador ou ajuste as permissoes '
-          'de escrita em ProgramData/Public Documents.';
+      return AppStrings.bootstrapFailureStorageMessage;
     }
 
-    return 'Ocorreu uma falha durante a inicializacao do aplicativo. '
-        'Feche e abra novamente. Se o problema persistir, execute como '
-        'administrador e revise as permissoes do sistema.';
+    return AppStrings.bootstrapFailureGenericMessage;
   }
 
   static String technicalDetails({

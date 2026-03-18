@@ -208,6 +208,20 @@ class AppStrings {
   static const String singleInstanceMessage = 'O aplicativo Plug Agente já está em execução.';
   static const String singleInstanceMessageWithUser = 'O aplicativo Plug Agente já está em execução.\n\nUsuário: ';
 
+  // Bootstrap Failure (startup error screen)
+  static const String bootstrapFailureTitle = 'Falha na inicializacao';
+  static const String bootstrapFailureButtonClose = 'Fechar aplicativo';
+  static const String bootstrapFailureTechnicalDetails = 'Detalhes tecnicos:';
+  static const String bootstrapFailureStorageMessage =
+      'Nao foi possivel iniciar porque o aplicativo nao conseguiu '
+      'acessar um diretorio global de configuracao.\n\n'
+      'Execute o Plug Agente como administrador ou ajuste as permissoes '
+      'de escrita em ProgramData/Public Documents.';
+  static const String bootstrapFailureGenericMessage =
+      'Ocorreu uma falha durante a inicializacao do aplicativo. '
+      'Feche e abra novamente. Se o problema persistir, execute como '
+      'administrador e revise as permissoes do sistema.';
+
   // Database Settings
   static const String dbSectionTitle = 'Configuração do banco de dados';
   static const String dbFieldDatabaseDriver = 'Driver do Banco de Dados';
@@ -302,6 +316,14 @@ class AppStrings {
   // Button Labels
   static const String btnOk = 'OK';
   static const String btnCancel = 'Cancelar';
+  static const String btnRetry = 'Tentar Novamente';
+
+  // Error Display Titles (Failure codes)
+  static const String errorTitleValidation = 'Dados Inválidos';
+  static const String errorTitleNetwork = 'Erro de Rede';
+  static const String errorTitleDatabase = 'Erro no Banco de Dados';
+  static const String errorTitleServer = 'Erro no Servidor';
+  static const String errorTitleNotFound = 'Não Encontrado';
 
   // Query Results
   static const String queryNoResults = 'Sem resultados';

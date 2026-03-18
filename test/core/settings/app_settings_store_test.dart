@@ -17,7 +17,7 @@ void main() {
     });
 
     tearDown(() async {
-      if (await tempDir.exists()) {
+      if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
       }
     });
@@ -30,7 +30,7 @@ void main() {
       await store.initialize();
 
       expect(store.getKeys(), isEmpty);
-      expect(await File(settingsPath).exists(), isFalse);
+      expect(File(settingsPath).existsSync(), isFalse);
 
       final quarantinedFiles = tempDir
           .listSync()
@@ -43,7 +43,7 @@ void main() {
       expect(quarantinedFiles, isNotEmpty);
 
       await store.setBool('settings.start_with_windows', true);
-      expect(await File(settingsPath).exists(), isTrue);
+      expect(File(settingsPath).existsSync(), isTrue);
       expect(store.getBool('settings.start_with_windows'), isTrue);
     });
 
@@ -55,7 +55,7 @@ void main() {
       await store.initialize();
 
       expect(store.getKeys(), isEmpty);
-      expect(await File(settingsPath).exists(), isFalse);
+      expect(File(settingsPath).existsSync(), isFalse);
     });
   });
 }

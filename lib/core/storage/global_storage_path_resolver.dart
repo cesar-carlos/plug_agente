@@ -135,7 +135,7 @@ class GlobalStoragePathResolver {
 
   static Future<void> _ensureWritableDirectory(String directoryPath) async {
     final directory = Directory(directoryPath);
-    if (!await directory.exists()) {
+    if (!directory.existsSync()) {
       await directory.create(recursive: true);
     }
 
@@ -149,7 +149,7 @@ class GlobalStoragePathResolver {
     try {
       await probeFile.writeAsString('ok', flush: true);
     } finally {
-      if (await probeFile.exists()) {
+      if (probeFile.existsSync()) {
         await probeFile.delete();
       }
     }

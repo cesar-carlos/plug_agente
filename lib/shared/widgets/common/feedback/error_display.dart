@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
@@ -33,7 +34,7 @@ class ErrorDisplay extends StatelessWidget {
       message: display._getMessage(),
       type: MessageType.error,
       onConfirm: onRetry,
-      confirmText: onRetry != null ? 'Tentar Novamente' : null,
+      confirmText: onRetry != null ? AppStrings.btnRetry : null,
     );
   }
 
@@ -56,27 +57,27 @@ class ErrorDisplay extends StatelessWidget {
       final failure = error as Failure;
       switch (failure.code) {
         case 'VALIDATION_ERROR':
-          return 'Dados Inválidos';
+          return AppStrings.errorTitleValidation;
         case 'CONFIG_ERROR':
-          return 'Erro de Configuração';
+          return AppStrings.modalTitleConfigError;
         case 'CONNECTION_ERROR':
-          return 'Erro de Conexão';
+          return AppStrings.modalTitleConnectionError;
         case 'NETWORK_ERROR':
-          return 'Erro de Rede';
+          return AppStrings.errorTitleNetwork;
         case 'DATABASE_ERROR':
-          return 'Erro no Banco de Dados';
+          return AppStrings.errorTitleDatabase;
         case 'QUERY_ERROR':
-          return 'Erro na Consulta';
+          return AppStrings.queryErrorTitle;
         case 'SERVER_ERROR':
-          return 'Erro no Servidor';
+          return AppStrings.errorTitleServer;
         case 'NOT_FOUND':
-          return 'Não Encontrado';
+          return AppStrings.errorTitleNotFound;
         default:
-          return 'Erro';
+          return AppStrings.modalTitleError;
       }
     }
 
-    return 'Erro';
+    return AppStrings.modalTitleError;
   }
 
   String _getMessage() {
@@ -132,7 +133,7 @@ class ErrorDisplay extends StatelessWidget {
             FilledButton(
               onPressed: onRetry,
               child: Text(
-                'Tentar Novamente',
+                AppStrings.btnRetry,
                 style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
               ),
             ),

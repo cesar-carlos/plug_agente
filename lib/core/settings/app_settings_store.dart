@@ -38,11 +38,11 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
     final file = File(_requireFilePath());
     final parentDir = file.parent;
-    if (!await parentDir.exists()) {
+    if (!parentDir.existsSync()) {
       await parentDir.create(recursive: true);
     }
 
-    if (!await file.exists()) {
+    if (!file.existsSync()) {
       return;
     }
 
@@ -233,7 +233,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
         error: error,
         stackTrace: stackTrace,
       );
-      if (await sourceFile.exists()) {
+      if (sourceFile.existsSync()) {
         await sourceFile.delete();
       }
     }
@@ -257,7 +257,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     final filePath = _requireFilePath();
     final file = File(filePath);
     final parentDir = file.parent;
-    if (!await parentDir.exists()) {
+    if (!parentDir.existsSync()) {
       await parentDir.create(recursive: true);
     }
 
@@ -265,7 +265,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     final tmpFile = File('$filePath.tmp');
     await tmpFile.writeAsString(jsonEncode(sortedMap));
 
-    if (await file.exists()) {
+    if (file.existsSync()) {
       await file.delete();
     }
     await tmpFile.rename(file.path);

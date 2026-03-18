@@ -15,7 +15,7 @@ void main() {
     });
 
     tearDown(() async {
-      if (await tempDir.exists()) {
+      if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
       }
     });
@@ -29,7 +29,7 @@ void main() {
           );
 
       expect(resolvedDirectory, writableCandidate);
-      expect(await Directory(writableCandidate).exists(), isTrue);
+      expect(Directory(writableCandidate).existsSync(), isTrue);
     });
 
     test(
@@ -48,7 +48,7 @@ void main() {
             );
 
         expect(resolvedDirectory, writableCandidate);
-        expect(await Directory(writableCandidate).exists(), isTrue);
+        expect(Directory(writableCandidate).existsSync(), isTrue);
       },
     );
 

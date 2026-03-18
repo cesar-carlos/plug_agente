@@ -7,7 +7,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -92,11 +92,10 @@ class _ConfigPageState extends State<ConfigPage> {
         );
       },
       (failure) {
-        final message = failure is domain.Failure ? failure.message : failure.toString();
         return SettingsFeedback.showError(
           context: context,
           title: AppStrings.gsSectionUpdates,
-          message: message,
+          message: failure.toDisplayMessage(),
         );
       },
     );

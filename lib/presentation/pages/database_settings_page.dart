@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
@@ -90,13 +90,6 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     return null;
   }
 
-  String _extractFailureMessage(Object failure) {
-    if (failure is domain.Failure) {
-      return failure.message;
-    }
-    return failure.toString();
-  }
-
   Future<bool> _ensureOdbcDriverInstalled({
     required ConnectionProvider connectionProvider,
     required String odbcDriverName,
@@ -123,7 +116,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
         await SettingsFeedback.showError(
           context: context,
           title: AppStrings.modalTitleErrorVerifyingDriver,
-          message: _extractFailureMessage(failure),
+          message: failure.toDisplayMessage(),
         );
         return false;
       },
@@ -234,7 +227,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                         SettingsFeedback.showError(
                           context: context,
                           title: AppStrings.modalTitleErrorTestingConnection,
-                          message: _extractFailureMessage(failure),
+                          message: failure.toDisplayMessage(),
                         );
                       },
                     );
@@ -275,7 +268,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                         SettingsFeedback.showError(
                           context: context,
                           title: AppStrings.modalTitleErrorSaving,
-                          message: _extractFailureMessage(failure),
+                          message: failure.toDisplayMessage(),
                         );
                       },
                     );

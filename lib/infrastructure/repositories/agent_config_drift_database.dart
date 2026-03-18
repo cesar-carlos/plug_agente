@@ -216,7 +216,7 @@ LazyDatabase _openConnection({
         : (await GlobalStoragePathResolver.resolveContext()).appDirectoryPath;
     final globalDir = Directory(globalDirectoryPath);
     try {
-      if (!await globalDir.exists()) {
+      if (!globalDir.existsSync()) {
         await globalDir.create(recursive: true);
       }
     } on FileSystemException catch (error) {
@@ -235,14 +235,14 @@ LazyDatabase _openConnection({
 }
 
 Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
-  if (await globalDbFile.exists()) {
+  if (globalDbFile.existsSync()) {
     return;
   }
 
   try {
     final legacyFolder = await getApplicationDocumentsDirectory();
     final legacyDb = File(p.join(legacyFolder.path, 'agent_config.db'));
-    if (!await legacyDb.exists()) {
+    if (!legacyDb.existsSync()) {
       return;
     }
 
@@ -269,7 +269,7 @@ Future<void> _copySidecarFileIfExists({
   required File source,
   required File destination,
 }) async {
-  if (!await source.exists()) {
+  if (!source.existsSync()) {
     return;
   }
   await source.copy(destination.path);

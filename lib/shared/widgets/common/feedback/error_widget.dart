@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 
 class ErrorWidget extends StatelessWidget {
@@ -43,7 +43,7 @@ class ErrorWidget extends StatelessWidget {
             FilledButton(
               onPressed: onRetry,
               child: Text(
-                'Tentar Novamente',
+                AppStrings.btnRetry,
                 style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
