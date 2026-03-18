@@ -34,13 +34,13 @@ def get_version_from_pubspec() -> tuple[str, str]:
 
 
 def update_setup_iss(version: str) -> None:
-    content = SETUP_ISS.read_text(encoding="utf-8")
+    content = SETUP_ISS.read_text(encoding="utf-8-sig")
     new_content = re.sub(
         r'#define MyAppVersion\s+".*"',
         f'#define MyAppVersion "{version}"',
         content,
     )
-    SETUP_ISS.write_text(new_content, encoding="utf-8")
+    SETUP_ISS.write_text(new_content, encoding="utf-8-sig")
     print(f"  setup.iss: MyAppVersion = {version}")
 
 

@@ -63,18 +63,19 @@ void HandleSecondInstance(bool is_autostart) {
   const bool has_computer =
       ::GetComputerNameW(computer_name, &computer_name_size) != 0;
 
-  std::wstring msg = L"O aplicativo Plug Agente já está em execução.\n\n";
+  std::wstring msg =
+      L"O aplicativo Plug Agente j\u00E1 est\u00E1 em execu\u00E7\u00E3o.\n\n";
   if (has_user) {
-    msg += L"Usuário: ";
+    msg += L"Usu\u00E1rio: ";
     msg += username;
     msg += L"\n";
   }
   if (has_computer) {
-    msg += L"Máquina: ";
+    msg += L"M\u00E1quina: ";
     msg += computer_name;
   }
   if (!has_user && !has_computer) {
-    msg += L"Não foi possível obter informações do sistema.";
+    msg += L"N\u00E3o foi poss\u00EDvel obter informa\u00E7\u00F5es do sistema.";
   }
 
   ::MessageBoxW(nullptr, msg.c_str(), L"Plug Agente",
