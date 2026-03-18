@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
+import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
@@ -38,6 +39,7 @@ import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
@@ -326,7 +328,9 @@ Future<void> setupDependencies({
     ..registerLazySingleton(() => ConfigService(getIt<ConfigValidator>()))
     ..registerLazySingleton(
       () => UpdateService(
-        'https://api.example.com/updates', // This should be configurable
+        dotenv.env['AUTO_UPDATE_FEED_URL']?.trim().isNotEmpty ?? false
+            ? dotenv.env['AUTO_UPDATE_FEED_URL']!.trim()
+            : 'https://api.example.com/updates',
         DioFactory.createDio(),
       ),
     )
@@ -359,6 +363,7 @@ Future<void> setupDependencies({
     ..registerLazySingleton(
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
+    ..registerLazySingleton<IAutoUpdateOrchestrator>(AutoUpdateOrchestrator.new)
     ..registerLazySingleton(() => CheckForUpdates(getIt<UpdateService>()))
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))

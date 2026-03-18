@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Build do Flutter (windows --release) e compilação do instalador Inno Setup.
-Execute a partir da raiz do projeto: python installer/build_installer.py
+Orquestra o build do instalador Windows: sincroniza versão, build Flutter e compila Inno Setup.
 
-Requisitos:
-- Flutter instalado e no PATH
-- Inno Setup 6 instalado (ISCC no PATH ou em C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe)
+Fluxo: update_version.py → flutter build windows --release → ISCC setup.iss
+
+Saída: installer/dist/PlugAgente-Setup-{versão}.exe
+
+Requisitos: Flutter no PATH, Inno Setup 6 (ISCC no PATH ou em Program Files).
+Execute a partir da raiz: python installer/build_installer.py
 """
 
 import shutil
@@ -40,7 +42,11 @@ def find_iscc() -> str:
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
-    result = subprocess.run(cmd, cwd=cwd or PROJECT_ROOT)
+    result = subprocess.run(
+        cmd,
+        cwd=cwd or PROJECT_ROOT,
+        shell=True,
+    )
     if result.returncode != 0:
         sys.exit(result.returncode)
 

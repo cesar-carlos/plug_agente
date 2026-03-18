@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/app_spacing.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
@@ -19,6 +18,7 @@ class GeneralConfigSection extends StatelessWidget {
     required this.onCloseToTrayChanged,
     required this.onCheckUpdates,
     required this.onOpenStartupSettings,
+    required this.appVersion,
     this.startupSupported = true,
     this.startupError,
     super.key,
@@ -37,6 +37,7 @@ class GeneralConfigSection extends StatelessWidget {
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onCheckUpdates;
   final VoidCallback onOpenStartupSettings;
+  final String appVersion;
   final bool startupSupported;
   final String? startupError;
 
@@ -114,9 +115,9 @@ class GeneralConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             const SettingsSectionTitle(title: AppStrings.gsSectionAbout),
             const SizedBox(height: AppSpacing.md),
-            const SettingsKeyValue(
+            SettingsKeyValue(
               label: AppStrings.gsLabelVersion,
-              value: AppConstants.appVersion,
+              value: appVersion,
             ),
             const SizedBox(height: AppSpacing.md),
             const SettingsKeyValue(

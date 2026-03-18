@@ -32,4 +32,4 @@ alwaysApply: true
 
 ## Copying to other projects
 
-See `README.md` in this folder. Keep generic rules, and replace `project_specifics.mdc`.
+See `readme.md` in this folder. Keep generic rules, and replace `project_specifics.mdc`.

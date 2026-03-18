@@ -3,7 +3,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "com.se7esistemas"
 #define MyAppURL "https://github.com/cesar-carlos/plug_agente"
 #define MyAppExeName "plug_agente.exe"
@@ -60,7 +60,7 @@ Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 [Code]
 function GetAutostartValue(Param: String): String;
 begin
-  Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + ' --autostart';
+  Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + '{#AutostartArg}';
 end;
 
 function IsAppRunning(const ExeName: String): Boolean;

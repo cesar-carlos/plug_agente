@@ -6,7 +6,7 @@ Este diretório contém as regras do Cursor para manter a consistência e qualid
 
 ```
 .cursor/rules/
-├── README.md                 # Este arquivo
+├── readme.md                 # Este arquivo
 ├── rules_index.mdc          # Índice completo das regras
 │
 ├── 🔄 REGRAS GENÉRICAS (Reutilizáveis)

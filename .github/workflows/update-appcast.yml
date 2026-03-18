@@ -30,22 +30,65 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          cache: true
+
       - name: Get asset info
         id: asset
+        env:
+          ASSET_PATTERN: "PlugAgente-Setup-"
         run: |
           ASSET_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets")
 
-          ASSET_URL=$(echo "$ASSET_RESPONSE" | python3 -c "import sys, json; assets = json.load(sys.stdin); exe = [a for a in assets if a['name'].endswith('.exe')][0]; print(exe['browser_download_url'])" 2>/dev/null || echo "")
-          ASSET_SIZE=$(echo "$ASSET_RESPONSE" | python3 -c "import sys, json; assets = json.load(sys.stdin); exe = [a for a in assets if a['name'].endswith('.exe')][0]; print(exe['size'])" 2>/dev/null || echo "")
+          ASSET_URL=$(echo "$ASSET_RESPONSE" | python3 -c "
+          import sys, json
+          assets = json.load(sys.stdin)
+          exes = [a for a in assets if a['name'].endswith('.exe')]
+          preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
+          chosen = (preferred or exes)[0] if (preferred or exes) else None
+          print(chosen['browser_download_url'] if chosen else '')
+          " 2>/dev/null || echo "")
+          ASSET_SIZE=$(echo "$ASSET_RESPONSE" | python3 -c "
+          import sys, json
+          assets = json.load(sys.stdin)
+          exes = [a for a in assets if a['name'].endswith('.exe')]
+          preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
+          chosen = (preferred or exes)[0] if (preferred or exes) else None
+          print(chosen['size'] if chosen else '')
+          " 2>/dev/null || echo "")
 
           if [ -z "$ASSET_URL" ]; then
-            echo "Error: No .exe asset found in release"
+            echo "Error: No PlugAgente-Setup-*.exe asset found in release"
             exit 1
           fi
 
           echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Sign update (optional)
+        id: sign
+        env:
+          DSA_PRIVATE_KEY: ${{ secrets.DSA_PRIVATE_KEY }}
+        run: |
+          if [ -z "$DSA_PRIVATE_KEY" ]; then
+            echo "signature=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          dart pub get
+          echo "$DSA_PRIVATE_KEY" > dsa_priv.pem
+          curl -sL -o setup.exe "${{ steps.asset.outputs.url }}"
+          SIGN_OUTPUT=$(dart run auto_updater:sign_update setup.exe 2>/dev/null || true)
+          if [ -n "$SIGN_OUTPUT" ]; then
+            SIG=$(echo "$SIGN_OUTPUT" | sed -n 's/.*sparkle:dsaSignature="\([^"]*\)".*/\1/p')
+            echo "signature=${SIG}" >> $GITHUB_OUTPUT
+          else
+            echo "signature=" >> $GITHUB_OUTPUT
+          fi
+          rm -f dsa_priv.pem setup.exe
 
       - name: Checkout main branch
         run: |
@@ -53,8 +96,10 @@ jobs:
           git checkout -B main origin/main
 
       - name: Update appcast.xml
+        env:
+          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
         run: |
-          python3 << 'PYEOF'
+          python3 << PYEOF
           import xml.etree.ElementTree as ET
           from datetime import datetime, timezone
           import os
@@ -64,6 +109,7 @@ jobs:
           VERSION = "${{ steps.release.outputs.version }}"
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
+          DSA_SIGNATURE = os.environ.get("DSA_SIGNATURE", "").strip()
 
           if not ASSET_URL or not ASSET_SIZE:
               print("Error: Asset URL or size not found")
@@ -104,6 +150,8 @@ jobs:
           enclosure.set(f"{{{SPARKLE_NS}}}os", "windows")
           enclosure.set("length", str(ASSET_SIZE))
           enclosure.set("type", "application/octet-stream")
+          if DSA_SIGNATURE:
+              enclosure.set(f"{{{SPARKLE_NS}}}dsaSignature", DSA_SIGNATURE)
 
           channel.insert(0, item)
 
@@ -113,7 +161,7 @@ jobs:
               f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
               tree.write(f, encoding="utf-8")
 
-          print(f"Successfully updated appcast.xml with version {VERSION}")
+          print(f"Successfully updated appcast.xml with version {VERSION}" + (" (with DSA signature)" if DSA_SIGNATURE else ""))
           PYEOF
 
       - name: Commit and push

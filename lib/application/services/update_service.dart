@@ -1,3 +1,4 @@
+import 'package:auto_updater/auto_updater.dart';
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -7,8 +8,55 @@ class UpdateService {
   UpdateService(this._updateUrl, this._dio);
   final String _updateUrl;
   final Dio _dio;
+  static const int _minimumScheduledCheckIntervalSeconds = 3600;
 
   Future<Result<bool>> checkForUpdates() async {
+    if (_isSparkleFeedUrl(_updateUrl)) {
+      return _checkForUpdatesViaSparkle();
+    }
+    return _checkForUpdatesViaApi();
+  }
+
+  bool _isSparkleFeedUrl(String url) {
+    final normalized = url.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    final withoutQuery = normalized.split('?').first;
+    return withoutQuery.endsWith('.xml');
+  }
+
+  Future<Result<bool>> _checkForUpdatesViaSparkle() async {
+    final feedUrl = _updateUrl.trim();
+    if (feedUrl.isEmpty) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Update feed URL is not configured',
+          context: {'operation': 'checkForUpdates'},
+        ),
+      );
+    }
+
+    try {
+      await autoUpdater.setFeedURL(feedUrl);
+      await autoUpdater.setScheduledCheckInterval(
+        _minimumScheduledCheckIntervalSeconds,
+      );
+      await autoUpdater.checkForUpdates();
+      return const Success(true);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to trigger update check',
+          cause: error,
+          context: {
+            'operation': 'checkForUpdates',
+            'feedUrl': feedUrl,
+          },
+        ),
+      );
+    }
+  }
+
+  Future<Result<bool>> _checkForUpdatesViaApi() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
@@ -40,15 +88,6 @@ class UpdateService {
         );
       }
       final isUpdateAvailable = data['updateAvailable'] as bool? ?? false;
-
-      if (isUpdateAvailable) {
-        // TODO(team): Implementar atualização automática quando AutoUpdater API
-        // estiver disponível. AutoUpdater requer configuração específica do Windows.
-        // AutoUpdater requer configuração específica do Windows
-        // final autoUpdater = AutoUpdater();
-        // autoUpdater.setFeedURL(_updateUrl);
-        // await autoUpdater.checkForUpdates();
-      }
 
       return Success(isUpdateAvailable);
     } on DioException catch (error) {

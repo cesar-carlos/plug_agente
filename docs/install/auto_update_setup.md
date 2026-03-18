@@ -7,7 +7,15 @@ Este documento explica como configurar e testar o sistema de atualização autom
 
 ## Visão Geral
 
-O sistema de atualização automática permite que o aplicativo verifique e instale atualizações automaticamente. Utiliza o pacote `auto_updater` (WinSparkle no Windows) com feed no formato Sparkle.
+O sistema de atualização automática permite que o aplicativo verifique e
+instale atualizações automaticamente. Utiliza o pacote `auto_updater`
+(WinSparkle no Windows) com feed no formato Sparkle.
+
+Comportamento atual da aplicação:
+
+- checagem automática em background a cada 1 hora;
+- checagem inicial ao subir o app;
+- fluxo silencioso de download/aplicação (sem interação obrigatória).
 
 ## Opção Recomendada: GitHub Releases + GitHub Raw
 
@@ -50,6 +58,30 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
 5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
+### 4. Assinatura DSA (opcional, recomendado para produção)
+
+O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates. Para habilitar:
+
+1. **Gerar chaves** (uma vez):
+   ```bash
+   dart run auto_updater:generate_keys
+   ```
+   Isso cria `dsa_priv.pem` e `dsa_pub.pem`.
+
+2. **Adicionar chave pública ao app** – em `windows/runner/Runner.rc`:
+   ```
+   // WinSparkle
+   DSAPub DSAPEM "../../dsa_pub.pem"
+   ```
+
+3. **Configurar secret no GitHub** – em Settings → Secrets → Actions:
+   - Nome: `DSA_PRIVATE_KEY`
+   - Valor: conteúdo completo do arquivo `dsa_priv.pem`
+
+4. **Backup da chave privada** – guarde `dsa_priv.pem` em local seguro. Sem ela, usuários não poderão atualizar.
+
+Com o secret configurado, o workflow `update-appcast` assina automaticamente cada release e adiciona `sparkle:dsaSignature` ao appcast.
+
 ### Estrutura do appcast.xml
 
 O arquivo é mantido automaticamente pelo GitHub Actions:
@@ -78,4 +110,4 @@ O arquivo é mantido automaticamente pelo GitHub Actions:
 
 - [testing_auto_update.md](testing_auto_update.md): Como testar o sistema de atualização
 - [release_guide.md](release_guide.md): Como criar releases no GitHub
-- [VERSION_STRATEGY.md](VERSION_STRATEGY.md): Estratégia de versionamento
+- [version_strategy.md](version_strategy.md): Estratégia de versionamento

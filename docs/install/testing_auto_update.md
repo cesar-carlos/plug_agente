@@ -1,55 +1,63 @@
-# Guia de Teste - Sistema de Auto-Atualização
+# Guia de Teste - Auto-Update (1h + silencioso)
 
-Este guia explica como testar o sistema de atualização automática do Plug Agente.
+Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 ## Pré-requisitos
 
-1. **Arquivo `.env` configurado** na raiz do projeto:
+1. `.env` com feed configurado:
 
    ```env
    AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
    ```
 
-2. **GitHub Pages configurado** (opcional): https://github.com/cesar-carlos/plug_agente/settings/pages
+2. Release publicado com instalador `PlugAgente-Setup-*.exe`.
+3. Workflow `Update Appcast on Release` concluído com sucesso.
 
-## Como Testar
+## Teste rápido (manual sob demanda)
 
-### Método 1: Teste Manual na Interface
+1. Execute uma versão antiga instalada do app.
+2. Abra **Configurações** > **Atualizações**.
+3. Clique em **Verificar atualizações**.
+4. Resultado esperado:
+   - com nova versão: download/aplicação iniciam silenciosamente;
+   - sem nova versão: feedback de “sem atualização”.
 
-1. Execute: `flutter run -d windows`
-2. Acesse **Configurações** > **Atualizações**
-3. Clique em **"Verificar Atualizações"**
-4. Se houver atualização disponível, uma janela será exibida
+> Observação: o fluxo foi implementado para ser silencioso; não depende de
+> prompt/modal para avançar.
 
-### Método 2: Teste com Versão de Desenvolvimento
+## Teste end-to-end do fluxo automático
 
-1. Atualize a versão no `pubspec.yaml` (ex.: `1.0.1+2`)
-2. Build: `flutter build windows --release`
-3. Crie o instalador: `python installer/build_installer.py`
-4. Crie um novo release no GitHub com tag `v1.0.1`
-5. Faça upload do instalador `PlugAgente-Setup-1.0.1.exe`
-6. Marque como **"Set as the latest release"** (não Pre-release)
-7. Aguarde o workflow atualizar o `appcast.xml`
-8. Execute a versão antiga e verifique se a atualização é detectada
+1. Garanta uma instalação em versão antiga (ex.: `1.0.1`).
+2. Publique nova versão (ex.: `1.0.2`) e anexe `PlugAgente-Setup-1.0.2.exe`.
+3. Aguarde o workflow atualizar `appcast.xml`.
+4. Inicie a versão antiga e mantenha o app em execução.
+5. Valide:
+   - checagem inicial em background ao subir o app;
+   - nova checagem automática a cada 1h;
+   - ao detectar update, app baixa/aplica sem ação do usuário;
+   - reinício automático quando suportado pelo ambiente.
 
-### Verificar appcast.xml
+## Verificações úteis
 
-Acesse no navegador:
+- Feed:
+  - `https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml`
+  - `https://cesar-carlos.github.io/plug_agente/appcast.xml` (se usar Pages)
+- Actions:
+  - workflow de appcast executado no release publicado
+- Logs:
+  - `auto_update_orchestrator` no log da aplicação
 
-- GitHub Raw: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
-- GitHub Pages: https://cesar-carlos.github.io/plug_agente/appcast.xml
+## Falhas comuns
 
-## Problemas Comuns
+### Workflow não executou
 
-### O workflow não executou
+- Release criado como `Pre-release` (não dispara o fluxo esperado de produção).
 
-- O release foi criado como Pre-release → desmarque e publique novamente
+### Feed não configurado
 
-### Erro "AUTO_UPDATE_FEED_URL não configurada"
+- Defina `AUTO_UPDATE_FEED_URL` no `.env`.
 
-- Crie `.env` na raiz com `AUTO_UPDATE_FEED_URL=...`
+### appcast sem item
 
-### appcast.xml está vazio
-
-- Verifique se o arquivo `.exe` foi anexado ao release
-- O nome deve terminar com `.exe`
+- Confirme upload do asset `.exe` no release.
+- Confirme nome esperado do instalador (`PlugAgente-Setup-*.exe`).

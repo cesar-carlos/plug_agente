@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Sincroniza a versão do pubspec.yaml em setup.iss e .env.
-Execute a partir da raiz do projeto: python installer/update_version.py
+
+Atualiza:
+- installer/setup.iss: MyAppVersion
+- .env: AUTO_UPDATE_FEED_URL (para build local e testes de auto-update)
+
+Execute a partir da raiz: python installer/update_version.py
 """
 
 import re
@@ -11,7 +16,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PUBSPEC = PROJECT_ROOT / "pubspec.yaml"
 SETUP_ISS = PROJECT_ROOT / "installer" / "setup.iss"
 ENV_FILE = PROJECT_ROOT / ".env"
-ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
 
 
 def get_version_from_pubspec() -> str:

@@ -14,10 +14,11 @@ Antes de começar, certifique-se de ter:
 4. **Espaço em disco** suficiente (mínimo 500 MB)
 
 Compatibilidade de sistema:
-- **Windows Server 2012 / 2012 R2**: não suportado
-- **Windows Server 2016+**: compatibilidade condicional (homologar no ambiente)
+- **Windows 10/11**: suporte completo (todos os recursos)
+- **Windows 8/8.1 e Windows Server 2012+**: suporte degradado (sem tray, notificações, auto-update)
+- **Abaixo de Windows 8 / Server 2012**: não suportado
 
-Consulte [requirements.md](requirements.md) para requisitos detalhados.
+Consulte [requirements.md](requirements.md) para requisitos detalhados e checklist de homologação.
 
 ---
 
@@ -105,7 +106,8 @@ Se você utilizar o **Monitor de Portas** (PlugPortMon) para impressão:
 
 ### Monitor de Portas
 
-Se instalou o PlugPortMon, execute `docs\install\uninstall_monitor.bat` como administrador antes de desinstalar o aplicativo.
+Se instalou o PlugPortMon, remova/desative o monitor de portas antes de
+desinstalar o aplicativo principal.
 
 ### O que é removido
 

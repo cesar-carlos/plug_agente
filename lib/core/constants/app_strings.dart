@@ -176,9 +176,14 @@ class AppStrings {
   static const String configTabWebSocket = 'WebSocket';
   static const String configLastUpdateNever = 'Nunca verificado';
   static const String configLastUpdateManual = 'Verificação manual';
-  static const String configUpdatesNotImplemented =
-      'A verificação automática de atualizações será implementada na próxima '
-      'etapa.';
+  static const String configUpdatesChecking = 'Verificando atualizações...';
+  static const String configUpdatesAvailable =
+      'Uma nova versão está disponível. Siga as instruções para atualizar.';
+  static const String configUpdatesNotAvailable =
+      'Você já está na versão mais recente.';
+  static const String configUpdatesTriggered =
+      'Verificação de atualizações iniciada.';
+  static const String configLastUpdatePrefix = 'Última verificação: ';
 
   // General Settings
   static const String gsSectionAppearance = 'Aparência';

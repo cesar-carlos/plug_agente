@@ -58,8 +58,7 @@ class AppRoot extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (context) =>
-              RuntimeModeProvider(getIt<RuntimeCapabilities>()),
+          create: (context) => RuntimeModeProvider(getIt<RuntimeCapabilities>()),
         ),
         ChangeNotifierProvider(
           create: (context) => ThemeProvider(getIt<SharedPreferences>()),
@@ -67,12 +66,8 @@ class AppRoot extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => SystemSettingsProvider(
             getIt<SharedPreferences>(),
-            windowManagerService: getIt.isRegistered<WindowManagerService>()
-                ? getIt<WindowManagerService>()
-                : null,
-            startupService: getIt.isRegistered<IStartupService>()
-                ? getIt<IStartupService>()
-                : null,
+            windowManagerService: getIt.isRegistered<WindowManagerService>() ? getIt<WindowManagerService>() : null,
+            startupService: getIt.isRegistered<IStartupService>() ? getIt<IStartupService>() : null,
           ),
         ),
         ChangeNotifierProvider(
@@ -201,9 +196,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final configProvider = _configProvider;
     final connectionProvider = _connectionProvider;
     final authProvider = _authProvider;
-    if (configProvider == null ||
-        connectionProvider == null ||
-        authProvider == null) {
+    if (configProvider == null || connectionProvider == null || authProvider == null) {
       return;
     }
 
@@ -259,9 +252,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final serverUrl = normalizeServerUrl(config.serverUrl);
     final agentId = config.agentId.trim();
 
-    if (serverUrl.isEmpty ||
-        serverUrl.toLowerCase() == _defaultServerUrl ||
-        agentId.isEmpty) {
+    if (serverUrl.isEmpty || serverUrl.toLowerCase() == _defaultServerUrl || agentId.isEmpty) {
       return null;
     }
 
@@ -270,10 +261,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final authUsername = config.authUsername?.trim();
     final authPassword = config.authPassword?.trim();
     final hasAuthCredentials =
-        authUsername != null &&
-        authUsername.isNotEmpty &&
-        authPassword != null &&
-        authPassword.isNotEmpty;
+        authUsername != null && authUsername.isNotEmpty && authPassword != null && authPassword.isNotEmpty;
 
     if (!hasAuthToken && !hasAuthCredentials) {
       return null;

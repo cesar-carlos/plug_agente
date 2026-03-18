@@ -29,16 +29,15 @@ Formato: **`MAJOR.MINOR.PATCH+BUILD`**
 
 ## Fluxo de Release
 
-```
-1. Atualizar pubspec.yaml (version: 1.0.1+2)
-2. python installer/update_version.py
-3. flutter build windows --release
-4. python installer/build_installer.py
-5. git add, commit, push
-6. git tag v1.0.1 && git push origin v1.0.1
-7. Criar release no GitHub com o instalador
-8. GitHub Actions atualiza appcast.xml
-```
+Fluxo operacional detalhado em [release_guide.md](release_guide.md).
+
+Resumo:
+
+1. Atualizar `pubspec.yaml`
+2. Sincronizar instalador (`installer/update_version.py`)
+3. Build + instalador
+4. Criar tag `v{versão}` e publicar release
+5. Workflow atualiza `appcast.xml`
 
 ## Auto-Update via GitHub
 

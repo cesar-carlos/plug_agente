@@ -8,6 +8,7 @@ import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/runtime/runtime_policy_evaluator.dart';
+import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
@@ -107,6 +108,30 @@ class AppInitializer {
     }
 
     await _initializeNotifications();
+    await _initializeAutoUpdate();
+  }
+
+  Future<void> _initializeAutoUpdate() async {
+    try {
+      final orchestrator = getIt<IAutoUpdateOrchestrator>();
+      await orchestrator.initialize();
+      if (orchestrator.isAvailable) {
+        await orchestrator.checkInBackground();
+        developer.log(
+          'Auto-update initialized and initial background check triggered',
+          name: 'app_initializer',
+          level: 800,
+        );
+      }
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to initialize auto-update (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<WindowManagerService?> _initializeWindowManager() async {

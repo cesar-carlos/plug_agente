@@ -30,7 +30,8 @@ version: 1.0.0+1
 python installer/update_version.py
 ```
 
-Este script atualiza `installer/setup.iss` e `.env` automaticamente.
+Este script atualiza `installer/setup.iss` e garante o
+`AUTO_UPDATE_FEED_URL` local para testes.
 
 ### 3. Build e Instalador
 
@@ -44,7 +45,7 @@ O instalador será criado em `installer/dist/PlugAgente-Setup-1.0.0.exe`.
 ### 4. Commit e Push
 
 ```bash
-git add pubspec.yaml installer/setup.iss .env
+git add pubspec.yaml installer/setup.iss
 git commit -m "chore: bump version to 1.0.0"
 git push origin main
 ```
@@ -84,20 +85,20 @@ Formato: `MAJOR.MINOR.PATCH+BUILD`
 | PATCH | Correções de bugs                 |
 | BUILD | Número de build (opcional)        |
 
-Consulte [VERSION_STRATEGY.md](VERSION_STRATEGY.md) para detalhes.
+Consulte [version_strategy.md](version_strategy.md) para detalhes.
 
 ## Scripts Relacionados
 
 | Script                         | Propósito                                     |
 |--------------------------------|-----------------------------------------------|
-| `installer/update_version.py`  | Sincroniza versão em setup.iss e .env        |
+| `installer/update_version.py`  | Sincroniza versão em setup.iss e feed local  |
 | `installer/build_installer.py` | Build Flutter + compila instalador Inno Setup |
 
 ## Comandos Rápidos
 
 ```bash
 python installer/update_version.py
-git add pubspec.yaml installer/setup.iss .env
+git add pubspec.yaml installer/setup.iss
 git commit -m "chore: bump version to 1.0.0"
 git push origin main
 git tag v1.0.0
