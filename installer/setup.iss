@@ -3,7 +3,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "com.se7esistemas"
 #define MyAppURL "https://github.com/cesar-carlos/plug_agente"
 #define MyAppExeName "plug_agente.exe"
@@ -52,12 +52,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""{#AutostartArg}; Flags: uninsdeletevalue; Tasks: startup
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 
 [Code]
+function GetAutostartValue(Param: String): String;
+begin
+  Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + ' --autostart';
+end;
+
 function IsAppRunning(const ExeName: String): Boolean;
 var
   ResultCode: Integer;
