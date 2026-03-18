@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 
 abstract interface class IAppSettingsStore {
   bool? getBool(String key);
@@ -27,30 +27,16 @@ abstract interface class IAppSettingsStore {
 }
 
 class GlobalAppSettingsStore implements IAppSettingsStore {
-  GlobalAppSettingsStore({String? filePath})
-    : _filePath = filePath ?? defaultFilePath();
+  GlobalAppSettingsStore({String? filePath}) : _filePath = filePath;
 
-  static const String _appFolderName = 'PlugAgente';
-
-  static String defaultFilePath() {
-    if (Platform.isWindows) {
-      final programData =
-          Platform.environment['ProgramData'] ??
-          Platform.environment['ALLUSERSPROFILE'];
-      if (programData != null && programData.isNotEmpty) {
-        return p.join(programData, _appFolderName, 'settings.json');
-      }
-    }
-
-    return p.join(Directory.systemTemp.path, _appFolderName, 'settings.json');
-  }
-
-  final String _filePath;
+  String? _filePath;
   final Map<String, Object> _cache = <String, Object>{};
   Future<void> _writeQueue = Future<void>.value();
 
   Future<void> initialize() async {
-    final file = File(_filePath);
+    _filePath ??= await _resolveDefaultFilePath();
+
+    final file = File(_requireFilePath());
     final parentDir = file.parent;
     if (!await parentDir.exists()) {
       await parentDir.create(recursive: true);
@@ -65,8 +51,30 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
       return;
     }
 
-    final decoded = jsonDecode(raw);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException catch (error, stackTrace) {
+      developer.log(
+        'Settings file is corrupted. Quarantining and continuing with defaults.',
+        name: 'app_settings_store',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _quarantineCorruptedSettingsFile(file);
+      _cache.clear();
+      return;
+    }
+
     if (decoded is! Map<String, dynamic>) {
+      developer.log(
+        'Settings file has invalid root type. Quarantining and continuing with defaults.',
+        name: 'app_settings_store',
+        level: 900,
+      );
+      await _quarantineCorruptedSettingsFile(file);
+      _cache.clear();
       return;
     }
 
@@ -211,8 +219,28 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     return migratedCount;
   }
 
+  Future<void> _quarantineCorruptedSettingsFile(File sourceFile) async {
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final corruptedFile = File('${sourceFile.path}.corrupt.$timestamp');
+
+    try {
+      await sourceFile.rename(corruptedFile.path);
+    } on FileSystemException catch (error, stackTrace) {
+      developer.log(
+        'Failed to quarantine corrupted settings file. Attempting delete.',
+        name: 'app_settings_store',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (await sourceFile.exists()) {
+        await sourceFile.delete();
+      }
+    }
+  }
+
   Future<void> _persist() {
-    _writeQueue = _writeQueue
+    return _writeQueue = _writeQueue
         .catchError((Object e, StackTrace stackTrace) {
           developer.log(
             'Settings persist failed',
@@ -223,24 +251,39 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
           );
         })
         .then((_) => _writeSnapshot());
-    return _writeQueue;
   }
 
   Future<void> _writeSnapshot() async {
-    final file = File(_filePath);
+    final filePath = _requireFilePath();
+    final file = File(filePath);
     final parentDir = file.parent;
     if (!await parentDir.exists()) {
       await parentDir.create(recursive: true);
     }
 
     final sortedMap = SplayTreeMap<String, Object>.from(_cache);
-    final tmpFile = File('$_filePath.tmp');
+    final tmpFile = File('$filePath.tmp');
     await tmpFile.writeAsString(jsonEncode(sortedMap));
 
     if (await file.exists()) {
       await file.delete();
     }
     await tmpFile.rename(file.path);
+  }
+
+  Future<String> _resolveDefaultFilePath() async {
+    final context = await GlobalStoragePathResolver.resolveContext();
+    return context.settingsFilePath;
+  }
+
+  String _requireFilePath() {
+    final filePath = _filePath;
+    if (filePath != null && filePath.isNotEmpty) {
+      return filePath;
+    }
+    throw StateError(
+      'GlobalAppSettingsStore must be initialized before persistence.',
+    );
   }
 
   static String _normalizeLegacyKey(String rawKey) {

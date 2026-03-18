@@ -43,11 +43,16 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
     _metricsTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      AppConstants.dashboardMetricsInterval,
       (_) => _updateMetrics(),
     );
     _metricsSubscription = getIt<IMetricsCollector>().metricsStream.listen(
       (_) => _updateMetrics(),
+      onError: (Object e, StackTrace? s) => AppLogger.warning(
+        'Metrics stream error',
+        e,
+        s,
+      ),
     );
   }
 

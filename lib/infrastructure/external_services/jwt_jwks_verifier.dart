@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:jose/jose.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -256,7 +257,13 @@ class JwtJwksVerifier {
       final decoded = utf8.decode(base64Url.decode(normalized));
       final header = jsonDecode(decoded) as Map<String, dynamic>;
       return header['alg'] as String?;
-    } on Exception {
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'JWT header parsing failed (malformed or invalid token)',
+        name: 'jwt_jwks_verifier',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

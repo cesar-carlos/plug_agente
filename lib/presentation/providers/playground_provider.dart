@@ -328,7 +328,17 @@ class PlaygroundProvider extends ChangeNotifier {
   void cancelQuery() {
     if (_isLoading) {
       _cancellationToken.cancel();
-      unawaited(_executeStreamingQuery.cancelActiveStream());
+      unawaited(
+        _executeStreamingQuery
+            .cancelActiveStream()
+            .catchError(
+              (Object e, StackTrace? s) => AppLogger.warning(
+                'Failed to cancel active stream',
+                e,
+                s,
+              ),
+            ),
+      );
       _isLoading = false;
       _isStreaming = false;
       _error = AppStrings.queryCancelledByUser;

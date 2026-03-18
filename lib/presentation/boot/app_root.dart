@@ -23,8 +23,8 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
@@ -67,8 +67,8 @@ class AppRoot extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => SystemSettingsProvider(
             getIt<IAppSettingsStore>(),
-            windowManagerService: getIt.isRegistered<WindowManagerService>()
-                ? getIt<WindowManagerService>()
+            windowManagerService: getIt.isRegistered<IWindowManagerService>()
+                ? getIt<IWindowManagerService>()
                 : null,
             startupService: getIt.isRegistered<IStartupService>()
                 ? getIt<IStartupService>()

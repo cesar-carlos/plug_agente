@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
@@ -1274,7 +1275,13 @@ class RpcMethodDispatcher {
             lastRowValues: decodedCursor.lastRowValues,
           ),
         );
-      } on Exception {
+      } on Exception catch (e, stackTrace) {
+        developer.log(
+          'Pagination cursor parsing failed (invalid or malformed)',
+          name: 'rpc_method_dispatcher',
+          error: e,
+          stackTrace: stackTrace,
+        );
         return const _ResolvedPagination(
           errorMessage: 'cursor is invalid or malformed',
         );

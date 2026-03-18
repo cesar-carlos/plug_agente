@@ -7,9 +7,10 @@ import 'package:logger/logger.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService with WindowListener {
+class WindowManagerService with WindowListener implements IWindowManagerService {
   factory WindowManagerService() => _instance;
   WindowManagerService._();
   static final WindowManagerService _instance = WindowManagerService._();
@@ -61,7 +62,7 @@ class WindowManagerService with WindowListener {
     });
 
     if (startMinimized) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
       final isVisible = await windowManager.isVisible();
       if (isVisible) {
         _logger.w(
@@ -96,11 +97,13 @@ class WindowManagerService with WindowListener {
     _onFocus = onFocus;
   }
 
+  @override
   void setMinimizeToTray({required bool value}) {
     _minimizeToTray = value;
     _logger.d('Minimizar para bandeja: $value');
   }
 
+  @override
   void setCloseToTray({required bool value}) {
     _closeToTray = value;
     _logger.d('Fechar para bandeja: $value');
@@ -126,12 +129,13 @@ class WindowManagerService with WindowListener {
     }
   }
 
+  @override
   Future<void> show() async {
     try {
       _logger.i('🪟 Mostrando janela...');
 
       await windowManager.setSkipTaskbar(false);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(AppConstants.windowShowInitialDelay);
 
       final isMinimized = await windowManager.isMinimized();
       final isVisible = await windowManager.isVisible();
@@ -143,7 +147,7 @@ class WindowManagerService with WindowListener {
       if (isMinimized) {
         _logger.i('🔄 Janela está minimizada, restaurando...');
         await windowManager.restore();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
       }
 
       _logger.i('👁️ Chamando show()...');
@@ -158,14 +162,14 @@ class WindowManagerService with WindowListener {
           '⚠️ Janela ainda não está visível após show(), tentando restaurar...',
         );
         await windowManager.restore();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
         await windowManager.show();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
       }
 
       _logger.i('🎯 Focando janela...');
       await windowManager.focus();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+        await Future<void>.delayed(AppConstants.windowShowInitialDelay);
 
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();
@@ -178,7 +182,7 @@ class WindowManagerService with WindowListener {
           '❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!',
         );
         await windowManager.restore();
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await Future<void>.delayed(AppConstants.windowShowFinalDelay);
         await windowManager.show();
         await windowManager.focus();
       }
@@ -187,7 +191,7 @@ class WindowManagerService with WindowListener {
       try {
         _logger.i('🔄 Tentando método alternativo...');
         await windowManager.restore();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
         await windowManager.show();
         await windowManager.focus();
       } on Exception catch (e2) {
@@ -199,7 +203,7 @@ class WindowManagerService with WindowListener {
 
   Future<void> restore() async {
     await windowManager.restore();
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
     await show();
   }
 

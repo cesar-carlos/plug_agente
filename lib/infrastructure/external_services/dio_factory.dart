@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -33,7 +34,13 @@ class DioFactory {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       _userAgent = '${AppConstants.appName}/${packageInfo.version} (Windows)';
-    } on Exception {
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'PackageInfo.fromPlatform failed, using fallback User-Agent',
+        name: 'dio_factory',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _userAgent = '${AppConstants.appName}/${AppConstants.appVersion} (Windows)';
     } finally {
       _isInitializing = false;
@@ -46,7 +53,13 @@ class DioFactory {
     try {
       final envValue = dotenv.env[_envKeyAcceptBadCertificates];
       return envValue?.toLowerCase() == 'true' || envValue == '1';
-    } on Exception {
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to read ACCEPT_BAD_CERTIFICATES env, defaulting to false',
+        name: 'dio_factory',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return false;
     }
   }

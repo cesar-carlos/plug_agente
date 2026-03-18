@@ -7,7 +7,7 @@ const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
 const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
 
-/// Implementação de [IOdbcConnectionSettings] usando SharedPreferences.
+/// Implementacao de [IOdbcConnectionSettings] com store global de configuracoes.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
   OdbcConnectionSettings(this._prefs);
   final IAppSettingsStore _prefs;

@@ -2,13 +2,13 @@ import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
-import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockWindowManagerService extends Mock implements WindowManagerService {}
+class MockWindowManagerService extends Mock implements IWindowManagerService {}
 
 class MockStartupService extends Mock implements IStartupService {}
 
@@ -40,7 +40,7 @@ void main() {
       check(provider.closeToTray).equals(true);
     });
 
-    test('should load saved values from SharedPreferences', () async {
+    test('should load saved values from settings store', () async {
       await prefs.setBool('settings.start_with_windows', true);
       await prefs.setBool('settings.start_minimized', true);
       await prefs.setBool('settings.minimize_to_tray', false);
@@ -55,7 +55,7 @@ void main() {
     });
 
     test(
-      'should update startWithWindows and persist to SharedPreferences',
+      'should update startWithWindows and persist to settings store',
       () async {
         when(
           () => mockStartupService.enable(),
@@ -113,7 +113,7 @@ void main() {
     });
 
     test(
-      'should update startMinimized and persist to SharedPreferences',
+      'should update startMinimized and persist to settings store',
       () async {
         final provider = SystemSettingsProvider(prefs);
 

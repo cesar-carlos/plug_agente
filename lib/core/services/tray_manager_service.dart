@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
-import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 class TrayManagerService with TrayListener implements ITrayService {
@@ -53,10 +55,10 @@ class TrayManagerService with TrayListener implements ITrayService {
 
     try {
       await trayManager.setToolTip('Plug Database');
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(AppConstants.trayInitDelay);
 
       await _updateMenu();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(AppConstants.trayInitDelay);
 
       _isInitialized = true;
       _logger.i('TrayManager inicializado');
@@ -181,7 +183,7 @@ class TrayManagerService with TrayListener implements ITrayService {
   @override
   void onTrayIconMouseDown() {
     unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 200), () {
+      Future<void>.delayed(AppConstants.trayIconClickDelay, () {
         unawaited(
           _restoreWindow()
               .then((_) => _onMenuAction?.call(TrayMenuAction.show))
@@ -205,13 +207,25 @@ class TrayManagerService with TrayListener implements ITrayService {
   }
 
   Future<void> _restoreWindow() async {
-    final windowManager = WindowManagerService();
+    if (!getIt.isRegistered<IWindowManagerService>()) {
+      _logger.w('Window manager not available');
+      return;
+    }
+    final windowManager = getIt<IWindowManagerService>();
     await windowManager.show();
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(_showContextMenu());
+    unawaited(
+      _showContextMenu().catchError((Object e, StackTrace? s) {
+        _logger.e(
+          'Erro ao exibir menu de contexto (unhandled)',
+          error: e,
+          stackTrace: s,
+        );
+      }),
+    );
   }
 
   @override
@@ -225,7 +239,7 @@ class TrayManagerService with TrayListener implements ITrayService {
 
     try {
       await _updateMenu();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(AppConstants.trayContextMenuDelay);
       await trayManager.popUpContextMenu();
     } on Exception catch (e, stackTrace) {
       _logger.e(

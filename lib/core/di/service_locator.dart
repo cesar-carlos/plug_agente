@@ -37,22 +37,23 @@ import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
-import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
+import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
@@ -171,6 +172,29 @@ Future<void> _migrateLegacyUserPreferences(
   }
 }
 
+Never _throwGlobalStorageBootstrapError(
+  GlobalStorageAccessException error,
+) {
+  throw GlobalStorageBootstrapException(
+    attempts: error.attempts,
+  );
+}
+
+Future<GlobalStorageContext> _resolveGlobalStorageContextOrThrow() async {
+  try {
+    return await GlobalStoragePathResolver.resolveContext();
+  } on GlobalStorageAccessException catch (error, stackTrace) {
+    developer.log(
+      'Unable to resolve global storage context',
+      name: 'service_locator',
+      level: 1000,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    _throwGlobalStorageBootstrapError(error);
+  }
+}
+
 Future<void> setupDependencies({
   required RuntimeCapabilities capabilities,
 }) async {
@@ -190,9 +214,24 @@ Future<void> setupDependencies({
   getIt.registerSingleton<RuntimeCapabilities>(capabilities);
 
   _odbcLocator.initialize(useAsync: true);
+  final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
+  getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);
 
-  final appSettings = GlobalAppSettingsStore();
-  await appSettings.initialize();
+  final appSettings = GlobalAppSettingsStore(
+    filePath: globalStorageContext.settingsFilePath,
+  );
+  try {
+    await appSettings.initialize();
+  } on GlobalStorageAccessException catch (error, stackTrace) {
+    developer.log(
+      'Unable to initialize global settings storage',
+      name: 'service_locator',
+      level: 1000,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    _throwGlobalStorageBootstrapError(error);
+  }
   await _migrateLegacyUserPreferences(appSettings);
   getIt.registerSingleton<IAppSettingsStore>(appSettings);
 
@@ -209,7 +248,11 @@ Future<void> setupDependencies({
     ..registerLazySingleton(ConfigValidator.new)
     ..registerLazySingleton(QueryNormalizer.new)
     ..registerLazySingleton(SocketDataSource.new)
-    ..registerLazySingleton(AppDatabase.new)
+    ..registerLazySingleton(
+      () => AppDatabase(
+        databaseFilePath: globalStorageContext.databaseFilePath,
+      ),
+    )
     ..registerLazySingleton<ITokenSecretStore>(
       () {
         try {
@@ -250,7 +293,7 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
-    ..registerLazySingleton<IMetricsCollector>(() => getIt<MetricsCollector>())
+    ..registerLazySingleton<IMetricsCollector>(getIt.call)
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       InMemoryAuthorizationDecisionCache.new,
@@ -520,6 +563,17 @@ Future<void> setupDependencies({
   );
 
   // Initialize database
-  final database = getIt<AppDatabase>();
-  await database.customStatement('PRAGMA foreign_keys = ON');
+  try {
+    final database = getIt<AppDatabase>();
+    await database.customStatement('PRAGMA foreign_keys = ON');
+  } on GlobalStorageAccessException catch (error, stackTrace) {
+    developer.log(
+      'Unable to initialize global database storage',
+      name: 'service_locator',
+      level: 1000,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    _throwGlobalStorageBootstrapError(error);
+  }
 }

@@ -422,8 +422,13 @@ class ClientTokenLocalDataSource {
           tokenValue: Value(_secureStorageMarker),
         ),
       );
-    } on Exception {
-      // Best effort migration only.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Token migration to secret store failed (best effort)',
+        name: 'client_token_local_data_source',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -434,8 +439,13 @@ class ClientTokenLocalDataSource {
     }
     try {
       await secretStore.saveSecret(tokenId, tokenValue);
-    } on Exception {
-      // Secret persistence must not block token operations.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Secret persistence failed (must not block token operations)',
+        name: 'client_token_local_data_source',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -446,7 +456,13 @@ class ClientTokenLocalDataSource {
     }
     try {
       return await secretStore.readSecret(tokenId);
-    } on Exception {
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Secret read failed',
+        name: 'client_token_local_data_source',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }
@@ -458,8 +474,13 @@ class ClientTokenLocalDataSource {
     }
     try {
       await secretStore.deleteSecret(tokenId);
-    } on Exception {
-      // Best effort cleanup only.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Secret delete failed (best effort cleanup)',
+        name: 'client_token_local_data_source',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 }

@@ -5,14 +5,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
+import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_policy_evaluator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
 
@@ -163,6 +164,7 @@ class AppInitializer {
       );
 
       getIt.registerSingleton<WindowManagerService>(windowManagerService);
+      getIt.registerSingleton<IWindowManagerService>(windowManagerService);
 
       developer.log(
         'Window manager initialized (startMinimized: $startMinimized)',

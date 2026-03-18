@@ -32,6 +32,16 @@ class AppConstants {
   static const int httpStatusTooManyRequests = 429;
 
   static const int userAgentInitPollIntervalMs = 10;
-  static const String notificationAppUserModelGuid =
-      'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
+  static const String notificationAppUserModelGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
+
+  static const Duration windowShowInitialDelay = Duration(milliseconds: 100);
+  static const Duration windowShowRestoreDelay = Duration(milliseconds: 200);
+  static const Duration windowShowFinalDelay = Duration(milliseconds: 300);
+  static const Duration trayInitDelay = Duration(milliseconds: 100);
+  static const Duration trayContextMenuDelay = Duration(milliseconds: 50);
+  static const Duration trayIconClickDelay = Duration(milliseconds: 200);
+  static const Duration dashboardMetricsInterval = Duration(seconds: 5);
+  static const Duration clientTokenDebounceDelay = Duration(milliseconds: 250);
+  static const Duration formTransitionDelay = Duration(milliseconds: 100);
+  static const Duration ruleDialogTransition = Duration(milliseconds: 120);
 }

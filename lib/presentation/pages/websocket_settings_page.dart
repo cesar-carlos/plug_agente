@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
@@ -211,9 +215,17 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
     } else if (configProvider.isLoading) {
-      Future.delayed(
-        const Duration(milliseconds: 100),
-        _checkAndInitializeFields,
+      unawaited(
+        Future.delayed(
+          AppConstants.formTransitionDelay,
+          _checkAndInitializeFields,
+        ).catchError(
+          (Object e, StackTrace? s) => AppLogger.warning(
+            'Form field initialization check failed',
+            e,
+            s,
+          ),
+        ),
       );
     }
   }

@@ -262,15 +262,14 @@ class AutoStartService implements IStartupService {
   }) {
     final psExecutable = _quotePowerShellSingle(executable);
     final psArgs = arguments.map(_quotePowerShellSingle).join(', ');
-    final startProcessLine =
-        r'$p = Start-Process -FilePath ' +
-        '$psExecutable '
-            r'-ArgumentList $arguments -Verb RunAs -Wait -PassThru';
+    final startProcessLine = StringBuffer(r'$p = Start-Process -FilePath ')
+      ..write(psExecutable)
+      ..write(r' -ArgumentList $arguments -Verb RunAs -Wait -PassThru');
 
     final script = StringBuffer()
       ..writeln(r'$ErrorActionPreference = "Stop"')
       ..writeln('\$arguments = @($psArgs)')
-      ..writeln(startProcessLine)
+      ..writeln(startProcessLine.toString())
       ..writeln(r'exit $p.ExitCode');
 
     return script.toString();

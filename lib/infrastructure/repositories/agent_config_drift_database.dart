@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart';
 
 part 'agent_config_drift_database.g.dart';
@@ -21,8 +23,15 @@ abstract class AgentConfigDataSource {
 
 @DriftDatabase(tables: [ConfigTable, ClientTokenCacheTable])
 class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
-  AppDatabase([QueryExecutor? executor])
-    : super(executor ?? _openConnection()) {
+  AppDatabase({
+    QueryExecutor? executor,
+    String? databaseFilePath,
+  }) : super(
+         executor ??
+             _openConnection(
+               databaseFilePath: databaseFilePath,
+             ),
+       ) {
     _startWalMaintenance();
   }
 
@@ -180,8 +189,13 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   Future<void> _runWalCheckpoint() async {
     try {
       await customStatement('PRAGMA wal_checkpoint(PASSIVE)');
-    } on Exception {
-      // Best effort maintenance task.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'WAL checkpoint failed (best effort maintenance)',
+        name: 'agent_config_drift_database',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -193,30 +207,31 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection({
+  String? databaseFilePath,
+}) {
   return LazyDatabase(() async {
-    final globalDir = Directory(_resolveGlobalDataDirectoryPath());
-    if (!await globalDir.exists()) {
-      await globalDir.create(recursive: true);
+    final globalDirectoryPath = databaseFilePath != null
+        ? File(databaseFilePath).parent.path
+        : (await GlobalStoragePathResolver.resolveContext()).appDirectoryPath;
+    final globalDir = Directory(globalDirectoryPath);
+    try {
+      if (!await globalDir.exists()) {
+        await globalDir.create(recursive: true);
+      }
+    } on FileSystemException catch (error) {
+      throw GlobalStorageAccessException(
+        message: 'Failed to create or access global database directory.',
+        attempts: <String>['$globalDirectoryPath -> ${error.message}'],
+      );
     }
 
-    final file = File(p.join(globalDir.path, 'agent_config.db'));
+    final file = File(
+      databaseFilePath ?? p.join(globalDir.path, 'agent_config.db'),
+    );
     await _migrateLegacyDatabaseIfNeeded(file);
     return NativeDatabase(file);
   });
-}
-
-String _resolveGlobalDataDirectoryPath() {
-  if (Platform.isWindows) {
-    final programData =
-        Platform.environment['ProgramData'] ??
-        Platform.environment['ALLUSERSPROFILE'];
-    if (programData != null && programData.isNotEmpty) {
-      return p.join(programData, 'PlugAgente');
-    }
-  }
-
-  return p.join(Directory.systemTemp.path, 'PlugAgente');
 }
 
 Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
@@ -240,8 +255,13 @@ Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
       source: File('${legacyDb.path}-shm'),
       destination: File('${globalDbFile.path}-shm'),
     );
-  } on Exception {
-    // Best effort migration from legacy per-user path.
+  } on Exception catch (e, stackTrace) {
+    developer.log(
+      'Legacy database migration failed (best effort)',
+      name: 'agent_config_drift_database',
+      error: e,
+      stackTrace: stackTrace,
+    );
   }
 }
 

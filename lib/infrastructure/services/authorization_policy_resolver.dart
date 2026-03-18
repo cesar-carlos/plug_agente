@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
@@ -274,8 +275,13 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           },
         ),
       );
-    } on Exception {
-      // Audit is best effort only.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Authorization denied audit failed (best effort only)',
+        name: 'authorization_policy_resolver',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 

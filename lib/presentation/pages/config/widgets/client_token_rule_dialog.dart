@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -12,7 +13,6 @@ import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 const _ruleDialogWidth = 620.0;
 const _ruleDialogCompactBreakpoint = 760.0;
 const _barrierOpacity = 0.4;
-const _ruleDialogTransition = Duration(milliseconds: 120);
 
 Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
   required BuildContext context,
@@ -23,7 +23,7 @@ Future<ClientTokenRuleDraft?> showClientTokenRuleDialog({
     barrierDismissible: true,
     barrierLabel: 'Dismiss rule dialog',
     barrierColor: Colors.black.withValues(alpha: _barrierOpacity),
-    transitionDuration: _ruleDialogTransition,
+    transitionDuration: AppConstants.ruleDialogTransition,
     pageBuilder: (dialogContext, primaryAnimation, secondaryAnimation) {
       return _ClientTokenRuleOverlay(initialRule: initialRule);
     },

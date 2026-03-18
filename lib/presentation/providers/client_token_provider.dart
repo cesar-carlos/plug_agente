@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
@@ -259,8 +261,13 @@ class ClientTokenProvider extends ChangeNotifier {
           clientId: clientId,
         ),
       );
-    } on Exception {
-      // Audit must not impact UI flow.
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Token copy audit record failed (must not impact UI flow)',
+        name: 'client_token_provider',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 

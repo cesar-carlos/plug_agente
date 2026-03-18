@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -668,7 +669,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   void _handleClientFilterChanged(String _) {
     _clientFilterDebounceTimer?.cancel();
     _clientFilterDebounceTimer = Timer(
-      const Duration(milliseconds: 250),
+      AppConstants.clientTokenDebounceDelay,
       () {
         if (!mounted) {
           return;

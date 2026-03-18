@@ -1,6 +1,6 @@
+export 'auth_token.dart';
 export 'authorization_metric.dart';
 export 'authorization_metrics_summary.dart';
-export 'auth_token.dart';
 export 'cancellation_token.dart';
 export 'client_token_create_request.dart';
 export 'client_token_list_query.dart';
