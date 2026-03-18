@@ -47,4 +47,34 @@ void main() {
       expect(isSparkleFeedUrl('https://example.com/check'), isFalse);
     });
   });
+
+  group('resolveAutoUpdateCheckIntervalSeconds', () {
+    test('returns default when not configured', () {
+      final result = resolveAutoUpdateCheckIntervalSeconds(
+        environment: const {},
+      );
+
+      expect(result, 3600);
+    });
+
+    test('returns default when value is below minimum', () {
+      final result = resolveAutoUpdateCheckIntervalSeconds(
+        environment: const {
+          'AUTO_UPDATE_CHECK_INTERVAL_SECONDS': '300',
+        },
+      );
+
+      expect(result, 3600);
+    });
+
+    test('returns configured value when value is valid', () {
+      final result = resolveAutoUpdateCheckIntervalSeconds(
+        environment: const {
+          'AUTO_UPDATE_CHECK_INTERVAL_SECONDS': '7200',
+        },
+      );
+
+      expect(result, 7200);
+    });
+  });
 }

@@ -39,7 +39,25 @@ jobs:
         run: |
           TAG_NAME="${RELEASE_TAG:-${GITHUB_REF#refs/tags/}}"
           VERSION_SHORT="${TAG_NAME#v}"
-          FULL_VERSION=$(git show "$TAG_NAME:pubspec.yaml" 2>/dev/null | grep -E '^\s*version:' | sed -E 's/^\s*version:\s*["]?([^"[:space:]]+)["]?.*/\1/' | tr -d ' \r' || echo "$VERSION_SHORT")
+          FULL_VERSION=$(git show "$TAG_NAME:pubspec.yaml" 2>/dev/null | grep -E '^\s*version:' | sed -E 's/^\s*version:\s*["]?([^"[:space:]]+)["]?.*/\1/' | tr -d ' \r' || true)
+          if [ -z "$FULL_VERSION" ]; then
+            echo "Error: Unable to resolve version from pubspec.yaml at tag $TAG_NAME"
+            exit 1
+          fi
+          VERSION_FROM_PUBSPEC="${FULL_VERSION%%+*}"
+          if [ "$VERSION_FROM_PUBSPEC" != "$VERSION_SHORT" ]; then
+            echo "Error: Tag version ($VERSION_SHORT) does not match pubspec short version ($VERSION_FROM_PUBSPEC)"
+            exit 1
+          fi
+          SETUP_VERSION=$(git show "$TAG_NAME:installer/setup.iss" 2>/dev/null | grep -E '^#define MyAppVersion ' | sed -E 's/^#define MyAppVersion\s+"([^"]+)".*/\1/' | tr -d ' \r' || true)
+          if [ -z "$SETUP_VERSION" ]; then
+            echo "Error: Unable to resolve installer/setup.iss MyAppVersion at tag $TAG_NAME"
+            exit 1
+          fi
+          if [ "$SETUP_VERSION" != "$VERSION_SHORT" ]; then
+            echo "Error: setup.iss version ($SETUP_VERSION) does not match tag version ($VERSION_SHORT)"
+            exit 1
+          fi
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION_SHORT" >> $GITHUB_OUTPUT
           echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
@@ -65,11 +83,12 @@ jobs:
           preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
           chosen = (preferred or exes)[0] if (preferred or exes) else None
           if chosen:
-              print(chosen['url'] + '|' + chosen['browser_download_url'] + '|' + str(chosen.get('size', '')))
+              print(chosen['url'] + '|' + chosen['browser_download_url'] + '|' + str(chosen.get('size', '')) + '|' + chosen['name'])
           " 2>/dev/null || echo "")
           ASSET_API_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f1)
           ASSET_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f2)
           ASSET_SIZE=$(echo "$ASSET_CHOSEN" | cut -d'|' -f3)
+          ASSET_NAME=$(echo "$ASSET_CHOSEN" | cut -d'|' -f4)
 
           if [ -z "$ASSET_URL" ] || [ -z "$ASSET_API_URL" ]; then
             echo "Error: No PlugAgente-Setup-*.exe asset found in release"
@@ -79,6 +98,52 @@ jobs:
           echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
           echo "api_url=$ASSET_API_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
+          echo "name=$ASSET_NAME" >> $GITHUB_OUTPUT
+
+      - name: Validate release consistency
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+          VERSION_SHORT: ${{ steps.release.outputs.version }}
+          FULL_VERSION: ${{ steps.release.outputs.full_version }}
+          ASSET_URL: ${{ steps.asset.outputs.url }}
+          ASSET_NAME: ${{ steps.asset.outputs.name }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+
+          tag = os.environ.get("TAG_NAME", "").strip()
+          version_short = os.environ.get("VERSION_SHORT", "").strip()
+          full_version = os.environ.get("FULL_VERSION", "").strip()
+          asset_url = os.environ.get("ASSET_URL", "").strip()
+          asset_name = os.environ.get("ASSET_NAME", "").strip()
+
+          expected_asset_name = f"PlugAgente-Setup-{version_short}.exe"
+          expected_path = f"/releases/download/{tag}/"
+
+          if not tag or not version_short or not full_version:
+              print("Error: Missing tag/version metadata.")
+              sys.exit(1)
+
+          if asset_name != expected_asset_name:
+              print(
+                  "Error: Release asset name mismatch. "
+                  f"expected={expected_asset_name!r}, actual={asset_name!r}"
+              )
+              sys.exit(1)
+
+          if expected_path not in asset_url:
+              print(
+                  "Error: Release asset URL mismatch. "
+                  f"expected path segment {expected_path!r}, actual URL={asset_url!r}"
+              )
+              sys.exit(1)
+
+          print(
+              "Release consistency validation passed "
+              f"(tag={tag}, version={version_short}, full_version={full_version}, asset={asset_name})."
+          )
+          PYEOF
 
       - name: Install cryptography library
         run: pip install cryptography
@@ -151,23 +216,21 @@ jobs:
         env:
           DSA_PRIVATE_KEY: ${{ secrets.DSA_PRIVATE_KEY }}
           DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           python3 << 'PYEOF'
           import os
           import sys
 
-          prerelease = os.environ.get("RELEASE_PRERELEASE", "false").strip().lower() == "true"
           has_private_key = bool(os.environ.get("DSA_PRIVATE_KEY", "").strip())
           has_signature = bool(os.environ.get("DSA_SIGNATURE", "").strip())
-          signature_required = not prerelease
+          signature_required = True
 
           if signature_required and not has_private_key:
-              print("Error: DSA_PRIVATE_KEY is required for production (non-pre-release) releases.")
+              print("Error: DSA_PRIVATE_KEY is required for all releases.")
               sys.exit(1)
 
           if signature_required and not has_signature:
-              print("Error: Failed to generate DSA signature for production release.")
+              print("Error: Failed to generate DSA signature for release.")
               sys.exit(1)
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:

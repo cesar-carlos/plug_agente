@@ -45,7 +45,7 @@ Resumo:
 - **Feed**: `appcast.xml` (formato Sparkle/WinSparkle)
 - **Hospedagem**: GitHub Raw ou GitHub Pages
 - **Workflow**: `.github/workflows/update-appcast.yml` atualiza o feed automaticamente em cada release publicado
-- **Assinatura**: releases de produção exigem `DSA_PRIVATE_KEY`; pre-releases aceitam assinatura opcional
+- **Assinatura**: todos os releases exigem `DSA_PRIVATE_KEY`
 
 ## Scripts de Desenvolvimento (Python)
 

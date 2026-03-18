@@ -24,9 +24,10 @@ Em modo degradado (Windows Server 2012/2016+), o auto-update não é suportado e
 
 Comportamento atual da aplicação:
 
-- checagem automática em background (intervalo configurável via `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, padrão 1 hora);
+- checagem automática em background (intervalo configurável via `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, padrão 1 hora, mínimo 1 hora);
 - checagem inicial ao subir o app;
-- fluxo silencioso de download/aplicação: download em background, sem diálogo modal bloqueante; a atualização é aplicada ao fechar o app (sem interação obrigatória).
+- checagem manual pela UI usa fluxo foreground do WinSparkle (pode exibir progresso nativo);
+- fluxo de download/aplicação permanece silencioso em background; a atualização é aplicada ao fechar o app.
 
 ## Opção Recomendada: GitHub Releases + GitHub Raw
 
@@ -77,11 +78,10 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
 5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
-### 4. Assinatura DSA (obrigatória para releases de produção)
+### 4. Assinatura DSA (obrigatória para todos os releases)
 
 O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates.
-No workflow atual, releases de produção (não marcados como pre-release) falham se a assinatura DSA não estiver configurada e gerada.
-Em pre-releases, a assinatura continua opcional.
+No workflow atual, qualquer release (inclusive pre-release) falha se a assinatura DSA não estiver configurada e gerada.
 
 1. **Gerar chaves** (uma vez):
 

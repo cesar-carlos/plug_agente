@@ -3,23 +3,65 @@ import 'dart:developer' as developer;
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
+import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
+abstract interface class IAutoUpdaterGateway {
+  void addListener(UpdaterListener listener);
+  Future<void> setFeedURL(String feedUrl);
+  Future<void> checkForUpdates({required bool inBackground});
+  Future<void> setScheduledCheckInterval(int interval);
+}
+
+class AutoUpdaterGateway implements IAutoUpdaterGateway {
+  const AutoUpdaterGateway();
+
+  @override
+  void addListener(UpdaterListener listener) {
+    autoUpdater.addListener(listener);
+  }
+
+  @override
+  Future<void> setFeedURL(String feedUrl) {
+    return autoUpdater.setFeedURL(feedUrl);
+  }
+
+  @override
+  Future<void> checkForUpdates({required bool inBackground}) {
+    return autoUpdater.checkForUpdates(inBackground: inBackground);
+  }
+
+  @override
+  Future<void> setScheduledCheckInterval(int interval) {
+    return autoUpdater.setScheduledCheckInterval(interval);
+  }
+}
+
 class AutoUpdateOrchestrator
     with UpdaterListener
     implements IAutoUpdateOrchestrator {
-  AutoUpdateOrchestrator(this._capabilities);
+  AutoUpdateOrchestrator(
+    this._capabilities, {
+    IAutoUpdaterGateway updaterGateway = const AutoUpdaterGateway(),
+    IAppcastProbeService appcastProbeService = const AppcastProbeService(),
+  }) : _updaterGateway = updaterGateway,
+       _appcastProbeService = appcastProbeService;
 
   final RuntimeCapabilities _capabilities;
+  final IAutoUpdaterGateway _updaterGateway;
+  final IAppcastProbeService _appcastProbeService;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
   bool _isManualCheck = false;
+  UpdateCheckDiagnostics? _activeManualDiagnostics;
+  UpdateCheckDiagnostics? _lastManualDiagnostics;
 
   String? get _feedUrl {
     final url = resolveAutoUpdateFeedUrl(environment: dotenv.env);
@@ -27,9 +69,26 @@ class AutoUpdateOrchestrator
     return isSparkleFeedUrl(url) ? url : null;
   }
 
+  String _buildManualFeedUrl(String baseFeedUrl) {
+    final uri = Uri.tryParse(baseFeedUrl);
+    if (uri == null) return baseFeedUrl;
+    final query = Map<String, String>.from(uri.queryParameters);
+    query['cb'] = DateTime.now().millisecondsSinceEpoch.toString();
+    return uri.replace(queryParameters: query).toString();
+  }
+
+  String _extractFailureMessage(Exception error) {
+    if (error is domain.Failure) {
+      return error.message;
+    }
+    return error.toString();
+  }
+
   @override
-  bool get isAvailable =>
-      _capabilities.supportsAutoUpdate && _feedUrl != null;
+  bool get isAvailable => _capabilities.supportsAutoUpdate && _feedUrl != null;
+
+  @override
+  UpdateCheckDiagnostics? get lastManualDiagnostics => _lastManualDiagnostics;
 
   @override
   Future<void> initialize() async {
@@ -52,13 +111,14 @@ class AutoUpdateOrchestrator
       return;
     }
 
-    final intervalSeconds =
-        resolveAutoUpdateCheckIntervalSeconds(environment: dotenv.env);
+    final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
+      environment: dotenv.env,
+    );
 
     try {
-      autoUpdater.addListener(this);
-      await autoUpdater.setFeedURL(feedUrl);
-      await autoUpdater.setScheduledCheckInterval(intervalSeconds);
+      _updaterGateway.addListener(this);
+      await _updaterGateway.setFeedURL(feedUrl);
+      await _updaterGateway.setScheduledCheckInterval(intervalSeconds);
       _isInitialized = true;
       developer.log(
         'Auto-update initialized (feed: $feedUrl, interval: ${intervalSeconds}s)',
@@ -84,7 +144,7 @@ class AutoUpdateOrchestrator
     if (!isAvailable) return;
     for (var attempt = 1; attempt <= _maxBackgroundRetries; attempt++) {
       try {
-        await autoUpdater.checkForUpdates(inBackground: true);
+        await _updaterGateway.checkForUpdates(inBackground: true);
         return;
       } on Exception catch (e, s) {
         developer.log(
@@ -130,6 +190,18 @@ class AutoUpdateOrchestrator
       );
     }
 
+    if (!_isInitialized) {
+      await initialize();
+      if (!_isInitialized) {
+        return Failure<bool, Exception>(
+          domain.ServerFailure.withContext(
+            message: 'Auto-update is not initialized',
+            context: {'operation': 'checkManual'},
+          ),
+        );
+      }
+    }
+
     if (_isManualCheck) {
       return Failure<bool, Exception>(
         domain.ServerFailure.withContext(
@@ -141,8 +213,28 @@ class AutoUpdateOrchestrator
 
     _manualCheckCompleter = Completer<Result<bool>>();
     _isManualCheck = true;
+    final manualFeedUrl = _buildManualFeedUrl(feedUrl);
+    _activeManualDiagnostics = UpdateCheckDiagnostics(
+      checkedAt: DateTime.now(),
+      configuredFeedUrl: feedUrl,
+      requestedFeedUrl: manualFeedUrl,
+    );
     try {
-      await autoUpdater.checkForUpdates(inBackground: true);
+      developer.log(
+        'Manual update check triggered (configured feed: $feedUrl, requested feed: $manualFeedUrl)',
+        name: 'auto_update_orchestrator',
+        level: 800,
+      );
+      final probeResult = await _appcastProbeService.probeLatest(
+        feedUrl: manualFeedUrl,
+      );
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        appcastProbeVersion: probeResult.latestVersion,
+        appcastProbeItemCount: probeResult.itemCount,
+        probeErrorMessage: probeResult.errorMessage,
+      );
+      await _updaterGateway.setFeedURL(manualFeedUrl);
+      await _updaterGateway.checkForUpdates(inBackground: false);
       return await _manualCheckCompleter!.future.timeout(
         _manualCheckTimeout,
         onTimeout: () {
@@ -168,12 +260,26 @@ class AutoUpdateOrchestrator
       _completeManualCheck(failure);
       return failure;
     } finally {
+      _lastManualDiagnostics = _activeManualDiagnostics;
+      _activeManualDiagnostics = null;
       _isManualCheck = false;
       _manualCheckCompleter = null;
     }
   }
 
   void _completeManualCheck(Result<bool> result) {
+    result.fold(
+      (isUpdateAvailable) {
+        _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+          updateAvailable: isUpdateAvailable,
+        );
+      },
+      (error) {
+        _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+          errorMessage: _extractFailureMessage(error),
+        );
+      },
+    );
     if (_isManualCheck &&
         _manualCheckCompleter != null &&
         !_manualCheckCompleter!.isCompleted) {
@@ -201,7 +307,7 @@ class AutoUpdateOrchestrator
   @override
   void onUpdaterCheckingForUpdate(Appcast? appcast) {
     developer.log(
-      'Checking for updates...',
+      'Checking for updates... (items: ${appcast?.items.length ?? 0})',
       name: 'auto_update_orchestrator',
       level: 800,
     );
@@ -210,9 +316,13 @@ class AutoUpdateOrchestrator
   @override
   void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
     developer.log(
-      'Update available: ${appcastItem?.versionString}',
+      'Update available: ${appcastItem?.versionString} (display: ${appcastItem?.displayVersionString})',
       name: 'auto_update_orchestrator',
       level: 800,
+    );
+    _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+      remoteVersion: appcastItem?.versionString,
+      remoteDisplayVersion: appcastItem?.displayVersionString,
     );
     _completeManualCheck(const Success(true));
   }
@@ -220,10 +330,15 @@ class AutoUpdateOrchestrator
   @override
   void onUpdaterUpdateNotAvailable(UpdaterError? error) {
     developer.log(
-      'No update available',
+      'No update available (manual: $_isManualCheck, error: $error)',
       name: 'auto_update_orchestrator',
       level: 800,
     );
+    if (error != null) {
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        errorMessage: error.message,
+      );
+    }
     _completeManualCheck(const Success(false));
   }
 

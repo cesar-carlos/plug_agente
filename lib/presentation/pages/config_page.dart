@@ -6,6 +6,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
@@ -56,6 +57,45 @@ class _ConfigPageState extends State<ConfigPage> {
         : AppStrings.gsAutoUpdateNotSupported;
   }
 
+  String _formatTechnicalDetails(UpdateCheckDiagnostics? diagnostics) {
+    if (diagnostics == null) {
+      return 'Sem dados tecnicos para a verificacao atual.';
+    }
+
+    final lines = <String>[
+      'Detalhes tecnicos',
+      'Checado em: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
+      'Feed configurado: ${diagnostics.configuredFeedUrl}',
+      'Feed consultado: ${diagnostics.requestedFeedUrl}',
+    ];
+
+    if (diagnostics.remoteVersion != null &&
+        diagnostics.remoteVersion!.isNotEmpty) {
+      lines.add(
+        'Versao remota: ${diagnostics.remoteVersion}',
+      );
+    } else if (diagnostics.appcastProbeVersion != null &&
+        diagnostics.appcastProbeVersion!.isNotEmpty) {
+      lines.add(
+        'Versao remota: ${diagnostics.appcastProbeVersion}',
+      );
+    }
+
+    if (diagnostics.errorMessage != null &&
+        diagnostics.errorMessage!.isNotEmpty) {
+      lines.add(
+        'Erro do updater: ${diagnostics.errorMessage}',
+      );
+    } else if (diagnostics.probeErrorMessage != null &&
+        diagnostics.probeErrorMessage!.isNotEmpty) {
+      lines.add(
+        'Erro ao ler appcast: ${diagnostics.probeErrorMessage}',
+      );
+    }
+
+    return lines.join('\n');
+  }
+
   Future<void> _checkUpdates() async {
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
@@ -84,18 +124,26 @@ class _ConfigPageState extends State<ConfigPage> {
 
     result.fold(
       (isUpdateAvailable) {
-        final message = isUpdateAvailable ? AppStrings.configUpdatesAvailable : AppStrings.configUpdatesNotAvailable;
+        final message = isUpdateAvailable
+            ? AppStrings.configUpdatesAvailable
+            : '${AppStrings.configUpdatesNotAvailable}\nSe voce acabou de publicar uma nova versao, aguarde ate 5 minutos e tente novamente.';
+        final technicalDetails = _formatTechnicalDetails(
+          orchestrator.lastManualDiagnostics,
+        );
         return SettingsFeedback.showInfo(
           context: context,
           title: AppStrings.gsSectionUpdates,
-          message: message,
+          message: '$message\n\n$technicalDetails',
         );
       },
       (failure) {
+        final technicalDetails = _formatTechnicalDetails(
+          orchestrator.lastManualDiagnostics,
+        );
         return SettingsFeedback.showError(
           context: context,
           title: AppStrings.gsSectionUpdates,
-          message: failure.toDisplayMessage(),
+          message: '${failure.toDisplayMessage()}\n\n$technicalDetails',
         );
       },
     );
@@ -131,7 +179,8 @@ class _ConfigPageState extends State<ConfigPage> {
             startupError: systemSettingsProvider.lastError,
             supportsAutoUpdate: supportsAutoUpdate,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
-            onStartWithWindowsChanged: systemSettingsProvider.setStartWithWindows,
+            onStartWithWindowsChanged:
+                systemSettingsProvider.setStartWithWindows,
             onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,

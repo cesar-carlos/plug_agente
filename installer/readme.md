@@ -65,7 +65,7 @@ O nome segue o padrão esperado pelo workflow **Update Appcast on Release** (`.g
 1. **Versão**: definida em `pubspec.yaml`; `update_version.py` propaga para `setup.iss`.
 2. **Release**: após criar o instalador, publique no GitHub com tag `v{versão}` e anexe o `.exe`.
 3. **Appcast**: o workflow atualiza `appcast.xml` automaticamente; clientes recebem update na próxima checagem (1h) ou via botão manual.
-4. **Assinatura DSA** (obrigatória em produção): consulte [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
+4. **Assinatura DSA** (obrigatória em qualquer release): consulte [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
 
 ## Documentação relacionada
 

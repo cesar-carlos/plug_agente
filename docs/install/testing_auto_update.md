@@ -24,6 +24,9 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
    - com nova versão: download/aplicação iniciam silenciosamente;
    - sem nova versão: feedback de “sem atualização”.
 
+> Dica: o feed em `raw.githubusercontent.com` pode ficar em cache por até 5 minutos após publicar release.
+> Se acabou de publicar, aguarde alguns minutos e repita a checagem manual.
+
 > Observação: o fluxo foi implementado para ser silencioso; não depende de
 > prompt/modal para avançar.
 
@@ -53,8 +56,8 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 ### Workflow não executou
 
-- Release criado como `Pre-release` (não dispara o fluxo esperado de produção).
-- Release de produção sem `DSA_PRIVATE_KEY` configurado (workflow falha por política de assinatura).
+- Release sem asset `PlugAgente-Setup-{versao}.exe` compatível com a tag.
+- Secret `DSA_PRIVATE_KEY` ausente (workflow falha por política de assinatura obrigatória em qualquer release).
 
 ### Feed não configurado
 

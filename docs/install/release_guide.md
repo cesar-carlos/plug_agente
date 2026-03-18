@@ -76,7 +76,7 @@ git push origin v1.0.0
 1. Acesse: https://github.com/cesar-carlos/plug_agente/actions
 2. O workflow **"Update Appcast on Release"** executará automaticamente
 3. Aguarde conclusão (1-2 minutos)
-4. Em release de produção (não pre-release), confirme que o secret `DSA_PRIVATE_KEY` está configurado; sem ele, o workflow falha.
+4. Confirme que o secret `DSA_PRIVATE_KEY` está configurado; sem ele, o workflow falha em qualquer tipo de release.
 
 ## Estrutura de Versão
 
