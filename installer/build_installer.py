@@ -20,6 +20,7 @@ INSTALLER_DIR = PROJECT_ROOT / "installer"
 BUILD_DIR = PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release"
 SETUP_ISS = INSTALLER_DIR / "setup.iss"
 DIST_DIR = INSTALLER_DIR / "dist"
+ENV_FILE = PROJECT_ROOT / ".env"
 
 ISCC_PATHS = [
     "ISCC",
@@ -51,12 +52,35 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
         sys.exit(result.returncode)
 
 
+def resolve_auto_update_feed_url() -> str | None:
+    if not ENV_FILE.exists():
+        return None
+
+    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() != "AUTO_UPDATE_FEED_URL":
+            continue
+        normalized = value.strip().strip('"').strip("'")
+        return normalized or None
+    return None
+
+
 def main() -> None:
     print("1. Executando update_version.py...")
     run([sys.executable, str(INSTALLER_DIR / "update_version.py")])
 
     print("\n2. Build Flutter (windows --release)...")
-    run(["flutter", "build", "windows", "--release"])
+    flutter_cmd = ["flutter", "build", "windows", "--release"]
+    feed_url = resolve_auto_update_feed_url()
+    if feed_url:
+        flutter_cmd.append(f"--dart-define=AUTO_UPDATE_FEED_URL={feed_url}")
+        print(f"   AUTO_UPDATE_FEED_URL injetado via --dart-define: {feed_url}")
+    else:
+        print("   Aviso: AUTO_UPDATE_FEED_URL não encontrado no .env")
+    run(flutter_cmd)
 
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build não encontrada: {BUILD_DIR}")

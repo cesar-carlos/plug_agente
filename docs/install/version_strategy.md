@@ -19,7 +19,7 @@ Formato: **`MAJOR.MINOR.PATCH+BUILD`**
 |---------|-----------|
 | `pubspec.yaml` | Fonte única da versão (campo `version`) |
 | `installer/setup.iss` | Inno Setup (gerado por `update_version.py`) |
-| `.env` | `AUTO_UPDATE_FEED_URL` (opcional, gerado por `update_version.py`) |
+| `.env` | `AUTO_UPDATE_FEED_URL` (opcional, configurado manualmente) |
 
 ## Tags Git
 
@@ -44,12 +44,13 @@ Resumo:
 - **Feed**: `appcast.xml` (formato Sparkle/WinSparkle)
 - **Hospedagem**: GitHub Raw ou GitHub Pages
 - **Workflow**: `.github/workflows/update-appcast.yml` atualiza o feed automaticamente em cada release publicado
+- **Assinatura**: releases de produção exigem `DSA_PRIVATE_KEY`; pre-releases aceitam assinatura opcional
 
 ## Scripts de Desenvolvimento (Python)
 
 | Script | Uso |
 |--------|-----|
-| `installer/update_version.py` | Sincroniza versão em setup.iss e .env |
+| `installer/update_version.py` | Sincroniza versão em setup.iss |
 | `installer/build_installer.py` | Build Flutter + compila Inno Setup |
 
 Preferência por scripts em Python para facilitar manutenção e portabilidade.

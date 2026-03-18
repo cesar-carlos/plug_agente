@@ -4,33 +4,35 @@ Requisitos para instalação e execução do **Plug Agente** no Windows.
 
 ## Requisitos Mínimos
 
-| Item | Especificação |
-|------|---------------|
+| Item                    | Especificação                    |
+| ----------------------- | -------------------------------- |
 | **Sistema operacional** | Windows 10 ou superior (64 bits) |
-| **Arquitetura** | x64 |
-| **Memória RAM** | 4 GB |
-| **Espaço em disco** | 500 MB |
-| **Permissões** | Administrador para instalação |
+| **Arquitetura**         | x64                              |
+| **Memória RAM**         | 4 GB                             |
+| **Espaço em disco**     | 500 MB                           |
+| **Permissões**          | Administrador para instalação    |
 
 ## Matriz de Compatibilidade (SO)
 
-| Plataforma | Versão | Status | Modo de Execução |
-|------------|--------|--------|------------------|
-| Windows (cliente) | Windows 10 e Windows 11 | Suporte completo | Completo (todos os recursos) |
-| Windows Server | 2012 / 2012 R2 | Suporte degradado | Degradado (sem tray/notificações/auto-update) |
-| Windows Server | 2016 ou superior | Suporte degradado | Degradado (sem tray/notificações/auto-update) |
-| Windows (cliente) | Windows 8 / 8.1 | Suporte degradado | Degradado |
-| Windows (qualquer) | Windows 7 ou inferior | Não suportado | Não inicializa |
+| Plataforma         | Versão                  | Status            | Modo de Execução                              |
+| ------------------ | ----------------------- | ----------------- | --------------------------------------------- |
+| Windows (cliente)  | Windows 10 e Windows 11 | Suporte completo  | Completo (todos os recursos)                  |
+| Windows Server     | 2012 / 2012 R2          | Suporte degradado | Degradado (sem tray/notificações/auto-update) |
+| Windows Server     | 2016 ou superior        | Suporte degradado | Degradado (sem tray/notificações/auto-update) |
+| Windows (cliente)  | Windows 8 / 8.1         | Suporte degradado | Degradado                                     |
+| Windows (qualquer) | Windows 7 ou inferior   | Não suportado     | Não inicializa                                |
 
 ### Modo Degradado
 
 No modo degradado, o aplicativo executa com os seguintes recursos desabilitados:
+
 - **Tray (bandeja do sistema)**: Ícone e menu de contexto não disponíveis
 - **Notificações locais**: Sistema de notificações Windows desabilitado (usa logging interno)
 - **Auto-update**: Verificação automática de atualizações desabilitada
 - **Minimize-to-tray**: Janela minimiza normalmente (não para a bandeja)
 
 Recursos que **permanecem funcionais** no modo degradado:
+
 - Core do agente (Socket.IO + ODBC)
 - Todas as funcionalidades de query (SQL normal e streaming)
 - Configuração e gerenciamento de conexões
@@ -38,6 +40,7 @@ Recursos que **permanecem funcionais** no modo degradado:
 - Conexão com hub remoto
 
 Notas:
+
 - O app detecta automaticamente a versão do Windows e ajusta suas capacidades
 - Banner de modo degradado aparece na UI quando aplicável
 - Em ambientes de servidor, valide GPO, permissões, Visual C++ Redistributable e drivers ODBC
@@ -86,6 +89,7 @@ Use esta seção como checklist operacional de compatibilidade.
 ### Windows 10/11 (modo completo)
 
 #### Inicialização
+
 - [ ] Aplicativo inicia sem erros
 - [ ] Log mostra `Runtime mode: Completo`
 - [ ] Janela abre com tamanho esperado
@@ -93,12 +97,14 @@ Use esta seção como checklist operacional de compatibilidade.
 - [ ] Banner de modo degradado não aparece
 
 #### Funcionalidades core
+
 - [ ] Dashboard carrega corretamente
 - [ ] Playground SQL (normal e streaming) funciona
 - [ ] Configuração/teste de conexão ODBC funciona
 - [ ] Conexão com hub Socket.IO funciona
 
 #### Funcionalidades desktop
+
 - [ ] Minimize-to-tray funciona
 - [ ] Close-to-tray funciona
 - [ ] Menu da bandeja funciona (Abrir/Sair)
@@ -107,16 +113,19 @@ Use esta seção como checklist operacional de compatibilidade.
 ### Windows Server 2012+ e Windows 8/8.1 (modo degradado)
 
 #### Inicialização
+
 - [ ] Aplicativo inicia sem crash
 - [ ] Log mostra `Runtime mode: Degradado`
 - [ ] Banner de modo degradado aparece com motivos
 
 #### Core (deve funcionar)
+
 - [ ] Dashboard e Playground funcionam
 - [ ] SQL streaming funciona
 - [ ] ODBC e Socket.IO funcionam
 
 #### Desktop (deve estar desabilitado/noop)
+
 - [ ] Sem ícone de bandeja
 - [ ] Minimize/close sem redirecionar para tray
 - [ ] Sem notificações locais
@@ -139,6 +148,7 @@ Use esta seção como checklist operacional de compatibilidade.
 ### Logs esperados
 
 #### Modo completo
+
 ```text
 Setting up dependencies with runtime mode: Completo
 Registering TrayManagerService
@@ -149,6 +159,7 @@ Notification service initialized
 ```
 
 #### Modo degradado
+
 ```text
 Setting up dependencies with runtime mode: Degradado
 Registering NoopTrayManagerService (degraded mode)
@@ -159,6 +170,7 @@ Notification service initialized
 ```
 
 #### Modo não suportado
+
 ```text
 Runtime mode: Não suportado
 Cannot run application: Sistema operacional abaixo do mínimo suportado ...

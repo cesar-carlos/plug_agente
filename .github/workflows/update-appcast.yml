@@ -69,7 +69,7 @@ jobs:
           echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
 
-      - name: Sign update (optional)
+      - name: Sign update
         id: sign
         env:
           DSA_PRIVATE_KEY: ${{ secrets.DSA_PRIVATE_KEY }}
@@ -89,6 +89,41 @@ jobs:
             echo "signature=" >> $GITHUB_OUTPUT
           fi
           rm -f dsa_priv.pem setup.exe
+
+      - name: Enforce signature policy
+        id: signature_policy
+        env:
+          DSA_PRIVATE_KEY: ${{ secrets.DSA_PRIVATE_KEY }}
+          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+
+          prerelease = os.environ.get("RELEASE_PRERELEASE", "false").strip().lower() == "true"
+          has_private_key = bool(os.environ.get("DSA_PRIVATE_KEY", "").strip())
+          has_signature = bool(os.environ.get("DSA_SIGNATURE", "").strip())
+          signature_required = not prerelease
+
+          if signature_required and not has_private_key:
+              print("Error: DSA_PRIVATE_KEY is required for production (non-pre-release) releases.")
+              sys.exit(1)
+
+          if signature_required and not has_signature:
+              print("Error: Failed to generate DSA signature for production release.")
+              sys.exit(1)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"required={'true' if signature_required else 'false'}\n")
+
+          print(
+              "Signature policy: "
+              f"required={signature_required}, "
+              f"has_private_key={has_private_key}, "
+              f"has_signature={has_signature}"
+          )
+          PYEOF
 
       - name: Checkout main branch
         run: |
@@ -162,6 +197,86 @@ jobs:
               tree.write(f, encoding="utf-8")
 
           print(f"Successfully updated appcast.xml with version {VERSION}" + (" (with DSA signature)" if DSA_SIGNATURE else ""))
+          PYEOF
+
+      - name: Validate appcast.xml
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          DSA_REQUIRED: ${{ steps.signature_policy.outputs.required }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          version = os.environ["VERSION"].strip()
+          dsa_required = os.environ.get("DSA_REQUIRED", "false").strip().lower() == "true"
+          sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+
+          tree = ET.parse("appcast.xml")
+          root = tree.getroot()
+          channel = root.find("channel")
+          if channel is None:
+              print("Error: appcast.xml missing <channel>.")
+              sys.exit(1)
+
+          matched_item = None
+          matched_enclosure = None
+          for item in channel.findall("item"):
+              enclosure = item.find("enclosure")
+              if enclosure is None:
+                  continue
+              sparkle_version = enclosure.get(f"{{{sparkle_ns}}}version") or enclosure.get("sparkle:version")
+              if sparkle_version == version:
+                  matched_item = item
+                  matched_enclosure = enclosure
+                  break
+
+          if matched_item is None or matched_enclosure is None:
+              print(f"Error: appcast.xml missing item for version {version}.")
+              sys.exit(1)
+
+          url = (matched_enclosure.get("url") or "").strip()
+          length = (matched_enclosure.get("length") or "").strip()
+          mime_type = (matched_enclosure.get("type") or "").strip()
+          os_name = (
+              matched_enclosure.get(f"{{{sparkle_ns}}}os")
+              or matched_enclosure.get("sparkle:os")
+              or ""
+          ).strip()
+          dsa_signature = (
+              matched_enclosure.get(f"{{{sparkle_ns}}}dsaSignature")
+              or matched_enclosure.get("sparkle:dsaSignature")
+              or ""
+          ).strip()
+
+          if not (url.startswith("https://") and url.lower().endswith(".exe")):
+              print(f"Error: invalid enclosure url: {url!r}")
+              sys.exit(1)
+
+          try:
+              if int(length) <= 0:
+                  raise ValueError
+          except ValueError:
+              print(f"Error: invalid enclosure length: {length!r}")
+              sys.exit(1)
+
+          if mime_type != "application/octet-stream":
+              print(f"Error: invalid enclosure type: {mime_type!r}")
+              sys.exit(1)
+
+          if os_name != "windows":
+              print(f"Error: invalid sparkle:os value: {os_name!r}")
+              sys.exit(1)
+
+          if dsa_required and not dsa_signature:
+              print("Error: missing sparkle:dsaSignature for production release.")
+              sys.exit(1)
+
+          print(
+              "appcast.xml validation passed "
+              f"(version={version}, dsa_required={dsa_required}, signature_present={bool(dsa_signature)})"
+          )
           PYEOF
 
       - name: Commit and push

@@ -14,6 +14,7 @@ Antes de começar, certifique-se de ter:
 4. **Espaço em disco** suficiente (mínimo 500 MB)
 
 Compatibilidade de sistema:
+
 - **Windows 10/11**: suporte completo (todos os recursos)
 - **Windows 8/8.1 e Windows Server 2012+**: suporte degradado (sem tray, notificações, auto-update)
 - **Abaixo de Windows 8 / Server 2012**: não suportado

@@ -1,6 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:plug_agente/application/use_cases/check_for_updates.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -24,6 +23,9 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
+  static const String _updateFeedNotConfiguredMessage =
+      'Auto-update nao esta configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
+
   String _lastUpdateCheck = AppStrings.configLastUpdateNever;
   String _appVersion = AppConstants.appVersion;
 
@@ -50,12 +52,21 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _checkUpdates() async {
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    if (!orchestrator.isAvailable) {
+      SettingsFeedback.showError(
+        context: context,
+        title: AppStrings.gsSectionUpdates,
+        message: _updateFeedNotConfiguredMessage,
+      );
+      return;
+    }
+
     setState(() {
       _lastUpdateCheck = AppStrings.configUpdatesChecking;
     });
 
-    final orchestrator = getIt<IAutoUpdateOrchestrator>();
-    final result = orchestrator.isAvailable ? await orchestrator.checkManual() : await getIt<CheckForUpdates>()();
+    final result = await orchestrator.checkManual();
 
     if (!mounted) {
       return;

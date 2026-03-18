@@ -30,8 +30,7 @@ version: 1.0.0+1
 python installer/update_version.py
 ```
 
-Este script atualiza `installer/setup.iss` e garante o
-`AUTO_UPDATE_FEED_URL` local para testes.
+Este script atualiza `installer/setup.iss`.
 
 ### 3. Build e Instalador
 
@@ -41,6 +40,9 @@ python installer/build_installer.py
 ```
 
 O instalador será criado em `installer/dist/PlugAgente-Setup-1.0.0.exe`.
+
+> O `build_installer.py` injeta automaticamente
+> `--dart-define=AUTO_UPDATE_FEED_URL=...` usando o valor do `.env`.
 
 ### 4. Commit e Push
 
@@ -72,26 +74,27 @@ git push origin v1.0.0
 
 1. Acesse: https://github.com/cesar-carlos/plug_agente/actions
 2. O workflow **"Update Appcast on Release"** executará automaticamente
-3. Aguarde conclusão (1–2 minutos)
+3. Aguarde conclusão (1-2 minutos)
+4. Em release de produção (não pre-release), confirme que o secret `DSA_PRIVATE_KEY` está configurado; sem ele, o workflow falha.
 
 ## Estrutura de Versão
 
 Formato: `MAJOR.MINOR.PATCH+BUILD`
 
-| Parte | Uso                               |
-|-------|-----------------------------------|
-| MAJOR | Mudanças incompatíveis            |
+| Parte | Uso |
+|-------|-----|
+| MAJOR | Mudanças incompatíveis |
 | MINOR | Novas funcionalidades compatíveis |
-| PATCH | Correções de bugs                 |
-| BUILD | Número de build (opcional)        |
+| PATCH | Correções de bugs |
+| BUILD | Número de build (opcional) |
 
 Consulte [version_strategy.md](version_strategy.md) para detalhes.
 
 ## Scripts Relacionados
 
-| Script                         | Propósito                                     |
-|--------------------------------|-----------------------------------------------|
-| `installer/update_version.py`  | Sincroniza versão em setup.iss e feed local  |
+| Script | Propósito |
+|--------|-----------|
+| `installer/update_version.py` | Sincroniza versão em setup.iss |
 | `installer/build_installer.py` | Build Flutter + compila instalador Inno Setup |
 
 ## Comandos Rápidos

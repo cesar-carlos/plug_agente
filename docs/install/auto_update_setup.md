@@ -11,11 +11,20 @@ O sistema de atualização automática permite que o aplicativo verifique e
 instale atualizações automaticamente. Utiliza o pacote `auto_updater`
 (WinSparkle no Windows) com feed no formato Sparkle.
 
+O auto-update só é ativado quando `AUTO_UPDATE_FEED_URL` está configurado e aponta para um feed Sparkle (URL terminando em `.xml`).
+
+Ordem de resolução da configuração:
+
+1. `--dart-define=AUTO_UPDATE_FEED_URL=...` no build (recomendado para release)
+2. `.env` em runtime (fallback para desenvolvimento/testes)
+
+Sem essa variável válida, o recurso fica desabilitado.
+
 Comportamento atual da aplicação:
 
 - checagem automática em background a cada 1 hora;
 - checagem inicial ao subir o app;
-- fluxo silencioso de download/aplicação (sem interação obrigatória).
+- fluxo silencioso de download/aplicação: download em background, sem diálogo modal bloqueante; a atualização é aplicada ao fechar o app (sem interação obrigatória).
 
 ## Opção Recomendada: GitHub Releases + GitHub Raw
 
@@ -36,9 +45,17 @@ O projeto está configurado para usar **GitHub Releases** para hospedar os execu
 2. Em "Workflow permissions", selecione "Read and write permissions"
 3. Marque "Allow GitHub Actions to create and approve pull requests"
 
-#### 3. Configurar Variável de Ambiente
+#### 3. Configurar URL do feed (build/runtime)
 
-Adicione no arquivo `.env`:
+**Opção recomendada (release):** usar `--dart-define` no build:
+
+```bash
+flutter build windows --release --dart-define=AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+```
+
+> Se usar `python installer/build_installer.py`, o script injeta automaticamente esse `--dart-define` com base no `.env`.
+
+**Fallback local (dev/teste):** adicionar no arquivo `.env`:
 
 ```env
 AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
@@ -58,17 +75,22 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
 5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
-### 4. Assinatura DSA (opcional, recomendado para produção)
+### 4. Assinatura DSA (obrigatória para releases de produção)
 
-O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates. Para habilitar:
+O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates.
+No workflow atual, releases de produção (não marcados como pre-release) falham se a assinatura DSA não estiver configurada e gerada.
+Em pre-releases, a assinatura continua opcional.
 
 1. **Gerar chaves** (uma vez):
+
    ```bash
    dart run auto_updater:generate_keys
    ```
+
    Isso cria `dsa_priv.pem` e `dsa_pub.pem`.
 
 2. **Adicionar chave pública ao app** – em `windows/runner/Runner.rc`:
+
    ```
    // WinSparkle
    DSAPub DSAPEM "../../dsa_pub.pem"

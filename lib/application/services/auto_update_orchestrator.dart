@@ -3,12 +3,15 @@ import 'dart:developer' as developer;
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
-class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestrator {
+class AutoUpdateOrchestrator
+    with UpdaterListener
+    implements IAutoUpdateOrchestrator {
   AutoUpdateOrchestrator();
 
   static const int _scheduledCheckIntervalSeconds = 3600;
@@ -17,17 +20,10 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   Completer<Result<bool>>? _manualCheckCompleter;
   bool _isManualCheck = false;
 
-  bool _isSparkleFeedUrl(String url) {
-    final normalized = url.trim().toLowerCase();
-    if (normalized.isEmpty) return false;
-    final withoutQuery = normalized.split('?').first;
-    return withoutQuery.endsWith('.xml');
-  }
-
   String? get _feedUrl {
-    final url = dotenv.env['AUTO_UPDATE_FEED_URL']?.trim();
-    if (url == null || url.isEmpty) return null;
-    return _isSparkleFeedUrl(url) ? url : null;
+    final url = resolveAutoUpdateFeedUrl(environment: dotenv.env);
+    if (url.isEmpty) return null;
+    return isSparkleFeedUrl(url) ? url : null;
   }
 
   @override
@@ -57,7 +53,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     try {
       autoUpdater.addListener(this);
       await autoUpdater.setFeedURL(feedUrl);
-      await autoUpdater.setScheduledCheckInterval(_scheduledCheckIntervalSeconds);
+      await autoUpdater.setScheduledCheckInterval(
+        _scheduledCheckIntervalSeconds,
+      );
       _isInitialized = true;
       developer.log(
         'Auto-update initialized (feed: $feedUrl, interval: ${_scheduledCheckIntervalSeconds}s)',
@@ -149,7 +147,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   }
 
   void _completeManualCheck(Result<bool> result) {
-    if (_isManualCheck && _manualCheckCompleter != null && !_manualCheckCompleter!.isCompleted) {
+    if (_isManualCheck &&
+        _manualCheckCompleter != null &&
+        !_manualCheckCompleter!.isCompleted) {
       _manualCheckCompleter!.complete(result);
     }
   }

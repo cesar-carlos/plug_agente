@@ -4,7 +4,9 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 ## Pré-requisitos
 
-1. `.env` com feed configurado:
+1. Feed configurado por uma das opções:
+   - build com `--dart-define=AUTO_UPDATE_FEED_URL=...` (recomendado para release)
+   - `.env` com feed configurado (fallback local)
 
    ```env
    AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
@@ -52,10 +54,11 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 ### Workflow não executou
 
 - Release criado como `Pre-release` (não dispara o fluxo esperado de produção).
+- Release de produção sem `DSA_PRIVATE_KEY` configurado (workflow falha por política de assinatura).
 
 ### Feed não configurado
 
-- Defina `AUTO_UPDATE_FEED_URL` no `.env`.
+- Defina `AUTO_UPDATE_FEED_URL` no build (`--dart-define`) ou no `.env`.
 
 ### appcast sem item
 

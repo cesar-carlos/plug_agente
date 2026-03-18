@@ -36,6 +36,7 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
@@ -328,10 +329,7 @@ Future<void> setupDependencies({
     ..registerLazySingleton(() => ConfigService(getIt<ConfigValidator>()))
     ..registerLazySingleton(
       () => UpdateService(
-        dotenv.env['AUTO_UPDATE_FEED_URL']?.trim().isNotEmpty ?? false
-            ? dotenv.env['AUTO_UPDATE_FEED_URL']!.trim()
-            : 'https://api.example.com/updates',
-        DioFactory.createDio(),
+        resolveAutoUpdateFeedUrl(environment: dotenv.env),
       ),
     )
     ..registerLazySingleton(() => ConnectToHub(getIt<ConnectionService>()))
