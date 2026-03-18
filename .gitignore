@@ -2,6 +2,9 @@
 .env
 .env.*
 
+# DSA private key (never commit; add to GitHub Secrets as DSA_PRIVATE_KEY)
+dsa_priv.pem
+
 # Miscellaneous
 *.class
 *.log
