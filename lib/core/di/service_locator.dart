@@ -410,7 +410,7 @@ Future<void> setupDependencies({
     )
     ..registerLazySingleton(
       () => ConnectionService(
-        () => getIt<ITransportClient>(),
+        getIt.call<ITransportClient>,
         getIt<IDatabaseGateway>(),
       ),
     )

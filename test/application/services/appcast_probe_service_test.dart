@@ -15,7 +15,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.contentType = ContentType('text', 'xml', charset: 'utf-8')
-          ..write('''<?xml version="1.0" encoding="UTF-8"?>
+          ..write('''
+<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <item>
@@ -29,7 +30,7 @@ void main() {
         await request.response.close();
       });
 
-      final service = AppcastProbeService();
+      const service = AppcastProbeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -52,7 +53,7 @@ void main() {
         await request.response.close();
       });
 
-      final service = AppcastProbeService();
+      const service = AppcastProbeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
