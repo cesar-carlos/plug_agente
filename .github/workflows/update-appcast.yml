@@ -81,12 +81,15 @@ jobs:
           dart pub get
           printf '%s\n' "$DSA_PRIVATE_KEY" > dsa_priv.pem
           curl -sL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o setup.exe "${{ steps.asset.outputs.url }}"
+          echo "Downloaded setup.exe: $(wc -c < setup.exe) bytes"
           SIGN_OUTPUT=$(dart run auto_updater:sign_update setup.exe 2>&1) || true
+          echo "Sign output (first 200 chars): ${SIGN_OUTPUT:0:200}"
           SIG=$(printf '%s' "$SIGN_OUTPUT" | python3 -c "
           import re, sys
           m = re.search(r'sparkle:dsaSignature=\"([^\"]*)\"', sys.stdin.read(), re.DOTALL)
           print(m.group(1).replace(chr(10), '') if m else '')
           ")
+          echo "Extracted signature length: ${#SIG}"
           echo "signature=${SIG}" >> $GITHUB_OUTPUT
           rm -f dsa_priv.pem setup.exe
 
