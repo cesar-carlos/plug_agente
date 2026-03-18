@@ -25,13 +25,24 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Fetch release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          TAG_NAME="${RELEASE_TAG:-${GITHUB_REF#refs/tags/}}"
+          git fetch origin tag "$TAG_NAME" 2>/dev/null || true
+
       - name: Get release info
         id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG_NAME#v}
+          TAG_NAME="${RELEASE_TAG:-${GITHUB_REF#refs/tags/}}"
+          VERSION_SHORT="${TAG_NAME#v}"
+          FULL_VERSION=$(git show "$TAG_NAME:pubspec.yaml" 2>/dev/null | grep -E '^\s*version:' | sed -E 's/^\s*version:\s*["]?([^"[:space:]]+)["]?.*/\1/' | tr -d ' \r' || echo "$VERSION_SHORT")
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION_SHORT" >> $GITHUB_OUTPUT
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -186,7 +197,9 @@ jobs:
           import sys
 
           TAG_NAME = "${{ steps.release.outputs.tag }}"
-          VERSION = "${{ steps.release.outputs.version }}"
+          VERSION_SHORT = "${{ steps.release.outputs.version }}"
+          FULL_VERSION = "${{ steps.release.outputs.full_version }}"
+          VERSION = FULL_VERSION if FULL_VERSION else VERSION_SHORT
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
           DSA_SIGNATURE = os.environ.get("DSA_SIGNATURE", "").strip()
@@ -205,7 +218,7 @@ jobs:
                   enclosure = item.find("enclosure")
                   if enclosure is not None:
                       sparkle_version = enclosure.get(f"{{{SPARKLE_NS}}}version") or enclosure.get("sparkle:version")
-                      if sparkle_version == VERSION:
+                      if sparkle_version in (VERSION, VERSION_SHORT):
                           channel.remove(item)
           else:
               root = ET.Element("rss")
@@ -246,7 +259,8 @@ jobs:
 
       - name: Validate appcast.xml
         env:
-          VERSION: ${{ steps.release.outputs.version }}
+          FULL_VERSION: ${{ steps.release.outputs.full_version }}
+          VERSION_SHORT: ${{ steps.release.outputs.version }}
           DSA_REQUIRED: ${{ steps.signature_policy.outputs.required }}
         run: |
           python3 << 'PYEOF'
@@ -254,7 +268,7 @@ jobs:
           import sys
           import xml.etree.ElementTree as ET
 
-          version = os.environ["VERSION"].strip()
+          version = (os.environ.get("FULL_VERSION") or os.environ.get("VERSION_SHORT", "")).strip()
           dsa_required = os.environ.get("DSA_REQUIRED", "false").strip().lower() == "true"
           sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 

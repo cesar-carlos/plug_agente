@@ -2,10 +2,10 @@
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
  <channel>
   <item>
-   <title>Version 1.0.11</title>
+   <title>Version 1.0.11+12</title>
    <pubDate>Wed, 18 Mar 2026 15:32:38 +0000</pubDate>
-   <description>Nova Versão 1.0.11 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.11/PlugAgente-Setup-1.0.11.exe" sparkle:version="1.0.11" sparkle:os="windows" length="35785404" type="application/octet-stream" sparkle:dsaSignature="MD0CHBedo7bKzBgoUtEe8xxZ4+UOMZdwzOP64Qb7UuoCHQCD/ztvsszBSAnWH8Gwhr+d2kBSMS5BQw7VIyCk" />
+   <description>Nova Versão 1.0.11+12 - Atualização automática via GitHub Release.</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.11/PlugAgente-Setup-1.0.11.exe" sparkle:version="1.0.11+12" sparkle:os="windows" length="35785404" type="application/octet-stream" sparkle:dsaSignature="MD0CHBedo7bKzBgoUtEe8xxZ4+UOMZdwzOP64Qb7UuoCHQCD/ztvsszBSAnWH8Gwhr+d2kBSMS5BQw7VIyCk" />
   </item>
   <title>Plug Agente Updates</title>
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
