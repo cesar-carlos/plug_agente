@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -69,6 +70,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcContractValidator _contractValidator = const RpcContractValidator();
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
   Map<String, dynamic>? _cachedOpenRpcDocument;
+  Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
   bool _hasReceivedCapabilities = false;
 
   @override
@@ -335,20 +337,23 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       _socket!.connect();
 
-      timeoutTimer = Timer(const Duration(seconds: 10), () {
-        if (!completer.isCompleted) {
-          _socket?.dispose();
-          _socket = null;
-          completer.complete(
-            Failure(
-              domain.NetworkFailure.withContext(
-                message: 'Connection timeout',
-                context: {'timeout': true, 'timeout_stage': 'transport'},
+      timeoutTimer = Timer(
+        const Duration(milliseconds: ConnectionConstants.socketConnectionTimeoutMs),
+        () {
+          if (!completer.isCompleted) {
+            _socket?.dispose();
+            _socket = null;
+            completer.complete(
+              Failure(
+                domain.NetworkFailure.withContext(
+                  message: 'Connection timeout',
+                  context: {'timeout': true, 'timeout_stage': 'transport'},
+                ),
               ),
-            ),
-          );
-        }
-      });
+            );
+          }
+        },
+      );
 
       return await completer.future;
     } on Exception catch (e) {
@@ -554,11 +559,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
       if (request.method == 'rpc.discover') {
         if (!_featureFlags.enableSocketNotificationsContract ||
             !request.isNotification) {
+          final doc = await _getOpenRpcDocument();
           final response = _attachRequestTraceToResponse(
             request,
             RpcResponse.success(
               id: request.id,
-              result: _loadOpenRpcDocument(),
+              result: doc,
             ),
           );
           await _emitRpcResponse(response);
@@ -764,13 +770,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
         if (request.method == 'rpc.discover') {
           if (!_featureFlags.enableSocketNotificationsContract ||
               !request.isNotification) {
+            final doc = await _getOpenRpcDocument();
             responses.add((
               index: index,
               response: _attachRequestTraceToResponse(
                 request,
                 RpcResponse.success(
                   id: request.id,
-                  result: _loadOpenRpcDocument(),
+                  result: doc,
                 ),
               ),
             ));
@@ -1128,6 +1135,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   void _closeSocket() {
     final socket = _socket;
     _socket = null;
+    _streamEmitters.clear();
     if (socket == null) {
       return;
     }
@@ -1662,19 +1670,26 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
   }
 
-  Map<String, dynamic> _loadOpenRpcDocument() {
+  Future<Map<String, dynamic>> _getOpenRpcDocument() async {
     final cached = _cachedOpenRpcDocument;
     if (cached != null) {
       return Map<String, dynamic>.from(cached);
     }
 
+    _openRpcDocumentLoadFuture ??= _loadOpenRpcDocumentAsync();
+    final doc = await _openRpcDocumentLoadFuture!;
+    return Map<String, dynamic>.from(doc);
+  }
+
+  Future<Map<String, dynamic>> _loadOpenRpcDocumentAsync() async {
     try {
       final file = File(
         '${Directory.current.path}\\docs\\communication\\openrpc.json',
       );
-      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final content = await file.readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
       _cachedOpenRpcDocument = json;
-      return Map<String, dynamic>.from(json);
+      return json;
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
         'Failed to load OpenRPC document from disk, using fallback',

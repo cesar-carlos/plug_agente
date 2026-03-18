@@ -21,6 +21,7 @@ class GeneralConfigSection extends StatelessWidget {
     required this.appVersion,
     this.startupSupported = true,
     this.startupError,
+    this.supportsAutoUpdate = true,
     super.key,
   });
 
@@ -40,6 +41,7 @@ class GeneralConfigSection extends StatelessWidget {
   final String appVersion;
   final bool startupSupported;
   final String? startupError;
+  final bool supportsAutoUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -96,20 +98,26 @@ class GeneralConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             const SettingsSectionTitle(title: AppStrings.gsSectionUpdates),
             const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${AppStrings.gsCheckUpdatesWithDate}\n$lastUpdateCheck',
-                    style: theme.typography.body,
+            if (supportsAutoUpdate)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${AppStrings.gsCheckUpdatesWithDate}\n$lastUpdateCheck',
+                      style: theme.typography.body,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(FluentIcons.refresh),
-                  onPressed: onCheckUpdates,
-                ),
-              ],
-            ),
+                  IconButton(
+                    icon: const Icon(FluentIcons.refresh),
+                    onPressed: onCheckUpdates,
+                  ),
+                ],
+              )
+            else
+              Text(
+                AppStrings.gsAutoUpdateNotSupported,
+                style: theme.typography.caption,
+              ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),

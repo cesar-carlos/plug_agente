@@ -12,11 +12,9 @@ import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
-import 'package:plug_agente/application/services/update_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
-import 'package:plug_agente/application/use_cases/check_for_updates.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
@@ -36,7 +34,6 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
-import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
@@ -194,7 +191,7 @@ Future<void> setupDependencies({
         getIt<IOdbcConnectionSettings>(),
       ),
     )
-    ..registerLazySingleton<IRetryManager>(() => RetryManager.instance)
+    ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(() => MetricsCollector.instance)
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IAuthorizationDecisionCache>(
@@ -329,11 +326,6 @@ Future<void> setupDependencies({
       () => ClientTokenValidationService(getIt<IAuthorizationPolicyResolver>()),
     )
     ..registerLazySingleton(() => ConfigService(getIt<ConfigValidator>()))
-    ..registerLazySingleton(
-      () => UpdateService(
-        resolveAutoUpdateFeedUrl(environment: dotenv.env),
-      ),
-    )
     ..registerLazySingleton(() => ConnectToHub(getIt<ConnectionService>()))
     ..registerLazySingleton(
       () => TestDbConnection(getIt<ConnectionService>()),
@@ -363,8 +355,9 @@ Future<void> setupDependencies({
     ..registerLazySingleton(
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
-    ..registerLazySingleton<IAutoUpdateOrchestrator>(AutoUpdateOrchestrator.new)
-    ..registerLazySingleton(() => CheckForUpdates(getIt<UpdateService>()))
+    ..registerLazySingleton<IAutoUpdateOrchestrator>(
+      () => AutoUpdateOrchestrator(getIt<RuntimeCapabilities>()),
+    )
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))
     ..registerLazySingleton(() => SaveAuthToken(getIt<AuthService>()))

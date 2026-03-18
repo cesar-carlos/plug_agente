@@ -195,6 +195,10 @@ class AppStrings {
   static const String gsToggleCloseToTray = 'Fechar para bandeja';
   static const String gsSectionUpdates = 'Atualizações';
   static const String gsCheckUpdatesWithDate = 'Verificar atualizações';
+  static const String gsAutoUpdateNotConfigured =
+      'Auto-update nao esta configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
+  static const String gsAutoUpdateNotSupported =
+      'Auto-update nao suportado neste modo de execucao.';
   static const String gsSectionAbout = 'Sobre';
   static const String gsLabelVersion = 'Versão';
   static const String gsLabelLicense = 'Licença';

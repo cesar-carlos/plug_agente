@@ -428,7 +428,7 @@ void main() {
         }),
       );
 
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       verifyNever(
         () => mockDispatcher.dispatch(

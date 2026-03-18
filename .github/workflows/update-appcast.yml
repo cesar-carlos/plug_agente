@@ -189,12 +189,14 @@ jobs:
       - name: Update appcast.xml
         env:
           DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
+          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           python3 << PYEOF
           import xml.etree.ElementTree as ET
           from datetime import datetime, timezone
           import os
           import sys
+          import html
 
           TAG_NAME = "${{ steps.release.outputs.tag }}"
           VERSION_SHORT = "${{ steps.release.outputs.version }}"
@@ -203,6 +205,7 @@ jobs:
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
           DSA_SIGNATURE = os.environ.get("DSA_SIGNATURE", "").strip()
+          RELEASE_BODY = (os.environ.get("RELEASE_BODY") or "").strip()
 
           if not ASSET_URL or not ASSET_SIZE:
               print("Error: Asset URL or size not found")
@@ -235,7 +238,10 @@ jobs:
           ET.SubElement(item, "title").text = f"Version {VERSION}"
           ET.SubElement(item, "pubDate").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
           desc = ET.SubElement(item, "description")
-          desc.text = f"Nova Versão {VERSION} - Atualização automática via GitHub Release."
+          if RELEASE_BODY:
+              desc.text = html.escape(RELEASE_BODY[:2000])
+          else:
+              desc.text = f"Nova Versão {VERSION} - Atualização automática via GitHub Release."
 
           enclosure = ET.SubElement(item, "enclosure")
           enclosure.set("url", ASSET_URL)
@@ -247,6 +253,30 @@ jobs:
               enclosure.set(f"{{{SPARKLE_NS}}}dsaSignature", DSA_SIGNATURE)
 
           channel.insert(0, item)
+
+          items = [c for c in channel if c.tag == "item"]
+          title_el = channel.find("title")
+          link_el = channel.find("link")
+          desc_el = channel.find("description")
+          for child in list(channel):
+              channel.remove(child)
+          if title_el is not None:
+              channel.append(title_el)
+          else:
+              el = ET.SubElement(channel, "title")
+              el.text = "Plug Agente Updates"
+          if link_el is not None:
+              channel.append(link_el)
+          else:
+              el = ET.SubElement(channel, "link")
+              el.text = "https://github.com/cesar-carlos/plug_agente/releases"
+          if desc_el is not None:
+              channel.append(desc_el)
+          else:
+              el = ET.SubElement(channel, "description")
+              el.text = "Atualizações do Plug Agente"
+          for i in items:
+              channel.append(i)
 
           tree = ET.ElementTree(root)
           ET.indent(tree, space=" ")

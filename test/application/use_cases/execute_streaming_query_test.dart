@@ -6,11 +6,9 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockStreamingDatabaseGateway extends Mock
-    implements IStreamingDatabaseGateway {}
+class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway {}
 
-class MockOdbcConnectionSettings extends Mock
-    implements IOdbcConnectionSettings {}
+class MockOdbcConnectionSettings extends Mock implements IOdbcConnectionSettings {}
 
 void main() {
   group('ExecuteStreamingQuery', () {

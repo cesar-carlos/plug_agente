@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
@@ -12,9 +13,9 @@ import 'package:window_manager/window_manager.dart';
 class AutoUpdateOrchestrator
     with UpdaterListener
     implements IAutoUpdateOrchestrator {
-  AutoUpdateOrchestrator();
+  AutoUpdateOrchestrator(this._capabilities);
 
-  static const int _scheduledCheckIntervalSeconds = 3600;
+  final RuntimeCapabilities _capabilities;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
@@ -27,7 +28,8 @@ class AutoUpdateOrchestrator
   }
 
   @override
-  bool get isAvailable => _feedUrl != null;
+  bool get isAvailable =>
+      _capabilities.supportsAutoUpdate && _feedUrl != null;
 
   @override
   Future<void> initialize() async {
@@ -50,15 +52,16 @@ class AutoUpdateOrchestrator
       return;
     }
 
+    final intervalSeconds =
+        resolveAutoUpdateCheckIntervalSeconds(environment: dotenv.env);
+
     try {
       autoUpdater.addListener(this);
       await autoUpdater.setFeedURL(feedUrl);
-      await autoUpdater.setScheduledCheckInterval(
-        _scheduledCheckIntervalSeconds,
-      );
+      await autoUpdater.setScheduledCheckInterval(intervalSeconds);
       _isInitialized = true;
       developer.log(
-        'Auto-update initialized (feed: $feedUrl, interval: ${_scheduledCheckIntervalSeconds}s)',
+        'Auto-update initialized (feed: $feedUrl, interval: ${intervalSeconds}s)',
         name: 'auto_update_orchestrator',
         level: 800,
       );
@@ -73,19 +76,34 @@ class AutoUpdateOrchestrator
     }
   }
 
+  static const int _maxBackgroundRetries = 3;
+  static const Duration _retryBaseDelay = Duration(seconds: 30);
+
   @override
   Future<void> checkInBackground() async {
     if (!isAvailable) return;
-    try {
-      await autoUpdater.checkForUpdates(inBackground: true);
-    } on Exception catch (e, s) {
-      developer.log(
-        'Background update check failed',
-        name: 'auto_update_orchestrator',
-        level: 900,
-        error: e,
-        stackTrace: s,
-      );
+    for (var attempt = 1; attempt <= _maxBackgroundRetries; attempt++) {
+      try {
+        await autoUpdater.checkForUpdates(inBackground: true);
+        return;
+      } on Exception catch (e, s) {
+        developer.log(
+          'Background update check failed (attempt $attempt/$_maxBackgroundRetries)',
+          name: 'auto_update_orchestrator',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+        if (attempt < _maxBackgroundRetries) {
+          final delay = _retryBaseDelay * attempt;
+          developer.log(
+            'Retrying in ${delay.inSeconds}s',
+            name: 'auto_update_orchestrator',
+            level: 800,
+          );
+          await Future<void>.delayed(delay);
+        }
+      }
     }
   }
 
@@ -93,6 +111,15 @@ class AutoUpdateOrchestrator
 
   @override
   Future<Result<bool>> checkManual() async {
+    if (!_capabilities.supportsAutoUpdate) {
+      return Failure<bool, Exception>(
+        domain.ConfigurationFailure.withContext(
+          message: 'Auto-update is not supported in current runtime mode',
+          context: {'operation': 'checkManual'},
+        ),
+      );
+    }
+
     final feedUrl = _feedUrl;
     if (feedUrl == null) {
       return Failure<bool, Exception>(

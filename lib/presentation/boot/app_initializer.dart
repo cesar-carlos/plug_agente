@@ -108,10 +108,21 @@ class AppInitializer {
     }
 
     await _initializeNotifications();
-    await _initializeAutoUpdate();
+    await _initializeAutoUpdate(capabilities);
   }
 
-  Future<void> _initializeAutoUpdate() async {
+  Future<void> _initializeAutoUpdate(
+    RuntimeCapabilities capabilities,
+  ) async {
+    if (!capabilities.supportsAutoUpdate) {
+      developer.log(
+        'Auto-update skipped: not supported in current runtime mode',
+        name: 'app_initializer',
+        level: 800,
+      );
+      return;
+    }
+
     try {
       final orchestrator = getIt<IAutoUpdateOrchestrator>();
       await orchestrator.initialize();

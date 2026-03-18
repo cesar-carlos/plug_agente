@@ -30,16 +30,15 @@ version: 1.0.0+1
 python installer/update_version.py
 ```
 
-Este script atualiza `installer/setup.iss`.
+Este script atualiza `installer/setup.iss` e `lib/core/constants/app_version.g.dart`. O `build_installer.py` executa esse passo automaticamente.
 
 ### 3. Build e Instalador
 
 ```bash
-flutter build windows --release
 python installer/build_installer.py
 ```
 
-O instalador será criado em `installer/dist/PlugAgente-Setup-1.0.0.exe`.
+O script executa `update_version.py`, `flutter build windows --release` e compila o Inno Setup. O instalador será criado em `installer/dist/PlugAgente-Setup-1.0.0.exe`.
 
 > O `build_installer.py` injeta automaticamente
 > `--dart-define=AUTO_UPDATE_FEED_URL=...` usando o valor do `.env`.
@@ -47,10 +46,12 @@ O instalador será criado em `installer/dist/PlugAgente-Setup-1.0.0.exe`.
 ### 4. Commit e Push
 
 ```bash
-git add pubspec.yaml installer/setup.iss
+git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
 git commit -m "chore: bump version to 1.0.0"
 git push origin main
 ```
+
+> O workflow `Sync Version on pubspec Change` pode atualizar automaticamente `setup.iss` e `app_version.g.dart` ao fazer push de alterações no `pubspec.yaml`.
 
 ### 5. Criar Tag e Enviar
 
@@ -94,14 +95,14 @@ Consulte [version_strategy.md](version_strategy.md) para detalhes.
 
 | Script | Propósito |
 |--------|-----------|
-| `installer/update_version.py` | Sincroniza versão em setup.iss |
-| `installer/build_installer.py` | Build Flutter + compila instalador Inno Setup |
+| `installer/update_version.py` | Sincroniza versão em setup.iss e app_version.g.dart |
+| `installer/build_installer.py` | Executa update_version.py, build Flutter e compila Inno Setup |
 
 ## Comandos Rápidos
 
 ```bash
 python installer/update_version.py
-git add pubspec.yaml installer/setup.iss
+git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
 git commit -m "chore: bump version to 1.0.0"
 git push origin main
 git tag v1.0.0

@@ -1,0 +1,42 @@
+name: Sync Version on pubspec Change
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pubspec.yaml'
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync version
+        run: python installer/update_version.py
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet installer/setup.iss lib/core/constants/app_version.g.dart; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add installer/setup.iss lib/core/constants/app_version.g.dart
+          git commit -m "chore: sync version from pubspec.yaml"
+          git push origin main

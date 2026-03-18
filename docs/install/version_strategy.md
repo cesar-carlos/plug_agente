@@ -19,6 +19,7 @@ Formato: **`MAJOR.MINOR.PATCH+BUILD`**
 |---------|-----------|
 | `pubspec.yaml` | Fonte única da versão (campo `version`) |
 | `installer/setup.iss` | Inno Setup (gerado por `update_version.py`) |
+| `lib/core/constants/app_version.g.dart` | Constante Dart (gerado por `update_version.py`) |
 | `.env` | `AUTO_UPDATE_FEED_URL` (opcional, configurado manualmente) |
 
 ## Tags Git
@@ -50,7 +51,11 @@ Resumo:
 
 | Script | Uso |
 |--------|-----|
-| `installer/update_version.py` | Sincroniza versão em setup.iss |
-| `installer/build_installer.py` | Build Flutter + compila Inno Setup |
+| `installer/update_version.py` | Sincroniza versão em `setup.iss` e `app_version.g.dart` a partir do `pubspec.yaml`. **Execute antes de cada build/release.** |
+| `installer/build_installer.py` | Executa `update_version.py`, build Flutter e compila Inno Setup |
+
+O `update_version.py` lê a versão completa (ex.: `1.0.11+12`) do `pubspec.yaml` e atualiza:
+- `installer/setup.iss`: `MyAppVersion` (versão curta, ex.: `1.0.11`)
+- `lib/core/constants/app_version.g.dart`: constante `appVersion` (versão completa)
 
 Preferência por scripts em Python para facilitar manutenção e portabilidade.

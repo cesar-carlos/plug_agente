@@ -1,4 +1,4 @@
-/// Constantes para configuração de conexões ODBC.
+/// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
   ConnectionConstants._();
 
@@ -10,4 +10,10 @@ class ConnectionConstants {
   static const int defaultMaxReconnectAttempts = 3;
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;
+
+  static const int socketConnectionTimeoutMs = 10000;
+  static const int socketAckTimeoutMs = 8000;
+  static const int socketReconnectionAttempts = 15;
+  static const int socketReconnectionDelayMs = 5000;
+  static const int socketReconnectionDelayMaxMs = 60000;
 }

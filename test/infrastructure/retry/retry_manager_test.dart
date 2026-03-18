@@ -8,7 +8,7 @@ void main() {
     late RetryManager retryManager;
 
     setUp(() {
-      retryManager = RetryManager.instance;
+      retryManager = RetryManager();
     });
 
     group('execute', () {
@@ -193,15 +193,5 @@ void main() {
       });
     });
 
-    group('singleton', () {
-      test('should return same instance', () {
-        // Act
-        final instance1 = RetryManager.instance;
-        final instance2 = RetryManager.instance;
-
-        // Assert
-        expect(identical(instance1, instance2), isTrue);
-      });
-    });
   });
 }

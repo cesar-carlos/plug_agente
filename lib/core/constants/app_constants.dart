@@ -1,6 +1,8 @@
+import 'package:plug_agente/core/constants/app_version.g.dart' as app_version;
+
 class AppConstants {
   static const String appName = 'Plug Database';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = app_version.appVersion;
 
   static const String defaultServerUrl = 'https://api.example.com';
   static const String defaultHubUrl = 'wss://api.example.com/hub';
@@ -8,7 +10,7 @@ class AppConstants {
   static const int connectionTimeoutSeconds = 30;
   static const int queryTimeoutSeconds = 60;
   static const int reconnectIntervalSeconds = 5;
-  static const int maxReconnectAttempts = 10;
+  static const int maxReconnectAttempts = 3;
 
   static const String databaseConfigFileName = 'database_config.json';
   static const String agentConfigFileName = 'agent_config.json';

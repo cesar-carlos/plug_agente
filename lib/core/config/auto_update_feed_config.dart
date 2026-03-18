@@ -17,3 +17,19 @@ bool isSparkleFeedUrl(String url) {
   final withoutQuery = normalized.split('?').first;
   return withoutQuery.endsWith('.xml');
 }
+
+const int _defaultCheckIntervalSeconds = 3600;
+const int _minimumCheckIntervalSeconds = 300;
+
+int resolveAutoUpdateCheckIntervalSeconds({
+  required Map<String, String> environment,
+}) {
+  final raw =
+      environment['AUTO_UPDATE_CHECK_INTERVAL_SECONDS']?.trim() ?? '';
+  if (raw.isEmpty) return _defaultCheckIntervalSeconds;
+  final parsed = int.tryParse(raw);
+  if (parsed == null || parsed < _minimumCheckIntervalSeconds) {
+    return _defaultCheckIntervalSeconds;
+  }
+  return parsed;
+}

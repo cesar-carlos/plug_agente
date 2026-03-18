@@ -6,10 +6,7 @@ import 'package:result_dart/result_dart.dart';
 
 /// Gerenciador de retries com exponential backoff.
 class RetryManager implements IRetryManager {
-  RetryManager._();
-
-  static RetryManager? _instance;
-  static RetryManager get instance => _instance ??= RetryManager._();
+  RetryManager();
 
   static const int _defaultMaxAttempts = 3;
   static const int _defaultInitialDelayMs = 500;

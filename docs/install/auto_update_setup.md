@@ -20,9 +20,11 @@ Ordem de resolução da configuração:
 
 Sem essa variável válida, o recurso fica desabilitado.
 
+Em modo degradado (Windows Server 2012/2016+), o auto-update não é suportado e a seção de atualizações exibe mensagem informativa.
+
 Comportamento atual da aplicação:
 
-- checagem automática em background a cada 1 hora;
+- checagem automática em background (intervalo configurável via `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, padrão 1 hora);
 - checagem inicial ao subir o app;
 - fluxo silencioso de download/aplicação: download em background, sem diálogo modal bloqueante; a atualização é aplicada ao fechar o app (sem interação obrigatória).
 

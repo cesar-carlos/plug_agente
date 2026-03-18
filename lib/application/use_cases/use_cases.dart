@@ -1,7 +1,6 @@
 export 'authorize_sql_operation.dart';
 export 'cancel_all_notifications.dart';
 export 'cancel_notification.dart';
-export 'check_for_updates.dart';
 export 'check_odbc_driver.dart';
 export 'connect_to_hub.dart';
 export 'create_client_token.dart';

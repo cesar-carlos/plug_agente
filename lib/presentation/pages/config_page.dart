@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -23,9 +24,6 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  static const String _updateFeedNotConfiguredMessage =
-      'Auto-update nao esta configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
-
   String _lastUpdateCheck = AppStrings.configLastUpdateNever;
   String _appVersion = AppConstants.appVersion;
 
@@ -51,13 +49,20 @@ class _ConfigPageState extends State<ConfigPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
+  String _getUpdateUnavailableMessage() {
+    final capabilities = getIt<RuntimeCapabilities>();
+    return capabilities.supportsAutoUpdate
+        ? AppStrings.gsAutoUpdateNotConfigured
+        : AppStrings.gsAutoUpdateNotSupported;
+  }
+
   Future<void> _checkUpdates() async {
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
       SettingsFeedback.showError(
         context: context,
         title: AppStrings.gsSectionUpdates,
-        message: _updateFeedNotConfiguredMessage,
+        message: _getUpdateUnavailableMessage(),
       );
       return;
     }
@@ -102,6 +107,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final themeProvider = context.watch<ThemeProvider>();
     final systemSettingsProvider = context.watch<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
+    final capabilities = getIt<RuntimeCapabilities>();
+    final supportsAutoUpdate = capabilities.supportsAutoUpdate;
 
     return ScaffoldPage(
       header: PageHeader(
@@ -123,6 +130,7 @@ class _ConfigPageState extends State<ConfigPage> {
             lastUpdateCheck: _lastUpdateCheck,
             startupSupported: startupSupported,
             startupError: systemSettingsProvider.lastError,
+            supportsAutoUpdate: supportsAutoUpdate,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
             onStartWithWindowsChanged: systemSettingsProvider.setStartWithWindows,
             onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,

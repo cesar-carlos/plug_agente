@@ -35,7 +35,7 @@ void main() {
       mockService = MockOdbcService();
       mockConfigRepository = MockAgentConfigRepository();
       mockConnectionPool = MockConnectionPool();
-      retryManager = RetryManager.instance;
+      retryManager = RetryManager();
       metrics = MetricsCollector.instance..clear();
       mockSettings = MockOdbcConnectionSettings();
       gateway = OdbcDatabaseGateway(
