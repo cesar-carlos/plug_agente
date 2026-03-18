@@ -79,15 +79,15 @@ jobs:
             exit 0
           fi
           dart pub get
-          echo "$DSA_PRIVATE_KEY" > dsa_priv.pem
-          curl -sL -o setup.exe "${{ steps.asset.outputs.url }}"
-          SIGN_OUTPUT=$(dart run auto_updater:sign_update setup.exe 2>/dev/null || true)
-          if [ -n "$SIGN_OUTPUT" ]; then
-            SIG=$(echo "$SIGN_OUTPUT" | sed -n 's/.*sparkle:dsaSignature="\([^"]*\)".*/\1/p')
-            echo "signature=${SIG}" >> $GITHUB_OUTPUT
-          else
-            echo "signature=" >> $GITHUB_OUTPUT
-          fi
+          printf '%s\n' "$DSA_PRIVATE_KEY" > dsa_priv.pem
+          curl -sL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o setup.exe "${{ steps.asset.outputs.url }}"
+          SIGN_OUTPUT=$(dart run auto_updater:sign_update setup.exe 2>&1) || true
+          SIG=$(printf '%s' "$SIGN_OUTPUT" | python3 -c "
+          import re, sys
+          m = re.search(r'sparkle:dsaSignature=\"([^\"]*)\"', sys.stdin.read(), re.DOTALL)
+          print(m.group(1).replace(chr(10), '') if m else '')
+          ")
+          echo "signature=${SIG}" >> $GITHUB_OUTPUT
           rm -f dsa_priv.pem setup.exe
 
       - name: Enforce signature policy
