@@ -256,6 +256,16 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void dispose() {
-    unawaited((trayManager..removeListener(this)).destroy());
+    unawaited(
+      (trayManager..removeListener(this))
+          .destroy()
+          .catchError(
+            (Object e, StackTrace? s) => _logger.w(
+              'Tray destroy failed',
+              error: e,
+              stackTrace: s,
+            ),
+          ),
+    );
   }
 }

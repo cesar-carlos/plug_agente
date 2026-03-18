@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
@@ -27,7 +28,6 @@ import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const _tokenClientFilterKey = 'client_token_list_client_filter';
 const _tokenStatusFilterKey = 'client_token_list_status_filter';
@@ -483,10 +483,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _restoreTokenListPreferences() async {
-    if (!getIt.isRegistered<SharedPreferences>()) {
+    if (!getIt.isRegistered<IAppSettingsStore>()) {
       return;
     }
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     try {
       final clientFilter = prefs.getString(_tokenClientFilterKey) ?? '';
       final statusFilter = _statusFilterFromStorage(
@@ -517,10 +517,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _saveTokenListPreferences() async {
-    if (!getIt.isRegistered<SharedPreferences>()) {
+    if (!getIt.isRegistered<IAppSettingsStore>()) {
       return;
     }
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     try {
       await prefs.setString(
         _tokenClientFilterKey,

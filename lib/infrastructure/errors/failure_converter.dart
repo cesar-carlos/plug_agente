@@ -69,20 +69,15 @@ class FailureConverter {
 
     // For ODBC/Database-related errors
     final errorString = exception.toString().toLowerCase();
-    if (errorString.contains('odbc') ||
-        errorString.contains('sql') ||
-        errorString.contains('database')) {
-      if (errorString.contains('connection') ||
-          errorString.contains('connect')) {
+    if (errorString.contains('odbc') || errorString.contains('sql') || errorString.contains('database')) {
+      if (errorString.contains('connection') || errorString.contains('connect')) {
         return ConnectionFailure.withContext(
           message: _extractMessage(exception),
           cause: exception,
           context: context,
         );
       }
-      if (errorString.contains('query') ||
-          errorString.contains('execute') ||
-          errorString.contains('syntax')) {
+      if (errorString.contains('query') || errorString.contains('execute') || errorString.contains('syntax')) {
         final isTimeout = errorString.contains('timeout');
         return QueryExecutionFailure.withContext(
           message: _extractMessage(exception),

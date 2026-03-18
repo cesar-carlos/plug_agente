@@ -177,12 +177,9 @@ class AppStrings {
   static const String configLastUpdateNever = 'Nunca verificado';
   static const String configLastUpdateManual = 'Verificação manual';
   static const String configUpdatesChecking = 'Verificando atualizações...';
-  static const String configUpdatesAvailable =
-      'Uma nova versão está disponível. Siga as instruções para atualizar.';
-  static const String configUpdatesNotAvailable =
-      'Você já está na versão mais recente.';
-  static const String configUpdatesTriggered =
-      'Verificação de atualizações iniciada.';
+  static const String configUpdatesAvailable = 'Uma nova versão está disponível. Siga as instruções para atualizar.';
+  static const String configUpdatesNotAvailable = 'Você já está na versão mais recente.';
+  static const String configUpdatesTriggered = 'Verificação de atualizações iniciada.';
   static const String configLastUpdatePrefix = 'Última verificação: ';
 
   // General Settings
@@ -197,8 +194,7 @@ class AppStrings {
   static const String gsCheckUpdatesWithDate = 'Verificar atualizações';
   static const String gsAutoUpdateNotConfigured =
       'Auto-update nao esta configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
-  static const String gsAutoUpdateNotSupported =
-      'Auto-update nao suportado neste modo de execucao.';
+  static const String gsAutoUpdateNotSupported = 'Auto-update nao suportado neste modo de execucao.';
   static const String gsSectionAbout = 'Sobre';
   static const String gsLabelVersion = 'Versão';
   static const String gsLabelLicense = 'Licença';

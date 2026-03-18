@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -40,12 +41,42 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    unawaited(windowManager.show());
-    unawaited(windowManager.focus());
+    unawaited(
+      windowManager.show().catchError((Object e, StackTrace? s) {
+        developer.log(
+          'Tray: failed to show window',
+          name: 'tray_service',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }),
+    );
+    unawaited(
+      windowManager.focus().catchError((Object e, StackTrace s) {
+        developer.log(
+          'Tray: failed to focus window',
+          name: 'tray_service',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }),
+    );
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(trayManager.popUpContextMenu());
+    unawaited(
+      trayManager.popUpContextMenu().catchError((Object e, StackTrace? s) {
+        developer.log(
+          'Tray: failed to pop up context menu',
+          name: 'tray_service',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }),
+    );
   }
 }

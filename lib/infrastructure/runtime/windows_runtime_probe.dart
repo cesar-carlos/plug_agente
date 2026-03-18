@@ -3,15 +3,11 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:win32/win32.dart';
-
-/// Interface para detecção de versão do Windows.
-abstract class IWindowsRuntimeProbe {
-  Future<Result<WindowsVersionInfo>> detect();
-}
 
 /// Implementação de detecção de versão do Windows usando Win32 API.
 class WindowsRuntimeProbe implements IWindowsRuntimeProbe {

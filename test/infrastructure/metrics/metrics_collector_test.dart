@@ -7,7 +7,7 @@ void main() {
     late MetricsCollector collector;
 
     setUp(() {
-      collector = MetricsCollector.instance;
+      collector = MetricsCollector();
       collector.clear();
     });
 
@@ -362,15 +362,5 @@ void main() {
       });
     });
 
-    group('singleton', () {
-      test('should return same instance', () {
-        // Act
-        final instance1 = MetricsCollector.instance;
-        final instance2 = MetricsCollector.instance;
-
-        // Assert
-        expect(identical(instance1, instance2), isTrue);
-      });
-    });
   });
 }

@@ -160,7 +160,6 @@ void main() {
         transportClient: fakeTransport,
         initialReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectDelay: const Duration(milliseconds: 20),
-        maxReconnectAttempts: 3,
       );
 
       await provider.connect('https://hub.test', 'agent-1');

@@ -1,8 +1,8 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
-import 'package:plug_agente/infrastructure/mappers/failure_to_rpc_error_mapper.dart';
 
 void main() {
   group('FailureToRpcErrorMapper', () {

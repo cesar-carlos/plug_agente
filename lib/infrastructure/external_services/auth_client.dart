@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -52,16 +54,24 @@ class AuthClient implements IAuthClient {
 
       for (final attempt in endpointAttempts) {
         final url = _normalizeUrl(serverUrl, attempt.path);
-        debugPrint(
-          'AuthClient: Attempting login to $url with username: ${credentials.username}',
-        );
+        if (kDebugMode) {
+          developer.log(
+            'AuthClient: Attempting login to $url',
+            name: 'auth_client',
+          );
+        }
         try {
           final response = await _dio.post<Map<String, dynamic>>(
             url,
             data: attempt.payload,
           );
 
-          debugPrint('AuthClient: Response status: ${response.statusCode}');
+          if (kDebugMode) {
+            developer.log(
+              'AuthClient: Response status: ${response.statusCode}',
+              name: 'auth_client',
+            );
+          }
 
           if (response.statusCode == AppConstants.httpStatusOk) {
             final data = response.data ?? const <String, dynamic>{};
@@ -75,9 +85,7 @@ class AuthClient implements IAuthClient {
             return Failure(parsed.exceptionOrNull()! as domain.Failure);
           }
 
-          return Failure(
-            domain.ServerFailure('Server error: ${response.statusCode}'),
-          );
+          return Failure(_mapHttpStatusToFailure(response.statusCode));
         } on DioException catch (e) {
           if (_shouldTryNextEndpoint(e)) {
             lastFallbackError = e;
@@ -93,8 +101,12 @@ class AuthClient implements IAuthClient {
 
       return Failure(domain.ValidationFailure('Login failed'));
     } on DioException catch (e, stackTrace) {
-      debugPrint(
-        'AuthClient: DioException: ${e.message}, Type: ${e.type}, Response: ${e.response?.statusCode}',
+      developer.log(
+        'AuthClient: DioException',
+        name: 'auth_client',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
       );
       if (e.response?.statusCode == AppConstants.httpStatusUnauthorized) {
         final data = e.response?.data as Map<String, dynamic>?;
@@ -116,7 +128,13 @@ class AuthClient implements IAuthClient {
         ),
       );
     } on Exception catch (e, stackTrace) {
-      debugPrint('AuthClient: Unexpected error: $e');
+      developer.log(
+        'AuthClient: Unexpected error',
+        name: 'auth_client',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
       return Failure(
         FailureConverter.convert(
           e,
@@ -160,9 +178,7 @@ class AuthClient implements IAuthClient {
             return Failure(parsed.exceptionOrNull()! as domain.Failure);
           }
 
-          return Failure(
-            domain.ServerFailure('Server error: ${response.statusCode}'),
-          );
+          return Failure(_mapHttpStatusToFailure(response.statusCode));
         } on DioException catch (e) {
           if (_shouldTryNextEndpoint(e)) {
             lastFallbackError = e;
@@ -207,6 +223,23 @@ class AuthClient implements IAuthClient {
         ),
       );
     }
+  }
+
+  domain.Failure _mapHttpStatusToFailure(int? statusCode) {
+    final code = statusCode ?? 0;
+    if (code == AppConstants.httpStatusNotFound) {
+      return domain.NotFoundFailure('Auth endpoint not found ($code)');
+    }
+    if (code == AppConstants.httpStatusTooManyRequests) {
+      return domain.ServerFailure.withContext(
+        message: 'Too many requests',
+        context: {'statusCode': code},
+      );
+    }
+    return domain.ServerFailure.withContext(
+      message: 'Server error',
+      context: {'statusCode': code},
+    );
   }
 
   bool _shouldTryNextEndpoint(DioException error) {

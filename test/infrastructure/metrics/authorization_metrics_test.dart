@@ -1,5 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/entities/authorization_metric.dart';
+import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 
 void main() {

@@ -15,7 +15,6 @@ import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.d
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -44,7 +43,6 @@ void main() {
     late MockTokenAuditStore mockTokenAuditStore;
 
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
       mockFeatureFlags = MockFeatureFlags();
       mockLocalDataSource = MockClientTokenLocalDataSource();
       mockJwksVerifier = MockJwtJwksVerifier();

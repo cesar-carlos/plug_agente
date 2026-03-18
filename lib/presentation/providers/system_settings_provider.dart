@@ -1,10 +1,10 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsProvider(
@@ -30,7 +30,7 @@ class SystemSettingsProvider extends ChangeNotifier {
   static const String _minimizeToTrayKey = 'settings.minimize_to_tray';
   static const String _closeToTrayKey = 'settings.close_to_tray';
 
-  final SharedPreferences _prefs;
+  final IAppSettingsStore _prefs;
   final WindowManagerService? _windowManagerService;
   final IStartupService? _startupService;
   late bool _startWithWindows;

@@ -23,6 +23,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -40,7 +41,6 @@ import 'package:plug_agente/presentation/providers/system_settings_provider.dart
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class AppRoot extends StatelessWidget {
@@ -58,16 +58,21 @@ class AppRoot extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (context) => RuntimeModeProvider(getIt<RuntimeCapabilities>()),
+          create: (context) =>
+              RuntimeModeProvider(getIt<RuntimeCapabilities>()),
         ),
         ChangeNotifierProvider(
-          create: (context) => ThemeProvider(getIt<SharedPreferences>()),
+          create: (context) => ThemeProvider(getIt<IAppSettingsStore>()),
         ),
         ChangeNotifierProvider(
           create: (context) => SystemSettingsProvider(
-            getIt<SharedPreferences>(),
-            windowManagerService: getIt.isRegistered<WindowManagerService>() ? getIt<WindowManagerService>() : null,
-            startupService: getIt.isRegistered<IStartupService>() ? getIt<IStartupService>() : null,
+            getIt<IAppSettingsStore>(),
+            windowManagerService: getIt.isRegistered<WindowManagerService>()
+                ? getIt<WindowManagerService>()
+                : null,
+            startupService: getIt.isRegistered<IStartupService>()
+                ? getIt<IStartupService>()
+                : null,
           ),
         ),
         ChangeNotifierProvider(
@@ -196,7 +201,9 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final configProvider = _configProvider;
     final connectionProvider = _connectionProvider;
     final authProvider = _authProvider;
-    if (configProvider == null || connectionProvider == null || authProvider == null) {
+    if (configProvider == null ||
+        connectionProvider == null ||
+        authProvider == null) {
       return;
     }
 
@@ -252,7 +259,9 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final serverUrl = normalizeServerUrl(config.serverUrl);
     final agentId = config.agentId.trim();
 
-    if (serverUrl.isEmpty || serverUrl.toLowerCase() == _defaultServerUrl || agentId.isEmpty) {
+    if (serverUrl.isEmpty ||
+        serverUrl.toLowerCase() == _defaultServerUrl ||
+        agentId.isEmpty) {
       return null;
     }
 
@@ -261,7 +270,10 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     final authUsername = config.authUsername?.trim();
     final authPassword = config.authPassword?.trim();
     final hasAuthCredentials =
-        authUsername != null && authUsername.isNotEmpty && authPassword != null && authPassword.isNotEmpty;
+        authUsername != null &&
+        authUsername.isNotEmpty &&
+        authPassword != null &&
+        authPassword.isNotEmpty;
 
     if (!hasAuthToken && !hasAuthCredentials) {
       return null;

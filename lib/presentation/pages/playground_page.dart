@@ -4,12 +4,13 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const _playgroundStreamingModeKey = 'playground_streaming_mode_enabled';
 
@@ -35,7 +36,11 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     super.initState();
     _queryController = TextEditingController();
     _focusNode = FocusNode();
-    unawaited(_restoreStreamingMode());
+    unawaited(
+      _restoreStreamingMode().catchError(
+        (Object e) => AppLogger.warning('Failed to restore streaming mode', e),
+      ),
+    );
 
     if (widget.configId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -50,7 +55,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   }
 
   Future<void> _restoreStreamingMode() async {
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     final enabled = prefs.getBool(_playgroundStreamingModeKey) ?? false;
     if (!mounted) {
       return;
@@ -59,7 +64,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   }
 
   Future<void> _saveStreamingMode(bool enabled) async {
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     await prefs.setBool(_playgroundStreamingModeKey, enabled);
   }
 
@@ -157,7 +162,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed &&
+        isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
@@ -222,7 +229,14 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       streamingModeEnabled: _streamingModeEnabled,
                       onStreamingModeChanged: (value) {
                         setState(() => _streamingModeEnabled = value);
-                        unawaited(_saveStreamingMode(value));
+                        unawaited(
+                          _saveStreamingMode(value).catchError(
+                            (Object e) => AppLogger.warning(
+                              'Failed to save streaming mode',
+                              e,
+                            ),
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -243,16 +257,29 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         hasPreviousPage: playgroundProvider.hasPreviousPage,
                         showPagination: playgroundProvider.hasPagination,
                         resultSetCount: playgroundProvider.resultSets.length,
-                        selectedResultSetIndex: playgroundProvider.selectedResultSetIndex,
+                        selectedResultSetIndex:
+                            playgroundProvider.selectedResultSetIndex,
                         onPreviousPage: playgroundProvider.hasPreviousPage
                             ? () => playgroundProvider.goToPreviousPage()
                             : null,
-                        onNextPage: playgroundProvider.hasNextPage ? () => playgroundProvider.goToNextPage() : null,
-                        onResultSetChanged: playgroundProvider.hasMultipleResultSets
+                        onNextPage: playgroundProvider.hasNextPage
+                            ? () => playgroundProvider.goToNextPage()
+                            : null,
+                        onResultSetChanged:
+                            playgroundProvider.hasMultipleResultSets
                             ? playgroundProvider.setSelectedResultSetIndex
                             : null,
                         onPageSizeChanged: (value) {
-                          unawaited(playgroundProvider.setPageSize(value));
+                          unawaited(
+                            playgroundProvider
+                                .setPageSize(value)
+                                .catchError(
+                                  (Object e) => AppLogger.warning(
+                                    'Failed to set page size',
+                                    e,
+                                  ),
+                                ),
+                          );
                         },
                         onShowErrorDetails: playgroundProvider.error != null
                             ? () => _showErrorModal(playgroundProvider.error!)

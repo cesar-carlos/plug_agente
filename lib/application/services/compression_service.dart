@@ -1,11 +1,11 @@
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/infrastructure/compression/gzip_compressor.dart';
+import 'package:plug_agente/domain/repositories/i_compressor.dart';
 import 'package:result_dart/result_dart.dart';
 
 class CompressionService {
   CompressionService(this._compressor);
-  final GzipCompressor _compressor;
+  final ICompressor _compressor;
 
   Future<Result<QueryResponse>> compress(QueryResponse response) async {
     final result = await _compressor.compress(response.data);

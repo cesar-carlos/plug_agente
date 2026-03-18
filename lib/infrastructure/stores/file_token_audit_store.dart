@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_slow_async_io
 
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -42,8 +43,14 @@ class FileTokenAuditStore implements ITokenAuditStore {
       final file = await _getAuditFile();
       final line = '${jsonEncode(event.toJson())}\n';
       await file.writeAsString(line, mode: FileMode.append);
-    } on Object catch (_) {
-      // Audit must not fail the main flow; swallow errors
+    } on Object catch (e, stackTrace) {
+      developer.log(
+        'Token audit record failed',
+        name: 'file_token_audit_store',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 }

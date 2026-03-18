@@ -1,10 +1,10 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 /// Feature flags for controlling rollout and experimentation.
 class FeatureFlags {
   FeatureFlags(this._prefs);
 
-  final SharedPreferences _prefs;
+  final IAppSettingsStore _prefs;
 
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';

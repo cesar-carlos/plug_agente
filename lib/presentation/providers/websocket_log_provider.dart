@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/utils/log_sanitizer.dart';
+
+const _maxMessagesDefault = 500;
 
 class WebSocketMessage {
   WebSocketMessage({
@@ -20,8 +24,15 @@ class WebSocketMessage {
         return const JsonEncoder.withIndent('  ').convert(data);
       }
       return data.toString();
-    } on Exception {
-      return data.toString();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'WebSocket message format failed',
+        name: 'websocket_log_provider',
+        level: 700,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return '[Unable to format]';
     }
   }
 
@@ -37,7 +48,7 @@ class WebSocketMessage {
 class WebSocketLogProvider extends ChangeNotifier {
   final List<WebSocketMessage> _messages = [];
   bool _isEnabled = true;
-  int _maxMessages = 500;
+  int _maxMessages = _maxMessagesDefault;
 
   List<WebSocketMessage> get messages => List.unmodifiable(_messages);
   bool get isEnabled => _isEnabled;
@@ -46,11 +57,12 @@ class WebSocketLogProvider extends ChangeNotifier {
   void addMessage(String direction, String event, dynamic data) {
     if (!_isEnabled) return;
 
+    final sanitizedData = LogSanitizer.sanitize(data);
     final message = WebSocketMessage(
       timestamp: DateTime.now(),
       direction: direction,
       event: event,
-      data: data,
+      data: sanitizedData,
     );
 
     _messages.insert(0, message);

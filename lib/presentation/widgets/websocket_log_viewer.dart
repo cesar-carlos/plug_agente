@@ -2,7 +2,8 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
+import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
@@ -78,11 +79,11 @@ class WebSocketLogViewer extends StatelessWidget {
   }
 
   AuthorizationMetricsSummary? _getAuthSummary() {
-    if (!getIt.isRegistered<AuthorizationMetricsCollector>()) {
+    if (!getIt.isRegistered<IAuthorizationMetricsCollector>()) {
       return null;
     }
 
-    final collector = getIt<AuthorizationMetricsCollector>();
+    final collector = getIt<IAuthorizationMetricsCollector>();
     return collector.getSummary();
   }
 }

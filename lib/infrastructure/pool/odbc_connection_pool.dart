@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -32,6 +33,18 @@ class OdbcConnectionPool implements IConnectionPool {
     final existingPoolId = _pools[connectionString];
     if (existingPoolId != null) {
       return Success(existingPoolId);
+    }
+
+    if (_pools.length >= ConnectionConstants.maxConnectionPools) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          Exception(
+            'Connection pool limit reached (${ConnectionConstants.maxConnectionPools}). '
+            'Recycle unused pools or reduce unique connection strings.',
+          ),
+          operation: 'pool_acquire',
+        ),
+      );
     }
 
     final inFlightCreation = _poolCreationFutures[connectionString];
@@ -213,20 +226,22 @@ class OdbcConnectionPool implements IConnectionPool {
     return Success(totalActive);
   }
 
-  /// Executa health check em todos os pools.
+  @override
   Future<Result<void>> healthCheckAll() async {
     final errors = <String>[];
 
+    var poolIndex = 0;
     for (final entry in _pools.entries) {
       final result = await _service.poolHealthCheck(entry.value);
       result.fold(
         (isHealthy) {
           if (!isHealthy) {
-            errors.add('Pool ${entry.key} unhealthy');
+            errors.add('Pool #$poolIndex unhealthy');
           }
         },
         (error) => errors.add(_odbcErrorMessage(error)),
       );
+      poolIndex++;
     }
 
     if (errors.isNotEmpty) {

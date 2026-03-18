@@ -51,6 +51,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
           .toString();
       _isLoading = false;
     });
+    final healthResult = await getIt<IConnectionPool>().healthCheckAll();
+    healthResult.fold(
+      (_) => AppLogger.info('Connection pool health check passed'),
+      (failure) => AppLogger.warning(
+        'Connection pool health check: $failure',
+      ),
+    );
   }
 
   Future<void> _saveSettings() async {

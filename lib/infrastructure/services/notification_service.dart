@@ -8,7 +8,8 @@ class NotificationService implements INotificationService {
   NotificationService() : _plugin = FlutterLocalNotificationsPlugin();
   final FlutterLocalNotificationsPlugin _plugin;
 
-  static const String _notificationGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
+  static const String _notificationGuid =
+      AppConstants.notificationAppUserModelGuid;
 
   domain.NotificationFailure _buildFailure(
     String message, {

@@ -37,6 +37,7 @@ import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
@@ -45,6 +46,8 @@ import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -122,8 +125,50 @@ Future<void> shutdownApp() async {
     await db.close();
   }
 
-  // 4. Encerrar worker ODBC (synchronous)
+  // 4. Dispose metrics collectors
+  if (getIt.isRegistered<MetricsCollector>()) {
+    getIt<MetricsCollector>().dispose();
+  }
+  if (getIt.isRegistered<ProtocolMetricsCollector>()) {
+    getIt<ProtocolMetricsCollector>().dispose();
+  }
+
+  // 5. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
+}
+
+Future<void> _migrateLegacyUserPreferences(
+  GlobalAppSettingsStore appSettings,
+) async {
+  try {
+    final legacyPrefs = await SharedPreferences.getInstance();
+    final keys = legacyPrefs.getKeys();
+    if (keys.isEmpty) {
+      return;
+    }
+
+    final legacyValues = <String, Object?>{};
+    for (final key in keys) {
+      legacyValues[key] = legacyPrefs.get(key);
+    }
+
+    final migratedCount = await appSettings.importMissingEntries(legacyValues);
+    if (migratedCount > 0) {
+      developer.log(
+        'Migrated $migratedCount legacy user preferences to global store',
+        name: 'service_locator',
+        level: 800,
+      );
+    }
+  } on Exception catch (e, stackTrace) {
+    developer.log(
+      'Failed to migrate legacy user preferences (continuing)',
+      name: 'service_locator',
+      level: 900,
+      error: e,
+      stackTrace: stackTrace,
+    );
+  }
 }
 
 Future<void> setupDependencies({
@@ -146,14 +191,16 @@ Future<void> setupDependencies({
 
   _odbcLocator.initialize(useAsync: true);
 
-  final prefs = await SharedPreferences.getInstance();
-  getIt.registerSingleton<SharedPreferences>(prefs);
+  final appSettings = GlobalAppSettingsStore();
+  await appSettings.initialize();
+  await _migrateLegacyUserPreferences(appSettings);
+  getIt.registerSingleton<IAppSettingsStore>(appSettings);
 
-  final odbcSettings = OdbcConnectionSettings(prefs);
+  final odbcSettings = OdbcConnectionSettings(appSettings);
   await odbcSettings.load();
   getIt.registerSingleton<IOdbcConnectionSettings>(odbcSettings);
 
-  final featureFlags = FeatureFlags(prefs);
+  final featureFlags = FeatureFlags(appSettings);
   getIt.registerSingleton<FeatureFlags>(featureFlags);
 
   // External
@@ -167,7 +214,14 @@ Future<void> setupDependencies({
       () {
         try {
           return FlutterSecureTokenSecretStore();
-        } on Object {
+        } on Object catch (e, stackTrace) {
+          developer.log(
+            'FlutterSecureTokenSecretStore init failed, using NoopTokenSecretStore',
+            name: 'service_locator',
+            level: 900,
+            error: e,
+            stackTrace: stackTrace,
+          );
           return NoopTokenSecretStore();
         }
       },
@@ -181,6 +235,9 @@ Future<void> setupDependencies({
     ..registerLazySingleton(ProtocolNegotiator.new)
     ..registerLazySingleton(ProtocolMetricsCollector.new)
     ..registerLazySingleton(AuthorizationMetricsCollector.new)
+    ..registerLazySingleton<IAuthorizationMetricsCollector>(
+      getIt.call,
+    )
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(getIt<AppDatabase>()),
     )
@@ -192,7 +249,8 @@ Future<void> setupDependencies({
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
-    ..registerLazySingleton(() => MetricsCollector.instance)
+    ..registerLazySingleton(MetricsCollector.new)
+    ..registerLazySingleton<IMetricsCollector>(() => getIt<MetricsCollector>())
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       InMemoryAuthorizationDecisionCache.new,
@@ -212,7 +270,7 @@ Future<void> setupDependencies({
         featureFlags: getIt<FeatureFlags>(),
         configRepository: getIt<IAgentConfigRepository>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
-        authMetrics: getIt<AuthorizationMetricsCollector>(),
+        authMetrics: getIt<IAuthorizationMetricsCollector>(),
         onIdempotencyFingerprintMismatch:
             getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
@@ -416,7 +474,7 @@ Future<void> setupDependencies({
   if (capabilities.supportsWindowManager) {
     developer.log('Registering AutoStartService', name: 'service_locator');
     getIt.registerLazySingleton<IStartupService>(
-      () => AutoStartService(prefs),
+      AutoStartService.new,
     );
   }
 

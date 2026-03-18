@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 
@@ -57,6 +58,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       _registered = true;
     }
     _chunkQueue.add(chunk);
+    while (_chunkQueue.length > ConnectionConstants.maxBackpressureChunkQueueSize) {
+      _chunkQueue.removeAt(0);
+    }
     _flush();
   }
 

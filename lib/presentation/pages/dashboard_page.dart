@@ -5,15 +5,15 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
+import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
-import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 enum _MetricsPeriod { last1h, last24h, all }
 
@@ -37,12 +37,16 @@ class _DashboardPageState extends State<DashboardPage> {
     super.initState();
     _setupWebSocketLogging();
     _updateMetrics();
-    unawaited(_restoreMetricsPeriod());
+    unawaited(
+      _restoreMetricsPeriod().catchError(
+        (Object e) => AppLogger.warning('Failed to restore metrics period', e),
+      ),
+    );
     _metricsTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _updateMetrics(),
     );
-    _metricsSubscription = MetricsCollector.instance.metricsStream.listen(
+    _metricsSubscription = getIt<IMetricsCollector>().metricsStream.listen(
       (_) => _updateMetrics(),
     );
   }
@@ -69,7 +73,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _updateMetrics() {
     if (!mounted) return;
     final summary = _buildSummaryForPeriod(
-      MetricsCollector.instance.metrics,
+      getIt<IMetricsCollector>().metrics,
       _selectedPeriod,
     );
     setState(() => _metricsSummary = summary);
@@ -88,13 +92,15 @@ class _DashboardPageState extends State<DashboardPage> {
         ? now.subtract(const Duration(hours: 1))
         : now.subtract(const Duration(hours: 24));
 
-    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
+    final filtered = metrics
+        .where((metric) => metric.timestamp.isAfter(cutoff))
+        .toList();
 
     return MetricsSummary.fromList(filtered);
   }
 
   Future<void> _restoreMetricsPeriod() async {
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     final storedValue = prefs.getString(_dashboardMetricsPeriodKey);
     final restored = _metricsPeriodFromStorage(storedValue);
     if (!mounted) {
@@ -106,7 +112,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _saveMetricsPeriod(_MetricsPeriod period) async {
-    final prefs = getIt<SharedPreferences>();
+    final prefs = getIt<IAppSettingsStore>();
     await prefs.setString(
       _dashboardMetricsPeriodKey,
       _metricsPeriodToStorage(period),
@@ -166,7 +172,14 @@ class _DashboardPageState extends State<DashboardPage> {
                     return;
                   }
                   setState(() => _selectedPeriod = period);
-                  unawaited(_saveMetricsPeriod(period));
+                  unawaited(
+                    _saveMetricsPeriod(period).catchError(
+                      (Object e) => AppLogger.warning(
+                        'Failed to save metrics period',
+                        e,
+                      ),
+                    ),
+                  );
                   _updateMetrics();
                 },
               ),
@@ -252,7 +265,9 @@ class _OdbcMetricsCard extends StatelessWidget {
                   icon: FluentIcons.error_badge,
                   label: AppStrings.dashboardMetricsErrors,
                   value: summary.failedQueries.toString(),
-                  valueColor: summary.failedQueries > 0 ? AppColors.error : null,
+                  valueColor: summary.failedQueries > 0
+                      ? AppColors.error
+                      : null,
                 ),
                 _MetricChip(
                   icon: FluentIcons.completed_solid,

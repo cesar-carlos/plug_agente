@@ -1,6 +1,6 @@
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const _keyPoolSize = 'odbc_pool_size';
 const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
@@ -10,11 +10,12 @@ const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
 /// Implementação de [IOdbcConnectionSettings] usando SharedPreferences.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
   OdbcConnectionSettings(this._prefs);
-  final SharedPreferences _prefs;
+  final IAppSettingsStore _prefs;
 
   int _poolSize = ConnectionConstants.defaultPoolSize;
   int _loginTimeoutSeconds = ConnectionConstants.defaultLoginTimeout.inSeconds;
-  int _maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
+  int _maxResultBufferMb =
+      ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
 
   @override
@@ -31,11 +32,17 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   Future<void> load() async {
-    _poolSize = _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
-    _loginTimeoutSeconds = _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds;
+    _poolSize =
+        _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
+    _loginTimeoutSeconds =
+        _prefs.getInt(_keyLoginTimeoutSeconds) ??
+        ConnectionConstants.defaultLoginTimeout.inSeconds;
     _maxResultBufferMb =
-        _prefs.getInt(_keyMaxResultBufferMb) ?? (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
-    _streamingChunkSizeKb = _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb;
+        _prefs.getInt(_keyMaxResultBufferMb) ??
+        (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
+    _streamingChunkSizeKb =
+        _prefs.getInt(_keyStreamingChunkSizeKb) ??
+        ConnectionConstants.defaultStreamingChunkSizeKb;
   }
 
   @override

@@ -61,9 +61,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
   bool _isWaitingHeartbeatAck = false;
   int _missedHeartbeats = 0;
 
-  static const Duration _heartbeatInterval = Duration(seconds: 20);
-  static const Duration _heartbeatAckTimeout = Duration(seconds: 8);
-  static const int _maxMissedHeartbeats = 2;
+  static Duration get _heartbeatInterval =>
+      ConnectionConstants.socketHeartbeatInterval;
+  static Duration get _heartbeatAckTimeout =>
+      ConnectionConstants.socketHeartbeatAckTimeout;
+  static int get _maxMissedHeartbeats =>
+      ConnectionConstants.socketMaxMissedHeartbeats;
   final RpcRequestGuard _rpcRequestGuard = RpcRequestGuard();
   final RpcRequestSchemaValidator _schemaValidator =
       const RpcRequestSchemaValidator();
@@ -168,7 +171,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'window_size': pull.windowSize,
       });
       _streamEmitters[pull.streamId]?.releaseChunks(pull.windowSize);
-    } on Object catch (_) {}
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Failed to handle rpc:stream.pull',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _emitRequestAck(dynamic requestId) {

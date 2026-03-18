@@ -1,1 +1,1 @@
-// Mappers serão exportados aqui quando criados
+export 'failure_to_rpc_error_mapper.dart';

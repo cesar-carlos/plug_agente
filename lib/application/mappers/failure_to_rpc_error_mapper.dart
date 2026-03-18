@@ -27,7 +27,6 @@ class FailureToRpcErrorMapper {
   /// Determines the RPC error code based on failure type.
   static int _getErrorCode(Failure failure, bool useTimeoutByStage) {
     if (failure is ValidationFailure) {
-      // Check context for SQL-specific validation
       if (failure.context['operation'] == 'sql_validation') {
         return RpcErrorCode.sqlValidationFailed;
       }
@@ -107,7 +106,6 @@ class FailureToRpcErrorMapper {
       return RpcErrorCode.methodNotFound;
     }
 
-    // Default to internal error
     return RpcErrorCode.internalError;
   }
 
@@ -126,13 +124,11 @@ class FailureToRpcErrorMapper {
       useTimeoutByStage,
     );
     final extra = <String, dynamic>{
-      // Legacy/problem-details-compatible fields for transition.
       'type': _getTypeUri(failure),
       'title': RpcErrorCode.getMessage(code),
       'status': RpcErrorCode.getStatus(code),
       'detail': failure.message,
       ...(instance != null ? {'instance': instance} : {}),
-      // Additional diagnostics.
       'recoverable': failure.isRecoverable,
       'failure_code': failure.code,
       ...safeContext,
@@ -149,7 +145,6 @@ class FailureToRpcErrorMapper {
     );
   }
 
-  /// Generates a type URI for the failure.
   static String _getTypeUri(Failure failure) {
     const baseUri = 'https://plugdb.dev/problems';
 
@@ -168,7 +163,6 @@ class FailureToRpcErrorMapper {
     return '$baseUri/internal-error';
   }
 
-  /// Returns reason override for timeout-by-stage classification.
   static String? _getTimeoutReasonOverride(
     Failure failure,
     int code,
@@ -185,18 +179,20 @@ class FailureToRpcErrorMapper {
     };
   }
 
-  /// Removes sensitive information from context.
-  static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
-    const sensitiveKeys = {
-      'password',
-      'token',
-      'secret',
-      'apiKey',
-      'connectionString',
+  static bool _isSensitiveKey(String key) {
+    final lower = key.toLowerCase();
+    const sensitive = {
+      'password', 'token', 'secret', 'apikey', 'api_key',
+      'accesstoken', 'access_token', 'refreshtoken', 'refresh_token',
+      'connectionstring', 'connection_string', 'authorization',
     };
+    if (sensitive.contains(lower)) return true;
+    return sensitive.any(lower.contains);
+  }
 
+  static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
     return Map.fromEntries(
-      context.entries.where((e) => !sensitiveKeys.contains(e.key)),
+      context.entries.where((e) => !_isSensitiveKey(e.key)),
     );
   }
 }

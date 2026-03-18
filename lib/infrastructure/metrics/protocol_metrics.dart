@@ -44,12 +44,11 @@ class ProtocolMetrics {
 
 /// Collector for protocol metrics.
 class ProtocolMetricsCollector {
-  factory ProtocolMetricsCollector() => _instance;
-  ProtocolMetricsCollector._internal();
-  static final ProtocolMetricsCollector _instance = ProtocolMetricsCollector._internal();
+  ProtocolMetricsCollector();
 
   final List<ProtocolMetrics> _metrics = [];
-  final StreamController<ProtocolMetrics> _metricsController = StreamController<ProtocolMetrics>.broadcast();
+  final StreamController<ProtocolMetrics> _metricsController =
+      StreamController<ProtocolMetrics>.broadcast();
 
   Stream<ProtocolMetrics> get metricsStream => _metricsController.stream;
 
@@ -58,16 +57,21 @@ class ProtocolMetricsCollector {
   void record(ProtocolMetrics metrics) {
     _metrics.add(metrics);
 
-    // Keep last 1000 metrics
     if (_metrics.length > 1000) {
       _metrics.removeAt(0);
     }
 
-    _metricsController.add(metrics);
+    if (!_metricsController.isClosed) {
+      _metricsController.add(metrics);
+    }
   }
 
   void clear() {
     _metrics.clear();
+  }
+
+  void dispose() {
+    _metricsController.close();
   }
 
   /// Gets metrics summary for a time period.

@@ -21,7 +21,8 @@ abstract class AgentConfigDataSource {
 
 @DriftDatabase(tables: [ConfigTable, ClientTokenCacheTable])
 class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection()) {
+  AppDatabase([QueryExecutor? executor])
+    : super(executor ?? _openConnection()) {
     _startWalMaintenance();
   }
 
@@ -166,7 +167,8 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 
   @override
-  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) =>
+      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 
   void _startWalMaintenance() {
     _walCheckpointTimer?.cancel();
@@ -193,8 +195,62 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'agent_config.db'));
+    final globalDir = Directory(_resolveGlobalDataDirectoryPath());
+    if (!await globalDir.exists()) {
+      await globalDir.create(recursive: true);
+    }
+
+    final file = File(p.join(globalDir.path, 'agent_config.db'));
+    await _migrateLegacyDatabaseIfNeeded(file);
     return NativeDatabase(file);
   });
+}
+
+String _resolveGlobalDataDirectoryPath() {
+  if (Platform.isWindows) {
+    final programData =
+        Platform.environment['ProgramData'] ??
+        Platform.environment['ALLUSERSPROFILE'];
+    if (programData != null && programData.isNotEmpty) {
+      return p.join(programData, 'PlugAgente');
+    }
+  }
+
+  return p.join(Directory.systemTemp.path, 'PlugAgente');
+}
+
+Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
+  if (await globalDbFile.exists()) {
+    return;
+  }
+
+  try {
+    final legacyFolder = await getApplicationDocumentsDirectory();
+    final legacyDb = File(p.join(legacyFolder.path, 'agent_config.db'));
+    if (!await legacyDb.exists()) {
+      return;
+    }
+
+    await legacyDb.copy(globalDbFile.path);
+    await _copySidecarFileIfExists(
+      source: File('${legacyDb.path}-wal'),
+      destination: File('${globalDbFile.path}-wal'),
+    );
+    await _copySidecarFileIfExists(
+      source: File('${legacyDb.path}-shm'),
+      destination: File('${globalDbFile.path}-shm'),
+    );
+  } on Exception {
+    // Best effort migration from legacy per-user path.
+  }
+}
+
+Future<void> _copySidecarFileIfExists({
+  required File source,
+  required File destination,
+}) async {
+  if (!await source.exists()) {
+    return;
+  }
+  await source.copy(destination.path);
 }

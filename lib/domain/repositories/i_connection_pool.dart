@@ -18,4 +18,7 @@ abstract class IConnectionPool {
 
   /// Retorna o número de conexões ativas no pool.
   Future<Result<int>> getActiveCount();
+
+  /// Executa health check em todos os pools.
+  Future<Result<void>> healthCheckAll();
 }

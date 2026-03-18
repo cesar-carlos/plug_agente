@@ -7,17 +7,19 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_policy_evaluator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
-import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AppInitializer {
-  const AppInitializer();
+  const AppInitializer({required this.runtimeProbe});
+
+  final IWindowsRuntimeProbe runtimeProbe;
 
   Future<AppBootstrapData> initialize(List<String> args) async {
     await dotenv.load(isOptional: true);
@@ -35,7 +37,7 @@ class AppInitializer {
   }
 
   Future<RuntimeCapabilities> _resolveRuntimeCapabilities() async {
-    final probe = WindowsRuntimeProbe();
+    final probe = runtimeProbe;
     const evaluator = RuntimePolicyEvaluator();
 
     final versionResult = await probe.detect();
@@ -151,7 +153,7 @@ class AppInitializer {
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
-      final prefs = getIt<SharedPreferences>();
+      final prefs = getIt<IAppSettingsStore>();
       final startMinimized = prefs.getBool('settings.start_minimized') ?? false;
 
       await windowManagerService.initialize(
@@ -198,7 +200,7 @@ class AppInitializer {
       );
 
       if (windowManagerService != null) {
-        final prefs = getIt<SharedPreferences>();
+        final prefs = getIt<IAppSettingsStore>();
         final minimizeToTray =
             prefs.getBool('settings.minimize_to_tray') ?? true;
         final closeToTray = prefs.getBool('settings.close_to_tray') ?? true;

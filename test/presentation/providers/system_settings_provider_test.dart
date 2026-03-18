@@ -3,23 +3,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class MockWindowManagerService extends Mock implements WindowManagerService {}
 
 class MockStartupService extends Mock implements IStartupService {}
 
 void main() {
-  late SharedPreferences prefs;
+  late InMemoryAppSettingsStore prefs;
   late MockWindowManagerService mockWindowManager;
   late MockStartupService mockStartupService;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    prefs = await SharedPreferences.getInstance();
+    prefs = InMemoryAppSettingsStore();
     mockWindowManager = MockWindowManagerService();
     mockStartupService = MockStartupService();
 

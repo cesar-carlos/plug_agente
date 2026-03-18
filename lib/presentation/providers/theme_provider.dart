@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 class ThemeProvider extends ChangeNotifier {
   ThemeProvider(this._prefs) {
@@ -8,7 +8,7 @@ class ThemeProvider extends ChangeNotifier {
 
   static const String _isDarkModeKey = 'settings.is_dark_mode_enabled';
 
-  final SharedPreferences _prefs;
+  final IAppSettingsStore _prefs;
   late bool _isDarkMode;
 
   bool get isDarkMode => _isDarkMode;

@@ -1,4 +1,5 @@
 import 'package:logger/logger.dart';
+import 'package:plug_agente/core/utils/log_sanitizer.dart';
 
 class AppLogger {
   static final Logger _instance = Logger(
@@ -26,7 +27,8 @@ class AppLogger {
   static void logQuery(String query, Map<String, dynamic>? parameters) {
     _instance.d('Query: $query');
     if (parameters != null && parameters.isNotEmpty) {
-      _instance.d('Parameters: $parameters');
+      final sanitized = LogSanitizer.sanitizeParameters(parameters);
+      _instance.d('Parameters: $sanitized');
     }
   }
 

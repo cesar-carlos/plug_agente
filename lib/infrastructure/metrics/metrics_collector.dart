@@ -3,27 +3,27 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/query_metrics.dart';
+import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 
 /// Servico para coletar e gerenciar metricas de performance.
-class MetricsCollector {
-  MetricsCollector._();
-
-  static MetricsCollector? _instance;
-  static MetricsCollector get instance => _instance ??= MetricsCollector._();
+class MetricsCollector implements IMetricsCollector {
+  MetricsCollector();
 
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
   static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
   static const String _transactionRollbackFailureCounter = 'transaction_rollback_failure';
   static const String _idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
 
+  static const int _maxMetrics = 10000;
+
   final List<QueryMetrics> _metrics = [];
   final _metricsController = StreamController<QueryMetrics>.broadcast();
   final Map<String, int> _eventCounters = <String, int>{};
 
-  /// Stream de novas metricas.
+  @override
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
 
-  /// Lista de todas as metricas coletadas.
+  @override
   List<QueryMetrics> get metrics => List.unmodifiable(_metrics);
 
   /// Numero de metricas coletadas.
@@ -85,7 +85,7 @@ class MetricsCollector {
     _addMetric(metric);
   }
 
-  /// Obtem resumo das ultimas N metricas.
+  @override
   MetricsSummary getSummary({int limit = 100}) {
     final recent = _metrics.length > limit ? _metrics.sublist(_metrics.length - limit) : _metrics;
 
@@ -110,6 +110,9 @@ class MetricsCollector {
   /// Registra metrica e notifica listeners.
   void _addMetric(QueryMetrics metric) {
     _metrics.add(metric);
+    if (_metrics.length > _maxMetrics) {
+      _metrics.removeRange(0, _metrics.length - _maxMetrics);
+    }
 
     developer.log(
       'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, '

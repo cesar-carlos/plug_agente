@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -14,12 +15,11 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
-import 'package:plug_agente/infrastructure/mappers/failure_to_rpc_error_mapper.dart';
-import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -33,7 +33,7 @@ class RpcMethodDispatcher {
     required FeatureFlags featureFlags,
     IAgentConfigRepository? configRepository,
     IIdempotencyStore? idempotencyStore,
-    AuthorizationMetricsCollector? authMetrics,
+    IAuthorizationMetricsCollector? authMetrics,
     void Function()? onIdempotencyFingerprintMismatch,
     IStreamingDatabaseGateway? streamingGateway,
     TransportLimits defaultLimits = const TransportLimits(),
@@ -71,7 +71,7 @@ class RpcMethodDispatcher {
   final FeatureFlags _featureFlags;
   final IAgentConfigRepository? _configRepository;
   final IIdempotencyStore? _idempotencyStore;
-  final AuthorizationMetricsCollector? _authMetrics;
+  final IAuthorizationMetricsCollector? _authMetrics;
   final void Function()? _onIdempotencyFingerprintMismatch;
   final IStreamingDatabaseGateway? _streamingGateway;
   final TransportLimits _defaultLimits;

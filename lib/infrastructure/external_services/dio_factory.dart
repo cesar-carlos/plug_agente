@@ -20,7 +20,11 @@ class DioFactory {
 
     if (_isInitializing) {
       while (_userAgent == null) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(
+          const Duration(
+            milliseconds: AppConstants.userAgentInitPollIntervalMs,
+          ),
+        );
       }
       return _userAgent!;
     }
@@ -92,12 +96,7 @@ class DioFactory {
       ),
     );
 
-    dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-      ),
-    );
+    dio.interceptors.add(LogInterceptor());
 
     return dio;
   }
