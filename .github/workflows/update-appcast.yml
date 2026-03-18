@@ -44,29 +44,26 @@ jobs:
           ASSET_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets")
 
-          ASSET_URL=$(echo "$ASSET_RESPONSE" | python3 -c "
+          ASSET_CHOSEN=$(echo "$ASSET_RESPONSE" | python3 -c "
           import sys, json
           assets = json.load(sys.stdin)
           exes = [a for a in assets if a['name'].endswith('.exe')]
           preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
           chosen = (preferred or exes)[0] if (preferred or exes) else None
-          print(chosen['browser_download_url'] if chosen else '')
+          if chosen:
+              print(chosen['url'] + '|' + chosen['browser_download_url'] + '|' + str(chosen.get('size', '')))
           " 2>/dev/null || echo "")
-          ASSET_SIZE=$(echo "$ASSET_RESPONSE" | python3 -c "
-          import sys, json
-          assets = json.load(sys.stdin)
-          exes = [a for a in assets if a['name'].endswith('.exe')]
-          preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
-          chosen = (preferred or exes)[0] if (preferred or exes) else None
-          print(chosen['size'] if chosen else '')
-          " 2>/dev/null || echo "")
+          ASSET_API_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f1)
+          ASSET_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f2)
+          ASSET_SIZE=$(echo "$ASSET_CHOSEN" | cut -d'|' -f3)
 
-          if [ -z "$ASSET_URL" ]; then
+          if [ -z "$ASSET_URL" ] || [ -z "$ASSET_API_URL" ]; then
             echo "Error: No PlugAgente-Setup-*.exe asset found in release"
             exit 1
           fi
 
           echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
+          echo "api_url=$ASSET_API_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
 
       - name: Sign update
@@ -80,8 +77,14 @@ jobs:
           fi
           dart pub get
           printf '%s\n' "$DSA_PRIVATE_KEY" > dsa_priv.pem
-          curl -sL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o setup.exe "${{ steps.asset.outputs.url }}"
-          echo "Downloaded setup.exe: $(wc -c < setup.exe) bytes"
+          curl -sL -H "Accept: application/octet-stream" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o setup.exe "${{ steps.asset.outputs.api_url }}"
+          DOWNLOAD_SIZE=$(wc -c < setup.exe)
+          echo "Downloaded setup.exe: $DOWNLOAD_SIZE bytes"
+          if [ "$DOWNLOAD_SIZE" -lt 1000000 ]; then
+            echo "Error: Download too small, likely failed. First 500 chars:"
+            head -c 500 setup.exe | cat -v
+            exit 1
+          fi
           SIGN_OUTPUT=$(dart run auto_updater:sign_update setup.exe 2>&1) || true
           echo "Sign output (first 200 chars): ${SIGN_OUTPUT:0:200}"
           SIG=$(printf '%s' "$SIGN_OUTPUT" | python3 -c "
