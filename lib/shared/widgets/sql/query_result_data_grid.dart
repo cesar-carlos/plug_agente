@@ -66,7 +66,8 @@ class QueryResultDataGrid extends StatelessWidget {
 
     try {
       return columnMetadata!.firstWhere(
-        (col) => (col['name'] as String?)?.toLowerCase() == columnName.toLowerCase(),
+        (col) =>
+            (col['name'] as String?)?.toLowerCase() == columnName.toLowerCase(),
       );
     } on Exception {
       return null;

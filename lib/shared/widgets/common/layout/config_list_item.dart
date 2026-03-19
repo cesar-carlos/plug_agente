@@ -45,14 +45,18 @@ class ConfigListItem extends StatelessWidget {
             Text(
               subtitle!,
               style: context.bodyMuted.copyWith(
-                color: isSelected ? AppColors.primary.withValues(alpha: 0.7) : textColor?.withValues(alpha: 0.7),
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.7)
+                    : textColor?.withValues(alpha: 0.7),
               ),
             ),
           if (trailing != null)
             Text(
               trailing!,
               style: context.bodyMuted.copyWith(
-                color: isSelected ? AppColors.primary.withValues(alpha: 0.7) : textColor?.withValues(alpha: 0.7),
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.7)
+                    : textColor?.withValues(alpha: 0.7),
               ),
             ),
         ],

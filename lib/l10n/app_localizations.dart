@@ -301,6 +301,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Monitor your agent status and database connections here.'**
   String get dashboardDescription;
+
+  /// No description provided for @odbcDriverNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The configured ODBC driver was not found on this computer. Review the driver and data source in settings.'**
+  String get odbcDriverNotFound;
+
+  /// No description provided for @odbcAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not authenticate to the database. Check username, password and permissions.'**
+  String get odbcAuthFailed;
+
+  /// No description provided for @odbcServerUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect to the database server. Check host, port, VPN and network availability.'**
+  String get odbcServerUnreachable;
+
+  /// No description provided for @odbcConnectionTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to the database took longer than expected. Confirm the server is accessible and try again.'**
+  String get odbcConnectionTimeout;
+
+  /// No description provided for @odbcConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not establish connection to the database.'**
+  String get odbcConnectionFailed;
+
+  /// No description provided for @odbcDetailPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'ODBC detail'**
+  String get odbcDetailPrefix;
 }
 
 class _AppLocalizationsDelegate

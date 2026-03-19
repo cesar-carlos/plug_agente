@@ -32,7 +32,8 @@ class TraceContextValidator {
 
       final key = trimmed.substring(0, separatorIndex);
       final entryValue = trimmed.substring(separatorIndex + 1);
-      if (!_tracestateKeyPattern.hasMatch(key) || !_isValidTraceStateValue(entryValue)) {
+      if (!_tracestateKeyPattern.hasMatch(key) ||
+          !_isValidTraceStateValue(entryValue)) {
         return false;
       }
     }

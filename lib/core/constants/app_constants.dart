@@ -32,7 +32,8 @@ class AppConstants {
   static const int httpStatusTooManyRequests = 429;
 
   static const int userAgentInitPollIntervalMs = 10;
-  static const String notificationAppUserModelGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
+  static const String notificationAppUserModelGuid =
+      'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
 
   static const Duration windowShowInitialDelay = Duration(milliseconds: 100);
   static const Duration windowShowRestoreDelay = Duration(milliseconds: 200);

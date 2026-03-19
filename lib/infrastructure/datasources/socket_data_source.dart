@@ -14,7 +14,9 @@ class SocketDataSource {
         .setAckTimeout(ConnectionConstants.socketAckTimeoutMs)
         .setReconnectionAttempts(ConnectionConstants.socketReconnectionAttempts)
         .setReconnectionDelay(ConnectionConstants.socketReconnectionDelayMs)
-        .setReconnectionDelayMax(ConnectionConstants.socketReconnectionDelayMaxMs)
+        .setReconnectionDelayMax(
+          ConnectionConstants.socketReconnectionDelayMaxMs,
+        )
         .setRandomizationFactor(0.2)
         .setExtraHeaders({'Connection': 'Upgrade'});
 

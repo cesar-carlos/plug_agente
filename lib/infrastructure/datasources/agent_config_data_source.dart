@@ -3,7 +3,8 @@ import 'package:drift/drift.dart';
 @DataClassName('ConfigData')
 class ConfigTable extends Table {
   TextColumn get id => text()();
-  TextColumn get serverUrl => text().withDefault(const Constant('https://api.example.com'))();
+  TextColumn get serverUrl =>
+      text().withDefault(const Constant('https://api.example.com'))();
   TextColumn get agentId => text().withDefault(const Constant(''))();
   TextColumn get authToken => text().nullable()();
   TextColumn get refreshToken => text().nullable()();
@@ -37,7 +38,8 @@ class ClientTokenCacheTable extends Table {
   TextColumn get payloadJson => text().withDefault(const Constant('{}'))();
   BoolColumn get allTables => boolean().withDefault(const Constant(false))();
   BoolColumn get allViews => boolean().withDefault(const Constant(false))();
-  BoolColumn get allPermissions => boolean().withDefault(const Constant(false))();
+  BoolColumn get allPermissions =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get rulesJson => text().withDefault(const Constant('[]'))();
   DateTimeColumn get syncedAt => dateTime()();
   TextColumn get tokenHash => text().withDefault(const Constant(''))();

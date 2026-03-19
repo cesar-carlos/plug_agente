@@ -84,7 +84,8 @@ class OdbcFailureMapper {
         'connectionFailed': true,
         'retryable': _isRetryableConnection(sqlState),
         'reason': 'database_connection_failed',
-        'user_message': 'Nao foi possivel estabelecer conexao com o banco de dados.',
+        'user_message':
+            'Nao foi possivel estabelecer conexao com o banco de dados.',
       },
     );
   }
@@ -121,7 +122,8 @@ class OdbcFailureMapper {
           'timeout': true,
           'timeout_stage': 'sql',
           'reason': 'query_timeout',
-          'user_message': 'A consulta demorou mais do que o permitido para concluir.',
+          'user_message':
+              'A consulta demorou mais do que o permitido para concluir.',
         },
       );
     }
@@ -148,12 +150,14 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'reason': 'sql_permission_denied',
-          'user_message': 'A consulta foi recusada por falta de permissao no banco de dados.',
+          'user_message':
+              'A consulta foi recusada por falta de permissao no banco de dados.',
         },
       );
     }
 
-    if (_isSyntaxOrValidationError(sqlState, detail) || error is ValidationError) {
+    if (_isSyntaxOrValidationError(sqlState, detail) ||
+        error is ValidationError) {
       return ValidationFailure.withContext(
         message: detail,
         cause: error,
@@ -174,7 +178,8 @@ class OdbcFailureMapper {
       context: {
         ...baseContext,
         'reason': 'sql_execution_failed',
-        'user_message': 'O banco de dados retornou um erro ao executar a consulta.',
+        'user_message':
+            'O banco de dados retornou um erro ao executar a consulta.',
       },
     );
   }
@@ -189,7 +194,9 @@ class OdbcFailureMapper {
     final isExhausted = _isPoolExhausted(detail);
 
     return ConnectionFailure.withContext(
-      message: isExhausted ? 'Pool de conexoes ODBC esgotado' : 'Falha ao obter conexao do pool ODBC',
+      message: isExhausted
+          ? 'Pool de conexoes ODBC esgotado'
+          : 'Falha ao obter conexao do pool ODBC',
       cause: error,
       context: {
         ...baseContext,
@@ -268,14 +275,24 @@ class OdbcFailureMapper {
   }
 
   static bool _isDriverMissing(String? sqlState, String detail) {
+    // 08xxx = connection/server errors (e.g. 08001 "Database server not found")
+    if (sqlState != null && sqlState.startsWith('08')) {
+      return false;
+    }
+
     if (sqlState == 'IM002' || sqlState == 'IM003') {
       return true;
     }
 
     final normalized = detail.toLowerCase();
+    // "Database server not found" = server unreachable, not driver missing
+    if (normalized.contains('database server not found')) {
+      return false;
+    }
+
     return normalized.contains('data source name not found') ||
         normalized.contains('no default driver specified') ||
-        normalized.contains('driver') && normalized.contains('not found') ||
+        (normalized.contains('driver') && normalized.contains('not found')) ||
         normalized.contains("can't open lib") ||
         normalized.contains('library not found');
   }
@@ -310,7 +327,8 @@ class OdbcFailureMapper {
     }
 
     final normalized = detail.toLowerCase();
-    return normalized.contains('server does not exist') ||
+    return normalized.contains('database server not found') ||
+        normalized.contains('server does not exist') ||
         normalized.contains('could not connect') ||
         normalized.contains('network-related') ||
         normalized.contains('connection refused') ||
@@ -353,7 +371,10 @@ class OdbcFailureMapper {
   }
 
   static bool _isTransientQueryFailure(String? sqlState, String detail) {
-    if (sqlState != null && (sqlState.startsWith('40') || sqlState == 'HY008' || sqlState == 'HY117')) {
+    if (sqlState != null &&
+        (sqlState.startsWith('40') ||
+            sqlState == 'HY008' ||
+            sqlState == 'HY117')) {
       return true;
     }
 

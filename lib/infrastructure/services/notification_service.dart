@@ -29,7 +29,8 @@ class NotificationService implements INotificationService {
       const initializationSettings = InitializationSettings(
         windows: WindowsInitializationSettings(
           appName: AppConstants.appName,
-          appUserModelId: 'PlugDatabase.PlugAgente.App.${AppConstants.appVersion}',
+          appUserModelId:
+              'PlugDatabase.PlugAgente.App.${AppConstants.appVersion}',
           guid: _notificationGuid,
         ),
       );

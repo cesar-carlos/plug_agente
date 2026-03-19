@@ -7,6 +7,7 @@ class ConnectionConstants {
   static const int defaultMaxResultBufferBytes = 32 * 1024 * 1024;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
+
   /// App-level reconnect attempts (ConnectionProvider). Distinct from
   /// [socketReconnectionAttempts] which is the Socket.IO client internal limit.
   static const int defaultMaxReconnectAttempts = 3;
@@ -15,6 +16,7 @@ class ConnectionConstants {
 
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;
+
   /// Socket.IO client internal reconnection attempts (transport-level).
   static const int socketReconnectionAttempts = 15;
   static const int socketReconnectionDelayMs = 5000;

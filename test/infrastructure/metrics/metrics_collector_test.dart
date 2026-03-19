@@ -361,6 +361,5 @@ void main() {
         expect(json.first['success'], isTrue);
       });
     });
-
   });
 }

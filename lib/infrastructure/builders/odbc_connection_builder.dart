@@ -1,5 +1,6 @@
 import 'package:odbc_fast/odbc_fast.dart';
 
+import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 
@@ -47,14 +48,13 @@ class OdbcConnectionBuilder {
   }
 
   static String _buildSybaseAnywhere(DatabaseConfig config) {
-    // SQL Anywhere não tem builder no odbc_fast, usar connection string manual
-    final buffer = StringBuffer('Driver={SQL Anywhere}')
-      ..write(';Server=${config.server}')
-      ..write(';Port=${config.port}')
-      ..write(';Database=${config.database}')
-      ..write(';Uid=${config.username}')
-      ..write(';Pwd=${config.password}');
-
-    return buffer.toString();
+    return SqlAnywhereConnectionString.build(
+      driverName: config.driverName,
+      username: config.username,
+      database: config.database,
+      host: config.server,
+      port: config.port,
+      password: config.password,
+    );
   }
 }

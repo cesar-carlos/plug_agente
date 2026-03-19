@@ -347,7 +347,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.connect();
 
       timeoutTimer = Timer(
-        const Duration(milliseconds: ConnectionConstants.socketConnectionTimeoutMs),
+        const Duration(
+          milliseconds: ConnectionConstants.socketConnectionTimeoutMs,
+        ),
         () {
           if (!completer.isCompleted) {
             _socket?.dispose();

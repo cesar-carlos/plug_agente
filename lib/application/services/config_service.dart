@@ -1,4 +1,6 @@
 import 'package:plug_agente/application/validation/config_validator.dart';
+import 'package:plug_agente/core/constants/odbc_drivers.dart';
+import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:result_dart/result_dart.dart';
@@ -23,7 +25,10 @@ class ConfigService {
   }
 
   String _buildSqlServerConnectionString(Config config) {
-    final buffer = StringBuffer('DRIVER={SQL Server};')
+    final driver = config.odbcDriverName.isNotEmpty
+        ? config.odbcDriverName
+        : 'ODBC Driver 17 for SQL Server';
+    final buffer = StringBuffer('DRIVER={$driver};')
       ..write('SERVER=${config.host},${config.port};')
       ..write('DATABASE=${config.databaseName};')
       ..write('UID=${config.username}');
@@ -34,7 +39,10 @@ class ConfigService {
   }
 
   String _buildPostgreSqlConnectionString(Config config) {
-    final buffer = StringBuffer('DRIVER={PostgreSQL Unicode};')
+    final driver = config.odbcDriverName.isNotEmpty
+        ? config.odbcDriverName
+        : OdbcDrivers.postgresqlUnicode;
+    final buffer = StringBuffer('DRIVER={$driver};')
       ..write('SERVER=${config.host};')
       ..write('PORT=${config.port};')
       ..write('DATABASE=${config.databaseName};')
@@ -46,15 +54,13 @@ class ConfigService {
   }
 
   String _buildSqlAnywhereConnectionString(Config config) {
-    final buffer = StringBuffer('DRIVER={${config.odbcDriverName}};')
-      ..write('UID=${config.username}');
-    if (config.password != null) {
-      buffer.write(';PWD=${config.password}');
-    }
-    buffer
-      ..write(';DBN=${config.databaseName};')
-      ..write('HOST=${config.host};')
-      ..write('PORT=${config.port}');
-    return buffer.toString();
+    return SqlAnywhereConnectionString.build(
+      driverName: config.odbcDriverName,
+      username: config.username,
+      database: config.databaseName,
+      host: config.host,
+      port: config.port,
+      password: config.password,
+    );
   }
 }

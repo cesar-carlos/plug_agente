@@ -10,7 +10,9 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService with WindowListener implements IWindowManagerService {
+class WindowManagerService
+    with WindowListener
+    implements IWindowManagerService {
   factory WindowManagerService() => _instance;
   WindowManagerService._();
   static final WindowManagerService _instance = WindowManagerService._();
@@ -169,7 +171,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
 
       _logger.i('🎯 Focando janela...');
       await windowManager.focus();
-        await Future<void>.delayed(AppConstants.windowShowInitialDelay);
+      await Future<void>.delayed(AppConstants.windowShowInitialDelay);
 
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();

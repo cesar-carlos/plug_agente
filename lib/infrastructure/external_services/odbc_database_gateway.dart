@@ -96,7 +96,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
     queryTimeout: ConnectionConstants.defaultQueryTimeout,
     maxResultBufferBytes: _settings.maxResultBufferMb * 1024 * 1024,
-    initialResultBufferBytes: ConnectionConstants.defaultInitialResultBufferBytes,
+    initialResultBufferBytes:
+        ConnectionConstants.defaultInitialResultBufferBytes,
     autoReconnectOnConnectionLost: true,
     maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
     reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
@@ -134,7 +135,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             operation: 'initialize_odbc',
             context: {
               'reason': 'odbc_initialization_failed',
-              'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
+              'user_message':
+                  'Não foi possível inicializar o ambiente ODBC neste computador.',
             },
           ),
         );
@@ -158,7 +160,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       request.pagination,
       rawData,
     );
-    final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
+    final data = paginationResponse == null
+        ? rawData
+        : rawData.take(request.pagination!.pageSize).toList();
 
     return QueryResponse(
       id: _uuid.v4(),
@@ -220,7 +224,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       requestId: request.id,
       agentId: request.agentId,
       data: primaryResultSet.rows,
-      affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
+      affectedRows: totalAffectedRows > 0
+          ? totalAffectedRows
+          : primaryResultSet.rowCount,
       timestamp: DateTime.now(),
       columnMetadata: primaryResultSet.columnMetadata,
       resultSets: resultSets,
@@ -259,12 +265,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             ),
           );
         },
-        (error) => Failure(
-          OdbcFailureMapper.mapConnectionError(
-            error,
-            operation: 'connect_test_connection',
-          ),
-        ),
+        (error) {
+          developer.log(
+            'Connection test failed',
+            name: 'database_gateway',
+            level: 900,
+            error: error,
+          );
+          return Failure(
+            OdbcFailureMapper.mapConnectionError(
+              error,
+              operation: 'connect_test_connection',
+            ),
+          );
+        },
       );
     }, Failure.new);
   }
@@ -312,7 +326,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           operation: 'initialize_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
+            'user_message':
+                'Não foi possível inicializar o ambiente ODBC neste computador.',
           },
         ),
       ),
@@ -1021,7 +1036,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
   ) async {
     try {
-      final disconnectResult = await _service.disconnect(connectionId).timeout(_bestEffortCancelDisconnectTimeout);
+      final disconnectResult = await _service
+          .disconnect(connectionId)
+          .timeout(_bestEffortCancelDisconnectTimeout);
       if (disconnectResult.isSuccess()) {
         _metrics.recordTimeoutCancelSuccess();
       } else {
@@ -1269,6 +1286,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     var updated = connectionString;
     final replacements = <RegExp>[
       RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
+      RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
       RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
     ];
 
@@ -1308,7 +1326,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   ConnectionOptions _buildExpandedConnectionOptions(Object error) {
     final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
     final expandedBufferBytes = _calculateExpandedBufferBytes(error);
-    final initialResultBufferBytes = expandedBufferBytes < ConnectionConstants.defaultInitialResultBufferBytes
+    final initialResultBufferBytes =
+        expandedBufferBytes <
+            ConnectionConstants.defaultInitialResultBufferBytes
         ? expandedBufferBytes
         : ConnectionConstants.defaultInitialResultBufferBytes;
 
@@ -1500,7 +1520,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final queryResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
+    final queryResult =
+        preparedExecution.parameters != null &&
+            preparedExecution.parameters!.isNotEmpty
         ? await _service.executeQueryNamed(
             connectionId,
             preparedExecution.sql,
@@ -1548,7 +1570,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     QueryPaginationRequest pagination,
   ) {
     final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
-    final orderByClause = pagination.orderBy.isEmpty ? null : _buildOrderByClause(pagination.orderBy);
+    final orderByClause = pagination.orderBy.isEmpty
+        ? null
+        : _buildOrderByClause(pagination.orderBy);
     return switch (databaseType) {
       DatabaseType.postgresql =>
         '''
@@ -1687,7 +1711,8 @@ OFFSET 0 ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
     if (value is bool) {
       return switch (databaseType) {
         DatabaseType.postgresql => value ? 'TRUE' : 'FALSE',
-        DatabaseType.sqlServer || DatabaseType.sybaseAnywhere => value ? '1' : '0',
+        DatabaseType.sqlServer ||
+        DatabaseType.sybaseAnywhere => value ? '1' : '0',
       };
     }
     if (value is DateTime) {
@@ -1708,6 +1733,8 @@ OFFSET 0 ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
   }
 
   List<Map<String, dynamic>> _buildColumnMetadata(List<String> columns) {
-    return columns.map((column) => <String, dynamic>{'name': column}).toList(growable: false);
+    return columns
+        .map((column) => <String, dynamic>{'name': column})
+        .toList(growable: false);
   }
 }

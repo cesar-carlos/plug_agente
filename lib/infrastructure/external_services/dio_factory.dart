@@ -41,7 +41,8 @@ class DioFactory {
         error: e,
         stackTrace: stackTrace,
       );
-      _userAgent = '${AppConstants.appName}/${AppConstants.appVersion} (Windows)';
+      _userAgent =
+          '${AppConstants.appName}/${AppConstants.appVersion} (Windows)';
     } finally {
       _isInitializing = false;
     }
@@ -65,7 +66,8 @@ class DioFactory {
   }
 
   static Dio createDio({bool? acceptBadCertificates}) {
-    final shouldAccept = acceptBadCertificates ?? _shouldAcceptBadCertificates();
+    final shouldAccept =
+        acceptBadCertificates ?? _shouldAcceptBadCertificates();
 
     final dio = Dio(
       BaseOptions(
@@ -81,7 +83,8 @@ class DioFactory {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'User-Agent': '${AppConstants.appName}/${AppConstants.appVersion} (Windows)',
+          'User-Agent':
+              '${AppConstants.appName}/${AppConstants.appVersion} (Windows)',
         },
         persistentConnection: true,
         followRedirects: true,
@@ -92,7 +95,8 @@ class DioFactory {
       createHttpClient: () {
         final client = HttpClient()..autoUncompress = true;
         if (shouldAccept) {
-          client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+          client.badCertificateCallback =
+              (X509Certificate cert, String host, int port) => true;
         }
         return client;
       },

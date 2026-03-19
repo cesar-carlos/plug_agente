@@ -114,4 +114,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardDescription =>
       'Monitor your agent status and database connections here.';
+
+  @override
+  String get odbcDriverNotFound =>
+      'The configured ODBC driver was not found on this computer. Review the driver and data source in settings.';
+
+  @override
+  String get odbcAuthFailed =>
+      'Could not authenticate to the database. Check username, password and permissions.';
+
+  @override
+  String get odbcServerUnreachable =>
+      'Could not connect to the database server. Check host, port, VPN and network availability.';
+
+  @override
+  String get odbcConnectionTimeout =>
+      'The connection to the database took longer than expected. Confirm the server is accessible and try again.';
+
+  @override
+  String get odbcConnectionFailed =>
+      'Could not establish connection to the database.';
+
+  @override
+  String get odbcDetailPrefix => 'ODBC detail';
 }

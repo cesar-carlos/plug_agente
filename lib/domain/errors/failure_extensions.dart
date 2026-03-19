@@ -27,6 +27,19 @@ extension ObjectFailureExtension on Object {
     return message;
   }
 
+  /// Returns display message with ODBC/technical details when available.
+  /// Use for connection test errors to help diagnose driver/network issues.
+  String toDisplayMessageWithOdbcDetail() {
+    final base = toDisplayMessage();
+    if (this is! Failure) return base;
+
+    final failure = this as Failure;
+    final odbcMessage = failure.context['odbc_message'] as String?;
+    if (odbcMessage == null || odbcMessage.trim().isEmpty) return base;
+
+    return '$base\n\nDetalhe ODBC: $odbcMessage';
+  }
+
   String toTechnicalMessage() {
     if (this is Failure) {
       return (this as Failure).toString();

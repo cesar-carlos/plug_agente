@@ -182,9 +182,18 @@ class FailureToRpcErrorMapper {
   static bool _isSensitiveKey(String key) {
     final lower = key.toLowerCase();
     const sensitive = {
-      'password', 'token', 'secret', 'apikey', 'api_key',
-      'accesstoken', 'access_token', 'refreshtoken', 'refresh_token',
-      'connectionstring', 'connection_string', 'authorization',
+      'password',
+      'token',
+      'secret',
+      'apikey',
+      'api_key',
+      'accesstoken',
+      'access_token',
+      'refreshtoken',
+      'refresh_token',
+      'connectionstring',
+      'connection_string',
+      'authorization',
     };
     if (sensitive.contains(lower)) return true;
     return sensitive.any(lower.contains);

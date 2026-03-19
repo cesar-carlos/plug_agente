@@ -25,7 +25,8 @@ import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
-class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
+class MockQueryNormalizerService extends Mock
+    implements QueryNormalizerService {}
 
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
@@ -33,9 +34,11 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class MockIdempotencyStore extends Mock implements IIdempotencyStore {}
 
-class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway {}
+class MockStreamingDatabaseGateway extends Mock
+    implements IStreamingDatabaseGateway {}
 
-class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock
+    implements IAgentConfigRepository {}
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
@@ -373,7 +376,9 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+        final captured =
+            verify(() => mockGateway.executeQuery(captureAny())).captured.single
+                as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.page, 2);
         expect(captured.pagination!.pageSize, 25);
@@ -421,7 +426,9 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+      final captured =
+          verify(() => mockGateway.executeQuery(captureAny())).captured.single
+              as QueryRequest;
       expect(captured.pagination, isNotNull);
       expect(captured.pagination!.orderBy, isEmpty);
     });
@@ -503,7 +510,9 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+        final captured =
+            verify(() => mockGateway.executeQuery(captureAny())).captured.single
+                as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.cursor, cursor);
         expect(captured.pagination!.usesStableCursor, isTrue);
@@ -552,7 +561,9 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
           ),
         ).thenAnswer((invocation) async {
-          final onChunk = invocation.positionalArguments[2] as void Function(List<Map<String, dynamic>>);
+          final onChunk =
+              invocation.positionalArguments[2]
+                  as void Function(List<Map<String, dynamic>>);
           onChunk([
             {'id': 1, 'name': 'a'},
             {'id': 2, 'name': 'b'},
@@ -780,7 +791,8 @@ void main() {
         () => mockGateway.executeQuery(any()),
       ).thenAnswer((_) async => Success(queryResponse1));
       when(() => mockNormalizer.normalize(any())).thenAnswer(
-        (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+        (invocation) async =>
+            invocation.positionalArguments[0] as QueryResponse,
       );
 
       final response = await dispatcher.dispatch(request, 'agent-1');
@@ -832,7 +844,8 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(
@@ -888,7 +901,8 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
@@ -905,7 +919,8 @@ void main() {
         );
 
         final result = response.result as Map<String, dynamic>;
-        final items = (result['items'] as List<dynamic>).cast<Map<String, dynamic>>();
+        final items = (result['items'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
         check(items.map((item) => item['index']).join(',')).equals('0,1,2');
       },
     );
@@ -946,7 +961,8 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+          (invocation) async =>
+              invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');

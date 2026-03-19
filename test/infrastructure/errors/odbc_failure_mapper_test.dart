@@ -57,6 +57,25 @@ void main() {
       expect(failure.context['retryable'], isTrue);
     });
 
+    test(
+      'maps 08001 database server not found to server_unreachable, not driver_not_found',
+      () {
+        final failure = OdbcFailureMapper.mapConnectionError(
+          const ConnectionError(
+            message:
+                '[Sybase][ODBC Driver][SQL Anywhere]Database server not found',
+            sqlState: '08001',
+            nativeCode: -100,
+          ),
+          operation: 'connect',
+        );
+
+        expect(failure, isA<ConnectionFailure>());
+        expect(failure.context['reason'], 'server_unreachable');
+        expect(failure.context['odbc_sql_state'], '08001');
+      },
+    );
+
     test('maps pool exhaustion to transient connection failure', () {
       final failure = OdbcFailureMapper.mapPoolError(
         Exception('Pool exhausted: no connections available'),

@@ -1,6 +1,7 @@
 # Environment (secrets)
 .env
 .env.*
+!.env.example
 
 # DSA private key (never commit; add to GitHub Secrets as DSA_PRIVATE_KEY)
 dsa_priv.pem

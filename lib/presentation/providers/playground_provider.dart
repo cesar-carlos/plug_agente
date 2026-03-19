@@ -60,14 +60,16 @@ class PlaygroundProvider extends ChangeNotifier {
   bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
   int? get affectedRows => _affectedRows;
-  List<Map<String, dynamic>>? get columnMetadata => selectedResultSet?.columnMetadata ?? _columnMetadata;
+  List<Map<String, dynamic>>? get columnMetadata =>
+      selectedResultSet?.columnMetadata ?? _columnMetadata;
   CancellationToken get cancellationToken => _cancellationToken;
   List<QueryResultSet> get resultSets => _resultSets;
   QueryResultSet? get selectedResultSet {
     if (_resultSets.isEmpty) {
       return null;
     }
-    if (_selectedResultSetIndex < 0 || _selectedResultSetIndex >= _resultSets.length) {
+    if (_selectedResultSetIndex < 0 ||
+        _selectedResultSetIndex >= _resultSets.length) {
       return _resultSets.first;
     }
     return _resultSets[_selectedResultSetIndex];
@@ -84,7 +86,11 @@ class PlaygroundProvider extends ChangeNotifier {
   int get pageSize => _pageSize;
   bool get hasNextPage => _hasNextPage;
   bool get hasPreviousPage => _currentPage > 1;
-  bool get hasPagination => _paginationAvailable && _hasExecutedQuery && !_isStreaming && _error == null;
+  bool get hasPagination =>
+      _paginationAvailable &&
+      _hasExecutedQuery &&
+      !_isStreaming &&
+      _error == null;
   List<int> get pageSizeOptions => _pageSizeOptions;
 
   void setQuery(String value) {
@@ -141,7 +147,8 @@ class PlaygroundProvider extends ChangeNotifier {
             _selectedResultSetIndex = 0;
             _results = response.data;
             _affectedRows = response.affectedRows ?? 0;
-            _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
+            _columnMetadata =
+                selectedResultSet?.columnMetadata ?? response.columnMetadata;
             _syncPaginationState(response.pagination);
           }
           _executionDuration = stopwatch.elapsed;
@@ -250,7 +257,8 @@ class PlaygroundProvider extends ChangeNotifier {
           _affectedRows = _rowsProcessed;
 
           // Atualizar progresso (estimativa simples)
-          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+          _progress =
+              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
 
           _notifyStreamingProgressIfNeeded();
         },
@@ -342,7 +350,8 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _notifyStreamingProgressIfNeeded() {
     final now = DateTime.now();
-    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    final shouldNotify =
+        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
     if (!shouldNotify) {
       return;
     }

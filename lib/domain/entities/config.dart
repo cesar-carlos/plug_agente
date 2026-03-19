@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 // Reason: Config uses ID-based equality for collections and state comparison.
 
+import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
+
 class Config {
   const Config({
     required this.id,
@@ -103,6 +105,14 @@ class Config {
       'PostgreSQL' =>
         'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : 'PostgreSQL Unicode'}};'
             'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',
+      'SQL Anywhere' => SqlAnywhereConnectionString.build(
+        driverName: odbcDriverName,
+        username: username,
+        database: databaseName,
+        host: host,
+        port: port,
+        password: password,
+      ),
       _ =>
         'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : driverName}};'
             'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',

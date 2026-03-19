@@ -78,7 +78,9 @@ class InlineFeedbackCard extends StatelessWidget {
                       SelectableText(
                         message!,
                         style: bodyStyle.copyWith(
-                          color: severity == InfoBarSeverity.error ? accentColor : null,
+                          color: severity == InfoBarSeverity.error
+                              ? accentColor
+                              : null,
                         ),
                       ),
                   ],

@@ -114,4 +114,27 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get dashboardDescription =>
       'Monitore o status do seu agente e conexões de banco de dados aqui.';
+
+  @override
+  String get odbcDriverNotFound =>
+      'O driver ODBC configurado não foi encontrado neste computador. Revise o driver e a fonte de dados nas configurações.';
+
+  @override
+  String get odbcAuthFailed =>
+      'Não foi possível autenticar no banco de dados. Verifique usuário, senha e permissões.';
+
+  @override
+  String get odbcServerUnreachable =>
+      'Não foi possível conectar ao servidor do banco. Verifique host, porta, VPN e disponibilidade da rede.';
+
+  @override
+  String get odbcConnectionTimeout =>
+      'A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.';
+
+  @override
+  String get odbcConnectionFailed =>
+      'Não foi possível estabelecer conexão com o banco de dados.';
+
+  @override
+  String get odbcDetailPrefix => 'Detalhe ODBC';
 }

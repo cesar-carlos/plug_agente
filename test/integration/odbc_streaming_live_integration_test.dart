@@ -1,20 +1,22 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
+
+import '../helpers/e2e_env.dart';
 import '../helpers/mock_odbc_connection_settings.dart';
 
-void main() {
-  group('ODBC streaming live integration', () {
-    final connectionString =
-        Platform.environment['ODBC_TEST_DSN'] ??
-        Platform.environment['ODBC_DSN'];
-    final smokeQuery =
-        Platform.environment['ODBC_INTEGRATION_SMOKE_QUERY'] ?? 'SELECT 1';
-    final longRunningQuery =
-        Platform.environment['ODBC_INTEGRATION_LONG_QUERY'];
+void main() async {
+  await E2EEnv.load();
 
+  final connectionString = E2EEnv.odbcConnectionStringAny;
+  final connectionStringValid =
+      connectionString != null && connectionString.trim().isNotEmpty;
+  final smokeQuery = E2EEnv.odbcSmokeQuery;
+  final longRunningQuery = E2EEnv.odbcLongQuery;
+  final longQueryValid = longRunningQuery != null &&
+      longRunningQuery.trim().isNotEmpty;
+
+  group('ODBC streaming live integration', () {
     late odbc.ServiceLocator locator;
     late OdbcStreamingGateway gateway;
     var isReady = false;
@@ -44,9 +46,7 @@ void main() {
     test(
       'should stream rows with a real DSN',
       () async {
-        if (!isReady) {
-          return;
-        }
+        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
 
         var totalRows = 0;
         final result = await gateway.executeQueryStream(
@@ -61,18 +61,20 @@ void main() {
         expect(result.isSuccess(), isTrue);
         expect(totalRows, greaterThan(0));
       },
-      skip: connectionString == null ? 'Set ODBC_TEST_DSN or ODBC_DSN' : false,
+      skip: !connectionStringValid
+          ? 'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env'
+          : false,
     );
 
     test(
       'should support cancellation with long-running query',
       () async {
-        if (!isReady || longRunningQuery == null || longRunningQuery.isEmpty) {
-          return;
-        }
+        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
+        expect(longQueryValid, isTrue, reason: 'Long query not configured');
 
+        final query = longRunningQuery!;
         final execution = gateway.executeQueryStream(
-          longRunningQuery,
+          query,
           connectionString!,
           (_) {},
           fetchSize: 50,
@@ -85,8 +87,8 @@ void main() {
         final result = await execution.timeout(const Duration(seconds: 20));
         expect(result.isError(), isTrue);
       },
-      skip: connectionString == null || longRunningQuery == null
-          ? 'Set ODBC_TEST_DSN/ODBC_DSN and ODBC_INTEGRATION_LONG_QUERY'
+      skip: !connectionStringValid || !longQueryValid
+          ? 'Defina um DSN e ODBC_INTEGRATION_LONG_QUERY* (query longa) no .env'
           : false,
     );
   });

@@ -33,5 +33,11 @@
   "queryTotalRecords": "Total de registros",
   "queryExecutionTime": "Tempo de execução",
   "queryAffectedRows": "Linhas afetadas",
-  "dashboardDescription": "Monitore o status do seu agente e conexões de banco de dados aqui."
+  "dashboardDescription": "Monitore o status do seu agente e conexões de banco de dados aqui.",
+  "odbcDriverNotFound": "O driver ODBC configurado não foi encontrado neste computador. Revise o driver e a fonte de dados nas configurações.",
+  "odbcAuthFailed": "Não foi possível autenticar no banco de dados. Verifique usuário, senha e permissões.",
+  "odbcServerUnreachable": "Não foi possível conectar ao servidor do banco. Verifique host, porta, VPN e disponibilidade da rede.",
+  "odbcConnectionTimeout": "A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.",
+  "odbcConnectionFailed": "Não foi possível estabelecer conexão com o banco de dados.",
+  "odbcDetailPrefix": "Detalhe ODBC"
 }

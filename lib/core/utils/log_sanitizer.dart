@@ -44,7 +44,11 @@ class LogSanitizer {
       if (value is List) {
         return MapEntry(
           key,
-          value.map((e) => e is Map ? sanitizeMap(Map<String, dynamic>.from(e)) : e).toList(),
+          value
+              .map(
+                (e) => e is Map ? sanitizeMap(Map<String, dynamic>.from(e)) : e,
+              )
+              .toList(),
         );
       }
       return MapEntry(key, value);
@@ -52,7 +56,9 @@ class LogSanitizer {
   }
 
   /// Sanitizes parameters for query logging.
-  static Map<String, dynamic>? sanitizeParameters(Map<String, dynamic>? params) {
+  static Map<String, dynamic>? sanitizeParameters(
+    Map<String, dynamic>? params,
+  ) {
     if (params == null || params.isEmpty) return params;
     return sanitizeMap(Map<String, dynamic>.from(params));
   }
@@ -63,7 +69,9 @@ class LogSanitizer {
       return sanitizeMap(Map<String, dynamic>.from(data));
     }
     if (data is List) {
-      return data.map((e) => e is Map ? sanitizeMap(Map<String, dynamic>.from(e)) : e).toList();
+      return data
+          .map((e) => e is Map ? sanitizeMap(Map<String, dynamic>.from(e)) : e)
+          .toList();
     }
     return data;
   }
