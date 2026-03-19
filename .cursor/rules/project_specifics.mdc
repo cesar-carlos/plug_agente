@@ -173,15 +173,13 @@ Future<void> main(List<String> args) async {
 
 - [ ] O codigo respeita as dependencias obrigatorias do projeto
 - [ ] Nenhuma camada importou `infrastructure` a partir de `presentation` ou
-  `application`
+      `application`
 - [ ] Providers/controllers ficaram focados em estado de apresentacao
 - [ ] Repositories permanecem como fonte de verdade para dados e politicas de
-  cache/retry/refresh
+      cache/retry/refresh
 - [ ] Services externos continuam sem estado sempre que possivel
 - [ ] Fluxos faliveis retornam `Result<T>` onde faz sentido
 - [ ] Failures estao tipadas e preservam contexto tecnico util
 - [ ] Mensagens para usuario sao claras e nao vazam detalhes internos
 - [ ] Testes relevantes cobrem `Result<T>`, failures e contratos alterados
 - [ ] Mudancas de transporte respeitam a documentacao do protocolo Plug
-
-

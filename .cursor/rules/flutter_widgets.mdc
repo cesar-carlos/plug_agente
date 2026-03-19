@@ -220,8 +220,6 @@ TextField(
 - [ ] Listas longas usam builders/slivers
 - [ ] Nao ha trabalho pesado dentro de `build()`
 - [ ] Custos de renderizacao caros (`saveLayer`, clipping, opacity, intrinsics)
-  foram evitados ou justificados
+      foram evitados ou justificados
 - [ ] Performance foi avaliada em `profile mode` quando a tarefa exigir isso
 - [ ] O widget consome tokens do theme em vez de hardcodes visuais
-
-

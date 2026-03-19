@@ -39,6 +39,7 @@ Dart/Flutter, use `coding_style.mdc`, `null_safety.mdc`,
 - Comente apenas quando o codigo sozinho nao explica o motivo da decisao
 - Use comentarios para tradeoffs, workarounds, restricoes externas ou riscos
 - Prefira explicar "por que" e "qual impacto existe", nao "o que o codigo faz"
+- Quando comentarios forem necessarios, escreva-os em ingles
 
 ```text
 Bom:

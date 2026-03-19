@@ -256,9 +256,7 @@ Future<User> loadUser(String id) async {
 - [ ] `const`/`final` foram usados corretamente
 - [ ] Logs usam ferramenta apropriada e preservam contexto
 - [ ] O baseline de lint do projeto esta adequado ao stack (`flutter_lints` ou
-  `recommended`)
+      `recommended`)
 - [ ] Em tarefas longas ou complexas, `flutter analyze` foi executado
 - [ ] Tear-offs foram usados apenas onde melhoram a leitura
 - [ ] Recursos modernos de Dart foram usados apenas quando melhoram a clareza
-
-
