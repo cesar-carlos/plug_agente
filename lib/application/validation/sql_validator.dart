@@ -194,6 +194,17 @@ class SqlValidator {
     );
   }
 
+  static bool containsTopLevelPaginationClause(String query) {
+    final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    if (normalizedQuery.isEmpty) {
+      return false;
+    }
+
+    return _containsTopLevelKeyword(normalizedQuery, 'limit') ||
+        _containsTopLevelKeyword(normalizedQuery, 'offset') ||
+        _containsTopLevelKeyword(normalizedQuery, 'fetch');
+  }
+
   static String stripTopLevelOrderBy(String query) {
     final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
     if (normalizedQuery.isEmpty) {

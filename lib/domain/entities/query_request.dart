@@ -3,6 +3,11 @@
 
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 
+enum SqlHandlingMode {
+  managed,
+  preserve,
+}
+
 class QueryRequest {
   const QueryRequest({
     required this.id,
@@ -13,6 +18,7 @@ class QueryRequest {
     this.clientToken,
     this.pagination,
     this.expectMultipleResults = false,
+    this.sqlHandlingMode = SqlHandlingMode.managed,
   });
   final String id;
   final String agentId;
@@ -24,6 +30,9 @@ class QueryRequest {
   final String? clientToken;
   final QueryPaginationRequest? pagination;
   final bool expectMultipleResults;
+  final SqlHandlingMode sqlHandlingMode;
+
+  bool get preserveSql => sqlHandlingMode == SqlHandlingMode.preserve;
 
   @override
   bool operator ==(Object other) {

@@ -386,6 +386,12 @@ Response:
   `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
   o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
   explicito.
+- `options.execution_mode`: controla como o agente trata a SQL. `managed`
+  (default) permite reescrita gerenciada para paginacao quando aplicavel.
+  `preserve` executa a SQL exatamente como foi enviada e nao aplica reescrita
+  gerenciada para paginacao. Nao pode ser combinado com `page`, `page_size`
+  ou `cursor`.
+- `options.preserve_sql`: alias legado para `execution_mode: "preserve"`.
 - `options.multi_result`: habilita retorno explicito de multiplos result sets
   e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
   com paginacao nem com `params` nomeados.
@@ -412,6 +418,22 @@ Exemplo de continuacao por cursor:
     "sql": "SELECT * FROM users ORDER BY id",
     "options": {
       "cursor": "eyJ2IjoyLCJwYWdlIjoyLCJwYWdlX3NpemUiOjEwMCwicXVlcnlfaGFzaCI6Ii4uLiIsIm9yZGVyX2J5IjpbeyJleHByZXNzaW9uIjoiaWQiLCJsb29rdXBfa2V5IjoiaWQiLCJkZXNjZW5kaW5nIjpmYWxzZX1dLCJsYXN0X3Jvd192YWx1ZXMiOlsxMDBdfQ"
+    }
+  }
+}
+```
+
+Exemplo de passthrough sem reescrita:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.execute",
+  "id": "req-125",
+  "params": {
+    "sql": "SELECT * FROM users LIMIT 10",
+    "options": {
+      "execution_mode": "preserve"
     }
   }
 }
@@ -445,6 +467,8 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
     "execution_id": "exec-456",
     "started_at": "2026-03-12T10:00:00Z",
     "finished_at": "2026-03-12T10:00:01Z",
+    "sql_handling_mode": "managed",
+    "max_rows_handling": "response_truncation",
     "rows": [],
     "row_count": 0,
     "affected_rows": 0,
@@ -500,6 +524,16 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 - `pagination` e retornado apenas quando a request inclui
   `options.page` + `options.page_size` ou `options.cursor`.
+- Requests com `options.execution_mode: "preserve"` nao recebem
+  `result.pagination`, porque o agente nao gerencia a SQL nem o
+  cursor/paginacao do comando.
+- `result.sql_handling_mode` expone o modo efetivamente usado (`managed` ou
+  `preserve`).
+- `result.max_rows_handling` informa a politica ativa para `max_rows`.
+  No estado atual, o valor e `response_truncation`.
+- `result.effective_max_rows` expoe o limite efetivo de linhas aplicado apos a
+  negociacao (min entre o solicitado e o limite do transporte). Facilita debug
+  e suporte.
 - `result_sets` e `items` aparecem apenas quando a execucao retorna multiplos
   result sets ou row counts no mesmo comando.
 - `current_cursor` e `next_cursor` podem aparecer quando o fluxo de
@@ -910,7 +944,7 @@ Exemplo de capacidades anunciadas:
     "batchSupport": true,
     "binaryPayload": true,
     "streamingResults": false,
-    "plugProfile": "plug-jsonrpc-profile/2.4",
+    "plugProfile": "plug-jsonrpc-profile/2.5",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset"],
@@ -999,6 +1033,7 @@ Exemplo de capacidades anunciadas:
 | `2.2`  | Hardening de limites negociados e assinatura de payload        | stable |
 | `2.3`  | Profile formal, OpenRPC, observabilidade e cursor opaco        | stable |
 | `2.4`  | Cursor keyset, output validation e `rpc.discover`              | stable |
+| `2.5`  | execution_mode preserve, alias legado e metadata de handling   | stable |
 
 ### Regras de versionamento
 
@@ -1130,6 +1165,11 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
+- `options.execution_mode` suportado em `sql.execute`.
+- `options.preserve_sql` suportado em `sql.execute` como alias legado.
+- `sql.executeBatch` **nao** suporta `execution_mode`; todos os comandos rodam em
+  modo managed implicito. Politica futura: evoluir em versao posterior (ex.:
+  `options.execution_mode` no batch ou `commands[*].execution_mode` por comando).
 - `options.multi_result` suportado em `sql.execute`.
 - `commands[*].execution_order` suportado em `sql.executeBatch`.
 - `result.pagination` retornado apenas para requests paginadas.
@@ -1137,6 +1177,11 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   multi-result.
 - Para fluxos sem streaming, payload segue request/response unico.
 - Requests paginadas nao usam o modo de streaming direto do banco.
+- `options.execution_mode: "preserve"` mantem a SQL original; limites, auth,
+  schema e tratamento de erro continuam sendo aplicados normalmente.
+- `max_rows` continua sendo aplicado como truncamento da response
+  (`response_truncation`). O agente nao reescreve a SQL para empurrar esse
+  limite ao banco quando `execution_mode` e `preserve`.
 - Limites de transporte documentados na secao "Limites negociados" acima.
 
 ## Limitacoes e observacoes do estado atual
@@ -1277,6 +1322,19 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   ativo.
 - `sql.executeBatch` aceita `commands[*].execution_order` opcional, com
   fallback para ordem da lista quando ausente.
+
+### `v2.5` (sql handling mode + passthrough explicito)
+
+- `options.execution_mode` adicionado a `sql.execute` com valores `managed`
+  (default) e `preserve`.
+- `options.preserve_sql` mantido como alias legado para
+  `execution_mode: "preserve"`.
+- Responses de `sql.execute` passam a incluir `sql_handling_mode`.
+- Responses de `sql.execute` passam a incluir `max_rows_handling`.
+- `execution_mode: "preserve"` nao pode ser combinado com `page`,
+  `page_size` ou `cursor`.
+- `max_rows` em modo `preserve` permanece como truncamento da response, sem
+  reescrita da SQL enviada pelo cliente.
 
 ## Schemas JSON (contrato)
 

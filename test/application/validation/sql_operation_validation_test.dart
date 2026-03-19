@@ -171,6 +171,24 @@ void main() {
     });
   });
 
+  group('SqlValidator.containsTopLevelPaginationClause', () {
+    test('should detect top-level limit clause', () {
+      final hasClause = SqlValidator.containsTopLevelPaginationClause(
+        'SELECT * FROM users LIMIT 10',
+      );
+
+      expect(hasClause, isTrue);
+    });
+
+    test('should ignore nested limit clause', () {
+      final hasClause = SqlValidator.containsTopLevelPaginationClause(
+        'SELECT * FROM (SELECT * FROM users LIMIT 10) q',
+      );
+
+      expect(hasClause, isFalse);
+    });
+  });
+
   group('SqlOperationClassifier', () {
     late SqlOperationClassifier classifier;
 

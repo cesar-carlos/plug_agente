@@ -328,6 +328,38 @@ void main() {
         expect(result.isSuccess(), isTrue);
       });
 
+      test('should succeed for sql.execute execution_mode preserve option', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT * FROM users LIMIT 10',
+            'options': {'execution_mode': 'preserve'},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should succeed for deprecated preserve_sql alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT * FROM users LIMIT 10',
+            'options': {'preserve_sql': true},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
       test(
         'should fail when multi_result is combined with pagination options',
         () {
@@ -390,6 +422,51 @@ void main() {
 
         expect(result.isError(), isTrue);
       });
+
+      test(
+        'should fail when execution_mode preserve is combined with pagination options',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {
+              'sql': 'SELECT * FROM users',
+              'options': {
+                'execution_mode': 'preserve',
+                'page': 1,
+                'page_size': 100,
+              },
+            },
+          };
+
+          final result = validator.validateSingle(data);
+
+          expect(result.isError(), isTrue);
+        },
+      );
+
+      test(
+        'should fail when preserve_sql conflicts with execution_mode managed',
+        () {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {
+              'sql': 'SELECT * FROM users',
+              'options': {
+                'preserve_sql': true,
+                'execution_mode': 'managed',
+              },
+            },
+          };
+
+          final result = validator.validateSingle(data);
+
+          expect(result.isError(), isTrue);
+        },
+      );
     });
 
     group('validateBatch', () {

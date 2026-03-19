@@ -2,15 +2,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
+import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:uuid/uuid.dart';
 
 class MockSocketDataSource extends Mock implements SocketDataSource {}
 
@@ -24,6 +31,13 @@ class MockSocket extends Mock implements io.Socket {}
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
+class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
+
+class MockQueryNormalizerService extends Mock
+    implements QueryNormalizerService {}
+
+class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
+
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -36,6 +50,23 @@ void main() {
     registerFallbackValue(ProtocolCapabilities.defaultCapabilities());
     registerFallbackValue(const TransportLimits());
     registerFallbackValue(MockRpcStreamEmitter());
+    registerFallbackValue(
+      QueryRequest(
+        id: 'test',
+        agentId: 'test',
+        query: 'SELECT * FROM test',
+        timestamp: DateTime.now(),
+      ),
+    );
+    registerFallbackValue(
+      QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [],
+        timestamp: DateTime.now(),
+      ),
+    );
   });
 
   group('SocketIOTransportClientV2', () {
@@ -70,8 +101,7 @@ void main() {
     }
 
     dynamic decodeWirePayload(dynamic payload) {
-      if (payload is! Map<String, dynamic> ||
-          !payload.containsKey('schemaVersion')) {
+      if (payload is! Map<String, dynamic> || !payload.containsKey('schemaVersion')) {
         return payload;
       }
       final frame = PayloadFrame.fromJson(payload);
@@ -109,8 +139,7 @@ void main() {
       ).thenReturn(mockSocket);
       when(() => mockSocket.connected).thenReturn(true);
       when(() => mockSocket.on(any<String>(), any())).thenAnswer((invocation) {
-        handlers[invocation.positionalArguments[0] as String] =
-            invocation.positionalArguments[1] as Function;
+        handlers[invocation.positionalArguments[0] as String] = invocation.positionalArguments[1] as Function;
         return () {};
       });
       when(() => mockSocket.emit(any<String>(), any<dynamic>())).thenAnswer((
@@ -148,6 +177,18 @@ void main() {
       when(() => mockFeatureFlags.enablePayloadSigning).thenReturn(false);
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketIdempotency,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketTimeoutByStage,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketStreamingFromDb,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketCancelMethod,
       ).thenReturn(false);
       when(
         () => mockNegotiator.negotiate(
@@ -191,9 +232,7 @@ void main() {
       expect(emitted.any((item) => item.event == 'agent:register'), isTrue);
       final registerPayload =
           decodeWirePayload(
-                emitted
-                    .firstWhere((item) => item.event == 'agent:register')
-                    .data,
+                emitted.firstWhere((item) => item.event == 'agent:register').data,
               )
               as Map<String, dynamic>;
       expect(registerPayload['agentId'], 'agent-1');
@@ -403,9 +442,7 @@ void main() {
         );
         final responsePayload =
             decodeWirePayload(
-                  emitted
-                      .firstWhere((item) => item.event == 'rpc:response')
-                      .data,
+                  emitted.firstWhere((item) => item.event == 'rpc:response').data,
                 )
                 as Map<String, dynamic>;
         final error = responsePayload['error'] as Map<String, dynamic>;
@@ -558,6 +595,239 @@ void main() {
       expect(
         (responsePayload['error'] as Map<String, dynamic>)['code'],
         RpcErrorCode.invalidPayload,
+      );
+    });
+
+    group('execution_mode', () {
+      test(
+        'should pass execution_mode preserve to dispatcher and return sql_handling_mode',
+        () async {
+          when(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).thenAnswer(
+            (_) async => RpcResponse.success(
+              id: 'req-1',
+              result: <String, dynamic>{
+                'execution_id': 'exec-1',
+                'sql_handling_mode': 'preserve',
+                'max_rows_handling': 'response_truncation',
+                'effective_max_rows': 50000,
+                'rows': <Map<String, dynamic>>[],
+                'row_count': 0,
+              },
+            ),
+          );
+
+          final connectFuture = client.connect('https://hub.test', 'agent-1');
+          emitEvent('connect');
+          await connectFuture;
+          emitted.clear();
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'req-1',
+              'params': {
+                'sql': 'SELECT * FROM t',
+                'options': {'execution_mode': 'preserve'},
+              },
+            }),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          verify(
+            () => mockDispatcher.dispatch(
+              any(
+                that: isA<RpcRequest>().having(
+                  (r) {
+                    final params = r.params as Map<String, dynamic>?;
+                    final options = params?['options'] as Map<String, dynamic>?;
+                    return options?['execution_mode'];
+                  },
+                  'params.options.execution_mode',
+                  'preserve',
+                ),
+              ),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).called(1);
+
+          final responsePayload =
+              decodeWirePayload(
+                    emitted.firstWhere((item) => item.event == 'rpc:response')
+                        .data,
+                  )
+                  as Map<String, dynamic>;
+          final result =
+              responsePayload['result'] as Map<String, dynamic>?;
+          expect(result, isNotNull);
+          final mode = result!['sql_handling_mode'] as String?;
+          expect(mode, 'preserve');
+        },
+      );
+
+      test(
+        'should pass preserve_sql alias to dispatcher and return sql_handling_mode',
+        () async {
+          when(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).thenAnswer(
+            (_) async => RpcResponse.success(
+              id: 'req-1',
+              result: <String, dynamic>{
+                'execution_id': 'exec-1',
+                'sql_handling_mode': 'preserve',
+                'max_rows_handling': 'response_truncation',
+                'effective_max_rows': 50000,
+                'rows': <Map<String, dynamic>>[],
+                'row_count': 0,
+              },
+            ),
+          );
+
+          final connectFuture = client.connect('https://hub.test', 'agent-1');
+          emitEvent('connect');
+          await connectFuture;
+          emitted.clear();
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'req-1',
+              'params': {
+                'sql': 'SELECT * FROM t',
+                'options': {'preserve_sql': true},
+              },
+            }),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          verify(
+            () => mockDispatcher.dispatch(
+              any(
+                that: isA<RpcRequest>().having(
+                  (r) {
+                    final params = r.params as Map<String, dynamic>?;
+                    final options = params?['options'] as Map<String, dynamic>?;
+                    return options?['preserve_sql'];
+                  },
+                  'params.options.preserve_sql',
+                  true,
+                ),
+              ),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).called(1);
+
+          final responsePayload =
+              decodeWirePayload(
+                    emitted.firstWhere((item) => item.event == 'rpc:response')
+                        .data,
+                  )
+                  as Map<String, dynamic>;
+          final result =
+              responsePayload['result'] as Map<String, dynamic>?;
+          expect(result, isNotNull);
+          final mode = result!['sql_handling_mode'] as String?;
+          expect(mode, 'preserve');
+        },
+      );
+    });
+
+    group('integration with real dispatcher', () {
+      test(
+        'should process execution_mode preserve through transport and dispatcher',
+        () async {
+          final mockGateway = MockDatabaseGateway();
+          final mockNormalizer = MockQueryNormalizerService();
+          final mockAuthorize = MockAuthorizeSqlOperation();
+
+          final queryResponse = QueryResponse(
+            id: 'exec-1',
+            requestId: 'req-1',
+            agentId: 'agent-1',
+            data: const [{'id': 1}],
+            timestamp: DateTime.now(),
+          );
+          when(() => mockGateway.executeQuery(any()))
+              .thenAnswer((_) async => Success(queryResponse));
+          when(() => mockNormalizer.normalize(any()))
+              .thenAnswer((_) async => queryResponse);
+
+          final realDispatcher = RpcMethodDispatcher(
+            databaseGateway: mockGateway,
+            normalizerService: mockNormalizer,
+            uuid: const Uuid(),
+            authorizeSqlOperation: mockAuthorize,
+            featureFlags: mockFeatureFlags,
+          );
+
+          final integrationClient = SocketIOTransportClientV2(
+            dataSource: mockDataSource,
+            negotiator: mockNegotiator,
+            rpcDispatcher: realDispatcher,
+            featureFlags: mockFeatureFlags,
+          );
+
+          final connectFuture =
+              integrationClient.connect('https://hub.test', 'agent-1');
+          emitEvent('connect');
+          await connectFuture;
+          emitted.clear();
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'req-1',
+              'params': {
+                'sql': 'SELECT * FROM t',
+                'options': {'execution_mode': 'preserve'},
+              },
+            }),
+          );
+
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+
+          final responseItems =
+              emitted.where((item) => item.event == 'rpc:response').toList();
+          expect(responseItems, isNotEmpty);
+          final responsePayload = decodeWirePayload(responseItems.first.data)
+              as Map<String, dynamic>;
+          final result = responsePayload['result'] as Map<String, dynamic>?;
+          expect(result, isNotNull);
+          expect(result!['sql_handling_mode'], 'preserve');
+          expect(result['effective_max_rows'], isNotNull);
+        },
       );
     });
   });

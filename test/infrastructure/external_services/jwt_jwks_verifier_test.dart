@@ -51,8 +51,7 @@ void main() {
         final now = DateTime.utc(2026, 3, 17, 12);
         final token = _buildTokenWithAlg('none');
         final verifier = JwtJwksVerifier(
-          () async =>
-              const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
+          () async => const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
           failureThreshold: 2,
           now: () => now,
         );
@@ -75,8 +74,7 @@ void main() {
         var now = DateTime.utc(2026, 3, 17, 12);
         final token = _buildTokenWithAlg('none');
         final verifier = JwtJwksVerifier(
-          () async =>
-              const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
+          () async => const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
           failureThreshold: 1,
           circuitOpenDuration: const Duration(seconds: 10),
           now: () => now,
@@ -91,8 +89,7 @@ void main() {
         expect(open.isError(), isTrue);
         expect(afterWindow.isError(), isTrue);
         final openFailure = open.exceptionOrNull()! as domain.Failure;
-        final afterWindowFailure =
-            afterWindow.exceptionOrNull()! as domain.Failure;
+        final afterWindowFailure = afterWindow.exceptionOrNull()! as domain.Failure;
         expect(openFailure.context['reason'], equals('jwks_circuit_open'));
         expect(
           afterWindowFailure.context['reason'],

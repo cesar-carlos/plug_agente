@@ -7,6 +7,7 @@ export 'i_authorization_policy_resolver.dart';
 export 'i_client_token_repository.dart';
 export 'i_compressor.dart';
 export 'i_database_gateway.dart';
+export 'i_deprecation_metrics_collector.dart';
 export 'i_idempotency_store.dart';
 export 'i_metrics_collector.dart';
 export 'i_notification_service.dart';

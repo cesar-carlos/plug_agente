@@ -21,6 +21,7 @@ class ExecutePlaygroundQuery {
   Future<Result<QueryResponse>> call(
     String query, {
     QueryPaginationRequest? pagination,
+    SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
   }) async {
     final trimmedQuery = query.trim();
 
@@ -51,6 +52,7 @@ class ExecutePlaygroundQuery {
               timestamp: DateTime.now(),
               pagination: resolvedPagination,
               expectMultipleResults: expectMultipleResults,
+              sqlHandlingMode: sqlHandlingMode,
             );
 
             return _databaseGateway.executeQuery(request);

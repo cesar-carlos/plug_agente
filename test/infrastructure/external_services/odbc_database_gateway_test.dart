@@ -4,6 +4,7 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
@@ -352,6 +353,140 @@ void main() {
       expect(capturedSql, contains('ORDER BY id ASC'));
     });
 
+    test(
+      'should reject SQL Server pagination without explicit order by terms',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-page-no-order',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        if (failure case final domain.ValidationFailure validationFailure) {
+          expect(
+            validationFailure.message,
+            contains('requires an explicit ORDER BY'),
+          );
+        } else {
+          fail('Expected ValidationFailure');
+        }
+        verifyNever(() => mockConnectionPool.acquire(any()));
+      },
+    );
+
+    test(
+      'should reject SQL Anywhere pagination without explicit order by terms',
+      () async {
+        const connectionString = 'Driver={SQL Anywhere 17};Server=localhost;';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere 17',
+        );
+        final request = QueryRequest(
+          id: 'req-anywhere-page-no-order',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        if (failure case final domain.ValidationFailure validationFailure) {
+          expect(
+            validationFailure.message,
+            contains('requires an explicit ORDER BY'),
+          );
+        } else {
+          fail('Expected ValidationFailure');
+        }
+        verifyNever(() => mockConnectionPool.acquire(any()));
+      },
+    );
+
+    test(
+      'should reject preserve_sql combined with managed pagination in gateway',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-preserve-sql-pagination',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users ORDER BY id',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+            orderBy: [
+              QueryPaginationOrderTerm(
+                expression: 'id',
+                lookupKey: 'id',
+              ),
+            ],
+          ),
+          sqlHandlingMode: SqlHandlingMode.preserve,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        if (failure case final domain.ValidationFailure validationFailure) {
+          expect(
+            validationFailure.message,
+            contains('preserve_sql cannot be combined with managed pagination'),
+          );
+        } else {
+          fail('Expected ValidationFailure');
+        }
+        verifyNever(() => mockConnectionPool.acquire(any()));
+      },
+    );
+
     test('should apply PostgreSQL pagination syntax', () async {
       const pooledConnectionId = 'pool-pg';
       const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -423,6 +558,117 @@ void main() {
       expect(capturedSql, contains('ORDER BY id ASC'));
       expect(capturedSql, contains('LIMIT 11 OFFSET 0'));
     });
+
+    test(
+      'should allow PostgreSQL pagination without explicit order by terms',
+      () async {
+        const pooledConnectionId = 'pool-pg-no-order';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'PostgreSQL',
+          odbcDriverName: 'PostgreSQL Unicode',
+        );
+        final request = QueryRequest(
+          id: 'req-pg-no-order',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final capturedSql =
+            verify(
+                  () => mockService.executeQuery(
+                    captureAny(),
+                    connectionId: pooledConnectionId,
+                  ),
+                ).captured.single
+                as String;
+        expect(capturedSql, contains('LIMIT 11 OFFSET 0'));
+        expect(capturedSql, isNot(contains('ORDER BY')));
+      },
+    );
+
+    test(
+      'should reject SQL that already declares pagination clauses when options pagination is active',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-sql-has-limit',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users LIMIT 10',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        if (failure case final domain.ValidationFailure validationFailure) {
+          expect(
+            validationFailure.message,
+            contains('cannot include LIMIT/OFFSET/FETCH'),
+          );
+        } else {
+          fail('Expected ValidationFailure');
+        }
+        verifyNever(() => mockConnectionPool.acquire(any()));
+      },
+    );
 
     test(
       'should prefer persisted connection string instead of rebuilding one',

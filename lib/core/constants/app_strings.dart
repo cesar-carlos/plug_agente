@@ -379,6 +379,9 @@ class AppStrings {
   static const String queryCancelledByUser = 'Query cancelada pelo usuário';
   static const String queryStreamingErrorPrefix = 'Erro no streaming';
   static const String queryStreamingMode = 'Modo streaming';
+  static const String querySqlHandlingModePreserve = 'Preservar SQL';
+  static const String querySqlHandlingModePreserveHint =
+      'Executa a SQL exatamente como enviada, sem reescrita de paginação';
   static const String queryStreamingModeHint =
       'Para grandes datasets (milhares de linhas)';
   static const String queryStreamingProgress = 'Processando';

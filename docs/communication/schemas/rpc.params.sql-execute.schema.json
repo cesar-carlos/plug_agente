@@ -61,6 +61,15 @@
           "type": "string",
           "description": "Opaque continuation cursor returned in result.pagination.next_cursor"
         },
+        "execution_mode": {
+          "type": "string",
+          "enum": ["managed", "preserve"],
+          "description": "SQL handling mode. managed lets the agent rewrite SQL for managed pagination when requested. preserve executes the SQL exactly as sent and disables managed pagination rewriting."
+        },
+        "preserve_sql": {
+          "type": "boolean",
+          "description": "Deprecated alias for execution_mode=preserve. When true, the agent executes the SQL as sent and disables managed SQL pagination rewriting. Cannot be combined with page, page_size, or cursor."
+        },
         "multi_result": {
           "type": "boolean",
           "description": "Enables multi-result execution for SQL batches that can return multiple result sets. Cannot be combined with pagination or named parameters."
@@ -83,6 +92,32 @@
               "anyOf": [
                 { "required": ["page"] },
                 { "required": ["page_size"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "preserve_sql": { "const": true } } },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["page"] },
+                { "required": ["page_size"] },
+                { "required": ["cursor"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "execution_mode": { "const": "preserve" } }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["page"] },
+                { "required": ["page_size"] },
+                { "required": ["cursor"] }
               ]
             }
           }

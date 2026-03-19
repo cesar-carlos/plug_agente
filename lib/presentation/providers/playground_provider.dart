@@ -9,6 +9,7 @@ import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 
@@ -45,6 +46,7 @@ class PlaygroundProvider extends ChangeNotifier {
   bool _hasNextPage = false;
   bool _hasExecutedQuery = false;
   bool _paginationAvailable = false;
+  SqlHandlingMode _sqlHandlingMode = SqlHandlingMode.managed;
 
   static const Duration _streamingUiUpdateInterval = Duration(
     milliseconds: 200,
@@ -92,6 +94,13 @@ class PlaygroundProvider extends ChangeNotifier {
       !_isStreaming &&
       _error == null;
   List<int> get pageSizeOptions => _pageSizeOptions;
+  SqlHandlingMode get sqlHandlingMode => _sqlHandlingMode;
+
+  void setSqlHandlingMode(SqlHandlingMode mode) {
+    if (_sqlHandlingMode == mode) return;
+    _sqlHandlingMode = mode;
+    notifyListeners();
+  }
 
   void setQuery(String value) {
     final shouldResetPagination = value != _query;
@@ -129,6 +138,7 @@ class PlaygroundProvider extends ChangeNotifier {
           page: _currentPage,
           pageSize: _pageSize,
         ),
+        sqlHandlingMode: _sqlHandlingMode,
       );
       stopwatch.stop();
       _isLoading = false;

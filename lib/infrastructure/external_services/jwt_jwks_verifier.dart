@@ -114,8 +114,7 @@ class JwtJwksVerifier {
         return _finalizeResult(result);
       }
 
-      final keyStore = JsonWebKeyStore()
-        ..addKeySetUrl(Uri.parse(config.jwksUrl));
+      final keyStore = JsonWebKeyStore()..addKeySetUrl(Uri.parse(config.jwksUrl));
 
       final verified = await JsonWebToken.decodeAndVerify(
         rawToken,
@@ -155,9 +154,7 @@ class JwtJwksVerifier {
       if (config.issuer != null && config.issuer!.isNotEmpty) {
         final expectedIssuer = Uri.tryParse(config.issuer!);
         final actualIssuer = claims.issuer;
-        if (expectedIssuer != null &&
-            (actualIssuer == null ||
-                actualIssuer.toString() != config.issuer)) {
+        if (expectedIssuer != null && (actualIssuer == null || actualIssuer.toString() != config.issuer)) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
               message:
@@ -178,8 +175,7 @@ class JwtJwksVerifier {
         if (aud == null || !aud.contains(config.audience)) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
-              message:
-                  'Token audience does not contain expected "${config.audience}"',
+              message: 'Token audience does not contain expected "${config.audience}"',
               context: {
                 'authentication': true,
                 'reason': 'invalid_token_signature',

@@ -15,6 +15,14 @@
         "stream_id": { "type": "string" },
         "started_at": { "type": "string", "format": "date-time" },
         "finished_at": { "type": "string", "format": "date-time" },
+        "sql_handling_mode": {
+          "type": "string",
+          "enum": ["managed", "preserve"]
+        },
+        "max_rows_handling": {
+          "type": "string",
+          "enum": ["response_truncation"]
+        },
         "rows": {
           "type": "array",
           "items": {

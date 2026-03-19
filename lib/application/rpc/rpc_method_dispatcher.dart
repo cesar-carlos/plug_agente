@@ -9,6 +9,7 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -18,6 +19,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -35,6 +37,7 @@ class RpcMethodDispatcher {
     IAgentConfigRepository? configRepository,
     IIdempotencyStore? idempotencyStore,
     IAuthorizationMetricsCollector? authMetrics,
+    IDeprecationMetricsCollector? deprecationMetrics,
     void Function()? onIdempotencyFingerprintMismatch,
     IStreamingDatabaseGateway? streamingGateway,
     TransportLimits defaultLimits = const TransportLimits(),
@@ -51,6 +54,7 @@ class RpcMethodDispatcher {
        _configRepository = configRepository,
        _idempotencyStore = idempotencyStore,
        _authMetrics = authMetrics,
+       _deprecationMetrics = deprecationMetrics,
        _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
        _streamingGateway = streamingGateway,
        _defaultLimits = defaultLimits,
@@ -73,6 +77,7 @@ class RpcMethodDispatcher {
   final IAgentConfigRepository? _configRepository;
   final IIdempotencyStore? _idempotencyStore;
   final IAuthorizationMetricsCollector? _authMetrics;
+  final IDeprecationMetricsCollector? _deprecationMetrics;
   final void Function()? _onIdempotencyFingerprintMismatch;
   final IStreamingDatabaseGateway? _streamingGateway;
   final TransportLimits _defaultLimits;
@@ -146,12 +151,29 @@ class RpcMethodDispatcher {
     if (sql == null || sql.isEmpty) {
       return _invalidParams(request, 'sql is required');
     }
-    final paginationResolution = _resolvePagination(
-      params,
-      sql,
-      maxRows,
-      negotiatedExtensions,
-    );
+    final options = params['options'] as Map<String, dynamic>?;
+    if (options?['preserve_sql'] == true) {
+      _deprecationMetrics?.recordPreserveSqlUsage(
+        requestId: request.id?.toString(),
+        method: request.method,
+      );
+    }
+    final sqlHandlingModeResolution = _resolveSqlHandlingMode(params);
+    if (sqlHandlingModeResolution.hasError) {
+      return _invalidParams(
+        request,
+        sqlHandlingModeResolution.errorMessage!,
+      );
+    }
+    final sqlHandlingMode = sqlHandlingModeResolution.sqlHandlingMode!;
+    final paginationResolution = sqlHandlingMode == SqlHandlingMode.preserve
+        ? const _ResolvedPagination()
+        : _resolvePagination(
+            params,
+            sql,
+            maxRows,
+            negotiatedExtensions,
+          );
     if (paginationResolution.hasError) {
       return _invalidParams(request, paginationResolution.errorMessage!);
     }
@@ -285,6 +307,7 @@ class RpcMethodDispatcher {
       timestamp: DateTime.now(),
       pagination: pagination,
       expectMultipleResults: multiResultRequested,
+      sqlHandlingMode: sqlHandlingMode,
     );
 
     final streamingFromDbResponse = await _tryStreamingFromDb(
@@ -359,6 +382,9 @@ class RpcMethodDispatcher {
             'execution_id': normalized.id,
             'started_at': queryRequest.timestamp.toIso8601String(),
             'finished_at': normalized.timestamp.toIso8601String(),
+            'sql_handling_mode': queryRequest.sqlHandlingMode.name,
+            'max_rows_handling': 'response_truncation',
+            'effective_max_rows': maxRows,
             'rows': <Map<String, dynamic>>[],
             'row_count': 0,
             'affected_rows': normalized.affectedRows,
@@ -379,6 +405,8 @@ class RpcMethodDispatcher {
           finishedAt: normalized.timestamp,
           limitedRows: limitedRows,
           wasTruncated: wasTruncated,
+          sqlHandlingMode: queryRequest.sqlHandlingMode,
+          effectiveMaxRows: maxRows,
           forceMultiResultEnvelope: multiResultRequested,
         );
 
@@ -503,6 +531,9 @@ class RpcMethodDispatcher {
               'execution_id': executionId,
               'started_at': queryRequest.timestamp.toIso8601String(),
               'finished_at': DateTime.now().toUtc().toIso8601String(),
+              'sql_handling_mode': queryRequest.sqlHandlingMode.name,
+              'max_rows_handling': 'response_truncation',
+              'effective_max_rows': limits.maxRows,
               'rows': <Map<String, dynamic>>[],
               'row_count': 0,
               'affected_rows': totalRows,
@@ -1195,6 +1226,67 @@ class RpcMethodDispatcher {
     return options?['multi_result'] == true;
   }
 
+  _ResolvedSqlHandlingMode _resolveSqlHandlingMode(
+    Map<String, dynamic> params,
+  ) {
+    final options = params['options'] as Map<String, dynamic>?;
+    if (options == null) {
+      return const _ResolvedSqlHandlingMode(
+        sqlHandlingMode: SqlHandlingMode.managed,
+      );
+    }
+
+    final executionMode = options['execution_mode'];
+    if (executionMode != null && executionMode is! String) {
+      return const _ResolvedSqlHandlingMode(
+        errorMessage: 'execution_mode must be a string',
+      );
+    }
+    if (executionMode != null &&
+        executionMode != 'managed' &&
+        executionMode != 'preserve') {
+      return const _ResolvedSqlHandlingMode(
+        errorMessage: 'execution_mode must be "managed" or "preserve"',
+      );
+    }
+
+    final preserveSql = options['preserve_sql'];
+    if (preserveSql != null && preserveSql is! bool) {
+      return const _ResolvedSqlHandlingMode(
+        errorMessage: 'preserve_sql must be a boolean',
+      );
+    }
+    if (preserveSql == true && executionMode == 'managed') {
+      return const _ResolvedSqlHandlingMode(
+        errorMessage:
+            'preserve_sql cannot be true when execution_mode is "managed"',
+      );
+    }
+
+    if (preserveSql == true) {
+      AppLogger.warning(
+        'options.preserve_sql is deprecated; use options.execution_mode: '
+        '"preserve" instead',
+      );
+    }
+
+    final resolvedMode = executionMode == 'preserve' || preserveSql == true
+        ? SqlHandlingMode.preserve
+        : SqlHandlingMode.managed;
+    final hasManagedPagination =
+        options['page'] != null ||
+        options['page_size'] != null ||
+        options['cursor'] != null;
+    if (resolvedMode == SqlHandlingMode.preserve && hasManagedPagination) {
+      return const _ResolvedSqlHandlingMode(
+        errorMessage:
+            'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
+      );
+    }
+
+    return _ResolvedSqlHandlingMode(sqlHandlingMode: resolvedMode);
+  }
+
   _ResolvedPagination _resolvePagination(
     Map<String, dynamic> params,
     String sql,
@@ -1337,12 +1429,17 @@ class RpcMethodDispatcher {
     required DateTime finishedAt,
     required List<Map<String, dynamic>> limitedRows,
     required bool wasTruncated,
+    required SqlHandlingMode sqlHandlingMode,
+    required int effectiveMaxRows,
     bool forceMultiResultEnvelope = false,
   }) {
     final resultData = <String, dynamic>{
       'execution_id': response.id,
       'started_at': startedAt.toIso8601String(),
       'finished_at': finishedAt.toIso8601String(),
+      'sql_handling_mode': sqlHandlingMode.name,
+      'max_rows_handling': 'response_truncation',
+      'effective_max_rows': effectiveMaxRows,
       'rows': limitedRows,
       'row_count': limitedRows.length,
     };
@@ -1479,6 +1576,18 @@ class _ResolvedPagination {
   });
 
   final QueryPaginationRequest? pagination;
+  final String? errorMessage;
+
+  bool get hasError => errorMessage != null;
+}
+
+class _ResolvedSqlHandlingMode {
+  const _ResolvedSqlHandlingMode({
+    this.sqlHandlingMode,
+    this.errorMessage,
+  });
+
+  final SqlHandlingMode? sqlHandlingMode;
   final String? errorMessage;
 
   bool get hasError => errorMessage != null;

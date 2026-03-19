@@ -212,6 +212,7 @@ class RpcRequestSchemaValidator {
         options,
         allowTransaction: false,
         maxRowsLimit: maxRowsLimit,
+        allowPreserveSql: true,
       );
       if (optionsValidation.isError()) {
         return optionsValidation;
@@ -340,6 +341,7 @@ class RpcRequestSchemaValidator {
         options,
         allowTransaction: true,
         maxRowsLimit: maxRowsLimit,
+        allowPreserveSql: false,
       );
       if (optionsValidation.isError()) {
         return optionsValidation;
@@ -406,6 +408,7 @@ class RpcRequestSchemaValidator {
     dynamic options, {
     required bool allowTransaction,
     required int maxRowsLimit,
+    required bool allowPreserveSql,
   }) {
     if (options is! Map<String, dynamic>) {
       return _invalidParams('Field "params.options" must be an object');
@@ -420,13 +423,15 @@ class RpcRequestSchemaValidator {
             'page_size',
             'cursor',
           }
-        : const {
+        : <String>{
             'timeout_ms',
             'max_rows',
             'page',
             'page_size',
             'cursor',
+            'execution_mode',
             'multi_result',
+            if (allowPreserveSql) 'preserve_sql',
           };
     final extraKeys = options.keys.where((key) => !allowedKeys.contains(key));
     if (extraKeys.isNotEmpty) {
@@ -476,6 +481,42 @@ class RpcRequestSchemaValidator {
       return _invalidParams(
         'Field "params.options.cursor" cannot be combined with '
         '"page" or "page_size"',
+      );
+    }
+
+    final preserveSql = options['preserve_sql'];
+    if (preserveSql != null && preserveSql is! bool) {
+      return _invalidParams(
+        'Field "params.options.preserve_sql" must be a boolean',
+      );
+    }
+
+    final executionMode = options['execution_mode'];
+    if (executionMode != null &&
+        (executionMode is! String ||
+            (executionMode != 'managed' && executionMode != 'preserve'))) {
+      return _invalidParams(
+        'Field "params.options.execution_mode" must be "managed" or "preserve"',
+      );
+    }
+    if (preserveSql == true && executionMode == 'managed') {
+      return _invalidParams(
+        'Field "params.options.preserve_sql" cannot be true when '
+        '"execution_mode" is "managed"',
+      );
+    }
+    if (preserveSql == true &&
+        (page != null || pageSize != null || cursor != null)) {
+      return _invalidParams(
+        'Field "params.options.preserve_sql" cannot be combined with '
+        'pagination options',
+      );
+    }
+    if (executionMode == 'preserve' &&
+        (page != null || pageSize != null || cursor != null)) {
+      return _invalidParams(
+        'Field "params.options.execution_mode" cannot be combined with '
+        'pagination options when set to "preserve"',
       );
     }
 

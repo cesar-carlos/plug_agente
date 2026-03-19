@@ -7,12 +7,14 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
 
 const _playgroundStreamingModeKey = 'playground_streaming_mode_enabled';
+const _playgroundSqlHandlingModeKey = 'playground_sql_handling_mode';
 
 class PlaygroundPage extends StatefulWidget {
   const PlaygroundPage({
@@ -41,6 +43,14 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
         (Object e) => AppLogger.warning('Failed to restore streaming mode', e),
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        _restoreSqlHandlingMode().catchError(
+          (Object e) =>
+              AppLogger.warning('Failed to restore SQL handling mode', e),
+        ),
+      );
+    });
 
     if (widget.configId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,6 +76,20 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   Future<void> _saveStreamingMode(bool enabled) async {
     final prefs = getIt<IAppSettingsStore>();
     await prefs.setBool(_playgroundStreamingModeKey, enabled);
+  }
+
+  Future<void> _restoreSqlHandlingMode() async {
+    final prefs = getIt<IAppSettingsStore>();
+    final preserve = prefs.getBool(_playgroundSqlHandlingModeKey) ?? false;
+    if (!mounted) return;
+    context.read<PlaygroundProvider>().setSqlHandlingMode(
+          preserve ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
+        );
+  }
+
+  Future<void> _saveSqlHandlingMode(bool preserve) async {
+    final prefs = getIt<IAppSettingsStore>();
+    await prefs.setBool(_playgroundSqlHandlingModeKey, preserve);
   }
 
   @override
@@ -238,6 +262,22 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                           ),
                         );
                       },
+                      sqlHandlingModePreserve:
+                          playgroundProvider.sqlHandlingMode ==
+                              SqlHandlingMode.preserve,
+                      onSqlHandlingModeChanged: (value) {
+                        playgroundProvider.setSqlHandlingMode(
+                          value ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
+                        );
+                        unawaited(
+                          _saveSqlHandlingMode(value).catchError(
+                            (Object e) => AppLogger.warning(
+                              'Failed to save SQL handling mode',
+                              e,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
@@ -255,32 +295,42 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         pageSize: playgroundProvider.pageSize,
                         hasNextPage: playgroundProvider.hasNextPage,
                         hasPreviousPage: playgroundProvider.hasPreviousPage,
-                        showPagination: playgroundProvider.hasPagination,
+                        showPagination: playgroundProvider.hasPagination &&
+                            playgroundProvider.sqlHandlingMode !=
+                                SqlHandlingMode.preserve,
                         resultSetCount: playgroundProvider.resultSets.length,
                         selectedResultSetIndex:
                             playgroundProvider.selectedResultSetIndex,
-                        onPreviousPage: playgroundProvider.hasPreviousPage
+                        onPreviousPage: playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve &&
+                                playgroundProvider.hasPreviousPage
                             ? () => playgroundProvider.goToPreviousPage()
                             : null,
-                        onNextPage: playgroundProvider.hasNextPage
+                        onNextPage: playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve &&
+                                playgroundProvider.hasNextPage
                             ? () => playgroundProvider.goToNextPage()
                             : null,
                         onResultSetChanged:
                             playgroundProvider.hasMultipleResultSets
                             ? playgroundProvider.setSelectedResultSetIndex
                             : null,
-                        onPageSizeChanged: (value) {
-                          unawaited(
-                            playgroundProvider
-                                .setPageSize(value)
-                                .catchError(
-                                  (Object e) => AppLogger.warning(
-                                    'Failed to set page size',
-                                    e,
-                                  ),
-                                ),
-                          );
-                        },
+                        onPageSizeChanged:
+                            playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve
+                                ? (value) {
+                                    unawaited(
+                                      playgroundProvider
+                                          .setPageSize(value)
+                                          .catchError(
+                                            (Object e) => AppLogger.warning(
+                                              'Failed to set page size',
+                                              e,
+                                            ),
+                                          ),
+                                    );
+                                  }
+                                : null,
                         onShowErrorDetails: playgroundProvider.error != null
                             ? () => _showErrorModal(playgroundProvider.error!)
                             : null,

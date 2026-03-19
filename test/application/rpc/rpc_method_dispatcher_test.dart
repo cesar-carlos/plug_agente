@@ -210,6 +210,8 @@ void main() {
       expect(response.isSuccess, isTrue);
       expect(response.result, isNotNull);
       final result = response.result as Map<String, dynamic>;
+      expect(result['sql_handling_mode'], 'managed');
+      expect(result['max_rows_handling'], 'response_truncation');
       expect(result['rows'], isNotNull);
       expect(result['row_count'], equals(1));
     });
@@ -303,6 +305,7 @@ void main() {
 
       expect(response.isSuccess, isTrue);
       final result = response.result as Map<String, dynamic>;
+      expect(result['sql_handling_mode'], 'managed');
       expect(result['multi_result'], isTrue);
       expect(result['result_set_count'], 2);
       expect(result['item_count'], 3);
@@ -384,6 +387,7 @@ void main() {
         expect(captured.pagination!.pageSize, 25);
 
         final result = response.result as Map<String, dynamic>;
+        expect(result['sql_handling_mode'], 'managed');
         expect(result['pagination'], isA<Map<String, dynamic>>());
         expect((result['pagination'] as Map<String, dynamic>)['page'], 2);
       },
@@ -455,6 +459,118 @@ void main() {
         'Paginated queries must declare an explicit ORDER BY clause',
       );
       verifyNever(() => mockGateway.executeQuery(any()));
+    });
+
+    test(
+      'should pass execution_mode preserve to gateway without managed pagination',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users LIMIT 10',
+            'options': {'execution_mode': 'preserve'},
+          },
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 1},
+          ],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) async => queryResponse);
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isSuccess, isTrue);
+        final result = response.result as Map<String, dynamic>;
+        expect(result['sql_handling_mode'], 'preserve');
+        expect(result['max_rows_handling'], 'response_truncation');
+        final captured =
+            verify(() => mockGateway.executeQuery(captureAny())).captured.single
+                as QueryRequest;
+        expect(captured.preserveSql, isTrue);
+        expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
+        expect(captured.pagination, isNull);
+      },
+    );
+
+    test(
+      'should reject execution_mode preserve combined with pagination options',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT * FROM users ORDER BY id',
+            'options': {
+              'execution_mode': 'preserve',
+              'page': 1,
+              'page_size': 25,
+            },
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, RpcErrorCode.invalidParams);
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(
+          data['technical_message'],
+          'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
+        );
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test('should accept deprecated preserve_sql alias', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-1',
+        params: {
+          'sql': 'SELECT * FROM users LIMIT 10',
+          'options': {'preserve_sql': true},
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'id': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockGateway.executeQuery(any()),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) async => queryResponse);
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      final captured =
+          verify(() => mockGateway.executeQuery(captureAny())).captured.single
+              as QueryRequest;
+      expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
     });
 
     test(
@@ -1393,6 +1509,7 @@ void main() {
       final result = response.result as Map<String, dynamic>;
       expect((result['rows'] as List<dynamic>).length, 5);
       expect(result['truncated'], isTrue);
+      expect(result['effective_max_rows'], 5);
     });
 
     group('sql.cancel', () {

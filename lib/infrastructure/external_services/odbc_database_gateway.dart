@@ -372,6 +372,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
   }) async {
     final stopwatch = Stopwatch()..start();
+    final paginationValidation = _validatePaginationForDatabase(
+      request,
+      databaseConfig.databaseType,
+    );
+    if (paginationValidation != null) {
+      return Failure(paginationValidation);
+    }
+
     final preparedExecution = _prepareQueryExecution(request, databaseConfig);
     final queryValidation = _validateQueryExecutionMode(
       request,
@@ -1440,10 +1448,52 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     };
   }
 
+  domain.ValidationFailure? _validatePaginationForDatabase(
+    QueryRequest request,
+    DatabaseType databaseType,
+  ) {
+    if (request.preserveSql && request.pagination != null) {
+      return domain.ValidationFailure(
+        'preserve_sql cannot be combined with managed pagination',
+      );
+    }
+
+    final pagination = request.pagination;
+    if (pagination == null) {
+      return null;
+    }
+
+    if (SqlValidator.containsTopLevelPaginationClause(request.query)) {
+      return domain.ValidationFailure(
+        'Paginated requests cannot include LIMIT/OFFSET/FETCH in SQL; '
+        'use options.page/page_size or options.cursor',
+      );
+    }
+
+    final requiresExplicitOrderBy =
+        databaseType == DatabaseType.sqlServer ||
+        databaseType == DatabaseType.sybaseAnywhere;
+    if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
+      return domain.ValidationFailure(
+        'Page-offset pagination requires an explicit ORDER BY for '
+        'SQL Server and SQL Anywhere',
+      );
+    }
+
+    return null;
+  }
+
   _PreparedQueryExecution _prepareQueryExecution(
     QueryRequest request,
     DatabaseConfig databaseConfig,
   ) {
+    if (request.preserveSql) {
+      return _PreparedQueryExecution(
+        sql: request.query,
+        parameters: request.parameters,
+      );
+    }
+
     final pagination = request.pagination;
     if (pagination == null) {
       return _PreparedQueryExecution(

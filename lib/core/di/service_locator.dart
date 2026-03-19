@@ -52,6 +52,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
@@ -73,6 +74,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
+import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
@@ -281,6 +283,10 @@ Future<void> setupDependencies({
     ..registerLazySingleton<IAuthorizationMetricsCollector>(
       getIt.get<AuthorizationMetricsCollector>,
     )
+    ..registerLazySingleton(DeprecationMetricsCollector.new)
+    ..registerLazySingleton<IDeprecationMetricsCollector>(
+      getIt.get<DeprecationMetricsCollector>,
+    )
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(getIt<AppDatabase>()),
     )
@@ -314,6 +320,7 @@ Future<void> setupDependencies({
         configRepository: getIt<IAgentConfigRepository>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<IAuthorizationMetricsCollector>(),
+        deprecationMetrics: getIt<IDeprecationMetricsCollector>(),
         onIdempotencyFingerprintMismatch:
             getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),

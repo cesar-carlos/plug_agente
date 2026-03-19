@@ -13,6 +13,8 @@ class SqlActionBar extends StatelessWidget {
     this.useStreamingMode = false,
     this.onStreamingModeChanged,
     this.streamingModeEnabled = false,
+    this.onSqlHandlingModeChanged,
+    this.sqlHandlingModePreserve = false,
   });
   final VoidCallback? onExecute;
   final VoidCallback? onTestConnection;
@@ -22,6 +24,8 @@ class SqlActionBar extends StatelessWidget {
   final bool useStreamingMode;
   final ValueChanged<bool>? onStreamingModeChanged;
   final bool streamingModeEnabled;
+  final ValueChanged<bool>? onSqlHandlingModeChanged;
+  final bool sqlHandlingModePreserve;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +50,17 @@ class SqlActionBar extends StatelessWidget {
 
     return Row(
       children: [
+        if (onSqlHandlingModeChanged != null) ...[
+          Tooltip(
+            message: AppStrings.querySqlHandlingModePreserveHint,
+            child: ToggleSwitch(
+              checked: sqlHandlingModePreserve,
+              onChanged: isExecuting ? null : onSqlHandlingModeChanged,
+              content: const Text(AppStrings.querySqlHandlingModePreserve),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+        ],
         if (useStreamingMode && onStreamingModeChanged != null) ...[
           ToggleSwitch(
             checked: streamingModeEnabled,

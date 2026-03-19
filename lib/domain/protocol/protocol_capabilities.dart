@@ -1,3 +1,5 @@
+import 'package:plug_agente/core/constants/protocol_version.dart';
+
 /// Protocol capabilities for negotiation between client and server.
 ///
 /// Used during agent registration to determine which protocol version,
@@ -40,7 +42,7 @@ class ProtocolCapabilities {
       'signatureScope': 'transport-frame',
       'signatureAlgorithms': signatureAlgorithms,
       'streamingResults': false,
-      'plugProfile': 'plug-jsonrpc-profile/2.4',
+      'plugProfile': ProtocolVersion.plugProfile,
       'orderedBatchResponses': true,
       'notificationNullIdCompatibility': true,
       'paginationModes': ['page-offset', 'cursor-keyset'],

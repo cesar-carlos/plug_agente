@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
+import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 
 void main() {
@@ -138,7 +139,7 @@ void main() {
           'paginationModes': ['cursor-keyset'],
           'traceContext': ['w3c-trace-context'],
           'errorFormat': 'structured-error-data',
-          'plugProfile': 'plug-jsonrpc-profile/2.4',
+          'plugProfile': ProtocolVersion.plugProfile,
         },
       );
 
@@ -157,7 +158,7 @@ void main() {
       );
       expect(
         config.negotiatedExtensions['plugProfile'],
-        equals('plug-jsonrpc-profile/2.4'),
+        equals(ProtocolVersion.plugProfile),
       );
     });
 
