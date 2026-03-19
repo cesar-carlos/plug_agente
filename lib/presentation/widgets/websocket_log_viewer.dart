@@ -4,6 +4,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,7 @@ class WebSocketLogViewer extends StatelessWidget {
     return Consumer<WebSocketLogProvider>(
       builder: (context, logProvider, child) {
         final authSummary = _getAuthSummary();
+        final deprecationCount = _getPreserveSqlDeprecatedCount();
 
         return AppCard(
           child: LayoutBuilder(
@@ -52,6 +54,10 @@ class WebSocketLogViewer extends StatelessWidget {
                   ),
                   SizedBox(height: spacing),
                   _AuthorizationSummaryCard(summary: authSummary),
+                  if (deprecationCount != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _DeprecationSummaryCard(count: deprecationCount),
+                  ],
                   const SizedBox(height: AppSpacing.sm),
                   Expanded(
                     child: logProvider.messages.isEmpty
@@ -85,6 +91,46 @@ class WebSocketLogViewer extends StatelessWidget {
 
     final collector = getIt<IAuthorizationMetricsCollector>();
     return collector.getSummary();
+  }
+
+  int? _getPreserveSqlDeprecatedCount() {
+    if (!getIt.isRegistered<IDeprecationMetricsCollector>()) {
+      return null;
+    }
+    return getIt<IDeprecationMetricsCollector>().preserveSqlUsageCount;
+  }
+}
+
+class _DeprecationSummaryCard extends StatelessWidget {
+  const _DeprecationSummaryCard({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(
+          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            AppStrings.wsLogPreserveSqlDeprecatedUses,
+            style: context.bodyMuted,
+          ),
+          Text(
+            ': $count',
+            style: context.bodyText.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
   }
 }
 

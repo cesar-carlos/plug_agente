@@ -4,6 +4,7 @@ import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockStreamingDatabaseGateway extends Mock
@@ -13,6 +14,10 @@ class MockOdbcConnectionSettings extends Mock
     implements IOdbcConnectionSettings {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(StreamingCancelReason.user);
+  });
+
   group('ExecuteStreamingQuery', () {
     late MockStreamingDatabaseGateway mockGateway;
     late MockOdbcConnectionSettings mockSettings;
@@ -86,7 +91,9 @@ void main() {
 
     test('should delegate cancel request to gateway', () async {
       when(
-        () => mockGateway.cancelActiveStream(),
+        () => mockGateway.cancelActiveStream(
+          reason: any(named: 'reason'),
+        ),
       ).thenAnswer((_) async => const Success(unit));
 
       final result = await useCase.cancelActiveStream();

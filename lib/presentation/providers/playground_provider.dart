@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/execute_playground_query.dart'
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -12,6 +13,7 @@ import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
@@ -47,6 +49,9 @@ class PlaygroundProvider extends ChangeNotifier {
   bool _hasExecutedQuery = false;
   bool _paginationAvailable = false;
   SqlHandlingMode _sqlHandlingMode = SqlHandlingMode.managed;
+  String? _lastExecutionHint;
+  bool _streamingStoppedByCap = false;
+  bool _streamingCapCancelRequested = false;
 
   static const Duration _streamingUiUpdateInterval = Duration(
     milliseconds: 200,
@@ -95,6 +100,10 @@ class PlaygroundProvider extends ChangeNotifier {
       _error == null;
   List<int> get pageSizeOptions => _pageSizeOptions;
   SqlHandlingMode get sqlHandlingMode => _sqlHandlingMode;
+  String? get lastExecutionHint => _lastExecutionHint;
+
+  /// True when streaming ended because [ConnectionConstants.playgroundStreamingMaxResultRows] was hit.
+  bool get streamingStoppedByRowCap => _streamingStoppedByCap;
 
   void setSqlHandlingMode(SqlHandlingMode mode) {
     if (_sqlHandlingMode == mode) return;
@@ -118,6 +127,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _currentPage = 1;
     }
     _clearError();
+    _lastExecutionHint = null;
     _isLoading = true;
     _hasExecutedQuery = true;
     _paginationAvailable = true;
@@ -152,6 +162,7 @@ class PlaygroundProvider extends ChangeNotifier {
             _columnMetadata = null;
             _hasNextPage = false;
             _paginationAvailable = false;
+            _lastExecutionHint = null;
           } else {
             _resultSets = response.resultSets;
             _selectedResultSetIndex = 0;
@@ -160,6 +171,7 @@ class PlaygroundProvider extends ChangeNotifier {
             _columnMetadata =
                 selectedResultSet?.columnMetadata ?? response.columnMetadata;
             _syncPaginationState(response.pagination);
+            _lastExecutionHint = _buildLastExecutionHint(response.pagination);
           }
           _executionDuration = stopwatch.elapsed;
         },
@@ -174,6 +186,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _executionDuration = stopwatch.elapsed;
           _hasNextPage = false;
           _paginationAvailable = false;
+          _lastExecutionHint = null;
         },
       );
     } on Exception catch (error, stackTrace) {
@@ -189,6 +202,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _executionDuration = stopwatch.elapsed;
       _hasNextPage = false;
       _paginationAvailable = false;
+      _lastExecutionHint = null;
       AppLogger.error(
         'Query execution threw: ${failure.toDisplayMessage()}',
         error,
@@ -235,6 +249,9 @@ class PlaygroundProvider extends ChangeNotifier {
     String connectionString,
   ) async {
     _clearError();
+    _lastExecutionHint = null;
+    _streamingStoppedByCap = false;
+    _streamingCapCancelRequested = false;
     _cancellationToken.reset();
     _isLoading = true;
     _isStreaming = true;
@@ -261,16 +278,28 @@ class PlaygroundProvider extends ChangeNotifier {
         query,
         connectionString,
         (chunk) {
-          // Callback chamado para cada chunk recebido
-          _results.addAll(chunk);
-          _rowsProcessed += chunk.length;
+          if (_streamingCapCancelRequested) {
+            return;
+          }
+          const cap = ConnectionConstants.playgroundStreamingMaxResultRows;
+          final remaining = cap - _results.length;
+          if (remaining <= 0) {
+            _requestStreamingStopAtRowCap(cap);
+            return;
+          }
+          if (chunk.length > remaining) {
+            _results.addAll(chunk.sublist(0, remaining));
+          } else {
+            _results.addAll(chunk);
+          }
+          _rowsProcessed = _results.length;
           _affectedRows = _rowsProcessed;
-
-          // Atualizar progresso (estimativa simples)
           _progress =
               _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
-
           _notifyStreamingProgressIfNeeded();
+          if (_results.length >= cap) {
+            _requestStreamingStopAtRowCap(cap);
+          }
         },
       );
 
@@ -278,18 +307,22 @@ class PlaygroundProvider extends ChangeNotifier {
         (_) {
           _isStreaming = false;
           _progress = 1.0;
+          if (!_streamingStoppedByCap) {
+            _lastExecutionHint = _buildStreamingExecutionHint();
+          }
         },
         (failure) {
           _error = failure.toDisplayMessage();
           _isStreaming = false;
+          if (!_streamingStoppedByCap) {
+            _lastExecutionHint = null;
+          }
           AppLogger.error(
             'Streaming query failed: ${failure.toDisplayMessage()}',
             failure.toTechnicalMessage(),
           );
         },
       );
-
-      notifyListeners();
     } on Exception catch (error, stackTrace) {
       _isLoading = false;
       _isStreaming = false;
@@ -303,7 +336,6 @@ class PlaygroundProvider extends ChangeNotifier {
         error,
         stackTrace,
       );
-      notifyListeners();
     } finally {
       stopwatch.stop();
       _executionDuration = stopwatch.elapsed;
@@ -330,8 +362,29 @@ class PlaygroundProvider extends ChangeNotifier {
     _hasNextPage = false;
     _hasExecutedQuery = false;
     _paginationAvailable = false;
+    _lastExecutionHint = null;
+    _streamingStoppedByCap = false;
+    _streamingCapCancelRequested = false;
     _cancellationToken.reset();
     notifyListeners();
+  }
+
+  void _requestStreamingStopAtRowCap(int cap) {
+    if (_streamingCapCancelRequested) {
+      return;
+    }
+    _streamingCapCancelRequested = true;
+    _streamingStoppedByCap = true;
+    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint
+        .replaceAll(
+          '{max}',
+          cap.toString(),
+        );
+    unawaited(
+      _executeStreamingQuery.cancelActiveStream(
+        reason: StreamingCancelReason.playgroundRowCap,
+      ),
+    );
   }
 
   /// Cancela a query em execução.
@@ -424,5 +477,22 @@ class PlaygroundProvider extends ChangeNotifier {
     _pageSize = pagination.pageSize;
     _hasNextPage = pagination.hasNextPage;
     _paginationAvailable = true;
+  }
+
+  String _buildLastExecutionHint(QueryPaginationInfo? pagination) {
+    if (_sqlHandlingMode == SqlHandlingMode.preserve) {
+      return AppStrings.queryPlaygroundHintLastRunPreserve;
+    }
+    if (pagination != null) {
+      return AppStrings.queryPlaygroundHintLastRunManagedPagination;
+    }
+    return AppStrings.queryPlaygroundHintLastRunManaged;
+  }
+
+  String _buildStreamingExecutionHint() {
+    if (_sqlHandlingMode == SqlHandlingMode.preserve) {
+      return AppStrings.queryPlaygroundHintLastRunPreserve;
+    }
+    return AppStrings.queryPlaygroundHintLastRunStreaming;
   }
 }

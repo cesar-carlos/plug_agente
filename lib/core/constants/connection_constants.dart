@@ -28,4 +28,7 @@ class ConnectionConstants {
 
   static const int maxConnectionPools = 64;
   static const int maxBackpressureChunkQueueSize = 1000;
+
+  /// Max rows kept in Playground UI during ODBC streaming (memory / grid cost).
+  static const int playgroundStreamingMaxResultRows = 100000;
 }

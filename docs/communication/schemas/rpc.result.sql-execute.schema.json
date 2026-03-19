@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.result.sql-execute.v1.json",
   "title": "sql.execute result",
-  "description": "Result payload for successful sql.execute responses",
+  "description": "Result payload for successful sql.execute responses. effective_max_rows reflects the negotiated row cap. Managed pagination is applied inside the agent; the executed SQL dialect depends on the configured ODBC driver (see socket_communication_standard.md).",
   "type": "object",
   "required": ["execution_id", "started_at", "finished_at", "rows", "row_count"],
   "properties": {

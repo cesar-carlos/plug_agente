@@ -2,6 +2,7 @@ import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Use case para executar queries em streaming.
@@ -51,7 +52,9 @@ class ExecuteStreamingQuery {
     );
   }
 
-  Future<Result<void>> cancelActiveStream() {
-    return _gateway.cancelActiveStream();
+  Future<Result<void>> cancelActiveStream({
+    StreamingCancelReason reason = StreamingCancelReason.user,
+  }) {
+    return _gateway.cancelActiveStream(reason: reason);
   }
 }

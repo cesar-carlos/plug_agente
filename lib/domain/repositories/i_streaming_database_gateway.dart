@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gateway para execução de queries em streaming.
@@ -24,5 +25,7 @@ abstract class IStreamingDatabaseGateway {
   /// Cancela o streaming ativo no runtime ODBC.
   ///
   /// Deve interromper a operação em andamento e liberar recursos.
-  Future<Result<void>> cancelActiveStream();
+  Future<Result<void>> cancelActiveStream({
+    StreamingCancelReason reason = StreamingCancelReason.user,
+  });
 }

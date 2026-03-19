@@ -50,14 +50,16 @@ class RpcRequestGuard {
     _rpcRequestTimeline.add(now);
 
     final cutoff = now.subtract(_rateLimitWindow);
-    while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
+    while (_rpcRequestTimeline.isNotEmpty &&
+        _rpcRequestTimeline.first.isBefore(cutoff)) {
       _rpcRequestTimeline.removeAt(0);
     }
   }
 
   bool _isRateLimited(DateTime now) {
     final cutoff = now.subtract(_rateLimitWindow);
-    while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
+    while (_rpcRequestTimeline.isNotEmpty &&
+        _rpcRequestTimeline.first.isBefore(cutoff)) {
       _rpcRequestTimeline.removeAt(0);
     }
     return _rpcRequestTimeline.length > _maxRequestsPerWindow;

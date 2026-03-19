@@ -12,6 +12,7 @@ class AppStrings {
   static const String tabWebSocketConnection = 'Conexão WebSocket';
   static const String tabClientTokenAuthorization =
       'Autorização de Token do Cliente';
+  static const String tabWebSocketDiagnostics = 'Diagnóstico';
   static const String navSettings = 'Configurações';
   static const String navDatabaseSettings = 'Banco de dados';
 
@@ -71,6 +72,19 @@ class AppStrings {
   static const String wsButtonDisconnect = 'Desconectar';
   static const String wsButtonConnect = 'Conectar';
   static const String wsButtonSaveConfig = 'Salvar Configuração';
+
+  // Diagnostics (advanced)
+  static const String diagnosticsSectionTitle = 'Diagnóstico avançado';
+  static const String diagnosticsWarningTitle = 'Dados sensíveis nos logs';
+  static const String diagnosticsWarningBody =
+      'As opções abaixo podem gravar SQL ou detalhes técnicos nos logs do '
+      'aplicativo. Use apenas para depuração e desative em produção quando '
+      'houver dados pessoais ou segredos.';
+  static const String diagnosticsOdbcPaginatedSqlLogLabel =
+      'Log de SQL paginada (ODBC)';
+  static const String diagnosticsOdbcPaginatedSqlLogDescription =
+      'Quando ativado, o agente registra a SQL final após reescrita de '
+      'paginação gerenciada (developer log).';
 
   // Client Token Settings
   static const String ctSectionTitle = 'Client Token Authorization';
@@ -382,6 +396,19 @@ class AppStrings {
   static const String querySqlHandlingModePreserve = 'Preservar SQL';
   static const String querySqlHandlingModePreserveHint =
       'Executa a SQL exatamente como enviada, sem reescrita de paginação';
+  static const String queryPlaygroundHintLastRunPreserve =
+      'Última execução: SQL preservada (sem reescrita de paginação pelo agente).';
+  static const String queryPlaygroundHintLastRunManagedPagination =
+      'Última execução: paginação gerenciada — a SQL pode ter sido reescrita para o dialeto do banco.';
+  static const String queryPlaygroundHintLastRunManaged =
+      'Última execução: modo gerenciado — limites e ajustes do agente podem aplicar-se à SQL.';
+  static const String queryPlaygroundHintLastRunStreaming =
+      'Última execução: modo streaming — resultados recebidos em fluxo contínuo.';
+  static const String queryPlaygroundStreamingRowCapHint =
+      'Exibição limitada a {max} linhas no streaming (memória). A consulta no '
+      'servidor foi interrompida ao atingir esse limite.';
+  static const String wsLogPreserveSqlDeprecatedUses =
+      'Uso de preserve_sql (deprecated)';
   static const String queryStreamingModeHint =
       'Para grandes datasets (milhares de linhas)';
   static const String queryStreamingProgress = 'Processando';

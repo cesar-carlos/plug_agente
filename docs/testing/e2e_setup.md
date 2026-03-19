@@ -36,6 +36,7 @@ Testes end-to-end e de integração que usam recursos reais (API, ODBC) dependem
 | `ODBC_INTEGRATION_SMOKE_QUERY`                      | Não          | Query smoke (default: `SELECT 1`)                                     |
 | `ODBC_INTEGRATION_LONG_QUERY`                       | Cancelamento | Query longa para teste de cancelamento                                |
 | `ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE`          | Não          | Query longa específica SQL Anywhere (ex.: `SELECT * FROM sys.systab`) |
+| `ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY`              | Não          | Query opcional para `odbc_sql_anywhere_top_start_at_live_test` (TOP/START AT) |
 | `ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER`            | Não          | Query longa específica SQL Server (ex.: `SELECT * FROM sys.tables`)   |
 | `ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL`            | Não          | Query longa específica PostgreSQL (ex.: `SELECT * FROM pg_tables`)    |
 

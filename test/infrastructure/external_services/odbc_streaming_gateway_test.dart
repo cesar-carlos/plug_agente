@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -150,5 +151,64 @@ void main() {
         () => mockService.disconnect('conn-cancel'),
       ).called(greaterThan(0));
     });
+
+    test(
+      'should return success when cancelled for playground row cap',
+      () async {
+        final controller = StreamController<Result<QueryResult>>();
+
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'conn-cap',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.initialize()).thenAnswer(
+          (_) async => const Success(unit),
+        );
+        when(
+          () => mockService.streamQuery('conn-cap', any()),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockService.disconnect(any()),
+        ).thenAnswer((_) async => const Success(unit));
+
+        final execution = gateway.executeQueryStream(
+          'SELECT * FROM users',
+          'DSN=Test',
+          (_) {},
+          fetchSize: 10,
+        );
+
+        unawaited(
+          gateway.cancelActiveStream(
+            reason: StreamingCancelReason.playgroundRowCap,
+          ),
+        );
+
+        controller.add(
+          const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+        await controller.close();
+
+        final result = await execution;
+
+        expect(result.isSuccess(), isTrue);
+      },
+    );
   });
 }

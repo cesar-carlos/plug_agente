@@ -20,6 +20,7 @@ import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -45,6 +46,10 @@ class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 Map<String, dynamic> _userAt(int i) => {'id': i, 'name': 'user$i'};
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(StreamingCancelReason.user);
+  });
+
   group('RpcMethodDispatcher', () {
     late MockDatabaseGateway mockGateway;
     late MockQueryNormalizerService mockNormalizer;
@@ -1584,7 +1589,9 @@ void main() {
           ).thenReturn(true);
           when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
           when(
-            () => mockStreamingGateway.cancelActiveStream(),
+            () => mockStreamingGateway.cancelActiveStream(
+              reason: any(named: 'reason'),
+            ),
           ).thenAnswer((_) async => const Success(unit));
 
           final mockConfigRepo = MockAgentConfigRepository();

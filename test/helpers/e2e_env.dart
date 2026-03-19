@@ -38,15 +38,15 @@ class E2EEnv {
 
   /// Base URL for API E2E tests (default: http://31.97.29.223:3000/).
   static String get apiTestBaseUrl => _validatedUrl(
-        _get('API_TEST_BASE_URL') ?? _defaultApiBaseUrl,
-        _defaultApiBaseUrl,
-      );
+    _get('API_TEST_BASE_URL') ?? _defaultApiBaseUrl,
+    _defaultApiBaseUrl,
+  );
 
   /// URL for timeout test (must not respond). Default: non-routable IP.
   static String get apiTestTimeoutUrl => _validatedUrl(
-        _get('API_TEST_TIMEOUT_URL') ?? _defaultTimeoutUrl,
-        _defaultTimeoutUrl,
-      );
+    _get('API_TEST_TIMEOUT_URL') ?? _defaultTimeoutUrl,
+    _defaultTimeoutUrl,
+  );
 
   /// ODBC connection string for integration tests (SQL Anywhere / Sybase).
   /// Uses ODBC_TEST_DSN or ODBC_DSN.
@@ -73,6 +73,11 @@ class E2EEnv {
   /// Smoke query for ODBC integration (default: SELECT 1).
   static String get odbcSmokeQuery =>
       _get('ODBC_INTEGRATION_SMOKE_QUERY') ?? 'SELECT 1';
+
+  /// Optional SQL Anywhere smoke using TOP/START AT (pagination-shaped).
+  /// When unset, a built-in query against `sys.systable` is used.
+  static String? get odbcSqlAnywhereTopStartAtQuery =>
+      _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');
 
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.

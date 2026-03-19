@@ -7,6 +7,7 @@ import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/diagnostics_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
@@ -278,6 +279,11 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
                 icon: FluentIcons.permissions,
                 text: AppStrings.tabClientTokenAuthorization,
                 body: _ClientTokenTabContent(),
+              ),
+              const SettingsTabItem(
+                icon: FluentIcons.info,
+                text: AppStrings.tabWebSocketDiagnostics,
+                body: DiagnosticsConfigSection(),
               ),
             ],
           ),

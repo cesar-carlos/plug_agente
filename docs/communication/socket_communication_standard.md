@@ -386,6 +386,12 @@ Response:
   `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
   o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
   explicito.
+- **Dialeto da SQL gerada (paginacao gerenciada):** o agente reescreve a query
+  conforme o driver configurado — **PostgreSQL** usa `LIMIT`/`OFFSET` no
+  envelope; **SQL Server** usa `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`;
+  **SQL Anywhere** usa `TOP n START AT m` (nao suporta `OFFSET`/`FETCH` do
+  SQL Server). Integradores (ex.: plug_server) devem enviar apenas `sql` +
+  `options`; nao dependem da forma literal da SQL final.
 - `options.execution_mode`: controla como o agente trata a SQL. `managed`
   (default) permite reescrita gerenciada para paginacao quando aplicavel.
   `preserve` executa a SQL exatamente como foi enviada e nao aplica reescrita

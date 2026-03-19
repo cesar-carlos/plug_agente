@@ -62,7 +62,8 @@ void main() {
       () {
         final failure = OdbcFailureMapper.mapConnectionError(
           const ConnectionError(
-            message: '[Sybase][ODBC Driver][SQL Anywhere]Database server not found',
+            message:
+                '[Sybase][ODBC Driver][SQL Anywhere]Database server not found',
             sqlState: '08001',
             nativeCode: -100,
           ),

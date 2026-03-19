@@ -6,6 +6,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -19,6 +20,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   final IOdbcConnectionSettings _settings;
   String? _activeConnectionId;
   bool _isCancelRequested = false;
+  StreamingCancelReason _cancelReason = StreamingCancelReason.user;
   bool _initialized = false;
   static const Duration _cancelDisconnectTimeout = Duration(seconds: 3);
 
@@ -72,7 +74,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           operation: 'initialize_streaming_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
+            'user_message':
+                'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
       ),
@@ -88,6 +91,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     int chunkSizeBytes = 1024 * 1024,
   }) async {
     _isCancelRequested = false;
+    _cancelReason = StreamingCancelReason.user;
 
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -116,6 +120,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
             query,
           )) {
             if (_isCancelRequested) {
+              if (_cancelReason == StreamingCancelReason.playgroundRowCap) {
+                return const Success(unit);
+              }
               return Failure(
                 OdbcFailureMapper.mapStreamingError(
                   StateError('stream_cancelled'),
@@ -170,15 +177,20 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   }
 
   @override
-  Future<Result<void>> cancelActiveStream() async {
+  Future<Result<void>> cancelActiveStream({
+    StreamingCancelReason reason = StreamingCancelReason.user,
+  }) async {
     final activeConnectionId = _activeConnectionId;
     if (activeConnectionId == null) {
       return const Success(unit);
     }
 
+    _cancelReason = reason;
     _isCancelRequested = true;
     try {
-      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
+      final result = await _service
+          .disconnect(activeConnectionId)
+          .timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(

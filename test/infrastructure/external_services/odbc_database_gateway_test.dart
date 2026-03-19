@@ -354,6 +354,87 @@ void main() {
     });
 
     test(
+      'should apply SQL Anywhere offset pagination with TOP START AT syntax',
+      () async {
+        const pooledConnectionId = 'pool-sa-page';
+        const connectionString = 'Driver={SQL Anywhere 17};Server=localhost;';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere 17',
+        );
+        final request = QueryRequest(
+          id: 'req-sa-page',
+          agentId: config.agentId,
+          query: 'SELECT * FROM produto ORDER BY CodProduto',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 2,
+            pageSize: 2,
+            queryHash: 'query-hash',
+            orderBy: [
+              QueryPaginationOrderTerm(
+                expression: 'CodProduto',
+                lookupKey: 'CodProduto',
+              ),
+            ],
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['CodProduto'],
+              rows: [
+                [3],
+                [4],
+                [5],
+              ],
+              rowCount: 3,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final capturedSql =
+            verify(
+                  () => mockService.executeQuery(
+                    captureAny(),
+                    connectionId: pooledConnectionId,
+                  ),
+                ).captured.single
+                as String;
+        expect(capturedSql, contains('TOP 3 START AT 3'));
+        expect(capturedSql, isNot(contains('OFFSET')));
+        expect(capturedSql, isNot(contains('FETCH NEXT')));
+        expect(capturedSql, contains('ORDER BY CodProduto ASC'));
+      },
+    );
+
+    test(
       'should reject SQL Server pagination without explicit order by terms',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -795,6 +876,90 @@ void main() {
       expect(capturedSql, contains('ORDER BY id ASC'));
       expect(capturedSql, contains('FETCH NEXT 3 ROWS ONLY'));
     });
+
+    test(
+      'should apply SQL Anywhere keyset cursor pagination with TOP syntax',
+      () async {
+        const pooledConnectionId = 'pool-sa-cursor';
+        const connectionString = 'Driver={SQL Anywhere 17};Server=localhost;';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere 17',
+        );
+        final request = QueryRequest(
+          id: 'req-sa-cursor',
+          agentId: config.agentId,
+          query: 'SELECT * FROM users ORDER BY id',
+          timestamp: DateTime.now(),
+          pagination: const QueryPaginationRequest(
+            page: 2,
+            pageSize: 2,
+            cursor: 'cursor-1',
+            queryHash: 'query-hash',
+            orderBy: [
+              QueryPaginationOrderTerm(
+                expression: 'id',
+                lookupKey: 'id',
+              ),
+            ],
+            lastRowValues: [2],
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [3],
+                [4],
+                [5],
+              ],
+              rowCount: 3,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final capturedSql =
+            verify(
+                  () => mockService.executeQuery(
+                    captureAny(),
+                    connectionId: pooledConnectionId,
+                  ),
+                ).captured.single
+                as String;
+        expect(capturedSql, contains('TOP 3'));
+        expect(capturedSql, contains('WHERE (id > 2)'));
+        expect(capturedSql, contains('ORDER BY id ASC'));
+        expect(capturedSql, isNot(contains('OFFSET')));
+        expect(capturedSql, isNot(contains('FETCH NEXT')));
+      },
+    );
 
     test('should map multiple result sets and row counts', () async {
       const pooledConnectionId = 'pool-multi';

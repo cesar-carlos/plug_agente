@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -19,7 +21,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   _onRegister;
   final void Function(String streamId) _onUnregister;
 
-  final List<RpcStreamChunk> _chunkQueue = [];
+  final Queue<RpcStreamChunk> _chunkQueue = Queue<RpcStreamChunk>();
   RpcStreamComplete? _pendingComplete;
   String? _streamId;
   bool _registered = false;
@@ -33,7 +35,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   void _flush() {
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
-      final chunk = _chunkQueue.removeAt(0);
+      final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();
       _emit('rpc:chunk', payload);
       _sendCredit--;
@@ -62,7 +64,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     _chunkQueue.add(chunk);
     while (_chunkQueue.length >
         ConnectionConstants.maxBackpressureChunkQueueSize) {
-      _chunkQueue.removeAt(0);
+      _chunkQueue.removeFirst();
     }
     _flush();
   }

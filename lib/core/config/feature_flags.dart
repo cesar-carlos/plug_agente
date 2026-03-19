@@ -40,6 +40,8 @@ class FeatureFlags {
       'feature_enable_socket_streaming_from_db';
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
+  static const _keyEnableOdbcPaginatedSqlDebugLog =
+      'feature_enable_odbc_paginated_sql_debug_log';
 
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload =>
@@ -194,6 +196,16 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnablePayloadSigning, value);
   }
 
+  /// Logs final paginated SQL at debug level when the agent rewrites queries
+  /// (managed pagination). Off by default; avoid enabling in production with
+  /// sensitive data.
+  bool get enableOdbcPaginatedSqlDebugLog =>
+      _prefs.getBool(_keyEnableOdbcPaginatedSqlDebugLog) ?? false;
+
+  Future<void> setEnableOdbcPaginatedSqlDebugLog(bool value) async {
+    await _prefs.setBool(_keyEnableOdbcPaginatedSqlDebugLog, value);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
@@ -215,5 +227,6 @@ class FeatureFlags {
     await setEnableSocketStreamingFromDb(false);
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
+    await setEnableOdbcPaginatedSqlDebugLog(false);
   }
 }

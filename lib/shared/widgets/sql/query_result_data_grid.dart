@@ -4,18 +4,57 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
-class QueryResultDataGrid extends StatelessWidget {
+/// Result grid with cached [DataGridRow] rows and O(1) column metadata lookup.
+class QueryResultDataGrid extends StatefulWidget {
   const QueryResultDataGrid({
     required this.data,
     super.key,
     this.columnMetadata,
   });
+
   final List<Map<String, dynamic>> data;
   final List<Map<String, dynamic>>? columnMetadata;
 
   @override
+  State<QueryResultDataGrid> createState() => _QueryResultDataGridState();
+}
+
+class _QueryResultDataGridState extends State<QueryResultDataGrid> {
+  late final _CachingQueryDataSource _dataSource = _CachingQueryDataSource(
+    widget.data,
+  );
+  Map<String, Map<String, dynamic>> _metadataByLowerName = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
+  }
+
+  @override
+  void didUpdateWidget(QueryResultDataGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final metaChanged = !identical(
+      oldWidget.columnMetadata,
+      widget.columnMetadata,
+    );
+    if (metaChanged) {
+      _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
+    }
+    final dataChanged =
+        !identical(oldWidget.data, widget.data) ||
+        oldWidget.data.length != widget.data.length;
+    if (dataChanged) {
+      _dataSource.updateData(widget.data);
+    }
+    if (metaChanged && !dataChanged) {
+      setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) {
+    if (widget.data.isEmpty) {
       return const CenteredMessage(
         title: AppStrings.queryNoResults,
         message: AppStrings.queryNoResultsMessage,
@@ -23,12 +62,11 @@ class QueryResultDataGrid extends StatelessWidget {
       );
     }
 
-    final columnKeys = data.first.keys.toList();
+    final columnKeys = widget.data.first.keys.toList();
     final columns = _generateColumns(context, columnKeys);
-    final dataSource = _QueryDataSource(data);
 
     return SfDataGrid(
-      source: dataSource,
+      source: _dataSource,
       columns: columns,
       allowSorting: true,
       allowFiltering: true,
@@ -43,7 +81,7 @@ class QueryResultDataGrid extends StatelessWidget {
     List<String> keys,
   ) {
     return keys.map((key) {
-      final metadata = _findColumnMetadata(key);
+      final metadata = _metadataByLowerName[key.toLowerCase()];
       final columnWidth = _calculateColumnWidth(key, metadata);
 
       return GridColumn(
@@ -61,51 +99,32 @@ class QueryResultDataGrid extends StatelessWidget {
     }).toList();
   }
 
-  Map<String, dynamic>? _findColumnMetadata(String columnName) {
-    if (columnMetadata == null) return null;
-
-    try {
-      return columnMetadata!.firstWhere(
-        (col) =>
-            (col['name'] as String?)?.toLowerCase() == columnName.toLowerCase(),
-      );
-    } on Exception {
-      return null;
-    }
-  }
-
   double _calculateColumnWidth(
     String columnName,
     Map<String, dynamic>? metadata,
   ) {
     const minWidth = 80.0;
     const maxWidth = 300.0;
-    const padding = 32.0; // Padding para texto + ícones de ordenação/filtro
-    const charWidth = 8.0; // Largura aproximada por caractere
+    const padding = 32.0;
+    const charWidth = 8.0;
 
-    // Calcular largura baseada no nome da coluna
     final columnDisplayName = metadata?['name'] as String? ?? columnName;
     final nameWidth = columnDisplayName.length * charWidth + padding;
 
-    // Calcular largura baseada no tamanho da coluna no banco
     double? sizeWidth;
     if (metadata != null) {
       final length = _extractLength(metadata['length']);
       if (length != null && length > 0) {
-        // Para colunas de texto, usar o tamanho como referência
-        // Limitar a um máximo razoável (ex: 50 caracteres para cálculo)
         final effectiveLength = length > 50 ? 50 : length;
         sizeWidth = effectiveLength * charWidth + padding;
       }
     }
 
-    // Usar o maior entre nome e tamanho, mas respeitando limites
     var finalWidth = nameWidth;
     if (sizeWidth != null && sizeWidth > finalWidth) {
       finalWidth = sizeWidth;
     }
 
-    // Garantir limites mínimo e máximo
     if (finalWidth < minWidth) {
       finalWidth = minWidth;
     }
@@ -116,7 +135,6 @@ class QueryResultDataGrid extends StatelessWidget {
     return finalWidth;
   }
 
-  /// Extrai o valor de length do metadata, suportando String ou int
   int? _extractLength(dynamic lengthValue) {
     if (lengthValue == null) return null;
 
@@ -128,27 +146,81 @@ class QueryResultDataGrid extends StatelessWidget {
       return int.tryParse(lengthValue);
     }
 
-    // Tentar converter para string e depois para int
     return int.tryParse(lengthValue.toString());
   }
 }
 
-class _QueryDataSource extends DataGridSource {
-  _QueryDataSource(this.data);
+Map<String, Map<String, dynamic>> _buildColumnMetadataIndex(
+  List<Map<String, dynamic>>? columnMetadata,
+) {
+  if (columnMetadata == null || columnMetadata.isEmpty) {
+    return {};
+  }
+  final out = <String, Map<String, dynamic>>{};
+  for (final col in columnMetadata) {
+    final name = col['name'] as String?;
+    if (name == null || name.isEmpty) {
+      continue;
+    }
+    out[name.toLowerCase()] = col;
+  }
+  return out;
+}
 
-  final List<Map<String, dynamic>> data;
+/// Avoids rebuilding [DataGridRow] lists on every [rows] access (Syncfusion may
+/// read [rows] repeatedly).
+class _CachingQueryDataSource extends DataGridSource {
+  _CachingQueryDataSource(this._data);
+
+  List<Map<String, dynamic>> _data;
+  List<DataGridRow>? _rowsCache;
+  int _cachedLength = -1;
+  String? _structureKey;
+
+  void updateData(List<Map<String, dynamic>> data) {
+    _data = data;
+    _invalidateCache();
+    notifyListeners();
+  }
+
+  void _invalidateCache() {
+    _rowsCache = null;
+    _cachedLength = -1;
+    _structureKey = null;
+  }
+
+  String? _computeStructureKey() {
+    if (_data.isEmpty) {
+      return '';
+    }
+    final keys = _data.first.keys.toList()..sort();
+    return '${_data.length}:${keys.join('|')}';
+  }
 
   @override
   List<DataGridRow> get rows {
-    if (data.isEmpty) return [];
-    final keys = data.first.keys.toList();
-    return data.map((row) {
+    if (_data.isEmpty) {
+      return [];
+    }
+    final structureKey = _computeStructureKey();
+    if (_rowsCache != null &&
+        _cachedLength == _data.length &&
+        _structureKey == structureKey) {
+      return _rowsCache!;
+    }
+    final keys = _data.first.keys.toList();
+    _structureKey = structureKey;
+    _cachedLength = _data.length;
+    _rowsCache = _data.map((row) {
       return DataGridRow(
-        cells: keys.map((key) {
-          return DataGridCell(columnName: key, value: row[key]);
-        }).toList(),
+        cells: keys
+            .map(
+              (key) => DataGridCell(columnName: key, value: row[key]),
+            )
+            .toList(),
       );
     }).toList();
+    return _rowsCache!;
   }
 
   @override

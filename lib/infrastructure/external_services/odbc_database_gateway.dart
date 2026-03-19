@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -19,6 +20,7 @@ import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_paginated_sql_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -78,14 +80,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     this._connectionPool,
     this._retryManager,
     this._metrics,
-    this._settings,
-  ) : _uuid = const Uuid();
+    this._settings, {
+    FeatureFlags? featureFlags,
+  }) : _featureFlags = featureFlags,
+       _uuid = const Uuid();
   final OdbcService _service;
   final IAgentConfigRepository _configRepository;
   final IConnectionPool _connectionPool;
   final IRetryManager _retryManager;
   final MetricsCollector _metrics;
   final IOdbcConnectionSettings _settings;
+  final FeatureFlags? _featureFlags;
   final Uuid _uuid;
   bool _initialized = false;
   static const int _bufferRetryMarginBytes = 1024 * 1024;
@@ -388,6 +393,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (queryValidation != null) {
       return Failure(queryValidation);
     }
+
+    _maybeLogPaginatedSqlRewrite(
+      request: request,
+      databaseConfig: databaseConfig,
+      preparedExecution: preparedExecution,
+    );
 
     final poolResult = await _connectionPool.acquire(connectionString);
 
@@ -1448,6 +1459,29 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     };
   }
 
+  void _maybeLogPaginatedSqlRewrite({
+    required QueryRequest request,
+    required DatabaseConfig databaseConfig,
+    required _PreparedQueryExecution preparedExecution,
+  }) {
+    final flags = _featureFlags;
+    if (flags == null || !flags.enableOdbcPaginatedSqlDebugLog) {
+      return;
+    }
+    if (request.pagination == null || request.preserveSql) {
+      return;
+    }
+    final original = request.query.trim();
+    final rewritten = preparedExecution.sql.trim();
+    if (original == rewritten) {
+      return;
+    }
+    developer.log(
+      'Paginated SQL (${databaseConfig.databaseType.name}): $rewritten',
+      name: 'odbc_database_gateway',
+    );
+  }
+
   domain.ValidationFailure? _validatePaginationForDatabase(
     QueryRequest request,
     DatabaseType databaseType,
@@ -1503,12 +1537,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final sql = pagination.usesStableCursor
-        ? _buildCursorPaginatedSql(
+        ? OdbcPaginatedSqlBuilder.buildCursorPaginatedSql(
             request.query,
             databaseConfig.databaseType,
             pagination,
           )
-        : _buildOffsetPaginatedSql(
+        : OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
             request.query,
             databaseConfig.databaseType,
             pagination,
@@ -1610,166 +1644,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       hasNextPage: hasNextPage,
       hasPreviousPage: pagination.page > 1,
       currentCursor: pagination.cursor,
-      nextCursor: hasNextPage ? _buildNextCursor(pagination, pageData) : null,
+      nextCursor: hasNextPage
+          ? OdbcPaginatedSqlBuilder.buildNextCursorToken(
+              pagination: pagination,
+              pageData: pageData,
+            )
+          : null,
     );
-  }
-
-  String _buildOffsetPaginatedSql(
-    String originalSql,
-    DatabaseType databaseType,
-    QueryPaginationRequest pagination,
-  ) {
-    final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
-    final orderByClause = pagination.orderBy.isEmpty
-        ? null
-        : _buildOrderByClause(pagination.orderBy);
-    return switch (databaseType) {
-      DatabaseType.postgresql =>
-        '''
-SELECT *
-FROM (
-  $trimmedSql
-) AS plug_paginated_source
-${orderByClause != null ? 'ORDER BY $orderByClause' : ''}
-LIMIT ${pagination.fetchSizeWithLookAhead} OFFSET ${pagination.offset}
-''',
-      DatabaseType.sqlServer || DatabaseType.sybaseAnywhere =>
-        '''
-SELECT *
-FROM (
-  $trimmedSql
-) AS plug_paginated_source
-ORDER BY ${orderByClause ?? '(SELECT NULL)'}
-OFFSET ${pagination.offset} ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
-''',
-    };
-  }
-
-  String _buildCursorPaginatedSql(
-    String originalSql,
-    DatabaseType databaseType,
-    QueryPaginationRequest pagination,
-  ) {
-    final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
-    final orderByClause = _buildOrderByClause(pagination.orderBy);
-    final whereClause = _buildKeysetWhereClause(
-      pagination.orderBy,
-      pagination.lastRowValues,
-      databaseType,
-    );
-
-    return switch (databaseType) {
-      DatabaseType.postgresql =>
-        '''
-SELECT *
-FROM (
-  $trimmedSql
-) AS plug_paginated_source
-WHERE $whereClause
-ORDER BY $orderByClause
-LIMIT ${pagination.fetchSizeWithLookAhead}
-''',
-      DatabaseType.sqlServer || DatabaseType.sybaseAnywhere =>
-        '''
-SELECT *
-FROM (
-  $trimmedSql
-) AS plug_paginated_source
-WHERE $whereClause
-ORDER BY $orderByClause
-OFFSET 0 ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
-''',
-    };
-  }
-
-  String _buildOrderByClause(List<QueryPaginationOrderTerm> orderBy) {
-    return orderBy
-        .map(
-          (term) => '${term.expression}${term.descending ? ' DESC' : ' ASC'}',
-        )
-        .join(', ');
-  }
-
-  String _buildKeysetWhereClause(
-    List<QueryPaginationOrderTerm> orderBy,
-    List<dynamic> lastRowValues,
-    DatabaseType databaseType,
-  ) {
-    final disjunctions = <String>[];
-
-    for (var i = 0; i < orderBy.length; i++) {
-      final conjunctions = <String>[];
-      for (var j = 0; j < i; j++) {
-        conjunctions.add(
-          '${orderBy[j].expression} = '
-          '${_toSqlLiteral(lastRowValues[j], databaseType)}',
-        );
-      }
-
-      final operator = orderBy[i].descending ? '<' : '>';
-      conjunctions.add(
-        '${orderBy[i].expression} $operator '
-        '${_toSqlLiteral(lastRowValues[i], databaseType)}',
-      );
-      disjunctions.add('(${conjunctions.join(' AND ')})');
-    }
-
-    return disjunctions.join(' OR ');
-  }
-
-  String? _buildNextCursor(
-    QueryPaginationRequest pagination,
-    List<Map<String, dynamic>> pageData,
-  ) {
-    if (pageData.isEmpty) {
-      return null;
-    }
-    if (pagination.orderBy.isEmpty) {
-      return null;
-    }
-
-    final lastRow = pageData.last;
-    final lastRowValues = <dynamic>[];
-    for (final term in pagination.orderBy) {
-      if (!lastRow.containsKey(term.lookupKey)) {
-        developer.log(
-          'Unable to derive cursor key "${term.lookupKey}" from page data',
-          name: 'database_gateway',
-          level: 900,
-        );
-        return null;
-      }
-      lastRowValues.add(lastRow[term.lookupKey]);
-    }
-
-    return QueryPaginationCursor(
-      page: pagination.page + 1,
-      pageSize: pagination.pageSize,
-      queryHash: pagination.queryHash,
-      orderBy: pagination.orderBy,
-      lastRowValues: lastRowValues,
-    ).toToken();
-  }
-
-  String _toSqlLiteral(dynamic value, DatabaseType databaseType) {
-    if (value == null) {
-      throw StateError('Cursor pagination does not support null order values');
-    }
-    if (value is num) {
-      return value.toString();
-    }
-    if (value is bool) {
-      return switch (databaseType) {
-        DatabaseType.postgresql => value ? 'TRUE' : 'FALSE',
-        DatabaseType.sqlServer ||
-        DatabaseType.sybaseAnywhere => value ? '1' : '0',
-      };
-    }
-    if (value is DateTime) {
-      return "'${value.toUtc().toIso8601String().replaceAll("'", "''")}'";
-    }
-    final stringValue = value.toString().replaceAll("'", "''");
-    return "'$stringValue'";
   }
 
   List<Map<String, dynamic>> _convertQueryResultToMaps(QueryResult result) {

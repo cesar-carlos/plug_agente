@@ -3,7 +3,7 @@
   "info": {
     "title": "Plug Agente Socket RPC",
     "version": "2.5.0",
-    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO."
+    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. sql.execute results include effective_max_rows when applicable; managed pagination SQL shape depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET)."
   },
   "servers": [
     {

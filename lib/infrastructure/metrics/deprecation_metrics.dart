@@ -6,6 +6,7 @@ class DeprecationMetricsCollector implements IDeprecationMetricsCollector {
 
   int _preserveSqlUsageCount = 0;
 
+  @override
   int get preserveSqlUsageCount => _preserveSqlUsageCount;
 
   @override

@@ -32,7 +32,8 @@ class FakeTransportClient implements ITransportClient {
   Future<Result<void>> disconnect() async => const Success(unit);
 
   @override
-  Future<Result<void>> sendResponse(QueryResponse response) async => const Success(unit);
+  Future<Result<void>> sendResponse(QueryResponse response) async =>
+      const Success(unit);
 
   @override
   bool get isConnected => false;
@@ -97,7 +98,8 @@ void main() {
     test('should recover connection after failures with backoff', () async {
       var connectCallCount = 0;
       when(
-        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+        () =>
+            mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).thenAnswer((_) async {
         connectCallCount++;
         if (connectCallCount == 1) {
@@ -130,14 +132,16 @@ void main() {
       await waitForStatus(provider, ConnectionStatus.reconnecting);
       await waitForStatus(provider, ConnectionStatus.connected);
       verify(
-        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+        () =>
+            mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).called(greaterThanOrEqualTo(4));
     });
 
     test('should fail recovery when all retries exhausted', () async {
       var connectCallCount = 0;
       when(
-        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+        () =>
+            mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).thenAnswer((_) async {
         connectCallCount++;
         if (connectCallCount == 1) {

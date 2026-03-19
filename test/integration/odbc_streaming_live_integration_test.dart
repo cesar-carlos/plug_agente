@@ -13,8 +13,8 @@ void main() async {
       connectionString != null && connectionString.trim().isNotEmpty;
   final smokeQuery = E2EEnv.odbcSmokeQuery;
   final longRunningQuery = E2EEnv.odbcLongQuery;
-  final longQueryValid = longRunningQuery != null &&
-      longRunningQuery.trim().isNotEmpty;
+  final longQueryValid =
+      longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
 
   group('ODBC streaming live integration', () {
     late odbc.ServiceLocator locator;
@@ -46,7 +46,11 @@ void main() async {
     test(
       'should stream rows with a real DSN',
       () async {
-        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
+        expect(
+          isReady,
+          isTrue,
+          reason: 'ODBC init failed or DSN not configured',
+        );
 
         var totalRows = 0;
         final result = await gateway.executeQueryStream(
@@ -69,7 +73,11 @@ void main() async {
     test(
       'should support cancellation with long-running query',
       () async {
-        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
+        expect(
+          isReady,
+          isTrue,
+          reason: 'ODBC init failed or DSN not configured',
+        );
         expect(longQueryValid, isTrue, reason: 'Long query not configured');
 
         final query = longRunningQuery!;

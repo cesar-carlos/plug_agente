@@ -101,7 +101,8 @@ void main() {
     }
 
     dynamic decodeWirePayload(dynamic payload) {
-      if (payload is! Map<String, dynamic> || !payload.containsKey('schemaVersion')) {
+      if (payload is! Map<String, dynamic> ||
+          !payload.containsKey('schemaVersion')) {
         return payload;
       }
       final frame = PayloadFrame.fromJson(payload);
@@ -139,7 +140,8 @@ void main() {
       ).thenReturn(mockSocket);
       when(() => mockSocket.connected).thenReturn(true);
       when(() => mockSocket.on(any<String>(), any())).thenAnswer((invocation) {
-        handlers[invocation.positionalArguments[0] as String] = invocation.positionalArguments[1] as Function;
+        handlers[invocation.positionalArguments[0] as String] =
+            invocation.positionalArguments[1] as Function;
         return () {};
       });
       when(() => mockSocket.emit(any<String>(), any<dynamic>())).thenAnswer((
@@ -232,7 +234,9 @@ void main() {
       expect(emitted.any((item) => item.event == 'agent:register'), isTrue);
       final registerPayload =
           decodeWirePayload(
-                emitted.firstWhere((item) => item.event == 'agent:register').data,
+                emitted
+                    .firstWhere((item) => item.event == 'agent:register')
+                    .data,
               )
               as Map<String, dynamic>;
       expect(registerPayload['agentId'], 'agent-1');
@@ -442,7 +446,9 @@ void main() {
         );
         final responsePayload =
             decodeWirePayload(
-                  emitted.firstWhere((item) => item.event == 'rpc:response').data,
+                  emitted
+                      .firstWhere((item) => item.event == 'rpc:response')
+                      .data,
                 )
                 as Map<String, dynamic>;
         final error = responsePayload['error'] as Map<String, dynamic>;
@@ -668,12 +674,12 @@ void main() {
 
           final responsePayload =
               decodeWirePayload(
-                    emitted.firstWhere((item) => item.event == 'rpc:response')
+                    emitted
+                        .firstWhere((item) => item.event == 'rpc:response')
                         .data,
                   )
                   as Map<String, dynamic>;
-          final result =
-              responsePayload['result'] as Map<String, dynamic>?;
+          final result = responsePayload['result'] as Map<String, dynamic>?;
           expect(result, isNotNull);
           final mode = result!['sql_handling_mode'] as String?;
           expect(mode, 'preserve');
@@ -749,12 +755,12 @@ void main() {
 
           final responsePayload =
               decodeWirePayload(
-                    emitted.firstWhere((item) => item.event == 'rpc:response')
+                    emitted
+                        .firstWhere((item) => item.event == 'rpc:response')
                         .data,
                   )
                   as Map<String, dynamic>;
-          final result =
-              responsePayload['result'] as Map<String, dynamic>?;
+          final result = responsePayload['result'] as Map<String, dynamic>?;
           expect(result, isNotNull);
           final mode = result!['sql_handling_mode'] as String?;
           expect(mode, 'preserve');
@@ -774,13 +780,17 @@ void main() {
             id: 'exec-1',
             requestId: 'req-1',
             agentId: 'agent-1',
-            data: const [{'id': 1}],
+            data: const [
+              {'id': 1},
+            ],
             timestamp: DateTime.now(),
           );
-          when(() => mockGateway.executeQuery(any()))
-              .thenAnswer((_) async => Success(queryResponse));
-          when(() => mockNormalizer.normalize(any()))
-              .thenAnswer((_) async => queryResponse);
+          when(
+            () => mockGateway.executeQuery(any()),
+          ).thenAnswer((_) async => Success(queryResponse));
+          when(
+            () => mockNormalizer.normalize(any()),
+          ).thenAnswer((_) async => queryResponse);
 
           final realDispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
@@ -797,8 +807,10 @@ void main() {
             featureFlags: mockFeatureFlags,
           );
 
-          final connectFuture =
-              integrationClient.connect('https://hub.test', 'agent-1');
+          final connectFuture = integrationClient.connect(
+            'https://hub.test',
+            'agent-1',
+          );
           emitEvent('connect');
           await connectFuture;
           emitted.clear();
@@ -818,11 +830,13 @@ void main() {
 
           await Future<void>.delayed(const Duration(milliseconds: 100));
 
-          final responseItems =
-              emitted.where((item) => item.event == 'rpc:response').toList();
+          final responseItems = emitted
+              .where((item) => item.event == 'rpc:response')
+              .toList();
           expect(responseItems, isNotEmpty);
-          final responsePayload = decodeWirePayload(responseItems.first.data)
-              as Map<String, dynamic>;
+          final responsePayload =
+              decodeWirePayload(responseItems.first.data)
+                  as Map<String, dynamic>;
           final result = responsePayload['result'] as Map<String, dynamic>?;
           expect(result, isNotNull);
           expect(result!['sql_handling_mode'], 'preserve');

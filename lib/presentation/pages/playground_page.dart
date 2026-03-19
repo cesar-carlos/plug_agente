@@ -83,8 +83,19 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     final preserve = prefs.getBool(_playgroundSqlHandlingModeKey) ?? false;
     if (!mounted) return;
     context.read<PlaygroundProvider>().setSqlHandlingMode(
-          preserve ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
-        );
+      preserve ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
+    );
+    if (preserve && mounted) {
+      setState(() => _streamingModeEnabled = false);
+      unawaited(
+        _saveStreamingMode(false).catchError(
+          (Object e) => AppLogger.warning(
+            'Failed to sync streaming mode with preserve',
+            e,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _saveSqlHandlingMode(bool preserve) async {
@@ -249,7 +260,6 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       onClear: () => _handleClear(playgroundProvider),
                       onCancel: () => playgroundProvider.cancelQuery(),
                       isExecuting: playgroundProvider.isLoading,
-                      useStreamingMode: config != null,
                       streamingModeEnabled: _streamingModeEnabled,
                       onStreamingModeChanged: (value) {
                         setState(() => _streamingModeEnabled = value);
@@ -264,11 +274,24 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       },
                       sqlHandlingModePreserve:
                           playgroundProvider.sqlHandlingMode ==
-                              SqlHandlingMode.preserve,
+                          SqlHandlingMode.preserve,
                       onSqlHandlingModeChanged: (value) {
                         playgroundProvider.setSqlHandlingMode(
-                          value ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
+                          value
+                              ? SqlHandlingMode.preserve
+                              : SqlHandlingMode.managed,
                         );
+                        if (value) {
+                          setState(() => _streamingModeEnabled = false);
+                          unawaited(
+                            _saveStreamingMode(false).catchError(
+                              (Object e) => AppLogger.warning(
+                                'Failed to save streaming mode',
+                                e,
+                              ),
+                            ),
+                          );
+                        }
                         unawaited(
                           _saveSqlHandlingMode(value).catchError(
                             (Object e) => AppLogger.warning(
@@ -278,7 +301,18 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                           ),
                         );
                       },
+                      useStreamingMode:
+                          config != null &&
+                          playgroundProvider.sqlHandlingMode !=
+                              SqlHandlingMode.preserve,
                     ),
+                    if (playgroundProvider.lastExecutionHint != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        playgroundProvider.lastExecutionHint!,
+                        style: context.bodyMuted,
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: QueryResultsSection(
@@ -295,18 +329,21 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         pageSize: playgroundProvider.pageSize,
                         hasNextPage: playgroundProvider.hasNextPage,
                         hasPreviousPage: playgroundProvider.hasPreviousPage,
-                        showPagination: playgroundProvider.hasPagination &&
+                        showPagination:
+                            playgroundProvider.hasPagination &&
                             playgroundProvider.sqlHandlingMode !=
                                 SqlHandlingMode.preserve,
                         resultSetCount: playgroundProvider.resultSets.length,
                         selectedResultSetIndex:
                             playgroundProvider.selectedResultSetIndex,
-                        onPreviousPage: playgroundProvider.sqlHandlingMode !=
+                        onPreviousPage:
+                            playgroundProvider.sqlHandlingMode !=
                                     SqlHandlingMode.preserve &&
                                 playgroundProvider.hasPreviousPage
                             ? () => playgroundProvider.goToPreviousPage()
                             : null,
-                        onNextPage: playgroundProvider.sqlHandlingMode !=
+                        onNextPage:
+                            playgroundProvider.sqlHandlingMode !=
                                     SqlHandlingMode.preserve &&
                                 playgroundProvider.hasNextPage
                             ? () => playgroundProvider.goToNextPage()
@@ -317,20 +354,20 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                             : null,
                         onPageSizeChanged:
                             playgroundProvider.sqlHandlingMode !=
-                                    SqlHandlingMode.preserve
-                                ? (value) {
-                                    unawaited(
-                                      playgroundProvider
-                                          .setPageSize(value)
-                                          .catchError(
-                                            (Object e) => AppLogger.warning(
-                                              'Failed to set page size',
-                                              e,
-                                            ),
-                                          ),
-                                    );
-                                  }
-                                : null,
+                                SqlHandlingMode.preserve
+                            ? (value) {
+                                unawaited(
+                                  playgroundProvider
+                                      .setPageSize(value)
+                                      .catchError(
+                                        (Object e) => AppLogger.warning(
+                                          'Failed to set page size',
+                                          e,
+                                        ),
+                                      ),
+                                );
+                              }
+                            : null,
                         onShowErrorDetails: playgroundProvider.error != null
                             ? () => _showErrorModal(playgroundProvider.error!)
                             : null,

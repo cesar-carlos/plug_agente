@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -142,7 +143,8 @@ class RpcMethodDispatcher {
     }
 
     final params = request.params as Map<String, dynamic>;
-    final sql = params['sql'] as String?;
+    final paramReader = SqlExecuteParamsReader(params);
+    final sql = paramReader.sql;
     final maxRows = _resolveMaxRows(params, limits.maxRows);
     final deadline = _featureFlags.enableSocketTimeoutByStage
         ? DateTime.now().add(_sqlExecuteTotalBudgetDuration)
@@ -151,7 +153,7 @@ class RpcMethodDispatcher {
     if (sql == null || sql.isEmpty) {
       return _invalidParams(request, 'sql is required');
     }
-    final options = params['options'] as Map<String, dynamic>?;
+    final options = paramReader.options;
     if (options?['preserve_sql'] == true) {
       _deprecationMetrics?.recordPreserveSqlUsage(
         requestId: request.id?.toString(),
@@ -179,8 +181,8 @@ class RpcMethodDispatcher {
     }
     final pagination = paginationResolution.pagination;
     final multiResultRequested = _resolveMultiResult(params);
-    final requestParameters = params['params'] as Map<String, dynamic>?;
-    final database = params['database'] as String?;
+    final requestParameters = paramReader.boundParams;
+    final database = paramReader.database;
 
     if (multiResultRequested &&
         requestParameters != null &&
@@ -197,7 +199,7 @@ class RpcMethodDispatcher {
       );
     }
 
-    final idempotencyKey = params['idempotency_key'] as String?;
+    final idempotencyKey = paramReader.idempotencyKey;
     final idempotencyFingerprint = _buildIdempotencyFingerprint(
       method: request.method,
       params: params,
