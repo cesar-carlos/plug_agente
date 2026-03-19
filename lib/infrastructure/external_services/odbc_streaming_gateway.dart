@@ -74,8 +74,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           operation: 'initialize_streaming_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message':
-                'Não foi possível inicializar o ambiente ODBC para streaming.',
+            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
       ),
@@ -188,9 +187,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     _cancelReason = reason;
     _isCancelRequested = true;
     try {
-      final result = await _service
-          .disconnect(activeConnectionId)
-          .timeout(_cancelDisconnectTimeout);
+      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(

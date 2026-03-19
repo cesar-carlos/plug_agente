@@ -15,9 +15,7 @@ class AuthClient implements IAuthClient {
   final Dio _dio;
 
   String _normalizeUrl(String baseUrl, String path) {
-    final normalizedBase = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
+    final normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     return '$normalizedBase$path';
   }
 
@@ -253,8 +251,7 @@ class AuthClient implements IAuthClient {
     Map<String, dynamic> data, {
     required String fallbackErrorMessage,
   }) {
-    final accessToken =
-        _readString(data, 'accessToken') ?? _readString(data, 'token');
+    final accessToken = _readString(data, 'accessToken') ?? _readString(data, 'token');
     final refreshToken = _readString(data, 'refreshToken');
 
     if (accessToken != null &&
@@ -271,9 +268,7 @@ class AuthClient implements IAuthClient {
 
     return Failure(
       domain.ValidationFailure(
-        _readString(data, 'error') ??
-            _readString(data, 'message') ??
-            fallbackErrorMessage,
+        _readString(data, 'error') ?? _readString(data, 'message') ?? fallbackErrorMessage,
       ),
     );
   }

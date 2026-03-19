@@ -28,9 +28,7 @@ List<Map<String, dynamic>> _compressInIsolate(List<Map<String, dynamic>> data) {
 List<Map<String, dynamic>> _decompressInIsolate(
   List<Map<String, dynamic>> data,
 ) {
-  if (data.length != 1 ||
-      !data.first.containsKey('compressed_data') ||
-      data.first['is_compressed'] != true) {
+  if (data.length != 1 || !data.first.containsKey('compressed_data') || data.first['is_compressed'] != true) {
     return data;
   }
 

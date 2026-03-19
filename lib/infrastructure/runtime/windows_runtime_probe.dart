@@ -18,10 +18,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
       versionInfo.ref.dwOSVersionInfoSize = sizeOf<OSVERSIONINFOEX>();
 
       final rtlGetVersion = DynamicLibrary.open('ntdll.dll')
-          .lookupFunction<
-            Int32 Function(Pointer<OSVERSIONINFOEX>),
-            int Function(Pointer<OSVERSIONINFOEX>)
-          >(
+          .lookupFunction<Int32 Function(Pointer<OSVERSIONINFOEX>), int Function(Pointer<OSVERSIONINFOEX>)>(
             'RtlGetVersion',
           );
 

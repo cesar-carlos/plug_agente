@@ -55,8 +55,7 @@ class TransportPipeline {
       final originalSize = encodedBytes.length;
 
       // 2. Compress (if threshold met and compression enabled)
-      final shouldCompress =
-          compression != 'none' && originalSize >= compressionThreshold;
+      final shouldCompress = compression != 'none' && originalSize >= compressionThreshold;
 
       Uint8List finalBytes;
       String finalCompression;
@@ -122,8 +121,7 @@ class TransportPipeline {
       if (frame.enc != encoding) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message:
-                'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
+            message: 'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
             context: {'expected': encoding, 'actual': frame.enc},
           ),
         );
@@ -151,8 +149,7 @@ class TransportPipeline {
       if (bytes.length != frame.compressedSize) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message:
-                'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
+            message: 'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
             context: {
               'expectedCompressedSize': frame.compressedSize,
               'actualCompressedSize': bytes.length,
@@ -160,8 +157,7 @@ class TransportPipeline {
           ),
         );
       }
-      if (maxCompressedBytes != null &&
-          frame.compressedSize > maxCompressedBytes) {
+      if (maxCompressedBytes != null && frame.compressedSize > maxCompressedBytes) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Compressed payload exceeds negotiated limit',
@@ -203,8 +199,7 @@ class TransportPipeline {
       if (decodableBytes.length != frame.originalSize) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message:
-                'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
+            message: 'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
             context: {
               'expectedOriginalSize': frame.originalSize,
               'actualOriginalSize': decodableBytes.length,
@@ -212,8 +207,7 @@ class TransportPipeline {
           ),
         );
       }
-      if (maxOriginalBytes != null &&
-          decodableBytes.length > maxOriginalBytes) {
+      if (maxOriginalBytes != null && decodableBytes.length > maxOriginalBytes) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Decoded payload exceeds negotiated limit',
@@ -224,8 +218,7 @@ class TransportPipeline {
           ),
         );
       }
-      if (bytes.isNotEmpty &&
-          decodableBytes.length / bytes.length > maxInflationRatio) {
+      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > maxInflationRatio) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Payload inflation ratio exceeds allowed maximum',
