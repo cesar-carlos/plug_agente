@@ -1,43 +1,74 @@
 ---
-description: Clean Architecture - Generic dependency and layer boundary rules
+description: Clean Architecture - layer boundaries and dependency direction
 globs: ["lib/**/*.dart"]
 alwaysApply: true
 ---
 
-# Clean Architecture (Generic)
+# Clean Architecture
 
-## Layers
+## Escopo
 
-- **Domain**: pure business rules (no Flutter, no IO, no infrastructure)
-- **Application**: orchestration/use-case coordination (depends on Domain + Core)
-- **Infrastructure**: implementations (depends on Domain + Core)
-- **Presentation**: UI/state (depends on Application + Domain + Core)
-- **Core/Shared**: cross-cutting code (no dependency on business layers)
+Este arquivo e a fonte de verdade para:
 
-## Dependency Rules (imports)
+- definicao das camadas
+- direcao permitida das dependencias
+- fronteiras entre regras de negocio, orquestracao, infraestrutura e UI
 
-- ✅ **Domain**
-  - may import only **core/shared** and other domain files
-  - must not import **application/infrastructure/presentation**
-  - must not import Flutter/framework packages
+Nao repita aqui regras de estilo, SOLID ou decisoes especificas do repositorio.
+Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
+`project_specifics.mdc`.
 
-- ✅ **Application**
-  - may import **domain** and **core**
-  - must not import **infrastructure** or **presentation**
-  - depends on **interfaces** from Domain (DIP)
+## Camadas
 
-- ✅ **Infrastructure**
-  - may import **domain** and **core**
-  - must not import **application** or **presentation**
-  - implements **Domain interfaces** (repositories, data sources contracts)
+- `domain`: regras de negocio puras, entidades, value objects, contratos e
+  failures
+- `application`: orquestracao de casos de uso, mapeamentos e coordenacao entre
+  interfaces
+- `infrastructure`: IO, rede, banco, codecs, datasources e implementacoes
+  concretas
+- `presentation`: UI, estado visual, navegacao e adaptacao para interacao com o
+  usuario
+- `core/shared`: codigo transversal, utilitarios, tema, config e componentes
+  reaproveitaveis
 
-- ✅ **Presentation**
-  - may import **application**, **domain**, and **core**
-  - must not import **infrastructure**
-  - contains UI concerns only (rendering + UI state)
+## Regras de Dependencia
 
-## Guidance
+- `domain` pode depender apenas de `domain`, `core` e `shared`
+- `domain` nao pode importar Flutter, framework UI, IO ou detalhes de
+  infraestrutura
+- `application` pode depender de `domain` e `core`
+- `application` nao pode importar `infrastructure` nem `presentation`
+- `infrastructure` pode depender de `domain` e `core`
+- `infrastructure` implementa contratos definidos nas camadas mais internas
+- `presentation` pode depender de `application`, `domain`, `core` e `shared`
+- `presentation` nao pode importar `infrastructure` diretamente
 
-- Prefer **small, focused** entities/use cases/services (SRP)
-- Keep Domain **technology-agnostic**
-- Push side effects (IO, DB, network) to Infrastructure
+## Regras de Fronteira
+
+- Coloque efeitos colaterais em `infrastructure`
+- Mantenha `domain` agnostico a tecnologia
+- Exponha contratos nas camadas internas; implemente nas externas
+- Nao atravesse camadas por conveniencia com imports diretos
+- Se uma tela precisar de um detalhe tecnico, traduza isso antes em
+  `application` ou `core`
+
+## Sinais de Violacao
+
+- `domain` conhecendo `Dio`, `Socket`, `BuildContext` ou `Widget`
+- `presentation` chamando datasource, repository concreto ou client de rede
+- `application` importando widget, provider ou classe de infraestrutura
+- entidades com logica de persistencia, serializacao de transporte ou estado de
+  tela
+
+## Referencias Cruzadas
+
+- Design de classes e DIP: `solid_principles.mdc`
+- Regras especificas de stack e `Result<T>`: `project_specifics.mdc`
+
+## Checklist
+
+- [ ] Cada tipo esta na camada correta
+- [ ] A direcao dos imports respeita a arquitetura
+- [ ] Efeitos colaterais ficaram fora de `domain`
+- [ ] `presentation` nao conhece implementacoes concretas de infraestrutura
+- [ ] Contratos vivem em camadas internas e implementacoes nas externas

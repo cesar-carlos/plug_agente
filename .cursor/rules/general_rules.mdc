@@ -1,428 +1,96 @@
 ---
-description: Regras gerais do projeto - Core principles, documentação e código limpo
+description: General rules - cross-cutting principles and code hygiene
 globs: ["lib/**/*.dart", "test/**/*.dart"]
 alwaysApply: true
 ---
 
 # Regras Gerais do Projeto
 
-## Princípios Fundamentais (Core Principles)
+## Escopo
 
-- ✅ **Write concise, technical Dart code with accurate examples**
-- ✅ **Use functional and declarative programming patterns where appropriate**
-- ✅ **Prefer composition over inheritance**
-- ✅ **Use descriptive variable names with auxiliary verbs** (e.g., `isLoading`, `hasError`, `canProceed`)
-- ✅ **Structure files logically: exported widget, subwidgets, helpers, static content, types**
-- ✅ **Prefer English for code identifiers** (classes, methods, variables); keep user-facing strings localizable
+Este arquivo e a fonte de verdade para principios universais de escrita,
+manutencao e colaboracao em codigo.
 
-```dart
-// ✅ Good: functional/declarative patterns
-List<User> activeUsers = users.where((u) => u.isActive).toList();
+Ele deve permanecer agnostico de linguagem e framework. Para regras de
+Dart/Flutter, use `coding_style.mdc`, `null_safety.mdc`,
+`flutter_widgets.mdc`, `ui_ux_design.mdc` e `testing_dart_flutter.mdc`.
 
-// ✅ Good: composition over inheritance
-class UserProfilePage extends StatelessWidget {
-  final User user;
-  const UserProfilePage({super.key, required this.user});
+## Principios Fundamentais
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        UserHeader(user: user),
-        UserStats(user: user),
-        UserActions(user: user),
-      ],
-    );
-  }
-}
+- Escreva codigo conciso, tecnico e facil de manter
+- Prefira composicao a heranca
+- Prefira padroes declarativos quando isso simplificar o fluxo
+- Use nomes descritivos e consistentes
+- Organize arquivos e modulos de forma previsivel
+- Prefira mensagens de erro acionaveis em vez de falhas genericas
+- Mantenha responsabilidades pequenas e fronteiras claras
 
-// ✅ Good: descriptive boolean names with auxiliary verbs
-bool isLoading = false;
-bool hasError = true;
-bool canProceed = isValid && isAuthorized;
+## Documentacao e Comentarios
 
-// ✅ Good: logical file structure
-// 1. Exported widget
-class UserListPage extends StatelessWidget { }
+### Nao criar automaticamente
 
-// 2. Subwidgets (private)
-class _UserListItem extends StatelessWidget { }
-class _UserAvatar extends StatelessWidget { }
+- Nao criar `README.md`, changelog, guias ou arquivos `.md` sem solicitacao
+  explicita
+- Nao adicionar documentacao extensa por padrao
+- Nao comentar o obvio
 
-// 3. Helpers
-String _formatUserName(User user) { }
+### Quando comentar
 
-// 4. Static content
-const _defaultAvatar = 'assets/default_avatar.png';
+- Comente apenas quando o codigo sozinho nao explica o motivo da decisao
+- Use comentarios para tradeoffs, workarounds, restricoes externas ou riscos
+- Prefira explicar "por que" e "qual impacto existe", nao "o que o codigo faz"
 
-// 5. Types
-enum _UserSortOption { name, email, date }
+```text
+Bom:
+- Mantemos cache local porque a operacao remota custa caro e falha com frequencia
+
+Evite:
+- Busca item do cache
 ```
 
-## Documentação e Comentários
+## Codigo Autoexplicativo
 
-### Documentação Automática
+- Prefira clareza por nomenclatura e extracao de funcoes pequenas
+- Remova codigo morto, comentarios desatualizados e trechos comentados
+- Se um trecho exige explicacao longa, reestruture antes de comentar
 
-- ❌ **NÃO criar documentação automaticamente** (comentários `///`, `README.md`, etc.)
-- ❌ **NÃO criar arquivos de documentação** sem solicitação explícita
-- ❌ **NÃO adicionar comentários** desnecessários no código
-- ✅ **Apenas criar documentação quando explicitamente solicitado** pelo usuário
-- ✅ **Código deve ser autoexplicativo** através de nomenclatura clara
+## Duplicacao e Reuso
 
-### Quando Documentar
+- Extraia uma abstracao quando o mesmo padrao aparecer pela segunda vez com a
+  mesma intencao
+- Prefira helpers, componentes, modulos ou mapeadores reutilizaveis a copiar e
+  colar
+- Mantenha abstracoes pequenas e estaveis; nao crie "helpers genericos" vagos
+- Nao replique a mesma regra em mais de um arquivo de `.cursor/rules`
 
-- ✅ Documente apenas APIs públicas complexas quando solicitado
-- ✅ Adicione comentários apenas para explicar "por quê", não "o quê"
-- ✅ Use comentários para decisões arquiteturais importantes quando necessário
-- ✅ Documente apenas quando o código não é autoexplicativo
+```text
+Evite:
+- repetir a mesma politica de retry em varios pontos
 
-### Exemplo de Comportamento
-
-**❌ NÃO fazer:**
-
-```dart
-/// Service for managing user operations.
-///
-/// This service provides methods to create, update, and delete users.
-class UserService {
-  /// Creates a new user with the given [name] and [email].
-  ///
-  /// Returns the created [User] if successful, or throws an exception.
-  Future<User> createUser({
-    required String name,
-    required String email,
-  }) async {
-    // Implementação
-  }
-}
+Prefira:
+- uma abstracao nomeada ou constante compartilhada para essa politica
 ```
 
-**✅ Fazer (sem documentação automática):**
+## Constantes e Valores Literais
 
-```dart
-class UserService {
-  Future<User> createUser({
-    required String name,
-    required String email,
-  }) async {
-    // Implementação
-  }
-}
-```
+- Nao use numeros, strings ou duracoes "magicas" quando representarem regra de
+  negocio, limite tecnico ou token visual
+- Promova valores repetidos para constantes nomeadas
+- Centralize limites e politicas compartilhadas no modulo adequado
 
-**✅ Fazer apenas quando solicitado:**
+## Referencias Cruzadas
 
-```dart
-/// Service for managing user operations.
-///
-/// This service provides methods to create, update, and delete users.
-class UserService {
-  // Documentação criada apenas porque foi explicitamente solicitada
-}
-```
+- Arquitetura e dependencias: `clean_architecture.mdc`
+- Design de classes e interfaces: `solid_principles.mdc`
+- Testes universais: `testing.mdc`
+- Regras Dart/Flutter: `coding_style.mdc`, `null_safety.mdc`,
+  `flutter_widgets.mdc`, `ui_ux_design.mdc`, `testing_dart_flutter.mdc`
+- Decisoes especificas do repositorio: `project_specifics.mdc`
 
-## Arquivos de Documentação
+## Checklist
 
-### Não Criar Automaticamente
-
-- ❌ **NÃO criar** `README.md` automaticamente
-- ❌ **NÃO criar** arquivos `.md` de documentação
-- ❌ **NÃO criar** arquivos de changelog ou release notes
-- ❌ **NÃO criar** arquivos de exemplo ou guias
-- ✅ **Apenas criar** quando explicitamente solicitado
-
-### Comentários no Código
-
-**✅ Bom: Comentários apenas quando necessário**
-
-```dart
-// ✅ Bom: explica por quê (decisão importante)
-// Usar cache local para reduzir chamadas à API em 80%
-final cachedUser = await localCache.getUser(id);
-
-// ✅ Bom: explica decisão arquitetural
-// Usar Result ao invés de Exception para manter compatibilidade com Domain Layer
-return await repository.getById(id);
-```
-
-**❌ Evite: Comentários desnecessários**
-
-```dart
-// ❌ Evite: explica o que (código já faz isso)
-// Obter usuário do cache
-final user = await cache.getUser(id);
-
-// ❌ Evite: comentário óbvio
-// Incrementar contador
-_counter++;
-```
-
-## Princípios de Código Limpo
-
-### Código Autoexplicativo
-
-- ✅ Use nomes descritivos e claros
-- ✅ Nomenclatura deve deixar o código autoexplicativo
-- ✅ Evite comentários que apenas repetem o código
-- ✅ Prefira código claro sobre comentários
-
-### Tooling e Logging
-
-- ✅ Siga `coding_style.mdc` para rotina de **format/fix/analyze** e padrões de logging
-- ✅ Evite `print`; prefira logging estruturado (`dart:developer` `log`)
-
-### Evitar Números Mágicos
-
-- ❌ **NÃO usar números mágicos** no código
-- ✅ **SEMPRE usar constantes nomeadas** para valores literais
-- ✅ Use constantes com nomes descritivos que expliquem o propósito do valor
-- ✅ Agrupe constantes relacionadas em classes ou arquivos dedicados
-
-**❌ Evite: Números mágicos**
-
-```dart
-if (retryCount > 3) {
-  throw Exception('Max retries exceeded');
-}
-
-await Future.delayed(Duration(seconds: 30));
-
-if (user.age < 18) {
-  return false;
-}
-```
-
-**✅ Prefira: Constantes nomeadas**
-
-```dart
-const maxRetries = 3;
-const defaultTimeout = Duration(seconds: 30);
-const minimumAge = 18;
-
-if (retryCount > maxRetries) {
-  throw Exception('Max retries exceeded');
-}
-
-await Future.delayed(defaultTimeout);
-
-if (user.age < minimumAge) {
-  return false;
-}
-```
-
-**✅ Para constantes relacionadas, use classes:**
-
-```dart
-class Timeouts {
-  static const Duration defaultTimeout = Duration(seconds: 30);
-  static const Duration shortTimeout = Duration(seconds: 5);
-  static const Duration longTimeout = Duration(minutes: 5);
-}
-
-class Limits {
-  static const int maxRetries = 3;
-  static const int maxFileSize = 1024 * 1024;
-  static const int minPasswordLength = 8;
-}
-```
-
-### Exemplo
-
-**❌ Evite:**
-
-```dart
-// Criar usuário
-void createUser(String name) {
-  // Validar nome
-  if (name.isEmpty) {
-    // Lançar erro
-    throw Exception('Name cannot be empty');
-  }
-  // Salvar usuário
-  _saveUser(name);
-}
-```
-
-**✅ Prefira:**
-
-```dart
-void createUser(String name) {
-  if (name.isEmpty) {
-    throw Exception('Name cannot be empty');
-  }
-  _saveUser(name);
-}
-```
-
-## Criação de Componentes
-
-### Priorizar Componentes Reutilizáveis
-
-- ✅ **PRIORIZE criação de componentes** para padronização de layout
-- ✅ **EVITE duplicação de código** - extraia padrões repetidos em componentes
-- ✅ Componentes devem ser reutilizáveis em diferentes contextos
-- ✅ Use composição de componentes ao invés de copiar/colar código
-
-**❌ Evite: Código duplicado**
-
-```dart
-// ❌ Evite: mesmo padrão repetido em múltiplos lugares
-// Page 1
-Container(
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(8),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 10,
-      ),
-    ],
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Title 1', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-      SizedBox(height: 8),
-      Text('Content 1'),
-    ],
-  ),
-)
-
-// Page 2 - mesmo código duplicado
-Container(
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(8),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 10,
-      ),
-    ],
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Title 2', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-      SizedBox(height: 8),
-      Text('Content 2'),
-    ],
-  ),
-)
-```
-
-**✅ Prefira: Componente reutilizável**
-
-```dart
-// ✅ Bom: componente reutilizável
-class CardContainer extends StatelessWidget {
-  final String title;
-  final String content;
-
-  const CardContainer({
-    super.key,
-    required this.title,
-    required this.content,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(content),
-        ],
-      ),
-    );
-  }
-}
-
-// Uso em Page 1
-const CardContainer(title: 'Title 1', content: 'Content 1')
-
-// Uso em Page 2
-const CardContainer(title: 'Title 2', content: 'Content 2')
-```
-
-### Quando Criar Componentes
-
-Crie um componente quando:
-- ✅ O mesmo padrão de UI aparece **2 ou mais vezes**
-- ✅ O componente tem **responsabilidade única e clara**
-- ✅ O componente pode ser **reutilizado em diferentes contextos**
-- ✅ O componente ajuda a **manter consistência visual**
-
-### Exemplo: Botão Personalizado
-
-```dart
-// ✅ Bom: componente de botão padronizado
-class AppButton extends StatelessWidget {
-  final String text;
-  final VoidCallback? onPressed;
-  final bool isLoading;
-
-  const AppButton({
-    super.key,
-    required this.text,
-    this.onPressed,
-    this.isLoading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: isLoading ? null : onPressed,
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 48),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: isLoading
-          ? const CircularProgressIndicator()
-          : Text(text),
-    );
-  }
-}
-```
-
-## Checklist de Regras Gerais
-
-### Princípios Fundamentais
-- [ ] Escrever código conciso e técnico
-- [ ] Usar padrões funcionais e declarativos quando apropriado
-- [ ] Preferir composição sobre herança
-- [ ] Usar nomes descritivos com verbos auxiliares (isLoading, hasError, canProceed)
-- [ ] Estruturar arquivos logicamente: exported widget, subwidgets, helpers, static content, types
-
-### Documentação e Comentários
-- [ ] NÃO criar documentação automaticamente
-- [ ] NÃO criar arquivos `.md` sem solicitação explícita
-- [ ] NÃO adicionar comentários desnecessários
-- [ ] Código deve ser autoexplicativo
-- [ ] Documentar apenas quando explicitamente solicitado
-- [ ] Comentários apenas para explicar "por quê", não "o quê"
-- [ ] Usar nomenclatura clara ao invés de comentários
-
-### Código Limpo
-- [ ] Evitar números mágicos - usar constantes nomeadas
-- [ ] Manter código limpo e manutenível
-- [ ] **PRIORIZAR criação de componentes** para padronização
-- [ ] **EVITAR duplicação de código** - extrair padrões em componentes
+- [ ] O codigo esta claro sem depender de comentarios longos
+- [ ] Nao foram criados docs/READMEs sem pedido explicito
+- [ ] Comentarios explicam motivo, nao a mecanica do codigo
+- [ ] Valores literais com significado foram nomeados
+- [ ] Padroes repetidos viraram abstracoes pequenas e reutilizaveis
