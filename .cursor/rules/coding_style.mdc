@@ -202,10 +202,27 @@ final icon = switch (status) {
 - Prefira `json_serializable`/`json_annotation` quando o projeto usar models
   serializaveis
 - Use `FieldRename.snake` quando a API usar `snake_case`
-- Reexecute `build_runner` depois de mudar modelos anotados
+- Reexecute `build_runner` depois de mudar modelos anotados ou qualquer codigo
+  dirigido por geracao
+- Se o arquivo gerado ainda nao existir, erros como `Target of URI hasn't been
+  generated` sao esperados ate a primeira geracao
+- Para geracao pontual, rode `dart run build_runner build
+  --delete-conflicting-outputs`
+- Para desenvolvimento iterativo, prefira `dart run build_runner watch
+  --delete-conflicting-outputs`
+- Nao edite manualmente codigo gerado por `build_runner`; a fonte de verdade e o
+  arquivo de entrada anotado/configurado
+- Se a geracao ficar inconsistente, stale ou em conflito, faca um ciclo de
+  limpeza e gere novamente antes de depurar o codigo manualmente
+- Sempre que a tarefa depender de geracao, confirme que o codigo gerado esta
+  sincronizado antes de encerrar
 
 ```shell
 dart run build_runner build --delete-conflicting-outputs
+```
+
+```shell
+dart run build_runner watch --delete-conflicting-outputs
 ```
 
 ## Async, Erros e Logging
@@ -256,7 +273,9 @@ Future<User> loadUser(String id) async {
 - [ ] `const`/`final` foram usados corretamente
 - [ ] Logs usam ferramenta apropriada e preservam contexto
 - [ ] O baseline de lint do projeto esta adequado ao stack (`flutter_lints` ou
-      `recommended`)
+  `recommended`)
 - [ ] Em tarefas longas ou complexas, `flutter analyze` foi executado
+- [ ] Quando a tarefa depende de codegen, `build_runner` foi executado ou
+  validado
 - [ ] Tear-offs foram usados apenas onde melhoram a leitura
 - [ ] Recursos modernos de Dart foram usados apenas quando melhoram a clareza
