@@ -61,12 +61,8 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final backgroundColor = isSelected
-        ? AppColors.primary.withValues(alpha: 0.2)
-        : Colors.transparent;
-    final textColor = isSelected
-        ? AppColors.primary
-        : theme.resources.textFillColorPrimary;
+    final backgroundColor = isSelected ? AppColors.primary.withValues(alpha: 0.2) : Colors.transparent;
+    final textColor = isSelected ? AppColors.primary : theme.resources.textFillColorPrimary;
 
     return Expanded(
       child: GestureDetector(
@@ -91,9 +87,7 @@ class _TabButton extends StatelessWidget {
                   label,
                   style: context.bodyText.copyWith(
                     color: textColor,
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
