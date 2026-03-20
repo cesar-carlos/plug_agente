@@ -10,8 +10,7 @@ final class SqlExecuteParamsReader {
 
   Map<String, dynamic>? get options => _raw['options'] as Map<String, dynamic>?;
 
-  Map<String, dynamic>? get boundParams =>
-      _raw['params'] as Map<String, dynamic>?;
+  Map<String, dynamic>? get boundParams => _raw['params'] as Map<String, dynamic>?;
 
   String? get database => _raw['database'] as String?;
 

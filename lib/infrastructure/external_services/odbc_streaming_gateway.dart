@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gateway com suporte a streaming real para grandes datasets.
@@ -33,7 +34,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
     final maxResultBufferBytes = max(
       normalizedChunkSize,
-      _settings.maxResultBufferMb * 1024 * 1024,
+      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) *
+          1024 *
+          1024,
     );
     final initialResultBufferBytes = min(
       ConnectionConstants.defaultInitialResultBufferBytes,

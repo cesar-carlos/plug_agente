@@ -7,5 +7,7 @@ abstract class IClientTokenPolicyCache {
 
   void put(String credentialHash, ClientTokenPolicy policy);
 
+  void invalidate(String credentialHash);
+
   void invalidateAll();
 }

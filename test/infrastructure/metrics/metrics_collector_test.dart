@@ -314,6 +314,11 @@ void main() {
         expect(collector.timeoutCancelFailureCount, 0);
         expect(collector.transactionRollbackFailureCount, 0);
         expect(collector.idempotencyFingerprintMismatchCount, 0);
+        expect(collector.authDecisionCacheHitCount, 0);
+        expect(collector.authPolicyCacheMissCount, 0);
+        expect(collector.rpcSqlExecuteStreamingChunksResponseCount, 0);
+        expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 0);
+        expect(collector.rpcSqlExecuteMaterializedResponseCount, 0);
       });
     });
 
@@ -334,6 +339,30 @@ void main() {
 
         expect(collector.transactionRollbackFailureCount, 1);
         expect(collector.idempotencyFingerprintMismatchCount, 2);
+      });
+
+      test('should increment auth cache counters', () {
+        collector.recordAuthDecisionCacheHit();
+        collector.recordAuthDecisionCacheMiss();
+        collector.recordAuthPolicyCacheHit();
+        collector.recordAuthPolicyCacheMiss();
+        collector.recordAuthPolicyCacheMiss();
+
+        expect(collector.authDecisionCacheHitCount, 1);
+        expect(collector.authDecisionCacheMissCount, 1);
+        expect(collector.authPolicyCacheHitCount, 1);
+        expect(collector.authPolicyCacheMissCount, 2);
+      });
+
+      test('should increment rpc sql.execute path counters', () {
+        collector.recordRpcSqlExecuteStreamingChunksResponse();
+        collector.recordRpcSqlExecuteStreamingFromDbResponse();
+        collector.recordRpcSqlExecuteMaterializedResponse();
+        collector.recordRpcSqlExecuteMaterializedResponse();
+
+        expect(collector.rpcSqlExecuteStreamingChunksResponseCount, 1);
+        expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 1);
+        expect(collector.rpcSqlExecuteMaterializedResponseCount, 2);
       });
     });
 

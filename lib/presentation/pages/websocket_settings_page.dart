@@ -29,7 +29,6 @@ class WebSocketSettingsPage extends StatefulWidget {
 }
 
 class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
-  int _selectedTabIndex = 0;
   AuthStatus? _previousAuthStatus;
   String _previousAuthError = '';
   ConnectionStatus? _previousConnectionStatus;
@@ -257,38 +256,97 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          child: SettingsTabView(
-            currentIndex: _selectedTabIndex,
-            onChanged: (index) {
-              setState(() => _selectedTabIndex = index);
-            },
-            items: [
-              SettingsTabItem(
-                icon: FluentIcons.plug_connected,
-                text: AppStrings.tabWebSocketConnection,
-                body: WebSocketConfigSection(
-                  formController: _formController,
-                  configProvider: configProvider,
-                  onSaveConfig: () {
-                    _formController.updateAllFieldsToProvider(configProvider);
-                    configProvider.saveConfig();
-                  },
-                ),
-              ),
-              const SettingsTabItem(
-                icon: FluentIcons.permissions,
-                text: AppStrings.tabClientTokenAuthorization,
-                body: _ClientTokenTabContent(),
-              ),
-              const SettingsTabItem(
-                icon: FluentIcons.info,
-                text: AppStrings.tabWebSocketDiagnostics,
-                body: DiagnosticsConfigSection(),
-              ),
-            ],
+          child: _WebSocketSettingsTabbedContent(
+            formController: _formController,
+            configProvider: configProvider,
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Holds [SettingsTabView] state so tab changes do not rebuild [ScaffoldPage]
+/// or the page header.
+class _WebSocketSettingsTabbedContent extends StatefulWidget {
+  const _WebSocketSettingsTabbedContent({
+    required this.formController,
+    required this.configProvider,
+  });
+
+  final ConfigFormController formController;
+  final ConfigProvider configProvider;
+
+  @override
+  State<_WebSocketSettingsTabbedContent> createState() =>
+      _WebSocketSettingsTabbedContentState();
+}
+
+class _WebSocketSettingsTabbedContentState
+    extends State<_WebSocketSettingsTabbedContent> {
+  int _selectedTabIndex = 0;
+  late List<SettingsTabItem> _tabItems;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabItems = _buildTabItems();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WebSocketSettingsTabbedContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.formController != widget.formController ||
+        oldWidget.configProvider != widget.configProvider) {
+      _tabItems = _buildTabItems();
+    }
+  }
+
+  List<SettingsTabItem> _buildTabItems() {
+    return <SettingsTabItem>[
+      SettingsTabItem(
+        icon: FluentIcons.plug_connected,
+        text: AppStrings.tabWebSocketConnection,
+        body: ListenableBuilder(
+          listenable: widget.configProvider,
+          builder: (BuildContext context, Widget? _) {
+            return WebSocketConfigSection(
+              formController: widget.formController,
+              configProvider: widget.configProvider,
+              onSaveConfig: () {
+                widget.formController.updateAllFieldsToProvider(
+                  widget.configProvider,
+                );
+                widget.configProvider.saveConfig();
+              },
+            );
+          },
+        ),
+      ),
+      const SettingsTabItem(
+        icon: FluentIcons.permissions,
+        text: AppStrings.tabClientTokenAuthorization,
+        body: _ClientTokenTabContent(),
+      ),
+      const SettingsTabItem(
+        icon: FluentIcons.info,
+        text: AppStrings.tabWebSocketDiagnostics,
+        body: DiagnosticsConfigSection(),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTabView(
+      currentIndex: _selectedTabIndex,
+      onChanged: (int index) {
+        if (index == _selectedTabIndex) {
+          return;
+        }
+        setState(() => _selectedTabIndex = index);
+      },
+      items: _tabItems,
     );
   }
 }

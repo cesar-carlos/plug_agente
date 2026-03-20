@@ -49,5 +49,13 @@ void main() {
 
       expect(result.isError(), isTrue);
     });
+
+    test('should allow semicolon inside string literal', () {
+      final result = classifier.classify(
+        "SELECT * FROM dbo.users WHERE note = ';'",
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -11,6 +13,21 @@ class ClientTokenRepository implements IClientTokenRepository {
   ClientTokenRepository(this._localDataSource);
 
   final ClientTokenLocalDataSource _localDataSource;
+
+  @override
+  Future<ClientTokenSummary?> getTokenById(String tokenId) async {
+    try {
+      return await _localDataSource.getTokenById(tokenId);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to load client token by id',
+        name: 'client_token_repository',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
 
   @override
   Future<Result<String>> createToken(ClientTokenCreateRequest request) async {

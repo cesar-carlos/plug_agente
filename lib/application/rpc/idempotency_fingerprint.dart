@@ -37,14 +37,12 @@ dynamic canonicalizeJsonValueForIdempotency(dynamic value) {
   if (value is Map<String, dynamic>) {
     final sortedKeys = value.keys.toList(growable: false)..sort();
     return <String, dynamic>{
-      for (final String key in sortedKeys)
-        key: canonicalizeJsonValueForIdempotency(value[key]),
+      for (final String key in sortedKeys) key: canonicalizeJsonValueForIdempotency(value[key]),
     };
   }
   if (value is Map) {
     final normalized = value.map(
-      (dynamic key, dynamic v) =>
-          MapEntry(key.toString(), canonicalizeJsonValueForIdempotency(v)),
+      (dynamic key, dynamic v) => MapEntry(key.toString(), canonicalizeJsonValueForIdempotency(v)),
     );
     final sortedKeys = normalized.keys.toList(growable: false)..sort();
     return <String, dynamic>{

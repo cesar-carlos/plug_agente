@@ -418,12 +418,25 @@ Response:
   e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
   com paginacao nem com `params` nomeados. Com autorizacao por token ativa, cada
   statement separado por `;` e avaliado isoladamente (mesmo modelo que
-  `sql.executeBatch`).
+  `sql.executeBatch`). O agente detecta multiplos statements com um scanner
+  leve (strings `'...'`, `"..."`, `[...]`, comentarios `--` e `/* */`), nao com
+  parser SQL completo: nao cobre backticks estilo MySQL, dollar-quoting
+  PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
 - `params.database`: override opcional do banco alvo para a request atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
   rejeitada com `invalid_params`.
 - Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
   para evitar crescimento sem limite.
+- Cache de decisoes de autorizacao SQL e cache de politica de token (em memoria)
+  usam LRU com limite de entradas (padrao 8192 e 2048; configuravel via
+  `AUTH_DECISION_CACHE_MAX_ENTRIES` e `AUTH_POLICY_CACHE_MAX_ENTRIES` no `.env`)
+  alem de TTL por entrada. Invalidacao apos alterar token afeta apenas o hash da
+  credencial afetada quando o segredo e resolvido; caso contrario o agente faz
+  flush completo desses caches. Contadores de evento no `MetricsCollector`:
+  `auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
+  `auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
+  `rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
+  `rpc_sql_execute_materialized_response`.
 - Requests paginadas seguem o caminho request/response tradicional; nao usam
   streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ativo.
 - `options.cursor`: token opaco de continuacao retornado em

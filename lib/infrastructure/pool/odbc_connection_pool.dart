@@ -1,137 +1,70 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
-import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Pool de conexões ODBC usando pool nativo do odbc_fast.
+/// Aluga uma conexão ODBC por consulta via [OdbcService.connect] com
+/// [ConnectionOptions] completos (buffer alinhado às configurações do app).
 ///
-/// Utiliza a API de pool nativo para gerenciamento automático de conexões,
-/// health checks e isolamento correto entre consumers.
+/// Evita falha `Buffer too small` em `poolReleaseConnection` do pool nativo
+/// do `odbc_fast`, que não associa `maxResultBufferBytes` a conexões alugadas
+/// do pool (caindo em buffer pequeno no worker).
 class OdbcConnectionPool implements IConnectionPool {
   OdbcConnectionPool(this._service, this._settings);
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
 
-  // connectionString -> poolId
-  final Map<String, int> _pools = {};
-  final Map<String, Future<Result<int>>> _poolCreationFutures = {};
-
-  /// Helper para converter erros ODBC em String.
-  String _odbcErrorMessage(Object error) {
-    if (error is OdbcError) {
-      return error.message;
-    }
-    return error.toString();
-  }
-
-  /// Cria ou reutiliza pool para a connection string.
-  Future<Result<int>> _getOrCreatePool(String connectionString) async {
-    final existingPoolId = _pools[connectionString];
-    if (existingPoolId != null) {
-      return Success(existingPoolId);
-    }
-
-    if (_pools.length >= ConnectionConstants.maxConnectionPools) {
-      return Failure(
-        OdbcFailureMapper.mapPoolError(
-          Exception(
-            'Connection pool limit reached (${ConnectionConstants.maxConnectionPools}). '
-            'Recycle unused pools or reduce unique connection strings.',
-          ),
-          operation: 'pool_acquire',
-        ),
-      );
-    }
-
-    final inFlightCreation = _poolCreationFutures[connectionString];
-    if (inFlightCreation != null) {
-      return inFlightCreation;
-    }
-
-    final creationFuture = _createPool(connectionString);
-    _poolCreationFutures[connectionString] = creationFuture;
-    final result = await creationFuture;
-    _poolCreationFutures.remove(connectionString);
-    return result;
-  }
-
-  Future<Result<int>> _createPool(String connectionString) async {
-    developer.log(
-      'Creating native pool for connection',
-      name: 'connection_pool',
-      level: 500,
-    );
-
-    final poolResult = await _service.poolCreate(
-      connectionString,
-      _settings.poolSize,
-    );
-
-    return poolResult.fold(
-      (poolId) {
-        _pools[connectionString] = poolId;
-        developer.log(
-          'Native pool created: $poolId',
-          name: 'connection_pool',
-          level: 500,
-        );
-        return Success(poolId);
-      },
-      (error) {
-        developer.log(
-          'Failed to create pool',
-          name: 'connection_pool',
-          level: 1000,
-          error: error,
-        );
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_create',
-          ),
-        );
-      },
-    );
-  }
+  final Map<String, Set<String>> _leasedIdsByConnectionString = {};
+  final Set<String> _leasedIds = {};
 
   @override
   Future<Result<String>> acquire(String connectionString) async {
-    final poolResult = await _getOrCreatePool(connectionString);
+    final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+    final connectResult = await _service.connect(
+      connectionString,
+      options: options,
+    );
 
-    return poolResult.fold(
-      (poolId) async {
-        // Obter conexão do pool nativo
-        final connResult = await _service.poolGetConnection(poolId);
-
-        return connResult.fold(
-          (connection) {
-            return Success(connection.id);
-          },
-          (error) => Failure(
-            OdbcFailureMapper.mapPoolError(
-              error,
-              operation: 'pool_acquire',
-            ),
-          ),
+    return connectResult.fold(
+      (Connection connection) {
+        _leasedIdsByConnectionString
+            .putIfAbsent(connectionString, () => <String>{})
+            .add(connection.id);
+        _leasedIds.add(connection.id);
+        developer.log(
+          'Acquired ODBC connection ${connection.id} (lease)',
+          name: 'connection_pool',
+          level: 500,
         );
+        return Success(connection.id);
       },
-      Failure.new,
+      (error) => Failure(
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'pool_acquire',
+        ),
+      ),
     );
   }
 
   @override
   Future<Result<void>> release(String connectionId) async {
-    // Liberar conexão de volta ao pool nativo
-    final result = await _service.poolReleaseConnection(connectionId);
-
-    return result.fold(
-      (_) => const Success(unit),
+    final disconnectResult = await _service.disconnect(connectionId);
+    return disconnectResult.fold(
+      (_) {
+        _leasedIds.remove(connectionId);
+        for (final entry in _leasedIdsByConnectionString.entries) {
+          entry.value.remove(connectionId);
+        }
+        _leasedIdsByConnectionString.removeWhere((_, ids) => ids.isEmpty);
+        return const Success(unit);
+      },
       (error) => Failure(
-        OdbcFailureMapper.mapPoolError(
+        OdbcFailureMapper.mapConnectionError(
           error,
           operation: 'pool_release',
         ),
@@ -142,23 +75,24 @@ class OdbcConnectionPool implements IConnectionPool {
   @override
   Future<Result<void>> closeAll() async {
     developer.log(
-      'Closing all pools',
+      'Disconnecting all leased ODBC connections',
       name: 'connection_pool',
       level: 500,
     );
 
     final errors = <String>[];
-
-    for (final poolId in _pools.values) {
-      final result = await _service.poolClose(poolId);
+    final ids = _leasedIds.toList(growable: false);
+    for (final id in ids) {
+      final result = await _service.disconnect(id);
       result.fold(
         (_) {},
-        (error) => errors.add(_odbcErrorMessage(error)),
+        (error) => errors.add(
+          error is OdbcError ? error.message : error.toString(),
+        ),
       );
     }
-
-    _pools.clear();
-    _poolCreationFutures.clear();
+    _leasedIds.clear();
+    _leasedIdsByConnectionString.clear();
 
     if (errors.isNotEmpty) {
       return Failure(
@@ -173,75 +107,31 @@ class OdbcConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> recycle(String connectionString) async {
-    final poolId = _pools.remove(connectionString);
-    _poolCreationFutures.remove(connectionString);
-    if (poolId == null) {
+    final ids = _leasedIdsByConnectionString.remove(connectionString);
+    if (ids == null || ids.isEmpty) {
       return const Success(unit);
     }
 
     developer.log(
-      'Recycling pool for connection',
+      'Recycling leased ODBC connections for connection string',
       name: 'connection_pool',
       level: 800,
     );
 
-    final closeResult = await _service.poolClose(poolId);
-    return closeResult.fold(
-      (_) => const Success(unit),
-      (error) => Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: 'pool_recycle',
-        ),
-      ),
-    );
+    for (final id in ids.toList(growable: false)) {
+      await _service.disconnect(id);
+      _leasedIds.remove(id);
+    }
+    return const Success(unit);
   }
 
   @override
   Future<Result<int>> getActiveCount() async {
-    var totalActive = 0;
-
-    for (final poolId in _pools.values) {
-      final stateResult = await _service.poolGetState(poolId);
-      stateResult.fold(
-        (state) {
-          // Active = size - idle
-          totalActive += state.size - state.idle;
-        },
-        (_) {},
-      );
-    }
-
-    return Success(totalActive);
+    return Success(_leasedIds.length);
   }
 
   @override
   Future<Result<void>> healthCheckAll() async {
-    final errors = <String>[];
-
-    var poolIndex = 0;
-    for (final entry in _pools.entries) {
-      final result = await _service.poolHealthCheck(entry.value);
-      result.fold(
-        (isHealthy) {
-          if (!isHealthy) {
-            errors.add('Pool #$poolIndex unhealthy');
-          }
-        },
-        (error) => errors.add(_odbcErrorMessage(error)),
-      );
-      poolIndex++;
-    }
-
-    if (errors.isNotEmpty) {
-      return Failure(
-        OdbcFailureMapper.mapPoolError(
-          Exception(errors.join(', ')),
-          operation: 'pool_health_check',
-        ),
-      );
-    }
-
     return const Success(unit);
   }
 }

@@ -6,6 +6,7 @@ const _keyPoolSize = 'odbc_pool_size';
 const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
 const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
+const _keyUseNativeOdbcPool = 'odbc_use_native_pool';
 
 /// Implementacao de [IOdbcConnectionSettings] com store global de configuracoes.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
@@ -17,6 +18,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   int _maxResultBufferMb =
       ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
+  bool _useNativeOdbcPool = false;
 
   @override
   int get poolSize => _poolSize;
@@ -31,6 +33,9 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   int get streamingChunkSizeKb => _streamingChunkSizeKb;
 
   @override
+  bool get useNativeOdbcPool => _useNativeOdbcPool;
+
+  @override
   Future<void> load() async {
     _poolSize =
         _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
@@ -43,6 +48,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
     _streamingChunkSizeKb =
         _prefs.getInt(_keyStreamingChunkSizeKb) ??
         ConnectionConstants.defaultStreamingChunkSizeKb;
+    _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
   }
 
   @override
@@ -67,5 +73,11 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> setStreamingChunkSizeKb(int value) async {
     await _prefs.setInt(_keyStreamingChunkSizeKb, value);
     _streamingChunkSizeKb = value;
+  }
+
+  @override
+  Future<void> setUseNativeOdbcPool(bool value) async {
+    await _prefs.setBool(_keyUseNativeOdbcPool, value);
+    _useNativeOdbcPool = value;
   }
 }

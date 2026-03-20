@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
@@ -18,11 +20,18 @@ class DiagnosticsConfigSection extends StatefulWidget {
 class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   late final FeatureFlags _flags = getIt<FeatureFlags>();
   late bool _odbcPaginatedSqlLog;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _setOdbcPaginatedSqlLog(bool value) async {
@@ -36,7 +45,9 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   @override
   Widget build(BuildContext context) {
     return Scrollbar(
+      controller: _scrollController,
       child: SingleChildScrollView(
+        controller: _scrollController,
         child: Padding(
           padding: const EdgeInsets.only(right: AppSpacing.md),
           child: ConstrainedBox(
@@ -59,7 +70,9 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   SettingsToggleTile(
                     label: AppStrings.diagnosticsOdbcPaginatedSqlLogLabel,
                     value: _odbcPaginatedSqlLog,
-                    onChanged: _setOdbcPaginatedSqlLog,
+                    onChanged: (bool value) {
+                      unawaited(_setOdbcPaginatedSqlLog(value));
+                    },
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(

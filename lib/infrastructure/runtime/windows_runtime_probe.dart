@@ -11,6 +11,10 @@ import 'package:win32/win32.dart';
 
 /// Implementação de detecção de versão do Windows usando Win32 API.
 class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
+  static final RegExp _fallbackOsVersionPattern = RegExp(
+    r'Version (\d+)\.(\d+)\.(\d+)',
+  );
+
   @override
   Future<Result<WindowsVersionInfo>> detect() async {
     try {
@@ -87,8 +91,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
         level: 800,
       );
 
-      final regex = RegExp(r'Version (\d+)\.(\d+)\.(\d+)');
-      final match = regex.firstMatch(osVersion);
+      final match = _fallbackOsVersionPattern.firstMatch(osVersion);
 
       if (match != null) {
         final osVersionLower = osVersion.toLowerCase();

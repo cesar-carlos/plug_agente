@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:plug_agente/core/utils/split_sql_statements.dart';
+import 'package:plug_agente/core/utils/sql_dangerous_pattern_scan.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
@@ -27,15 +29,23 @@ class SqlValidator {
     'delete ',
   ];
 
-  static const _dangerousAfterSemicolon = [
-    'drop',
-    'delete',
-    'insert',
-    'update',
-    'alter',
-    'create',
-    'truncate',
-  ];
+  static final RegExp _normalizeFingerprintWhitespace = RegExp(r'\s+');
+  static final RegExp _wordBoundaryChar = RegExp(
+    '[a-z0-9_]',
+    caseSensitive: false,
+  );
+
+  static final RegExp _trailingSemicolons = RegExp(r';+\s*$');
+  static final RegExp _namedParameter = RegExp(r':(\w+)');
+  static final RegExp _removeCommentsLine = RegExp(r'--.*?\n');
+  static final RegExp _removeCommentsBlock = RegExp(
+    r'/\*.*?\*/',
+    dotAll: true,
+  );
+  static final RegExp _orderTermPattern = RegExp(
+    r'^(?<expr>(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*)(?:\s+(?<dir>asc|desc))?$',
+    caseSensitive: false,
+  );
 
   /// Validates SQL for execution in RPC/legacy flows.
   /// Allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE.
@@ -52,7 +62,7 @@ class SqlValidator {
     }
 
     final normalized = trimmed.toLowerCase();
-    if (!allowMultipleStatements && _containsMultipleStatements(normalized)) {
+    if (!allowMultipleStatements && sqlHasMultipleTopLevelStatements(trimmed)) {
       return Failure(
         domain.ValidationFailure(
           'Multiple SQL statements are not supported',
@@ -78,30 +88,11 @@ class SqlValidator {
   }
 
   static bool containsMultipleStatements(String query) {
-    return _containsMultipleStatements(query.toLowerCase());
-  }
-
-  static bool _containsMultipleStatements(String sql) {
-    final withoutTrailing = sql.trim().replaceFirst(RegExp(r';$'), '');
-    return withoutTrailing.contains(';');
+    return sqlHasMultipleTopLevelStatements(query.trim());
   }
 
   static domain.ValidationFailure? _checkDangerousPatterns(String query) {
-    if (RegExp('--', caseSensitive: false).hasMatch(query)) {
-      return domain.ValidationFailure(
-        'Query contains potentially dangerous patterns',
-      );
-    }
-    if (RegExp(r'/\*', caseSensitive: false).hasMatch(query)) {
-      return domain.ValidationFailure(
-        'Query contains potentially dangerous patterns',
-      );
-    }
-    final multiStmtPattern = RegExp(
-      ';\\s*(${_dangerousAfterSemicolon.join('|')})',
-      caseSensitive: false,
-    );
-    if (multiStmtPattern.hasMatch(query)) {
+    if (sqlContainsTopLevelDangerousPatterns(query)) {
       return domain.ValidationFailure(
         'Query contains potentially dangerous patterns',
       );
@@ -120,23 +111,12 @@ class SqlValidator {
       );
     }
 
-    final dangerousPatterns = [
-      RegExp('--', caseSensitive: false),
-      RegExp(r'/\*', caseSensitive: false),
-      RegExp(
-        r';\s*(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|TRUNCATE)',
-        caseSensitive: false,
-      ),
-    ];
-
-    for (final pattern in dangerousPatterns) {
-      if (pattern.hasMatch(query)) {
-        return Failure(
-          domain.ValidationFailure(
-            'Query contém padrões potencialmente perigosos',
-          ),
-        );
-      }
+    if (sqlContainsTopLevelDangerousPatterns(query)) {
+      return Failure(
+        domain.ValidationFailure(
+          'Query contém padrões potencialmente perigosos',
+        ),
+      );
     }
 
     return const Success(unit);
@@ -152,7 +132,7 @@ class SqlValidator {
       );
     }
 
-    final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
     final orderByIndex = _findTopLevelOrderBy(normalizedQuery);
     if (orderByIndex < 0) {
       return Failure(
@@ -186,16 +166,14 @@ class SqlValidator {
 
     return Success(
       SqlPaginationPlan(
-        queryFingerprint: sha256
-            .convert(utf8.encode(_normalizeForFingerprint(normalizedQuery)))
-            .toString(),
+        queryFingerprint: sha256.convert(utf8.encode(_normalizeForFingerprint(normalizedQuery))).toString(),
         orderBy: orderTerms.whereType<QueryPaginationOrderTerm>().toList(),
       ),
     );
   }
 
   static bool containsTopLevelPaginationClause(String query) {
-    final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
     if (normalizedQuery.isEmpty) {
       return false;
     }
@@ -206,7 +184,7 @@ class SqlValidator {
   }
 
   static String stripTopLevelOrderBy(String query) {
-    final normalizedQuery = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
+    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
     if (normalizedQuery.isEmpty) {
       return normalizedQuery;
     }
@@ -220,8 +198,7 @@ class SqlValidator {
   }
 
   static List<String> extractNamedParameters(String query) {
-    final regex = RegExp(r':(\w+)');
-    final matches = regex.allMatches(query);
+    final matches = _namedParameter.allMatches(query);
     return matches.map((m) => m.group(1)!).toSet().toList();
   }
 
@@ -230,11 +207,11 @@ class SqlValidator {
   }
 
   static String removeComments(String query) {
-    var result = query.replaceAll(RegExp(r'--.*?\n'), '');
+    var result = query.replaceAll(_removeCommentsLine, '');
 
-    result = result.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
+    result = result.replaceAll(_removeCommentsBlock, '');
 
-    result = result.replaceAllMapped(RegExp(r'\s+'), (match) => ' ');
+    result = result.replaceAll(_normalizeFingerprintWhitespace, ' ');
 
     return result;
   }
@@ -373,10 +350,7 @@ class SqlValidator {
   }
 
   static QueryPaginationOrderTerm? _parseOrderTerm(String rawTerm) {
-    final match = RegExp(
-      r'^(?<expr>(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*)(?:\s+(?<dir>asc|desc))?$',
-      caseSensitive: false,
-    ).firstMatch(rawTerm.trim());
+    final match = _orderTermPattern.firstMatch(rawTerm.trim());
     if (match == null) {
       return null;
     }
@@ -407,10 +381,10 @@ class SqlValidator {
       return true;
     }
     final char = value[index];
-    return !RegExp('[a-z0-9_]', caseSensitive: false).hasMatch(char);
+    return !_wordBoundaryChar.hasMatch(char);
   }
 
   static String _normalizeForFingerprint(String query) {
-    return query.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    return query.replaceAll(_normalizeFingerprintWhitespace, ' ').trim().toLowerCase();
   }
 }

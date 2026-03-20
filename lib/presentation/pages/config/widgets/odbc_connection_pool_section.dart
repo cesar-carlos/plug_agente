@@ -17,8 +17,7 @@ class OdbcConnectionPoolSection extends StatefulWidget {
   const OdbcConnectionPoolSection({super.key});
 
   @override
-  State<OdbcConnectionPoolSection> createState() =>
-      _OdbcConnectionPoolSectionState();
+  State<OdbcConnectionPoolSection> createState() => _OdbcConnectionPoolSectionState();
 }
 
 class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
@@ -28,6 +27,8 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   late final TextEditingController _streamingChunkSizeController;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _useNativeOdbcPool = false;
+  bool _useNativeOdbcPoolAtLoad = false;
 
   @override
   void initState() {
@@ -47,8 +48,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _poolSizeController.text = settings.poolSize.toString();
       _loginTimeoutController.text = settings.loginTimeoutSeconds.toString();
       _maxResultBufferController.text = settings.maxResultBufferMb.toString();
-      _streamingChunkSizeController.text = settings.streamingChunkSizeKb
-          .toString();
+      _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
+      _useNativeOdbcPool = settings.useNativeOdbcPool;
+      _useNativeOdbcPoolAtLoad = settings.useNativeOdbcPool;
       _isLoading = false;
     });
     final healthResult = await getIt<IConnectionPool>().healthCheckAll();
@@ -74,15 +76,11 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _showError(AppStrings.odbcErrorLoginTimeoutRange);
       return;
     }
-    if (maxResultBuffer == null ||
-        maxResultBuffer < 8 ||
-        maxResultBuffer > 128) {
+    if (maxResultBuffer == null || maxResultBuffer < 8 || maxResultBuffer > 128) {
       _showError(AppStrings.odbcErrorBufferRange);
       return;
     }
-    if (streamingChunkSize == null ||
-        streamingChunkSize < 64 ||
-        streamingChunkSize > 8192) {
+    if (streamingChunkSize == null || streamingChunkSize < 64 || streamingChunkSize > 8192) {
       _showError(AppStrings.odbcErrorChunkRange);
       return;
     }
@@ -90,16 +88,24 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     setState(() => _isSaving = true);
     try {
       final settings = getIt<IOdbcConnectionSettings>();
+      final poolModeChanged = _useNativeOdbcPool != _useNativeOdbcPoolAtLoad;
       await settings.setPoolSize(poolSize);
       await settings.setLoginTimeoutSeconds(loginTimeout);
       await settings.setMaxResultBufferMb(maxResultBuffer);
       await settings.setStreamingChunkSizeKb(streamingChunkSize);
+      await settings.setUseNativeOdbcPool(_useNativeOdbcPool);
 
       final closeResult = await getIt<IConnectionPool>().closeAll();
       final settingsAppliedNow = closeResult.isSuccess();
 
       if (!mounted) return;
-      _showSuccess(settingsAppliedNow);
+      _showSuccess(
+        settingsAppliedNow,
+        poolModeChanged: poolModeChanged,
+      );
+      if (poolModeChanged) {
+        setState(() => _useNativeOdbcPoolAtLoad = _useNativeOdbcPool);
+      }
     } on Object catch (error, stackTrace) {
       AppLogger.error(
         'Failed to save advanced ODBC settings',
@@ -115,17 +121,11 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   }
 
   Future<void> _restoreDefaults() async {
+    setState(() => _useNativeOdbcPool = false);
     _poolSizeController.text = ConnectionConstants.defaultPoolSize.toString();
-    _loginTimeoutController.text = ConnectionConstants
-        .defaultLoginTimeout
-        .inSeconds
-        .toString();
-    _maxResultBufferController.text =
-        (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024))
-            .toString();
-    _streamingChunkSizeController.text = ConnectionConstants
-        .defaultStreamingChunkSizeKb
-        .toString();
+    _loginTimeoutController.text = ConnectionConstants.defaultLoginTimeout.inSeconds.toString();
+    _maxResultBufferController.text = (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024)).toString();
+    _streamingChunkSizeController.text = ConnectionConstants.defaultStreamingChunkSizeKb.toString();
 
     await _saveSettings();
   }
@@ -139,11 +139,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     );
   }
 
-  void _showSuccess(bool settingsAppliedNow) {
+  void _showSuccess(
+    bool settingsAppliedNow, {
+    required bool poolModeChanged,
+  }) {
     if (!mounted) return;
-    final message = settingsAppliedNow
-        ? AppStrings.odbcSuccessAppliedNow
-        : AppStrings.odbcSuccessAppliedGradually;
+    final base = settingsAppliedNow ? AppStrings.odbcSuccessAppliedNow : AppStrings.odbcSuccessAppliedGradually;
+    final message = poolModeChanged ? '$base${AppStrings.odbcSuccessPoolModeRestartAppend}' : base;
 
     SettingsFeedback.showSuccess(
       context: context,
@@ -198,6 +200,21 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                         minValue: 1,
                         maxValue: 20,
                       ),
+                      const SizedBox(height: 16),
+                      SettingsToggleTile(
+                        label: AppStrings.odbcFieldNativePool,
+                        value: _useNativeOdbcPool,
+                        onChanged: _isSaving
+                            ? null
+                            : (bool value) {
+                                setState(() => _useNativeOdbcPool = value);
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcTextNativePoolHelp,
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
                       const SizedBox(height: 24),
                       Text(
                         AppStrings.odbcBlockTimeouts,
@@ -245,10 +262,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                       const SizedBox(height: 8),
                       Text(
                         AppStrings.odbcTextQuickRecommendation,
-                        style: FluentTheme.of(context).typography.caption
-                            ?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: FluentTheme.of(context).typography.caption?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(

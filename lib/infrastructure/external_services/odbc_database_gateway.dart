@@ -24,6 +24,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -92,25 +93,23 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   bool _initialized = false;
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
   static const int _multiResultSqlLogPreviewChars = 120;
+  static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
+  static final List<RegExp> _connectionStringDatabasePatterns = [
+    RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
+    RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
+    RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
+  ];
 
   static String _previewSqlForLog(String sql) {
-    final collapsed = sql.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final collapsed = sql.replaceAll(_previewSqlWhitespaceCollapse, ' ').trim();
     if (collapsed.length <= _multiResultSqlLogPreviewChars) {
       return collapsed;
     }
     return '${collapsed.substring(0, _multiResultSqlLogPreviewChars)}…';
   }
 
-  ConnectionOptions get _connectionOptions => ConnectionOptions(
-    loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
-    queryTimeout: ConnectionConstants.defaultQueryTimeout,
-    maxResultBufferBytes: _settings.maxResultBufferMb * 1024 * 1024,
-    initialResultBufferBytes:
-        ConnectionConstants.defaultInitialResultBufferBytes,
-    autoReconnectOnConnectionLost: true,
-    maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
-    reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
-  );
+  ConnectionOptions get _connectionOptions =>
+      OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -661,7 +660,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
       if (recycleAfterRelease) {
         if (!context.ownedConnection) {
-          await _tryRecoverPoolAfterInvalidConnectionId(context.connectionString);
+          await _tryRecoverPoolAfterInvalidConnectionId(
+            context.connectionString,
+          );
         }
         continue;
       }
@@ -1438,14 +1439,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String database,
   ) {
     var updated = connectionString;
-    final replacements = <RegExp>[
-      RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
-      RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
-      RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
-    ];
 
     var replaced = false;
-    for (final pattern in replacements) {
+    for (final pattern in _connectionStringDatabasePatterns) {
       if (pattern.hasMatch(updated)) {
         updated = updated.replaceAllMapped(pattern, (match) {
           replaced = true;
@@ -1478,7 +1474,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   ConnectionOptions _buildExpandedConnectionOptions(Object error) {
-    final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
+    final currentBufferBytes =
+        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) *
+        1024 *
+        1024;
     final expandedBufferBytes =
         OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
           currentBufferBytes: currentBufferBytes,
@@ -1540,7 +1539,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (!request.expectMultipleResults) {
       return false;
     }
-    final hasRows = response.data.isNotEmpty ||
+    final hasRows =
+        response.data.isNotEmpty ||
         response.resultSets.any((QueryResultSet s) => s.rows.isNotEmpty);
     final hasNonZeroRowCount = response.items.any(
       (QueryResponseItem i) => i.isRowCount && (i.rowCount ?? 0) > 0,

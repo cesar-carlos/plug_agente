@@ -72,10 +72,7 @@ class QueryNormalizerService {
   String _normalizeColumnName(String columnName) {
     if (columnName.isEmpty) return 'column';
 
-    return columnName
-        .replaceAllMapped(_columnWhitespace, (match) => '_')
-        .toLowerCase()
-        .replaceAll(_columnNonAlnum, '');
+    return columnName.replaceAllMapped(_columnWhitespace, (match) => '_').toLowerCase().replaceAll(_columnNonAlnum, '');
   }
 
   dynamic _normalizeValue(dynamic value) {

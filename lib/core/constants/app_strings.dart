@@ -318,6 +318,14 @@ class AppStrings {
       'performance em cenários de alta concorrência.';
   static const String odbcFieldPoolSize = 'Tamanho máximo do pool';
   static const String odbcHintPoolSize = '4';
+  static const String odbcFieldNativePool = 'Pool nativo ODBC (experimental)';
+  static const String odbcTextNativePoolHelp =
+      'Desligado por padrão: cada consulta usa conexão dedicada com buffer '
+      'configurado (mais estável). Ative apenas para testar desempenho ou '
+      'quando o driver/pacote tratar buffers no pool nativo. '
+      'Após alterar, reinicie o aplicativo para o modo valer de fato.';
+  static const String odbcSuccessPoolModeRestartAppend =
+      ' Reinicie o aplicativo para aplicar a troca do modo de pool ODBC.';
   static const String odbcBlockTimeouts = 'Timeouts';
   static const String odbcFieldLoginTimeout = 'Login timeout (segundos)';
   static const String odbcHintLoginTimeout = '30';

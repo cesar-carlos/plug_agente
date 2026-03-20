@@ -29,6 +29,9 @@ class DatabaseResource {
     );
   }
 
+  static final RegExp _normalizeWhitespace = RegExp(r'\s+');
+  static final RegExp _normalizeDots = RegExp(r'\.+');
+
   final DatabaseResourceType resourceType;
   final String name;
 
@@ -68,8 +71,8 @@ class DatabaseResource {
         .replaceAll('"', '')
         .replaceAll('`', '')
         .replaceAll("'", '')
-        .replaceAll(RegExp(r'\s+'), '')
-        .replaceAll(RegExp(r'\.+'), '.');
+        .replaceAll(_normalizeWhitespace, '')
+        .replaceAll(_normalizeDots, '.');
   }
 
   static String _baseName(String normalized) {

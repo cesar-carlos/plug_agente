@@ -6,6 +6,7 @@ import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
@@ -22,11 +23,13 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     IRevokedTokenStore? revokedTokenStore,
     ITokenAuditStore? tokenAuditStore,
     IClientTokenPolicyCache? policyCache,
+    IAuthorizationCacheMetrics? cacheMetrics,
   }) : _jwksVerifier = jwksVerifier,
        _localDataSource = localDataSource,
        _revokedTokenStore = revokedTokenStore,
        _tokenAuditStore = tokenAuditStore,
-       _policyCache = policyCache;
+       _policyCache = policyCache,
+       _cacheMetrics = cacheMetrics;
 
   final FeatureFlags _featureFlags;
   final JwtJwksVerifier? _jwksVerifier;
@@ -34,6 +37,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   final IRevokedTokenStore? _revokedTokenStore;
   final ITokenAuditStore? _tokenAuditStore;
   final IClientTokenPolicyCache? _policyCache;
+  final IAuthorizationCacheMetrics? _cacheMetrics;
 
   @override
   Future<Result<ClientTokenPolicy>> resolvePolicy(String token) async {
@@ -66,8 +70,10 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     if (policyCache != null) {
       final cachedPolicy = policyCache.get(credentialHash);
       if (cachedPolicy != null) {
+        _cacheMetrics?.recordPolicyCacheLookup(hit: true);
         return Success(cachedPolicy);
       }
+      _cacheMetrics?.recordPolicyCacheLookup(hit: false);
     }
 
     if (_localDataSource != null) {

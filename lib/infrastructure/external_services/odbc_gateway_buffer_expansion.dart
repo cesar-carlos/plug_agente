@@ -7,12 +7,14 @@ class OdbcGatewayBufferExpansion {
   static const int bufferRetryMarginBytes = 1024 * 1024;
   static const int maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
 
+  static final RegExp _needBytesPattern = RegExp(
+    r'need\s+(\d+)\s+bytes',
+    caseSensitive: false,
+  );
+
   /// Parses "need N bytes" style messages from some ODBC drivers.
   static int? extractRequiredBufferBytes(String message) {
-    final match = RegExp(
-      r'need\s+(\d+)\s+bytes',
-      caseSensitive: false,
-    ).firstMatch(message);
+    final match = _needBytesPattern.firstMatch(message);
     if (match == null) {
       return null;
     }

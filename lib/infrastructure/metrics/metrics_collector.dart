@@ -23,6 +23,17 @@ class MetricsCollector implements IMetricsCollector {
       'multi_result_direct_still_vacuous';
   static const String _transactionalBatchDirectPathCounter =
       'transactional_batch_direct_path';
+  static const String _authDecisionCacheHitCounter = 'auth_decision_cache_hit';
+  static const String _authDecisionCacheMissCounter =
+      'auth_decision_cache_miss';
+  static const String _authPolicyCacheHitCounter = 'auth_policy_cache_hit';
+  static const String _authPolicyCacheMissCounter = 'auth_policy_cache_miss';
+  static const String _rpcSqlExecuteStreamingChunksResponseCounter =
+      'rpc_sql_execute_streaming_chunks_response';
+  static const String _rpcSqlExecuteStreamingFromDbResponseCounter =
+      'rpc_sql_execute_streaming_from_db_response';
+  static const String _rpcSqlExecuteMaterializedResponseCounter =
+      'rpc_sql_execute_materialized_response';
 
   static const int _maxMetrics = 10000;
 
@@ -52,6 +63,20 @@ class MetricsCollector implements IMetricsCollector {
       _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
   int get transactionalBatchDirectPathCount =>
       _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
+  int get authDecisionCacheHitCount =>
+      _eventCounters[_authDecisionCacheHitCounter] ?? 0;
+  int get authDecisionCacheMissCount =>
+      _eventCounters[_authDecisionCacheMissCounter] ?? 0;
+  int get authPolicyCacheHitCount =>
+      _eventCounters[_authPolicyCacheHitCounter] ?? 0;
+  int get authPolicyCacheMissCount =>
+      _eventCounters[_authPolicyCacheMissCounter] ?? 0;
+  int get rpcSqlExecuteStreamingChunksResponseCount =>
+      _eventCounters[_rpcSqlExecuteStreamingChunksResponseCounter] ?? 0;
+  int get rpcSqlExecuteStreamingFromDbResponseCount =>
+      _eventCounters[_rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
+  int get rpcSqlExecuteMaterializedResponseCount =>
+      _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
 
   Map<String, int> get eventCounters =>
       UnmodifiableMapView<String, int>(_eventCounters);
@@ -82,6 +107,27 @@ class MetricsCollector implements IMetricsCollector {
 
   void recordTransactionalBatchDirectPath() =>
       _incrementEventCounter(_transactionalBatchDirectPathCounter);
+
+  void recordAuthDecisionCacheHit() =>
+      _incrementEventCounter(_authDecisionCacheHitCounter);
+
+  void recordAuthDecisionCacheMiss() =>
+      _incrementEventCounter(_authDecisionCacheMissCounter);
+
+  void recordAuthPolicyCacheHit() =>
+      _incrementEventCounter(_authPolicyCacheHitCounter);
+
+  void recordAuthPolicyCacheMiss() =>
+      _incrementEventCounter(_authPolicyCacheMissCounter);
+
+  void recordRpcSqlExecuteStreamingChunksResponse() =>
+      _incrementEventCounter(_rpcSqlExecuteStreamingChunksResponseCounter);
+
+  void recordRpcSqlExecuteStreamingFromDbResponse() =>
+      _incrementEventCounter(_rpcSqlExecuteStreamingFromDbResponseCounter);
+
+  void recordRpcSqlExecuteMaterializedResponse() =>
+      _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

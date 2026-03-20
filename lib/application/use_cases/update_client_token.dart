@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/services/client_token_auth_cache_invalidation.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
@@ -46,14 +47,23 @@ class UpdateClientToken {
       );
     }
 
+    final existing = await _repository.getTokenById(tokenId);
     final result = await _repository.updateToken(
       tokenId,
       request,
       expectedVersion: expectedVersion,
     );
     if (result.isSuccess()) {
-      _decisionCache?.invalidateAll();
-      _policyCache?.invalidateAll();
+      invalidateAuthCachesForClientCredential(
+        tokenValue: existing?.tokenValue,
+        decisionCache: _decisionCache,
+        policyCache: _policyCache,
+      );
+      invalidateAuthCachesForClientCredential(
+        tokenValue: result.getOrNull()?.tokenValue,
+        decisionCache: _decisionCache,
+        policyCache: _policyCache,
+      );
       await _recordRotateAuditEvent(tokenId, request.clientId);
     }
     return result;

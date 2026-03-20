@@ -25,5 +25,8 @@ abstract class IAuthorizationDecisionCache {
 
   void invalidate(String key);
 
+  /// Removes all entries whose key starts with [credentialHash] + '|'.
+  void invalidateForCredentialHash(String credentialHash);
+
   void invalidateAll();
 }

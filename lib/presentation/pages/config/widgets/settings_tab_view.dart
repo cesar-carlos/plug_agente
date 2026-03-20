@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 
+/// Item for [SettingsTabView] (icon, label, body).
 class SettingsTabItem {
   const SettingsTabItem({
     required this.icon,
@@ -13,6 +14,9 @@ class SettingsTabItem {
   final Widget body;
 }
 
+/// Padrão visual de abas em telas de configurações: Fluent `TabView` (faixa
+/// nativa + corpo com page view). Use este widget para manter identidade
+/// consistente com o restante do app (ex.: configurações da base de dados).
 class SettingsTabView extends StatelessWidget {
   const SettingsTabView({
     required this.currentIndex,
@@ -33,7 +37,7 @@ class SettingsTabView extends StatelessWidget {
       minTabWidth: 180,
       tabs: items
           .map(
-            (item) => Tab(
+            (SettingsTabItem item) => Tab(
               icon: Icon(item.icon),
               text: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

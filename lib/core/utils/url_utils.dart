@@ -1,9 +1,11 @@
+final RegExp _trailingSlashes = RegExp(r'/+$');
+
 String normalizeServerUrl(String serverUrl) {
   final trimmedServerUrl = serverUrl.trim();
   if (trimmedServerUrl.isEmpty) {
     return trimmedServerUrl;
   }
-  return trimmedServerUrl.replaceFirst(RegExp(r'/+$'), '');
+  return trimmedServerUrl.replaceFirst(_trailingSlashes, '');
 }
 
 String joinServerUrlAndPath(String serverUrl, String path) {

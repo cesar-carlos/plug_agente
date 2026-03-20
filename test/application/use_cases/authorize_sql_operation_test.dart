@@ -3,9 +3,11 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
-import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure;
+import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -116,6 +118,50 @@ void main() {
         );
 
         verify(() => resolver.resolvePolicy(any())).called(1);
+      },
+    );
+
+    test(
+      'should not overwrite cached allow entries when validate fails for pending only',
+      () async {
+        when(() => resolver.resolvePolicy(any())).thenAnswer(
+          (_) async => Failure(
+            ConfigurationFailure.withContext(
+              message: 'Token not found',
+              context: const {
+                'authorization': true,
+                'reason': 'token_not_found',
+              },
+            ),
+          ),
+        );
+
+        const token = 'opaque-token';
+        final tokenHash = hashClientCredentialToken(token);
+        final usersKey = '$tokenHash|read|dbo.users';
+        decisionCache.put(
+          usersKey,
+          AuthorizationDecisionCacheEntry(
+            allowed: true,
+            expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+          ),
+        );
+
+        final result = await useCase.call(
+          token: token,
+          sql:
+              'SELECT * FROM dbo.users u INNER JOIN dbo.orders o ON u.id = o.user_id',
+        );
+
+        expect(result.isError(), isTrue);
+        final usersStill = decisionCache.get(usersKey);
+        expect(usersStill, isNotNull);
+        expect(usersStill!.allowed, isTrue);
+
+        final ordersKey = '$tokenHash|read|dbo.orders';
+        final ordersEntry = decisionCache.get(ordersKey);
+        expect(ordersEntry, isNotNull);
+        expect(ordersEntry!.allowed, isFalse);
       },
     );
   });

@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/split_sql_statements.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -16,7 +17,6 @@ class SqlOperationClassification {
 class SqlOperationClassifier {
   static final RegExp _blockComments = RegExp(r'/\*.*?\*/', dotAll: true);
   static final RegExp _lineComments = RegExp(r'--.*$', multiLine: true);
-  static final RegExp _trailingSemicolon = RegExp(r';$');
   static final RegExp _identifierStart = RegExp('[a-z_]', caseSensitive: false);
   static final RegExp _identifierPart = RegExp(
     r'[a-z0-9_$#]',
@@ -24,12 +24,12 @@ class SqlOperationClassifier {
   );
 
   Result<SqlOperationClassification> classify(String sql) {
-    final normalized = _normalizeSql(sql);
-    if (normalized.isEmpty) {
+    final trimmed = sql.trim();
+    if (trimmed.isEmpty) {
       return Failure(domain.ValidationFailure('SQL cannot be empty'));
     }
 
-    if (_containsMultipleStatements(normalized)) {
+    if (sqlHasMultipleTopLevelStatements(trimmed)) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Multiple SQL statements are not supported',
@@ -38,6 +38,11 @@ class SqlOperationClassifier {
           },
         ),
       );
+    }
+
+    final normalized = _normalizeSql(sql);
+    if (normalized.isEmpty) {
+      return Failure(domain.ValidationFailure('SQL cannot be empty'));
     }
 
     final operation = _detectOperation(normalized);
@@ -76,9 +81,7 @@ class SqlOperationClassifier {
     if (sql.startsWith('select ') || sql.startsWith('with ')) {
       return SqlOperation.read;
     }
-    if (sql.startsWith('update ') ||
-        sql.startsWith('insert ') ||
-        sql.startsWith('merge ')) {
+    if (sql.startsWith('update ') || sql.startsWith('insert ') || sql.startsWith('merge ')) {
       return SqlOperation.update;
     }
     if (sql.startsWith('delete ')) {
@@ -117,9 +120,7 @@ class SqlOperationClassifier {
       resources.addAll(_extractByKeywords(sql, const ['from']));
     }
 
-    return resources
-        .where((resource) => !_isCteAliasReference(resource, cteAliases))
-        .toList();
+    return resources.where((resource) => !_isCteAliasReference(resource, cteAliases)).toList();
   }
 
   Set<DatabaseResource> _extractByKeywords(
@@ -165,8 +166,7 @@ class SqlOperationClassifier {
     }
 
     final hasFromClause =
-        _findKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 ||
-        _findKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
+        _findKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 || _findKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
     if (hasFromClause && _looksLikeAlias(parsed.value)) {
       return null;
     }
@@ -181,9 +181,7 @@ class SqlOperationClassifier {
     if (trimmed.contains('.')) {
       return false;
     }
-    return !trimmed.startsWith('[') &&
-        !trimmed.startsWith('"') &&
-        !trimmed.startsWith('`');
+    return !trimmed.startsWith('[') && !trimmed.startsWith('"') && !trimmed.startsWith('`');
   }
 
   Set<String> _extractCteAliases(String sql) {
@@ -275,8 +273,7 @@ class SqlOperationClassifier {
     if (end > lowerSql.length || !lowerSql.startsWith(keyword, index)) {
       return false;
     }
-    return _isWordBoundary(lowerSql, index - 1) &&
-        _isWordBoundary(lowerSql, end);
+    return _isWordBoundary(lowerSql, index - 1) && _isWordBoundary(lowerSql, end);
   }
 
   _ParsedIdentifier? _readQualifiedIdentifier(String sql, int start) {
@@ -417,12 +414,6 @@ class SqlOperationClassifier {
     final noBlockComments = sql.replaceAll(_blockComments, ' ');
     final noLineComments = noBlockComments.replaceAll(_lineComments, ' ');
     return noLineComments.trim().toLowerCase();
-  }
-
-  bool _containsMultipleStatements(String sql) {
-    final withoutTrailingSemicolon =
-        sql.trim().replaceFirst(_trailingSemicolon, '');
-    return withoutTrailingSemicolon.contains(';');
   }
 }
 

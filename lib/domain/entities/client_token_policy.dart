@@ -50,22 +50,22 @@ class ClientTokenPolicy {
       return false;
     }
 
-    final matchingRules = rules.where((rule) => rule.appliesTo(resource));
-    final hasDenyRule = matchingRules.any(
-      (rule) =>
-          rule.effect == ClientTokenRuleEffect.deny &&
-          rule.affectsOperation(operation),
-    );
-    if (hasDenyRule) {
-      return false;
+    var hasExplicitAllow = false;
+    for (final rule in rules) {
+      if (!rule.appliesTo(resource)) {
+        continue;
+      }
+      if (rule.effect == ClientTokenRuleEffect.deny &&
+          rule.affectsOperation(operation)) {
+        return false;
+      }
+      if (rule.effect == ClientTokenRuleEffect.allow &&
+          rule.affectsOperation(operation)) {
+        hasExplicitAllow = true;
+      }
     }
 
-    final hasAllowRule = matchingRules.any(
-      (rule) =>
-          rule.effect == ClientTokenRuleEffect.allow &&
-          rule.affectsOperation(operation),
-    );
-    if (hasAllowRule) {
+    if (hasExplicitAllow) {
       return true;
     }
 

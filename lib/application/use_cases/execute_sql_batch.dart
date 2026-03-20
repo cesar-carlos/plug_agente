@@ -31,9 +31,7 @@ class ExecuteSqlBatch {
     Duration? timeout,
   }) async {
     final opts = options ?? const SqlExecutionOptions();
-    final batchDeadline = timeout == null
-        ? null
-        : DateTime.now().add(timeout);
+    final batchDeadline = timeout == null ? null : DateTime.now().add(timeout);
 
     if (opts.transaction) {
       return _databaseGateway.executeBatch(

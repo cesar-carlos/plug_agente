@@ -1,3 +1,5 @@
+import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
+
 /// SQL command with optional parameters.
 class SqlCommand {
   const SqlCommand({
@@ -135,8 +137,8 @@ class SqlExecutionOptions {
 
   factory SqlExecutionOptions.fromJson(Map<String, dynamic> json) {
     return SqlExecutionOptions(
-      timeoutMs: json['timeout_ms'] as int? ?? 30000,
-      maxRows: json['max_rows'] as int? ?? 50000,
+      timeoutMs: jsonNonNegativeIntWithDefault(json['timeout_ms'], 30000),
+      maxRows: jsonPositiveIntWithDefault(json['max_rows'], 50000),
       transaction: json['transaction'] as bool? ?? false,
     );
   }

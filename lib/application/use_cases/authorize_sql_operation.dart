@@ -2,6 +2,7 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:result_dart/result_dart.dart';
@@ -11,13 +12,16 @@ class AuthorizeSqlOperation {
     this._classifier,
     this._tokenValidationService, {
     IAuthorizationDecisionCache? decisionCache,
+    IAuthorizationCacheMetrics? cacheMetrics,
     Duration decisionTtl = const Duration(seconds: 30),
   }) : _decisionCache = decisionCache,
+       _cacheMetrics = cacheMetrics,
        _decisionTtl = decisionTtl;
 
   final SqlOperationClassifier _classifier;
   final ClientTokenValidationService _tokenValidationService;
   final IAuthorizationDecisionCache? _decisionCache;
+  final IAuthorizationCacheMetrics? _cacheMetrics;
   final Duration _decisionTtl;
 
   Future<Result<void>> call({
@@ -65,9 +69,7 @@ class AuthorizeSqlOperation {
                 resource: resource,
               );
               if (!allowed) {
-                final reason = policy.isRevoked
-                    ? 'token_revoked'
-                    : 'missing_permission';
+                final reason = policy.isRevoked ? 'token_revoked' : 'missing_permission';
                 _cacheDecision(
                   key: decisionKeys[i],
                   allowed: false,
@@ -110,9 +112,9 @@ class AuthorizeSqlOperation {
           },
           (failure) {
             final error = failure as domain.Failure;
-            for (final key in decisionKeys) {
+            for (final i in pendingIndices) {
               _cacheDecision(
-                key: key,
+                key: decisionKeys[i],
                 allowed: false,
                 clientId: error.context['client_id'] as String?,
                 reason: error.context['reason'] as String?,
@@ -158,6 +160,7 @@ class AuthorizeSqlOperation {
 
     for (var i = 0; i < keys.length; i++) {
       final entry = cache.get(keys[i]);
+      _cacheMetrics?.recordDecisionCacheLookup(hit: entry != null);
       if (entry == null) {
         pending.add(i);
         continue;
@@ -237,11 +240,9 @@ class _DecisionCachePhase {
   factory _DecisionCachePhase.denied(domain.ConfigurationFailure failure) =>
       _DecisionCachePhase._(fastFailure: failure);
 
-  factory _DecisionCachePhase.allCachedAllowed() =>
-      _DecisionCachePhase._(allSatisfiedByCache: true);
+  factory _DecisionCachePhase.allCachedAllowed() => _DecisionCachePhase._(allSatisfiedByCache: true);
 
-  factory _DecisionCachePhase.needsCheck(List<int> indices) =>
-      _DecisionCachePhase._(pendingIndices: indices);
+  factory _DecisionCachePhase.needsCheck(List<int> indices) => _DecisionCachePhase._(pendingIndices: indices);
 
   final domain.ConfigurationFailure? fastFailure;
   final bool allSatisfiedByCache;

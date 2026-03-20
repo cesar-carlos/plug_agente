@@ -44,6 +44,7 @@ import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
@@ -59,6 +60,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
@@ -73,11 +75,13 @@ import 'package:plug_agente/infrastructure/external_services/odbc_database_gatew
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
@@ -101,6 +105,18 @@ void registerPlugDependencyGraph(
   GetIt getIt, {
   required odbc.ServiceLocator odbcWorkerLocator,
 }) {
+  int readPositiveIntEnv(String key, int fallback) {
+    final raw = dotenv.env[key]?.trim();
+    if (raw == null || raw.isEmpty) {
+      return fallback;
+    }
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 1) {
+      return fallback;
+    }
+    return parsed;
+  }
+
   getIt
     ..registerLazySingleton<odbc.OdbcService>(
       () => odbcWorkerLocator.asyncService,
@@ -150,7 +166,7 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton(() => const Uuid())
     ..registerLazySingleton<IConnectionPool>(
-      () => OdbcConnectionPool(
+      () => createOdbcConnectionPool(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
       ),
@@ -158,12 +174,28 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
+    ..registerLazySingleton<IRpcDispatchMetricsCollector>(
+      () => RpcDispatchMetricsCollector(getIt<MetricsCollector>()),
+    )
+    ..registerLazySingleton<IAuthorizationCacheMetrics>(
+      () => AuthorizationCacheMetricsCollector(getIt<MetricsCollector>()),
+    )
     ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
     ..registerLazySingleton<IAuthorizationDecisionCache>(
-      InMemoryAuthorizationDecisionCache.new,
+      () => InMemoryAuthorizationDecisionCache(
+        maxEntries: readPositiveIntEnv(
+          'AUTH_DECISION_CACHE_MAX_ENTRIES',
+          8192,
+        ),
+      ),
     )
     ..registerLazySingleton<IClientTokenPolicyCache>(
-      ClientTokenPolicyMemoryCache.new,
+      () => ClientTokenPolicyMemoryCache(
+        maxEntries: readPositiveIntEnv(
+          'AUTH_POLICY_CACHE_MAX_ENTRIES',
+          2048,
+        ),
+      ),
     )
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
@@ -182,6 +214,7 @@ void registerPlugDependencyGraph(
         idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<IAuthorizationMetricsCollector>(),
         deprecationMetrics: getIt<IDeprecationMetricsCollector>(),
+        dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
         onIdempotencyFingerprintMismatch:
             getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
@@ -236,6 +269,7 @@ void registerPlugDependencyGraph(
         revokedTokenStore: getIt<IRevokedTokenStore>(),
         tokenAuditStore: getIt<ITokenAuditStore>(),
         policyCache: getIt<IClientTokenPolicyCache>(),
+        cacheMetrics: getIt<IAuthorizationCacheMetrics>(),
       ),
     )
     ..registerLazySingleton<JwtJwksVerifier>(
@@ -371,6 +405,7 @@ void registerPlugDependencyGraph(
         getIt<SqlOperationClassifier>(),
         getIt<ClientTokenValidationService>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
+        cacheMetrics: getIt<IAuthorizationCacheMetrics>(),
       ),
     );
 }

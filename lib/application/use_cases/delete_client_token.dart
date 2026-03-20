@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/services/client_token_auth_cache_invalidation.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
@@ -28,10 +29,14 @@ class DeleteClientToken {
       return Failure(domain.ValidationFailure('tokenId is required'));
     }
 
+    final existing = await _repository.getTokenById(tokenId);
     final result = await _repository.deleteToken(tokenId);
     if (result.isSuccess()) {
-      _decisionCache?.invalidateAll();
-      _policyCache?.invalidateAll();
+      invalidateAuthCachesForClientCredential(
+        tokenValue: existing?.tokenValue,
+        decisionCache: _decisionCache,
+        policyCache: _policyCache,
+      );
       await _recordDeleteAuditEvent(tokenId);
     }
     return result;

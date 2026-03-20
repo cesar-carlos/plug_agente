@@ -118,6 +118,15 @@ void main() {
         expect(result.isError(), isTrue);
       });
 
+      test(
+        'should accept DROP substring only inside string literal',
+        () {
+          const query = "SELECT * FROM t WHERE c = ';DROP TABLE u'";
+          final result = SqlValidator.validateSelectQuery(query);
+          expect(result.isSuccess(), isTrue);
+        },
+      );
+
       test('should accept SELECT with mixed case', () {
         // Arrange
         const query = 'select * from users';
@@ -174,6 +183,23 @@ void main() {
         );
         expect(r.isError(), isTrue);
       });
+
+      test('should accept semicolon inside string literal', () {
+        final result = SqlValidator.validateSqlForExecution(
+          "SELECT * FROM dbo.t WHERE code = ';'",
+        );
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test(
+        'should accept semicolon and DROP substring only inside string literal',
+        () {
+          final result = SqlValidator.validateSqlForExecution(
+            "SELECT 1 WHERE msg = ';DROP TABLE x'",
+          );
+          expect(result.isSuccess(), isTrue);
+        },
+      );
 
       test('should reject DROP', () {
         final r = SqlValidator.validateSqlForExecution('DROP TABLE users');
