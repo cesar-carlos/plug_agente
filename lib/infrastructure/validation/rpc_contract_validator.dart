@@ -294,12 +294,69 @@ class RpcContractValidator {
       if (items is! List<dynamic>) {
         return _invalid('Field "items" must be an array');
       }
+      if (items.isEmpty) {
+        return const Success(unit);
+      }
+      final first = items.first;
+      final isBatchShape =
+          first is Map<String, dynamic> && first.containsKey('ok');
       for (final item in items) {
-        final validation = _validateResponseItem(item);
+        final validation = isBatchShape
+            ? _validateBatchCommandResultItem(item)
+            : _validateResponseItem(item);
         if (validation.isError()) {
           return validation;
         }
       }
+    }
+
+    return const Success(unit);
+  }
+
+  Result<void> _validateBatchCommandResultItem(dynamic item) {
+    if (item is! Map<String, dynamic>) {
+      return _invalid('Field "items" must contain objects');
+    }
+
+    final index = item['index'];
+    if (index is! int || index < 0) {
+      return _invalid('Field "items[].index" must be an integer >= 0');
+    }
+
+    final ok = item['ok'];
+    if (ok is! bool) {
+      return _invalid('Field "items[].ok" must be a boolean');
+    }
+
+    if (!ok) {
+      final err = item['error'];
+      if (err != null && err is! String) {
+        return _invalid('Field "items[].error" must be a string');
+      }
+      return const Success(unit);
+    }
+
+    final rows = item['rows'];
+    if (rows != null &&
+        (rows is! List<dynamic> ||
+            rows.any((row) => row is! Map<String, dynamic>))) {
+      return _invalid('Field "items[].rows" must be an array of objects');
+    }
+
+    for (final key in ['row_count', 'affected_rows']) {
+      final value = item[key];
+      if (value != null && (value is! int || value < 0)) {
+        return _invalid('Field "items[].$key" must be an integer >= 0');
+      }
+    }
+
+    final columnMetadata = item['column_metadata'];
+    if (columnMetadata != null &&
+        (columnMetadata is! List<dynamic> ||
+            columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+      return _invalid(
+        'Field "items[].column_metadata" must be an array of objects',
+      );
     }
 
     return const Success(unit);

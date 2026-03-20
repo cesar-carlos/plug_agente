@@ -109,11 +109,6 @@ class OdbcConnectionPool implements IConnectionPool {
 
         return connResult.fold(
           (connection) {
-            developer.log(
-              'Connection acquired from pool: ${connection.id}',
-              name: 'connection_pool',
-              level: 500,
-            );
             return Success(connection.id);
           },
           (error) => Failure(
@@ -130,12 +125,6 @@ class OdbcConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> release(String connectionId) async {
-    developer.log(
-      'Releasing connection back to pool: $connectionId',
-      name: 'connection_pool',
-      level: 500,
-    );
-
     // Liberar conexão de volta ao pool nativo
     final result = await _service.poolReleaseConnection(connectionId);
 

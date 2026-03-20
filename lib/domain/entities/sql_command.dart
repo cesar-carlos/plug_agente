@@ -75,10 +75,15 @@ class SqlCommandResult {
                 .map((e) => e as Map<String, dynamic>)
                 .toList()
           : null,
-      rowCount: json['rowCount'] as int?,
-      affectedRows: json['affectedRows'] as int?,
+      rowCount: json['row_count'] as int? ?? json['rowCount'] as int?,
+      affectedRows:
+          json['affected_rows'] as int? ?? json['affectedRows'] as int?,
       error: json['error'] as String?,
-      columnMetadata: json['columnMetadata'] != null
+      columnMetadata: json['column_metadata'] != null
+          ? (json['column_metadata'] as List<dynamic>)
+                .map((e) => e as Map<String, dynamic>)
+                .toList()
+          : json['columnMetadata'] != null
           ? (json['columnMetadata'] as List<dynamic>)
                 .map((e) => e as Map<String, dynamic>)
                 .toList()
@@ -112,10 +117,10 @@ class SqlCommandResult {
       'index': index,
       'ok': ok,
       if (rows != null) 'rows': rows,
-      if (rowCount != null) 'rowCount': rowCount,
-      if (affectedRows != null) 'affectedRows': affectedRows,
+      if (rowCount != null) 'row_count': rowCount,
+      if (affectedRows != null) 'affected_rows': affectedRows,
       if (error != null) 'error': error,
-      if (columnMetadata != null) 'columnMetadata': columnMetadata,
+      if (columnMetadata != null) 'column_metadata': columnMetadata,
     };
   }
 }

@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -30,7 +31,9 @@ class ExecuteSqlBatch {
     Duration? timeout,
   }) async {
     final opts = options ?? const SqlExecutionOptions();
-    final effectiveTimeout = timeout;
+    final batchDeadline = timeout == null
+        ? null
+        : DateTime.now().add(timeout);
 
     if (opts.transaction) {
       return _databaseGateway.executeBatch(
@@ -38,7 +41,7 @@ class ExecuteSqlBatch {
         commands,
         database: database,
         options: opts,
-        timeout: effectiveTimeout,
+        timeout: timeout,
       );
     }
 
@@ -49,19 +52,6 @@ class ExecuteSqlBatch {
       if (validation.isError()) {
         validationResults[i] = validation.exceptionOrNull()! as domain.Failure;
       }
-    }
-
-    // If any validation failed and transaction mode, fail early
-    if (validationResults.isNotEmpty && opts.transaction) {
-      return Failure(
-        domain.ValidationFailure.withContext(
-          message: 'Batch validation failed in transaction mode',
-          context: {
-            'failedCommands': validationResults.keys.toList(),
-            'operation': 'sql_validation',
-          },
-        ),
-      );
     }
 
     // Execute commands
@@ -82,6 +72,26 @@ class ExecuteSqlBatch {
         continue;
       }
 
+      Duration? perCommandTimeout;
+      if (batchDeadline != null) {
+        final remaining = batchDeadline.difference(DateTime.now());
+        if (remaining <= Duration.zero) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Batch execution budget exhausted before database call',
+              context: {
+                'timeout': true,
+                'timeout_stage': 'sql',
+                'stage': 'batch',
+                'reason': 'batch_budget_exhausted',
+                'failedIndex': i,
+              },
+            ),
+          );
+        }
+        perCommandTimeout = remaining;
+      }
+
       // Execute command
       final command = commands[i];
       final request = queryRequestForCommand(
@@ -89,7 +99,7 @@ class ExecuteSqlBatch {
         agentId: agentId,
         requestId: _uuid.v4(),
       );
-      final executeResult = switch ((effectiveTimeout, database)) {
+      final executeResult = switch ((perCommandTimeout, database)) {
         (null, null) => await _databaseGateway.executeQuery(request),
         (null, final db?) => await _databaseGateway.executeQuery(
           request,
@@ -106,22 +116,25 @@ class ExecuteSqlBatch {
         ),
       };
 
-      await executeResult.fold(
-        (response) async {
-          // Normalize response
-          final normalized = await _normalizerService.normalize(response);
+      executeResult.fold(
+        (response) {
+          final normalized = _normalizerService.normalize(response);
+          final limitedRows = truncateSqlResultRows(
+            normalized.data,
+            opts.maxRows,
+          );
 
           results.add(
             SqlCommandResult.success(
               index: i,
-              rows: normalized.data,
-              rowCount: normalized.data.length,
+              rows: limitedRows,
+              rowCount: limitedRows.length,
               affectedRows: normalized.affectedRows,
               columnMetadata: normalized.columnMetadata,
             ),
           );
         },
-        (failure) async {
+        (failure) {
           final domainFailure = failure as domain.Failure;
           results.add(
             SqlCommandResult.failure(
@@ -129,31 +142,7 @@ class ExecuteSqlBatch {
               error: domainFailure.message,
             ),
           );
-
-          // In transaction mode, abort on first error
-          if (opts.transaction) {
-            return;
-          }
         },
-      );
-
-      // In transaction mode, abort if we hit an error
-      if (opts.transaction && !results.last.ok) {
-        break;
-      }
-    }
-
-    // In transaction mode, if any failed, return failure
-    if (opts.transaction && results.any((r) => !r.ok)) {
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Transaction aborted due to command failure',
-          context: {
-            'failedIndex': results.indexWhere((r) => !r.ok),
-            'totalCommands': commands.length,
-            'completedCommands': results.length,
-          },
-        ),
       );
     }
 

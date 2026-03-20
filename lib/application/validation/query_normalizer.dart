@@ -1,4 +1,6 @@
 class QueryNormalizer {
+  static final RegExp _whitespaceCollapse = RegExp(r'\s+');
+
   bool isValidQuery(String query) {
     if (query.isEmpty) return false;
 
@@ -19,6 +21,6 @@ class QueryNormalizer {
   String sanitizeQuery(String query) {
     if (query.isEmpty) return '';
 
-    return query.replaceAllMapped(RegExp(r'\s+'), (match) => ' ').trim();
+    return query.replaceAllMapped(_whitespaceCollapse, (match) => ' ').trim();
   }
 }

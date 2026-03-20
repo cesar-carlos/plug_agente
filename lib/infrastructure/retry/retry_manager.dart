@@ -131,6 +131,14 @@ class RetryManager implements IRetryManager {
         return false;
       }
 
+      if (exception is domain.ServerFailure ||
+          exception is domain.DatabaseFailure ||
+          exception is domain.NotFoundFailure ||
+          exception is domain.CompressionFailure ||
+          exception is domain.NotificationFailure) {
+        return false;
+      }
+
       // Outros erros: não fazer retry por segurança
       return false;
     }

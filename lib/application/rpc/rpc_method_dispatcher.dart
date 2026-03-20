@@ -10,6 +10,8 @@ import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -345,10 +347,25 @@ class RpcMethodDispatcher {
     return result.fold<Future<RpcResponse>>(
       (QueryResponse queryResponse) async {
         // Normalize
-        final normalized = await _normalizerService.normalize(queryResponse);
+        var normalized = _normalizerService.normalize(queryResponse);
 
-        final limitedRows = _applyMaxRows(normalized.data, maxRows);
-        final wasTruncated = limitedRows.length != normalized.data.length;
+        var multiResultSetsTruncated = false;
+        if (normalized.resultSets.isNotEmpty) {
+          final beforeMulti = normalized;
+          normalized = _applyMaxRowsToMultiResultSets(normalized, maxRows);
+          multiResultSetsTruncated = _multiResultSetsWereTruncated(
+            beforeMulti,
+            normalized,
+          );
+        }
+
+        final limitedRows = normalized.resultSets.isNotEmpty
+            ? normalized.data
+            : truncateSqlResultRows(normalized.data, maxRows);
+        final wasTruncated =
+            multiResultSetsTruncated ||
+            (!normalized.resultSets.isNotEmpty &&
+                limitedRows.length != normalized.data.length);
         final useStreaming =
             _featureFlags.enableSocketStreamingChunks &&
             streamEmitter != null &&
@@ -1018,9 +1035,13 @@ class RpcMethodDispatcher {
     required String? requestId,
     required DateTime? deadline,
   }) async {
-    final timeout = _effectiveStageTimeout(
+    final stageTimeout = _effectiveStageTimeout(
       deadline: deadline,
       stageBudget: _batchExecutionStageBudgetDuration,
+    );
+    final timeout = mergeBatchOdbcTimeout(
+      stageTimeout: stageTimeout,
+      timeoutMs: options.timeoutMs,
     );
     if (timeout != null && timeout <= Duration.zero) {
       final context = <String, dynamic>{
@@ -1510,14 +1531,72 @@ class RpcMethodDispatcher {
     };
   }
 
-  List<Map<String, dynamic>> _applyMaxRows(
-    List<Map<String, dynamic>> rows,
+  QueryResponse _applyMaxRowsToMultiResultSets(
+    QueryResponse response,
     int maxRows,
   ) {
-    if (rows.length <= maxRows) {
-      return rows;
+    if (response.resultSets.isEmpty) {
+      return response;
     }
-    return rows.take(maxRows).toList();
+    final newSets = <QueryResultSet>[];
+    for (final rs in response.resultSets) {
+      final limited = truncateSqlResultRows(rs.rows, maxRows);
+      newSets.add(
+        QueryResultSet(
+          index: rs.index,
+          rows: limited,
+          rowCount: limited.length,
+          affectedRows: rs.affectedRows,
+          columnMetadata: rs.columnMetadata,
+        ),
+      );
+    }
+    final newItems = response.items
+        .map((QueryResponseItem item) {
+          if (item.resultSet != null) {
+            final idx = item.resultSet!.index;
+            final match = newSets.firstWhere(
+              (QueryResultSet s) => s.index == idx,
+            );
+            return QueryResponseItem.resultSet(
+              index: item.index,
+              resultSet: match,
+            );
+          }
+          return item;
+        })
+        .toList(growable: false);
+    final primary = newSets.isNotEmpty
+        ? newSets.first
+        : const QueryResultSet(index: 0, rows: [], rowCount: 0);
+    return QueryResponse(
+      id: response.id,
+      requestId: response.requestId,
+      agentId: response.agentId,
+      data: primary.rows,
+      affectedRows: response.affectedRows,
+      timestamp: response.timestamp,
+      error: response.error,
+      columnMetadata: primary.columnMetadata,
+      pagination: response.pagination,
+      resultSets: newSets,
+      items: newItems,
+    );
+  }
+
+  bool _multiResultSetsWereTruncated(
+    QueryResponse before,
+    QueryResponse after,
+  ) {
+    if (before.resultSets.length != after.resultSets.length) {
+      return true;
+    }
+    for (var i = 0; i < before.resultSets.length; i++) {
+      if (before.resultSets[i].rows.length != after.resultSets[i].rows.length) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool _matchesActiveExecution({

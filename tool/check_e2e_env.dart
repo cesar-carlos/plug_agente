@@ -2,10 +2,13 @@
 
 /// Verifica se as variáveis de ambiente para testes E2E estão definidas.
 ///
-/// Uso: dart run tool/check_e2e_env.dart
+/// Uso: `dart run tool/check_e2e_env.dart` (na raiz do projeto Flutter).
 ///
 /// Pode ser executado de qualquer diretório; localiza a raiz do projeto
-/// automaticamente. Copie .env.example para .env e defina as variáveis.
+/// automaticamente. Copie `.env.example` para `.env` e defina as variáveis.
+///
+/// O parser segue o mesmo estilo de chave=valor que o `E2EEnv` usa com
+/// `loadFromString` (primeiro `=` separa chave e valor; valor pode conter `=`).
 library;
 
 import 'dart:io';
@@ -14,14 +17,28 @@ String _projectRootPath() {
   final scriptPath = Platform.script.toFilePath();
   final toolDir = File(scriptPath).parent;
   final candidate = toolDir.parent.path;
-  if (File('$candidate/pubspec.yaml').existsSync()) return candidate;
+  if (File('$candidate/pubspec.yaml').existsSync()) {
+    return candidate;
+  }
+  var dir = Directory.current;
+  for (var i = 0; i < 12; i++) {
+    final p = '${dir.path}${Platform.pathSeparator}pubspec.yaml';
+    if (File(p).existsSync()) {
+      return dir.path;
+    }
+    final parent = dir.parent;
+    if (parent.path == dir.path) {
+      break;
+    }
+    dir = parent;
+  }
   return Directory.current.path;
 }
 
 void main() {
   final root = _projectRootPath();
-  final envFile = File('$root/.env');
-  final exampleFile = File('$root/.env.example');
+  final envFile = File('$root${Platform.pathSeparator}.env');
+  final exampleFile = File('$root${Platform.pathSeparator}.env.example');
 
   final env = _loadEnv(envFile);
   if (!envFile.existsSync() && exampleFile.existsSync()) {
@@ -48,6 +65,8 @@ void main() {
       get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ??
       get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ??
       get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL');
+  final e2eRequireMulti = get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
+  final e2eTxBatch = get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
 
   print('=== Variáveis E2E / Live Integration Tests ===\n');
 
@@ -75,6 +94,25 @@ void main() {
   print('');
   print('ODBC_INTEGRATION_SMOKE_QUERY: ${odbcSmoke ?? "SELECT 1 (default)"}');
   print('ODBC_INTEGRATION_LONG_QUERY*: ${odbcLong ?? "não definido (teste de cancelamento ignorado)"}');
+
+  print('');
+  print(
+    'ODBC_E2E_REQUIRE_MULTI_RESULT: ${e2eRequireMulti ? "true (falha se multi_result vier vazio)" : "não definido ou false"}',
+  );
+  print(
+    'ODBC_E2E_TRANSACTIONAL_BATCH: ${e2eTxBatch ? "true (lote transacional extra no E2E RPC)" : "não definido ou false"}',
+  );
+  if (e2eTxBatch) {
+    print(
+      '  -> odbc_rpc_execute_coverage: 3º teste (executeBatch transaction:true) '
+      'será executado; em alguns drivers antigos ainda pode falhar.',
+    );
+  } else {
+    print(
+      '  -> odbc_rpc_execute_coverage: 3º teste (batch transacional) será '
+      'ignorado (defina ODBC_E2E_TRANSACTIONAL_BATCH=true para ativar).',
+    );
+  }
 
   print('');
   print('Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart');

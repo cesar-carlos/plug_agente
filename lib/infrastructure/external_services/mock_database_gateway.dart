@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -151,11 +152,15 @@ class MockDatabaseGateway implements IDatabaseGateway {
             }
             return;
           }
+          final limitedRows = truncateSqlResultRows(
+            queryResponse.data,
+            options.maxRows,
+          );
           results.add(
             SqlCommandResult.success(
               index: i,
-              rows: queryResponse.data,
-              rowCount: queryResponse.data.length,
+              rows: limitedRows,
+              rowCount: limitedRows.length,
               affectedRows: queryResponse.affectedRows,
               columnMetadata: queryResponse.columnMetadata,
             ),

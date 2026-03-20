@@ -12,9 +12,41 @@ class E2EEnv {
 
   static bool _loaded = false;
 
+  static File _resolveDotEnvFile() {
+    var dir = Directory.current;
+    for (var i = 0; i < 12; i++) {
+      final pubspec = File('${dir.path}${Platform.pathSeparator}pubspec.yaml');
+      if (pubspec.existsSync()) {
+        return File('${dir.path}${Platform.pathSeparator}.env');
+      }
+      final parent = dir.parent;
+      if (parent.path == dir.path) {
+        break;
+      }
+      dir = parent;
+    }
+    return File('.env');
+  }
+
   static Future<void> _ensureLoaded() async {
     if (_loaded) return;
-    await dotenv.load(isOptional: true);
+
+    // flutter_dotenv's [dotenv.load] only reads via [rootBundle] (pubspec assets).
+    // `.env` is not bundled (secrets); load from disk (project root via walk-up).
+    try {
+      final file = _resolveDotEnvFile();
+      if (file.existsSync()) {
+        dotenv.loadFromString(
+          envString: file.readAsStringSync(),
+          isOptional: true,
+        );
+      } else {
+        await dotenv.load(isOptional: true);
+      }
+    } on Object {
+      await dotenv.load(isOptional: true);
+    }
+
     _loaded = true;
   }
 
@@ -78,6 +110,16 @@ class E2EEnv {
   /// When unset, a built-in query against `sys.systable` is used.
   static String? get odbcSqlAnywhereTopStartAtQuery =>
       _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');
+
+  /// When true (`ODBC_E2E_REQUIRE_MULTI_RESULT=true`), RPC coverage E2E fails if
+  /// `sql.execute` with `multi_result` returns no `result_sets`/rows (no fallback).
+  static bool get odbcE2eRequireMultiResult =>
+      _get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
+
+  /// When true (`ODBC_E2E_TRANSACTIONAL_BATCH=true`), RPC coverage E2E runs an
+  /// extra `sql.executeBatch` with `transaction: true` (validates begin/commit).
+  static bool get odbcE2eTryTransactionalBatch =>
+      _get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
 
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.

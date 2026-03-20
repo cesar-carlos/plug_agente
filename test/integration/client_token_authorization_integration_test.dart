@@ -172,7 +172,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         const request = RpcRequest(
           jsonrpc: '2.0',
@@ -290,7 +290,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -434,7 +434,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         final response = await dispatcherWithLocalResolver.dispatch(
           const RpcRequest(

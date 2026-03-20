@@ -6,6 +6,8 @@ import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 
 /// Servico para coletar e gerenciar metricas de performance.
+///
+/// Chaves em [_eventCounters] sao estaveis para exportacao (ex.: OpenTelemetry).
 class MetricsCollector implements IMetricsCollector {
   MetricsCollector();
 
@@ -15,6 +17,12 @@ class MetricsCollector implements IMetricsCollector {
       'transaction_rollback_failure';
   static const String _idempotencyFingerprintMismatchCounter =
       'idempotency_fingerprint_mismatch';
+  static const String _multiResultPoolVacuousFallbackCounter =
+      'multi_result_pool_vacuous_fallback';
+  static const String _multiResultDirectStillVacuousCounter =
+      'multi_result_direct_still_vacuous';
+  static const String _transactionalBatchDirectPathCounter =
+      'transactional_batch_direct_path';
 
   static const int _maxMetrics = 10000;
 
@@ -38,6 +46,12 @@ class MetricsCollector implements IMetricsCollector {
       _eventCounters[_transactionRollbackFailureCounter] ?? 0;
   int get idempotencyFingerprintMismatchCount =>
       _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
+  int get multiResultPoolVacuousFallbackCount =>
+      _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
+  int get multiResultDirectStillVacuousCount =>
+      _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
+  int get transactionalBatchDirectPathCount =>
+      _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
 
   Map<String, int> get eventCounters =>
       UnmodifiableMapView<String, int>(_eventCounters);
@@ -59,6 +73,15 @@ class MetricsCollector implements IMetricsCollector {
 
   void recordIdempotencyFingerprintMismatch() =>
       _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
+
+  void recordMultiResultPoolVacuousFallback() =>
+      _incrementEventCounter(_multiResultPoolVacuousFallbackCounter);
+
+  void recordMultiResultDirectStillVacuous() =>
+      _incrementEventCounter(_multiResultDirectStillVacuousCounter);
+
+  void recordTransactionalBatchDirectPath() =>
+      _incrementEventCounter(_transactionalBatchDirectPathCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({
@@ -127,12 +150,14 @@ class MetricsCollector implements IMetricsCollector {
       _metrics.removeRange(0, _metrics.length - _maxMetrics);
     }
 
-    developer.log(
-      'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, '
-      'rows: ${metric.rowsAffected}, success: ${metric.success}',
-      name: 'metrics',
-      level: metric.success ? 500 : 1000,
-    );
+    if (!metric.success) {
+      developer.log(
+        'QueryMetric: ${metric.executionDuration.inMilliseconds}ms, '
+        'rows: ${metric.rowsAffected}, success: false',
+        name: 'metrics',
+        level: 1000,
+      );
+    }
 
     if (!_metricsController.isClosed) {
       _metricsController.add(metric);
@@ -141,11 +166,6 @@ class MetricsCollector implements IMetricsCollector {
 
   void _incrementEventCounter(String counter) {
     _eventCounters[counter] = (_eventCounters[counter] ?? 0) + 1;
-    developer.log(
-      'MetricCounter: $counter=${_eventCounters[counter]}',
-      name: 'metrics',
-      level: 700,
-    );
   }
 
   /// Exporta metricas para JSON.

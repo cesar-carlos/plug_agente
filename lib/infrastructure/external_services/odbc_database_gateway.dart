@@ -5,6 +5,7 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -42,11 +43,16 @@ class _BatchExecutionContext {
     required this.connectionId,
     required this.connectionString,
     required this.deadline,
+    this.ownedConnection = false,
   });
 
   final String connectionId;
   final String connectionString;
   final DateTime? deadline;
+
+  /// When true, [connectionId] was obtained via [OdbcService.connect] and must
+  /// be disconnected; otherwise it is a pooled handle and must be released.
+  final bool ownedConnection;
 }
 
 class _BatchTransactionStart {
@@ -85,6 +91,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final Uuid _uuid;
   bool _initialized = false;
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
+  static const int _multiResultSqlLogPreviewChars = 120;
+
+  static String _previewSqlForLog(String sql) {
+    final collapsed = sql.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (collapsed.length <= _multiResultSqlLogPreviewChars) {
+      return collapsed;
+    }
+    return '${collapsed.substring(0, _multiResultSqlLogPreviewChars)}…';
+  }
 
   ConnectionOptions get _connectionOptions => ConnectionOptions(
     loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
@@ -175,6 +190,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  /// Builds a multi-result [QueryResponse]. Top-level [QueryResponse.affectedRows]
+  /// sums row-count items when present; otherwise falls back to the first result
+  /// set row count (legacy single-field compatibility for RPC).
   QueryResponse _createSuccessResponseFromMulti(
     QueryRequest request,
     QueryResultMulti queryResult,
@@ -292,8 +310,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     String? database,
   }) async {
-    developer.log('Executing query ${request.id}', name: 'database_gateway');
-
     final initResult = await _ensureInitialized();
 
     return initResult.fold(
@@ -506,6 +522,26 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
 
       final response = outcome.response!;
+      if (_isVacuousMultiResultResponse(request, response)) {
+        _metrics.recordMultiResultPoolVacuousFallback();
+        developer.log(
+          'Pooled executeQueryMultiFull returned no rows or row-count items; '
+          'retrying on a direct connection (pool/driver quirk) '
+          '(query_id=${request.id}, '
+          'sql_preview=${_previewSqlForLog(preparedExecution.sql)})',
+          name: 'database_gateway',
+          level: 800,
+        );
+        return _executeQueryWithoutPool(
+          request,
+          connectionString,
+          stopwatch,
+          preparedExecution: preparedExecution,
+          timeout: timeout,
+          afterVacuousPooledMulti: true,
+        );
+      }
+
       stopwatch.stop();
 
       developer.log(
@@ -558,56 +594,102 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
   }) async {
-    final contextResult = await _prepareBatchExecutionContext(
-      database: database,
-      timeout: timeout,
-    );
-    if (contextResult.isError()) {
-      return Failure(contextResult.exceptionOrNull()!);
-    }
-
-    final context = contextResult.getOrNull()!;
-    int? transactionId;
-    try {
-      final beginResult = await _beginBatchTransactionIfNeeded(
-        connectionId: context.connectionId,
-        transactionEnabled: options.transaction,
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final contextResult = await _prepareBatchExecutionContext(
+        database: database,
+        timeout: timeout,
+        useOwnedConnection: options.transaction,
       );
-      if (beginResult.isError()) {
-        return Failure(beginResult.exceptionOrNull()!);
-      }
-      transactionId = beginResult.getOrNull()!.transactionId;
-
-      final commandResult = await _executeBatchCommands(
-        context: context,
-        agentId: agentId,
-        commands: commands,
-        options: options,
-        transactionId: transactionId,
-      );
-      if (commandResult.isError()) {
-        return Failure(commandResult.exceptionOrNull()!);
+      if (contextResult.isError()) {
+        return Failure(contextResult.exceptionOrNull()!);
       }
 
-      if (options.transaction && transactionId != null) {
-        final commitResult = await _commitBatchTransaction(
+      final context = contextResult.getOrNull()!;
+      var recycleAfterRelease = false;
+      int? transactionId;
+      try {
+        final beginResult = await _beginBatchTransactionIfNeeded(
           connectionId: context.connectionId,
-          transactionId: transactionId,
+          transactionEnabled: options.transaction,
         );
-        if (commitResult.isError()) {
-          return Failure(commitResult.exceptionOrNull()!);
+        if (beginResult.isError()) {
+          final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
+          if (options.transaction &&
+              attempt == 0 &&
+              _queryFailureIndicatesInvalidConnectionId(beginFailure)) {
+            recycleAfterRelease = true;
+          } else {
+            return Failure(beginFailure);
+          }
+        } else {
+          if (options.transaction && context.ownedConnection) {
+            _metrics.recordTransactionalBatchDirectPath();
+            developer.log(
+              'Transactional executeBatch uses direct ODBC connection (pool bypass)',
+              name: 'database_gateway',
+              level: 800,
+            );
+          }
+          transactionId = beginResult.getOrNull()!.transactionId;
+
+          final commandResult = await _executeBatchCommands(
+            context: context,
+            agentId: agentId,
+            commands: commands,
+            options: options,
+            transactionId: transactionId,
+          );
+          if (commandResult.isError()) {
+            return Failure(commandResult.exceptionOrNull()!);
+          }
+
+          if (options.transaction && transactionId != null) {
+            final commitResult = await _commitBatchTransaction(
+              connectionId: context.connectionId,
+              transactionId: transactionId,
+            );
+            if (commitResult.isError()) {
+              return Failure(commitResult.exceptionOrNull()!);
+            }
+          }
+
+          return commandResult;
         }
+      } finally {
+        await _releaseBatchConnection(context);
       }
 
-      return commandResult;
-    } finally {
-      await _releaseConnectionSafely(context.connectionId);
+      if (recycleAfterRelease) {
+        if (!context.ownedConnection) {
+          await _tryRecoverPoolAfterInvalidConnectionId(context.connectionString);
+        }
+        continue;
+      }
     }
+
+    return Failure(
+      domain.QueryExecutionFailure.withContext(
+        message: 'Batch transaction start failed after retry',
+        context: {
+          'reason': 'transaction_failed',
+          'operation': 'transaction_begin',
+        },
+      ),
+    );
+  }
+
+  Future<void> _releaseBatchConnection(_BatchExecutionContext context) async {
+    if (context.ownedConnection) {
+      await _service.disconnect(context.connectionId);
+      return;
+    }
+    await _releaseConnectionSafely(context.connectionId);
   }
 
   Future<Result<_BatchExecutionContext>> _prepareBatchExecutionContext({
     required String? database,
     required Duration? timeout,
+    required bool useOwnedConnection,
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -636,6 +718,37 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       localConfig,
       databaseOverride: database,
     );
+    final deadline = timeout == null ? null : DateTime.now().add(timeout);
+
+    if (useOwnedConnection) {
+      final connectResult = await _service.connect(
+        connectionString,
+        options: _connectionOptions,
+      );
+      return connectResult.fold(
+        (connection) {
+          return Success(
+            _BatchExecutionContext(
+              connectionId: connection.id,
+              connectionString: connectionString,
+              deadline: deadline,
+              ownedConnection: true,
+            ),
+          );
+        },
+        (error) => Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'connect_direct',
+            context: {
+              'operation': 'batch_execute',
+              'transaction': true,
+            },
+          ),
+        ),
+      );
+    }
+
     final poolResult = await _connectionPool.acquire(connectionString);
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
@@ -652,7 +765,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       _BatchExecutionContext(
         connectionId: poolResult.getOrNull()!,
         connectionString: connectionString,
-        deadline: timeout == null ? null : DateTime.now().add(timeout),
+        deadline: deadline,
       ),
     );
   }
@@ -805,11 +918,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         }
 
         final response = outcome.response!;
+        final limitedRows = truncateSqlResultRows(
+          response.data,
+          options.maxRows,
+        );
         results.add(
           SqlCommandResult.success(
             index: i,
-            rows: response.data,
-            rowCount: response.data.length,
+            rows: limitedRows,
+            rowCount: limitedRows.length,
             affectedRows: response.affectedRows,
             columnMetadata: response.columnMetadata,
           ),
@@ -1128,6 +1245,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required OdbcPreparedQueryExecution preparedExecution,
     ConnectionOptions? options,
     Duration? timeout,
+    bool afterVacuousPooledMulti = false,
   }) async {
     final connectResult = await _service.connect(
       connectionString,
@@ -1163,6 +1281,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           }
 
           final response = outcome.response!;
+          if (afterVacuousPooledMulti &&
+              _isVacuousMultiResultResponse(request, response)) {
+            _metrics.recordMultiResultDirectStillVacuous();
+            developer.log(
+              'Direct connection multi-result still vacuous after pooled empty '
+              'payload (query_id=${request.id}, '
+              'sql_preview=${_previewSqlForLog(preparedExecution.sql)})',
+              name: 'database_gateway',
+              level: 800,
+            );
+          }
           stopwatch.stop();
           _metrics.recordSuccess(
             queryId: request.id,
@@ -1398,6 +1527,33 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       level: 900,
       error: recycleResult.exceptionOrNull(),
     );
+  }
+
+  /// True when [request] asked for multi-result execution but the ODBC layer
+  /// reported success with no materialized rows and no non-zero row-count
+  /// items. Some pool/driver paths return an empty [QueryResultMulti] payload
+  /// even though a direct connection returns data for the same SQL.
+  bool _isVacuousMultiResultResponse(
+    QueryRequest request,
+    QueryResponse response,
+  ) {
+    if (!request.expectMultipleResults) {
+      return false;
+    }
+    final hasRows = response.data.isNotEmpty ||
+        response.resultSets.any((QueryResultSet s) => s.rows.isNotEmpty);
+    final hasNonZeroRowCount = response.items.any(
+      (QueryResponseItem i) => i.isRowCount && (i.rowCount ?? 0) > 0,
+    );
+    return !hasRows && !hasNonZeroRowCount;
+  }
+
+  bool _queryFailureIndicatesInvalidConnectionId(domain.Failure failure) {
+    final ctx = failure.context;
+    final err = ctx['error'] != null
+        ? ctx['error'].toString()
+        : failure.message;
+    return _isInvalidConnectionIdError(err);
   }
 
   bool _isInvalidConnectionIdError(Object error) {

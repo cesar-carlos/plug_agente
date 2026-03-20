@@ -100,6 +100,7 @@ void main() {
         ),
       );
       registerFallbackValue(Duration.zero);
+      registerFallbackValue(const Duration(seconds: 7));
       registerFallbackValue('');
       registerFallbackValue(
         const SqlCommand(
@@ -215,7 +216,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -311,7 +312,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -324,6 +325,115 @@ void main() {
       expect(result['result_sets'] as List<dynamic>, hasLength(2));
       expect(result['items'] as List<dynamic>, hasLength(3));
     });
+
+    test(
+      'should include multi_result envelope keys when result sets are empty',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT 1 WHERE 1=0; SELECT 2 WHERE 1=0;',
+            'options': {'multi_result': true},
+          },
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const <Map<String, dynamic>>[],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) => queryResponse);
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isSuccess, isTrue);
+        final result = response.result as Map<String, dynamic>;
+        expect(result['multi_result'], isTrue);
+        expect(result['result_set_count'], 0);
+        expect(result['item_count'], 0);
+        expect(result['result_sets'], isA<List<dynamic>>());
+        expect(result['items'], isA<List<dynamic>>());
+        expect(result['result_sets'] as List<dynamic>, isEmpty);
+        expect(result['items'] as List<dynamic>, isEmpty);
+      },
+    );
+
+    test(
+      'should truncate each result_set when multi_result respects max_rows',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT 1; SELECT 2;',
+            'options': {'multi_result': true, 'max_rows': 1},
+          },
+        );
+
+        const rs0 = QueryResultSet(
+          index: 0,
+          rows: [
+            {'a': 0},
+            {'a': 1},
+            {'a': 2},
+          ],
+          rowCount: 3,
+        );
+        const rs1 = QueryResultSet(
+          index: 1,
+          rows: [
+            {'b': 0},
+            {'b': 1},
+          ],
+          rowCount: 2,
+        );
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: rs0.rows,
+          timestamp: DateTime.now(),
+          resultSets: [rs0, rs1],
+          items: const [
+            QueryResponseItem.resultSet(index: 0, resultSet: rs0),
+            QueryResponseItem.resultSet(index: 1, resultSet: rs1),
+          ],
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) =>
+              invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          limits: const TransportLimits(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        final result = response.result as Map<String, dynamic>;
+        final sets = result['result_sets'] as List<dynamic>;
+        expect((sets[0] as Map<String, dynamic>)['rows'], hasLength(1));
+        expect((sets[1] as Map<String, dynamic>)['rows'], hasLength(1));
+        expect(result['truncated'], isTrue);
+      },
+    );
 
     test(
       'should reject multi_result execution when named parameters are used',
@@ -382,7 +492,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         final response = await dispatcher.dispatch(
           request,
@@ -437,7 +547,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -501,7 +611,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -574,7 +684,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -622,7 +732,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         final response = await dispatcher.dispatch(
           RpcRequest(
@@ -798,7 +908,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         const request = RpcRequest(
           jsonrpc: '2.0',
@@ -858,7 +968,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         final mockEmitter = MockRpcStreamEmitter();
         when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => true);
@@ -923,8 +1033,7 @@ void main() {
         () => mockGateway.executeQuery(any()),
       ).thenAnswer((_) async => Success(queryResponse1));
       when(() => mockNormalizer.normalize(any())).thenAnswer(
-        (invocation) async =>
-            invocation.positionalArguments[0] as QueryResponse,
+        (invocation) => invocation.positionalArguments[0] as QueryResponse,
       );
 
       final response = await dispatcher.dispatch(request, 'agent-1');
@@ -934,6 +1043,72 @@ void main() {
       expect(result['items'], hasLength(2));
       expect(result['total_commands'], equals(2));
     });
+
+    test(
+      'should cap sql.executeBatch ODBC timeout with options.timeout_ms when '
+      'stage budgets are enabled',
+      () async {
+        when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+
+        final captured = <Duration?>[];
+        when(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((invocation) async {
+          const sym = Symbol('timeout');
+          captured.add(
+            invocation.namedArguments.containsKey(sym)
+                ? invocation.namedArguments[sym] as Duration?
+                : null,
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          return Success(
+            QueryResponse(
+              id: 'e',
+              requestId: 'r',
+              agentId: 'agent-1',
+              data: const [],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) =>
+              invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-1',
+          params: {
+            'commands': [
+              {'sql': 'SELECT 1'},
+              {'sql': 'SELECT 2'},
+            ],
+            'options': {
+              'timeout_ms': 8000,
+              'transaction': false,
+            },
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isSuccess, isTrue);
+        expect(captured, hasLength(2));
+        expect(captured[0], isNotNull);
+        final first = captured[0]!;
+        expect(first.inMilliseconds, lessThanOrEqualTo(8000));
+        expect(captured[1], isNotNull);
+        final second = captured[1]!;
+        expect(second.inMilliseconds, lessThanOrEqualTo(8000));
+        expect(second, lessThan(first));
+      },
+    );
 
     test(
       'should deduplicate batch authorization checks for equivalent SQL commands',
@@ -976,7 +1151,7 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async =>
+          (invocation) =>
               invocation.positionalArguments[0] as QueryResponse,
         );
 
@@ -1033,7 +1208,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async =>
+          (invocation) =>
               invocation.positionalArguments[0] as QueryResponse,
         );
 
@@ -1093,7 +1268,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) async =>
+          (invocation) =>
               invocation.positionalArguments[0] as QueryResponse,
         );
 
@@ -1361,7 +1536,7 @@ void main() {
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
-        ).thenAnswer((_) async => queryResponse);
+        ).thenAnswer((_) => queryResponse);
 
         when(() => mockStore.getRecord(any())).thenReturn(null);
 
@@ -1473,7 +1648,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(request, 'agent-1');
 
@@ -1513,7 +1688,7 @@ void main() {
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) async => queryResponse);
+      ).thenAnswer((_) => queryResponse);
 
       final response = await dispatcher.dispatch(
         request,

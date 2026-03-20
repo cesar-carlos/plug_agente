@@ -803,7 +803,7 @@ void main() {
           ).thenAnswer((_) async => Success(queryResponse));
           when(
             () => mockNormalizer.normalize(any()),
-          ).thenAnswer((_) async => queryResponse);
+          ).thenAnswer((_) => queryResponse);
 
           final realDispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,

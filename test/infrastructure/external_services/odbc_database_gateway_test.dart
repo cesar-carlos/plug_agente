@@ -4,6 +4,7 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -1039,6 +1040,262 @@ void main() {
         ),
       ).called(1);
     });
+
+    test(
+      'should fallback to direct connection when pooled multi-result is vacuous',
+      () async {
+        const pooledConnectionId = 'pool-multi-empty';
+        const directConnectionId = 'direct-multi';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const sql = 'SELECT 1 AS a; SELECT 2 AS b;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-multi-fallback',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+          expectMultipleResults: true,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQueryMultiFull(
+            pooledConnectionId,
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(QueryResultMulti(items: []));
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: directConnectionId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.executeQueryMultiFull(
+            directConnectionId,
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResultMulti(
+              items: [
+                QueryResultMultiItem.resultSet(
+                  QueryResult(
+                    columns: ['a'],
+                    rows: [
+                      [1],
+                    ],
+                    rowCount: 1,
+                  ),
+                ),
+                QueryResultMultiItem.resultSet(
+                  QueryResult(
+                    columns: ['b'],
+                    rows: [
+                      [2],
+                    ],
+                    rowCount: 1,
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final response = result.getOrNull()!;
+        expect(response.resultSets, hasLength(2));
+        expect(response.data.single['a'], 1);
+        verify(
+          () => mockService.executeQueryMultiFull(pooledConnectionId, sql),
+        ).called(1);
+        verify(
+          () => mockService.executeQueryMultiFull(directConnectionId, sql),
+        ).called(1);
+        verify(() => mockService.disconnect(directConnectionId)).called(1);
+        expect(metrics.multiResultPoolVacuousFallbackCount, 1);
+        expect(metrics.multiResultDirectStillVacuousCount, 0);
+      },
+    );
+
+    test(
+      'should record direct-still-vacuous when pool and direct multi are empty',
+      () async {
+        const pooledConnectionId = 'pool-multi-empty-twice';
+        const directConnectionId = 'direct-multi-empty';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const sql = 'SELECT 1 AS a; SELECT 2 AS b;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-multi-empty-both',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+          expectMultipleResults: true,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQueryMultiFull(
+            pooledConnectionId,
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(QueryResultMulti(items: []));
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: directConnectionId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.executeQueryMultiFull(
+            directConnectionId,
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(QueryResultMulti(items: []));
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final response = result.getOrNull()!;
+        expect(response.resultSets, isEmpty);
+        expect(metrics.multiResultPoolVacuousFallbackCount, 1);
+        expect(metrics.multiResultDirectStillVacuousCount, 1);
+      },
+    );
+
+    test(
+      'should use direct ODBC connection for transactional executeBatch',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const ownedId = 'owned-tx-1';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(() => mockService.beginTransaction(ownedId)).thenAnswer((
+          _,
+        ) async {
+          return const Success(1);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: ownedId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.commitTransaction(ownedId, 1)).thenAnswer((
+          _,
+        ) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'SELECT 1')],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(() => mockConnectionPool.acquire(any()));
+        verify(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).called(1);
+        verify(() => mockService.disconnect(ownedId)).called(1);
+        expect(metrics.transactionalBatchDirectPathCount, 1);
+      },
+    );
   });
 }
 
