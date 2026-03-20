@@ -5,6 +5,7 @@ import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -162,9 +163,18 @@ void main() {
       when(() => mockFeatureFlags.enableSocketBackpressure).thenReturn(false);
       when(() => mockFeatureFlags.enableBinaryPayload).thenReturn(true);
       when(() => mockFeatureFlags.enableCompression).thenReturn(true);
+      when(() => mockFeatureFlags.outboundCompressionMode).thenReturn(
+        OutboundCompressionMode.gzip,
+      );
       when(() => mockFeatureFlags.compressionThreshold).thenReturn(1024);
       when(
         () => mockFeatureFlags.enableSocketSchemaValidation,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketOutgoingContractValidation,
+      ).thenReturn(true);
+      when(
+        () => mockFeatureFlags.enableSocketSummarizeLargePayloadLogs,
       ).thenReturn(false);
       when(
         () => mockFeatureFlags.enableSocketDeliveryGuarantees,

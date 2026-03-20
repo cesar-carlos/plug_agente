@@ -37,4 +37,15 @@ class ConnectionConstants {
 
   /// Max rows kept in Playground UI during ODBC streaming (memory / grid cost).
   static const int playgroundStreamingMaxResultRows = 100000;
+
+  /// Max in-flight `rpc:request` handlers per socket connection (backpressure).
+  static const int maxConcurrentRpcHandlers = 32;
+
+  /// UTF-8 JSON size above which message tracing replaces the raw payload with a
+  /// summary (when `FeatureFlags.enableSocketSummarizeLargePayloadLogs` is on).
+  static const int socketLogPayloadSummaryThresholdBytes = 8192;
+
+  /// Outgoing `rpc:response` contract validation is skipped above this UTF-8 JSON
+  /// size to limit CPU on huge results (0 disables the soft cap).
+  static const int socketOutgoingContractValidationMaxBytes = 2 * 1024 * 1024;
 }

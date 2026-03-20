@@ -50,5 +50,17 @@ void main() {
       expect(data['reason'], equals('method_not_found'));
       expect(data['category'], equals('validation'));
     });
+
+    test('should allow explicit invalid_signature reason on authentication code',
+        () {
+      final data = RpcErrorCode.buildErrorData(
+        code: RpcErrorCode.authenticationFailed,
+        technicalMessage: 'Invalid transport frame signature',
+        reason: RpcErrorCode.reasonInvalidSignature,
+      );
+
+      expect(data['reason'], equals('invalid_signature'));
+      expect(data['category'], equals('auth'));
+    });
   });
 }

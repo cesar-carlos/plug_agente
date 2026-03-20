@@ -73,6 +73,17 @@ class AppStrings {
   static const String wsButtonConnect = 'Conectar';
   static const String wsButtonSaveConfig = 'Salvar Configuração';
 
+  static const String wsSectionOutboundCompression =
+      'Compressão de envio (agente → hub)';
+  static const String wsFieldOutboundCompressionMode = 'Modo';
+  static const String wsOutboundCompressionOff = 'Desligado';
+  static const String wsOutboundCompressionGzip = 'Sempre GZIP';
+  static const String wsOutboundCompressionAuto = 'Automático';
+  static const String wsOutboundCompressionDescription =
+      'Automático: acima do limite negociado, o agente comprime com GZIP apenas '
+      'se o resultado for menor que o JSON em UTF-8 (evita CPU e tráfego em '
+      'dados pouco compressíveis).';
+
   // Diagnostics (advanced)
   static const String diagnosticsSectionTitle = 'Diagnóstico avançado';
   static const String diagnosticsWarningTitle = 'Dados sensíveis nos logs';

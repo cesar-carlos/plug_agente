@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
@@ -11,6 +16,7 @@ import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
@@ -43,6 +49,8 @@ class WebSocketConfigSection extends StatelessWidget {
                 formController: formController,
                 onLoginOrLogout: () => _handleLoginOrLogout(context),
               ),
+              const SizedBox(height: 24),
+              const _OutboundCompressionSection(),
               const SizedBox(height: 24),
               _WebSocketActionButtons(
                 formController: formController,
@@ -173,6 +181,77 @@ class _ServerSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _OutboundCompressionSection extends StatefulWidget {
+  const _OutboundCompressionSection();
+
+  @override
+  State<_OutboundCompressionSection> createState() =>
+      _OutboundCompressionSectionState();
+}
+
+class _OutboundCompressionSectionState extends State<_OutboundCompressionSection> {
+  late final FeatureFlags _flags = getIt<FeatureFlags>();
+  late OutboundCompressionMode _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = _flags.outboundCompressionMode;
+  }
+
+  Future<void> _onModeChanged(OutboundCompressionMode mode) async {
+    setState(() => _mode = mode);
+    await _flags.setOutboundCompressionMode(mode);
+    if (mounted) {
+      setState(() {
+        _mode = _flags.outboundCompressionMode;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: SettingsSectionBlock(
+        title: AppStrings.wsSectionOutboundCompression,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppDropdown<OutboundCompressionMode>(
+              label: AppStrings.wsFieldOutboundCompressionMode,
+              value: _mode,
+              items: const [
+                ComboBoxItem<OutboundCompressionMode>(
+                  value: OutboundCompressionMode.none,
+                  child: Text(AppStrings.wsOutboundCompressionOff),
+                ),
+                ComboBoxItem<OutboundCompressionMode>(
+                  value: OutboundCompressionMode.gzip,
+                  child: Text(AppStrings.wsOutboundCompressionGzip),
+                ),
+                ComboBoxItem<OutboundCompressionMode>(
+                  value: OutboundCompressionMode.auto,
+                  child: Text(AppStrings.wsOutboundCompressionAuto),
+                ),
+              ],
+              onChanged: (OutboundCompressionMode? value) {
+                if (value != null) {
+                  unawaited(_onModeChanged(value));
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              AppStrings.wsOutboundCompressionDescription,
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

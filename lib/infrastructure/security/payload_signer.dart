@@ -41,8 +41,8 @@ class PayloadSigner {
   PayloadSignature sign(Map<String, dynamic> payload) {
     final keyId = activeKeyId;
     final secret = _keys[keyId]!;
-    final canonical = _canonicalize(payload);
-    final hmacValue = _computeHmac(canonical, secret);
+    final canonicalBytes = _canonicalizeUtf8(payload);
+    final hmacValue = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return PayloadSignature(
       alg: supportedAlgorithm,
       value: hmacValue,
@@ -56,16 +56,17 @@ class PayloadSigner {
     final secret = _keys[signature.keyId];
     if (secret == null) return false;
 
-    final canonical = _canonicalize(payload);
-    final expected = _computeHmac(canonical, secret);
+    final canonicalBytes = _canonicalizeUtf8(payload);
+    final expected = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return _constantTimeEquals(expected, signature.value);
   }
 
   PayloadSignature signFrame(PayloadFrame frame) {
     final keyId = activeKeyId;
     final secret = _keys[keyId]!;
-    final canonical = _canonicalizeFrame(frame.copyWith(clearSignature: true));
-    final hmacValue = _computeHmac(canonical, secret);
+    final canonicalBytes =
+        _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
+    final hmacValue = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return PayloadSignature(
       alg: supportedAlgorithm,
       value: hmacValue,
@@ -79,29 +80,31 @@ class PayloadSigner {
     final secret = _keys[signature.keyId];
     if (secret == null) return false;
 
-    final canonical = _canonicalizeFrame(frame.copyWith(clearSignature: true));
-    final expected = _computeHmac(canonical, secret);
+    final canonicalBytes =
+        _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
+    final expected = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return _constantTimeEquals(expected, signature.value);
   }
 
-  String _canonicalize(Map<String, dynamic> payload) {
+  Uint8List _canonicalizeUtf8(Map<String, dynamic> payload) {
     final signable = <String, dynamic>{};
     if (payload.containsKey('method')) signable['method'] = payload['method'];
     if (payload.containsKey('id')) signable['id'] = payload['id'];
     if (payload.containsKey('params')) signable['params'] = payload['params'];
     if (payload.containsKey('result')) signable['result'] = payload['result'];
     if (payload.containsKey('error')) signable['error'] = payload['error'];
-    return jsonEncode(signable);
+    final raw = JsonUtf8Encoder().convert(signable);
+    return raw is Uint8List ? raw : Uint8List.fromList(raw);
   }
 
-  String _canonicalizeFrame(PayloadFrame frame) {
+  Uint8List _canonicalizeFrameUtf8(PayloadFrame frame) {
     final payload = frame.payload;
     final payloadBytes = switch (payload) {
       final Uint8List value => value,
       final List<int> value => Uint8List.fromList(value),
       _ => Uint8List.fromList(utf8.encode(jsonEncode(payload))),
     };
-    return jsonEncode({
+    final raw = JsonUtf8Encoder().convert(<String, dynamic>{
       'schemaVersion': frame.schemaVersion,
       'enc': frame.enc,
       'cmp': frame.cmp,
@@ -112,12 +115,12 @@ class PayloadSigner {
       'requestId': frame.requestId,
       'payload': base64Encode(payloadBytes),
     });
+    return raw is Uint8List ? raw : Uint8List.fromList(raw);
   }
 
-  String _computeHmac(String data, String secret) {
+  String _computeHmacFromUtf8Bytes(Uint8List data, String secret) {
     final key = utf8.encode(secret);
-    final bytes = utf8.encode(data);
-    final digest = Hmac(sha256, key).convert(bytes);
+    final digest = Hmac(sha256, key).convert(data);
     return base64Encode(digest.bytes);
   }
 

@@ -34,8 +34,8 @@ class JsonPayloadCodec implements IPayloadCodec {
   @override
   Result<Uint8List> encode(dynamic data) {
     try {
-      final jsonString = jsonEncode(data);
-      final bytes = const Utf8Encoder().convert(jsonString);
+      final raw = JsonUtf8Encoder().convert(data);
+      final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
       return Success(bytes);
     } on Exception catch (error) {
       return Failure(

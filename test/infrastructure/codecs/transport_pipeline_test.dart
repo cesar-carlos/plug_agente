@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 
 void main() {
@@ -42,6 +43,42 @@ void main() {
       expect(frame.cmp, equals('gzip'));
       expect(frame.compressedSize, lessThan(frame.originalSize));
     });
+
+    test('auto mode compresses repetitive payloads when beneficial', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'auto',
+        compressionThreshold: 50,
+      );
+
+      final data = {'message': 'Hello World! ' * 100};
+      final result = pipeline.prepareSend(data);
+
+      expect(result.isSuccess(), isTrue);
+      final frame = result.getOrThrow();
+      expect(frame.cmp, equals('gzip'));
+      expect(frame.compressedSize, lessThan(frame.originalSize));
+      expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
+    });
+
+    test(
+      'auto mode uses cmp none when gzip does not shrink payload',
+      () {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'auto',
+          compressionThreshold: 1,
+        );
+
+        final data = {'a': 'x'};
+        final result = pipeline.prepareSend(data);
+        expect(result.isSuccess(), isTrue);
+        final frame = result.getOrThrow();
+        expect(frame.cmp, equals('none'));
+        expect(frame.compressedSize, equals(frame.originalSize));
+        expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
+      },
+    );
 
     test('should process received frame without compression', () {
       final pipeline = TransportPipeline(
@@ -183,12 +220,12 @@ void main() {
           encoding: 'json',
           compression: 'none',
         );
-        final pad = 'z' * (jsonDecodeIsolateThresholdBytes + 4096);
+        final pad = 'z' * (jsonPayloadIsolateEncodeThresholdBytes + 4096);
         final originalData = <String, dynamic>{'blob': pad};
         final frame = pipeline.prepareSend(originalData).getOrThrow();
         expect(
           frame.compressedSize,
-          greaterThan(jsonDecodeIsolateThresholdBytes),
+          greaterThan(jsonPayloadIsolateEncodeThresholdBytes),
         );
         final asyncResult = await pipeline.receiveProcessAsync(frame);
         expect(asyncResult.isSuccess(), isTrue);
@@ -197,6 +234,23 @@ void main() {
         final syncResult = pipeline.receiveProcess(frame);
         expect(syncResult.isSuccess(), isTrue);
         expect(syncResult.getOrThrow(), equals(originalData));
+      },
+    );
+
+    test(
+      'prepareSendAsync encodes large JSON via isolate path',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+          compressionThreshold: 999999999,
+        );
+        final huge = <String, dynamic>{'blob': 'a' * 200000};
+        final result = await pipeline.prepareSendAsync(huge);
+        expect(result.isSuccess(), isTrue);
+        final frame = result.getOrThrow();
+        expect(frame.cmp, equals('none'));
+        expect(pipeline.receiveProcess(frame).getOrThrow(), equals(huge));
       },
     );
   });

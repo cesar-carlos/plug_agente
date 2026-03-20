@@ -68,10 +68,6 @@ class RpcRequestGuard {
 
   void _cleanupReplayCache(DateTime now) {
     final cutoff = now.subtract(_replayWindow);
-    final expiredIds = _recentRpcRequestIds.entries
-        .where((entry) => entry.value.isBefore(cutoff))
-        .map((entry) => entry.key)
-        .toList();
-    expiredIds.forEach(_recentRpcRequestIds.remove);
+    _recentRpcRequestIds.removeWhere((_, time) => time.isBefore(cutoff));
   }
 }

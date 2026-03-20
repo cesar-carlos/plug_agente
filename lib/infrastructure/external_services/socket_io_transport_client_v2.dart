@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -74,11 +75,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
   TransportPipeline? _cachedSendPipeline;
   String _sendPipelineCacheKey = '';
+  final Map<String, TransportPipeline> _receivePipelineByKey = {};
   Map<String, dynamic>? _cachedOpenRpcDocument;
   Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
   bool _hasReceivedCapabilities = false;
   Timer? _capabilitiesTimeoutTimer;
   int _capabilitiesReRegisterCount = 0;
+  int _activeRpcHandlers = 0;
 
   @override
   void setMessageCallback(
@@ -98,15 +101,118 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _logMessage(String direction, String event, dynamic data) {
-    _onMessage?.call(direction, event, data);
+    final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs &&
+            data != null
+        ? _summarizeLargePayloadForTracing(direction, event, data)
+        : data;
+    _onMessage?.call(direction, event, traced);
+  }
+
+  dynamic _summarizeLargePayloadForTracing(
+    String direction,
+    String event,
+    dynamic data,
+  ) {
+    const threshold =
+        ConnectionConstants.socketLogPayloadSummaryThresholdBytes;
+    try {
+      final sink = _Utf8BudgetSink(threshold);
+      final jsonSink = JsonUtf8Encoder().startChunkedConversion(sink);
+      jsonSink.add(data);
+      jsonSink.close();
+      return data;
+    } on _PayloadUtf8BudgetExceeded {
+      return <String, Object?>{
+        '_log': 'payload_summary',
+        'direction': direction,
+        'event': event,
+        'truncated': true,
+        'threshold_bytes': threshold,
+        if (data is Map<String, dynamic>) ..._shallowRpcLogHints(data),
+        if (data is List<dynamic>) 'list_length': data.length,
+      };
+    } on Object {
+      return data;
+    }
+  }
+
+  Map<String, Object?> _shallowRpcLogHints(Map<String, dynamic> map) {
+    return <String, Object?>{
+      if (map.containsKey('id')) 'id': map['id'],
+      if (map.containsKey('method')) 'method': map['method'],
+      if (map.containsKey('jsonrpc')) 'jsonrpc': map['jsonrpc'],
+    };
+  }
+
+  bool _tryAcquireRpcHandlerSlot() {
+    if (_activeRpcHandlers >= ConnectionConstants.maxConcurrentRpcHandlers) {
+      return false;
+    }
+    _activeRpcHandlers++;
+    return true;
+  }
+
+  void _releaseRpcHandlerSlot() {
+    _activeRpcHandlers--;
+  }
+
+  Future<void> _handleRpcRequestWithRelease(dynamic data) async {
+    try {
+      await _handleRpcRequest(data);
+    } finally {
+      _releaseRpcHandlerSlot();
+    }
+  }
+
+  Future<void> _emitRpcConcurrencyLimited(dynamic rawData) async {
+    dynamic id;
+    try {
+      if (rawData is Map<String, dynamic> &&
+          _looksLikePayloadFrame(rawData)) {
+        final payload = _decodeIncomingPayloadOrThrow(rawData);
+        if (payload is Map<String, dynamic>) {
+          id = payload['id'];
+        }
+      } else if (rawData is Map<String, dynamic>) {
+        id = rawData['id'];
+      }
+    } on Object {
+      id = null;
+    }
+
+    await _emitRpcResponse(
+      _buildRpcErrorResponse(
+        id: id,
+        code: RpcErrorCode.rateLimited,
+        technicalMessage:
+            'Concurrent RPC handler limit exceeded '
+            '(${ConnectionConstants.maxConcurrentRpcHandlers})',
+      ),
+    );
+  }
+
+  bool _utf8JsonExceedsByteBudget(dynamic payload, int budgetBytes) {
+    if (budgetBytes <= 0) {
+      return false;
+    }
+    try {
+      final sink = _Utf8BudgetSink(budgetBytes);
+      final jsonSink = JsonUtf8Encoder().startChunkedConversion(sink);
+      jsonSink.add(payload);
+      jsonSink.close();
+      return false;
+    } on _PayloadUtf8BudgetExceeded {
+      return true;
+    }
   }
 
   ProtocolCapabilities _localCapabilities() {
     return ProtocolCapabilities.defaultCapabilities(
       binaryPayload: _featureFlags.enableBinaryPayload,
-      compressions: _featureFlags.enableCompression
-          ? const ['gzip', 'none']
-          : const ['none'],
+      compressions: _featureFlags.outboundCompressionMode ==
+              OutboundCompressionMode.none
+          ? const ['none']
+          : const ['gzip', 'none'],
       compressionThreshold: _featureFlags.compressionThreshold,
       signatureRequired: _localSignatureRequired,
       signatureAlgorithms: _localSignatureAlgorithms,
@@ -129,20 +235,29 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   TransportPipeline _createSendPipeline() {
-    final compression = !_featureFlags.enableCompression
-        ? 'none'
-        : (_hasReceivedCapabilities ? _currentProtocol.compression : 'gzip');
+    final negotiatedCmp =
+        _hasReceivedCapabilities ? _currentProtocol.compression : 'gzip';
+    final String pipelineCompression;
+    if (_featureFlags.outboundCompressionMode == OutboundCompressionMode.none ||
+        negotiatedCmp == 'none') {
+      pipelineCompression = 'none';
+    } else if (_featureFlags.outboundCompressionMode ==
+        OutboundCompressionMode.auto) {
+      pipelineCompression = 'auto';
+    } else {
+      pipelineCompression = 'gzip';
+    }
     final threshold = _hasReceivedCapabilities
         ? _currentProtocol.compressionThreshold
         : _featureFlags.compressionThreshold;
     final cacheKey =
-        '${_currentProtocol.encoding}|$compression|$threshold|$_hasReceivedCapabilities';
+        '${_currentProtocol.encoding}|$pipelineCompression|$threshold|$_hasReceivedCapabilities';
     if (_cachedSendPipeline != null && _sendPipelineCacheKey == cacheKey) {
       return _cachedSendPipeline!;
     }
     final pipeline = TransportPipeline(
       encoding: _currentProtocol.encoding,
-      compression: compression,
+      compression: pipelineCompression,
       compressionThreshold: threshold,
     );
     _cachedSendPipeline = pipeline;
@@ -151,12 +266,24 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   TransportPipeline _createReceivePipeline(PayloadFrame frame) {
-    return TransportPipeline(
+    final key =
+        '${frame.enc}|${frame.cmp}|${frame.schemaVersion}|'
+        '${_currentProtocol.compressionThreshold}';
+    final cached = _receivePipelineByKey[key];
+    if (cached != null) {
+      return cached;
+    }
+    if (_receivePipelineByKey.length > 16) {
+      _receivePipelineByKey.clear();
+    }
+    final pipeline = TransportPipeline(
       encoding: frame.enc,
       compression: frame.cmp,
       compressionThreshold: _currentProtocol.compressionThreshold,
       schemaVersion: frame.schemaVersion,
     );
+    _receivePipelineByKey[key] = pipeline;
+    return pipeline;
   }
 
   IRpcStreamEmitter _createStreamEmitter() {
@@ -350,7 +477,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       _socket!.on('rpc:request', (data) {
         _logMessage('RECEIVED', 'rpc:request', data);
-        _handleRpcRequest(data);
+        if (!_tryAcquireRpcHandlerSlot()) {
+          unawaited(_emitRpcConcurrencyLimited(data));
+          return;
+        }
+        unawaited(_handleRpcRequestWithRelease(data));
       });
 
       if (_featureFlags.enableSocketBackpressure) {
@@ -479,6 +610,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _capabilitiesTimeoutTimer?.cancel();
       _capabilitiesTimeoutTimer = null;
       _hasReceivedCapabilities = true;
+      _receivePipelineByKey.clear();
 
       final limits = _currentProtocol.effectiveLimits;
       AppLogger.info(
@@ -518,10 +650,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
       try {
         payload = await _decodeIncomingPayloadOrThrowAsync(payload);
       } on domain.Failure catch (failure) {
+        final mapped = _mapInboundTransportDecodeFailure(failure);
         await _sendSchemaValidationError(
           _extractRequestIdFromWirePayload(payload),
-          RpcErrorCode.invalidPayload,
+          mapped.code,
           failure.message,
+          errorReason: mapped.reason,
         );
         socketAck?.call();
         return;
@@ -578,6 +712,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
           requestMap['id'],
           RpcErrorCode.authenticationFailed,
           'Invalid payload signature',
+          errorReason: RpcErrorCode.reasonInvalidSignature,
         );
         socketAck?.call();
         return;
@@ -737,6 +872,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             item['id'],
             RpcErrorCode.authenticationFailed,
             'Invalid payload signature',
+            errorReason: RpcErrorCode.reasonInvalidSignature,
           );
           return;
         }
@@ -986,7 +1122,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       if (!_verifyIncomingFrameSignature(frame)) {
         throw domain.ValidationFailure.withContext(
           message: 'Invalid transport frame signature',
-          context: {'request_id': frame.requestId},
+          context: {
+            'request_id': frame.requestId,
+            'transport_signature_invalid': true,
+          },
         );
       }
 
@@ -1039,7 +1178,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       if (!_verifyIncomingFrameSignature(frame)) {
         throw domain.ValidationFailure.withContext(
           message: 'Invalid transport frame signature',
-          context: {'request_id': frame.requestId},
+          context: {
+            'request_id': frame.requestId,
+            'transport_signature_invalid': true,
+          },
         );
       }
 
@@ -1132,12 +1274,21 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   bool _exceedsPayloadLimit(dynamic payload) {
-    final bytes = utf8.encode(jsonEncode(payload)).length;
-    return bytes > _currentProtocol.effectiveLimits.maxDecodedPayloadBytes;
+    final limit = _currentProtocol.effectiveLimits.maxDecodedPayloadBytes;
+    return _utf8JsonExceedsByteBudget(payload, limit);
   }
 
   dynamic _validateOutgoingRpcPayload(dynamic payload) {
     if (!_featureFlags.enableSocketSchemaValidation) {
+      return payload;
+    }
+    if (!_featureFlags.enableSocketOutgoingContractValidation) {
+      return payload;
+    }
+
+    const softCap =
+        ConnectionConstants.socketOutgoingContractValidationMaxBytes;
+    if (softCap > 0 && _utf8JsonExceedsByteBudget(payload, softCap)) {
       return payload;
     }
 
@@ -1256,6 +1407,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _capabilitiesReRegisterCount = 0;
     _cachedSendPipeline = null;
     _sendPipelineCacheKey = '';
+    _receivePipelineByKey.clear();
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
@@ -1577,23 +1729,39 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   Map<String, dynamic> _prepareResponseForSend(RpcResponse response) {
-    final json = Map<String, dynamic>.from(response.toJson());
+    late final Map<String, dynamic> json;
     if (_featureFlags.enableSocketApiVersionMeta) {
       final existingMeta = Map<String, dynamic>.from(
         response.meta?.toJson() ?? const <String, dynamic>{},
       );
-      json['api_version'] = ProtocolVersion.apiVersion;
-      json['meta'] = <String, dynamic>{
-        ...existingMeta,
-        'agent_id': _agentId,
-        'request_id': response.id?.toString(),
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      json = <String, dynamic>{
+        'jsonrpc': response.jsonrpc,
+        'id': response.id,
+        if (response.result != null) 'result': response.result,
+        if (response.error != null) 'error': response.error!.toJson(),
+        'api_version': ProtocolVersion.apiVersion,
+        'meta': <String, dynamic>{
+          ...existingMeta,
+          'agent_id': _agentId,
+          'request_id': response.id?.toString(),
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        },
+      };
+    } else {
+      json = <String, dynamic>{
+        'jsonrpc': response.jsonrpc,
+        'id': response.id,
+        if (response.result != null) 'result': response.result,
+        if (response.error != null) 'error': response.error!.toJson(),
+        if (response.apiVersion != null) 'api_version': response.apiVersion,
+        if (response.meta != null) 'meta': response.meta!.toJson(),
       };
     }
-    if (!_usesBinaryTransport &&
-        _featureFlags.enablePayloadSigning &&
-        _payloadSigner != null) {
-      json['signature'] = _payloadSigner.sign(json).toJson();
+    if (!_usesBinaryTransport && _featureFlags.enablePayloadSigning) {
+      final signer = _payloadSigner;
+      if (signer != null) {
+        json['signature'] = signer.sign(json).toJson();
+      }
     }
     return json;
   }
@@ -1708,20 +1876,36 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<void> _sendSchemaValidationError(
     dynamic id,
     int code,
-    String technicalMessage,
-  ) async {
+    String technicalMessage, {
+    String? errorReason,
+  }) async {
     final errorResponse = _buildRpcErrorResponse(
       id: id,
       code: code,
       technicalMessage: technicalMessage,
+      errorReason: errorReason,
     );
     await _emitRpcResponse(errorResponse);
+  }
+
+  ({int code, String? reason}) _mapInboundTransportDecodeFailure(
+    domain.Failure failure,
+  ) {
+    if (failure is domain.ValidationFailure &&
+        failure.context['transport_signature_invalid'] == true) {
+      return (
+        code: RpcErrorCode.authenticationFailed,
+        reason: RpcErrorCode.reasonInvalidSignature,
+      );
+    }
+    return (code: RpcErrorCode.invalidPayload, reason: null);
   }
 
   RpcResponse _buildRpcErrorResponse({
     required dynamic id,
     required int code,
     required String technicalMessage,
+    String? errorReason,
   }) {
     return RpcResponse.error(
       id: id,
@@ -1731,6 +1915,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         data: RpcErrorCode.buildErrorData(
           code: code,
           technicalMessage: technicalMessage,
+          reason: errorReason,
         ),
       ),
     );
@@ -1748,12 +1933,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<Map<String, dynamic>> _getOpenRpcDocument() async {
     final cached = _cachedOpenRpcDocument;
     if (cached != null) {
-      return Map<String, dynamic>.from(cached);
+      return cached;
     }
 
     _openRpcDocumentLoadFuture ??= _loadOpenRpcDocumentAsync();
-    final doc = await _openRpcDocumentLoadFuture!;
-    return Map<String, dynamic>.from(doc);
+    return _openRpcDocumentLoadFuture!;
   }
 
   Future<Map<String, dynamic>> _loadOpenRpcDocumentAsync() async {
@@ -1785,17 +1969,39 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    const fallback = {
+    const fallback = <String, dynamic>{
       'openrpc': '1.3.2',
-      'info': {
+      'info': <String, dynamic>{
         'title': 'Plug Agente Socket RPC',
         'version': ProtocolVersion.openRpcVersion,
       },
-      'methods': <Map<String, dynamic>>[],
+      'methods': <dynamic>[],
     };
     _cachedOpenRpcDocument = fallback;
-    return Map<String, dynamic>.from(fallback);
+    return fallback;
   }
+}
+
+class _PayloadUtf8BudgetExceeded implements Exception {
+  const _PayloadUtf8BudgetExceeded();
+}
+
+class _Utf8BudgetSink extends ByteConversionSinkBase {
+  _Utf8BudgetSink(this.budgetBytes);
+
+  final int budgetBytes;
+  int _total = 0;
+
+  @override
+  void add(List<int> chunk) {
+    _total += chunk.length;
+    if (_total > budgetBytes) {
+      throw const _PayloadUtf8BudgetExceeded();
+    }
+  }
+
+  @override
+  void close() {}
 }
 
 class _SocketRpcStreamEmitter implements IRpcStreamEmitter {

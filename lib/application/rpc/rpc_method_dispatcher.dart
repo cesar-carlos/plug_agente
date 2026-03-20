@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -213,9 +212,9 @@ class RpcMethodDispatcher {
     }
 
     final idempotencyKey = paramReader.idempotencyKey;
-    final idempotencyFingerprint = _buildIdempotencyFingerprint(
-      method: request.method,
-      params: params,
+    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
+      request.method,
+      params,
     );
     final store = _idempotencyStore;
     if (!request.isNotification &&
@@ -645,9 +644,9 @@ class RpcMethodDispatcher {
     }
 
     final idempotencyKey = params['idempotency_key'] as String?;
-    final idempotencyFingerprint = _buildIdempotencyFingerprint(
-      method: request.method,
-      params: params,
+    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
+      request.method,
+      params,
     );
     final store = _idempotencyStore;
     if (!request.isNotification &&
@@ -1217,41 +1216,6 @@ class RpcMethodDispatcher {
 
   String _authorizationFingerprint(String sql) {
     return sql.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
-  }
-
-  String _buildIdempotencyFingerprint({
-    required String method,
-    required Map<String, dynamic> params,
-  }) {
-    final payload = <String, dynamic>{
-      'method': method,
-      'params': params,
-    };
-    final canonicalPayload = _canonicalizeJsonValue(payload);
-    final encoded = jsonEncode(canonicalPayload);
-    return sha256.convert(utf8.encode(encoded)).toString();
-  }
-
-  dynamic _canonicalizeJsonValue(dynamic value) {
-    if (value is Map<String, dynamic>) {
-      final sortedKeys = value.keys.toList(growable: false)..sort();
-      return <String, dynamic>{
-        for (final key in sortedKeys) key: _canonicalizeJsonValue(value[key]),
-      };
-    }
-    if (value is Map) {
-      final normalized = value.map(
-        (key, v) => MapEntry(key.toString(), _canonicalizeJsonValue(v)),
-      );
-      final sortedKeys = normalized.keys.toList(growable: false)..sort();
-      return <String, dynamic>{
-        for (final key in sortedKeys) key: normalized[key],
-      };
-    }
-    if (value is List) {
-      return value.map(_canonicalizeJsonValue).toList(growable: false);
-    }
-    return value;
   }
 
   int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {

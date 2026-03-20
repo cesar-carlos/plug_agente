@@ -64,8 +64,10 @@ Regras:
 - `enc` descreve o formato antes da compressao. Valor padrao: `json`.
 - `cmp` descreve o algoritmo aplicado ao payload codificado.
 - `cmp` pode ser `gzip` ou `none`.
-- Em payloads acima de `compressionThreshold`, o modo esperado e `gzip`.
-- Em payloads pequenos, `cmp: none` e aceito e esperado.
+- Em payloads acima de `compressionThreshold`, o emissor pode usar `gzip` quando
+  isso reduzir o tamanho; o agente Plug, no modo de compressao **automatico**,
+  envia `cmp: none` quando o GZIP nao fica menor que o JSON UTF-8 bruto.
+- Em payloads pequenos (abaixo do limiar), `cmp: none` e aceito e esperado.
 - `originalSize` deve refletir o tamanho antes da compressao.
 - `compressedSize` deve refletir o tamanho efetivamente transmitido.
 - `signature` e opcional, mas quando presente cobre o frame de transporte.
@@ -82,7 +84,9 @@ Para qualquer evento de aplicacao:
 
 1. Montar o payload logico do evento.
 2. Serializar em JSON UTF-8.
-3. Aplicar GZIP quando o tamanho codificado atingir `compressionThreshold`.
+3. Avaliar GZIP quando o tamanho codificado atingir `compressionThreshold`
+   (ou sempre que a politica local exigir); no modo automatico, usar GZIP apenas
+   se o resultado for menor que os bytes UTF-8.
 4. Montar o `PayloadFrame`.
 5. Assinar o frame quando o contrato da sessao exigir assinatura.
 6. Emitir o evento Socket.IO com o frame contendo `payload` binario.

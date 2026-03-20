@@ -98,6 +98,9 @@ abstract class RpcErrorCode {
   static const String categoryDatabase = 'database';
   static const String categoryInternal = 'internal';
 
+  /// Use in [buildErrorData] `reason` when [-32001] is due to bad HMAC/signature.
+  static const String reasonInvalidSignature = 'invalid_signature';
+
   // ============================================================================
   // Helper methods
   // ============================================================================

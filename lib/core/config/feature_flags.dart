@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 /// Feature flags for controlling rollout and experimentation.
@@ -9,6 +10,7 @@ class FeatureFlags {
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';
   static const _keyEnableCompression = 'feature_enable_compression';
+  static const _keyOutboundCompressionMode = 'feature_outbound_compression_mode';
   static const _keyCompressionThreshold = 'feature_compression_threshold';
   static const _keyEnableClientTokenAuthorization =
       'feature_enable_client_token_authorization';
@@ -28,6 +30,10 @@ class FeatureFlags {
       'feature_enable_socket_cancel_method';
   static const _keyEnableSocketSchemaValidation =
       'feature_enable_socket_schema_validation';
+  static const _keyEnableSocketOutgoingContractValidation =
+      'feature_enable_socket_outgoing_contract_validation';
+  static const _keyEnableSocketSummarizeLargePayloadLogs =
+      'feature_enable_socket_summarize_large_payload_logs';
   static const _keyEnableSocketJwksValidation =
       'feature_enable_socket_jwks_validation';
   static const _keyEnableSocketRevokedTokenInSession =
@@ -51,11 +57,49 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableBinaryPayload, value);
   }
 
-  /// Whether compression is enabled.
-  bool get enableCompression => _prefs.getBool(_keyEnableCompression) ?? true;
+  /// Whether outbound compression is enabled (any mode other than `none`).
+  bool get enableCompression =>
+      outboundCompressionMode != OutboundCompressionMode.none;
+
+  /// Persisted strategy for agent -> hub PayloadFrame compression.
+  OutboundCompressionMode get outboundCompressionMode {
+    final stored = _prefs.getString(_keyOutboundCompressionMode);
+    if (stored == OutboundCompressionMode.none.storageName) {
+      return OutboundCompressionMode.none;
+    }
+    if (stored == OutboundCompressionMode.gzip.storageName) {
+      return OutboundCompressionMode.gzip;
+    }
+    if (stored == OutboundCompressionMode.auto.storageName) {
+      return OutboundCompressionMode.auto;
+    }
+    return (_prefs.getBool(_keyEnableCompression) ?? true)
+        ? OutboundCompressionMode.gzip
+        : OutboundCompressionMode.none;
+  }
+
+  Future<void> setOutboundCompressionMode(OutboundCompressionMode mode) async {
+    await _prefs.setString(_keyOutboundCompressionMode, mode.storageName);
+    await _prefs.setBool(
+      _keyEnableCompression,
+      mode != OutboundCompressionMode.none,
+    );
+  }
 
   Future<void> setEnableCompression(bool value) async {
-    await _prefs.setBool(_keyEnableCompression, value);
+    if (value) {
+      await _prefs.setBool(_keyEnableCompression, true);
+      final stored = _prefs.getString(_keyOutboundCompressionMode);
+      if (stored == null ||
+          stored == OutboundCompressionMode.none.storageName) {
+        await _prefs.setString(
+          _keyOutboundCompressionMode,
+          OutboundCompressionMode.gzip.storageName,
+        );
+      }
+    } else {
+      await setOutboundCompressionMode(OutboundCompressionMode.none);
+    }
   }
 
   /// Compression threshold in bytes.
@@ -138,6 +182,28 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableSocketSchemaValidation, value);
   }
 
+  /// Validates outgoing `rpc:response` bodies against the RPC contract schema.
+  ///
+  /// Incoming request validation is still controlled by
+  /// `enableSocketSchemaValidation`. When both are enabled, very large outgoing
+  /// payloads may skip validation (see
+  /// `ConnectionConstants.socketOutgoingContractValidationMaxBytes`).
+  bool get enableSocketOutgoingContractValidation =>
+      _prefs.getBool(_keyEnableSocketOutgoingContractValidation) ?? true;
+
+  Future<void> setEnableSocketOutgoingContractValidation(bool value) async {
+    await _prefs.setBool(_keyEnableSocketOutgoingContractValidation, value);
+  }
+
+  /// When true, large payloads passed to the socket message tracer are replaced
+  /// by a compact summary to avoid copying huge maps/lists through the callback.
+  bool get enableSocketSummarizeLargePayloadLogs =>
+      _prefs.getBool(_keyEnableSocketSummarizeLargePayloadLogs) ?? true;
+
+  Future<void> setEnableSocketSummarizeLargePayloadLogs(bool value) async {
+    await _prefs.setBool(_keyEnableSocketSummarizeLargePayloadLogs, value);
+  }
+
   /// Whether to cryptographically validate client tokens via JWKS
   /// (issuer, audience, kid, algorithm allowlist).
   bool get enableSocketJwksValidation =>
@@ -209,7 +275,7 @@ class FeatureFlags {
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
-    await setEnableCompression(true);
+    await setOutboundCompressionMode(OutboundCompressionMode.gzip);
     await setCompressionThreshold(1024);
     await setEnableClientTokenAuthorization(true);
     await setEnableSocketApiVersionMeta(true);
@@ -220,6 +286,8 @@ class FeatureFlags {
     await setEnableSocketDeliveryGuarantees(false);
     await setEnableSocketCancelMethod(true);
     await setEnableSocketSchemaValidation(true);
+    await setEnableSocketOutgoingContractValidation(true);
+    await setEnableSocketSummarizeLargePayloadLogs(true);
     await setEnableSocketJwksValidation(false);
     await setEnableSocketRevokedTokenInSession(false);
     await setEnableSocketStreamingChunks(false);

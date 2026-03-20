@@ -111,6 +111,12 @@ handshake.
 | -------------------- | ------------- | ---------------------------------------------- | ----------------------------------------- |
 | `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>` | `agent:capabilities`                 |
 | `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`               | define protocolo efetivo                  |
+| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`           | `rpc:response`                            |
+| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
+| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
+| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>` | (quando `enableSocketStreamingChunks`) |
+| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows }>` | (quando `enableSocketStreamingChunks`) |
+| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`     | (quando `enableSocketBackpressure`)       |
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
 de um tempo limite (ex.: 8 s) apos `agent:register`, o agente reenvia `agent:register`
@@ -121,12 +127,6 @@ ate N vezes (ex.: 2). Apos esgotar as tentativas, o agente força reconexao.
 completa. O `connect` pode retornar sucesso assim que o transporte Socket.IO
 estabelece conexao; o agente envia `agent:register` e aguarda `agent:capabilities`
 antes de aceitar RPCs.
-| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`           | `rpc:response`                            |
-| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>` | (quando `enableSocketStreamingChunks`) |
-| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows }>` | (quando `enableSocketStreamingChunks`) |
-| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`     | (quando `enableSocketBackpressure`)       |
 
 ## Camadas do transporte
 
@@ -801,6 +801,19 @@ Pelo menos um de `execution_id` ou `request_id` e obrigatorio.
 **Nota**: O cancelamento aplica-se apenas a execucoes em streaming (ex.: Playground).
 Execucoes via `sql.execute` (nao-streaming) nao sao cancelaveis por este metodo.
 
+## Metodo `rpc.discover`
+
+- **Onde roda:** tratado no transporte (`SocketIOTransportClientV2`) **antes** do
+  `RpcMethodDispatcher`; nao passa por `sql.execute` nem exige `client_token`.
+- **Resultado:** corpo do documento OpenRPC publicado (`docs/communication/openrpc.json`),
+  carregado de asset em runtime com fallback para disco e documento minimo embutido.
+- **Batch:** cada item de batch com `method: "rpc.discover"` e processado da mesma
+  forma no loop do transporte.
+- **Notifications e contrato estrito:** com `enableSocketNotificationsContract`
+  ativo, um pedido **sem** `id` (notification JSON-RPC) **nao** recebe
+  `rpc:response` — regra geral de notifications. Para obter o OpenRPC, o hub deve
+  enviar `rpc.discover` com `id` definido.
+
 ## Contrato obrigatorio de erro (`error.data`)
 
 Para padronizar UX e troubleshooting, toda resposta de erro deve incluir:
@@ -861,7 +874,7 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 | `-32601` | `method_not_found`                                       |
 | `-32602` | `invalid_params`                                         |
 | `-32603` | `internal_error`                                         |
-| `-32001` | `authentication_failed` ou `missing_client_token`        |
+| `-32001` | `authentication_failed`, `missing_client_token` ou `invalid_signature` (falha de HMAC no `PayloadFrame` ou no envelope logico) |
 | `-32002` | `unauthorized` (ex.: `token_revoked`, `token_not_found`) |
 | `-32008` | `timeout`                                                |
 | `-32009` | `invalid_payload`                                        |
@@ -909,9 +922,13 @@ Regras:
 
 ### Reconnect e recovery
 
-- **Reconexao curta**: apos desconexao, o agente tenta reconectar com backoff
-  exponencial (2s, 4s, 8s, ate max 10s).
-- **Max tentativas**: 3 tentativas por ciclo de recovery.
+- **Reconexao curta** (`ConnectionProvider` + `computeReconnectDelay`): apos
+  desconexao, o agente agenda atrasos com backoff exponencial a partir de
+  **5 s** por tentativa (`AppConstants.reconnectIntervalSeconds`), multiplicador
+  **2^(tentativa-1)** (ex.: ~5 s, ~10 s, ~20 s antes das tentativas 1..3), com
+  **teto de 60 s** por intervalo (`maxReconnectDelay`) e **jitter** de ±15%.
+- **Max tentativas**: 3 tentativas por ciclo de recovery
+  (`AppConstants.maxReconnectAttempts` / `ConnectionConstants.defaultMaxReconnectAttempts`).
 - **Token expirado**: ao detectar `token_revoked` ou `authentication_failed`, o
   agente tenta refresh via AuthProvider e reconecta com token renovado.
 - **Heartbeat**: `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack`
@@ -953,7 +970,8 @@ erros exclusivamente pelo envelope JSON-RPC v2.
 
 ## Capabilities (negociacao atual)
 
-Exemplo de capacidades anunciadas:
+Exemplo de capacidades anunciadas (alinhado a
+`ProtocolCapabilities.defaultCapabilities` quando `binaryPayload` esta ativo):
 
 ```json
 {
@@ -963,6 +981,12 @@ Exemplo de capacidades anunciadas:
   "extensions": {
     "batchSupport": true,
     "binaryPayload": true,
+    "transportFrame": "payload-frame/1.0",
+    "compressionThreshold": 1024,
+    "maxInflationRatio": 20,
+    "signatureRequired": false,
+    "signatureScope": "transport-frame",
+    "signatureAlgorithms": ["hmac-sha256"],
     "streamingResults": false,
     "plugProfile": "plug-jsonrpc-profile/2.5",
     "orderedBatchResponses": true,
@@ -973,6 +997,9 @@ Exemplo de capacidades anunciadas:
   }
 }
 ```
+
+O mapa `limits` negociado segue a secao "Limites negociados por transporte"; nao
+e repetido neste exemplo.
 
 ## Compatibilidade e Fallback
 
@@ -1158,7 +1185,9 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 ### Regras
 
 - **Opcional**: o emissor pode omitir `signature`; o receptor aceita sem verificar.
-- **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida, retorna `-32001` (authentication failed) com `reason: invalid_signature`.
+- **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida,
+  retorna `-32001` (`Authentication failed`) com `error.data.reason`:
+  `invalid_signature` (frame de transporte ou assinatura legada no JSON logico).
 - **Escopo principal**: a assinatura cobre `schemaVersion`, `enc`, `cmp`,
   `contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
 - **Compatibilidade**: quando o modo binario estiver desativado por feature
@@ -1209,8 +1238,13 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - O transporte ativo usa `PayloadFrame` binario como camada fisica padrao.
 - A leitura de payload logico JSON cru ainda existe apenas como compatibilidade
   temporaria para rollout.
-- A compressao e decidida por threshold; clientes devem aceitar `cmp: gzip` e
-  `cmp: none`.
+- A compressao de **envio** (agente -> hub) segue o limiar negociado
+  `compressionThreshold`. No modo **automatico** (`OutboundCompressionMode.auto`
+  nas configuracoes do agente), o GZIP e aplicado apenas quando o bloco
+  comprimido e **menor** que o JSON UTF-8 bruto; caso contrario o frame usa
+  `cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
+  permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
+  devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
 - Nao existe metodo RPC generico de transferencia de arquivo no contrato atual;
   qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
   e, depois, transportado dentro do `PayloadFrame`.
@@ -1355,6 +1389,17 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   `page_size` ou `cursor`.
 - `max_rows` em modo `preserve` permanece como truncamento da response, sem
   reescrita da SQL enviada pelo cliente.
+
+### Alinhamento doc/codigo (pos-v2.5)
+
+- Politica de reconnect do app documentada conforme `ConnectionProvider` /
+  `computeReconnectDelay` (base 5 s, teto 60 s, jitter).
+- Assinatura invalida: `error.data.reason` = `invalid_signature` com codigo
+  `-32001` (inclui falha de assinatura do `PayloadFrame` na decodificacao).
+- `rpc.discover`: fluxo no transporte, OpenRPC, e interacao com notifications
+  estritas.
+- Exemplo de `extensions` em capabilities alinhado ao default do agente.
+- Tabela "Mapa rapido de eventos" corrigida em Markdown.
 
 ## Schemas JSON (contrato)
 

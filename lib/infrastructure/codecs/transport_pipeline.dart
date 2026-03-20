@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
@@ -12,12 +13,15 @@ import 'package:uuid/uuid.dart';
 /// Bytes above which compression runs in isolate to avoid jank.
 const int gzipIsolateThresholdBytes = 32 * 1024;
 
-/// UTF-8 JSON body above this size is parsed in a worker isolate on receive.
-const int jsonDecodeIsolateThresholdBytes = 256 * 1024;
-
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
   final jsonString = utf8.decode(bytes);
   return jsonDecode(jsonString) as Object;
+}
+
+/// Top-level for [compute]: JSON-serializable values only.
+Uint8List jsonUtf8EncodePayloadInIsolate(Object? data) {
+  final raw = JsonUtf8Encoder().convert(data);
+  return raw is Uint8List ? raw : Uint8List.fromList(raw);
 }
 
 Uint8List _compressGzipInIsolate(Uint8List data) {
@@ -31,6 +35,17 @@ Uint8List _compressGzipInIsolate(Uint8List data) {
 Uint8List _decompressGzipInIsolate(Uint8List compressed) {
   final decompressedBytes = GZipDecoder().decodeBytes(compressed);
   return Uint8List.fromList(decompressedBytes);
+}
+
+bool _shouldRunGzipCompression(
+  String compressionMode,
+  int originalSize,
+  int compressionThreshold,
+) {
+  if (compressionMode == 'none' || originalSize < compressionThreshold) {
+    return false;
+  }
+  return compressionMode == 'gzip' || compressionMode == 'auto';
 }
 
 /// Transport pipeline for encoding/compressing and decoding/decompressing payloads.
@@ -49,7 +64,8 @@ class TransportPipeline {
   /// Selected encoding format.
   final String encoding;
 
-  /// Selected compression algorithm.
+  /// Send-path compression: `none`, `gzip`, or `auto` (try GZIP; use wire `gzip`
+  /// only if smaller than raw UTF-8). Received frames only use `none`/`gzip`.
   final String compression;
 
   /// Minimum payload size (bytes) to trigger compression.
@@ -80,25 +96,35 @@ class TransportPipeline {
       final encodedBytes = encodeResult.getOrThrow();
       final originalSize = encodedBytes.length;
 
-      // 2. Compress (if threshold met and compression enabled)
-      final shouldCompress =
-          compression != 'none' && originalSize >= compressionThreshold;
+      // 2. Compress (if threshold met and mode requests gzip or auto)
+      final shouldCompress = _shouldRunGzipCompression(
+        compression,
+        originalSize,
+        compressionThreshold,
+      );
 
       Uint8List finalBytes;
       String finalCompression;
       int compressedSize;
 
       if (shouldCompress) {
-        final compressionCodec = CompressionCodecFactory.getCodec(compression);
-        final compressResult = compressionCodec.compress(encodedBytes);
+        final gzipCodec = CompressionCodecFactory.getCodec('gzip');
+        final compressResult = gzipCodec.compress(encodedBytes);
 
         if (compressResult.isError()) {
           return Failure(compressResult.exceptionOrNull()!);
         }
 
-        finalBytes = compressResult.getOrThrow();
-        finalCompression = compression;
-        compressedSize = finalBytes.length;
+        final compressedBytes = compressResult.getOrThrow();
+        if (compression == 'auto' && compressedBytes.length >= originalSize) {
+          finalBytes = encodedBytes;
+          finalCompression = 'none';
+          compressedSize = originalSize;
+        } else {
+          finalBytes = compressedBytes;
+          finalCompression = 'gzip';
+          compressedSize = compressedBytes.length;
+        }
       } else {
         finalBytes = encodedBytes;
         finalCompression = 'none';
@@ -143,37 +169,63 @@ class TransportPipeline {
   }) async {
     try {
       final codec = PayloadCodecFactory.getCodec(encoding);
-      final encodeResult = codec.encode(data);
-
-      if (encodeResult.isError()) {
-        return Failure(encodeResult.exceptionOrNull()!);
+      late final Uint8List encodedBytes;
+      if (encoding == 'json' &&
+          jsonTreeLikelyExceedsByteBudget(
+            data,
+            jsonPayloadIsolateEncodeThresholdBytes,
+          )) {
+        try {
+          encodedBytes = await compute(jsonUtf8EncodePayloadInIsolate, data);
+        } on Object catch (error) {
+          return Failure(
+            domain.CompressionFailure.withContext(
+              message: 'Failed to encode JSON in isolate',
+              cause: error,
+              context: {'operation': 'jsonEncode', 'encoding': 'json'},
+            ),
+          );
+        }
+      } else {
+        final encodeResult = codec.encode(data);
+        if (encodeResult.isError()) {
+          return Failure(encodeResult.exceptionOrNull()!);
+        }
+        encodedBytes = encodeResult.getOrThrow();
       }
-
-      final encodedBytes = encodeResult.getOrThrow();
       final originalSize = encodedBytes.length;
-      final shouldCompress =
-          compression != 'none' && originalSize >= compressionThreshold;
+      final shouldCompress = _shouldRunGzipCompression(
+        compression,
+        originalSize,
+        compressionThreshold,
+      );
 
       Uint8List finalBytes;
       String finalCompression;
       int compressedSize;
 
       if (shouldCompress) {
-        if (originalSize >= gzipIsolateThresholdBytes &&
-            compression == 'gzip') {
-          finalBytes = await compute(_compressGzipInIsolate, encodedBytes);
+        final useIsolate = originalSize >= gzipIsolateThresholdBytes;
+        final Uint8List compressedBytes;
+        if (useIsolate) {
+          compressedBytes = await compute(_compressGzipInIsolate, encodedBytes);
         } else {
-          final compressionCodec = CompressionCodecFactory.getCodec(
-            compression,
-          );
-          final compressResult = compressionCodec.compress(encodedBytes);
+          final gzipCodec = CompressionCodecFactory.getCodec('gzip');
+          final compressResult = gzipCodec.compress(encodedBytes);
           if (compressResult.isError()) {
             return Failure(compressResult.exceptionOrNull()!);
           }
-          finalBytes = compressResult.getOrThrow();
+          compressedBytes = compressResult.getOrThrow();
         }
-        finalCompression = compression;
-        compressedSize = finalBytes.length;
+        if (compression == 'auto' && compressedBytes.length >= originalSize) {
+          finalBytes = encodedBytes;
+          finalCompression = 'none';
+          compressedSize = originalSize;
+        } else {
+          finalBytes = compressedBytes;
+          finalCompression = 'gzip';
+          compressedSize = compressedBytes.length;
+        }
       } else {
         finalBytes = encodedBytes;
         finalCompression = 'none';
@@ -505,7 +557,7 @@ class TransportPipeline {
 
       final Object decoded;
       if (frame.enc == 'json' &&
-          decodableBytes.length >= jsonDecodeIsolateThresholdBytes) {
+          decodableBytes.length >= jsonPayloadIsolateEncodeThresholdBytes) {
         try {
           decoded =
               await compute(_jsonDecodeUtf8PayloadInIsolate, decodableBytes);
