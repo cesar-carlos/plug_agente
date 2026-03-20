@@ -4,7 +4,7 @@ import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat
 void main() {
   group('SocketIoHeartbeatController', () {
     test('should call onConnectionStale after max missed acks', () async {
-      final connected = true;
+      const connected = true;
       final staleCalls = <int>[];
 
       final controller = SocketIoHeartbeatController(
@@ -25,7 +25,7 @@ void main() {
     });
 
     test('onAckReceived resets missed count', () async {
-      final connected = true;
+      const connected = true;
       final staleCalls = <int>[];
 
       final controller = SocketIoHeartbeatController(

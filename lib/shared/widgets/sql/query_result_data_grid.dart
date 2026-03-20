@@ -4,6 +4,9 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
+/// Above this row count, sorting/filtering are disabled to avoid main-thread spikes.
+const int kQueryResultHeavyRowThreshold = 10000;
+
 /// Result grid with cached [DataGridRow] rows and O(1) column metadata lookup.
 class QueryResultDataGrid extends StatefulWidget {
   const QueryResultDataGrid({
@@ -41,9 +44,7 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
     if (metaChanged) {
       _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
     }
-    final dataChanged =
-        !identical(oldWidget.data, widget.data) ||
-        oldWidget.data.length != widget.data.length;
+    final dataChanged = !identical(oldWidget.data, widget.data) || oldWidget.data.length != widget.data.length;
     if (dataChanged) {
       _dataSource.updateData(widget.data);
     }
@@ -64,12 +65,13 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
 
     final columnKeys = widget.data.first.keys.toList();
     final columns = _generateColumns(context, columnKeys);
+    final isHeavyDataset = widget.data.length > kQueryResultHeavyRowThreshold;
 
     return SfDataGrid(
       source: _dataSource,
       columns: columns,
-      allowSorting: true,
-      allowFiltering: true,
+      allowSorting: !isHeavyDataset,
+      allowFiltering: !isHeavyDataset,
       gridLinesVisibility: GridLinesVisibility.both,
       headerGridLinesVisibility: GridLinesVisibility.both,
       selectionMode: SelectionMode.single,
@@ -203,9 +205,7 @@ class _CachingQueryDataSource extends DataGridSource {
       return [];
     }
     final structureKey = _computeStructureKey();
-    if (_rowsCache != null &&
-        _cachedLength == _data.length &&
-        _structureKey == structureKey) {
+    if (_rowsCache != null && _cachedLength == _data.length && _structureKey == structureKey) {
       return _rowsCache!;
     }
     final keys = _data.first.keys.toList();

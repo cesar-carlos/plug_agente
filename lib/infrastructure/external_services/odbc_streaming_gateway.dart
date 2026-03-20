@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart' as app_log;
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
@@ -122,6 +124,34 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
               if (_cancelReason == StreamingCancelReason.playgroundRowCap) {
                 return const Success(unit);
               }
+              if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
+                return Failure(
+                  OdbcFailureMapper.mapStreamingError(
+                    StateError('stream_cancelled_backpressure_overflow'),
+                    operation: 'executeQueryStream',
+                    context: {
+                      'connectionId': connection.id,
+                      'rpc_error_code': RpcErrorCode.resultTooLarge,
+                      'reason': 'backpressure_overflow',
+                    },
+                  ),
+                );
+              }
+              if (_cancelReason == StreamingCancelReason.socketDisconnect) {
+                app_log.AppLogger.info(
+                  'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
+                );
+                return Failure(
+                  OdbcFailureMapper.mapStreamingError(
+                    StateError('stream_cancelled_on_disconnect'),
+                    operation: 'executeQueryStream',
+                    context: {
+                      'connectionId': connection.id,
+                      'reason': 'socket_disconnect',
+                    },
+                  ),
+                );
+              }
               return Failure(
                 OdbcFailureMapper.mapStreamingError(
                   StateError('stream_cancelled'),
@@ -148,13 +178,18 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
           return const Success(unit);
         } on Exception catch (e) {
+          final context = <String, dynamic>{
+            'connectionId': connection.id,
+          };
+          if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
+            context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
+            context['reason'] = 'backpressure_overflow';
+          }
           return Failure(
             OdbcFailureMapper.mapStreamingError(
               e,
               operation: 'executeQueryStream',
-              context: {
-                'connectionId': connection.id,
-              },
+              context: context,
             ),
           );
         } finally {

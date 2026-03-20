@@ -138,6 +138,9 @@ void main() {
           authToken: any(named: 'authToken'),
         ),
       ).thenReturn(mockSocket);
+      when(
+        () => mockDispatcher.cancelActiveStreamOnDisconnect(),
+      ).thenAnswer((_) async {});
       when(() => mockSocket.connected).thenReturn(true);
       when(() => mockSocket.on(any<String>(), any())).thenAnswer((invocation) {
         handlers[invocation.positionalArguments[0] as String] =

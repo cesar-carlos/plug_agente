@@ -17,6 +17,12 @@ class ConnectionConstants {
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;
 
+  /// Timeout for hub to respond with agent:capabilities after agent:register.
+  static const int capabilitiesTimeoutMs = 8000;
+
+  /// Max agent:register retries before forcing reconnect when capabilities missing.
+  static const int capabilitiesMaxReRegisterAttempts = 2;
+
   /// Socket.IO client internal reconnection attempts (transport-level).
   static const int socketReconnectionAttempts = 15;
   static const int socketReconnectionDelayMs = 5000;

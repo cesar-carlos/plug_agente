@@ -67,16 +67,14 @@ class PlaygroundProvider extends ChangeNotifier {
   bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
   int? get affectedRows => _affectedRows;
-  List<Map<String, dynamic>>? get columnMetadata =>
-      selectedResultSet?.columnMetadata ?? _columnMetadata;
+  List<Map<String, dynamic>>? get columnMetadata => selectedResultSet?.columnMetadata ?? _columnMetadata;
   CancellationToken get cancellationToken => _cancellationToken;
   List<QueryResultSet> get resultSets => _resultSets;
   QueryResultSet? get selectedResultSet {
     if (_resultSets.isEmpty) {
       return null;
     }
-    if (_selectedResultSetIndex < 0 ||
-        _selectedResultSetIndex >= _resultSets.length) {
+    if (_selectedResultSetIndex < 0 || _selectedResultSetIndex >= _resultSets.length) {
       return _resultSets.first;
     }
     return _resultSets[_selectedResultSetIndex];
@@ -93,11 +91,7 @@ class PlaygroundProvider extends ChangeNotifier {
   int get pageSize => _pageSize;
   bool get hasNextPage => _hasNextPage;
   bool get hasPreviousPage => _currentPage > 1;
-  bool get hasPagination =>
-      _paginationAvailable &&
-      _hasExecutedQuery &&
-      !_isStreaming &&
-      _error == null;
+  bool get hasPagination => _paginationAvailable && _hasExecutedQuery && !_isStreaming && _error == null;
   List<int> get pageSizeOptions => _pageSizeOptions;
   SqlHandlingMode get sqlHandlingMode => _sqlHandlingMode;
   String? get lastExecutionHint => _lastExecutionHint;
@@ -168,8 +162,7 @@ class PlaygroundProvider extends ChangeNotifier {
             _selectedResultSetIndex = 0;
             _results = response.data;
             _affectedRows = response.affectedRows ?? 0;
-            _columnMetadata =
-                selectedResultSet?.columnMetadata ?? response.columnMetadata;
+            _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
             _syncPaginationState(response.pagination);
             _lastExecutionHint = _buildLastExecutionHint(response.pagination);
           }
@@ -294,8 +287,7 @@ class PlaygroundProvider extends ChangeNotifier {
           }
           _rowsProcessed = _results.length;
           _affectedRows = _rowsProcessed;
-          _progress =
-              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
           _notifyStreamingProgressIfNeeded();
           if (_results.length >= cap) {
             _requestStreamingStopAtRowCap(cap);
@@ -375,11 +367,10 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _streamingCapCancelRequested = true;
     _streamingStoppedByCap = true;
-    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint
-        .replaceAll(
-          '{max}',
-          cap.toString(),
-        );
+    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint.replaceAll(
+      '{max}',
+      cap.toString(),
+    );
     unawaited(
       _executeStreamingQuery.cancelActiveStream(
         reason: StreamingCancelReason.playgroundRowCap,
@@ -413,8 +404,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _notifyStreamingProgressIfNeeded() {
     final now = DateTime.now();
-    final shouldNotify =
-        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
     if (!shouldNotify) {
       return;
     }

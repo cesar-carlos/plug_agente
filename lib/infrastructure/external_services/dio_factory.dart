@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/infrastructure/http/get_retry_interceptor.dart';
 
 class DioFactory {
   static String? _userAgent;
@@ -110,6 +111,7 @@ class DioFactory {
     );
 
     dio.interceptors.add(LogInterceptor());
+    dio.interceptors.add(GetRetryInterceptor(dio: dio));
 
     return dio;
   }

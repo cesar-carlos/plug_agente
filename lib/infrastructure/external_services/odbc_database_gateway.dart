@@ -6,7 +6,6 @@ import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -20,20 +19,12 @@ import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_paginated_sql_builder.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
-
-class _PreparedQueryExecution {
-  const _PreparedQueryExecution({
-    required this.sql,
-    required this.parameters,
-  });
-
-  final String sql;
-  final Map<String, dynamic>? parameters;
-}
 
 class _QueryExecutionOutcome {
   const _QueryExecutionOutcome.success(this.response) : error = null;
@@ -93,15 +84,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final FeatureFlags? _featureFlags;
   final Uuid _uuid;
   bool _initialized = false;
-  static const int _bufferRetryMarginBytes = 1024 * 1024;
-  static const int _maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
 
   ConnectionOptions get _connectionOptions => ConnectionOptions(
     loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
     queryTimeout: ConnectionConstants.defaultQueryTimeout,
     maxResultBufferBytes: _settings.maxResultBufferMb * 1024 * 1024,
-    initialResultBufferBytes: ConnectionConstants.defaultInitialResultBufferBytes,
+    initialResultBufferBytes:
+        ConnectionConstants.defaultInitialResultBufferBytes,
     autoReconnectOnConnectionLost: true,
     maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
     reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
@@ -139,7 +129,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             operation: 'initialize_odbc',
             context: {
               'reason': 'odbc_initialization_failed',
-              'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
+              'user_message':
+                  'Não foi possível inicializar o ambiente ODBC neste computador.',
             },
           ),
         );
@@ -158,12 +149,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     QueryRequest request,
     QueryResult queryResult,
   ) {
-    final rawData = _convertQueryResultToMaps(queryResult);
-    final paginationResponse = _buildPaginationResponse(
-      request.pagination,
-      rawData,
+    final rawData = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+      queryResult,
     );
-    final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
+    final paginationResponse =
+        OdbcGatewayQueryResultMapper.buildPaginationResponse(
+          request.pagination,
+          rawData,
+        );
+    final data = paginationResponse == null
+        ? rawData
+        : rawData.take(request.pagination!.pageSize).toList();
 
     return QueryResponse(
       id: _uuid.v4(),
@@ -172,7 +168,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       data: data,
       affectedRows: data.length,
       timestamp: DateTime.now(),
-      columnMetadata: _buildColumnMetadata(queryResult.columns),
+      columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
+        queryResult.columns,
+      ),
       pagination: paginationResponse,
     );
   }
@@ -191,9 +189,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (item.resultSet != null) {
         final resultSet = QueryResultSet(
           index: resultSetIndex,
-          rows: _convertQueryResultToMaps(item.resultSet!),
+          rows: OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+            item.resultSet!,
+          ),
           rowCount: item.resultSet!.rowCount,
-          columnMetadata: _buildColumnMetadata(item.resultSet!.columns),
+          columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
+            item.resultSet!.columns,
+          ),
         );
         resultSets.add(resultSet);
         items.add(
@@ -225,7 +227,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       requestId: request.id,
       agentId: request.agentId,
       data: primaryResultSet.rows,
-      affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
+      affectedRows: totalAffectedRows > 0
+          ? totalAffectedRows
+          : primaryResultSet.rowCount,
       timestamp: DateTime.now(),
       columnMetadata: primaryResultSet.columnMetadata,
       resultSets: resultSets,
@@ -325,7 +329,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           operation: 'initialize_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
+            'user_message':
+                'Não foi possível inicializar o ambiente ODBC neste computador.',
           },
         ),
       ),
@@ -370,24 +375,30 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
   }) async {
     final stopwatch = Stopwatch()..start();
-    final paginationValidation = _validatePaginationForDatabase(
-      request,
-      databaseConfig.databaseType,
-    );
+    final paginationValidation =
+        OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+          request,
+          databaseConfig.databaseType,
+        );
     if (paginationValidation != null) {
       return Failure(paginationValidation);
     }
 
-    final preparedExecution = _prepareQueryExecution(request, databaseConfig);
-    final queryValidation = _validateQueryExecutionMode(
+    final preparedExecution = OdbcGatewayQueryPreparation.prepareQueryExecution(
       request,
-      preparedExecution,
+      databaseConfig,
     );
+    final queryValidation =
+        OdbcGatewayQueryPreparation.validateQueryExecutionMode(
+          request,
+          preparedExecution,
+        );
     if (queryValidation != null) {
       return Failure(queryValidation);
     }
 
-    _maybeLogPaginatedSqlRewrite(
+    OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+      featureFlags: _featureFlags,
       request: request,
       databaseConfig: databaseConfig,
       preparedExecution: preparedExecution,
@@ -450,7 +461,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             timeout: timeout,
           );
         }
-        if (_isBufferTooSmallError(error)) {
+        if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
+          _odbcErrorMessage(error),
+        )) {
           developer.log(
             'Buffer too small in pooled query, retrying with expanded buffer',
             name: 'database_gateway',
@@ -747,7 +760,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         final outcome = await _runQueryExecutionWithTimeout(
           connId: context.connectionId,
           request: commandRequest,
-          preparedExecution: _PreparedQueryExecution(
+          preparedExecution: OdbcPreparedQueryExecution(
             sql: command.sql,
             parameters: command.params,
           ),
@@ -978,7 +991,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<_QueryExecutionOutcome> _runQueryExecutionWithTimeout({
     required String connId,
     required QueryRequest request,
-    required _PreparedQueryExecution preparedExecution,
+    required OdbcPreparedQueryExecution preparedExecution,
     required String connectionString,
     Duration? timeout,
   }) async {
@@ -1048,7 +1061,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
   ) async {
     try {
-      final disconnectResult = await _service.disconnect(connectionId).timeout(_bestEffortCancelDisconnectTimeout);
+      final disconnectResult = await _service
+          .disconnect(connectionId)
+          .timeout(_bestEffortCancelDisconnectTimeout);
       if (disconnectResult.isSuccess()) {
         _metrics.recordTimeoutCancelSuccess();
       } else {
@@ -1110,7 +1125,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     QueryRequest request,
     String connectionString,
     Stopwatch stopwatch, {
-    required _PreparedQueryExecution preparedExecution,
+    required OdbcPreparedQueryExecution preparedExecution,
     ConnectionOptions? options,
     Duration? timeout,
   }) async {
@@ -1335,8 +1350,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   ConnectionOptions _buildExpandedConnectionOptions(Object error) {
     final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
-    final expandedBufferBytes = _calculateExpandedBufferBytes(error);
-    final initialResultBufferBytes = expandedBufferBytes < ConnectionConstants.defaultInitialResultBufferBytes
+    final expandedBufferBytes =
+        OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
+          currentBufferBytes: currentBufferBytes,
+          errorMessage: _odbcErrorMessage(error),
+        );
+    final initialResultBufferBytes =
+        expandedBufferBytes <
+            ConnectionConstants.defaultInitialResultBufferBytes
         ? expandedBufferBytes
         : ConnectionConstants.defaultInitialResultBufferBytes;
 
@@ -1356,40 +1377,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
       reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
     );
-  }
-
-  int _calculateExpandedBufferBytes(Object error) {
-    final currentBufferBytes = _settings.maxResultBufferMb * 1024 * 1024;
-    final requiredBufferBytes = _extractRequiredBufferBytes(error);
-
-    if (requiredBufferBytes == null) {
-      final doubledBuffer = currentBufferBytes * 2;
-      if (doubledBuffer > _maxAutoExpandedBufferBytes) {
-        return _maxAutoExpandedBufferBytes;
-      }
-      return doubledBuffer;
-    }
-
-    final withMargin = requiredBufferBytes + _bufferRetryMarginBytes;
-    if (withMargin > _maxAutoExpandedBufferBytes) {
-      return _maxAutoExpandedBufferBytes;
-    }
-    if (withMargin < currentBufferBytes) {
-      return currentBufferBytes;
-    }
-    return withMargin;
-  }
-
-  int? _extractRequiredBufferBytes(Object error) {
-    final message = _odbcErrorMessage(error);
-    final match = RegExp(
-      r'need\s+(\d+)\s+bytes',
-      caseSensitive: false,
-    ).firstMatch(message);
-    if (match == null) {
-      return null;
-    }
-    return int.tryParse(match.group(1) ?? '');
   }
 
   Future<void> _tryRecoverPoolAfterInvalidConnectionId(
@@ -1434,11 +1421,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return message.contains('invalid connection id');
   }
 
-  bool _isBufferTooSmallError(Object error) {
-    final message = _odbcErrorMessage(error).toLowerCase();
-    return message.contains('buffer too small');
-  }
-
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {
     return switch (driverName) {
       'SQL Server' => DatabaseType.sqlServer,
@@ -1448,138 +1430,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     };
   }
 
-  void _maybeLogPaginatedSqlRewrite({
-    required QueryRequest request,
-    required DatabaseConfig databaseConfig,
-    required _PreparedQueryExecution preparedExecution,
-  }) {
-    final flags = _featureFlags;
-    if (flags == null || !flags.enableOdbcPaginatedSqlDebugLog) {
-      return;
-    }
-    if (request.pagination == null || request.preserveSql) {
-      return;
-    }
-    final original = request.query.trim();
-    final rewritten = preparedExecution.sql.trim();
-    if (original == rewritten) {
-      return;
-    }
-    developer.log(
-      'Paginated SQL (${databaseConfig.databaseType.name}): $rewritten',
-      name: 'odbc_database_gateway',
-    );
-  }
-
-  domain.ValidationFailure? _validatePaginationForDatabase(
-    QueryRequest request,
-    DatabaseType databaseType,
-  ) {
-    if (request.preserveSql && request.pagination != null) {
-      return domain.ValidationFailure(
-        'preserve_sql cannot be combined with managed pagination',
-      );
-    }
-
-    final pagination = request.pagination;
-    if (pagination == null) {
-      return null;
-    }
-
-    if (SqlValidator.containsTopLevelPaginationClause(request.query)) {
-      return domain.ValidationFailure(
-        'Paginated requests cannot include LIMIT/OFFSET/FETCH in SQL; '
-        'use options.page/page_size or options.cursor',
-      );
-    }
-
-    final requiresExplicitOrderBy =
-        databaseType == DatabaseType.sqlServer || databaseType == DatabaseType.sybaseAnywhere;
-    if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
-      return domain.ValidationFailure(
-        'Page-offset pagination requires an explicit ORDER BY for '
-        'SQL Server and SQL Anywhere',
-      );
-    }
-
-    return null;
-  }
-
-  _PreparedQueryExecution _prepareQueryExecution(
-    QueryRequest request,
-    DatabaseConfig databaseConfig,
-  ) {
-    if (request.preserveSql) {
-      return _PreparedQueryExecution(
-        sql: request.query,
-        parameters: request.parameters,
-      );
-    }
-
-    final pagination = request.pagination;
-    if (pagination == null) {
-      return _PreparedQueryExecution(
-        sql: request.query,
-        parameters: request.parameters,
-      );
-    }
-
-    final sql = pagination.usesStableCursor
-        ? OdbcPaginatedSqlBuilder.buildCursorPaginatedSql(
-            request.query,
-            databaseConfig.databaseType,
-            pagination,
-          )
-        : OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
-            request.query,
-            databaseConfig.databaseType,
-            pagination,
-          );
-    return _PreparedQueryExecution(
-      sql: sql,
-      parameters: request.parameters,
-    );
-  }
-
-  domain.ValidationFailure? _validateQueryExecutionMode(
-    QueryRequest request,
-    _PreparedQueryExecution preparedExecution,
-  ) {
-    if (!request.expectMultipleResults) {
-      return null;
-    }
-    if (request.pagination != null) {
-      return domain.ValidationFailure(
-        'Multi-result execution cannot be combined with pagination',
-      );
-    }
-    if (preparedExecution.parameters?.isNotEmpty ?? false) {
-      return domain.ValidationFailure(
-        'Multi-result execution is not supported with named parameters',
-      );
-    }
-    return null;
-  }
-
-  bool _shouldUseMultiResultExecution(
-    QueryRequest request,
-    _PreparedQueryExecution preparedExecution,
-  ) {
-    if (!request.expectMultipleResults) {
-      return false;
-    }
-    if (request.pagination != null) {
-      return false;
-    }
-    return !(preparedExecution.parameters?.isNotEmpty ?? false);
-  }
-
   Future<_QueryExecutionOutcome> _runQueryExecution(
     String connectionId,
     QueryRequest request,
-    _PreparedQueryExecution preparedExecution,
+    OdbcPreparedQueryExecution preparedExecution,
   ) async {
-    if (_shouldUseMultiResultExecution(request, preparedExecution)) {
+    if (OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+      request,
+      preparedExecution,
+    )) {
       final queryResult = await _service.executeQueryMultiFull(
         connectionId,
         preparedExecution.sql,
@@ -1592,7 +1451,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final queryResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
+    final queryResult =
+        preparedExecution.parameters != null &&
+            preparedExecution.parameters!.isNotEmpty
         ? await _service.executeQueryNamed(
             connectionId,
             preparedExecution.sql,
@@ -1609,47 +1470,5 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       ),
       _QueryExecutionOutcome.failure,
     );
-  }
-
-  QueryPaginationInfo? _buildPaginationResponse(
-    QueryPaginationRequest? pagination,
-    List<Map<String, dynamic>> rawData,
-  ) {
-    if (pagination == null) {
-      return null;
-    }
-
-    final rawRowCount = rawData.length;
-    final hasNextPage = rawRowCount > pagination.pageSize;
-    final returnedRows = hasNextPage ? pagination.pageSize : rawRowCount;
-    final pageData = rawData.take(returnedRows).toList();
-    return QueryPaginationInfo(
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      returnedRows: returnedRows,
-      hasNextPage: hasNextPage,
-      hasPreviousPage: pagination.page > 1,
-      currentCursor: pagination.cursor,
-      nextCursor: hasNextPage
-          ? OdbcPaginatedSqlBuilder.buildNextCursorToken(
-              pagination: pagination,
-              pageData: pageData,
-            )
-          : null,
-    );
-  }
-
-  List<Map<String, dynamic>> _convertQueryResultToMaps(QueryResult result) {
-    return result.rows.map((row) {
-      final map = <String, dynamic>{};
-      for (var i = 0; i < result.columns.length; i++) {
-        map[result.columns[i]] = row[i];
-      }
-      return map;
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> _buildColumnMetadata(List<String> columns) {
-    return columns.map((column) => <String, dynamic>{'name': column}).toList(growable: false);
   }
 }

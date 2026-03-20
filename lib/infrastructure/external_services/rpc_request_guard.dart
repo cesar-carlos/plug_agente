@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:plug_agente/domain/protocol/rpc_request.dart';
 
 enum RpcRequestGuardResult {
@@ -21,7 +23,7 @@ class RpcRequestGuard {
   final Duration _rateLimitWindow;
   final int _maxRequestsPerWindow;
   final Duration _replayWindow;
-  final List<DateTime> _rpcRequestTimeline = <DateTime>[];
+  final Queue<DateTime> _rpcRequestTimeline = Queue<DateTime>();
   final Map<String, DateTime> _recentRpcRequestIds = <String, DateTime>{};
 
   RpcRequestGuardResult evaluate(RpcRequest request) {
@@ -48,18 +50,18 @@ class RpcRequestGuard {
 
   void _registerRequest(DateTime now) {
     _rpcRequestTimeline.add(now);
+    _evictExpiredFromTimeline(now);
+  }
 
+  void _evictExpiredFromTimeline(DateTime now) {
     final cutoff = now.subtract(_rateLimitWindow);
     while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
-      _rpcRequestTimeline.removeAt(0);
+      _rpcRequestTimeline.removeFirst();
     }
   }
 
   bool _isRateLimited(DateTime now) {
-    final cutoff = now.subtract(_rateLimitWindow);
-    while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
-      _rpcRequestTimeline.removeAt(0);
-    }
+    _evictExpiredFromTimeline(now);
     return _rpcRequestTimeline.length > _maxRequestsPerWindow;
   }
 

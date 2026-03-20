@@ -9,15 +9,21 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 class BackpressureStreamEmitter implements IRpcStreamEmitter {
   BackpressureStreamEmitter({
     required void Function(String event, Map<String, dynamic> payload) emit,
-    required void Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
+    required void Function(String streamId, BackpressureStreamEmitter emitter)
+    onRegister,
     required void Function(String streamId) onUnregister,
+    int? maxQueueSize,
   }) : _emit = emit,
        _onRegister = onRegister,
-       _onUnregister = onUnregister;
+       _onUnregister = onUnregister,
+       _maxQueueSize =
+           maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
 
   final void Function(String event, Map<String, dynamic> payload) _emit;
-  final void Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
+  final void Function(String streamId, BackpressureStreamEmitter emitter)
+  _onRegister;
   final void Function(String streamId) _onUnregister;
+  final int _maxQueueSize;
 
   final Queue<RpcStreamChunk> _chunkQueue = Queue<RpcStreamChunk>();
   RpcStreamComplete? _pendingComplete;
@@ -53,17 +59,19 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   }
 
   @override
-  void emitChunk(RpcStreamChunk chunk) {
+  bool emitChunk(RpcStreamChunk chunk) {
     if (!_registered) {
       _streamId = chunk.streamId;
       _onRegister(_streamId!, this);
       _registered = true;
     }
-    _chunkQueue.add(chunk);
-    while (_chunkQueue.length > ConnectionConstants.maxBackpressureChunkQueueSize) {
-      _chunkQueue.removeFirst();
-    }
     _flush();
+    if (_chunkQueue.length >= _maxQueueSize && _sendCredit == 0) {
+      return false;
+    }
+    _chunkQueue.add(chunk);
+    _flush();
+    return true;
   }
 
   @override

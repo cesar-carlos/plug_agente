@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jose/jose.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 
@@ -44,6 +45,27 @@ void main() {
 
       expect(result.isError(), isTrue);
     });
+
+    test(
+      'should use createKeyStore when resolving JWKS before verify fails',
+      () async {
+        var storeBuilds = 0;
+        final verifier = JwtJwksVerifier(
+          () async =>
+              const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
+          createKeyStore: (Uri u) {
+            storeBuilds++;
+            return JsonWebKeyStore()..addKeySetUrl(u);
+          },
+        );
+
+        final token = _buildTokenWithAlg('RS256');
+        final result = await verifier.verify(token);
+
+        expect(result.isError(), isTrue);
+        expect(storeBuilds, 1);
+      },
+    );
 
     test(
       'should open JWKS circuit breaker after consecutive failures',

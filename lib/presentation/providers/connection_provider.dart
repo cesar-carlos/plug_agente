@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
@@ -5,6 +7,7 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/utils/reconnect_delay_calculator.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
@@ -32,13 +35,15 @@ class ConnectionProvider extends ChangeNotifier {
     Duration maxReconnectDelay = _defaultMaxReconnectDelay,
     int tokenRefreshIntervalAttempts = _defaultTokenRefreshIntervalAttempts,
     int maxReconnectAttempts = _defaultMaxReconnectAttempts,
+    Random? random,
   }) : _authProvider = authProvider,
        _configProvider = configProvider,
        _transportClientOverride = transportClient,
        _initialReconnectDelay = initialReconnectDelay,
        _maxReconnectDelay = maxReconnectDelay,
        _tokenRefreshIntervalAttempts = tokenRefreshIntervalAttempts,
-       _maxReconnectAttempts = maxReconnectAttempts {
+       _maxReconnectAttempts = maxReconnectAttempts,
+       _random = random {
     if (_tokenRefreshIntervalAttempts < 1) {
       throw ArgumentError.value(
         tokenRefreshIntervalAttempts,
@@ -84,12 +89,12 @@ class ConnectionProvider extends ChangeNotifier {
   );
   static const Duration _defaultMaxReconnectDelay = Duration(seconds: 60);
   static const int _defaultTokenRefreshIntervalAttempts = 4;
-  static const int _defaultMaxReconnectAttempts =
-      AppConstants.maxReconnectAttempts;
+  static const int _defaultMaxReconnectAttempts = AppConstants.maxReconnectAttempts;
   final Duration _initialReconnectDelay;
   final Duration _maxReconnectDelay;
   final int _tokenRefreshIntervalAttempts;
   final int _maxReconnectAttempts;
+  final Random? _random;
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -114,8 +119,7 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    final transportClient =
-        _transportClientOverride ?? getIt<ITransportClient>();
+    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     transportClient.setOnTokenExpired(_handleTokenExpired);
     transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
 
@@ -146,8 +150,7 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
-    final transportClient =
-        _transportClientOverride ?? getIt<ITransportClient>();
+    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
     _error = '';
@@ -228,8 +231,7 @@ class ConnectionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final transportClient =
-          _transportClientOverride ?? getIt<ITransportClient>();
+      final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
       await transportClient.disconnect();
 
       final context = _resolveConnectionContext();
@@ -325,16 +327,19 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<bool> _recoverConnection(_ConnectionContext context) async {
     var authToken = _resolveAuthTokenForReconnect();
-    for (
-      var attempt = 1;
-      attempt <= _maxReconnectAttempts && !_isDisconnectRequested;
-      attempt++
-    ) {
+    for (var attempt = 1; attempt <= _maxReconnectAttempts && !_isDisconnectRequested; attempt++) {
       final delay = _computeReconnectDelay(attempt);
       if (delay > Duration.zero) {
+        AppLogger.info(
+          'resilience: reconnect_delay_ms attempt=$attempt '
+          'delay_ms=${delay.inMilliseconds} agent_id=${context.agentId}',
+        );
         await Future<void>.delayed(delay);
       }
 
+      AppLogger.info(
+        'resilience: connect_attempt attempt=$attempt agent_id=${context.agentId}',
+      );
       final connected = await _attemptReconnect(
         context.serverUrl,
         context.agentId,
@@ -414,15 +419,8 @@ class ConnectionProvider extends ChangeNotifier {
     final configServerUrl = config?.serverUrl.trim();
     final configAgentId = config?.agentId.trim();
     final serverUrl =
-        _lastServerUrl ??
-        ((configServerUrl != null && configServerUrl.isNotEmpty)
-            ? configServerUrl
-            : null);
-    final agentId =
-        _lastAgentId ??
-        ((configAgentId != null && configAgentId.isNotEmpty)
-            ? configAgentId
-            : null);
+        _lastServerUrl ?? ((configServerUrl != null && configServerUrl.isNotEmpty) ? configServerUrl : null);
+    final agentId = _lastAgentId ?? ((configAgentId != null && configAgentId.isNotEmpty) ? configAgentId : null);
 
     if (serverUrl == null || agentId == null) {
       return null;
@@ -446,16 +444,12 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Duration _computeReconnectDelay(int attempt) {
-    final attemptOffset = attempt - 1;
-    final safeExponent = attemptOffset < 0
-        ? 0
-        : (attemptOffset > 5 ? 5 : attemptOffset);
-    final multiplier = 1 << safeExponent;
-    final seconds = _initialReconnectDelay.inSeconds * multiplier;
-    final cappedSeconds = seconds > _maxReconnectDelay.inSeconds
-        ? _maxReconnectDelay.inSeconds
-        : seconds;
-    return Duration(seconds: cappedSeconds);
+    return computeReconnectDelay(
+      attempt: attempt,
+      initialDelay: _initialReconnectDelay,
+      maxDelay: _maxReconnectDelay,
+      random: _random,
+    );
   }
 }
 

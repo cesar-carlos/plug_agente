@@ -111,6 +111,16 @@ handshake.
 | -------------------- | ------------- | ---------------------------------------------- | ----------------------------------------- |
 | `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>` | `agent:capabilities`                 |
 | `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`               | define protocolo efetivo                  |
+
+**Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
+de um tempo limite (ex.: 8 s) apos `agent:register`, o agente reenvia `agent:register`
+ate N vezes (ex.: 2). Apos esgotar as tentativas, o agente força reconexao.
+
+**Readiness:** O hub nao deve enviar `rpc:request` antes de o agente ter recebido
+`agent:capabilities`. O agente so considera o protocolo pronto apos a negociacao
+completa. O `connect` pode retornar sucesso assim que o transporte Socket.IO
+estabelece conexao; o agente envia `agent:register` e aguarda `agent:capabilities`
+antes de aceitar RPCs.
 | `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`           | `rpc:response`                            |
 | `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
 | `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
@@ -175,6 +185,10 @@ Fluxo atual para resultados grandes:
 3. Agente emite `rpc:complete` ao finalizar com `total_rows` e resumo.
 4. Se `enableSocketBackpressure`: agente espera `rpc:stream.pull` antes de enviar
    proximos chunks; `window_size` controla quantos chunks enviar por pull.
+5. **Overflow de buffer**: se a fila de chunks atingir o limite (`maxBackpressureChunkQueueSize`)
+   e o hub nao enviar `rpc:stream.pull` a tempo, o agente **nao descarta** chunks silenciosamente.
+   Em vez disso, cancela o stream e retorna erro RPC `resultTooLarge` (`-32105`) com
+   `reason: backpressure_overflow`. O hub deve consumir mais rapido ou aumentar `window_size`.
 
 Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 `lib/domain/protocol/rpc_stream.dart`.

@@ -713,6 +713,7 @@ void main() {
         );
 
         final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenReturn(true);
         final response = await dispatcher.dispatch(
           request,
           'agent-1',
@@ -852,6 +853,7 @@ void main() {
         ).thenAnswer((_) async => queryResponse);
 
         final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenReturn(true);
         final response = await dispatcher.dispatch(
           request,
           'agent-1',
@@ -1755,5 +1757,36 @@ void main() {
         },
       );
     });
+
+    test(
+      'cancelActiveStreamOnDisconnect should cancel gateway when active stream exists',
+      () async {
+        when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
+        when(
+          () => mockStreamingGateway.cancelActiveStream(
+            reason: any(named: 'reason'),
+          ),
+        ).thenAnswer((_) async => const Success(unit));
+
+        await dispatcher.cancelActiveStreamOnDisconnect();
+
+        verify(
+          () => mockStreamingGateway.cancelActiveStream(
+            reason: StreamingCancelReason.socketDisconnect,
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'cancelActiveStreamOnDisconnect should do nothing when no active stream',
+      () async {
+        when(() => mockStreamingGateway.hasActiveStream).thenReturn(false);
+
+        await dispatcher.cancelActiveStreamOnDisconnect();
+
+        verifyNever(() => mockStreamingGateway.cancelActiveStream());
+      },
+    );
   });
 }

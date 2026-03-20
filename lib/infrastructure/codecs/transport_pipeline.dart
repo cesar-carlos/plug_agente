@@ -1,11 +1,22 @@
-import 'dart:typed_data';
-
+import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
+
+/// Bytes above which compression runs in isolate to avoid jank.
+const int gzipIsolateThresholdBytes = 32 * 1024;
+
+Uint8List _compressGzipInIsolate(Uint8List data) {
+  final compressedBytes = GZipEncoder().encode(data);
+  if (compressedBytes == null) {
+    throw StateError('GZipEncoder returned null');
+  }
+  return Uint8List.fromList(compressedBytes);
+}
 
 /// Transport pipeline for encoding/compressing and decoding/decompressing payloads.
 ///
@@ -55,7 +66,8 @@ class TransportPipeline {
       final originalSize = encodedBytes.length;
 
       // 2. Compress (if threshold met and compression enabled)
-      final shouldCompress = compression != 'none' && originalSize >= compressionThreshold;
+      final shouldCompress =
+          compression != 'none' && originalSize >= compressionThreshold;
 
       Uint8List finalBytes;
       String finalCompression;
@@ -107,6 +119,80 @@ class TransportPipeline {
     }
   }
 
+  /// Async variant: uses [compute] for gzip when payload exceeds
+  /// [gzipIsolateThresholdBytes] to avoid jank on the main isolate.
+  Future<Result<PayloadFrame>> prepareSendAsync(
+    dynamic data, {
+    String? traceId,
+    String? requestId,
+  }) async {
+    try {
+      final codec = PayloadCodecFactory.getCodec(encoding);
+      final encodeResult = codec.encode(data);
+
+      if (encodeResult.isError()) {
+        return Failure(encodeResult.exceptionOrNull()!);
+      }
+
+      final encodedBytes = encodeResult.getOrThrow();
+      final originalSize = encodedBytes.length;
+      final shouldCompress =
+          compression != 'none' && originalSize >= compressionThreshold;
+
+      Uint8List finalBytes;
+      String finalCompression;
+      int compressedSize;
+
+      if (shouldCompress) {
+        if (originalSize >= gzipIsolateThresholdBytes &&
+            compression == 'gzip') {
+          finalBytes = await compute(_compressGzipInIsolate, encodedBytes);
+        } else {
+          final compressionCodec = CompressionCodecFactory.getCodec(
+            compression,
+          );
+          final compressResult = compressionCodec.compress(encodedBytes);
+          if (compressResult.isError()) {
+            return Failure(compressResult.exceptionOrNull()!);
+          }
+          finalBytes = compressResult.getOrThrow();
+        }
+        finalCompression = compression;
+        compressedSize = finalBytes.length;
+      } else {
+        finalBytes = encodedBytes;
+        finalCompression = 'none';
+        compressedSize = originalSize;
+      }
+
+      final frame = PayloadFrame(
+        schemaVersion: schemaVersion,
+        enc: encoding,
+        cmp: finalCompression,
+        contentType: codec.contentType,
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        payload: finalBytes,
+        traceId: traceId ?? _uuid.v4(),
+        requestId: requestId,
+      );
+
+      return Success(frame);
+    } on Exception catch (error) {
+      return Failure(
+        domain.CompressionFailure.withContext(
+          message: 'Failed to prepare payload for sending',
+          cause: error,
+          context: {
+            'operation': 'prepareSendAsync',
+            'encoding': encoding,
+            'compression': compression,
+          },
+        ),
+      );
+    }
+  }
+
   /// Receives and processes a payload frame.
   ///
   /// Flow: frame -> decompress (if needed) -> decode -> data
@@ -121,7 +207,8 @@ class TransportPipeline {
       if (frame.enc != encoding) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message: 'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
+            message:
+                'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
             context: {'expected': encoding, 'actual': frame.enc},
           ),
         );
@@ -149,7 +236,8 @@ class TransportPipeline {
       if (bytes.length != frame.compressedSize) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message: 'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
+            message:
+                'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
             context: {
               'expectedCompressedSize': frame.compressedSize,
               'actualCompressedSize': bytes.length,
@@ -157,7 +245,8 @@ class TransportPipeline {
           ),
         );
       }
-      if (maxCompressedBytes != null && frame.compressedSize > maxCompressedBytes) {
+      if (maxCompressedBytes != null &&
+          frame.compressedSize > maxCompressedBytes) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Compressed payload exceeds negotiated limit',
@@ -199,7 +288,8 @@ class TransportPipeline {
       if (decodableBytes.length != frame.originalSize) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message: 'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
+            message:
+                'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
             context: {
               'expectedOriginalSize': frame.originalSize,
               'actualOriginalSize': decodableBytes.length,
@@ -207,7 +297,8 @@ class TransportPipeline {
           ),
         );
       }
-      if (maxOriginalBytes != null && decodableBytes.length > maxOriginalBytes) {
+      if (maxOriginalBytes != null &&
+          decodableBytes.length > maxOriginalBytes) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Decoded payload exceeds negotiated limit',
@@ -218,7 +309,8 @@ class TransportPipeline {
           ),
         );
       }
-      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > maxInflationRatio) {
+      if (bytes.isNotEmpty &&
+          decodableBytes.length / bytes.length > maxInflationRatio) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Payload inflation ratio exceeds allowed maximum',

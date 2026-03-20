@@ -210,5 +210,82 @@ void main() {
         expect(result.isSuccess(), isTrue);
       },
     );
+
+    test(
+      'should return failure when cancelled for socket disconnect',
+      () async {
+        final controller = StreamController<Result<QueryResult>>();
+
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'conn-disconnect',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.initialize()).thenAnswer(
+          (_) async => const Success(unit),
+        );
+        when(
+          () => mockService.streamQuery('conn-disconnect', any()),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockService.disconnect(any()),
+        ).thenAnswer((_) async => const Success(unit));
+
+        final execution = gateway.executeQueryStream(
+          'SELECT * FROM users',
+          'DSN=Test',
+          (chunk) {
+            if (chunk.isNotEmpty) {
+              unawaited(
+                gateway.cancelActiveStream(
+                  reason: StreamingCancelReason.socketDisconnect,
+                ),
+              );
+            }
+          },
+          fetchSize: 2,
+        );
+
+        controller.add(
+          const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+                [2],
+              ],
+              rowCount: 2,
+            ),
+          ),
+        );
+
+        controller.add(
+          const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [3],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+        await controller.close();
+
+        final result = await execution;
+
+        expect(result.isError(), isTrue);
+        verify(
+          () => mockService.disconnect('conn-disconnect'),
+        ).called(greaterThan(0));
+      },
+    );
   });
 }

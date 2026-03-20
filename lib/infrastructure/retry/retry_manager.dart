@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
@@ -37,6 +38,9 @@ class RetryManager implements IRetryManager {
           return Failure(lastException!);
         }
 
+        AppLogger.info(
+          'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
+        );
         // Aguardar com exponential backoff para próxima tentativa
         await Future<void>.delayed(Duration(milliseconds: delayMs));
         delayMs = (delayMs * backoffMultiplier).toInt();
@@ -60,6 +64,9 @@ class RetryManager implements IRetryManager {
         return Failure(lastException!);
       }
 
+      AppLogger.info(
+        'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
+      );
       // Aguardar com exponential backoff para próxima tentativa
       await Future<void>.delayed(Duration(milliseconds: delayMs));
       delayMs = (delayMs * backoffMultiplier).toInt();
@@ -87,6 +94,21 @@ class RetryManager implements IRetryManager {
             message.contains('connection') ||
             message.contains('network') ||
             message.contains('temporarily');
+      }
+
+      // NetworkFailure: transiente quando timeout ou retryable; não retry em auth
+      if (exception is domain.NetworkFailure) {
+        if (exception.context['timeout'] == true || exception.context['retryable'] == true) {
+          return true;
+        }
+        final message = exception.message.toLowerCase();
+        if (message.contains('authentication') || message.contains('invalid token') || message.contains('401')) {
+          return false;
+        }
+        if (message.contains('timeout') || message.contains('connection') || message.contains('network')) {
+          return true;
+        }
+        return false;
       }
 
       // Erros de query NÃO são transientes (SQL error, syntax error)

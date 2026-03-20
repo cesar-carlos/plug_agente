@@ -24,6 +24,7 @@ import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -126,6 +127,18 @@ class RpcMethodDispatcher {
       'sql.cancel' => await _handleSqlCancel(request),
       _ => _methodNotFound(request),
     };
+  }
+
+  /// Cancels any active ODBC stream when the socket disconnects.
+  ///
+  /// Called by the transport client on disconnect to release ODBC resources.
+  Future<void> cancelActiveStreamOnDisconnect() async {
+    final gateway = _streamingGateway;
+    if (gateway == null || !gateway.hasActiveStream) return;
+    await gateway.cancelActiveStream(
+      reason: StreamingCancelReason.socketDisconnect,
+    );
+    _activeStreamExecution = null;
   }
 
   /// Handles sql.execute method (single command).
@@ -349,13 +362,18 @@ class RpcMethodDispatcher {
           final streamId = 'stream-${queryRequest.id}';
           final rows = limitedRows;
           final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
+          var overflowed = false;
 
-          for (var i = 0; i < rows.length; i += limits.streamingChunkSize) {
+          for (
+            var i = 0;
+            i < rows.length && !overflowed;
+            i += limits.streamingChunkSize
+          ) {
             final chunkRows = rows
                 .skip(i)
                 .take(limits.streamingChunkSize)
                 .toList();
-            streamEmitter.emitChunk(
+            if (!streamEmitter.emitChunk(
               RpcStreamChunk(
                 streamId: streamId,
                 requestId: request.id,
@@ -363,6 +381,27 @@ class RpcMethodDispatcher {
                 rows: chunkRows,
                 totalChunks: totalChunks,
                 columnMetadata: normalized.columnMetadata,
+              ),
+            )) {
+              overflowed = true;
+              break;
+            }
+          }
+
+          if (overflowed) {
+            return RpcResponse.error(
+              id: request.id,
+              error: RpcError(
+                code: RpcErrorCode.resultTooLarge,
+                message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
+                data: RpcErrorCode.buildErrorData(
+                  code: RpcErrorCode.resultTooLarge,
+                  technicalMessage:
+                      'Streaming buffer overflowed: hub not consuming fast enough; '
+                      'stream cancelled to avoid data loss.',
+                  correlationId: request.id?.toString(),
+                  extra: {'reason': 'backpressure_overflow'},
+                ),
               ),
             );
           }
@@ -500,7 +539,7 @@ class RpcMethodDispatcher {
                 .toList();
           }
           totalRows += chunk.length;
-          streamEmitter.emitChunk(
+          if (!streamEmitter.emitChunk(
             RpcStreamChunk(
               streamId: streamId,
               requestId: request.id,
@@ -508,7 +547,13 @@ class RpcMethodDispatcher {
               rows: chunk,
               columnMetadata: columnMetadata,
             ),
-          );
+          )) {
+            unawaited(
+              gateway.cancelActiveStream(
+                reason: StreamingCancelReason.backpressureOverflow,
+              ),
+            );
+          }
         },
         fetchSize: limits.streamingChunkSize,
       );

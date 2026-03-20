@@ -276,6 +276,7 @@ void registerPlugDependencyGraph(
       () => ConnectionService(
         getIt.call<ITransportClient>,
         getIt<IDatabaseGateway>(),
+        getIt<IRetryManager>(),
       ),
     )
     ..registerLazySingleton(

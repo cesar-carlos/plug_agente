@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -71,6 +73,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Map<String, dynamic>? _cachedOpenRpcDocument;
   Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
   bool _hasReceivedCapabilities = false;
+  Timer? _capabilitiesTimeoutTimer;
+  int _capabilitiesReRegisterCount = 0;
 
   @override
   void setMessageCallback(
@@ -199,7 +203,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (validatedPayload == null) {
       return;
     }
-    final outgoingPayload = _prepareOutgoingPayload(
+    final outgoingPayload = await _prepareOutgoingPayloadAsync(
       'rpc:response',
       validatedPayload,
     );
@@ -273,7 +277,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _logMessage('RECEIVED', 'connect', null);
         _isTokenRefreshRequested = false;
         _heartbeat.resetTransientState();
+        _capabilitiesReRegisterCount = 0;
         _sendAgentRegister();
+        _startCapabilitiesTimeoutTimer();
 
         if (!completer.isCompleted) {
           completer.complete(const Success<Object, Exception>(Object()));
@@ -283,7 +289,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('reconnect', (_) {
         _logMessage('RECEIVED', 'reconnect', null);
         _heartbeat.resetTransientState();
+        _capabilitiesReRegisterCount = 0;
         _sendAgentRegister();
+        _startCapabilitiesTimeoutTimer();
       });
 
       _socket!.on('reconnect_failed', (_) {
@@ -306,6 +314,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('disconnect', (reason) {
         _logMessage('RECEIVED', 'disconnect', reason);
         _heartbeat.stop();
+        unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
       });
 
       // Protocol negotiation response
@@ -364,6 +373,31 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
+  void _startCapabilitiesTimeoutTimer() {
+    _capabilitiesTimeoutTimer?.cancel();
+    _capabilitiesTimeoutTimer = Timer(
+      const Duration(milliseconds: ConnectionConstants.capabilitiesTimeoutMs),
+      () {
+        if (_hasReceivedCapabilities || _socket == null) return;
+        if (_capabilitiesReRegisterCount < ConnectionConstants.capabilitiesMaxReRegisterAttempts) {
+          _capabilitiesReRegisterCount++;
+          AppLogger.warning(
+            'resilience: capabilities_timeout re_register_count=$_capabilitiesReRegisterCount '
+            'max=${ConnectionConstants.capabilitiesMaxReRegisterAttempts}',
+          );
+          _sendAgentRegister();
+          _startCapabilitiesTimeoutTimer();
+        } else {
+          AppLogger.warning(
+            'resilience: capabilities_timeout forcing_reconnect after_max_attempts',
+          );
+          _capabilitiesReRegisterCount = 0;
+          _onReconnectionNeeded?.call();
+        }
+      },
+    );
+  }
+
   /// Sends agent registration with protocol capabilities.
   void _sendAgentRegister() {
     final agentCapabilities = _localCapabilities();
@@ -418,6 +452,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
         agentCapabilities: agentCapabilities,
         serverCapabilities: serverCapabilities,
       );
+      _capabilitiesTimeoutTimer?.cancel();
+      _capabilitiesTimeoutTimer = null;
       _hasReceivedCapabilities = true;
 
       final limits = _currentProtocol.effectiveLimits;
@@ -878,6 +914,58 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return frame.toJson();
   }
 
+  Future<dynamic> _prepareOutgoingPayloadAsync(
+    String event,
+    dynamic logicalPayload,
+  ) async {
+    if (!_usesBinaryTransport) {
+      AppLogger.error(
+        'Attempted to emit $event without negotiated binary PayloadFrame transport',
+      );
+      return null;
+    }
+
+    final prepareResult = await _createSendPipeline().prepareSendAsync(
+      logicalPayload,
+      traceId: _extractTraceId(logicalPayload),
+      requestId: _extractRequestId(logicalPayload),
+    );
+    if (prepareResult.isError()) {
+      final failure = prepareResult.exceptionOrNull();
+      AppLogger.error(
+        'Failed to frame $event payload for transport: $failure',
+      );
+      return null;
+    }
+
+    var frame = prepareResult.getOrThrow();
+    if (frame.compressedSize > _currentProtocol.effectiveLimits.maxCompressedPayloadBytes) {
+      AppLogger.error(
+        '$event payload exceeds negotiated transport limit after framing',
+      );
+      return null;
+    }
+    if (frame.originalSize > _currentProtocol.effectiveLimits.maxDecodedPayloadBytes) {
+      AppLogger.error(
+        '$event payload exceeds negotiated decoded payload limit',
+      );
+      return null;
+    }
+    if (_shouldSignTransportFrames) {
+      final signer = _payloadSigner;
+      if (signer == null) {
+        AppLogger.error(
+          'Attempted to sign $event transport frame without configured signer',
+        );
+        return null;
+      }
+      frame = frame.copyWith(
+        signature: signer.signFrame(frame).toJson(),
+      );
+    }
+    return frame.toJson();
+  }
+
   dynamic _decodeIncomingPayloadOrThrow(dynamic payload) {
     if (!_looksLikePayloadFrame(payload)) {
       throw domain.ValidationFailure.withContext(
@@ -1107,6 +1195,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _closeSocket() {
+    _capabilitiesTimeoutTimer?.cancel();
+    _capabilitiesTimeoutTimer = null;
+    _capabilitiesReRegisterCount = 0;
+    unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
     _streamEmitters.clear();
@@ -1583,30 +1675,43 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   Future<Map<String, dynamic>> _loadOpenRpcDocumentAsync() async {
     try {
-      final file = File(
-        '${Directory.current.path}\\docs\\communication\\openrpc.json',
+      final content = await rootBundle.loadString(
+        'docs/communication/openrpc.json',
       );
-      final content = await file.readAsString();
       final json = jsonDecode(content) as Map<String, dynamic>;
       _cachedOpenRpcDocument = json;
       return json;
-    } on Object catch (error, stackTrace) {
-      AppLogger.warning(
-        'Failed to load OpenRPC document from disk, using fallback',
-        error,
-        stackTrace,
-      );
-      const fallback = {
-        'openrpc': '1.3.2',
-        'info': {
-          'title': 'Plug Agente Socket RPC',
-          'version': ProtocolVersion.openRpcVersion,
-        },
-        'methods': <Map<String, dynamic>>[],
-      };
-      _cachedOpenRpcDocument = fallback;
-      return Map<String, dynamic>.from(fallback);
+    } on Object catch (assetError, assetStack) {
+      try {
+        final filePath = path.join(
+          Directory.current.path,
+          'docs',
+          'communication',
+          'openrpc.json',
+        );
+        final content = await File(filePath).readAsString();
+        final json = jsonDecode(content) as Map<String, dynamic>;
+        _cachedOpenRpcDocument = json;
+        return json;
+      } on Object catch (fileError, _) {
+        AppLogger.warning(
+          'Failed to load OpenRPC from asset and disk, using fallback',
+          assetError,
+          assetStack,
+        );
+      }
     }
+
+    const fallback = {
+      'openrpc': '1.3.2',
+      'info': {
+        'title': 'Plug Agente Socket RPC',
+        'version': ProtocolVersion.openRpcVersion,
+      },
+      'methods': <Map<String, dynamic>>[],
+    };
+    _cachedOpenRpcDocument = fallback;
+    return Map<String, dynamic>.from(fallback);
   }
 }
 
@@ -1616,8 +1721,9 @@ class _SocketRpcStreamEmitter implements IRpcStreamEmitter {
   final void Function(String event, dynamic payload) _emit;
 
   @override
-  void emitChunk(RpcStreamChunk chunk) {
+  bool emitChunk(RpcStreamChunk chunk) {
     _emit('rpc:chunk', chunk.toJson());
+    return true;
   }
 
   @override

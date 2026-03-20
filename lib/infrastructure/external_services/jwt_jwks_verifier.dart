@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:jose/jose.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/external_services/jwks_key_store_cache.dart';
 import 'package:result_dart/result_dart.dart';
 
 const _defaultAllowedAlgorithms = [
@@ -33,13 +34,22 @@ class JwtJwksVerifier {
     this._getConfig, {
     this.failureThreshold = 3,
     this.circuitOpenDuration = const Duration(seconds: 30),
+    this.jwksCacheTtl = const Duration(minutes: 5),
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+    JsonWebKeyStore Function(Uri jwksUri)? createKeyStore,
+  }) : _now = now ?? DateTime.now,
+       _jwksKeyStoreCache = JwksKeyStoreCache(
+         jwksCacheTtl: jwksCacheTtl,
+         now: now ?? DateTime.now,
+         createKeyStore: createKeyStore,
+       );
 
   final Future<JwksConfig?> Function() _getConfig;
   final int failureThreshold;
   final Duration circuitOpenDuration;
+  final Duration jwksCacheTtl;
   final DateTime Function() _now;
+  final JwksKeyStoreCache _jwksKeyStoreCache;
   int _consecutiveFailures = 0;
   DateTime? _circuitOpenUntil;
 
@@ -114,7 +124,7 @@ class JwtJwksVerifier {
         return _finalizeResult(result);
       }
 
-      final keyStore = JsonWebKeyStore()..addKeySetUrl(Uri.parse(config.jwksUrl));
+      final keyStore = _jwksKeyStoreCache.resolve(config.jwksUrl);
 
       final verified = await JsonWebToken.decodeAndVerify(
         rawToken,
@@ -123,9 +133,9 @@ class JwtJwksVerifier {
       );
 
       final claims = verified.claims;
-      final now = DateTime.now();
+      final claimsNow = _now();
 
-      if (claims.expiry != null && claims.expiry!.isBefore(now)) {
+      if (claims.expiry != null && claims.expiry!.isBefore(claimsNow)) {
         final result = Failure<Map<String, dynamic>, Exception>(
           domain.ConfigurationFailure.withContext(
             message: 'Token has expired',
@@ -138,7 +148,7 @@ class JwtJwksVerifier {
         return _finalizeResult(result);
       }
 
-      if (claims.notBefore != null && claims.notBefore!.isAfter(now)) {
+      if (claims.notBefore != null && claims.notBefore!.isAfter(claimsNow)) {
         final result = Failure<Map<String, dynamic>, Exception>(
           domain.ConfigurationFailure.withContext(
             message: 'Token is not yet valid',
@@ -154,7 +164,9 @@ class JwtJwksVerifier {
       if (config.issuer != null && config.issuer!.isNotEmpty) {
         final expectedIssuer = Uri.tryParse(config.issuer!);
         final actualIssuer = claims.issuer;
-        if (expectedIssuer != null && (actualIssuer == null || actualIssuer.toString() != config.issuer)) {
+        if (expectedIssuer != null &&
+            (actualIssuer == null ||
+                actualIssuer.toString() != config.issuer)) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
               message:
@@ -175,7 +187,8 @@ class JwtJwksVerifier {
         if (aud == null || !aud.contains(config.audience)) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
-              message: 'Token audience does not contain expected "${config.audience}"',
+              message:
+                  'Token audience does not contain expected "${config.audience}"',
               context: {
                 'authentication': true,
                 'reason': 'invalid_token_signature',
@@ -187,6 +200,7 @@ class JwtJwksVerifier {
       }
 
       final payload = claims.toJson();
+      _jwksKeyStoreCache.remember(config.jwksUrl, keyStore);
       final result = Success<Map<String, dynamic>, Exception>(payload);
       return _finalizeResult(result);
     } on JoseException catch (error) {

@@ -26,6 +26,11 @@ class FailureToRpcErrorMapper {
 
   /// Determines the RPC error code based on failure type.
   static int _getErrorCode(Failure failure, bool useTimeoutByStage) {
+    final override = failure.context['rpc_error_code'];
+    if (override is int) {
+      return override;
+    }
+
     if (failure is ValidationFailure) {
       if (failure.context['operation'] == 'sql_validation') {
         return RpcErrorCode.sqlValidationFailed;
