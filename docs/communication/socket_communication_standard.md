@@ -51,6 +51,8 @@ binario esta documentado em
 | Limites negociados por transporte                                    | implemented (negociacao via TransportLimits no handshake)          |
 | Assinatura opcional de payload                                       | implemented (HMAC-SHA256; feature flag `enablePayloadSigning`)     |
 | Validacao de schema na entrada (rpc:request)                         | implemented (via feature flag)                                     |
+| Validacao de contrato na saida (`rpc:response`, batch, streaming)   | implemented (via `enableSocketOutgoingContractValidation`; acima de ~2 MiB UTF-8 a validacao de saida e omitida por custo) |
+| Resumo de payloads grandes no tracer Socket (`onMessage`)            | implemented (via `enableSocketSummarizeLargePayloadLogs`; limiar 8 KiB UTF-8 estimado) |
 | Client token authorization (opaco + hash lookup)                     | implemented (default on)                                           |
 | Validacao criptografica de token (JWKS)                              | implemented (via feature flag; fallback)                           |
 | Revogacao em sessao ativa                                            | implemented (via feature flag)                                     |
@@ -726,7 +728,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 | `-32010` | falha de decode                                           | verificar content-type/encoding e compatibilidade      |
 | `-32011` | falha de compressao                                       | reenviar sem compressao (fallback) e registrar erro    |
 | `-32012` | erro de rede                                              | reconectar socket e repetir com controle               |
-| `-32013` | limite de requests por janela excedido                    | aplicar backoff e reduzir concorrencia                 |
+| `-32013` | cota por janela (`RpcRequestGuard`) **ou** limite de handlers `rpc:request` concorrentes no agente | backoff; reduzir taxa enviada ao agente; ver `technical_message` (distingue janela vs concorrencia) |
 | `-32014` | request duplicada (replay)                                | reenviar com novo `id`/correlation                     |
 
 ### Formato de erro
@@ -934,13 +936,20 @@ Regras:
 - **Heartbeat**: `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack`
   em 2 janelas consecutivas aciona reconexao.
 
-### Rate limiting (agent-side)
+### Rate limiting e cota de concorrencia (agent-side)
 
-| Parametro              | Valor padrao              | Descricao                          |
-| ---------------------- | ------------------------- | ---------------------------------- |
-| `rateLimitWindow`      | 1 minuto                  | Janela deslizante para contagem    |
-| `maxRequestsPerWindow` | 120                       | Maximo de `rpc:request` por janela |
-| Codigo de erro         | `-32013` (`rate_limited`) | HTTP 429                           |
+| Parametro                   | Valor padrao              | Descricao                                                                 |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `rateLimitWindow`           | 1 minuto                  | Janela deslizante para contagem de eventos recebidos                        |
+| `maxRequestsPerWindow`      | 120                       | Maximo de eventos contados na janela antes do guard de taxa                 |
+| `maxConcurrentRpcHandlers`  | 32                        | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo      |
+| Codigo de erro (ambos)      | `-32013` (`rate_limited`) | HTTP 429; `error.data.reason` permanece `rate_limited`                      |
+
+O codigo `-32013` e reutilizado para duas politicas independentes: (1) excesso de
+volume na janela deslizante (`RpcRequestGuard`) e (2) saturacao do pool de
+handlers concorrentes no transporte. O hub/cliente deve usar
+`error.data.technical_message` para distinguir (ex.: mensagem contem
+`Concurrent RPC handler limit exceeded`).
 
 ### Replay protection
 
@@ -1000,6 +1009,12 @@ Exemplo de capacidades anunciadas (alinhado a
 
 O mapa `limits` negociado segue a secao "Limites negociados por transporte"; nao
 e repetido neste exemplo.
+
+O array `compressions` no handshake reflete o que o agente **anuncia** para o
+hub (`gzip` + `none` quando compressao outbound nao esta desligada, ou apenas
+`none` quando o modo outbound e `none`). O modo **automatico** de compressao
+(`OutboundCompressionMode.auto`) nao adiciona um terceiro valor no fio: o frame
+continua com `cmp: gzip` ou `cmp: none`.
 
 ## Compatibilidade e Fallback
 
@@ -1275,6 +1290,18 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - Rate limits/quotas por evento estao ativos agent-side.
 - Schemas JSON publicados em `docs/communication/schemas/`. Validacao automatica
   na entrada disponivel via `enableSocketSchemaValidation`.
+- Validacao de contrato na **saida** (`rpc:response`, respostas batch e eventos
+  de streaming) via `enableSocketOutgoingContractValidation` (default **true**);
+  para payloads de saida muito grandes (~2 MiB UTF-8 JSON estimados), a
+  validacao de saida e omitida para limitar CPU (o frame ainda respeita limites
+  negociados de tamanho).
+- Tracer de mensagens Socket: com `enableSocketSummarizeLargePayloadLogs`
+  (default **true**), payloads acima de ~8 KiB UTF-8 estimados sao substituidos
+  por um resumo no callback (nao altera o fio).
+- Implementacao: serializacao/deserializacao JSON UTF-8 acima de ~256 KiB pode
+  executar em isolate no envio (`prepareSendAsync`) e na recepcao
+  (`receiveProcessAsync`). Fingerprint de idempotencia (quando a flag esta
+  ativa) tambem pode ser calculado em isolate para `params` grandes.
 - OpenRPC publicado em `docs/communication/openrpc.json` para descoberta do
   profile RPC.
 - Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
@@ -1367,7 +1394,9 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `options.cursor` passa a representar continuacao keyset com fingerprint da query.
 - `notificationNullIdCompatibility` passa a governar `id: null` em runtime.
 - Respostas `rpc:response`, `rpc:chunk`, `rpc:complete` e payloads de handshake
-  sao validados antes do envio quando `enableSocketSchemaValidation` esta ativo.
+  sao validados antes do envio quando `enableSocketSchemaValidation` e
+  `enableSocketOutgoingContractValidation` estao ativos (com omissao de
+  validacao de saida acima do limiar de tamanho documentado nas limitacoes).
 - `rpc.discover` retorna o documento OpenRPC publicado.
 - Todos os eventos de aplicacao passam a trafegar em `PayloadFrame` binario.
 - Compressao GZIP foi movida para a borda de transporte com fallback `cmp: none`
@@ -1400,6 +1429,13 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   estritas.
 - Exemplo de `extensions` em capabilities alinhado ao default do agente.
 - Tabela "Mapa rapido de eventos" corrigida em Markdown.
+- Compressao outbound `none` / `gzip` / `auto` (politica local); fio apenas
+  `cmp: none` ou `cmp: gzip`; anuncio `compressions` conforme modo.
+- `-32013`: janela de taxa (`RpcRequestGuard`) e limite de handlers concorrentes
+  (`maxConcurrentRpcHandlers`, default 32).
+- Feature flags `enableSocketOutgoingContractValidation` e
+  `enableSocketSummarizeLargePayloadLogs`; isolate JSON ~256 KiB e fingerprint
+  de idempotencia para cargas grandes.
 
 ## Schemas JSON (contrato)
 

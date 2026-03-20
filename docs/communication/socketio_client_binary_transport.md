@@ -122,14 +122,17 @@ seguir o `PayloadFrame`.
 
 Quando o cliente anunciar capacidades:
 
-- `compressions` deve incluir `gzip`
+- `compressions`: o agente Plug anuncia `gzip` e `none` quando a compressao
+  outbound esta habilitada; se estiver desligada (`none` apenas), o anuncio pode
+  ser somente `["none"]`. Nao existe terceiro valor no handshake para o modo
+  **automatico** de compressao: no fio continuam apenas `cmp: gzip` ou `cmp: none`.
 - `encodings` deve incluir `json`
 - `extensions.binaryPayload` deve ser `true`
 
 Quando o cliente consumir capacidades do outro lado:
 
-- considerar a sessao apta ao modo obrigatorio apenas se `gzip` estiver em
-  `compressions`
+- considerar a sessao apta a compressao GZIP negociada apenas se `gzip` estiver em
+  `compressions` (se o peer anunciar so `none`, nao exigir gzip outbound)
 - considerar a sessao apta ao modo obrigatorio apenas se
   `extensions.binaryPayload == true`
 
