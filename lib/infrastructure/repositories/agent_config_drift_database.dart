@@ -176,7 +176,8 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 
   @override
-  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) =>
+      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 
   void _startWalMaintenance() {
     _walCheckpointTimer?.cancel();

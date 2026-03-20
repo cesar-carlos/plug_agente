@@ -22,7 +22,7 @@ class ExecuteStreamingQuery {
   Future<Result<void>> call(
     String query,
     String connectionString,
-    void Function(List<Map<String, dynamic>>) onChunk, {
+    Future<void> Function(List<Map<String, dynamic>>) onChunk, {
     int fetchSize = 1000,
   }) async {
     final trimmedQuery = query.trim();

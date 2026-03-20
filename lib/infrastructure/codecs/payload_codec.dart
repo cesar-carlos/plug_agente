@@ -35,8 +35,8 @@ class JsonPayloadCodec implements IPayloadCodec {
   Result<Uint8List> encode(dynamic data) {
     try {
       final jsonString = jsonEncode(data);
-      final bytes = utf8.encode(jsonString);
-      return Success(Uint8List.fromList(bytes));
+      final bytes = const Utf8Encoder().convert(jsonString);
+      return Success(bytes);
     } on Exception catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(

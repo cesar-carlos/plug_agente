@@ -60,16 +60,20 @@ class SocketIOTransportClientV2 implements ITransportClient {
   void Function()? _onTokenExpired;
   void Function()? _onReconnectionNeeded;
   bool _isTokenRefreshRequested = false;
-  late final SocketIoHeartbeatController _heartbeat = SocketIoHeartbeatController(
-    isConnected: () => _socket?.connected ?? false,
-    emitHeartbeat: _emitAgentHeartbeat,
-    logMessage: _logHeartbeatEvent,
-    onConnectionStale: () => _onReconnectionNeeded?.call(),
-  );
+  late final SocketIoHeartbeatController _heartbeat =
+      SocketIoHeartbeatController(
+        isConnected: () => _socket?.connected ?? false,
+        emitHeartbeat: _emitAgentHeartbeat,
+        logMessage: _logHeartbeatEvent,
+        onConnectionStale: () => _onReconnectionNeeded?.call(),
+      );
   final RpcRequestGuard _rpcRequestGuard = RpcRequestGuard();
-  final RpcRequestSchemaValidator _schemaValidator = const RpcRequestSchemaValidator();
+  final RpcRequestSchemaValidator _schemaValidator =
+      const RpcRequestSchemaValidator();
   final RpcContractValidator _contractValidator = const RpcContractValidator();
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
+  TransportPipeline? _cachedSendPipeline;
+  String _sendPipelineCacheKey = '';
   Map<String, dynamic>? _cachedOpenRpcDocument;
   Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
   bool _hasReceivedCapabilities = false;
@@ -100,36 +104,50 @@ class SocketIOTransportClientV2 implements ITransportClient {
   ProtocolCapabilities _localCapabilities() {
     return ProtocolCapabilities.defaultCapabilities(
       binaryPayload: _featureFlags.enableBinaryPayload,
-      compressions: _featureFlags.enableCompression ? const ['gzip', 'none'] : const ['none'],
+      compressions: _featureFlags.enableCompression
+          ? const ['gzip', 'none']
+          : const ['none'],
       compressionThreshold: _featureFlags.compressionThreshold,
       signatureRequired: _localSignatureRequired,
       signatureAlgorithms: _localSignatureAlgorithms,
     );
   }
 
-  bool get _localSignatureRequired => _featureFlags.enablePayloadSigning && _payloadSigner != null;
+  bool get _localSignatureRequired =>
+      _featureFlags.enablePayloadSigning && _payloadSigner != null;
 
-  List<String> get _localSignatureAlgorithms =>
-      _payloadSigner == null ? const [] : const [PayloadSigner.supportedAlgorithm];
+  List<String> get _localSignatureAlgorithms => _payloadSigner == null
+      ? const []
+      : const [PayloadSigner.supportedAlgorithm];
 
   bool get _usesBinaryTransport {
     if (!_hasReceivedCapabilities) {
       return _featureFlags.enableBinaryPayload;
     }
-    return _currentProtocol.usesBinaryPayload && _currentProtocol.usesTransportFrame;
+    return _currentProtocol.usesBinaryPayload &&
+        _currentProtocol.usesTransportFrame;
   }
 
   TransportPipeline _createSendPipeline() {
     final compression = !_featureFlags.enableCompression
         ? 'none'
         : (_hasReceivedCapabilities ? _currentProtocol.compression : 'gzip');
-    return TransportPipeline(
+    final threshold = _hasReceivedCapabilities
+        ? _currentProtocol.compressionThreshold
+        : _featureFlags.compressionThreshold;
+    final cacheKey =
+        '${_currentProtocol.encoding}|$compression|$threshold|$_hasReceivedCapabilities';
+    if (_cachedSendPipeline != null && _sendPipelineCacheKey == cacheKey) {
+      return _cachedSendPipeline!;
+    }
+    final pipeline = TransportPipeline(
       encoding: _currentProtocol.encoding,
       compression: compression,
-      compressionThreshold: _hasReceivedCapabilities
-          ? _currentProtocol.compressionThreshold
-          : _featureFlags.compressionThreshold,
+      compressionThreshold: threshold,
     );
+    _cachedSendPipeline = pipeline;
+    _sendPipelineCacheKey = cacheKey;
+    return pipeline;
   }
 
   TransportPipeline _createReceivePipeline(PayloadFrame frame) {
@@ -144,14 +162,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   IRpcStreamEmitter _createStreamEmitter() {
     if (_featureFlags.enableSocketBackpressure) {
       return BackpressureStreamEmitter(
-        emit: _emitValidatedEvent,
+        emit: _emitValidatedStreamEvent,
         onRegister: (streamId, emitter) {
           _streamEmitters[streamId] = emitter;
         },
         onUnregister: _streamEmitters.remove,
       );
     }
-    return _SocketRpcStreamEmitter(_emitValidatedEvent);
+    return _SocketRpcStreamEmitter(_emitValidatedStreamEvent);
   }
 
   void _handleStreamPull(dynamic data) {
@@ -175,24 +193,27 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
-  void _emitRequestAck(dynamic requestId) {
+  Future<void> _emitRequestAck(dynamic requestId) async {
     if (requestId == null || _socket == null) return;
     final ackPayload = {
       'request_id': requestId.toString(),
       'received_at': DateTime.now().toIso8601String(),
     };
-    _emitEvent('rpc:request_ack', ackPayload);
+    await _emitEventAsync('rpc:request_ack', ackPayload);
   }
 
-  void _emitBatchRequestAck(List<RpcRequest> requests) {
+  Future<void> _emitBatchRequestAck(List<RpcRequest> requests) async {
     if (_socket == null || requests.isEmpty) return;
-    final ids = requests.where((r) => r.id != null).map((r) => r.id.toString()).toList();
+    final ids = requests
+        .where((r) => r.id != null)
+        .map((r) => r.id.toString())
+        .toList();
     if (ids.isEmpty) return;
     final ackPayload = {
       'request_ids': ids,
       'received_at': DateTime.now().toIso8601String(),
     };
-    _emitEvent('rpc:batch_ack', ackPayload);
+    await _emitEventAsync('rpc:batch_ack', ackPayload);
   }
 
   Future<void> _emitRpcResponse(dynamic responseData) async {
@@ -223,7 +244,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         _logMessage('SENT', 'rpc:response', validatedPayload);
-        await _socket!.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
+        await _socket!
+            .timeout(timeoutMs)
+            .emitWithAckAsync('rpc:response', outgoingPayload);
         return;
       } on Exception catch (e) {
         if (attempt < maxRetries) {
@@ -272,13 +295,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
       final completer = Completer<Result<void>>();
       Timer? timeoutTimer;
 
-      _socket!.on('connect', (_) {
+      _socket!.on('connect', (_) async {
         timeoutTimer?.cancel();
         _logMessage('RECEIVED', 'connect', null);
         _isTokenRefreshRequested = false;
         _heartbeat.resetTransientState();
         _capabilitiesReRegisterCount = 0;
-        _sendAgentRegister();
+        await _sendAgentRegister();
         _startCapabilitiesTimeoutTimer();
 
         if (!completer.isCompleted) {
@@ -286,11 +309,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       });
 
-      _socket!.on('reconnect', (_) {
+      _socket!.on('reconnect', (_) async {
         _logMessage('RECEIVED', 'reconnect', null);
         _heartbeat.resetTransientState();
         _capabilitiesReRegisterCount = 0;
-        _sendAgentRegister();
+        await _sendAgentRegister();
         _startCapabilitiesTimeoutTimer();
       });
 
@@ -379,13 +402,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
       const Duration(milliseconds: ConnectionConstants.capabilitiesTimeoutMs),
       () {
         if (_hasReceivedCapabilities || _socket == null) return;
-        if (_capabilitiesReRegisterCount < ConnectionConstants.capabilitiesMaxReRegisterAttempts) {
+        if (_capabilitiesReRegisterCount <
+            ConnectionConstants.capabilitiesMaxReRegisterAttempts) {
           _capabilitiesReRegisterCount++;
           AppLogger.warning(
             'resilience: capabilities_timeout re_register_count=$_capabilitiesReRegisterCount '
             'max=${ConnectionConstants.capabilitiesMaxReRegisterAttempts}',
           );
-          _sendAgentRegister();
+          unawaited(_sendAgentRegister());
           _startCapabilitiesTimeoutTimer();
         } else {
           AppLogger.warning(
@@ -399,7 +423,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   /// Sends agent registration with protocol capabilities.
-  void _sendAgentRegister() {
+  Future<void> _sendAgentRegister() async {
     final agentCapabilities = _localCapabilities();
 
     final registerData = {
@@ -417,7 +441,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    _emitEvent('agent:register', registerData);
+    await _emitEventAsync('agent:register', registerData);
   }
 
   /// Handles protocol capabilities negotiation.
@@ -492,7 +516,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       try {
-        payload = _decodeIncomingPayloadOrThrow(payload);
+        payload = await _decodeIncomingPayloadOrThrowAsync(payload);
       } on domain.Failure catch (failure) {
         await _sendSchemaValidationError(
           _extractRequestIdFromWirePayload(payload),
@@ -570,8 +594,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         return;
       }
 
-      if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
-        _emitRequestAck(request.id);
+      if (_featureFlags.enableSocketDeliveryGuarantees &&
+          !request.isNotification) {
+        await _emitRequestAck(request.id);
       }
       socketAck?.call();
 
@@ -587,7 +612,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       if (request.method == 'rpc.discover') {
-        if (!_featureFlags.enableSocketNotificationsContract || !request.isNotification) {
+        if (!_featureFlags.enableSocketNotificationsContract ||
+            !request.isNotification) {
           final doc = await _getOpenRpcDocument();
           final response = _attachRequestTraceToResponse(
             request,
@@ -601,7 +627,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
         return;
       }
       final clientToken = _extractClientTokenFromRpcParams(request.params);
-      final streamEmitter = !request.isNotification && _featureFlags.enableSocketStreamingChunks
+      final streamEmitter =
+          !request.isNotification && _featureFlags.enableSocketStreamingChunks
           ? _createStreamEmitter()
           : null;
       final response = await _rpcDispatcher.dispatch(
@@ -619,7 +646,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
         clientToken: clientToken,
       );
 
-      if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
+      if (_featureFlags.enableSocketNotificationsContract &&
+          request.isNotification) {
         return;
       }
 
@@ -714,7 +742,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
-      final requests = data.map((e) => RpcRequest.fromJson(e as Map<String, dynamic>)).toList();
+      final requests = data
+          .map((e) => RpcRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
 
       for (final item in data.whereType<Map<String, dynamic>>()) {
         if (_hasNullIdCompatibilityViolation(item)) {
@@ -728,7 +758,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       if (_featureFlags.enableSocketDeliveryGuarantees) {
-        _emitBatchRequestAck(requests);
+        await _emitBatchRequestAck(requests);
       }
 
       if (_featureFlags.enableSocketBatchStrictValidation) {
@@ -745,7 +775,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
                 message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
                 data: RpcErrorCode.buildErrorData(
                   code: RpcErrorCode.invalidRequest,
-                  technicalMessage: 'Batch contains duplicate request IDs: $duplicateIds',
+                  technicalMessage:
+                      'Batch contains duplicate request IDs: $duplicateIds',
                   reason: 'batch_duplicate_ids',
                   extra: {'duplicate_ids': duplicateIds},
                 ),
@@ -792,7 +823,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
 
         if (request.method == 'rpc.discover') {
-          if (!_featureFlags.enableSocketNotificationsContract || !request.isNotification) {
+          if (!_featureFlags.enableSocketNotificationsContract ||
+              !request.isNotification) {
             final doc = await _getOpenRpcDocument();
             responses.add((
               index: index,
@@ -822,7 +854,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
           response: tracedResponse,
           clientToken: clientToken,
         );
-        if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
+        if (_featureFlags.enableSocketNotificationsContract &&
+            request.isNotification) {
           continue;
         }
         responses.add((index: index, response: tracedResponse));
@@ -833,7 +866,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       final orderedResponses = _supportsOrderedBatchResponses()
-          ? (responses.toList()..sort((left, right) => left.index.compareTo(right.index)))
+          ? (responses.toList()
+                  ..sort((left, right) => left.index.compareTo(right.index)))
                 .map((entry) => entry.response)
                 .toList()
           : responses.map((entry) => entry.response).toList();
@@ -854,64 +888,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _emitEvent(String event, dynamic logicalPayload) {
+    unawaited(_emitEventAsync(event, logicalPayload));
+  }
+
+  Future<void> _emitEventAsync(String event, dynamic logicalPayload) async {
     if (_socket == null) {
       return;
     }
-    final outgoingPayload = _prepareOutgoingPayload(event, logicalPayload);
+    final outgoingPayload = await _prepareOutgoingPayloadAsync(
+      event,
+      logicalPayload,
+    );
     if (outgoingPayload == null) {
       return;
     }
     _logMessage('SENT', event, logicalPayload);
     _socket!.emit(event, outgoingPayload);
-  }
-
-  dynamic _prepareOutgoingPayload(String event, dynamic logicalPayload) {
-    if (!_usesBinaryTransport) {
-      AppLogger.error(
-        'Attempted to emit $event without negotiated binary PayloadFrame transport',
-      );
-      return null;
-    }
-
-    final prepareResult = _createSendPipeline().prepareSend(
-      logicalPayload,
-      traceId: _extractTraceId(logicalPayload),
-      requestId: _extractRequestId(logicalPayload),
-    );
-    if (prepareResult.isError()) {
-      final failure = prepareResult.exceptionOrNull();
-      AppLogger.error(
-        'Failed to frame $event payload for transport: $failure',
-      );
-      return null;
-    }
-
-    var frame = prepareResult.getOrThrow();
-    if (frame.compressedSize > _currentProtocol.effectiveLimits.maxCompressedPayloadBytes) {
-      AppLogger.error(
-        '$event payload exceeds negotiated transport limit after framing',
-      );
-      return null;
-    }
-    if (frame.originalSize > _currentProtocol.effectiveLimits.maxDecodedPayloadBytes) {
-      AppLogger.error(
-        '$event payload exceeds negotiated decoded payload limit',
-      );
-      return null;
-    }
-    if (_shouldSignTransportFrames) {
-      final signer = _payloadSigner;
-      if (signer == null) {
-        AppLogger.error(
-          'Attempted to sign $event transport frame without configured signer',
-        );
-        return null;
-      }
-      frame = frame.copyWith(
-        signature: signer.signFrame(frame).toJson(),
-      );
-    }
-    return frame.toJson();
   }
 
   Future<dynamic> _prepareOutgoingPayloadAsync(
@@ -939,13 +931,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
 
     var frame = prepareResult.getOrThrow();
-    if (frame.compressedSize > _currentProtocol.effectiveLimits.maxCompressedPayloadBytes) {
+    if (frame.compressedSize >
+        _currentProtocol.effectiveLimits.maxCompressedPayloadBytes) {
       AppLogger.error(
         '$event payload exceeds negotiated transport limit after framing',
       );
       return null;
     }
-    if (frame.originalSize > _currentProtocol.effectiveLimits.maxDecodedPayloadBytes) {
+    if (frame.originalSize >
+        _currentProtocol.effectiveLimits.maxDecodedPayloadBytes) {
       AppLogger.error(
         '$event payload exceeds negotiated decoded payload limit',
       );
@@ -998,8 +992,63 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       final processed = _createReceivePipeline(frame).receiveProcess(
         frame,
-        maxCompressedBytes: _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
-        maxOriginalBytes: _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
+        maxCompressedBytes:
+            _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
+        maxOriginalBytes:
+            _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
+        maxInflationRatio: _currentProtocol.maxInflationRatio,
+      );
+      if (processed.isError()) {
+        throw processed.exceptionOrNull()! as domain.Failure;
+      }
+      return processed.getOrThrow();
+    } on domain.Failure {
+      rethrow;
+    } on Exception catch (error) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Failed to decode transport frame',
+        cause: error,
+        context: {'payloadType': payload.runtimeType.toString()},
+      );
+    }
+  }
+
+  Future<dynamic> _decodeIncomingPayloadOrThrowAsync(dynamic payload) async {
+    if (!_looksLikePayloadFrame(payload)) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Application payload must be a PayloadFrame',
+        context: {'payloadType': payload.runtimeType.toString()},
+      );
+    }
+
+    try {
+      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
+      final localCapabilities = _localCapabilities();
+      if (!localCapabilities.supportsEncoding(frame.enc)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Unsupported payload encoding: ${frame.enc}',
+          context: {'encoding': frame.enc},
+        );
+      }
+      if (!localCapabilities.supportsCompression(frame.cmp)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Unsupported payload compression: ${frame.cmp}',
+          context: {'compression': frame.cmp},
+        );
+      }
+      if (!_verifyIncomingFrameSignature(frame)) {
+        throw domain.ValidationFailure.withContext(
+          message: 'Invalid transport frame signature',
+          context: {'request_id': frame.requestId},
+        );
+      }
+
+      final processed = await _createReceivePipeline(frame).receiveProcessAsync(
+        frame,
+        maxCompressedBytes:
+            _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
+        maxOriginalBytes:
+            _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
         maxInflationRatio: _currentProtocol.maxInflationRatio,
       );
       if (processed.isError()) {
@@ -1029,7 +1078,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   bool get _shouldSignTransportFrames =>
       _payloadSigner != null &&
-      (_localSignatureRequired || (_hasReceivedCapabilities && _currentProtocol.signatureRequired));
+      (_localSignatureRequired ||
+          (_hasReceivedCapabilities && _currentProtocol.signatureRequired));
 
   void _validateNegotiatedTransportContract({
     required ProtocolCapabilities agentCapabilities,
@@ -1044,7 +1094,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       );
     }
 
-    final localCompressionThreshold = agentCapabilities.extensions['compressionThreshold'];
+    final localCompressionThreshold =
+        agentCapabilities.extensions['compressionThreshold'];
     if (localCompressionThreshold is! int || localCompressionThreshold < 1) {
       throw StateError('Local compressionThreshold capability is invalid');
     }
@@ -1055,9 +1106,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
       throw StateError('Negotiated maxInflationRatio is invalid');
     }
 
-    final agentRequiresSignature = agentCapabilities.extensions['signatureRequired'] as bool? ?? false;
-    final serverRequiresSignature = serverCapabilities.extensions['signatureRequired'] as bool? ?? false;
-    if ((agentRequiresSignature || serverRequiresSignature) && _currentProtocol.signatureAlgorithms.isEmpty) {
+    final agentRequiresSignature =
+        agentCapabilities.extensions['signatureRequired'] as bool? ?? false;
+    final serverRequiresSignature =
+        serverCapabilities.extensions['signatureRequired'] as bool? ?? false;
+    if ((agentRequiresSignature || serverRequiresSignature) &&
+        _currentProtocol.signatureAlgorithms.isEmpty) {
       throw StateError(
         'Negotiated protocol requires signature but no shared algorithm was found',
       );
@@ -1108,7 +1162,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
     final fallbackValidation = _contractValidator.validateResponse(fallback);
     if (fallbackValidation.isError()) {
-      final fallbackFailure = fallbackValidation.exceptionOrNull()! as domain.Failure;
+      final fallbackFailure =
+          fallbackValidation.exceptionOrNull()! as domain.Failure;
       AppLogger.error(
         'Fallback rpc:response payload is invalid: ${fallbackFailure.message}',
       );
@@ -1170,7 +1225,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
 
     return domain.NetworkFailure.withContext(
-      message: 'Unable to connect to the hub. Check the server URL and your network connection.',
+      message:
+          'Unable to connect to the hub. Check the server URL and your network connection.',
       cause: error,
       context: {'operation': 'connect'},
     );
@@ -1198,6 +1254,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _capabilitiesTimeoutTimer?.cancel();
     _capabilitiesTimeoutTimer = null;
     _capabilitiesReRegisterCount = 0;
+    _cachedSendPipeline = null;
+    _sendPipelineCacheKey = '';
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
@@ -1243,8 +1301,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'finished_at': response.timestamp.toIso8601String(),
         'rows': response.data,
         'row_count': response.data.length,
-        if (response.affectedRows != null) 'affected_rows': response.affectedRows,
-        if (response.columnMetadata != null) 'column_metadata': response.columnMetadata,
+        if (response.affectedRows != null)
+          'affected_rows': response.affectedRows,
+        if (response.columnMetadata != null)
+          'column_metadata': response.columnMetadata,
         if (response.hasMultiResult) ...{
           'multi_result': true,
           'result_set_count': response.resultSets.length,
@@ -1255,8 +1315,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
                   'index': resultSet.index,
                   'rows': resultSet.rows,
                   'row_count': resultSet.rowCount,
-                  if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
-                  if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
+                  if (resultSet.affectedRows != null)
+                    'affected_rows': resultSet.affectedRows,
+                  if (resultSet.columnMetadata != null)
+                    'column_metadata': resultSet.columnMetadata,
                 },
               )
               .toList(growable: false),
@@ -1269,8 +1331,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
                         'result_set_index': item.resultSet!.index,
                         'rows': item.resultSet!.rows,
                         'row_count': item.resultSet!.rowCount,
-                        if (item.resultSet!.affectedRows != null) 'affected_rows': item.resultSet!.affectedRows,
-                        if (item.resultSet!.columnMetadata != null) 'column_metadata': item.resultSet!.columnMetadata,
+                        if (item.resultSet!.affectedRows != null)
+                          'affected_rows': item.resultSet!.affectedRows,
+                        if (item.resultSet!.columnMetadata != null)
+                          'column_metadata': item.resultSet!.columnMetadata,
                       }
                     : {
                         'type': 'row_count',
@@ -1287,8 +1351,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'returned_rows': response.pagination!.returnedRows,
             'has_next_page': response.pagination!.hasNextPage,
             'has_previous_page': response.pagination!.hasPreviousPage,
-            if (response.pagination!.currentCursor != null) 'current_cursor': response.pagination!.currentCursor,
-            if (response.pagination!.nextCursor != null) 'next_cursor': response.pagination!.nextCursor,
+            if (response.pagination!.currentCursor != null)
+              'current_cursor': response.pagination!.currentCursor,
+            if (response.pagination!.nextCursor != null)
+              'next_cursor': response.pagination!.nextCursor,
           },
       };
 
@@ -1350,7 +1416,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
 
     final errorData = error.data;
-    final reason = errorData is Map<String, dynamic> ? (errorData['reason'] as String?) : null;
+    final reason = errorData is Map<String, dynamic>
+        ? (errorData['reason'] as String?)
+        : null;
 
     if (error.code == RpcErrorCode.authenticationFailed) {
       _logMessage('AUTH', 'authorization.authentication_failed', {
@@ -1457,7 +1525,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
-  void _emitValidatedEvent(String event, dynamic payload) {
+  Future<void> _emitValidatedStreamEvent(
+    String event,
+    Map<String, dynamic> payload,
+  ) async {
     if (_socket == null) {
       return;
     }
@@ -1465,13 +1536,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (_featureFlags.enableSocketSchemaValidation) {
       Result<void> validation;
       if (event == 'rpc:chunk') {
-        validation = _contractValidator.validateStreamChunk(
-          payload as Map<String, dynamic>,
-        );
+        validation = _contractValidator.validateStreamChunk(payload);
       } else if (event == 'rpc:complete') {
-        validation = _contractValidator.validateStreamComplete(
-          payload as Map<String, dynamic>,
-        );
+        validation = _contractValidator.validateStreamComplete(payload);
       } else {
         validation = const Success(unit);
       }
@@ -1482,15 +1549,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    _emitEvent(event, payload);
+    await _emitEventAsync(event, payload);
   }
 
   bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {
-    return requestMap.containsKey('id') && requestMap['id'] == null && !_allowsNullIdNotifications();
+    return requestMap.containsKey('id') &&
+        requestMap['id'] == null &&
+        !_allowsNullIdNotifications();
   }
 
   bool _allowsNullIdNotifications() {
-    final extensionValue = _currentProtocol.negotiatedExtensions['notificationNullIdCompatibility'];
+    final extensionValue = _currentProtocol
+        .negotiatedExtensions['notificationNullIdCompatibility'];
     if (extensionValue is bool) {
       return extensionValue;
     }
@@ -1498,7 +1568,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   bool _supportsOrderedBatchResponses() {
-    final extensionValue = _currentProtocol.negotiatedExtensions['orderedBatchResponses'];
+    final extensionValue =
+        _currentProtocol.negotiatedExtensions['orderedBatchResponses'];
     if (extensionValue is bool) {
       return extensionValue;
     }
@@ -1519,7 +1590,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       };
     }
-    if (!_usesBinaryTransport && _featureFlags.enablePayloadSigning && _payloadSigner != null) {
+    if (!_usesBinaryTransport &&
+        _featureFlags.enablePayloadSigning &&
+        _payloadSigner != null) {
       json['signature'] = _payloadSigner.sign(json).toJson();
     }
     return json;
@@ -1531,16 +1604,21 @@ class SocketIOTransportClientV2 implements ITransportClient {
   ) {
     final requestMeta = request.meta;
     final responseMeta = response.meta;
-    final supportedTraceContext = _currentProtocol.negotiatedExtensions['traceContext'];
+    final supportedTraceContext =
+        _currentProtocol.negotiatedExtensions['traceContext'];
     final traceModes = supportedTraceContext is List<dynamic>
         ? supportedTraceContext.whereType<String>().toSet()
         : {'w3c-trace-context', 'legacy-trace-id'};
     final mergedMeta = RpcProtocolMeta(
-      traceId: traceModes.contains('legacy-trace-id') ? responseMeta?.traceId ?? requestMeta?.traceId : null,
+      traceId: traceModes.contains('legacy-trace-id')
+          ? responseMeta?.traceId ?? requestMeta?.traceId
+          : null,
       traceParent: traceModes.contains('w3c-trace-context')
           ? responseMeta?.traceParent ?? requestMeta?.traceParent
           : null,
-      traceState: traceModes.contains('w3c-trace-context') ? responseMeta?.traceState ?? requestMeta?.traceState : null,
+      traceState: traceModes.contains('w3c-trace-context')
+          ? responseMeta?.traceState ?? requestMeta?.traceState
+          : null,
       requestId: responseMeta?.requestId ?? requestMeta?.requestId,
       agentId: responseMeta?.agentId,
       timestamp: responseMeta?.timestamp,
@@ -1574,7 +1652,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   bool _verifyIncomingFrameSignature(PayloadFrame frame) {
-    final signatureRequired = _hasReceivedCapabilities ? _currentProtocol.signatureRequired : _localSignatureRequired;
+    final signatureRequired = _hasReceivedCapabilities
+        ? _currentProtocol.signatureRequired
+        : _localSignatureRequired;
     if (_payloadSigner == null) {
       return !signatureRequired;
     }
@@ -1658,7 +1738,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   String? _extractClientTokenFromRpcParams(dynamic params) {
     if (params is! Map<String, dynamic>) return null;
-    final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
+    final raw =
+        params['client_token'] as String? ??
+        params['auth'] as String? ??
+        params['clientToken'] as String?;
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
   }
 
@@ -1716,18 +1799,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
 }
 
 class _SocketRpcStreamEmitter implements IRpcStreamEmitter {
-  _SocketRpcStreamEmitter(this._emit);
+  _SocketRpcStreamEmitter(this._emitAsync);
 
-  final void Function(String event, dynamic payload) _emit;
+  final Future<void> Function(String event, Map<String, dynamic> payload)
+  _emitAsync;
 
   @override
-  bool emitChunk(RpcStreamChunk chunk) {
-    _emit('rpc:chunk', chunk.toJson());
+  Future<bool> emitChunk(RpcStreamChunk chunk) async {
+    await _emitAsync('rpc:chunk', chunk.toJson());
     return true;
   }
 
   @override
-  void emitComplete(RpcStreamComplete complete) {
-    _emit('rpc:complete', complete.toJson());
+  Future<void> emitComplete(RpcStreamComplete complete) async {
+    await _emitAsync('rpc:complete', complete.toJson());
   }
 }

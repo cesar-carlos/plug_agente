@@ -76,7 +76,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           operation: 'initialize_streaming_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
+            'user_message':
+                'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
       ),
@@ -87,7 +88,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   Future<Result<void>> executeQueryStream(
     String query,
     String connectionString,
-    void Function(List<Map<String, dynamic>> chunk) onChunk, {
+    Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     int fetchSize = 1000,
     int chunkSizeBytes = 1024 * 1024,
   }) async {
@@ -167,7 +168,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
                 // Converter chunk e notificar callback
                 final rows = _convertQueryResultToMaps(queryResult);
                 if (rows.isNotEmpty) {
-                  _chunkRows(rows, fetchSize).forEach(onChunk);
+                  for (final part in _chunkRows(rows, fetchSize)) {
+                    await onChunk(part);
+                  }
                 }
               },
               (error) {
@@ -222,7 +225,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     _cancelReason = reason;
     _isCancelRequested = true;
     try {
-      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
+      final result = await _service
+          .disconnect(activeConnectionId)
+          .timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(

@@ -112,7 +112,8 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     final currentStatus = connectionProvider.status;
     final currentError = connectionProvider.error;
 
-    if (_previousConnectionStatus != ConnectionStatus.connected && currentStatus == ConnectionStatus.connected) {
+    if (_previousConnectionStatus != ConnectionStatus.connected &&
+        currentStatus == ConnectionStatus.connected) {
       _showConnectionSuccessModal();
     }
 
@@ -213,7 +214,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
+    if (!_formController.fieldsInitialized &&
+        !configProvider.isLoading &&
+        configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
     } else if (configProvider.isLoading) {
       unawaited(

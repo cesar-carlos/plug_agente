@@ -86,7 +86,9 @@ class AppInitializer {
   String? _resolveInitialRoute(List<String> args) {
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink(args);
-    return initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
+    return initialLink != null
+        ? deepLinkService.deepLinkToRoute(initialLink)
+        : null;
   }
 
   Future<void> _initializeDesktopFeatures(
@@ -201,7 +203,8 @@ class AppInitializer {
 
       if (windowManagerService != null) {
         final prefs = getIt<IAppSettingsStore>();
-        final minimizeToTray = prefs.getBool('settings.minimize_to_tray') ?? true;
+        final minimizeToTray =
+            prefs.getBool('settings.minimize_to_tray') ?? true;
         final closeToTray = prefs.getBool('settings.close_to_tray') ?? true;
 
         windowManagerService

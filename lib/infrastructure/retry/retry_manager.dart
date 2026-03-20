@@ -98,14 +98,19 @@ class RetryManager implements IRetryManager {
 
       // NetworkFailure: transiente quando timeout ou retryable; não retry em auth
       if (exception is domain.NetworkFailure) {
-        if (exception.context['timeout'] == true || exception.context['retryable'] == true) {
+        if (exception.context['timeout'] == true ||
+            exception.context['retryable'] == true) {
           return true;
         }
         final message = exception.message.toLowerCase();
-        if (message.contains('authentication') || message.contains('invalid token') || message.contains('401')) {
+        if (message.contains('authentication') ||
+            message.contains('invalid token') ||
+            message.contains('401')) {
           return false;
         }
-        if (message.contains('timeout') || message.contains('connection') || message.contains('network')) {
+        if (message.contains('timeout') ||
+            message.contains('connection') ||
+            message.contains('network')) {
           return true;
         }
         return false;

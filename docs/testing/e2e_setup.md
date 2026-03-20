@@ -20,25 +20,25 @@ Testes end-to-end e de integração que usam recursos reais (API, ODBC) dependem
 
 ### API (api_test.dart)
 
-| Variável              | Obrigatória | Descrição                                        |
-| --------------------- | ----------- | ------------------------------------------------ |
-| `RUN_LIVE_API_TESTS`  | Sim         | `true` para executar testes de API               |
-| `API_TEST_BASE_URL`   | Não         | URL base (default: `http://31.97.29.223:3000/`)  |
-| `API_TEST_TIMEOUT_URL` | Não       | URL para teste de timeout (default: IP não roteável) |
+| Variável               | Obrigatória | Descrição                                            |
+| ---------------------- | ----------- | ---------------------------------------------------- |
+| `RUN_LIVE_API_TESTS`   | Sim         | `true` para executar testes de API                   |
+| `API_TEST_BASE_URL`    | Não         | URL base (default: `http://31.97.29.223:3000/`)      |
+| `API_TEST_TIMEOUT_URL` | Não         | URL para teste de timeout (default: IP não roteável) |
 
 ### ODBC (odbc_streaming_live_integration_test.dart)
 
-| Variável                                            | Obrigatória  | Descrição                                                             |
-| --------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
-| `ODBC_TEST_DSN` ou `ODBC_DSN`                       | SQL Anywhere | Connection string SQL Anywhere/Sybase                                 |
-| `ODBC_TEST_DSN_SQL_SERVER` ou `ODBC_DSN_SQL_SERVER` | SQL Server   | Connection string SQL Server                                          |
-| `ODBC_TEST_DSN_POSTGRESQL` ou `ODBC_DSN_POSTGRESQL` | PostgreSQL   | Connection string PostgreSQL                                          |
-| `ODBC_INTEGRATION_SMOKE_QUERY`                      | Não          | Query smoke (default: `SELECT 1`)                                     |
-| `ODBC_INTEGRATION_LONG_QUERY`                       | Cancelamento | Query longa para teste de cancelamento                                |
-| `ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE`          | Não          | Query longa específica SQL Anywhere (ex.: `SELECT * FROM sys.systab`) |
+| Variável                                            | Obrigatória  | Descrição                                                                     |
+| --------------------------------------------------- | ------------ | ----------------------------------------------------------------------------- |
+| `ODBC_TEST_DSN` ou `ODBC_DSN`                       | SQL Anywhere | Connection string SQL Anywhere/Sybase                                         |
+| `ODBC_TEST_DSN_SQL_SERVER` ou `ODBC_DSN_SQL_SERVER` | SQL Server   | Connection string SQL Server                                                  |
+| `ODBC_TEST_DSN_POSTGRESQL` ou `ODBC_DSN_POSTGRESQL` | PostgreSQL   | Connection string PostgreSQL                                                  |
+| `ODBC_INTEGRATION_SMOKE_QUERY`                      | Não          | Query smoke (default: `SELECT 1`)                                             |
+| `ODBC_INTEGRATION_LONG_QUERY`                       | Cancelamento | Query longa para teste de cancelamento                                        |
+| `ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE`          | Não          | Query longa específica SQL Anywhere (ex.: `SELECT * FROM sys.systab`)         |
 | `ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY`              | Não          | Query opcional para `odbc_sql_anywhere_top_start_at_live_test` (TOP/START AT) |
-| `ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER`            | Não          | Query longa específica SQL Server (ex.: `SELECT * FROM sys.tables`)   |
-| `ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL`            | Não          | Query longa específica PostgreSQL (ex.: `SELECT * FROM pg_tables`)    |
+| `ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER`            | Não          | Query longa específica SQL Server (ex.: `SELECT * FROM sys.tables`)           |
+| `ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL`            | Não          | Query longa específica PostgreSQL (ex.: `SELECT * FROM pg_tables`)            |
 
 Pelo menos um DSN deve estar definido para rodar os testes ODBC. O teste usa o primeiro disponível na ordem: SQL Anywhere → SQL Server → PostgreSQL.
 

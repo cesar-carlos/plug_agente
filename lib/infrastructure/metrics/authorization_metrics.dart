@@ -62,7 +62,9 @@ class AuthorizationMetricsCollector implements IAuthorizationMetricsCollector {
   @override
   AuthorizationMetricsSummary getSummary({Duration? period}) {
     final cutoff = period != null ? DateTime.now().subtract(period) : null;
-    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList() : _metrics;
+    final filtered = cutoff != null
+        ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList()
+        : _metrics;
     return AuthorizationMetricsSummary.fromList(filtered);
   }
 

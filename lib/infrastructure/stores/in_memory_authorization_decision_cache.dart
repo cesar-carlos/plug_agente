@@ -1,7 +1,9 @@
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 
-class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache {
-  final Map<String, AuthorizationDecisionCacheEntry> _entries = <String, AuthorizationDecisionCacheEntry>{};
+class InMemoryAuthorizationDecisionCache
+    implements IAuthorizationDecisionCache {
+  final Map<String, AuthorizationDecisionCacheEntry> _entries =
+      <String, AuthorizationDecisionCacheEntry>{};
 
   @override
   AuthorizationDecisionCacheEntry? get(String key) {

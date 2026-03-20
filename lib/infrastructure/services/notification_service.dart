@@ -8,7 +8,8 @@ class NotificationService implements INotificationService {
   NotificationService() : _plugin = FlutterLocalNotificationsPlugin();
   final FlutterLocalNotificationsPlugin _plugin;
 
-  static const String _notificationGuid = AppConstants.notificationAppUserModelGuid;
+  static const String _notificationGuid =
+      AppConstants.notificationAppUserModelGuid;
 
   domain.NotificationFailure _buildFailure(
     String message, {
@@ -28,7 +29,8 @@ class NotificationService implements INotificationService {
       const initializationSettings = InitializationSettings(
         windows: WindowsInitializationSettings(
           appName: AppConstants.appName,
-          appUserModelId: 'PlugDatabase.PlugAgente.App.${AppConstants.appVersion}',
+          appUserModelId:
+              'PlugDatabase.PlugAgente.App.${AppConstants.appVersion}',
           guid: _notificationGuid,
         ),
       );

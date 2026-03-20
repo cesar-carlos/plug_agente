@@ -218,7 +218,9 @@ class _AppDataGridRow<T> extends StatelessWidget {
       'got ${cells.length}.',
     );
 
-    final rowColor = index.isEven ? Colors.transparent : FluentTheme.of(context).resources.subtleFillColorSecondary;
+    final rowColor = index.isEven
+        ? Colors.transparent
+        : FluentTheme.of(context).resources.subtleFillColorSecondary;
 
     final content = Row(
       children: List<Widget>.generate(

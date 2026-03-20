@@ -18,11 +18,13 @@ class ClientTokenVersionConflictException implements Exception {
   final int currentVersion;
 
   @override
-  String toString() => 'ClientTokenVersionConflictException(currentVersion: $currentVersion)';
+  String toString() =>
+      'ClientTokenVersionConflictException(currentVersion: $currentVersion)';
 }
 
 class ClientTokenLocalDataSource {
-  ClientTokenLocalDataSource(this._database, {ITokenSecretStore? secretStore}) : _secretStore = secretStore;
+  ClientTokenLocalDataSource(this._database, {ITokenSecretStore? secretStore})
+    : _secretStore = secretStore;
 
   final AppDatabase _database;
   final ITokenSecretStore? _secretStore;
@@ -67,7 +69,9 @@ class ClientTokenLocalDataSource {
       }
 
       final now = DateTime.now().toUtc();
-      final companions = tokens.map((token) => _toCompanion(token, syncedAt: now)).toList();
+      final companions = tokens
+          .map((token) => _toCompanion(token, syncedAt: now))
+          .toList();
 
       await _database.batch((batch) {
         batch.insertAll(_database.clientTokenCacheTable, companions);
@@ -172,7 +176,9 @@ class ClientTokenLocalDataSource {
         await (_database.update(
               _database.clientTokenCacheTable,
             )..where(
-              (table) => table.id.equals(tokenId) & table.version.equals(current.version),
+              (table) =>
+                  table.id.equals(tokenId) &
+                  table.version.equals(current.version),
             ))
             .write(
               ClientTokenCacheTableCompanion(
@@ -215,13 +221,17 @@ class ClientTokenLocalDataSource {
         await (_database.update(
               _database.clientTokenCacheTable,
             )..where(
-              (table) => table.id.equals(tokenId) & table.version.equals(current.version),
+              (table) =>
+                  table.id.equals(tokenId) &
+                  table.version.equals(current.version),
             ))
             .write(
               ClientTokenCacheTableCompanion(
                 clientId: Value(request.clientId.trim()),
                 agentId: Value(
-                  request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
+                  request.agentId?.trim().isEmpty ?? true
+                      ? null
+                      : request.agentId,
                 ),
                 tokenHash: Value(newTokenHash),
                 tokenValue: Value(_persistedTokenValue(newTokenValue)),
@@ -339,7 +349,10 @@ class ClientTokenLocalDataSource {
         return const <ClientTokenRule>[];
       }
 
-      return decoded.whereType<Map<String, dynamic>>().map(ClientTokenRule.fromJson).toList();
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(ClientTokenRule.fromJson)
+          .toList();
     } on FormatException catch (error, stackTrace) {
       developer.log(
         'Invalid rules JSON in token cache',

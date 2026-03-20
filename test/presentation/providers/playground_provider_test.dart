@@ -52,14 +52,14 @@ void main() {
       ).thenAnswer((invocation) async {
         final onChunk =
             invocation.positionalArguments[2]
-                as void Function(List<Map<String, dynamic>>);
-        onChunk([
+                as Future<void> Function(List<Map<String, dynamic>>);
+        await onChunk([
           {'id': 1},
         ]);
-        onChunk([
+        await onChunk([
           {'id': 2},
         ]);
-        onChunk([
+        await onChunk([
           {'id': 3},
         ]);
         return const Success(unit);

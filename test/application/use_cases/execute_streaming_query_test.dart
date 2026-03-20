@@ -34,7 +34,7 @@ void main() {
       final result = await useCase(
         '   ',
         'DSN=Test',
-        (_) {},
+        (_) async {},
       );
 
       expect(result.isError(), isTrue);
@@ -47,7 +47,7 @@ void main() {
       final result = await useCase(
         'DROP TABLE users',
         'DSN=Test',
-        (_) {},
+        (_) async {},
       );
 
       expect(result.isError(), isTrue);
@@ -74,7 +74,7 @@ void main() {
       final result = await useCase(
         ' SELECT * FROM users ',
         'DSN=Test',
-        (_) {},
+        (_) async {},
       );
 
       expect(result.isSuccess(), isTrue);

@@ -373,7 +373,7 @@ class RpcMethodDispatcher {
                 .skip(i)
                 .take(limits.streamingChunkSize)
                 .toList();
-            if (!streamEmitter.emitChunk(
+            if (!await streamEmitter.emitChunk(
               RpcStreamChunk(
                 streamId: streamId,
                 requestId: request.id,
@@ -406,7 +406,7 @@ class RpcMethodDispatcher {
             );
           }
 
-          streamEmitter.emitComplete(
+          await streamEmitter.emitComplete(
             RpcStreamComplete(
               streamId: streamId,
               requestId: request.id,
@@ -532,14 +532,14 @@ class RpcMethodDispatcher {
       final streamResult = await gateway.executeQueryStream(
         sql.trim(),
         config.resolveConnectionString(),
-        (chunk) {
+        (chunk) async {
           if (columnMetadata == null && chunk.isNotEmpty) {
             columnMetadata = chunk.first.keys
                 .map((k) => <String, dynamic>{'name': k, 'type': 'string'})
                 .toList();
           }
           totalRows += chunk.length;
-          if (!streamEmitter.emitChunk(
+          if (!await streamEmitter.emitChunk(
             RpcStreamChunk(
               streamId: streamId,
               requestId: request.id,
@@ -558,45 +558,42 @@ class RpcMethodDispatcher {
         fetchSize: limits.streamingChunkSize,
       );
 
-      return streamResult.fold(
-        (_) {
-          streamEmitter.emitComplete(
-            RpcStreamComplete(
-              streamId: streamId,
-              requestId: request.id,
-              totalRows: totalRows,
-              affectedRows: totalRows,
-              executionId: executionId,
-              startedAt: queryRequest.timestamp.toIso8601String(),
-              finishedAt: DateTime.now().toUtc().toIso8601String(),
-            ),
-          );
-          return RpcResponse.success(
-            id: request.id,
-            result: {
-              'stream_id': streamId,
-              'execution_id': executionId,
-              'started_at': queryRequest.timestamp.toIso8601String(),
-              'finished_at': DateTime.now().toUtc().toIso8601String(),
-              'sql_handling_mode': queryRequest.sqlHandlingMode.name,
-              'max_rows_handling': 'response_truncation',
-              'effective_max_rows': limits.maxRows,
-              'rows': <Map<String, dynamic>>[],
-              'row_count': 0,
-              'affected_rows': totalRows,
-              ...?(columnMetadata != null
-                  ? {'column_metadata': columnMetadata}
-                  : null),
-            },
-          );
-        },
-        (failure) {
-          final rpcError = FailureToRpcErrorMapper.map(
-            failure as domain.Failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          );
-          return RpcResponse.error(id: request.id, error: rpcError);
+      if (streamResult.isError()) {
+        final rpcError = FailureToRpcErrorMapper.map(
+          streamResult.exceptionOrNull()! as domain.Failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      }
+
+      await streamEmitter.emitComplete(
+        RpcStreamComplete(
+          streamId: streamId,
+          requestId: request.id,
+          totalRows: totalRows,
+          affectedRows: totalRows,
+          executionId: executionId,
+          startedAt: queryRequest.timestamp.toIso8601String(),
+          finishedAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      return RpcResponse.success(
+        id: request.id,
+        result: {
+          'stream_id': streamId,
+          'execution_id': executionId,
+          'started_at': queryRequest.timestamp.toIso8601String(),
+          'finished_at': DateTime.now().toUtc().toIso8601String(),
+          'sql_handling_mode': queryRequest.sqlHandlingMode.name,
+          'max_rows_handling': 'response_truncation',
+          'effective_max_rows': limits.maxRows,
+          'rows': <Map<String, dynamic>>[],
+          'row_count': 0,
+          'affected_rows': totalRows,
+          ...?(columnMetadata != null
+              ? {'column_metadata': columnMetadata}
+              : null),
         },
       );
     } finally {

@@ -43,6 +43,13 @@ class MockAgentConfigRepository extends Mock
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
+MockRpcStreamEmitter _stubRpcStreamEmitter() {
+  final emitter = MockRpcStreamEmitter();
+  when(() => emitter.emitChunk(any())).thenAnswer((_) async => true);
+  when(() => emitter.emitComplete(any())).thenAnswer((_) async {});
+  return emitter;
+}
+
 Map<String, dynamic> _userAt(int i) => {'id': i, 'name': 'user$i'};
 
 void main() {
@@ -684,12 +691,12 @@ void main() {
         ).thenAnswer((invocation) async {
           final onChunk =
               invocation.positionalArguments[2]
-                  as void Function(List<Map<String, dynamic>>);
-          onChunk([
+                  as Future<void> Function(List<Map<String, dynamic>>);
+          await onChunk([
             {'id': 1, 'name': 'a'},
             {'id': 2, 'name': 'b'},
           ]);
-          onChunk([
+          await onChunk([
             {'id': 3, 'name': 'c'},
           ]);
           return const Success(unit);
@@ -713,7 +720,8 @@ void main() {
         );
 
         final mockEmitter = MockRpcStreamEmitter();
-        when(() => mockEmitter.emitChunk(any())).thenReturn(true);
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => true);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
         final response = await dispatcher.dispatch(
           request,
           'agent-1',
@@ -805,7 +813,7 @@ void main() {
         final response = await dispatcher.dispatch(
           request,
           'agent-1',
-          streamEmitter: MockRpcStreamEmitter(),
+          streamEmitter: _stubRpcStreamEmitter(),
         );
 
         expect(response.isSuccess, isTrue);
@@ -853,7 +861,8 @@ void main() {
         ).thenAnswer((_) async => queryResponse);
 
         final mockEmitter = MockRpcStreamEmitter();
-        when(() => mockEmitter.emitChunk(any())).thenReturn(true);
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => true);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
         final response = await dispatcher.dispatch(
           request,
           'agent-1',
@@ -1642,7 +1651,7 @@ void main() {
               params: {'sql': 'SELECT * FROM users'},
             ),
             'agent-1',
-            streamEmitter: MockRpcStreamEmitter(),
+            streamEmitter: _stubRpcStreamEmitter(),
           );
 
           await Future<void>.delayed(Duration.zero);
@@ -1730,7 +1739,7 @@ void main() {
               params: {'sql': 'SELECT * FROM users'},
             ),
             'agent-1',
-            streamEmitter: MockRpcStreamEmitter(),
+            streamEmitter: _stubRpcStreamEmitter(),
           );
 
           await Future<void>.delayed(Duration.zero);

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('TransportPipeline', () {
     test('should prepare payload without compression when below threshold', () {
       final pipeline = TransportPipeline(
@@ -151,5 +153,51 @@ void main() {
 
       expect(result.isError(), isTrue);
     });
+
+    test(
+      'receiveProcessAsync should match receiveProcess for gzip frames',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: 10,
+        );
+
+        final originalData = {'message': 'Hello World! ' * 100};
+        final frame = pipeline.prepareSend(originalData).getOrThrow();
+        expect(frame.cmp, equals('gzip'));
+
+        final syncResult = pipeline.receiveProcess(frame);
+        final asyncResult = await pipeline.receiveProcessAsync(frame);
+
+        expect(syncResult.isSuccess(), isTrue);
+        expect(asyncResult.isSuccess(), isTrue);
+        expect(asyncResult.getOrThrow(), equals(syncResult.getOrThrow()));
+      },
+    );
+
+    test(
+      'receiveProcessAsync decodes large JSON via isolate when above threshold',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+        );
+        final pad = 'z' * (jsonDecodeIsolateThresholdBytes + 4096);
+        final originalData = <String, dynamic>{'blob': pad};
+        final frame = pipeline.prepareSend(originalData).getOrThrow();
+        expect(
+          frame.compressedSize,
+          greaterThan(jsonDecodeIsolateThresholdBytes),
+        );
+        final asyncResult = await pipeline.receiveProcessAsync(frame);
+        expect(asyncResult.isSuccess(), isTrue);
+        expect(asyncResult.getOrThrow(), equals(originalData));
+
+        final syncResult = pipeline.receiveProcess(frame);
+        expect(syncResult.isSuccess(), isTrue);
+        expect(syncResult.getOrThrow(), equals(originalData));
+      },
+    );
   });
 }

@@ -11,8 +11,10 @@ class MetricsCollector implements IMetricsCollector {
 
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
   static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
-  static const String _transactionRollbackFailureCounter = 'transaction_rollback_failure';
-  static const String _idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
+  static const String _transactionRollbackFailureCounter =
+      'transaction_rollback_failure';
+  static const String _idempotencyFingerprintMismatchCounter =
+      'idempotency_fingerprint_mismatch';
 
   static const int _maxMetrics = 10000;
 
@@ -28,12 +30,17 @@ class MetricsCollector implements IMetricsCollector {
 
   /// Numero de metricas coletadas.
   int get count => _metrics.length;
-  int get timeoutCancelSuccessCount => _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
-  int get timeoutCancelFailureCount => _eventCounters[_timeoutCancelFailureCounter] ?? 0;
-  int get transactionRollbackFailureCount => _eventCounters[_transactionRollbackFailureCounter] ?? 0;
-  int get idempotencyFingerprintMismatchCount => _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
+  int get timeoutCancelSuccessCount =>
+      _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
+  int get timeoutCancelFailureCount =>
+      _eventCounters[_timeoutCancelFailureCounter] ?? 0;
+  int get transactionRollbackFailureCount =>
+      _eventCounters[_transactionRollbackFailureCounter] ?? 0;
+  int get idempotencyFingerprintMismatchCount =>
+      _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
 
-  Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
+  Map<String, int> get eventCounters =>
+      UnmodifiableMapView<String, int>(_eventCounters);
 
   /// Limpa todas as metricas.
   void clear() {
@@ -41,13 +48,17 @@ class MetricsCollector implements IMetricsCollector {
     _eventCounters.clear();
   }
 
-  void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
+  void recordTimeoutCancelSuccess() =>
+      _incrementEventCounter(_timeoutCancelSuccessCounter);
 
-  void recordTimeoutCancelFailure() => _incrementEventCounter(_timeoutCancelFailureCounter);
+  void recordTimeoutCancelFailure() =>
+      _incrementEventCounter(_timeoutCancelFailureCounter);
 
-  void recordTransactionRollbackFailure() => _incrementEventCounter(_transactionRollbackFailureCounter);
+  void recordTransactionRollbackFailure() =>
+      _incrementEventCounter(_transactionRollbackFailureCounter);
 
-  void recordIdempotencyFingerprintMismatch() => _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
+  void recordIdempotencyFingerprintMismatch() =>
+      _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({
@@ -87,7 +98,9 @@ class MetricsCollector implements IMetricsCollector {
 
   @override
   MetricsSummary getSummary({int limit = 100}) {
-    final recent = _metrics.length > limit ? _metrics.sublist(_metrics.length - limit) : _metrics;
+    final recent = _metrics.length > limit
+        ? _metrics.sublist(_metrics.length - limit)
+        : _metrics;
 
     return MetricsSummary.fromList(recent);
   }

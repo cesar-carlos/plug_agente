@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -10,12 +12,25 @@ import 'package:uuid/uuid.dart';
 /// Bytes above which compression runs in isolate to avoid jank.
 const int gzipIsolateThresholdBytes = 32 * 1024;
 
+/// UTF-8 JSON body above this size is parsed in a worker isolate on receive.
+const int jsonDecodeIsolateThresholdBytes = 256 * 1024;
+
+Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
+  final jsonString = utf8.decode(bytes);
+  return jsonDecode(jsonString) as Object;
+}
+
 Uint8List _compressGzipInIsolate(Uint8List data) {
   final compressedBytes = GZipEncoder().encode(data);
   if (compressedBytes == null) {
     throw StateError('GZipEncoder returned null');
   }
   return Uint8List.fromList(compressedBytes);
+}
+
+Uint8List _decompressGzipInIsolate(Uint8List compressed) {
+  final decompressedBytes = GZipDecoder().decodeBytes(compressed);
+  return Uint8List.fromList(decompressedBytes);
 }
 
 /// Transport pipeline for encoding/compressing and decoding/decompressing payloads.
@@ -178,7 +193,7 @@ class TransportPipeline {
       );
 
       return Success(frame);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to prepare payload for sending',
@@ -340,6 +355,188 @@ class TransportPipeline {
           cause: error,
           context: {
             'operation': 'receiveProcess',
+            'frameEncoding': frame.enc,
+            'frameCompression': frame.cmp,
+          },
+        ),
+      );
+    }
+  }
+
+  /// Like [receiveProcess], but runs GZIP decompression in an isolate when the
+  /// compressed payload is at least [gzipIsolateThresholdBytes].
+  Future<Result<dynamic>> receiveProcessAsync(
+    PayloadFrame frame, {
+    int? maxCompressedBytes,
+    int? maxOriginalBytes,
+    double maxInflationRatio = 30,
+  }) async {
+    try {
+      if (frame.enc != encoding) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
+            context: {'expected': encoding, 'actual': frame.enc},
+          ),
+        );
+      }
+
+      Uint8List bytes;
+
+      if (frame.payload is! Uint8List) {
+        if (frame.payload is List<int>) {
+          bytes = Uint8List.fromList(frame.payload as List<int>);
+        } else {
+          final payloadType = frame.payload.runtimeType.toString();
+          return Failure(
+            domain.ValidationFailure.withContext(
+              message: 'Frame payload is not binary data',
+              context: {'payloadType': payloadType},
+            ),
+          );
+        }
+      } else {
+        bytes = frame.payload as Uint8List;
+      }
+
+      if (bytes.length != frame.compressedSize) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Frame compressed size mismatch: expected ${frame.compressedSize}, got ${bytes.length}',
+            context: {
+              'expectedCompressedSize': frame.compressedSize,
+              'actualCompressedSize': bytes.length,
+            },
+          ),
+        );
+      }
+      if (maxCompressedBytes != null &&
+          frame.compressedSize > maxCompressedBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Compressed payload exceeds negotiated limit',
+            context: {
+              'compressedSize': frame.compressedSize,
+              'limit': maxCompressedBytes,
+            },
+          ),
+        );
+      }
+      if (maxOriginalBytes != null && frame.originalSize > maxOriginalBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Original payload exceeds negotiated limit',
+            context: {
+              'originalSize': frame.originalSize,
+              'limit': maxOriginalBytes,
+            },
+          ),
+        );
+      }
+
+      Uint8List decodableBytes;
+
+      if (frame.cmp != 'none') {
+        if (frame.cmp == 'gzip' && bytes.length >= gzipIsolateThresholdBytes) {
+          try {
+            decodableBytes = await compute(_decompressGzipInIsolate, bytes);
+          } on Object catch (error) {
+            return Failure(
+              domain.CompressionFailure.withContext(
+                message: 'Failed to decompress with GZIP',
+                cause: error,
+                context: {'operation': 'decompress', 'algorithm': 'gzip'},
+              ),
+            );
+          }
+        } else {
+          final compressionCodec = CompressionCodecFactory.getCodec(frame.cmp);
+          final decompressResult = compressionCodec.decompress(bytes);
+
+          if (decompressResult.isError()) {
+            return Failure(decompressResult.exceptionOrNull()!);
+          }
+
+          decodableBytes = decompressResult.getOrThrow();
+        }
+      } else {
+        decodableBytes = bytes;
+      }
+
+      if (decodableBytes.length != frame.originalSize) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Frame original size mismatch: expected ${frame.originalSize}, got ${decodableBytes.length}',
+            context: {
+              'expectedOriginalSize': frame.originalSize,
+              'actualOriginalSize': decodableBytes.length,
+            },
+          ),
+        );
+      }
+      if (maxOriginalBytes != null &&
+          decodableBytes.length > maxOriginalBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Decoded payload exceeds negotiated limit',
+            context: {
+              'decodedSize': decodableBytes.length,
+              'limit': maxOriginalBytes,
+            },
+          ),
+        );
+      }
+      if (bytes.isNotEmpty &&
+          decodableBytes.length / bytes.length > maxInflationRatio) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Payload inflation ratio exceeds allowed maximum',
+            context: {
+              'decodedSize': decodableBytes.length,
+              'compressedSize': bytes.length,
+              'maxInflationRatio': maxInflationRatio,
+            },
+          ),
+        );
+      }
+
+      final Object decoded;
+      if (frame.enc == 'json' &&
+          decodableBytes.length >= jsonDecodeIsolateThresholdBytes) {
+        try {
+          decoded =
+              await compute(_jsonDecodeUtf8PayloadInIsolate, decodableBytes);
+        } on Object catch (error) {
+          return Failure(
+            domain.CompressionFailure.withContext(
+              message: 'Failed to decode JSON payload',
+              cause: error,
+              context: {'operation': 'jsonDecode', 'encoding': 'json'},
+            ),
+          );
+        }
+      } else {
+        final codec = PayloadCodecFactory.getCodec(frame.enc);
+        final decodeResult = codec.decode(decodableBytes);
+
+        if (decodeResult.isError()) {
+          return Failure(decodeResult.exceptionOrNull()!);
+        }
+
+        decoded = decodeResult.getOrThrow() as Object;
+      }
+
+      return Success(decoded);
+    } on Object catch (error) {
+      return Failure(
+        domain.CompressionFailure.withContext(
+          message: 'Failed to process received payload',
+          cause: error,
+          context: {
+            'operation': 'receiveProcessAsync',
             'frameEncoding': frame.enc,
             'frameCompression': frame.cmp,
           },

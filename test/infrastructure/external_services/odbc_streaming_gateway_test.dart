@@ -52,7 +52,7 @@ void main() {
       final execution = gateway.executeQueryStream(
         'SELECT * FROM users',
         'DSN=Test',
-        receivedChunks.add,
+        (c) async => receivedChunks.add(c),
         fetchSize: 2,
       );
 
@@ -108,7 +108,7 @@ void main() {
       final execution = gateway.executeQueryStream(
         'SELECT * FROM users',
         'DSN=Test',
-        (chunk) {
+        (chunk) async {
           receivedChunks.add(chunk);
           if (receivedChunks.length == 1) {
             unawaited(gateway.cancelActiveStream());
@@ -182,7 +182,7 @@ void main() {
         final execution = gateway.executeQueryStream(
           'SELECT * FROM users',
           'DSN=Test',
-          (_) {},
+          (_) async {},
           fetchSize: 10,
         );
 
@@ -241,7 +241,7 @@ void main() {
         final execution = gateway.executeQueryStream(
           'SELECT * FROM users',
           'DSN=Test',
-          (chunk) {
+          (chunk) async {
             if (chunk.isNotEmpty) {
               unawaited(
                 gateway.cancelActiveStream(

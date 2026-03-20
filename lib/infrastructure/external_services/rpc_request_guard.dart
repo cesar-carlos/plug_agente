@@ -55,7 +55,8 @@ class RpcRequestGuard {
 
   void _evictExpiredFromTimeline(DateTime now) {
     final cutoff = now.subtract(_rateLimitWindow);
-    while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
+    while (_rpcRequestTimeline.isNotEmpty &&
+        _rpcRequestTimeline.first.isBefore(cutoff)) {
       _rpcRequestTimeline.removeFirst();
     }
   }

@@ -11,7 +11,8 @@ class DiagnosticsConfigSection extends StatefulWidget {
   const DiagnosticsConfigSection({super.key});
 
   @override
-  State<DiagnosticsConfigSection> createState() => _DiagnosticsConfigSectionState();
+  State<DiagnosticsConfigSection> createState() =>
+      _DiagnosticsConfigSectionState();
 }
 
 class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {

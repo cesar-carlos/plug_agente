@@ -92,7 +92,9 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     final startupService = _startupService;
     if (startupService != null) {
-      final result = value ? await startupService.enable() : await startupService.disable();
+      final result = value
+          ? await startupService.enable()
+          : await startupService.disable();
 
       final success = result.fold(
         (_) {
@@ -132,7 +134,8 @@ class SystemSettingsProvider extends ChangeNotifier {
   Future<void> openStartupSettings() async {
     final startupService = _startupService;
     if (startupService == null) {
-      _lastError = 'Configurações de inicialização não disponíveis neste ambiente';
+      _lastError =
+          'Configurações de inicialização não disponíveis neste ambiente';
       notifyListeners();
       return;
     }
@@ -147,7 +150,9 @@ class SystemSettingsProvider extends ChangeNotifier {
         );
       },
       (failure) {
-        _lastError = failure is StartupServiceFailure ? failure.message : 'Falha ao abrir configurações do sistema';
+        _lastError = failure is StartupServiceFailure
+            ? failure.message
+            : 'Falha ao abrir configurações do sistema';
         notifyListeners();
       },
     );

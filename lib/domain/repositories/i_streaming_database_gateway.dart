@@ -11,13 +11,14 @@ abstract class IStreamingDatabaseGateway {
 
   /// Executa query em streaming, processando em chunks.
   ///
-  /// [onChunk] é chamado para cada lote de linhas processado.
+  /// [onChunk] é chamado para cada lote de linhas processado (pode ser async
+  /// para alinhar com framing de socket sem bloquear a isolate principal).
   /// [fetchSize] é o número de linhas buscadas por vez.
   /// [chunkSizeBytes] é o tamanho aproximado em bytes de cada chunk.
   Future<Result<void>> executeQueryStream(
     String query,
     String connectionString,
-    void Function(List<Map<String, dynamic>> chunk) onChunk, {
+    Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     int fetchSize,
     int chunkSizeBytes,
   });

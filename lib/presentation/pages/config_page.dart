@@ -52,7 +52,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
   String _getUpdateUnavailableMessage() {
     final capabilities = getIt<RuntimeCapabilities>();
-    return capabilities.supportsAutoUpdate ? AppStrings.gsAutoUpdateNotConfigured : AppStrings.gsAutoUpdateNotSupported;
+    return capabilities.supportsAutoUpdate
+        ? AppStrings.gsAutoUpdateNotConfigured
+        : AppStrings.gsAutoUpdateNotSupported;
   }
 
   String _formatTechnicalDetails(UpdateCheckDiagnostics? diagnostics) {
@@ -67,21 +69,25 @@ class _ConfigPageState extends State<ConfigPage> {
       'Feed consultado: ${diagnostics.requestedFeedUrl}',
     ];
 
-    if (diagnostics.remoteVersion != null && diagnostics.remoteVersion!.isNotEmpty) {
+    if (diagnostics.remoteVersion != null &&
+        diagnostics.remoteVersion!.isNotEmpty) {
       lines.add(
         'Versao remota: ${diagnostics.remoteVersion}',
       );
-    } else if (diagnostics.appcastProbeVersion != null && diagnostics.appcastProbeVersion!.isNotEmpty) {
+    } else if (diagnostics.appcastProbeVersion != null &&
+        diagnostics.appcastProbeVersion!.isNotEmpty) {
       lines.add(
         'Versao remota: ${diagnostics.appcastProbeVersion}',
       );
     }
 
-    if (diagnostics.errorMessage != null && diagnostics.errorMessage!.isNotEmpty) {
+    if (diagnostics.errorMessage != null &&
+        diagnostics.errorMessage!.isNotEmpty) {
       lines.add(
         'Erro do updater: ${diagnostics.errorMessage}',
       );
-    } else if (diagnostics.probeErrorMessage != null && diagnostics.probeErrorMessage!.isNotEmpty) {
+    } else if (diagnostics.probeErrorMessage != null &&
+        diagnostics.probeErrorMessage!.isNotEmpty) {
       lines.add(
         'Erro ao ler appcast: ${diagnostics.probeErrorMessage}',
       );
@@ -173,7 +179,8 @@ class _ConfigPageState extends State<ConfigPage> {
             startupError: systemSettingsProvider.lastError,
             supportsAutoUpdate: supportsAutoUpdate,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
-            onStartWithWindowsChanged: systemSettingsProvider.setStartWithWindows,
+            onStartWithWindowsChanged:
+                systemSettingsProvider.setStartWithWindows,
             onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,

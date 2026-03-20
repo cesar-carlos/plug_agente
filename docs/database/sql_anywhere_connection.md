@@ -12,13 +12,13 @@ DRIVER={SQL Anywhere 16};UID=user;PWD=password;DBN=database;HOST=host:port
 
 ### Parameters
 
-| Parameter | Description |
-|-----------|-------------|
-| DRIVER | ODBC driver name (e.g. `SQL Anywhere 16`, `SQL Anywhere 17`) |
-| UID | Username |
-| PWD | Password |
-| DBN | Database name |
-| HOST | `hostname:port` or `ip:port` |
+| Parameter | Description                                                  |
+| --------- | ------------------------------------------------------------ |
+| DRIVER    | ODBC driver name (e.g. `SQL Anywhere 16`, `SQL Anywhere 17`) |
+| UID       | Username                                                     |
+| PWD       | Password                                                     |
+| DBN       | Database name                                                |
+| HOST      | `hostname:port` or `ip:port`                                 |
 
 ### Example
 

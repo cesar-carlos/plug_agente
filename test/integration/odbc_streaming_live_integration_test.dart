@@ -56,7 +56,7 @@ void main() async {
         final result = await gateway.executeQueryStream(
           smokeQuery,
           connectionString!,
-          (chunk) {
+          (chunk) async {
             totalRows += chunk.length;
           },
           fetchSize: 1,
@@ -84,7 +84,7 @@ void main() async {
         final execution = gateway.executeQueryStream(
           query,
           connectionString!,
-          (_) {},
+          (_) async {},
           fetchSize: 50,
         );
 
