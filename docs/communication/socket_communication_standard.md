@@ -416,7 +416,9 @@ Response:
 - `options.preserve_sql`: alias legado para `execution_mode: "preserve"`.
 - `options.multi_result`: habilita retorno explicito de multiplos result sets
   e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
-  com paginacao nem com `params` nomeados.
+  com paginacao nem com `params` nomeados. Com autorizacao por token ativa, cada
+  statement separado por `;` e avaliado isoladamente (mesmo modelo que
+  `sql.executeBatch`).
 - `params.database`: override opcional do banco alvo para a request atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
   rejeitada com `invalid_params`.
@@ -1226,6 +1228,12 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 ## Limites operacionais atuais
 
 - `options.timeout_ms` suportado em `sql.execute` e `sql.executeBatch`.
+  Quando timeouts por estagio do socket estao ativos, o timeout ODBC efetivo do
+  batch e o **minimo** entre o orcamento do estagio SQL e `options.timeout_ms`
+  (este ultimo age como teto por pedido). Em `sql.executeBatch` com
+  `transaction: false`, o agente aplica o **tempo restante** do orcamento a cada
+  comando em sequencia; se o orcamento esgotar antes de um comando, o batch
+  falha com contexto de timeout/budget (sem executar esse comando).
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.

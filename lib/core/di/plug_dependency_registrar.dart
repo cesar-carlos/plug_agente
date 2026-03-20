@@ -47,6 +47,7 @@ import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
@@ -62,6 +63,7 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
@@ -160,6 +162,9 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       InMemoryAuthorizationDecisionCache.new,
     )
+    ..registerLazySingleton<IClientTokenPolicyCache>(
+      ClientTokenPolicyMemoryCache.new,
+    )
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
       () => getIt<FeatureFlags>().enableTokenAudit
@@ -230,6 +235,7 @@ void registerPlugDependencyGraph(
         localDataSource: getIt<ClientTokenLocalDataSource>(),
         revokedTokenStore: getIt<IRevokedTokenStore>(),
         tokenAuditStore: getIt<ITokenAuditStore>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton<JwtJwksVerifier>(
@@ -341,6 +347,7 @@ void registerPlugDependencyGraph(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton(
@@ -348,6 +355,7 @@ void registerPlugDependencyGraph(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton(
@@ -355,6 +363,7 @@ void registerPlugDependencyGraph(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton(

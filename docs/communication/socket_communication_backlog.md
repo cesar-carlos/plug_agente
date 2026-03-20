@@ -21,12 +21,12 @@ Referencia de implementacao atual:
 ## Politica futura: execution_mode em sql.executeBatch
 
 - Em v2.5, `sql.executeBatch` nao suporta `execution_mode`; todos os comandos rodam
-  em modo managed implicito.
+em modo managed implicito.
 - Opcoes para evolucao futura: (A) manter assim; (B) adicionar
-  `options.execution_mode` no batch (aplicado a todos os comandos); (C) adicionar
-  `commands[*].execution_mode` por comando.
+`options.execution_mode` no batch (aplicado a todos os comandos); (C) adicionar
+`commands[*].execution_mode` por comando.
 - Decisao a ser tomada quando houver demanda ou requisito de passthrough por
-  comando.
+comando.
 
 ## Proximos itens (quando priorizado)
 
@@ -40,3 +40,4 @@ Referencia de implementacao atual:
 - Registrar apenas itens ainda pendentes.
 - Nao reintroduzir itens concluidos.
 - Promover um item para `standard` assim que estiver implementado.
+

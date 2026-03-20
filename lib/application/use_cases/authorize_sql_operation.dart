@@ -1,8 +1,6 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
@@ -31,7 +29,7 @@ class AuthorizeSqlOperation {
     final classificationResult = _classifier.classify(sql);
     return classificationResult.fold(
       (classification) async {
-        final tokenHash = _hashToken(token);
+        final tokenHash = hashClientCredentialToken(token);
         final decisionKeys = classification.resources
             .map(
               (resource) => _decisionCacheKey(
@@ -42,19 +40,25 @@ class AuthorizeSqlOperation {
             )
             .toList(growable: false);
 
-        final cachedDecision = _resolveFromDecisionCache(
+        final phase = _resolveDecisionCachePhase(
           keys: decisionKeys,
           operation: classification.operation.name,
           resources: classification.resources.map((r) => r.normalizedName),
         );
-        if (cachedDecision != null) {
-          return cachedDecision;
+
+        if (phase.fastFailure != null) {
+          return Failure(phase.fastFailure!);
         }
+        if (phase.allSatisfiedByCache) {
+          return const Success(unit);
+        }
+
+        final pendingIndices = phase.pendingIndices!;
 
         final policyResult = await _tokenValidationService.validate(token);
         return policyResult.fold(
           (policy) async {
-            for (var i = 0; i < classification.resources.length; i++) {
+            for (final i in pendingIndices) {
               final resource = classification.resources[i];
               final allowed = policy.isAllowed(
                 operation: classification.operation,
@@ -137,46 +141,48 @@ class AuthorizeSqlOperation {
     );
   }
 
-  Result<void>? _resolveFromDecisionCache({
+  _DecisionCachePhase _resolveDecisionCachePhase({
     required List<String> keys,
     required String operation,
     required Iterable<String> resources,
   }) {
     final cache = _decisionCache;
     if (cache == null || keys.isEmpty) {
-      return null;
-    }
-
-    final entries = <AuthorizationDecisionCacheEntry>[];
-    for (final key in keys) {
-      final entry = cache.get(key);
-      if (entry == null) {
-        return null;
-      }
-      entries.add(entry);
-    }
-
-    for (var i = 0; i < entries.length; i++) {
-      final entry = entries[i];
-      if (entry.allowed) {
-        continue;
-      }
-      final resource = resources.elementAt(i);
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Authorization denied for $operation on $resource',
-          context: {
-            'authorization': true,
-            'reason': entry.reason ?? 'missing_permission',
-            if (entry.clientId != null) 'client_id': entry.clientId,
-            'operation': operation,
-            'resource': resource,
-          },
-        ),
+      return _DecisionCachePhase.needsCheck(
+        List<int>.generate(keys.length, (i) => i),
       );
     }
 
-    return const Success(unit);
+    final resourceList = resources.toList(growable: false);
+    final pending = <int>[];
+
+    for (var i = 0; i < keys.length; i++) {
+      final entry = cache.get(keys[i]);
+      if (entry == null) {
+        pending.add(i);
+        continue;
+      }
+      if (!entry.allowed) {
+        final resource = resourceList[i];
+        return _DecisionCachePhase.denied(
+          domain.ConfigurationFailure.withContext(
+            message: 'Authorization denied for $operation on $resource',
+            context: {
+              'authorization': true,
+              'reason': entry.reason ?? 'missing_permission',
+              if (entry.clientId != null) 'client_id': entry.clientId,
+              'operation': operation,
+              'resource': resource,
+            },
+          ),
+        );
+      }
+    }
+
+    if (pending.isEmpty) {
+      return _DecisionCachePhase.allCachedAllowed();
+    }
+    return _DecisionCachePhase.needsCheck(pending);
   }
 
   void _cacheDecision({
@@ -212,11 +218,6 @@ class AuthorizeSqlOperation {
     return '$tokenHash|$operation|$resource';
   }
 
-  String _hashToken(String token) {
-    final normalized = token.trim();
-    return sha256.convert(utf8.encode(normalized)).toString();
-  }
-
   String _operationLabel(SqlOperation operation) {
     return switch (operation) {
       SqlOperation.read => 'consultar',
@@ -224,4 +225,25 @@ class AuthorizeSqlOperation {
       SqlOperation.delete => 'excluir',
     };
   }
+}
+
+class _DecisionCachePhase {
+  _DecisionCachePhase._({
+    this.fastFailure,
+    this.allSatisfiedByCache = false,
+    this.pendingIndices,
+  });
+
+  factory _DecisionCachePhase.denied(domain.ConfigurationFailure failure) =>
+      _DecisionCachePhase._(fastFailure: failure);
+
+  factory _DecisionCachePhase.allCachedAllowed() =>
+      _DecisionCachePhase._(allSatisfiedByCache: true);
+
+  factory _DecisionCachePhase.needsCheck(List<int> indices) =>
+      _DecisionCachePhase._(pendingIndices: indices);
+
+  final domain.ConfigurationFailure? fastFailure;
+  final bool allSatisfiedByCache;
+  final List<int>? pendingIndices;
 }

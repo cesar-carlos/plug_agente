@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:math' show max, min;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -38,8 +40,133 @@ const _tokenAutoRefreshAfterCreateKey =
 const _createTokenDialogMaxWidth = 1120.0;
 const _createTokenDialogHorizontalMargin = 40.0;
 const _createTokenDialogHeightFactor = 0.84;
+const _createTokenDialogMinPreferredOuterHeight = 400.0;
+const _createTokenDialogCompactWidthBreakpoint = 780.0;
 const _createTokenBarrierOpacity = 0.4;
 const _createTokenScaleStart = 0.95;
+
+class _CreateTokenDialogShell extends StatefulWidget {
+  const _CreateTokenDialogShell({
+    required this.navigatorContext,
+    required this.agentFocusNode,
+    required this.dialogWidth,
+    required this.dialogOuterMaxHeight,
+    required this.theme,
+    required this.isEditingToken,
+    required this.body,
+  });
+
+  final BuildContext navigatorContext;
+  final FocusNode agentFocusNode;
+  final double dialogWidth;
+  final double dialogOuterMaxHeight;
+  final FluentThemeData theme;
+  final bool isEditingToken;
+  final Widget Function(BuildContext context, ClientTokenProvider provider)
+  body;
+
+  @override
+  State<_CreateTokenDialogShell> createState() =>
+      _CreateTokenDialogShellState();
+}
+
+class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.agentFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCreating = context.select<ClientTokenProvider, bool>(
+      (ClientTokenProvider p) => p.isCreating,
+    );
+    return PopScope(
+      canPop: !isCreating,
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            if (isCreating) {
+              return;
+            }
+            final navigator = Navigator.of(widget.navigatorContext);
+            if (navigator.canPop()) {
+              navigator.pop();
+            }
+          },
+        },
+        child: FocusTraversalGroup(
+          policy: OrderedTraversalPolicy(),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: widget.dialogWidth,
+                maxWidth: widget.dialogWidth,
+                maxHeight: widget.dialogOuterMaxHeight,
+              ),
+              child: Semantics(
+                namesRoute: true,
+                label: widget.isEditingToken
+                    ? AppStrings.ctDialogEditTokenTitle
+                    : AppStrings.ctDialogCreateTokenTitle,
+                child: Card(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  backgroundColor:
+                      widget.theme.resources.solidBackgroundFillColorBase,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.isEditingToken
+                            ? AppStrings.ctDialogEditTokenTitle
+                            : AppStrings.ctDialogCreateTokenTitle,
+                        style: widget.theme.typography.subtitle,
+                      ),
+                      if (widget.isEditingToken) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color:
+                                widget.theme.resources.subtleFillColorSecondary,
+                            border: Border.all(
+                              color: widget
+                                  .theme
+                                  .resources
+                                  .controlStrokeColorDefault,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          child: const Text(AppStrings.ctEditUpdatesTokenHint),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.lg),
+                      Expanded(
+                        child: Consumer<ClientTokenProvider>(
+                          builder: (context, tokenProvider, _) {
+                            return widget.body(context, tokenProvider);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ClientTokenSection extends StatefulWidget {
   const ClientTokenSection({
@@ -62,6 +189,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
   Timer? _clientFilterDebounceTimer;
   final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
+  final FocusNode _createTokenDialogAgentFocusNode = FocusNode();
   bool _isCreateTokenDialogOpen = false;
 
   bool _allTables = false;
@@ -99,6 +227,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _listClientFilterController.dispose();
     _clientFilterDebounceTimer?.cancel();
     _createTokenDialogRevision.dispose();
+    _createTokenDialogAgentFocusNode.dispose();
     super.dispose();
   }
 
@@ -193,117 +322,89 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
           return ValueListenableBuilder<int>(
             valueListenable: _createTokenDialogRevision,
             builder: (dialogContext, revision, child) {
-              final screenSize = MediaQuery.sizeOf(dialogContext);
+              final mediaQuery = MediaQuery.of(dialogContext);
+              final availableHeight =
+                  (mediaQuery.size.height -
+                          mediaQuery.padding.vertical -
+                          mediaQuery.viewInsets.bottom)
+                      .clamp(0.0, double.infinity);
               final availableWidth =
-                  screenSize.width - (_createTokenDialogHorizontalMargin * 2);
+                  mediaQuery.size.width -
+                  (_createTokenDialogHorizontalMargin * 2);
               final dialogWidth = availableWidth.clamp(
                 420.0,
                 _createTokenDialogMaxWidth,
               );
-              final dialogMaxHeight =
-                  screenSize.height * _createTokenDialogHeightFactor;
+              final factorHeight =
+                  availableHeight * _createTokenDialogHeightFactor;
+              final minPreferredOuter = min(
+                _createTokenDialogMinPreferredOuterHeight,
+                availableHeight,
+              );
+              final dialogOuterMaxHeight = max(factorHeight, minPreferredOuter);
+              final isCompact =
+                  dialogWidth < _createTokenDialogCompactWidthBreakpoint;
               final theme = FluentTheme.of(dialogContext);
 
               return ChangeNotifierProvider<ClientTokenProvider>.value(
                 value: provider,
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: dialogWidth,
-                      maxWidth: dialogWidth,
-                    ),
-                    child: Card(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      backgroundColor:
-                          theme.resources.solidBackgroundFillColorBase,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isEditingToken
-                                ? AppStrings.ctDialogEditTokenTitle
-                                : AppStrings.ctDialogCreateTokenTitle,
-                            style: theme.typography.subtitle,
-                          ),
-                          if (isEditingToken) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(AppSpacing.sm),
-                              decoration: BoxDecoration(
-                                color: theme.resources.subtleFillColorSecondary,
-                                border: Border.all(
-                                  color:
-                                      theme.resources.controlStrokeColorDefault,
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
-                                ),
-                              ),
-                              child: const Text(
-                                AppStrings.ctEditUpdatesTokenHint,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.lg),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxHeight: dialogMaxHeight,
-                            ),
-                            child: Consumer<ClientTokenProvider>(
-                              builder: (context, provider, _) {
-                                return _CreateTokenDialogContent(
-                                  clientIdController: _clientIdController,
-                                  agentIdController: _agentIdController,
-                                  payloadController: _payloadController,
-                                  rules: _rules,
-                                  allTables: _allTables,
-                                  allViews: _allViews,
-                                  allPermissions: _allPermissions,
-                                  formError: _formError,
-                                  providerError: provider.error,
-                                  lastCreatedToken: provider.lastCreatedToken,
-                                  onToggleAllTables: (value) {
-                                    _allTables = value;
-                                    _notifyCreateTokenDialogChanged();
-                                  },
-                                  onToggleAllViews: (value) {
-                                    _allViews = value;
-                                    _notifyCreateTokenDialogChanged();
-                                  },
-                                  onToggleAllPermissions: (value) {
-                                    _allPermissions = value;
-                                    _notifyCreateTokenDialogChanged();
-                                  },
-                                  onAddRule: _openAddRuleModal,
-                                  onEditRule: _openEditRuleModal,
-                                  onDeleteRule: _removeRule,
-                                  onDismissCreatedToken:
-                                      provider.clearLastCreatedToken,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          Consumer<ClientTokenProvider>(
-                            builder: (context, provider, _) {
-                              return _CreateTokenDialogFooter(
-                                isCreating: provider.isCreating,
-                                submitLabel: isEditingToken
-                                    ? AppStrings.ctButtonSaveTokenChanges
-                                    : AppStrings.ctButtonCreateToken,
-                                onCancel: () =>
-                                    Navigator.of(dialogContext).pop(),
-                                onSubmit: _handleSubmitToken,
-                              );
+                child: _CreateTokenDialogShell(
+                  navigatorContext: dialogContext,
+                  agentFocusNode: _createTokenDialogAgentFocusNode,
+                  dialogWidth: dialogWidth,
+                  dialogOuterMaxHeight: dialogOuterMaxHeight,
+                  theme: theme,
+                  isEditingToken: isEditingToken,
+                  body: (context, tokenProvider) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _CreateTokenDialogContent(
+                            isCompact: isCompact,
+                            agentFocusNode: _createTokenDialogAgentFocusNode,
+                            clientIdController: _clientIdController,
+                            agentIdController: _agentIdController,
+                            payloadController: _payloadController,
+                            rules: _rules,
+                            allTables: _allTables,
+                            allViews: _allViews,
+                            allPermissions: _allPermissions,
+                            formError: _formError,
+                            providerError: tokenProvider.error,
+                            lastCreatedToken: tokenProvider.lastCreatedToken,
+                            onToggleAllTables: (value) {
+                              _allTables = value;
+                              _notifyCreateTokenDialogChanged();
                             },
+                            onToggleAllViews: (value) {
+                              _allViews = value;
+                              _notifyCreateTokenDialogChanged();
+                            },
+                            onToggleAllPermissions: (value) {
+                              _allPermissions = value;
+                              _notifyCreateTokenDialogChanged();
+                            },
+                            onAddRule: _openAddRuleModal,
+                            onEditRule: _openEditRuleModal,
+                            onDeleteRule: _removeRule,
+                            onDismissCreatedToken:
+                                tokenProvider.clearLastCreatedToken,
+                            onFieldSubmitted: _handleSubmitToken,
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        _CreateTokenDialogFooter(
+                          isCreating: tokenProvider.isCreating,
+                          submitLabel: isEditingToken
+                              ? AppStrings.ctButtonSaveTokenChanges
+                              : AppStrings.ctButtonCreateToken,
+                          onCancel: () => Navigator.of(dialogContext).pop(),
+                          onSubmit: _handleSubmitToken,
+                        ),
+                      ],
+                    );
+                  },
                 ),
               );
             },
@@ -856,8 +957,50 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 }
 
+class _TokenFormErrorAnnouncer extends StatefulWidget {
+  const _TokenFormErrorAnnouncer({
+    required this.formError,
+    required this.providerError,
+    required this.child,
+  });
+
+  final String formError;
+  final String providerError;
+  final Widget child;
+
+  @override
+  State<_TokenFormErrorAnnouncer> createState() =>
+      _TokenFormErrorAnnouncerState();
+}
+
+class _TokenFormErrorAnnouncerState extends State<_TokenFormErrorAnnouncer> {
+  @override
+  void didUpdateWidget(covariant _TokenFormErrorAnnouncer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _announceIfNew(widget.formError, oldWidget.formError);
+    _announceIfNew(widget.providerError, oldWidget.providerError);
+  }
+
+  void _announceIfNew(String next, String previous) {
+    if (next.isEmpty || next == previous) {
+      return;
+    }
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      next,
+      Directionality.of(context),
+      assertiveness: Assertiveness.assertive,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _CreateTokenDialogContent extends StatelessWidget {
   const _CreateTokenDialogContent({
+    required this.isCompact,
+    required this.agentFocusNode,
     required this.clientIdController,
     required this.agentIdController,
     required this.payloadController,
@@ -875,8 +1018,11 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.onEditRule,
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
+    required this.onFieldSubmitted,
   });
 
+  final bool isCompact;
+  final FocusNode agentFocusNode;
   final TextEditingController clientIdController;
   final TextEditingController agentIdController;
   final TextEditingController payloadController;
@@ -894,86 +1040,98 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final ValueChanged<int> onEditRule;
   final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
+  final VoidCallback onFieldSubmitted;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 780;
-        return SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _TokenIdentityFields(
-                clientIdController: clientIdController,
-                agentIdController: agentIdController,
-                isCompact: isCompact,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
+    return _TokenFormErrorAnnouncer(
+      formError: formError,
+      providerError: providerError,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _TokenIdentityFields(
+              clientIdController: clientIdController,
+              agentIdController: agentIdController,
+              agentFocusNode: agentFocusNode,
+              isCompact: isCompact,
+              onAgentSubmitted: onFieldSubmitted,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(3),
+              child: AppTextField(
                 label: AppStrings.ctFieldPayloadJsonOptional,
                 controller: payloadController,
                 hint: AppStrings.ctHintPayloadJson,
                 maxLines: 4,
+                textInputAction: TextInputAction.newline,
               ),
-              const SizedBox(height: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.lg,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  _FlagCheckbox(
-                    label: AppStrings.ctFlagAllTables,
-                    value: allTables,
-                    onChanged: onToggleAllTables,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _FlagCheckbox(
+                  focusOrder: 4,
+                  label: AppStrings.ctFlagAllTables,
+                  value: allTables,
+                  onChanged: onToggleAllTables,
+                ),
+                _FlagCheckbox(
+                  focusOrder: 5,
+                  label: AppStrings.ctFlagAllViews,
+                  value: allViews,
+                  onChanged: onToggleAllViews,
+                ),
+                _FlagCheckbox(
+                  focusOrder: 6,
+                  label: AppStrings.ctFlagAllPermissions,
+                  value: allPermissions,
+                  onChanged: onToggleAllPermissions,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                const Expanded(
+                  child: SettingsSectionTitle(
+                    title: AppStrings.ctSectionRulesByResource,
                   ),
-                  _FlagCheckbox(
-                    label: AppStrings.ctFlagAllViews,
-                    value: allViews,
-                    onChanged: onToggleAllViews,
-                  ),
-                  _FlagCheckbox(
-                    label: AppStrings.ctFlagAllPermissions,
-                    value: allPermissions,
-                    onChanged: onToggleAllPermissions,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  const Expanded(
-                    child: SettingsSectionTitle(
-                      title: AppStrings.ctSectionRulesByResource,
-                    ),
-                  ),
-                  AppButton(
+                ),
+                FocusTraversalOrder(
+                  order: const NumericFocusOrder(7),
+                  child: AppButton(
                     label: AppStrings.ctButtonAddRule,
                     isPrimary: false,
                     icon: FluentIcons.add,
                     onPressed: allPermissions ? null : onAddRule,
                   ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (rules.isEmpty)
-                const Text(AppStrings.ctNoRulesAdded)
-              else
-                ClientTokenRulesGrid(
-                  rules: rules,
-                  onEdit: onEditRule,
-                  onDelete: onDeleteRule,
                 ),
-              _TokenFeedbackPanel(
-                formError: formError,
-                providerError: providerError,
-                lastCreatedToken: lastCreatedToken,
-                onDismissCreatedToken: onDismissCreatedToken,
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (rules.isEmpty)
+              const Text(AppStrings.ctNoRulesAdded)
+            else
+              ClientTokenRulesGrid(
+                rules: rules,
+                onEdit: onEditRule,
+                onDelete: onDeleteRule,
               ),
-            ],
-          ),
-        );
-      },
+            _TokenFeedbackPanel(
+              formError: formError,
+              providerError: providerError,
+              lastCreatedToken: lastCreatedToken,
+              onDismissCreatedToken: onDismissCreatedToken,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -996,16 +1154,22 @@ class _CreateTokenDialogFooter extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        AppButton(
-          label: AppStrings.btnCancel,
-          isPrimary: false,
-          onPressed: onCancel,
+        FocusTraversalOrder(
+          order: const NumericFocusOrder(200),
+          child: AppButton(
+            label: AppStrings.btnCancel,
+            isPrimary: false,
+            onPressed: isCreating ? null : onCancel,
+          ),
         ),
         const SizedBox(width: AppSpacing.sm),
-        AppButton(
-          label: submitLabel,
-          isLoading: isCreating,
-          onPressed: isCreating ? null : onSubmit,
+        FocusTraversalOrder(
+          order: const NumericFocusOrder(210),
+          child: AppButton(
+            label: submitLabel,
+            isLoading: isCreating,
+            onPressed: isCreating ? null : onSubmit,
+          ),
         ),
       ],
     );
@@ -1107,27 +1271,40 @@ class _TokenIdentityFields extends StatelessWidget {
   const _TokenIdentityFields({
     required this.clientIdController,
     required this.agentIdController,
+    required this.agentFocusNode,
     required this.isCompact,
+    required this.onAgentSubmitted,
   });
 
   final TextEditingController clientIdController;
   final TextEditingController agentIdController;
+  final FocusNode agentFocusNode;
   final bool isCompact;
+  final VoidCallback onAgentSubmitted;
 
   @override
   Widget build(BuildContext context) {
-    final Widget clientField = AppTextField(
-      label: AppStrings.ctFieldClientId,
-      controller: clientIdController,
-      hint: AppStrings.ctHintClientId,
-      readOnly: true,
-      suffixIcon: _CopyValueButton(value: clientIdController.text),
+    final Widget clientField = FocusTraversalOrder(
+      order: const NumericFocusOrder(1),
+      child: AppTextField(
+        label: AppStrings.ctFieldClientId,
+        controller: clientIdController,
+        hint: AppStrings.ctHintClientId,
+        readOnly: true,
+        suffixIcon: _CopyValueButton(value: clientIdController.text),
+      ),
     );
 
-    final Widget agentField = AppTextField(
-      label: AppStrings.ctFieldAgentIdOptional,
-      controller: agentIdController,
-      hint: AppStrings.ctHintAgentId,
+    final Widget agentField = FocusTraversalOrder(
+      order: const NumericFocusOrder(2),
+      child: AppTextField(
+        label: AppStrings.ctFieldAgentIdOptional,
+        controller: agentIdController,
+        hint: AppStrings.ctHintAgentId,
+        focusNode: agentFocusNode,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => onAgentSubmitted(),
+      ),
     );
 
     if (isCompact) {
@@ -1223,21 +1400,26 @@ class _TokenFeedbackPanel extends StatelessWidget {
 
 class _FlagCheckbox extends StatelessWidget {
   const _FlagCheckbox({
+    required this.focusOrder,
     required this.label,
     required this.value,
     required this.onChanged,
   });
 
+  final double focusOrder;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Checkbox(
-      checked: value,
-      onChanged: (isChecked) => onChanged(isChecked ?? false),
-      content: Text(label),
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(focusOrder),
+      child: Checkbox(
+        checked: value,
+        onChanged: (isChecked) => onChanged(isChecked ?? false),
+        content: Text(label),
+      ),
     );
   }
 }

@@ -1421,6 +1421,126 @@ void main() {
       },
     );
 
+    test(
+      'should authorize each sql.execute statement when multi_result splits '
+      'scripts',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+
+        final capturedSql = <String>[];
+        when(
+          () => mockAuthorize(
+            token: any(named: 'token'),
+            sql: any(named: 'sql'),
+            requestId: any(named: 'requestId'),
+            method: any(named: 'method'),
+          ),
+        ).thenAnswer((Invocation inv) async {
+          capturedSql.add(inv.namedArguments[#sql]! as String);
+          return const Success(unit);
+        });
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const <Map<String, dynamic>>[],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) => queryResponse);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-multi-auth',
+          params: {
+            'sql': "SELECT 1 AS x; SELECT 'a;b' AS y FROM dbo.t",
+            'client_token': 'bearer-split',
+            'options': {'multi_result': true},
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          clientToken: 'bearer-split',
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(capturedSql, [
+          'SELECT 1 AS x',
+          "SELECT 'a;b' AS y FROM dbo.t",
+        ]);
+        verify(() => mockGateway.executeQuery(any())).called(1);
+      },
+    );
+
+    test(
+      'should deny sql.execute multi_result when a later statement fails auth',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+
+        when(
+          () => mockAuthorize(
+            token: any(named: 'token'),
+            sql: any(named: 'sql'),
+            requestId: any(named: 'requestId'),
+            method: any(named: 'method'),
+          ),
+        ).thenAnswer((Invocation inv) async {
+          final s = inv.namedArguments[#sql]! as String;
+          if (s.contains('dbo.denied')) {
+            return Failure(
+              domain.ConfigurationFailure.withContext(
+                message: 'Authorization denied for read on dbo.denied',
+                context: {
+                  'authorization': true,
+                  'reason': 'missing_permission',
+                  'client_id': 'client-acme',
+                  'operation': 'read',
+                  'resource': 'dbo.denied',
+                  'user_message': 'Seu cliente nao possui permissao.',
+                },
+              ),
+            );
+          }
+          return const Success(unit);
+        });
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-multi-deny',
+          params: {
+            'sql':
+                'SELECT * FROM dbo.allowed WHERE id = 1; SELECT * FROM dbo.denied',
+            'client_token': 'bearer-deny',
+            'options': {'multi_result': true},
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          clientToken: 'bearer-deny',
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.unauthorized));
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
     test('should return unauthorized on authorization stage timeout', () async {
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,

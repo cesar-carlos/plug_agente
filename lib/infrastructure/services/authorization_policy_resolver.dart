@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
@@ -19,20 +21,23 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     ClientTokenLocalDataSource? localDataSource,
     IRevokedTokenStore? revokedTokenStore,
     ITokenAuditStore? tokenAuditStore,
+    IClientTokenPolicyCache? policyCache,
   }) : _jwksVerifier = jwksVerifier,
        _localDataSource = localDataSource,
        _revokedTokenStore = revokedTokenStore,
-       _tokenAuditStore = tokenAuditStore;
+       _tokenAuditStore = tokenAuditStore,
+       _policyCache = policyCache;
 
   final FeatureFlags _featureFlags;
   final JwtJwksVerifier? _jwksVerifier;
   final ClientTokenLocalDataSource? _localDataSource;
   final IRevokedTokenStore? _revokedTokenStore;
   final ITokenAuditStore? _tokenAuditStore;
+  final IClientTokenPolicyCache? _policyCache;
 
   @override
   Future<Result<ClientTokenPolicy>> resolvePolicy(String token) async {
-    final rawToken = _normalizeToken(token);
+    final rawToken = normalizeClientCredentialToken(token);
     if (rawToken.isEmpty) {
       final failure = domain.ConfigurationFailure.withContext(
         message: 'Missing client token',
@@ -56,9 +61,22 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       return Failure(failure);
     }
 
+    final policyCache = _policyCache;
+    final credentialHash = hashClientCredentialToken(token);
+    if (policyCache != null) {
+      final cachedPolicy = policyCache.get(credentialHash);
+      if (cachedPolicy != null) {
+        return Success(cachedPolicy);
+      }
+    }
+
     if (_localDataSource != null) {
       final localResult = await _resolvePolicyFromLocalStore(rawToken);
       if (localResult.isSuccess()) {
+        final policy = localResult.getOrNull();
+        if (policy != null) {
+          policyCache?.put(credentialHash, policy);
+        }
         return localResult;
       }
       final localFailure = localResult.exceptionOrNull()! as domain.Failure;
@@ -88,6 +106,11 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           _addToRevokedStoreIfNeeded(rawToken, failure);
           await _recordAuthorizationDeniedAudit(failure);
         }
+      } else {
+        final policy = jwksResolved.getOrNull();
+        if (policy != null) {
+          policyCache?.put(credentialHash, policy);
+        }
       }
       return jwksResolved;
     }
@@ -98,6 +121,11 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       if (failure is domain.Failure) {
         _addToRevokedStoreIfNeeded(rawToken, failure);
         await _recordAuthorizationDeniedAudit(failure);
+      }
+    } else {
+      final policy = decodeResult.getOrNull();
+      if (policy != null) {
+        policyCache?.put(credentialHash, policy);
       }
     }
     return decodeResult;
@@ -151,7 +179,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Future<Result<ClientTokenPolicy>> _resolvePolicyDecodeOnly(
     String token,
   ) async {
-    final rawToken = _normalizeToken(token);
+    final rawToken = normalizeClientCredentialToken(token);
     if (rawToken.isEmpty) {
       return Failure(
         domain.ConfigurationFailure.withContext(
@@ -286,11 +314,4 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     }
   }
 
-  String _normalizeToken(String token) {
-    final value = token.trim();
-    if (value.toLowerCase().startsWith('bearer ')) {
-      return value.substring(7).trim();
-    }
-    return value;
-  }
 }

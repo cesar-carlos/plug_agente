@@ -19,6 +19,10 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.readOnly = false,
     this.inputFormatters,
+    this.focusNode,
+    this.autofocus = false,
+    this.textInputAction,
+    this.onSubmitted,
   });
   final String label;
   final String? hint;
@@ -34,6 +38,10 @@ class AppTextField extends StatelessWidget {
   final bool enabled;
   final bool readOnly;
   final List<TextInputFormatter>? inputFormatters;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
   Widget? _buildPrefixIcon() {
     if (prefixIcon == null) return null;
@@ -74,6 +82,10 @@ class AppTextField extends StatelessWidget {
       onChanged: onChanged,
       suffix: suffixIcon,
       prefix: _buildPrefixIcon(),
+      focusNode: focusNode,
+      autofocus: autofocus,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
     );
 
     if (errorText != null) {

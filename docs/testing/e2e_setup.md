@@ -77,14 +77,14 @@ flutter test test/infrastructure/external_services/api_test.dart
 # ODBC streaming
 flutter test test/integration/odbc_streaming_live_integration_test.dart
 
-# ODBC tabela Cliente (SELECT * / COUNT)
-flutter test test/integration/odbc_cliente_table_live_test.dart
+# ODBC SQL Anywhere TOP/START AT (DSN deve parecer SQL Anywhere)
+flutter test test/integration/odbc_sql_anywhere_top_start_at_live_test.dart
 
-# ODBC multi-result (duas SELECT no mesmo script — depende do driver)
-flutter test test/integration/odbc_multi_result_live_test.dart
-
-# ODBC RPC sql.execute / sql.executeBatch (DDL + DML; usa só ODBC_TEST_DSN / ODBC_DSN)
+# ODBC RPC sql.execute / sql.executeBatch (multi-result, SELECT em batch, DML; só ODBC_TEST_DSN / ODBC_DSN)
 flutter test test/integration/odbc_rpc_execute_coverage_live_e2e_test.dart
+
+# Recuperação de conexão (quando aplicável ao ambiente)
+flutter test test/integration/connection_recovery_integration_test.dart
 ```
 
 Testes que dependem de variáveis não definidas são **ignorados** (skip) com mensagem explicativa.

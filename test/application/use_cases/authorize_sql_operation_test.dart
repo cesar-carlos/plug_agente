@@ -98,6 +98,26 @@ void main() {
       expect(second.isSuccess(), isTrue);
       verify(() => resolver.resolvePolicy(any())).called(1);
     });
+
+    test(
+      'should hit full decision cache when only some resource keys were stored',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+        await useCase.call(
+          token: 'tok',
+          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+        );
+        await useCase.call(
+          token: 'tok',
+          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+        );
+
+        verify(() => resolver.resolvePolicy(any())).called(1);
+      },
+    );
   });
 }
 

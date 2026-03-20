@@ -14,6 +14,15 @@ class SqlOperationClassification {
 }
 
 class SqlOperationClassifier {
+  static final RegExp _blockComments = RegExp(r'/\*.*?\*/', dotAll: true);
+  static final RegExp _lineComments = RegExp(r'--.*$', multiLine: true);
+  static final RegExp _trailingSemicolon = RegExp(r';$');
+  static final RegExp _identifierStart = RegExp('[a-z_]', caseSensitive: false);
+  static final RegExp _identifierPart = RegExp(
+    r'[a-z0-9_$#]',
+    caseSensitive: false,
+  );
+
   Result<SqlOperationClassification> classify(String sql) {
     final normalized = _normalizeSql(sql);
     if (normalized.isEmpty) {
@@ -352,11 +361,11 @@ class SqlOperationClassifier {
   }
 
   bool _isIdentifierStart(String char) {
-    return RegExp('[a-z_]', caseSensitive: false).hasMatch(char);
+    return _identifierStart.hasMatch(char);
   }
 
   bool _isIdentifierPart(String char) {
-    return RegExp(r'[a-z0-9_$#]', caseSensitive: false).hasMatch(char);
+    return _identifierPart.hasMatch(char);
   }
 
   bool _isWordBoundary(String sql, int index) {
@@ -405,19 +414,14 @@ class SqlOperationClassifier {
   }
 
   String _normalizeSql(String sql) {
-    final noBlockComments = sql.replaceAll(
-      RegExp(r'/\*.*?\*/', dotAll: true),
-      ' ',
-    );
-    final noLineComments = noBlockComments.replaceAll(
-      RegExp(r'--.*$', multiLine: true),
-      ' ',
-    );
+    final noBlockComments = sql.replaceAll(_blockComments, ' ');
+    final noLineComments = noBlockComments.replaceAll(_lineComments, ' ');
     return noLineComments.trim().toLowerCase();
   }
 
   bool _containsMultipleStatements(String sql) {
-    final withoutTrailingSemicolon = sql.trim().replaceFirst(RegExp(r';$'), '');
+    final withoutTrailingSemicolon =
+        sql.trim().replaceFirst(_trailingSemicolon, '');
     return withoutTrailingSemicolon.contains(';');
   }
 }

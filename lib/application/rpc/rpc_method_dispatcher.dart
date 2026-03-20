@@ -11,6 +11,7 @@ import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/core/utils/split_sql_statements.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -91,6 +92,7 @@ class RpcMethodDispatcher {
   final Duration _batchExecutionStageBudgetDuration;
 
   static const _idempotencyTtl = Duration(minutes: 5);
+  static final RegExp _authorizationSqlWhitespaceCollapse = RegExp(r'\s+');
   static const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
   static const _defaultSqlBatchTotalBudget = Duration(seconds: 45);
   static const _defaultAuthorizationStageBudget = Duration(seconds: 3);
@@ -265,39 +267,16 @@ class RpcMethodDispatcher {
     if (_featureFlags.enableClientTokenAuthorization &&
         clientToken != null &&
         clientToken.isNotEmpty) {
-      final authStopwatch = Stopwatch()..start();
-      final authResult = await _authorizeWithBudget(
-        token: clientToken,
+      final authDenied = await _authorizeSqlExecuteWithClientToken(
+        request: request,
         sql: sql,
-        requestId: request.id?.toString(),
-        method: request.method,
+        multiResultRequested: multiResultRequested,
+        clientToken: clientToken,
         deadline: deadline,
       );
-      authStopwatch.stop();
-      if (authResult.isError()) {
-        final failure = authResult.exceptionOrNull()! as domain.Failure;
-        final ctx = failure.context;
-        _authMetrics?.recordDenied(
-          requestId: request.id?.toString(),
-          method: request.method,
-          latencyMs: authStopwatch.elapsedMilliseconds,
-          clientId: ctx['client_id'] as String?,
-          operation: ctx['operation'] as String?,
-          resource: ctx['resource'] as String?,
-          reason: ctx['reason'] as String?,
-        );
-        final rpcError = FailureToRpcErrorMapper.map(
-          failure,
-          instance: request.id?.toString(),
-          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-        );
-        return RpcResponse.error(id: request.id, error: rpcError);
+      if (authDenied != null) {
+        return authDenied;
       }
-      _authMetrics?.recordAuthorized(
-        requestId: request.id?.toString(),
-        method: request.method,
-        latencyMs: authStopwatch.elapsedMilliseconds,
-      );
     }
 
     // Validate SQL (allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE)
@@ -896,6 +875,71 @@ class RpcMethodDispatcher {
     );
   }
 
+  /// When [multiResultRequested] and the script contains several statements,
+  /// authorizes each fragment separately (aligned with `sql.executeBatch`).
+  Future<RpcResponse?> _authorizeSqlExecuteWithClientToken({
+    required RpcRequest request,
+    required String sql,
+    required bool multiResultRequested,
+    required String clientToken,
+    required DateTime? deadline,
+  }) async {
+    final List<String> statements;
+    if (multiResultRequested && SqlValidator.containsMultipleStatements(sql)) {
+      statements = splitSqlStatements(sql);
+    } else {
+      statements = <String>[sql];
+    }
+
+    final authorizedFingerprints = <String>{};
+    for (final raw in statements) {
+      final stmt = raw.trim();
+      if (stmt.isEmpty) {
+        continue;
+      }
+      final fingerprint = _authorizationFingerprint(stmt);
+      if (authorizedFingerprints.contains(fingerprint)) {
+        continue;
+      }
+      authorizedFingerprints.add(fingerprint);
+
+      final authStopwatch = Stopwatch()..start();
+      final authResult = await _authorizeWithBudget(
+        token: clientToken,
+        sql: stmt,
+        requestId: request.id?.toString(),
+        method: request.method,
+        deadline: deadline,
+      );
+      authStopwatch.stop();
+      if (authResult.isError()) {
+        final failure = authResult.exceptionOrNull()! as domain.Failure;
+        final ctx = failure.context;
+        _authMetrics?.recordDenied(
+          requestId: request.id?.toString(),
+          method: request.method,
+          latencyMs: authStopwatch.elapsedMilliseconds,
+          clientId: ctx['client_id'] as String?,
+          operation: ctx['operation'] as String?,
+          resource: ctx['resource'] as String?,
+          reason: ctx['reason'] as String?,
+        );
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      }
+      _authMetrics?.recordAuthorized(
+        requestId: request.id?.toString(),
+        method: request.method,
+        latencyMs: authStopwatch.elapsedMilliseconds,
+      );
+    }
+    return null;
+  }
+
   Future<Result<void>> _authorizeWithBudget({
     required String token,
     required String sql,
@@ -1236,7 +1280,10 @@ class RpcMethodDispatcher {
   }
 
   String _authorizationFingerprint(String sql) {
-    return sql.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    return sql
+        .trim()
+        .replaceAll(_authorizationSqlWhitespaceCollapse, ' ')
+        .toLowerCase();
   }
 
   int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {
