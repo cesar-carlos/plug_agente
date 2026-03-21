@@ -140,6 +140,36 @@ void main() {
     });
 
     group('shouldUseMultiResultExecution', () {
+      test('should be false when expectMultipleResults is false', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1; SELECT 2',
+          parameters: null,
+        );
+        final use = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+          _baseRequest(),
+          prepared,
+        );
+        expect(use, isFalse);
+      });
+
+      test('should be false when pagination is present on the request', () {
+        const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1; SELECT 2',
+          parameters: null,
+        );
+        final use = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+          _baseRequest(
+            query: 'SELECT 1; SELECT 2',
+            pagination: pagination,
+            expectMultipleResults: true,
+            sqlHandlingMode: SqlHandlingMode.preserve,
+          ),
+          prepared,
+        );
+        expect(use, isFalse);
+      });
+
       test('should be false when named parameters are present', () {
         const prepared = OdbcPreparedQueryExecution(
           sql: 'SELECT 1',
@@ -152,10 +182,34 @@ void main() {
         expect(use, isFalse);
       });
 
+      test('should be false when parameters map is non-empty', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1; SELECT 2',
+          parameters: {'': 0},
+        );
+        final use = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+          _baseRequest(expectMultipleResults: true),
+          prepared,
+        );
+        expect(use, isFalse);
+      });
+
       test('should be true when multi-result and no parameters', () {
         const prepared = OdbcPreparedQueryExecution(
           sql: 'SELECT 1; SELECT 2',
           parameters: null,
+        );
+        final use = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+          _baseRequest(expectMultipleResults: true),
+          prepared,
+        );
+        expect(use, isTrue);
+      });
+
+      test('should be true when parameters is an empty map', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1; SELECT 2',
+          parameters: <String, dynamic>{},
         );
         final use = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
           _baseRequest(expectMultipleResults: true),

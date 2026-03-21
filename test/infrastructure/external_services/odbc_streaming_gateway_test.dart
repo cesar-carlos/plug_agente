@@ -149,7 +149,7 @@ void main() {
       expect(result.isError(), isTrue);
       verify(
         () => mockService.disconnect('conn-cancel'),
-      ).called(greaterThan(0));
+      ).called(1);
     });
 
     test(
@@ -284,7 +284,7 @@ void main() {
         expect(result.isError(), isTrue);
         verify(
           () => mockService.disconnect('conn-disconnect'),
-        ).called(greaterThan(0));
+        ).called(1);
       },
     );
   });

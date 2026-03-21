@@ -49,6 +49,7 @@ class RpcStreamComplete {
     this.executionId,
     this.startedAt,
     this.finishedAt,
+    this.terminalStatus,
   });
 
   factory RpcStreamComplete.fromJson(Map<String, dynamic> json) =>
@@ -60,7 +61,14 @@ class RpcStreamComplete {
         executionId: json['execution_id'] as String?,
         startedAt: json['started_at'] as String?,
         finishedAt: json['finished_at'] as String?,
+        terminalStatus: json['terminal_status'] as String?,
       );
+
+  /// Abnormal stream end: backpressure / overflow before full delivery.
+  static const String terminalStatusAborted = 'aborted';
+
+  /// Abnormal stream end: database or transport error after partial delivery.
+  static const String terminalStatusError = 'error';
 
   final String streamId;
   final dynamic requestId;
@@ -70,6 +78,10 @@ class RpcStreamComplete {
   final String? startedAt;
   final String? finishedAt;
 
+  /// When set (`aborted` or `error`), the hub should treat the stream as
+  /// closed even though the matching `rpc:response` may be an error.
+  final String? terminalStatus;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'stream_id': streamId,
     'request_id': requestId?.toString(),
@@ -78,6 +90,7 @@ class RpcStreamComplete {
     if (executionId != null) 'execution_id': executionId,
     if (startedAt != null) 'started_at': startedAt,
     if (finishedAt != null) 'finished_at': finishedAt,
+    if (terminalStatus != null) 'terminal_status': terminalStatus,
   };
 }
 

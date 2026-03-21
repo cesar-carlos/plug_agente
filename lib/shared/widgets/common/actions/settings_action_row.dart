@@ -14,10 +14,12 @@ class SettingsActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         leading,
-        SizedBox(width: spacing),
         trailing,
       ],
     );

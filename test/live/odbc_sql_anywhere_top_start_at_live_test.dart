@@ -1,11 +1,16 @@
+@Tags(['live'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 
 import '../helpers/e2e_env.dart';
+import '../helpers/live_test_env.dart';
+import '../helpers/odbc_live_bootstrap.dart';
 
 /// Verifies SQL Anywhere accepts TOP/START AT (agent pagination shape).
 void main() async {
-  await E2EEnv.load();
+  await loadLiveTestEnv();
 
   final dsn = E2EEnv.odbcConnectionString;
   final dsnValid = dsn != null && dsn.trim().isNotEmpty;
@@ -22,8 +27,12 @@ FROM (
 ORDER BY table_id ASC
 ''';
 
+  final skipTopStartAt = !dsnValid
+      ? E2EEnv.skipReasonNoOdbcDsnPrimary
+      : (!looksLikeSqlAnywhere ? E2EEnv.skipReasonSqlAnywhereDriverMismatch : false);
+
   group('ODBC SQL Anywhere TOP START AT live', () {
-    late odbc.ServiceLocator locator;
+    OdbcLiveBootstrap? bootstrap;
     var isReady = false;
 
     setUpAll(() async {
@@ -31,19 +40,16 @@ ORDER BY table_id ASC
         return;
       }
 
-      locator = odbc.ServiceLocator()..initialize(useAsync: true);
-      final service = locator.asyncService;
-      final initResult = await service.initialize();
-      if (initResult.isError()) {
+      final opened = await OdbcLiveBootstrap.open();
+      if (opened == null) {
         return;
       }
+      bootstrap = opened;
       isReady = true;
     });
 
     tearDownAll(() {
-      if (isReady) {
-        locator.shutdown();
-      }
+      bootstrap?.shutdown();
     });
 
     test(
@@ -55,7 +61,7 @@ ORDER BY table_id ASC
           reason: 'ODBC init failed or DSN not SQL Anywhere',
         );
 
-        final service = locator.asyncService;
+        final service = bootstrap!.asyncService;
         final connResult = await service.connect(
           dsn!,
           options: const odbc.ConnectionOptions(),
@@ -74,11 +80,7 @@ ORDER BY table_id ASC
 
         await service.disconnect(connId);
       },
-      skip: !dsnValid
-          ? 'Defina ODBC_TEST_DSN ou ODBC_DSN no .env'
-          : !looksLikeSqlAnywhere
-          ? 'DSN nao parece SQL Anywhere; use driver SQL Anywhere ou ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY'
-          : false,
+      skip: skipTopStartAt,
     );
   });
 }

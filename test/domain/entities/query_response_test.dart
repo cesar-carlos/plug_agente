@@ -315,6 +315,85 @@ void main() {
         expect(response.items, hasLength(2));
       });
 
+      test(
+        'should set hasMultiResult false for single result set and no row_count items',
+        () {
+          final response = QueryResponse(
+            id: 'response-1',
+            requestId: 'query-1',
+            agentId: 'agent-1',
+            data: const [
+              {'id': 1},
+            ],
+            timestamp: timestamp,
+            resultSets: const [
+              QueryResultSet(
+                index: 0,
+                rows: [
+                  {'id': 1},
+                ],
+                rowCount: 1,
+              ),
+            ],
+            items: const [
+              QueryResponseItem.resultSet(
+                index: 0,
+                resultSet: QueryResultSet(
+                  index: 0,
+                  rows: [
+                    {'id': 1},
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+            ],
+          );
+
+          expect(response.hasMultiResult, isFalse);
+        },
+      );
+
+      test(
+        'should set hasMultiResult true when items include row_count even if '
+        'only one logical result set',
+        () {
+          final response = QueryResponse(
+            id: 'response-1',
+            requestId: 'query-1',
+            agentId: 'agent-1',
+            data: const [],
+            timestamp: timestamp,
+            resultSets: const [
+              QueryResultSet(
+                index: 0,
+                rows: [
+                  {'n': 1},
+                ],
+                rowCount: 1,
+              ),
+            ],
+            items: const [
+              QueryResponseItem.resultSet(
+                index: 0,
+                resultSet: QueryResultSet(
+                  index: 0,
+                  rows: [
+                    {'n': 1},
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+              QueryResponseItem.rowCount(
+                index: 1,
+                rowCount: 5,
+              ),
+            ],
+          );
+
+          expect(response.hasMultiResult, isTrue);
+        },
+      );
+
       test('should have timestamp', () {
         // Arrange & Act
         final response = QueryResponse(

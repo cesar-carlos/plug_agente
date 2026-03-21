@@ -24,6 +24,46 @@ void main() {
       pool = OdbcConnectionPool(mockService, mockSettings);
     });
 
+    test('should wait for poolSize before opening another lease', () async {
+      mockSettings.poolSize = 1;
+      var leaseCounter = 0;
+
+      when(
+        () => mockService.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async {
+        leaseCounter++;
+        return Success(
+          Connection(
+            id: 'lease-$leaseCounter',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+
+      final first = await pool.acquire('DSN=Test');
+      expect(first.getOrNull(), 'lease-1');
+
+      when(() => mockService.disconnect(any())).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final secondFuture = pool.acquire('DSN=Test');
+      await pumpEventQueue();
+      expect(leaseCounter, 1);
+
+      await pool.release('lease-1');
+
+      final second = await secondFuture;
+      expect(second.isSuccess(), isTrue);
+      expect(second.getOrNull(), 'lease-2');
+      expect(leaseCounter, 2);
+    });
+
     test('should connect for each acquire with options', () async {
       var connectionCounter = 0;
 

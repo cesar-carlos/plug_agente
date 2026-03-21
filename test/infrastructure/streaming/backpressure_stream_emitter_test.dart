@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -218,6 +220,134 @@ void main() {
         check(emitted).length.equals(1);
       },
     );
+
+    test(
+      'should not start a second chunk emit while the first is still in flight',
+      () async {
+        final emitStarted = Completer<void>();
+        final continueEmit = Completer<void>();
+        emitted = [];
+        final emitter = BackpressureStreamEmitter(
+          emit: (String event, Map<String, dynamic> payload) async {
+            emitted.add((event: event, payload: payload));
+            if (!emitStarted.isCompleted) {
+              emitStarted.complete();
+            }
+            await continueEmit.future;
+          },
+          onRegister: (_, _) {},
+          onUnregister: (_) {},
+        );
+
+        final doneFirst = emitter.emitChunk(
+          const RpcStreamChunk(
+            streamId: 's-1',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: [
+              {'id': 1},
+            ],
+          ),
+        );
+
+        await emitStarted.future;
+        check(emitted).length.equals(1);
+
+        await emitter.emitChunk(
+          const RpcStreamChunk(
+            streamId: 's-1',
+            requestId: 'req-1',
+            chunkIndex: 1,
+            rows: [
+              {'id': 2},
+            ],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        check(emitted).length.equals(1);
+        check(emitted.first.payload['chunk_index']).equals(0);
+
+        continueEmit.complete();
+        await doneFirst;
+      },
+    );
+
+    test('should re-queue chunk and restore credit when emit throws', () async {
+      var emitAttempts = 0;
+      emitted = [];
+      final emitter = BackpressureStreamEmitter(
+        emit: (String event, Map<String, dynamic> payload) async {
+          emitAttempts++;
+          if (emitAttempts == 1) {
+            throw Exception('emit failed');
+          }
+          emitted.add((event: event, payload: payload));
+        },
+        onRegister: (_, _) {},
+        onUnregister: (_) {},
+      );
+
+      await expectLater(
+        emitter.emitChunk(
+          const RpcStreamChunk(
+            streamId: 's-1',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: [
+              {'id': 1},
+            ],
+          ),
+        ),
+        throwsException,
+      );
+
+      check(emitAttempts).equals(1);
+      check(emitted).isEmpty();
+
+      emitter.releaseChunks(1);
+      await pumpEventQueue();
+      check(emitted).length.equals(1);
+      check(emitted.first.payload['chunk_index']).equals(0);
+    });
+
+    test('should unregister when rpc:complete emit fails', () async {
+      var unregistered = false;
+      emitted = [];
+      final emitter = BackpressureStreamEmitter(
+        emit: (String event, Map<String, dynamic> payload) async {
+          if (event == 'rpc:complete') {
+            throw Exception('complete failed');
+          }
+          emitted.add((event: event, payload: payload));
+        },
+        onRegister: (_, _) {},
+        onUnregister: (_) => unregistered = true,
+      );
+
+      await emitter.emitChunk(
+        const RpcStreamChunk(
+          streamId: 's-1',
+          requestId: 'req-1',
+          chunkIndex: 0,
+          rows: [
+            {'id': 1},
+          ],
+        ),
+      );
+
+      await expectLater(
+        emitter.emitComplete(
+          const RpcStreamComplete(
+            streamId: 's-1',
+            requestId: 'req-1',
+            totalRows: 1,
+          ),
+        ),
+        throwsException,
+      );
+
+      check(unregistered).isTrue();
+    });
 
     test('should ignore releaseChunks with windowSize <= 0', () async {
       final emitter = createEmitter();

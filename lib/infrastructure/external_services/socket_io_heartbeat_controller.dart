@@ -68,7 +68,6 @@ final class SocketIoHeartbeatController {
     }
 
     if (_waitingAck) {
-      _handleTimeout();
       return;
     }
 

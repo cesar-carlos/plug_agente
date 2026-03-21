@@ -1,11 +1,24 @@
-/// SQL snippets for ODBC E2E coverage (DDL + DML) keyed by detected driver family.
+import 'package:uuid/uuid.dart';
+
+/// SQL snippets for ODBC live E2E (DDL + DML) keyed by detected driver family.
 ///
 /// DDL is applied via the database gateway `executeNonQuery` (no RPC SQL validator).
 /// DML is exercised through `sql.execute` / `sql.executeBatch`.
+///
+/// This is **path coverage** (real RPC + ODBC), not Dart line coverage (LCOV).
 enum OdbcE2eSqlDialect {
   sqlAnywhere,
   sqlServer,
   postgresql,
+}
+
+/// Prefix for per-run table names (each [OdbcE2eLiveSql] instance uses a unique name).
+const odbcE2eLiveTableNamePrefix = 'plug_agente_e2e_live';
+
+/// Generates a unique table name for isolated parallel-safe E2E runs.
+String newOdbcE2eLiveTableName() {
+  final suffix = const Uuid().v4().replaceAll('-', '_');
+  return '${odbcE2eLiveTableNamePrefix}_$suffix';
 }
 
 /// Best-effort detection from the ODBC connection string (DRIVER= / keywords).
@@ -40,22 +53,21 @@ OdbcE2eSqlDialect detectOdbcE2eDialect(String dsn) {
   return OdbcE2eSqlDialect.sqlServer;
 }
 
-/// Shared table name for coverage tests (unquoted; avoid reserved words).
-const odbcE2eCoverageTableName = 'plug_agente_e2e_cov';
-
-class OdbcE2eCoverageSql {
-  OdbcE2eCoverageSql(this.dialect);
+class OdbcE2eLiveSql {
+  OdbcE2eLiveSql(this.dialect, {required this.tableName});
 
   /// Driver family used for literals and DDL.
   final OdbcE2eSqlDialect dialect;
 
-  String get dropTableIfExists =>
-      'DROP TABLE IF EXISTS $odbcE2eCoverageTableName';
+  /// Isolated table for this test group (see [newOdbcE2eLiveTableName]).
+  final String tableName;
+
+  String get dropTableIfExists => 'DROP TABLE IF EXISTS $tableName';
 
   String get createTable => switch (dialect) {
     OdbcE2eSqlDialect.sqlAnywhere =>
       '''
-CREATE TABLE $odbcE2eCoverageTableName (
+CREATE TABLE $tableName (
   id INTEGER NOT NULL PRIMARY KEY,
   code VARCHAR(40) NOT NULL,
   amt DECIMAL(10,2) NOT NULL,
@@ -66,7 +78,7 @@ CREATE TABLE $odbcE2eCoverageTableName (
 ''',
     OdbcE2eSqlDialect.sqlServer =>
       '''
-CREATE TABLE $odbcE2eCoverageTableName (
+CREATE TABLE $tableName (
   id INT NOT NULL PRIMARY KEY,
   code NVARCHAR(40) NOT NULL,
   amt DECIMAL(10,2) NOT NULL,
@@ -77,7 +89,7 @@ CREATE TABLE $odbcE2eCoverageTableName (
 ''',
     OdbcE2eSqlDialect.postgresql =>
       '''
-CREATE TABLE $odbcE2eCoverageTableName (
+CREATE TABLE $tableName (
   id INTEGER NOT NULL PRIMARY KEY,
   code VARCHAR(40) NOT NULL,
   amt NUMERIC(10,2) NOT NULL,
@@ -105,7 +117,7 @@ CREATE TABLE $odbcE2eCoverageTableName (
     return switch (dialect) {
       OdbcE2eSqlDialect.postgresql =>
         '''
-INSERT INTO $odbcE2eCoverageTableName (
+INSERT INTO $tableName (
   id, code, amt, birth_date, ts_col, is_active
 ) VALUES (
   $id, '$code', $amt, DATE '$birthDate', TIMESTAMP '$ts', $active
@@ -113,7 +125,7 @@ INSERT INTO $odbcE2eCoverageTableName (
 ''',
       OdbcE2eSqlDialect.sqlServer =>
         '''
-INSERT INTO $odbcE2eCoverageTableName (
+INSERT INTO $tableName (
   id, code, amt, birth_date, ts_col, is_active
 ) VALUES (
   $id, N'$code', $amt, CAST('$birthDate' AS DATE), CAST('$ts' AS DATETIME2(3)), $active
@@ -121,7 +133,7 @@ INSERT INTO $odbcE2eCoverageTableName (
 ''',
       OdbcE2eSqlDialect.sqlAnywhere =>
         '''
-INSERT INTO $odbcE2eCoverageTableName (
+INSERT INTO $tableName (
   id, code, amt, birth_date, ts_col, is_active
 ) VALUES (
   $id, '$code', $amt, '$birthDate', '$ts', $active
@@ -132,23 +144,52 @@ INSERT INTO $odbcE2eCoverageTableName (
 
   String get multiResultProbe =>
       '''
-SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = 1;
-SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName;
+SELECT id, code, amt FROM $tableName WHERE id = 1;
+SELECT COUNT(*) AS row_count FROM $tableName;
 ''';
 
   String updateAmtById(int id, double delta) =>
-      'UPDATE $odbcE2eCoverageTableName SET amt = amt + $delta WHERE id = $id';
+      'UPDATE $tableName SET amt = amt + $delta WHERE id = $id';
+
+  /// Absolute assignment (for execution_order probes).
+  String setAmtById(int id, double value) =>
+      'UPDATE $tableName SET amt = $value WHERE id = $id';
+
+  /// Multiplicative update (for execution_order probes).
+  String multiplyAmtById(int id, double factor) =>
+      'UPDATE $tableName SET amt = amt * $factor WHERE id = $id';
 
   String updateCodeById(int id, String code) =>
-      "UPDATE $odbcE2eCoverageTableName SET code = '${code.replaceAll("'", "''")}' WHERE id = $id";
+      "UPDATE $tableName SET code = '${code.replaceAll("'", "''")}' WHERE id = $id";
 
-  String deleteById(int id) =>
-      'DELETE FROM $odbcE2eCoverageTableName WHERE id = $id';
+  String deleteById(int id) => 'DELETE FROM $tableName WHERE id = $id';
 
-  String get countAll =>
-      'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName';
+  String get countAll => 'SELECT COUNT(*) AS row_count FROM $tableName';
 
   /// Single-row probe for batch SELECT coverage (same shape for SA / SQL Server / PostgreSQL).
   String selectIdCodeAmtById(int id) =>
-      'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = $id';
+      'SELECT id, code, amt FROM $tableName WHERE id = $id';
+
+  /// Stable ordering for pagination / streaming probes.
+  String get selectIdCodeOrderById =>
+      'SELECT id, code FROM $tableName ORDER BY id';
+
+  /// ODBC named placeholder for [key] (`@key` on SQL Server, `:key` elsewhere).
+  String namedPlaceholder(String key) => switch (dialect) {
+    OdbcE2eSqlDialect.sqlServer => '@$key',
+    _ => ':$key',
+  };
+
+  /// `SELECT code ... WHERE id = <named>` — use `params: { idKey: <int> }`.
+  String selectCodeWhereIdNamed(String idKey) {
+    final p = namedPlaceholder(idKey);
+    return 'SELECT code FROM $tableName WHERE id = $p';
+  }
+
+  /// `UPDATE ... SET code = <codeKey> WHERE id = <idKey>` with bound params.
+  String updateCodeWhereIdNamed(String codeKey, String idKey) {
+    final c = namedPlaceholder(codeKey);
+    final i = namedPlaceholder(idKey);
+    return 'UPDATE $tableName SET code = $c WHERE id = $i';
+  }
 }

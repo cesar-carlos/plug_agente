@@ -1,23 +1,27 @@
+@Tags(['live'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 
 import '../helpers/e2e_env.dart';
+import '../helpers/live_test_env.dart';
 import '../helpers/mock_odbc_connection_settings.dart';
+import '../helpers/odbc_live_bootstrap.dart';
 
 void main() async {
-  await E2EEnv.load();
+  await loadLiveTestEnv();
 
   final connectionString = E2EEnv.odbcConnectionStringAny;
-  final connectionStringValid =
-      connectionString != null && connectionString.trim().isNotEmpty;
+  final connectionStringValid = connectionString != null && connectionString.trim().isNotEmpty;
   final smokeQuery = E2EEnv.odbcSmokeQuery;
-  final longRunningQuery = E2EEnv.odbcLongQuery;
-  final longQueryValid =
-      longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
+  final longRunningQuery = connectionString != null && connectionString.trim().isNotEmpty
+      ? E2EEnv.odbcLongQueryForDsn(connectionString)
+      : null;
+  final longQueryValid = longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
 
-  group('ODBC streaming live integration', () {
-    late odbc.ServiceLocator locator;
+  group('ODBC streaming live', () {
+    OdbcLiveBootstrap? bootstrap;
     late OdbcStreamingGateway gateway;
     var isReady = false;
 
@@ -26,21 +30,20 @@ void main() async {
         return;
       }
 
-      locator = odbc.ServiceLocator()..initialize(useAsync: true);
-      final service = locator.asyncService;
-      final initResult = await service.initialize();
-      if (initResult.isError()) {
+      final opened = await OdbcLiveBootstrap.open();
+      if (opened == null) {
         return;
       }
-
-      gateway = OdbcStreamingGateway(service, MockOdbcConnectionSettings());
+      bootstrap = opened;
+      gateway = OdbcStreamingGateway(
+        opened.asyncService,
+        MockOdbcConnectionSettings(),
+      );
       isReady = true;
     });
 
     tearDownAll(() {
-      if (isReady) {
-        locator.shutdown();
-      }
+      bootstrap?.shutdown();
     });
 
     test(
@@ -65,9 +68,42 @@ void main() async {
         expect(result.isSuccess(), isTrue);
         expect(totalRows, greaterThan(0));
       },
-      skip: !connectionStringValid
-          ? 'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env'
-          : false,
+      skip: E2EEnv.skipUnless(
+        connectionStringValid,
+        E2EEnv.skipReasonNoOdbcDsnAny,
+      ),
+    );
+
+    test(
+      'should deliver multiple rows across chunks when fetchSize is 1',
+      () async {
+        expect(
+          isReady,
+          isTrue,
+          reason: 'ODBC init failed or DSN not configured',
+        );
+
+        const unionProbe = 'SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3';
+        var chunkEvents = 0;
+        var totalRows = 0;
+        final result = await gateway.executeQueryStream(
+          unionProbe,
+          connectionString!,
+          (List<Map<String, dynamic>> chunk) async {
+            chunkEvents++;
+            totalRows += chunk.length;
+          },
+          fetchSize: 1,
+        );
+
+        expect(result.isSuccess(), isTrue, reason: '$result');
+        expect(totalRows, 3);
+        expect(chunkEvents, greaterThanOrEqualTo(3));
+      },
+      skip: E2EEnv.skipUnless(
+        connectionStringValid,
+        E2EEnv.skipReasonNoOdbcDsnAny,
+      ),
     );
 
     test(
@@ -95,9 +131,10 @@ void main() async {
         final result = await execution.timeout(const Duration(seconds: 20));
         expect(result.isError(), isTrue);
       },
-      skip: !connectionStringValid || !longQueryValid
-          ? 'Defina um DSN e ODBC_INTEGRATION_LONG_QUERY* (query longa) no .env'
-          : false,
+      skip: E2EEnv.skipUnless(
+        connectionStringValid && longQueryValid,
+        E2EEnv.skipReasonOdbcLongQuery,
+      ),
     );
   });
 }

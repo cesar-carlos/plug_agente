@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../../tool/e2e_dotenv_parse.dart';
+
 /// Environment variables for E2E and live integration tests.
 ///
 /// Loads from .env (when present) and falls back to [Platform.environment].
@@ -11,6 +13,9 @@ class E2EEnv {
   E2EEnv._();
 
   static bool _loaded = false;
+
+  /// Keys from project-root `.env` (same parser as `tool/check_e2e_env.dart`).
+  static final Map<String, String> _fileEnv = <String, String>{};
 
   static File _resolveDotEnvFile() {
     var dir = Directory.current;
@@ -36,14 +41,15 @@ class E2EEnv {
     try {
       final file = _resolveDotEnvFile();
       if (file.existsSync()) {
-        dotenv.loadFromString(
-          envString: file.readAsStringSync(),
-          isOptional: true,
-        );
+        _fileEnv
+          ..clear()
+          ..addAll(parseDotEnvContent(file.readAsStringSync()));
       } else {
+        _fileEnv.clear();
         await dotenv.load(isOptional: true);
       }
     } on Object {
+      _fileEnv.clear();
       await dotenv.load(isOptional: true);
     }
 
@@ -51,6 +57,8 @@ class E2EEnv {
   }
 
   static String? _get(String key) {
+    final fromFile = _fileEnv[key]?.trim();
+    if (fromFile != null && fromFile.isNotEmpty) return fromFile;
     try {
       final fromEnv = dotenv.env[key]?.trim();
       if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
@@ -111,43 +119,181 @@ class E2EEnv {
   static String? get odbcSqlAnywhereTopStartAtQuery =>
       _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');
 
-  /// When true (`ODBC_E2E_REQUIRE_MULTI_RESULT=true`), RPC coverage E2E fails if
+  /// When true (`ODBC_E2E_REQUIRE_MULTI_RESULT=true`), RPC live E2E fails if
   /// `sql.execute` with `multi_result` returns no `result_sets`/rows (no fallback).
   static bool get odbcE2eRequireMultiResult =>
       _get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
 
-  /// When true (`ODBC_E2E_TRANSACTIONAL_BATCH=true`), RPC coverage E2E runs an
+  /// When true (`ODBC_E2E_TRANSACTIONAL_BATCH=true`), RPC live E2E runs an
   /// extra `sql.executeBatch` with `transaction: true` (validates begin/commit).
   static bool get odbcE2eTryTransactionalBatch =>
       _get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
+
+  /// When true (`ODBC_E2E_BENCHMARK=true`), runs `odbc_rpc_benchmark_live_e2e_test`.
+  static bool get odbcE2eBenchmarkEnabled =>
+      _get('ODBC_E2E_BENCHMARK') == 'true';
+
+  /// When true (`ODBC_E2E_BENCHMARK_RECORD=true`), benchmark E2E appends one JSON
+  /// line per target to [odbcE2eBenchmarkRecordFile] (JSONL history).
+  static bool get odbcE2eBenchmarkRecordEnabled =>
+      _get('ODBC_E2E_BENCHMARK_RECORD') == 'true';
+
+  /// Path to JSONL benchmark history (project-relative or absolute).
+  /// Default: `benchmark/e2e_odbc_rpc.jsonl` when recording is enabled.
+  static String get odbcE2eBenchmarkRecordFile {
+    final custom = _get('ODBC_E2E_BENCHMARK_FILE')?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      return custom;
+    }
+    return 'benchmark${Platform.pathSeparator}e2e_odbc_rpc.jsonl';
+  }
+
+  static const String skipReasonOdbcE2eBenchmark =
+      'Defina ODBC_E2E_BENCHMARK=true no .env para rodar benchmarks ODBC RPC.';
+
+  /// Optional context for charts: `local` | `remote` (`ODBC_E2E_BENCHMARK_DB_HOSTING`).
+  static String? get odbcE2eBenchmarkDbHosting {
+    final v = _get('ODBC_E2E_BENCHMARK_DB_HOSTING')?.trim().toLowerCase();
+    if (v == null || v.isEmpty) {
+      return null;
+    }
+    if (v == 'local' || v == 'remote') {
+      return v;
+    }
+    return null;
+  }
+
+  /// Optional regression caps (ms). Keys are JSON `cases` names (see benchmark README).
+  ///
+  /// Env pattern: `ODBC_E2E_BENCHMARK_MAX_MS_<SUFFIX>` where suffix is uppercase
+  /// e.g. `MATERIALIZED`, `BATCH_READS`, `NAMED_PARAMS`, `MULTI_RESULT`, `BATCH_TX`,
+  /// `STREAMING`.
+  static Map<String, int> get odbcE2eBenchmarkMaxMsByCase {
+    final out = <String, int>{};
+    void add(String suffix, String caseKey) {
+      final raw = _get('ODBC_E2E_BENCHMARK_MAX_MS_$suffix')?.trim();
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      final n = int.tryParse(raw);
+      if (n != null && n > 0) {
+        out[caseKey] = n;
+      }
+    }
+
+    add('MATERIALIZED', 'rpc_sql_execute_materialized');
+    add('BATCH_READS', 'rpc_sql_execute_batch_reads');
+    add('NAMED_PARAMS', 'rpc_sql_execute_named_params');
+    add('MULTI_RESULT', 'rpc_sql_execute_multi_result');
+    add('BATCH_TX', 'rpc_sql_execute_batch_tx');
+    add('STREAMING', 'rpc_sql_execute_streaming');
+    return out;
+  }
+
+  // --- Skip messages / helpers for test `skip:` parameter ---
+
+  static const String skipReasonLiveApiTests =
+      'Defina RUN_LIVE_API_TESTS=true no .env';
+
+  static const String skipReasonNoOdbcDsnAny =
+      'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env';
+
+  static const String skipReasonNoOdbcDsnPrimary =
+      'Defina ODBC_TEST_DSN ou ODBC_DSN no .env';
+
+  static const String skipReasonSqlAnywhereDriverMismatch =
+      'DSN não parece SQL Anywhere; use driver SQL Anywhere ou '
+      'ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY';
+
+  static const String skipReasonOdbcLongQuery =
+      'Defina um DSN e ODBC_INTEGRATION_LONG_QUERY* (query longa) no .env';
+
+  static const String skipReasonOdbcLongQueryForTarget =
+      'Defina ODBC_INTEGRATION_LONG_QUERY* compativel com o DSN deste alvo no .env';
+
+  static const String skipReasonOdbcTransactionalBatch =
+      'Defina ODBC_E2E_TRANSACTIONAL_BATCH=true no .env para este teste.';
+
+  static const String skipReasonOdbcRpcLiveMatrix =
+      'Defina pelo menos um de: ODBC_TEST_DSN / ODBC_DSN, '
+      'ODBC_TEST_DSN_SQL_SERVER / ODBC_DSN_SQL_SERVER, '
+      'ODBC_TEST_DSN_POSTGRESQL / ODBC_DSN_POSTGRESQL.';
+
+  /// `skip:` value: do not skip when [conditionMet] is true.
+  static Object? skipUnless(bool conditionMet, String skipReason) =>
+      conditionMet ? false : skipReason;
+
+  /// Skip live API tests when `RUN_LIVE_API_TESTS` is not `true`.
+  static Object? get skipUnlessLiveApiTests =>
+      runLiveApiTests ? false : skipReasonLiveApiTests;
+
+  /// Distinct ODBC DSNs for `test/live/odbc_rpc_execute_live_e2e_test.dart` (deduped).
+  ///
+  /// Order: primary (`ODBC_TEST_DSN` / `ODBC_DSN`), SQL Server, PostgreSQL.
+  static List<({String label, String dsn})> get odbcRpcLiveTargets {
+    final out = <({String label, String dsn})>[];
+    final seen = <String>{};
+    void add(String label, String? dsn) {
+      final s = dsn?.trim();
+      if (s == null || s.isEmpty) return;
+      if (seen.contains(s)) return;
+      seen.add(s);
+      out.add((label: label, dsn: s));
+    }
+
+    add('primary', odbcConnectionString);
+    add('sql_server', odbcSqlServerConnectionString);
+    add('postgresql', odbcPostgresqlConnectionString);
+    return out;
+  }
 
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.
   static String? get odbcLongQuery {
     final conn = odbcConnectionStringAny;
     if (conn == null) return null;
-    if (conn == odbcConnectionString) {
+    return odbcLongQueryForDsn(conn);
+  }
+
+  /// Same as [odbcLongQuery] but keyed to a specific DSN string (e.g. RPC live matrix target).
+  static String? odbcLongQueryForDsn(String dsn) {
+    final normalized = dsn.trim();
+    if (normalized.isEmpty) return null;
+    final primary = odbcConnectionString?.trim() ?? '';
+    if (primary.isNotEmpty && normalized == primary) {
       return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ??
           _get('ODBC_INTEGRATION_LONG_QUERY');
     }
-    if (conn == odbcSqlServerConnectionString) {
+    final ss = odbcSqlServerConnectionString?.trim() ?? '';
+    if (ss.isNotEmpty && normalized == ss) {
       return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ??
           _get('ODBC_INTEGRATION_LONG_QUERY');
     }
-    if (conn == odbcPostgresqlConnectionString) {
+    final pg = odbcPostgresqlConnectionString?.trim() ?? '';
+    if (pg.isNotEmpty && normalized == pg) {
       return _get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL') ??
           _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     return _get('ODBC_INTEGRATION_LONG_QUERY');
   }
 
-  /// Load .env before first use. Call in setUpAll of integration tests.
+  /// Load `.env` before first use. Call at the start of `test/live/*` or other live tests.
   static Future<void> load() => _ensureLoaded();
 
   /// Resets loaded state for testing. Use only in test code.
   @visibleForTesting
   static void resetForTesting() {
     _loaded = false;
+    _fileEnv.clear();
+  }
+
+  /// Seeds in-memory env so getters resolve without reading `.env` from disk.
+  @visibleForTesting
+  static void seedFileEnvForTesting(Map<String, String> env) {
+    _fileEnv
+      ..clear()
+      ..addAll(env);
+    _loaded = true;
   }
 
   /// Validates that [url] looks like http(s) URL. Returns false if invalid.

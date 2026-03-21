@@ -1,11 +1,50 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
+
+/// Limits concurrent in-flight ODBC leases. Each successful `enter` call is
+/// paired with `leave` when the lease ends.
+final class _LeaseLimiter {
+  _LeaseLimiter({required int maxLeases}) : _maxLeases = maxLeases > 0 ? maxLeases : 1;
+
+  final int _maxLeases;
+  int _active = 0;
+  final List<Completer<void>> _waiters = <Completer<void>>[];
+
+  Future<void> enter() async {
+    if (_active < _maxLeases) {
+      _active++;
+      return;
+    }
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    await completer.future;
+  }
+
+  void leave() {
+    if (_waiters.isNotEmpty) {
+      _waiters.removeAt(0).complete();
+    } else {
+      _active--;
+    }
+  }
+
+  void failWaiters(Object error, StackTrace stackTrace) {
+    for (final c in _waiters) {
+      if (!c.isCompleted) {
+        c.completeError(error, stackTrace);
+      }
+    }
+    _waiters.clear();
+  }
+}
 
 /// Aluga uma conexão ODBC por consulta via [OdbcService.connect] com
 /// [ConnectionOptions] completos (buffer alinhado às configurações do app).
@@ -21,8 +60,29 @@ class OdbcConnectionPool implements IConnectionPool {
   final Map<String, Set<String>> _leasedIdsByConnectionString = {};
   final Set<String> _leasedIds = {};
 
+  _LeaseLimiter? _leaseLimiterInstance;
+
+  _LeaseLimiter _leases() => _leaseLimiterInstance ??= _LeaseLimiter(
+    maxLeases: _settings.poolSize > 0 ? _settings.poolSize : ConnectionConstants.defaultPoolSize,
+  );
+
+  void _releaseLeaseSlot() {
+    _leaseLimiterInstance?.leave();
+  }
+
   @override
   Future<Result<String>> acquire(String connectionString) async {
+    try {
+      await _leases().enter();
+    } on Object catch (error) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_acquire',
+        ),
+      );
+    }
+
     final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
     final connectResult = await _service.connect(
       connectionString,
@@ -31,9 +91,7 @@ class OdbcConnectionPool implements IConnectionPool {
 
     return connectResult.fold(
       (Connection connection) {
-        _leasedIdsByConnectionString
-            .putIfAbsent(connectionString, () => <String>{})
-            .add(connection.id);
+        _leasedIdsByConnectionString.putIfAbsent(connectionString, () => <String>{}).add(connection.id);
         _leasedIds.add(connection.id);
         developer.log(
           'Acquired ODBC connection ${connection.id} (lease)',
@@ -42,12 +100,15 @@ class OdbcConnectionPool implements IConnectionPool {
         );
         return Success(connection.id);
       },
-      (error) => Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'pool_acquire',
-        ),
-      ),
+      (error) {
+        _releaseLeaseSlot();
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'pool_acquire',
+          ),
+        );
+      },
     );
   }
 
@@ -61,6 +122,7 @@ class OdbcConnectionPool implements IConnectionPool {
           entry.value.remove(connectionId);
         }
         _leasedIdsByConnectionString.removeWhere((_, ids) => ids.isEmpty);
+        _releaseLeaseSlot();
         return const Success(unit);
       },
       (error) => Failure(
@@ -93,6 +155,11 @@ class OdbcConnectionPool implements IConnectionPool {
     }
     _leasedIds.clear();
     _leasedIdsByConnectionString.clear();
+    _leaseLimiterInstance?.failWaiters(
+      StateError('ODBC lease pool closed'),
+      StackTrace.current,
+    );
+    _leaseLimiterInstance = null;
 
     if (errors.isNotEmpty) {
       return Failure(
@@ -118,9 +185,11 @@ class OdbcConnectionPool implements IConnectionPool {
       level: 800,
     );
 
-    for (final id in ids.toList(growable: false)) {
+    final idList = ids.toList(growable: false);
+    for (final id in idList) {
       await _service.disconnect(id);
       _leasedIds.remove(id);
+      _releaseLeaseSlot();
     }
     return const Success(unit);
   }

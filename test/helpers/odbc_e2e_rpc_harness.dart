@@ -10,16 +10,19 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 import 'mock_odbc_connection_settings.dart';
-import 'odbc_e2e_coverage_sql.dart';
+import 'odbc_e2e_live_sql.dart';
 
-class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock
+    implements IAgentConfigRepository {}
 
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
@@ -34,6 +37,7 @@ class OdbcE2eRpcHarness {
     required this.dispatcher,
     required this.connectionString,
     required this.metrics,
+    required this.featureFlags,
   });
 
   final odbc.ServiceLocator locator;
@@ -43,6 +47,9 @@ class OdbcE2eRpcHarness {
   final String connectionString;
   final MetricsCollector metrics;
 
+  /// Toggle streaming / cancel flags in live E2E without rebuilding the pool.
+  final MockFeatureFlags featureFlags;
+
   static Config _configFor(String dsn, OdbcE2eSqlDialect dialect) {
     final driverName = switch (dialect) {
       OdbcE2eSqlDialect.sqlAnywhere => 'SQL Anywhere',
@@ -51,7 +58,7 @@ class OdbcE2eRpcHarness {
     };
     final now = DateTime.utc(2024);
     return Config(
-      id: 'e2e-coverage',
+      id: 'e2e-live',
       driverName: driverName,
       odbcDriverName: '',
       connectionString: dsn,
@@ -97,6 +104,11 @@ class OdbcE2eRpcHarness {
       MockOdbcConnectionSettings(),
     );
 
+    final streamingGateway = OdbcStreamingGateway(
+      service,
+      MockOdbcConnectionSettings(),
+    );
+
     final normalizer = QueryNormalizerService(QueryNormalizer());
     final authorize = MockAuthorizeSqlOperation();
     when(
@@ -112,9 +124,9 @@ class OdbcE2eRpcHarness {
     when(() => featureFlags.enableClientTokenAuthorization).thenReturn(false);
     when(() => featureFlags.enableSocketIdempotency).thenReturn(false);
     when(() => featureFlags.enableSocketTimeoutByStage).thenReturn(false);
-    when(() => featureFlags.enableSocketCancelMethod).thenReturn(false);
-    when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(false);
-    when(() => featureFlags.enableSocketStreamingChunks).thenReturn(false);
+    when(() => featureFlags.enableSocketCancelMethod).thenReturn(true);
+    when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(true);
+    when(() => featureFlags.enableSocketStreamingChunks).thenReturn(true);
 
     final dispatcher = RpcMethodDispatcher(
       databaseGateway: gateway,
@@ -122,6 +134,9 @@ class OdbcE2eRpcHarness {
       uuid: const Uuid(),
       authorizeSqlOperation: authorize,
       featureFlags: featureFlags,
+      configRepository: configRepo,
+      streamingGateway: streamingGateway,
+      dispatchMetrics: RpcDispatchMetricsCollector(metrics),
     );
 
     return OdbcE2eRpcHarness._(
@@ -131,6 +146,7 @@ class OdbcE2eRpcHarness {
       dispatcher: dispatcher,
       connectionString: dsn,
       metrics: metrics,
+      featureFlags: featureFlags,
     );
   }
 

@@ -199,7 +199,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
             ),
           );
         } finally {
-          await _service.disconnect(connection.id);
+          if (_activeConnectionId == connection.id) {
+            await _service.disconnect(connection.id);
+          }
           if (_activeConnectionId == connection.id) {
             _activeConnectionId = null;
           }
@@ -268,10 +270,16 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
   /// Converte QueryResult para lista de maps.
   List<Map<String, dynamic>> _convertQueryResultToMaps(QueryResult result) {
-    return result.rows.map((row) {
+    final columns = result.columns;
+    final colCount = columns.length;
+    if (colCount == 0) {
+      return result.rows.map((_) => <String, dynamic>{}).toList();
+    }
+    return result.rows.map((dynamic row) {
+      final listRow = row as List<dynamic>;
       final map = <String, dynamic>{};
-      for (var i = 0; i < result.columns.length; i++) {
-        map[result.columns[i]] = row[i];
+      for (var i = 0; i < colCount; i++) {
+        map[columns[i]] = listRow[i];
       }
       return map;
     }).toList();

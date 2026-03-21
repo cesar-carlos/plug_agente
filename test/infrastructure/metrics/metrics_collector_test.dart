@@ -319,6 +319,12 @@ void main() {
         expect(collector.rpcSqlExecuteStreamingChunksResponseCount, 0);
         expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 0);
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 0);
+        expect(collector.transportInboundDecodeSyncCount, 0);
+        expect(collector.transportInboundDecodeAsyncCount, 0);
+        expect(collector.rpcStreamTerminalCompleteEmittedCount, 0);
+        expect(collector.rpcStreamTerminalCompleteFailedCount, 0);
+        expect(collector.rpcResponseAckRetryCount, 0);
+        expect(collector.rpcResponseAckFallbackWithoutAckCount, 0);
       });
     });
 
@@ -364,6 +370,49 @@ void main() {
         expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 1);
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 2);
       });
+
+      test('should increment transport inbound decode counters', () {
+        collector.recordTransportInboundDecodeSync();
+        collector.recordTransportInboundDecodeSync();
+        collector.recordTransportInboundDecodeAsync();
+
+        expect(collector.transportInboundDecodeSyncCount, 2);
+        expect(collector.transportInboundDecodeAsyncCount, 1);
+      });
+
+      test(
+        'should increment stream terminal complete and rpc response ack '
+        'counters',
+        () {
+          collector.recordRpcStreamTerminalCompleteEmitted();
+          collector.recordRpcStreamTerminalCompleteFailed();
+          collector.recordRpcResponseAckRetry();
+          collector.recordRpcResponseAckRetry();
+          collector.recordRpcResponseAckFallbackWithoutAck();
+
+          expect(collector.rpcStreamTerminalCompleteEmittedCount, 1);
+          expect(collector.rpcStreamTerminalCompleteFailedCount, 1);
+          expect(collector.rpcResponseAckRetryCount, 2);
+          expect(collector.rpcResponseAckFallbackWithoutAckCount, 1);
+        },
+      );
+    });
+
+    group('multi-result ODBC counters', () {
+      test(
+        'should increment pool vacuous fallback and direct still vacuous',
+        () {
+          expect(collector.multiResultPoolVacuousFallbackCount, 0);
+          expect(collector.multiResultDirectStillVacuousCount, 0);
+
+          collector.recordMultiResultPoolVacuousFallback();
+          collector.recordMultiResultPoolVacuousFallback();
+          collector.recordMultiResultDirectStillVacuous();
+
+          expect(collector.multiResultPoolVacuousFallbackCount, 2);
+          expect(collector.multiResultDirectStillVacuousCount, 1);
+        },
+      );
     });
 
     group('exportToJson', () {

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 
 void main() {
@@ -253,5 +254,91 @@ void main() {
         expect(pipeline.receiveProcess(frame).getOrThrow(), equals(huge));
       },
     );
+  });
+
+  group('incomingPayloadFrameNeedsAsyncDecode', () {
+    PayloadFrame frame({
+      required String cmp,
+      required int compressedSize,
+      required int originalSize,
+    }) {
+      return PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: cmp,
+        contentType: 'application/json',
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        payload: Uint8List(compressedSize),
+      );
+    }
+
+    test('false for small uncompressed JSON', () {
+      expect(
+        incomingPayloadFrameNeedsAsyncDecode(
+          frame(
+            cmp: 'none',
+            compressedSize: 100,
+            originalSize: 100,
+          ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('true when uncompressed JSON at isolate decode threshold', () {
+      expect(
+        incomingPayloadFrameNeedsAsyncDecode(
+          frame(
+            cmp: 'none',
+            compressedSize: jsonPayloadIsolateEncodeThresholdBytes,
+            originalSize: jsonPayloadIsolateEncodeThresholdBytes,
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('true when gzip compressed blob is large', () {
+      expect(
+        incomingPayloadFrameNeedsAsyncDecode(
+          frame(
+            cmp: 'gzip',
+            compressedSize: gzipIsolateThresholdBytes,
+            originalSize: gzipIsolateThresholdBytes * 10,
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'true when gzip wire is small but declared original is large',
+      () {
+        expect(
+          incomingPayloadFrameNeedsAsyncDecode(
+            frame(
+              cmp: 'gzip',
+              compressedSize: 1024,
+              originalSize: gzipIsolateThresholdBytes,
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('unknown compression requests async path', () {
+      expect(
+        incomingPayloadFrameNeedsAsyncDecode(
+          frame(
+            cmp: 'lz4',
+            compressedSize: 10,
+            originalSize: 10,
+          ),
+        ),
+        isTrue,
+      );
+    });
   });
 }

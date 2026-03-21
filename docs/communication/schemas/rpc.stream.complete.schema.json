@@ -37,6 +37,11 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO-8601 timestamp when execution finished"
+    },
+    "terminal_status": {
+      "type": "string",
+      "enum": ["aborted", "error"],
+      "description": "When set, the stream ended abnormally (e.g. backpressure overflow or DB error) after zero or more chunks; hub should close the stream. Omitted for normal completion."
     }
   },
   "additionalProperties": false

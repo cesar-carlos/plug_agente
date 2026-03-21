@@ -1,0 +1,9 @@
+tags:
+  live:
+    description: >
+      Tests under test/live that may need .env, network, or ODBC.
+      Run `flutter test --exclude-tags=live` for a faster local/CI pass.
+  benchmark:
+    description: >
+      Performance-style E2E (e.g. ODBC RPC timings). Often gated by ODBC_E2E_BENCHMARK=true.
+      Run `flutter test --tags benchmark` only when you intend to measure latency.

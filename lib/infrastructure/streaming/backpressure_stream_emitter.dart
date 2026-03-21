@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 
@@ -27,7 +28,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   final void Function(String streamId) _onUnregister;
   final int _maxQueueSize;
 
-  final Queue<RpcStreamChunk> _chunkQueue = Queue<RpcStreamChunk>();
+  final ListQueue<RpcStreamChunk> _chunkQueue = ListQueue<RpcStreamChunk>();
   RpcStreamComplete? _pendingComplete;
   String? _streamId;
   bool _registered = false;
@@ -36,15 +37,36 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   void releaseChunks(int windowSize) {
     if (windowSize <= 0) return;
     _sendCredit += windowSize;
-    unawaited(_flush());
+    unawaited(
+      _flush().catchError((Object error, StackTrace stackTrace) {
+        AppLogger.error(
+          'BackpressureStreamEmitter flush failed',
+          error,
+          stackTrace,
+        );
+      }),
+    );
   }
 
   Future<void> _flush() async {
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();
-      await _emit('rpc:chunk', payload);
+      // Consume credit before awaiting emit so concurrent _flush() calls cannot
+      // dequeue extra chunks while this send is still in flight.
       _sendCredit--;
+      try {
+        await _emit('rpc:chunk', payload);
+      } on Object catch (error, stackTrace) {
+        _sendCredit++;
+        _chunkQueue.addFirst(chunk);
+        AppLogger.error(
+          'rpc:chunk emit failed; chunk re-queued',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      }
     }
     await _maybeEmitComplete();
   }
@@ -54,9 +76,19 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     final complete = _pendingComplete!;
     _pendingComplete = null;
     final payload = complete.toJson();
-    await _emit('rpc:complete', payload);
-    if (_streamId != null) {
-      _onUnregister(_streamId!);
+    try {
+      await _emit('rpc:complete', payload);
+    } on Object catch (error, stackTrace) {
+      AppLogger.error(
+        'rpc:complete emit failed',
+        error,
+        stackTrace,
+      );
+      rethrow;
+    } finally {
+      if (_streamId != null) {
+        _onUnregister(_streamId!);
+      }
     }
   }
 

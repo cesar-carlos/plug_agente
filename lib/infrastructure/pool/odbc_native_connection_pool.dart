@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
@@ -17,6 +18,12 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
+
+  Duration get _poolConnectionAcquireTimeout => Duration(
+    seconds: _settings.loginTimeoutSeconds > 0
+        ? _settings.loginTimeoutSeconds
+        : ConnectionConstants.defaultLoginTimeout.inSeconds,
+  );
 
   String _odbcErrorMessage(Object error) {
     if (error is OdbcError) {
@@ -100,7 +107,26 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     return poolResult.fold(
       (poolId) async {
-        final connResult = await _service.poolGetConnection(poolId);
+        late final Result<Connection> connResult;
+        try {
+          connResult = await _service
+              .poolGetConnection(poolId)
+              .timeout(
+                _poolConnectionAcquireTimeout,
+                onTimeout: () => throw TimeoutException(
+                  'poolGetConnection timed out after '
+                  '${_poolConnectionAcquireTimeout.inSeconds}s',
+                  _poolConnectionAcquireTimeout,
+                ),
+              );
+        } on TimeoutException catch (error) {
+          return Failure(
+            OdbcFailureMapper.mapPoolError(
+              error,
+              operation: 'pool_acquire',
+            ),
+          );
+        }
 
         return connResult.fold(
           (connection) {

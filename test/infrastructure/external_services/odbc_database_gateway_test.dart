@@ -1296,6 +1296,56 @@ void main() {
         expect(metrics.transactionalBatchDirectPathCount, 1);
       },
     );
+
+    test(
+      'should reject multi-result request with pagination before pool acquire',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-multi-page',
+          agentId: config.agentId,
+          query: 'SELECT 1 AS id; SELECT 2 AS id;',
+          timestamp: DateTime.now(),
+          expectMultipleResults: true,
+          pagination: const QueryPaginationRequest(
+            page: 1,
+            pageSize: 10,
+            orderBy: [
+              QueryPaginationOrderTerm(
+                expression: 'id',
+                lookupKey: 'id',
+              ),
+            ],
+          ),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+          _,
+        ) async {
+          return Success(config);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(
+          failure.message,
+          'Multi-result execution cannot be combined with pagination',
+        );
+        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        );
+      },
+    );
   });
 }
 

@@ -13,6 +13,21 @@ import 'package:uuid/uuid.dart';
 /// Bytes above which compression runs in isolate to avoid jank.
 const int gzipIsolateThresholdBytes = 32 * 1024;
 
+/// Whether inbound processing should use [TransportPipeline.receiveProcessAsync]
+/// so gzip decompression and/or JSON decode can run off the UI isolate.
+bool incomingPayloadFrameNeedsAsyncDecode(PayloadFrame frame) {
+  switch (frame.cmp) {
+    case 'gzip':
+      return frame.compressedSize >= gzipIsolateThresholdBytes ||
+          frame.originalSize >= gzipIsolateThresholdBytes;
+    case 'none':
+      return frame.enc == 'json' &&
+          frame.originalSize >= jsonPayloadIsolateEncodeThresholdBytes;
+    default:
+      return true;
+  }
+}
+
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
   final jsonString = utf8.decode(bytes);
   return jsonDecode(jsonString) as Object;
@@ -491,7 +506,10 @@ class TransportPipeline {
       Uint8List decodableBytes;
 
       if (frame.cmp != 'none') {
-        if (frame.cmp == 'gzip' && bytes.length >= gzipIsolateThresholdBytes) {
+        final useGzipIsolate = frame.cmp == 'gzip' &&
+            (bytes.length >= gzipIsolateThresholdBytes ||
+                frame.originalSize >= gzipIsolateThresholdBytes);
+        if (useGzipIsolate) {
           try {
             decodableBytes = await compute(_decompressGzipInIsolate, bytes);
           } on Object catch (error) {

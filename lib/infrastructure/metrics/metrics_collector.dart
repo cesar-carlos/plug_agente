@@ -34,6 +34,18 @@ class MetricsCollector implements IMetricsCollector {
       'rpc_sql_execute_streaming_from_db_response';
   static const String _rpcSqlExecuteMaterializedResponseCounter =
       'rpc_sql_execute_materialized_response';
+  static const String _transportInboundDecodeSyncCounter =
+      'transport_inbound_decode_sync';
+  static const String _transportInboundDecodeAsyncCounter =
+      'transport_inbound_decode_async';
+  static const String _rpcStreamTerminalCompleteEmittedCounter =
+      'rpc_stream_terminal_complete_emitted';
+  static const String _rpcStreamTerminalCompleteFailedCounter =
+      'rpc_stream_terminal_complete_failed';
+  static const String _rpcResponseAckRetryCounter =
+      'rpc_response_ack_retry';
+  static const String _rpcResponseAckFallbackWithoutAckCounter =
+      'rpc_response_ack_fallback_without_ack';
 
   static const int _maxMetrics = 10000;
 
@@ -77,6 +89,18 @@ class MetricsCollector implements IMetricsCollector {
       _eventCounters[_rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
   int get rpcSqlExecuteMaterializedResponseCount =>
       _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
+  int get transportInboundDecodeSyncCount =>
+      _eventCounters[_transportInboundDecodeSyncCounter] ?? 0;
+  int get transportInboundDecodeAsyncCount =>
+      _eventCounters[_transportInboundDecodeAsyncCounter] ?? 0;
+  int get rpcStreamTerminalCompleteEmittedCount =>
+      _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
+  int get rpcStreamTerminalCompleteFailedCount =>
+      _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
+  int get rpcResponseAckRetryCount =>
+      _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
+  int get rpcResponseAckFallbackWithoutAckCount =>
+      _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
 
   Map<String, int> get eventCounters =>
       UnmodifiableMapView<String, int>(_eventCounters);
@@ -128,6 +152,24 @@ class MetricsCollector implements IMetricsCollector {
 
   void recordRpcSqlExecuteMaterializedResponse() =>
       _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
+
+  void recordTransportInboundDecodeSync() =>
+      _incrementEventCounter(_transportInboundDecodeSyncCounter);
+
+  void recordTransportInboundDecodeAsync() =>
+      _incrementEventCounter(_transportInboundDecodeAsyncCounter);
+
+  void recordRpcStreamTerminalCompleteEmitted() =>
+      _incrementEventCounter(_rpcStreamTerminalCompleteEmittedCounter);
+
+  void recordRpcStreamTerminalCompleteFailed() =>
+      _incrementEventCounter(_rpcStreamTerminalCompleteFailedCounter);
+
+  void recordRpcResponseAckRetry() =>
+      _incrementEventCounter(_rpcResponseAckRetryCounter);
+
+  void recordRpcResponseAckFallbackWithoutAck() =>
+      _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

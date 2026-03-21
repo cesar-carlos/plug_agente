@@ -596,6 +596,9 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
   e suporte.
 - `result_sets` e `items` aparecem apenas quando a execucao retorna multiplos
   result sets ou row counts no mesmo comando.
+- Quando `item_count` ou `result_set_count` estao presentes, devem coincidir com
+  o comprimento de `items` e de `result_sets`, respetivamente (validacao
+  outbound no agente).
 - `current_cursor` e `next_cursor` podem aparecer quando o fluxo de
   continuacao por cursor estiver em uso.
 - `next_cursor` e gerado a partir da ultima linha retornada e pressupoe

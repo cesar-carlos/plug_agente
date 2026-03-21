@@ -416,8 +416,7 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(
@@ -453,6 +452,40 @@ void main() {
 
         expect(response.isError, isTrue);
         expect(response.error!.code, RpcErrorCode.invalidParams);
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should reject multi_result when combined with pagination options',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {
+            'sql': 'SELECT 1 AS n; SELECT 2 AS n;',
+            'options': {
+              'multi_result': true,
+              'page': 1,
+              'page_size': 10,
+            },
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          limits: const TransportLimits(maxRows: 100),
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, RpcErrorCode.invalidParams);
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(
+          data['technical_message'],
+          'multi_result cannot be combined with pagination',
+        );
         verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
@@ -990,6 +1023,144 @@ void main() {
       },
     );
 
+    test(
+      'should emit terminal rpc:complete with aborted when in-memory '
+      'streaming hits backpressure',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {'sql': 'SELECT * FROM large_table'},
+        );
+
+        final largeData = List.generate(600, _userAt);
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: largeData,
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((_) => queryResponse);
+
+        final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => false);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: mockEmitter,
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.resultTooLarge));
+
+        verify(() => mockEmitter.emitChunk(any())).called(1);
+        final captured = verify(
+          () => mockEmitter.emitComplete(captureAny()),
+        ).captured;
+        expect(captured, hasLength(1));
+        final complete = captured.single as RpcStreamComplete;
+        expect(
+          complete.terminalStatus,
+          equals(RpcStreamComplete.terminalStatusAborted),
+        );
+        expect(complete.totalRows, equals(0));
+      },
+    );
+
+    test(
+      'should emit terminal rpc:complete with error when DB stream fails '
+      'before chunks',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-1',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(
+          mockConfigRepo.getCurrentConfig,
+        ).thenAnswer((_) async => Success(config));
+
+        when(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+          ),
+        ).thenAnswer(
+          (_) async => Failure(domain.ServerFailure('db stream failed')),
+        );
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-1',
+          params: {'sql': 'SELECT * FROM users'},
+        );
+
+        final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => true);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: mockEmitter,
+        );
+
+        expect(response.isError, isTrue);
+        verifyNever(() => mockEmitter.emitChunk(any()));
+        final captured = verify(
+          () => mockEmitter.emitComplete(captureAny()),
+        ).captured;
+        expect(captured, hasLength(1));
+        final complete = captured.single as RpcStreamComplete;
+        expect(
+          complete.terminalStatus,
+          equals(RpcStreamComplete.terminalStatusError),
+        );
+        expect(complete.totalRows, equals(0));
+      },
+    );
+
     test('should return error when SQL validation fails', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -1048,7 +1219,9 @@ void main() {
       'should cap sql.executeBatch ODBC timeout with options.timeout_ms when '
       'stage budgets are enabled',
       () async {
-        when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketTimeoutByStage,
+        ).thenReturn(true);
 
         final captured = <Duration?>[];
         when(
@@ -1076,8 +1249,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         const request = RpcRequest(
@@ -1151,8 +1323,7 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(
@@ -1208,8 +1379,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
@@ -1268,8 +1438,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');

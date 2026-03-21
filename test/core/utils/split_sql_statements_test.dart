@@ -40,6 +40,69 @@ void main() {
         );
       },
     );
+
+    test('should split after line comment that contains a semicolon', () {
+      expect(
+        splitSqlStatements('SELECT 1 -- ; not a splitter\n; SELECT 2'),
+        ['SELECT 1 -- ; not a splitter', 'SELECT 2'],
+      );
+    });
+
+    test('should split when semicolon appears inside block comment only', () {
+      expect(
+        splitSqlStatements('SELECT 1/*;not split*/; SELECT 2'),
+        ['SELECT 1/*;not split*/', 'SELECT 2'],
+      );
+    });
+
+    test('should handle doubled single-quote escape inside string literal', () {
+      expect(
+        splitSqlStatements("SELECT 'a'';b' AS x; SELECT 2"),
+        ["SELECT 'a'';b' AS x", 'SELECT 2'],
+      );
+    });
+
+    test(
+      'should match multi_result-style probe (two SELECTs separated by ;)',
+      () {
+        const probe =
+            'SELECT id FROM t WHERE id = 1;\n'
+            'SELECT COUNT(*) AS row_count FROM t;';
+        final parts = splitSqlStatements(probe);
+        expect(parts, hasLength(2));
+        expect(parts[0], contains('WHERE id = 1'));
+        expect(parts[1], contains('COUNT(*)'));
+      },
+    );
+  });
+
+  group('splitSqlStatements (documented limits)', () {
+    test('should not split on SQL Server GO (treated as plain text)', () {
+      expect(
+        splitSqlStatements('SELECT 1\nGO\nSELECT 2'),
+        ['SELECT 1\nGO\nSELECT 2'],
+      );
+    });
+
+    test(
+      'should mis-split when semicolon is inside PostgreSQL dollar quotes',
+      () {
+        expect(
+          splitSqlStatements(r'SELECT $$a;b$$; SELECT 2'),
+          [r'SELECT $$a', r'b$$', 'SELECT 2'],
+        );
+      },
+    );
+
+    test(
+      'should mis-split when semicolon is inside MySQL-style backtick id',
+      () {
+        expect(
+          splitSqlStatements('SELECT `a;b` FROM t; SELECT 2'),
+          ['SELECT `a', 'b` FROM t', 'SELECT 2'],
+        );
+      },
+    );
   });
 
   group('sqlHasMultipleTopLevelStatements', () {

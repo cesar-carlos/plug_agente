@@ -1,0 +1,45 @@
+# Optional: run ODBC RPC benchmark on a self-hosted or configured Windows runner.
+# Configure repository secrets: ODBC_TEST_DSN (and optionally SQL Server / PostgreSQL).
+# Artifact: benchmark/e2e_odbc_rpc.jsonl (when recording succeeds).
+name: E2E ODBC benchmark (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: ODBC RPC benchmark (live + record)
+        env:
+          ODBC_E2E_BENCHMARK: 'true'
+          ODBC_E2E_BENCHMARK_RECORD: 'true'
+          ODBC_TEST_DSN: ${{ secrets.ODBC_TEST_DSN }}
+          ODBC_TEST_DSN_SQL_SERVER: ${{ secrets.ODBC_TEST_DSN_SQL_SERVER }}
+          ODBC_TEST_DSN_POSTGRESQL: ${{ secrets.ODBC_TEST_DSN_POSTGRESQL }}
+        run: flutter test test/live/odbc_rpc_benchmark_live_e2e_test.dart
+
+      - name: Summarize JSONL (informational)
+        if: always()
+        run: dart run tool/summarize_e2e_benchmark.dart
+        continue-on-error: true
+
+      - name: Upload benchmark JSONL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-odbc-benchmark-jsonl
+          path: benchmark/e2e_odbc_rpc.jsonl
+          if-no-files-found: ignore

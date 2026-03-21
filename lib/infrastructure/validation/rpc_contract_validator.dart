@@ -326,6 +326,28 @@ class RpcContractValidator {
       }
     }
 
+    final resultSetsList = result['result_sets'];
+    if (resultSetsList is List<dynamic>) {
+      final rsc = result['result_set_count'];
+      if (rsc != null && rsc is int && rsc != resultSetsList.length) {
+        return _invalid(
+          'Field "result_set_count" must equal result_sets.length '
+          '(expected ${resultSetsList.length}, got $rsc)',
+        );
+      }
+    }
+
+    final itemsForCount = result['items'];
+    if (itemsForCount is List<dynamic>) {
+      final ic = result['item_count'];
+      if (ic != null && ic is int && ic != itemsForCount.length) {
+        return _invalid(
+          'Field "item_count" must equal items.length '
+          '(expected ${itemsForCount.length}, got $ic)',
+        );
+      }
+    }
+
     return const Success(unit);
   }
 

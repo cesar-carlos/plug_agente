@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/payload-frame.v1.json",
+  "title": "PayloadFrame (transport envelope)",
+  "description": "Physical Socket.IO envelope for application events. Logical JSON-RPC lives inside payload after decode/decompress. Receivers must use enc and cmp on each frame; cmp is always gzip or none on the wire (emitter auto mode is not a third cmp value).",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "enc",
+    "cmp",
+    "contentType",
+    "originalSize",
+    "compressedSize",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "enc": {
+      "type": "string",
+      "description": "Logical payload encoding before compression",
+      "enum": ["json"]
+    },
+    "cmp": {
+      "type": "string",
+      "description": "Compression applied to the encoded logical bytes",
+      "enum": ["none", "gzip"]
+    },
+    "contentType": {
+      "type": "string",
+      "examples": ["application/json"]
+    },
+    "originalSize": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Byte length of logical payload before compression"
+    },
+    "compressedSize": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Byte length of the payload field on the wire"
+    },
+    "payload": {
+      "description": "Wire bytes: UTF-8 JSON when cmp is none, or gzip of those bytes when cmp is gzip. In JSON serialization this is often an array of byte values (0-255) or a binary Buffer.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      ]
+    },
+    "traceId": {
+      "type": "string"
+    },
+    "requestId": {
+      "type": ["string", "null"]
+    },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "value", "key_id"],
+      "properties": {
+        "alg": { "type": "string", "enum": ["hmac-sha256"] },
+        "value": { "type": "string" },
+        "key_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

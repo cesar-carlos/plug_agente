@@ -79,6 +79,20 @@ void main() {
       check(limitedResult).equals(RpcRequestGuardResult.rateLimited);
       check(recoveredResult).equals(RpcRequestGuardResult.allow);
     });
+
+    test('should cap replay cache size without throwing', () {
+      final now = DateTime.utc(2026, 3, 12, 10);
+      final guard = RpcRequestGuard(
+        nowProvider: () => now,
+        maxRequestsPerWindow: 10000,
+        rateLimitWindow: const Duration(days: 1),
+        maxReplayCacheEntries: 8,
+      );
+
+      for (var i = 0; i < 50; i++) {
+        guard.evaluate(_requestWithId('unique-$i'));
+      }
+    });
   });
 }
 

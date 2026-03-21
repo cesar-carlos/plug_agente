@@ -187,9 +187,19 @@ class TrayManagerService with TrayListener implements ITrayService {
         unawaited(
           _restoreWindow()
               .then((_) => _onMenuAction?.call(TrayMenuAction.show))
-              .catchError((Object e) {
-                _logger.e('Erro ao restaurar janela do tray', error: e);
+              .catchError((Object e, StackTrace? s) {
+                _logger.e(
+                  'Erro ao restaurar janela do tray',
+                  error: e,
+                  stackTrace: s,
+                );
               }),
+        );
+      }).catchError((Object e, StackTrace s) {
+        _logger.e(
+          'Tray icon delayed restore failed',
+          error: e,
+          stackTrace: s,
         );
       }),
     );

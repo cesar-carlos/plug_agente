@@ -5,4 +5,8 @@ abstract class IRpcDispatchMetricsCollector {
   void recordSqlExecuteStreamingFromDbResponse();
 
   void recordSqlExecuteMaterializedResponse();
+
+  void recordRpcStreamTerminalCompleteEmitted();
+
+  void recordRpcStreamTerminalCompleteFailed();
 }

@@ -35,4 +35,11 @@ class DeliveryGuaranteeConfig {
 
   static const int maxResponseRetries = 3;
   static const Duration responseAckTimeout = Duration(seconds: 10);
+
+  /// Exponential backoff before retrying a timed-out `rpc:response` ack.
+  static Duration responseAckRetryDelayAfterAttempt(int zeroBasedAttempt) {
+    final clamped = zeroBasedAttempt.clamp(0, 6);
+    final ms = 250 * (1 << clamped);
+    return Duration(milliseconds: ms.clamp(250, 4000));
+  }
 }

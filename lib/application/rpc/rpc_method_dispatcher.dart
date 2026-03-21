@@ -337,6 +337,7 @@ class RpcMethodDispatcher {
           final rows = limitedRows;
           final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
           var overflowed = false;
+          var streamedRowCount = 0;
 
           for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
             final chunkEnd = i + limits.streamingChunkSize > rows.length ? rows.length : i + limits.streamingChunkSize;
@@ -354,6 +355,7 @@ class RpcMethodDispatcher {
               overflowed = true;
               break;
             }
+            streamedRowCount = chunkEnd;
           }
 
           if (!overflowed) {
@@ -361,6 +363,15 @@ class RpcMethodDispatcher {
           }
 
           if (overflowed) {
+            await _emitRpcStreamTerminalIfPossible(
+              streamEmitter: streamEmitter,
+              streamId: streamId,
+              requestId: request.id,
+              totalRows: streamedRowCount,
+              terminalStatus: RpcStreamComplete.terminalStatusAborted,
+              executionId: normalized.id,
+              startedAt: queryRequest.timestamp.toIso8601String(),
+            );
             return RpcResponse.error(
               id: request.id,
               error: RpcError(
@@ -512,9 +523,18 @@ class RpcMethodDispatcher {
             ),
           )) {
             unawaited(
-              gateway.cancelActiveStream(
-                reason: StreamingCancelReason.backpressureOverflow,
-              ),
+              gateway
+                  .cancelActiveStream(
+                    reason: StreamingCancelReason.backpressureOverflow,
+                  )
+                  .then<void>((_) {})
+                  .catchError((Object e, StackTrace stackTrace) {
+                    AppLogger.warning(
+                      'cancelActiveStream (backpressure) failed',
+                      e,
+                      stackTrace,
+                    );
+                  }),
             );
           }
         },
@@ -522,8 +542,18 @@ class RpcMethodDispatcher {
       );
 
       if (streamResult.isError()) {
+        final failure = streamResult.exceptionOrNull()! as domain.Failure;
+        await _emitRpcStreamTerminalIfPossible(
+          streamEmitter: streamEmitter,
+          streamId: streamId,
+          requestId: request.id,
+          totalRows: totalRows,
+          terminalStatus: _terminalStatusForStreamFailure(failure),
+          executionId: executionId,
+          startedAt: queryRequest.timestamp.toIso8601String(),
+        );
         final rpcError = FailureToRpcErrorMapper.map(
-          streamResult.exceptionOrNull()! as domain.Failure,
+          failure,
           instance: request.id?.toString(),
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
@@ -561,6 +591,50 @@ class RpcMethodDispatcher {
       return dbStreamResponse;
     } finally {
       _activeStreamExecution = null;
+    }
+  }
+
+  String _terminalStatusForStreamFailure(domain.Failure failure) {
+    final reason = failure.context['reason'];
+    if (reason == 'backpressure_overflow') {
+      return RpcStreamComplete.terminalStatusAborted;
+    }
+    return RpcStreamComplete.terminalStatusError;
+  }
+
+  Future<void> _emitRpcStreamTerminalIfPossible({
+    required IRpcStreamEmitter? streamEmitter,
+    required String streamId,
+    required dynamic requestId,
+    required int totalRows,
+    required String terminalStatus,
+    String? executionId,
+    String? startedAt,
+  }) async {
+    if (streamEmitter == null) {
+      return;
+    }
+    try {
+      await streamEmitter.emitComplete(
+        RpcStreamComplete(
+          streamId: streamId,
+          requestId: requestId,
+          totalRows: totalRows,
+          affectedRows: totalRows,
+          executionId: executionId,
+          startedAt: startedAt,
+          finishedAt: DateTime.now().toUtc().toIso8601String(),
+          terminalStatus: terminalStatus,
+        ),
+      );
+      _dispatchMetrics?.recordRpcStreamTerminalCompleteEmitted();
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'rpc:complete (terminal) emit failed',
+        error,
+        stackTrace,
+      );
+      _dispatchMetrics?.recordRpcStreamTerminalCompleteFailed();
     }
   }
 

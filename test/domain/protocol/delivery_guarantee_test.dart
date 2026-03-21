@@ -34,5 +34,16 @@ void main() {
         const Duration(seconds: 10),
       );
     });
+
+    test('should increase ack retry backoff with attempt and cap', () {
+      final d0 = DeliveryGuaranteeConfig.responseAckRetryDelayAfterAttempt(0);
+      final d1 = DeliveryGuaranteeConfig.responseAckRetryDelayAfterAttempt(1);
+      final dLarge = DeliveryGuaranteeConfig.responseAckRetryDelayAfterAttempt(
+        99,
+      );
+      expect(d1 > d0, isTrue);
+      expect(dLarge <= const Duration(milliseconds: 4000), isTrue);
+      expect(dLarge >= const Duration(milliseconds: 250), isTrue);
+    });
   });
 }

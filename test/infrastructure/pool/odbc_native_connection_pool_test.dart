@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -58,6 +60,20 @@ void main() {
         verify(() => mockService.poolGetConnection(77)).called(12);
       },
     );
+
+    test('should fail acquire when poolGetConnection times out', () async {
+      mockSettings.loginTimeoutSeconds = 1;
+
+      when(
+        () => mockService.poolCreate(any(), any()),
+      ).thenAnswer((_) async => const Success(9));
+      when(
+        () => mockService.poolGetConnection(9),
+      ).thenAnswer((_) => Completer<Result<Connection>>().future);
+
+      final result = await pool.acquire('DSN=Test');
+      expect(result.isError(), isTrue);
+    });
 
     test('should close created pools and clear internal state', () async {
       when(
