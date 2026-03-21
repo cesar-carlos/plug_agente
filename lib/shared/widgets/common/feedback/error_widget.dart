@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class ErrorWidget extends StatelessWidget {
   const ErrorWidget({
@@ -15,6 +15,7 @@ class ErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = FluentTheme.of(context);
     final textColor = theme.typography.body?.color;
 
@@ -43,7 +44,7 @@ class ErrorWidget extends StatelessWidget {
             FilledButton(
               onPressed: onRetry,
               child: Text(
-                AppStrings.btnRetry,
+                l10n.btnRetry,
                 style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
               ),
             ),

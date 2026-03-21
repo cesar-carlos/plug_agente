@@ -1,10 +1,10 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +16,7 @@ class WebSocketLogViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<WebSocketLogProvider>(
       builder: (context, logProvider, child) {
+        final l10n = AppLocalizations.of(context)!;
         final authSummary = _getAuthSummary();
         final deprecationCount = _getPreserveSqlDeprecatedCount();
 
@@ -32,19 +33,19 @@ class WebSocketLogViewer extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(AppStrings.wsLogTitle, style: context.sectionTitle),
+                      Text(l10n.wsLogTitle, style: context.sectionTitle),
                       Row(
                         children: [
                           ToggleSwitch(
                             checked: logProvider.isEnabled,
                             onChanged: logProvider.setEnabled,
-                            content: const Text(AppStrings.wsLogEnabled),
+                            content: Text(l10n.wsLogEnabled),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: AppSpacing.md),
                           Button(
                             onPressed: logProvider.clearMessages,
                             child: Text(
-                              AppStrings.wsLogClear,
+                              l10n.wsLogClear,
                               style: context.bodyText,
                             ),
                           ),
@@ -63,7 +64,7 @@ class WebSocketLogViewer extends StatelessWidget {
                     child: logProvider.messages.isEmpty
                         ? Center(
                             child: Text(
-                              AppStrings.wsLogNoMessages,
+                              l10n.wsLogNoMessages,
                               style: context.bodyMuted,
                             ),
                           )
@@ -108,6 +109,7 @@ class _DeprecationSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -121,7 +123,7 @@ class _DeprecationSummaryCard extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            AppStrings.wsLogPreserveSqlDeprecatedUses,
+            l10n.wsLogPreserveSqlDeprecatedUses,
             style: context.bodyMuted,
           ),
           Text(
@@ -145,6 +147,7 @@ class _AuthorizationSummaryCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
     final missingPermissionRate =
         (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
@@ -168,30 +171,30 @@ class _AuthorizationSummaryCard extends StatelessWidget {
         runSpacing: AppSpacing.xs,
         children: [
           _SummaryChip(
-            label: AppStrings.wsLogAuthChecks,
+            label: l10n.wsLogAuthChecks,
             value: summary!.total.toString(),
           ),
           _SummaryChip(
-            label: AppStrings.wsLogAllowed,
+            label: l10n.wsLogAllowed,
             value: summary!.totalAuthorized.toString(),
             valueColor: Colors.green,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogDenied,
+            label: l10n.wsLogDenied,
             value: summary!.totalDenied.toString(),
             valueColor: summary!.totalDenied > 0 ? Colors.red : null,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogDenialRate,
+            label: l10n.wsLogDenialRate,
             value: '$denialRate%',
             valueColor: summary!.totalDenied > 0 ? Colors.red : null,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogP95Latency,
+            label: l10n.wsLogP95Latency,
             value: _formatLatency(summary!.overallP95LatencyMs),
           ),
           _SummaryChip(
-            label: AppStrings.wsLogP99Latency,
+            label: l10n.wsLogP99Latency,
             value: _formatLatency(summary!.overallP99LatencyMs),
           ),
           _SummaryChip(

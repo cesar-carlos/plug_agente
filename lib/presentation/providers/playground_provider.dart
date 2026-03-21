@@ -1,10 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -14,6 +13,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
@@ -58,6 +58,10 @@ class PlaygroundProvider extends ChangeNotifier {
   );
   static const int _progressEstimateOffset = 100;
   static const List<int> _pageSizeOptions = [25, 50, 100, 250];
+
+  AppLocalizations get _l10n => lookupAppLocalizations(
+    WidgetsBinding.instance.platformDispatcher.locale,
+  );
 
   String get query => _query;
   List<Map<String, dynamic>> get results => selectedResultSet?.rows ?? _results;
@@ -193,7 +197,7 @@ class PlaygroundProvider extends ChangeNotifier {
       stopwatch.stop();
       _isLoading = false;
       final failure = error.toFailure(
-        message: 'Erro ao executar a consulta',
+        message: _l10n.queryExecuteGenericError,
         context: {'operation': 'executeQuery'},
       );
       _error = failure.toDisplayMessage();
@@ -215,7 +219,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   Future<void> testConnection(Config config) async {
     _clearError();
-    _connectionStatus = AppStrings.queryConnectionTesting;
+    _connectionStatus = _l10n.queryConnectionTesting;
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
@@ -223,7 +227,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
     result.fold(
       (_) {
-        _connectionStatus = AppStrings.queryConnectionSuccess;
+        _connectionStatus = _l10n.queryConnectionSuccess;
         _isConnectionStatusSuccess = true;
       },
       (failure) {
@@ -232,7 +236,7 @@ class PlaygroundProvider extends ChangeNotifier {
           'Failed to test connection: ${failure.toDisplayMessage()}',
           failure.toTechnicalMessage(),
         );
-        _connectionStatus = AppStrings.queryConnectionFailure;
+        _connectionStatus = _l10n.queryConnectionFailure;
         _isConnectionStatusSuccess = false;
       },
     );
@@ -327,7 +331,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _isLoading = false;
       _isStreaming = false;
       final failure = error.toFailure(
-        message: AppStrings.queryStreamingErrorPrefix,
+        message: _l10n.queryStreamingErrorPrefix,
         context: {'operation': 'executeQueryWithStreaming'},
       );
       _error = failure.toDisplayMessage();
@@ -375,15 +379,21 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _streamingCapCancelRequested = true;
     _streamingStoppedByCap = true;
-    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint
-        .replaceAll(
-          '{max}',
-          cap.toString(),
-        );
+    _lastExecutionHint = _l10n.queryPlaygroundStreamingRowCapHint(cap);
     unawaited(
-      _executeStreamingQuery.cancelActiveStream(
-        reason: StreamingCancelReason.playgroundRowCap,
-      ),
+      (() async {
+        try {
+          await _executeStreamingQuery.cancelActiveStream(
+            reason: StreamingCancelReason.playgroundRowCap,
+          );
+        } on Exception catch (e, stackTrace) {
+          AppLogger.warning(
+            'Failed to cancel active stream (row cap)',
+            e,
+            stackTrace,
+          );
+        }
+      })(),
     );
   }
 
@@ -406,7 +416,7 @@ class PlaygroundProvider extends ChangeNotifier {
       );
       _isLoading = false;
       _isStreaming = false;
-      _error = AppStrings.queryCancelledByUser;
+      _error = _l10n.queryCancelledByUser;
       notifyListeners();
     }
   }
@@ -481,18 +491,18 @@ class PlaygroundProvider extends ChangeNotifier {
 
   String _buildLastExecutionHint(QueryPaginationInfo? pagination) {
     if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return AppStrings.queryPlaygroundHintLastRunPreserve;
+      return _l10n.queryPlaygroundHintLastRunPreserve;
     }
     if (pagination != null) {
-      return AppStrings.queryPlaygroundHintLastRunManagedPagination;
+      return _l10n.queryPlaygroundHintLastRunManagedPagination;
     }
-    return AppStrings.queryPlaygroundHintLastRunManaged;
+    return _l10n.queryPlaygroundHintLastRunManaged;
   }
 
   String _buildStreamingExecutionHint() {
     if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return AppStrings.queryPlaygroundHintLastRunPreserve;
+      return _l10n.queryPlaygroundHintLastRunPreserve;
     }
-    return AppStrings.queryPlaygroundHintLastRunStreaming;
+    return _l10n.queryPlaygroundHintLastRunStreaming;
   }
 }

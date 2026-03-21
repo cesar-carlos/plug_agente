@@ -9,6 +9,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -150,11 +151,12 @@ class _ConfigPageState extends State<ConfigPage> {
     final startupSupported = getIt.isRegistered<IStartupService>();
     final capabilities = getIt<RuntimeCapabilities>();
     final supportsAutoUpdate = capabilities.supportsAutoUpdate;
+    final l10n = AppLocalizations.of(context)!;
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navSettings,
+          l10n.navSettings,
           style: context.sectionTitle,
         ),
       ),

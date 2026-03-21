@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
@@ -68,9 +68,10 @@ class QueryResultsSection extends StatelessWidget {
     }
 
     if (results.isEmpty && !isLoading) {
-      return const CenteredMessage(
-        title: AppStrings.queryNoResults,
-        message: AppStrings.queryNoResultsMessage,
+      final l10n = AppLocalizations.of(context)!;
+      return CenteredMessage(
+        title: l10n.queryNoResults,
+        message: l10n.queryNoResultsMessage,
         icon: FluentIcons.table,
       );
     }
@@ -134,6 +135,7 @@ class _StreamingProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -153,8 +155,8 @@ class _StreamingProgressBar extends StatelessWidget {
           const ProgressRing(strokeWidth: 2),
           const SizedBox(width: AppSpacing.md),
           Text(
-            '${AppStrings.queryStreamingProgress}: '
-            '$rowsProcessed ${AppStrings.queryStreamingRows}',
+            '${l10n.queryStreamingProgress}: '
+            '$rowsProcessed ${l10n.queryStreamingRows}',
             style: context.bodyText,
           ),
           const SizedBox(width: AppSpacing.lg),
@@ -202,6 +204,7 @@ class _QueryResultsFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -220,7 +223,7 @@ class _QueryResultsFooter extends StatelessWidget {
         children: [
           _ResultMetric(
             icon: FluentIcons.table,
-            text: '${AppStrings.queryPaginationShowing}: $totalRecords',
+            text: '${l10n.queryPaginationShowing}: $totalRecords',
             textStyle: context.bodyText,
           ),
           if (executionDuration != null) ...[
@@ -228,7 +231,7 @@ class _QueryResultsFooter extends StatelessWidget {
             _ResultMetric(
               icon: FluentIcons.clock,
               text:
-                  '${AppStrings.queryExecutionTime}: '
+                  '${l10n.queryExecutionTime}: '
                   '${_formatDuration(executionDuration!)}',
               textStyle: context.bodyText,
             ),
@@ -237,7 +240,7 @@ class _QueryResultsFooter extends StatelessWidget {
             const SizedBox(width: AppSpacing.lg),
             _ResultMetric(
               icon: FluentIcons.edit,
-              text: '${AppStrings.queryAffectedRows}: $affectedRows',
+              text: '${l10n.queryAffectedRows}: $affectedRows',
               textStyle: context.bodyText,
             ),
           ],
@@ -296,17 +299,18 @@ class _QueryResultSetSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       width: 180,
       child: ComboBox<int>(
         value: selectedResultSetIndex,
-        placeholder: const Text(AppStrings.queryResultSetLabel),
+        placeholder: Text(l10n.queryResultSetLabel),
         items: List<ComboBoxItem<int>>.generate(
           resultSetCount,
           (index) => ComboBoxItem<int>(
             value: index,
             child: Text(
-              '${AppStrings.queryResultSetLabel} ${index + 1}',
+              '${l10n.queryResultSetLabel} ${index + 1}',
             ),
           ),
         ),
@@ -341,20 +345,21 @@ class _QueryPaginationControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.sm,
       children: [
         Text(
-          '${AppStrings.queryPaginationPage} $currentPage',
+          '${l10n.queryPaginationPage} $currentPage',
           style: context.bodyText,
         ),
         SizedBox(
           width: 140,
           child: ComboBox<int>(
             value: pageSize,
-            placeholder: const Text(AppStrings.queryPaginationPageSize),
+            placeholder: Text(l10n.queryPaginationPageSize),
             items: const [25, 50, 100, 250]
                 .map(
                   (value) => ComboBoxItem<int>(
@@ -371,12 +376,12 @@ class _QueryPaginationControls extends StatelessWidget {
           ),
         ),
         AppButton(
-          label: AppStrings.queryPaginationPrevious,
+          label: l10n.queryPaginationPrevious,
           isPrimary: false,
           onPressed: hasPreviousPage ? onPreviousPage : null,
         ),
         AppButton(
-          label: AppStrings.queryPaginationNext,
+          label: l10n.queryPaginationNext,
           onPressed: hasNextPage ? onNextPage : null,
         ),
       ],
@@ -418,6 +423,7 @@ class _QueryErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -431,7 +437,7 @@ class _QueryErrorState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              AppStrings.queryErrorTitle,
+              l10n.queryErrorTitle,
               style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -442,7 +448,7 @@ class _QueryErrorState extends StatelessWidget {
             if (onShowDetails != null) ...[
               const SizedBox(height: AppSpacing.md),
               AppButton(
-                label: AppStrings.queryErrorShowDetails,
+                label: l10n.queryErrorShowDetails,
                 onPressed: onShowDetails,
               ),
             ],

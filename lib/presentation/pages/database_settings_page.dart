@@ -7,6 +7,7 @@ import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
@@ -151,13 +152,14 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
     final connectionProvider = context.read<ConnectionProvider>();
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navDatabaseSettings,
+          l10n.navDatabaseSettings,
           style: context.sectionTitle,
         ),
       ),

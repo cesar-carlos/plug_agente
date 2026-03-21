@@ -1,9 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -31,6 +31,7 @@ class _MainWindowState extends State<MainWindow> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final selectedDestination = _getCurrentDestination(context);
     final runtimeMode = context.watch<RuntimeModeProvider>();
 
@@ -49,27 +50,27 @@ class _MainWindowState extends State<MainWindow> {
         items: [
           PaneItem(
             icon: const Icon(FluentIcons.view_dashboard),
-            title: const Text(AppStrings.navDashboard),
+            title: Text(l10n.navDashboard),
             body: const SizedBox.shrink(),
           ),
           PaneItem(
             icon: const Icon(FluentIcons.table),
-            title: const Text(AppStrings.navPlayground),
+            title: Text(l10n.navPlayground),
             body: const SizedBox.shrink(),
           ),
           PaneItem(
             icon: const Icon(FluentIcons.database),
-            title: const Text(AppStrings.navDatabaseSettings),
+            title: Text(l10n.navDatabaseSettings),
             body: const SizedBox.shrink(),
           ),
           PaneItem(
             icon: const Icon(FluentIcons.plug_connected),
-            title: const Text(AppStrings.navWebSocketSettings),
+            title: Text(l10n.navWebSocketSettings),
             body: const SizedBox.shrink(),
           ),
           PaneItem(
             icon: const Icon(FluentIcons.settings),
-            title: const Text(AppStrings.navSettings),
+            title: Text(l10n.navSettings),
             body: const SizedBox.shrink(),
           ),
         ],
@@ -88,15 +89,16 @@ class _MainWindowState extends State<MainWindow> {
   }
 
   Widget _buildDegradedModeBanner(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final runtimeMode = context.watch<RuntimeModeProvider>();
 
     return InfoBar(
-      title: const Text(AppStrings.mainDegradedModeTitle),
+      title: Text(l10n.mainDegradedModeTitle),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(AppStrings.mainDegradedModeDescription),
+          Text(l10n.mainDegradedModeDescription),
           const SizedBox(height: AppSpacing.sm),
           ...runtimeMode.degradationReasons.map(
             (reason) => Padding(

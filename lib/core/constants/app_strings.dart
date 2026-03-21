@@ -5,17 +5,11 @@
 class AppStrings {
   AppStrings._();
 
-  // Navigation
-  static const String navDashboard = 'Dashboard';
-  static const String navPlayground = 'Playground';
-  static const String navWebSocketSettings = 'Conexão WebSocket';
+  // Navigation (in-page tabs; pane labels use AppLocalizations)
   static const String tabWebSocketConnection = 'Conexão WebSocket';
   static const String tabClientTokenAuthorization =
       'Autorização de Token do Cliente';
   static const String tabWebSocketDiagnostics = 'Diagnóstico';
-  static const String navSettings = 'Configurações';
-  static const String navDatabaseSettings = 'Banco de dados';
-
   // Page Titles
   static const String titlePlayground = 'Playground Database';
   static const String titleConfig = 'Configurações - Plug Database';
@@ -288,11 +282,6 @@ class AppStrings {
   static const String dbTabDatabase = 'Banco de dados';
   static const String dbTabAdvanced = 'Avançado';
 
-  // Main Window
-  static const String mainDegradedModeTitle = 'Modo Degradado Ativo';
-  static const String mainDegradedModeDescription =
-      'O aplicativo está rodando com recursos limitados:';
-
   // ODBC Advanced Settings
   static const String odbcErrorPoolRange =
       'Tamanho do pool deve ser entre 1 e 20';
@@ -380,90 +369,4 @@ class AppStrings {
   // Button Labels
   static const String btnOk = 'OK';
   static const String btnCancel = 'Cancelar';
-  static const String btnRetry = 'Tentar Novamente';
-
-  // Error Display Titles (Failure codes)
-  static const String errorTitleValidation = 'Dados Inválidos';
-  static const String errorTitleNetwork = 'Erro de Rede';
-  static const String errorTitleDatabase = 'Erro no Banco de Dados';
-  static const String errorTitleServer = 'Erro no Servidor';
-  static const String errorTitleNotFound = 'Não Encontrado';
-
-  // Query Results
-  static const String queryNoResults = 'Sem resultados';
-  static const String queryNoResultsMessage =
-      'Execute uma consulta SELECT para ver os resultados aqui.';
-  static const String queryErrorTitle = 'Erro na Consulta';
-  static const String queryErrorShowDetails = 'Ver Detalhes';
-  static const String queryTotalRecords = 'Total de registros';
-  static const String queryExecutionTime = 'Tempo de execução';
-  static const String queryAffectedRows = 'Linhas afetadas';
-  static const String querySqlLabel = 'Consulta SQL';
-  static const String querySqlHint = 'SELECT * FROM tabela...';
-  static const String queryActionExecute = 'Executar';
-  static const String queryActionTestConnection = 'Testar Conexão';
-  static const String queryActionClear = 'Limpar';
-  static const String queryActionCancel = 'Cancelar';
-  static const String queryConnectionStatusTitle = 'Status da Conexão';
-  static const String queryConnectionTesting = 'Testando conexão...';
-  static const String queryConnectionSuccess =
-      'Conexão estabelecida com sucesso';
-  static const String queryConnectionFailure = 'Falha na conexão';
-  static const String queryCancelledByUser = 'Query cancelada pelo usuário';
-  static const String queryStreamingErrorPrefix = 'Erro no streaming';
-  static const String queryStreamingMode = 'Modo streaming';
-  static const String querySqlHandlingModePreserve = 'Preservar SQL';
-  static const String querySqlHandlingModePreserveHint =
-      'Executa a SQL exatamente como enviada, sem reescrita de paginação';
-  static const String queryPlaygroundHintLastRunPreserve =
-      'Última execução: SQL preservada (sem reescrita de paginação pelo agente).';
-  static const String queryPlaygroundHintLastRunManagedPagination =
-      'Última execução: paginação gerenciada — a SQL pode ter sido reescrita para o dialeto do banco.';
-  static const String queryPlaygroundHintLastRunManaged =
-      'Última execução: modo gerenciado — limites e ajustes do agente podem aplicar-se à SQL.';
-  static const String queryPlaygroundHintLastRunStreaming =
-      'Última execução: modo streaming — resultados recebidos em fluxo contínuo.';
-  static const String queryPlaygroundStreamingRowCapHint =
-      'Exibição limitada a {max} linhas no streaming (memória). A consulta no '
-      'servidor foi interrompida ao atingir esse limite.';
-  static const String wsLogPreserveSqlDeprecatedUses =
-      'Uso de preserve_sql (deprecated)';
-  static const String queryStreamingModeHint =
-      'Para grandes datasets (milhares de linhas)';
-  static const String queryStreamingProgress = 'Processando';
-  static const String queryStreamingRows = 'linhas';
-  static const String queryPaginationPage = 'Pagina';
-  static const String queryPaginationPageSize = 'Linhas por pagina';
-  static const String queryPaginationPrevious = 'Anterior';
-  static const String queryPaginationNext = 'Proxima';
-  static const String queryPaginationShowing = 'Exibindo';
-  static const String queryResultSetLabel = 'Result set';
-
-  // Dashboard
-  static const String dashboardDescription =
-      'Monitor your agent status and database connections here.';
-  static const String dashboardMetricsTitle = 'Métricas ODBC';
-  static const String dashboardMetricsQueries = 'Queries executadas';
-  static const String dashboardMetricsSuccess = 'Sucesso';
-  static const String dashboardMetricsErrors = 'Erros';
-  static const String dashboardMetricsSuccessRate = 'Taxa de sucesso';
-  static const String dashboardMetricsAvgLatency = 'Latência média';
-  static const String dashboardMetricsMaxLatency = 'Latência máxima';
-  static const String dashboardMetricsTotalRows = 'Total de linhas';
-  static const String dashboardMetricsPeriod = 'Período';
-  static const String dashboardMetricsPeriod1h = 'Última 1h';
-  static const String dashboardMetricsPeriod24h = 'Últimas 24h';
-  static const String dashboardMetricsPeriodAll = 'Total';
-
-  // WebSocket Log Viewer
-  static const String wsLogTitle = 'WebSocket Messages';
-  static const String wsLogEnabled = 'Enabled';
-  static const String wsLogClear = 'Clear';
-  static const String wsLogNoMessages = 'No messages yet';
-  static const String wsLogAuthChecks = 'Auth checks';
-  static const String wsLogAllowed = 'Allowed';
-  static const String wsLogDenied = 'Denied';
-  static const String wsLogDenialRate = 'Denial rate';
-  static const String wsLogP95Latency = 'P95 auth latency';
-  static const String wsLogP99Latency = 'P99 auth latency';
 }

@@ -997,7 +997,7 @@ class _TokenFormErrorAnnouncerState extends State<_TokenFormErrorAnnouncer> {
   Widget build(BuildContext context) => widget.child;
 }
 
-class _CreateTokenDialogContent extends StatelessWidget {
+class _CreateTokenDialogContent extends StatefulWidget {
   const _CreateTokenDialogContent({
     required this.isCompact,
     required this.agentFocusNode,
@@ -1043,93 +1043,118 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final VoidCallback onFieldSubmitted;
 
   @override
+  State<_CreateTokenDialogContent> createState() =>
+      _CreateTokenDialogContentState();
+}
+
+class _CreateTokenDialogContentState extends State<_CreateTokenDialogContent> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _TokenFormErrorAnnouncer(
-      formError: formError,
-      providerError: providerError,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TokenIdentityFields(
-              clientIdController: clientIdController,
-              agentIdController: agentIdController,
-              agentFocusNode: agentFocusNode,
-              isCompact: isCompact,
-              onAgentSubmitted: onFieldSubmitted,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(3),
-              child: AppTextField(
-                label: AppStrings.ctFieldPayloadJsonOptional,
-                controller: payloadController,
-                hint: AppStrings.ctHintPayloadJson,
-                maxLines: 4,
-                textInputAction: TextInputAction.newline,
+      formError: widget.formError,
+      providerError: widget.providerError,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: Scrollbar(
+          controller: _scrollController,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TokenIdentityFields(
+                    clientIdController: widget.clientIdController,
+                    agentIdController: widget.agentIdController,
+                    agentFocusNode: widget.agentFocusNode,
+                    isCompact: widget.isCompact,
+                    onAgentSubmitted: widget.onFieldSubmitted,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  FocusTraversalOrder(
+                    order: const NumericFocusOrder(3),
+                    child: AppTextField(
+                      label: AppStrings.ctFieldPayloadJsonOptional,
+                      controller: widget.payloadController,
+                      hint: AppStrings.ctHintPayloadJson,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.newline,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.lg,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      _FlagCheckbox(
+                        focusOrder: 4,
+                        label: AppStrings.ctFlagAllTables,
+                        value: widget.allTables,
+                        onChanged: widget.onToggleAllTables,
+                      ),
+                      _FlagCheckbox(
+                        focusOrder: 5,
+                        label: AppStrings.ctFlagAllViews,
+                        value: widget.allViews,
+                        onChanged: widget.onToggleAllViews,
+                      ),
+                      _FlagCheckbox(
+                        focusOrder: 6,
+                        label: AppStrings.ctFlagAllPermissions,
+                        value: widget.allPermissions,
+                        onChanged: widget.onToggleAllPermissions,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: SettingsSectionTitle(
+                          title: AppStrings.ctSectionRulesByResource,
+                        ),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(7),
+                        child: AppButton(
+                          label: AppStrings.ctButtonAddRule,
+                          isPrimary: false,
+                          icon: FluentIcons.add,
+                          onPressed:
+                              widget.allPermissions ? null : widget.onAddRule,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (widget.rules.isEmpty)
+                    const Text(AppStrings.ctNoRulesAdded)
+                  else
+                    ClientTokenRulesGrid(
+                      rules: widget.rules,
+                      onEdit: widget.onEditRule,
+                      onDelete: widget.onDeleteRule,
+                    ),
+                  _TokenFeedbackPanel(
+                    formError: widget.formError,
+                    providerError: widget.providerError,
+                    lastCreatedToken: widget.lastCreatedToken,
+                    onDismissCreatedToken: widget.onDismissCreatedToken,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.lg,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _FlagCheckbox(
-                  focusOrder: 4,
-                  label: AppStrings.ctFlagAllTables,
-                  value: allTables,
-                  onChanged: onToggleAllTables,
-                ),
-                _FlagCheckbox(
-                  focusOrder: 5,
-                  label: AppStrings.ctFlagAllViews,
-                  value: allViews,
-                  onChanged: onToggleAllViews,
-                ),
-                _FlagCheckbox(
-                  focusOrder: 6,
-                  label: AppStrings.ctFlagAllPermissions,
-                  value: allPermissions,
-                  onChanged: onToggleAllPermissions,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                const Expanded(
-                  child: SettingsSectionTitle(
-                    title: AppStrings.ctSectionRulesByResource,
-                  ),
-                ),
-                FocusTraversalOrder(
-                  order: const NumericFocusOrder(7),
-                  child: AppButton(
-                    label: AppStrings.ctButtonAddRule,
-                    isPrimary: false,
-                    icon: FluentIcons.add,
-                    onPressed: allPermissions ? null : onAddRule,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (rules.isEmpty)
-              const Text(AppStrings.ctNoRulesAdded)
-            else
-              ClientTokenRulesGrid(
-                rules: rules,
-                onEdit: onEditRule,
-                onDelete: onDeleteRule,
-              ),
-            _TokenFeedbackPanel(
-              formError: formError,
-              providerError: providerError,
-              lastCreatedToken: lastCreatedToken,
-              onDismissCreatedToken: onDismissCreatedToken,
-            ),
-          ],
+          ),
         ),
       ),
     );

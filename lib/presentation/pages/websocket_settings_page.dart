@@ -5,6 +5,7 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/diagnostics_config_section.dart';
@@ -244,12 +245,13 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navWebSocketSettings,
+          l10n.navWebSocketSettings,
           style: context.sectionTitle,
         ),
       ),

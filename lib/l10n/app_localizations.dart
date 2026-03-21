@@ -104,6 +104,12 @@ abstract class AppLocalizations {
   /// **'Dashboard'**
   String get navDashboard;
 
+  /// No description provided for @navDatabaseSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Database'**
+  String get navDatabaseSettings;
+
   /// No description provided for @navPlayground.
   ///
   /// In en, this message translates to:
@@ -115,6 +121,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settings'**
   String get navSettings;
+
+  /// No description provided for @navWebSocketSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'WebSocket connection'**
+  String get navWebSocketSettings;
+
+  /// No description provided for @mainDegradedModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Degraded mode active'**
+  String get mainDegradedModeTitle;
+
+  /// No description provided for @mainDegradedModeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The application is running with limited capabilities:'**
+  String get mainDegradedModeDescription;
 
   /// No description provided for @titlePlayground.
   ///
@@ -266,6 +290,42 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get btnCancel;
 
+  /// No description provided for @btnRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get btnRetry;
+
+  /// No description provided for @errorTitleValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid data'**
+  String get errorTitleValidation;
+
+  /// No description provided for @errorTitleNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error'**
+  String get errorTitleNetwork;
+
+  /// No description provided for @errorTitleDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Database error'**
+  String get errorTitleDatabase;
+
+  /// No description provided for @errorTitleServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server error'**
+  String get errorTitleServer;
+
+  /// No description provided for @errorTitleNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found'**
+  String get errorTitleNotFound;
+
   /// No description provided for @queryNoResults.
   ///
   /// In en, this message translates to:
@@ -296,11 +356,377 @@ abstract class AppLocalizations {
   /// **'Affected rows'**
   String get queryAffectedRows;
 
+  /// No description provided for @queryErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Query error'**
+  String get queryErrorTitle;
+
+  /// No description provided for @queryErrorShowDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'View details'**
+  String get queryErrorShowDetails;
+
+  /// No description provided for @querySqlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SQL query'**
+  String get querySqlLabel;
+
+  /// No description provided for @querySqlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'SELECT * FROM table...'**
+  String get querySqlHint;
+
+  /// No description provided for @queryActionExecute.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get queryActionExecute;
+
+  /// No description provided for @queryActionTestConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get queryActionTestConnection;
+
+  /// No description provided for @queryActionClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get queryActionClear;
+
+  /// No description provided for @queryActionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get queryActionCancel;
+
+  /// No description provided for @queryConnectionStatusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection status'**
+  String get queryConnectionStatusTitle;
+
+  /// No description provided for @queryConnectionTesting.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing connection...'**
+  String get queryConnectionTesting;
+
+  /// No description provided for @queryConnectionSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection established successfully'**
+  String get queryConnectionSuccess;
+
+  /// No description provided for @queryConnectionFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed'**
+  String get queryConnectionFailure;
+
+  /// No description provided for @queryCancelledByUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Query cancelled by user'**
+  String get queryCancelledByUser;
+
+  /// No description provided for @queryStreamingErrorPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Streaming error'**
+  String get queryStreamingErrorPrefix;
+
+  /// No description provided for @queryStreamingMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Streaming mode'**
+  String get queryStreamingMode;
+
+  /// No description provided for @querySqlHandlingModePreserve.
+  ///
+  /// In en, this message translates to:
+  /// **'Preserve SQL'**
+  String get querySqlHandlingModePreserve;
+
+  /// No description provided for @querySqlHandlingModePreserveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs SQL exactly as sent, without pagination rewrite'**
+  String get querySqlHandlingModePreserveHint;
+
+  /// No description provided for @queryPlaygroundHintLastRunPreserve.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run: SQL preserved (no pagination rewrite by the agent).'**
+  String get queryPlaygroundHintLastRunPreserve;
+
+  /// No description provided for @queryPlaygroundHintLastRunManagedPagination.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run: managed pagination — SQL may have been rewritten for the database dialect.'**
+  String get queryPlaygroundHintLastRunManagedPagination;
+
+  /// No description provided for @queryPlaygroundHintLastRunManaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run: managed mode — agent limits and adjustments may apply to the SQL.'**
+  String get queryPlaygroundHintLastRunManaged;
+
+  /// No description provided for @queryPlaygroundHintLastRunStreaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run: streaming mode — results received as a continuous stream.'**
+  String get queryPlaygroundHintLastRunStreaming;
+
+  /// No description provided for @queryPlaygroundStreamingRowCapHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Display limited to {max} rows in streaming (memory). The server-side query was stopped when that limit was reached.'**
+  String queryPlaygroundStreamingRowCapHint(int max);
+
+  /// No description provided for @queryStreamingModeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For large datasets (thousands of rows)'**
+  String get queryStreamingModeHint;
+
+  /// No description provided for @queryStreamingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get queryStreamingProgress;
+
+  /// No description provided for @queryStreamingRows.
+  ///
+  /// In en, this message translates to:
+  /// **'rows'**
+  String get queryStreamingRows;
+
+  /// No description provided for @queryPaginationPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Page'**
+  String get queryPaginationPage;
+
+  /// No description provided for @queryPaginationPageSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows per page'**
+  String get queryPaginationPageSize;
+
+  /// No description provided for @queryPaginationPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get queryPaginationPrevious;
+
+  /// No description provided for @queryPaginationNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get queryPaginationNext;
+
+  /// No description provided for @queryPaginationShowing.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing'**
+  String get queryPaginationShowing;
+
+  /// No description provided for @queryResultSetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Result set'**
+  String get queryResultSetLabel;
+
+  /// No description provided for @queryExecuteGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to execute query'**
+  String get queryExecuteGenericError;
+
   /// No description provided for @dashboardDescription.
   ///
   /// In en, this message translates to:
   /// **'Monitor your agent status and database connections here.'**
   String get dashboardDescription;
+
+  /// No description provided for @connectionStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get connectionStatusConnected;
+
+  /// No description provided for @connectionStatusConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get connectionStatusConnecting;
+
+  /// No description provided for @connectionStatusError.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection error'**
+  String get connectionStatusError;
+
+  /// No description provided for @connectionStatusDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get connectionStatusDisconnected;
+
+  /// No description provided for @connectionStatusDbConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'DB: connected'**
+  String get connectionStatusDbConnected;
+
+  /// No description provided for @connectionStatusDbDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'DB: disconnected'**
+  String get connectionStatusDbDisconnected;
+
+  /// No description provided for @dashboardMetricsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'ODBC metrics'**
+  String get dashboardMetricsTitle;
+
+  /// No description provided for @dashboardMetricsQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'Queries executed'**
+  String get dashboardMetricsQueries;
+
+  /// No description provided for @dashboardMetricsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Success'**
+  String get dashboardMetricsSuccess;
+
+  /// No description provided for @dashboardMetricsErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get dashboardMetricsErrors;
+
+  /// No description provided for @dashboardMetricsSuccessRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Success rate'**
+  String get dashboardMetricsSuccessRate;
+
+  /// No description provided for @dashboardMetricsAvgLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Average latency'**
+  String get dashboardMetricsAvgLatency;
+
+  /// No description provided for @dashboardMetricsMaxLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum latency'**
+  String get dashboardMetricsMaxLatency;
+
+  /// No description provided for @dashboardMetricsTotalRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Total rows'**
+  String get dashboardMetricsTotalRows;
+
+  /// No description provided for @dashboardMetricsPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get dashboardMetricsPeriod;
+
+  /// No description provided for @dashboardMetricsPeriod1h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 1 hour'**
+  String get dashboardMetricsPeriod1h;
+
+  /// No description provided for @dashboardMetricsPeriod24h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 24 hours'**
+  String get dashboardMetricsPeriod24h;
+
+  /// No description provided for @dashboardMetricsPeriodAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get dashboardMetricsPeriodAll;
+
+  /// No description provided for @wsLogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WebSocket messages'**
+  String get wsLogTitle;
+
+  /// No description provided for @wsLogEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get wsLogEnabled;
+
+  /// No description provided for @wsLogClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get wsLogClear;
+
+  /// No description provided for @wsLogNoMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get wsLogNoMessages;
+
+  /// No description provided for @wsLogAuthChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'Auth checks'**
+  String get wsLogAuthChecks;
+
+  /// No description provided for @wsLogAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed'**
+  String get wsLogAllowed;
+
+  /// No description provided for @wsLogDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Denied'**
+  String get wsLogDenied;
+
+  /// No description provided for @wsLogDenialRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Denial rate'**
+  String get wsLogDenialRate;
+
+  /// No description provided for @wsLogP95Latency.
+  ///
+  /// In en, this message translates to:
+  /// **'P95 auth latency'**
+  String get wsLogP95Latency;
+
+  /// No description provided for @wsLogP99Latency.
+  ///
+  /// In en, this message translates to:
+  /// **'P99 auth latency'**
+  String get wsLogP99Latency;
+
+  /// No description provided for @wsLogPreserveSqlDeprecatedUses.
+  ///
+  /// In en, this message translates to:
+  /// **'preserve_sql usage (deprecated)'**
+  String get wsLogPreserveSqlDeprecatedUses;
 
   /// No description provided for @odbcDriverNotFound.
   ///

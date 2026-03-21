@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class SqlActionBar extends StatelessWidget {
   const SqlActionBar({
@@ -29,20 +29,21 @@ class SqlActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final actions = <_SqlActionConfig>[
       _SqlActionConfig(
-        label: AppStrings.queryActionExecute,
+        label: l10n.queryActionExecute,
         shortcut: 'F5',
         onPressed: onExecute,
         isPrimary: true,
       ),
       _SqlActionConfig(
-        label: AppStrings.queryActionTestConnection,
+        label: l10n.queryActionTestConnection,
         shortcut: 'Ctrl+Shift+C',
         onPressed: onTestConnection,
       ),
       _SqlActionConfig(
-        label: AppStrings.queryActionClear,
+        label: l10n.queryActionClear,
         shortcut: 'Ctrl+L',
         onPressed: onClear,
       ),
@@ -52,11 +53,11 @@ class SqlActionBar extends StatelessWidget {
       children: [
         if (onSqlHandlingModeChanged != null) ...[
           Tooltip(
-            message: AppStrings.querySqlHandlingModePreserveHint,
+            message: l10n.querySqlHandlingModePreserveHint,
             child: ToggleSwitch(
               checked: sqlHandlingModePreserve,
               onChanged: isExecuting ? null : onSqlHandlingModeChanged,
-              content: const Text(AppStrings.querySqlHandlingModePreserve),
+              content: Text(l10n.querySqlHandlingModePreserve),
             ),
           ),
           const SizedBox(width: AppSpacing.lg),
@@ -65,7 +66,7 @@ class SqlActionBar extends StatelessWidget {
           ToggleSwitch(
             checked: streamingModeEnabled,
             onChanged: isExecuting ? null : onStreamingModeChanged,
-            content: const Text(AppStrings.queryStreamingMode),
+            content: Text(l10n.queryStreamingMode),
           ),
           const SizedBox(width: AppSpacing.lg),
         ],
@@ -79,12 +80,12 @@ class SqlActionBar extends StatelessWidget {
                 ).resources.systemFillColorCautionBackground,
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ProgressRing(strokeWidth: 2),
-                SizedBox(width: AppSpacing.sm),
-                Text(AppStrings.queryActionCancel),
+                const ProgressRing(strokeWidth: 2),
+                const SizedBox(width: AppSpacing.sm),
+                Text(l10n.queryActionCancel),
               ],
             ),
           ),

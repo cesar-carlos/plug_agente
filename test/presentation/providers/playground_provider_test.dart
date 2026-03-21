@@ -1,12 +1,13 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -18,6 +19,8 @@ class MockTestDbConnection extends Mock implements TestDbConnection {}
 class MockExecuteStreamingQuery extends Mock implements ExecuteStreamingQuery {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('PlaygroundProvider', () {
     late MockExecutePlaygroundQuery mockExecutePlaygroundQuery;
     late MockTestDbConnection mockTestDbConnection;
@@ -86,7 +89,10 @@ void main() {
 
         await provider.testConnection(config);
 
-        expect(provider.connectionStatus, AppStrings.queryConnectionSuccess);
+        expect(
+          provider.connectionStatus,
+          lookupAppLocalizations(const Locale('en')).queryConnectionSuccess,
+        );
         expect(provider.isConnectionStatusSuccess, isTrue);
         expect(provider.error, isNull);
       },

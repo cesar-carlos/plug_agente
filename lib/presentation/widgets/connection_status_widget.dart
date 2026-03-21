@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +11,7 @@ class ConnectionStatusWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ConnectionProvider>(
       builder: (context, connectionProvider, child) {
+        final l10n = AppLocalizations.of(context)!;
         IconData icon;
         Color color;
         String statusText;
@@ -18,19 +20,19 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.connected:
             icon = FluentIcons.check_mark;
             color = AppColors.success;
-            statusText = 'Connected';
+            statusText = l10n.connectionStatusConnected;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
             color = AppColors.warning;
-            statusText = 'Connecting...';
+            statusText = l10n.connectionStatusConnecting;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = AppColors.error;
-            statusText = 'Connection Error';
+            statusText = l10n.connectionStatusError;
           default:
             icon = FluentIcons.circle_pause;
             color = AppColors.disabled;
-            statusText = 'Disconnected';
+            statusText = l10n.connectionStatusDisconnected;
         }
 
         return Container(
@@ -53,8 +55,8 @@ class ConnectionStatusWidget extends StatelessWidget {
               const Spacer(),
               Text(
                 connectionProvider.isDbConnected
-                    ? 'DB: Connected'
-                    : 'DB: Disconnected',
+                    ? l10n.connectionStatusDbConnected
+                    : l10n.connectionStatusDbDisconnected,
                 style: context.bodyText.copyWith(
                   color: connectionProvider.isDbConnected
                       ? AppColors.success
