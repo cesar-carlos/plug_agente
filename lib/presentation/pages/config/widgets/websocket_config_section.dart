@@ -5,6 +5,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
@@ -193,14 +194,31 @@ class _OutboundCompressionSection extends StatefulWidget {
       _OutboundCompressionSectionState();
 }
 
-class _OutboundCompressionSectionState extends State<_OutboundCompressionSection> {
+class _OutboundCompressionSectionState
+    extends State<_OutboundCompressionSection> {
   late final FeatureFlags _flags = getIt<FeatureFlags>();
   late OutboundCompressionMode _mode;
+  late bool _perRequestOutboundCompression;
 
   @override
   void initState() {
     super.initState();
     _mode = _flags.outboundCompressionMode;
+    _perRequestOutboundCompression =
+        _flags.enablePerRequestOutboundCompression;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mode = _flags.outboundCompressionMode;
+    final perRequest = _flags.enablePerRequestOutboundCompression;
+    if (mode != _mode || perRequest != _perRequestOutboundCompression) {
+      setState(() {
+        _mode = mode;
+        _perRequestOutboundCompression = perRequest;
+      });
+    }
   }
 
   Future<void> _onModeChanged(OutboundCompressionMode mode) async {
@@ -210,6 +228,14 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
       setState(() {
         _mode = _flags.outboundCompressionMode;
       });
+    }
+  }
+
+  Future<void> _onPerRequestChanged(bool value) async {
+    setState(() => _perRequestOutboundCompression = value);
+    await _flags.setEnablePerRequestOutboundCompression(value);
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -240,13 +266,46 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
               ],
               onChanged: (OutboundCompressionMode? value) {
                 if (value != null) {
-                  unawaited(_onModeChanged(value));
+                  unawaited(
+                    _onModeChanged(value).catchError(
+                      (Object e, StackTrace stackTrace) {
+                        AppLogger.warning(
+                          'Failed to set outbound compression mode',
+                          e,
+                          stackTrace,
+                        );
+                      },
+                    ),
+                  );
                 }
               },
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               AppStrings.wsOutboundCompressionDescription,
+              style: FluentTheme.of(context).typography.caption,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SettingsToggleTile(
+              label: AppStrings.wsPerRequestOutboundCompressionLabel,
+              value: _perRequestOutboundCompression,
+              onChanged: (bool value) {
+                unawaited(
+                  _onPerRequestChanged(value).catchError(
+                    (Object e, StackTrace stackTrace) {
+                      AppLogger.warning(
+                        'Failed to set per-request outbound compression flag',
+                        e,
+                        stackTrace,
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              AppStrings.wsPerRequestOutboundCompressionDescription,
               style: FluentTheme.of(context).typography.caption,
             ),
           ],

@@ -1,6 +1,8 @@
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/protocol/rpc_stream.dart';
 import 'package:plug_agente/infrastructure/validation/trace_context_validator.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -168,6 +170,20 @@ class RpcContractValidator {
     final executionId = data['execution_id'];
     if (executionId != null && !_isNonEmptyString(executionId)) {
       return _invalid('Field "execution_id" must be a non-empty string');
+    }
+
+    final terminalStatus = data['terminal_status'];
+    if (terminalStatus != null) {
+      if (terminalStatus is! String) {
+        return _invalid('Field "terminal_status" must be a string');
+      }
+      if (terminalStatus != RpcStreamComplete.terminalStatusAborted &&
+          terminalStatus != RpcStreamComplete.terminalStatusError) {
+        return _invalid(
+          'Field "terminal_status" must be "${RpcStreamComplete.terminalStatusAborted}" '
+          'or "${RpcStreamComplete.terminalStatusError}"',
+        );
+      }
     }
 
     return const Success(unit);
@@ -444,11 +460,20 @@ class RpcContractValidator {
       'request_id',
       'agent_id',
       'timestamp',
+      'outbound_compression',
     ]) {
       final value = meta[key];
       if (value != null && value is! String) {
         return _invalid('Field "meta.$key" must be a string');
       }
+    }
+
+    final outboundCompression = meta['outbound_compression'] as String?;
+    if (outboundCompression != null &&
+        tryParseOutboundCompressionWire(outboundCompression) == null) {
+      return _invalid(
+        'Field "meta.outbound_compression" must be one of: none, gzip, auto',
+      );
     }
 
     final timestamp = meta['timestamp'] as String?;

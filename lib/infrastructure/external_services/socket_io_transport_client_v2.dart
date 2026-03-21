@@ -22,6 +22,7 @@ import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
@@ -37,17 +38,20 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required RpcMethodDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
     PayloadSigner? payloadSigner,
+    MetricsCollector? metricsCollector,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
-       _payloadSigner = payloadSigner;
+       _payloadSigner = payloadSigner,
+       _metricsCollector = metricsCollector;
 
   final SocketDataSource _dataSource;
   final ProtocolNegotiator _negotiator;
   final RpcMethodDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
   final PayloadSigner? _payloadSigner;
+  final MetricsCollector? _metricsCollector;
 
   io.Socket? _socket;
   String _agentId = '';
@@ -75,6 +79,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final Map<String, BackpressureStreamEmitter> _streamEmitters = {};
   TransportPipeline? _cachedSendPipeline;
   String _sendPipelineCacheKey = '';
+  ProtocolCapabilities? _cachedLocalCapabilities;
+  String _localCapabilitiesCacheKey = '';
   final Map<String, TransportPipeline> _receivePipelineByKey = {};
   Map<String, dynamic>? _cachedOpenRpcDocument;
   Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
@@ -82,6 +88,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Timer? _capabilitiesTimeoutTimer;
   int _capabilitiesReRegisterCount = 0;
   int _activeRpcHandlers = 0;
+
+  /// Per JSON-RPC `id`: optional client override for agent->hub frame compression.
+  final Map<String, OutboundCompressionMode> _outboundCompressionByRpcId = {};
+
+  /// Next `rpc:response` payload is a batch array; use [_pendingBatchOutboundExplicitMode].
+  bool _pendingRpcResponseIsBatchArray = false;
+
+  /// Explicit batch compression mode, or null when all batch items omit the hint.
+  OutboundCompressionMode? _pendingBatchOutboundExplicitMode;
 
   @override
   void setMessageCallback(
@@ -101,8 +116,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _logMessage(String direction, String event, dynamic data) {
-    final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs &&
-            data != null
+    final traced =
+        _featureFlags.enableSocketSummarizeLargePayloadLogs && data != null
         ? _summarizeLargePayloadForTracing(direction, event, data)
         : data;
     _onMessage?.call(direction, event, traced);
@@ -113,8 +128,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     String event,
     dynamic data,
   ) {
-    const threshold =
-        ConnectionConstants.socketLogPayloadSummaryThresholdBytes;
+    const threshold = ConnectionConstants.socketLogPayloadSummaryThresholdBytes;
     try {
       final sink = _Utf8BudgetSink(threshold);
       final jsonSink = JsonUtf8Encoder().startChunkedConversion(sink);
@@ -156,6 +170,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _activeRpcHandlers--;
   }
 
+  void _runTransportFuture(Future<void> future, String label) {
+    unawaited(
+      future.catchError((Object error, StackTrace stackTrace) {
+        AppLogger.error(
+          'Transport async task failed: $label',
+          error,
+          stackTrace,
+        );
+      }),
+    );
+  }
+
   Future<void> _handleRpcRequestWithRelease(dynamic data) async {
     try {
       await _handleRpcRequest(data);
@@ -167,9 +193,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<void> _emitRpcConcurrencyLimited(dynamic rawData) async {
     dynamic id;
     try {
-      if (rawData is Map<String, dynamic> &&
-          _looksLikePayloadFrame(rawData)) {
-        final payload = _decodeIncomingPayloadOrThrow(rawData);
+      if (rawData is Map<String, dynamic> && _looksLikePayloadFrame(rawData)) {
+        final frame = _parseAndValidateTransportFrame(rawData);
+        final dynamic payload = incomingPayloadFrameNeedsAsyncDecode(frame)
+            ? await _decodePayloadFromValidatedFrameAsync(frame)
+            : _decodePayloadFromValidatedFrame(frame);
         if (payload is Map<String, dynamic>) {
           id = payload['id'];
         }
@@ -207,16 +235,29 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   ProtocolCapabilities _localCapabilities() {
-    return ProtocolCapabilities.defaultCapabilities(
+    final cacheKey =
+        '${_featureFlags.enableBinaryPayload}|'
+        '${_featureFlags.outboundCompressionMode.name}|'
+        '${_featureFlags.compressionThreshold}|'
+        '$_localSignatureRequired|'
+        '${_localSignatureAlgorithms.join(',')}';
+    if (_cachedLocalCapabilities != null &&
+        _localCapabilitiesCacheKey == cacheKey) {
+      return _cachedLocalCapabilities!;
+    }
+    final built = ProtocolCapabilities.defaultCapabilities(
       binaryPayload: _featureFlags.enableBinaryPayload,
-      compressions: _featureFlags.outboundCompressionMode ==
-              OutboundCompressionMode.none
+      compressions:
+          _featureFlags.outboundCompressionMode == OutboundCompressionMode.none
           ? const ['none']
           : const ['gzip', 'none'],
       compressionThreshold: _featureFlags.compressionThreshold,
       signatureRequired: _localSignatureRequired,
       signatureAlgorithms: _localSignatureAlgorithms,
     );
+    _cachedLocalCapabilities = built;
+    _localCapabilitiesCacheKey = cacheKey;
+    return built;
   }
 
   bool get _localSignatureRequired =>
@@ -234,15 +275,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _currentProtocol.usesTransportFrame;
   }
 
-  TransportPipeline _createSendPipeline() {
-    final negotiatedCmp =
-        _hasReceivedCapabilities ? _currentProtocol.compression : 'gzip';
+  TransportPipeline _createSendPipeline({
+    OutboundCompressionMode? clientOutboundMode,
+  }) {
+    final negotiatedCmp = _hasReceivedCapabilities
+        ? _currentProtocol.compression
+        : 'gzip';
+    final effectiveMode =
+        clientOutboundMode ?? _featureFlags.outboundCompressionMode;
     final String pipelineCompression;
-    if (_featureFlags.outboundCompressionMode == OutboundCompressionMode.none ||
+    if (effectiveMode == OutboundCompressionMode.none ||
         negotiatedCmp == 'none') {
       pipelineCompression = 'none';
-    } else if (_featureFlags.outboundCompressionMode ==
-        OutboundCompressionMode.auto) {
+    } else if (effectiveMode == OutboundCompressionMode.auto) {
       pipelineCompression = 'auto';
     } else {
       pipelineCompression = 'gzip';
@@ -251,7 +296,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
         ? _currentProtocol.compressionThreshold
         : _featureFlags.compressionThreshold;
     final cacheKey =
-        '${_currentProtocol.encoding}|$pipelineCompression|$threshold|$_hasReceivedCapabilities';
+        '${_currentProtocol.encoding}|$pipelineCompression|$threshold|$_hasReceivedCapabilities|'
+        '${clientOutboundMode?.name ?? 'app'}';
     if (_cachedSendPipeline != null && _sendPipelineCacheKey == cacheKey) {
       return _cachedSendPipeline!;
     }
@@ -263,6 +309,42 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _cachedSendPipeline = pipeline;
     _sendPipelineCacheKey = cacheKey;
     return pipeline;
+  }
+
+  Result<({OutboundCompressionMode? mode})> _resolveBatchOutboundCompression(
+    List<RpcRequest> requests,
+  ) {
+    final distinct = <OutboundCompressionMode>{};
+    for (final r in requests) {
+      final raw = r.meta?.outboundCompression;
+      if (raw == null || raw.isEmpty) {
+        continue;
+      }
+      final mode = tryParseOutboundCompressionWire(raw);
+      if (mode == null) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Invalid meta.outbound_compression in batch request',
+            context: {'rpc_error_code': RpcErrorCode.invalidRequest},
+          ),
+        );
+      }
+      distinct.add(mode);
+    }
+    if (distinct.length > 1) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message:
+              'Batch meta.outbound_compression conflict: '
+              'all set values must match',
+          context: {'rpc_error_code': RpcErrorCode.invalidRequest},
+        ),
+      );
+    }
+    if (distinct.isEmpty) {
+      return const Success((mode: null));
+    }
+    return Success((mode: distinct.single));
   }
 
   TransportPipeline _createReceivePipeline(PayloadFrame frame) {
@@ -301,16 +383,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   void _handleStreamPull(dynamic data) {
     try {
-      final payload = _decodeIncomingPayloadOrThrow(data);
-      if (payload is! Map<String, dynamic>) {
+      final frame = _parseAndValidateTransportFrame(data);
+      if (incomingPayloadFrameNeedsAsyncDecode(frame)) {
+        _runTransportFuture(
+          _handleStreamPullFromFrameAsync(frame),
+          'handleStreamPullFromFrameAsync',
+        );
         return;
       }
-      final pull = RpcStreamPull.fromJson(payload);
-      _logMessage('INFO', 'rpc:stream.pull', {
-        'stream_id': pull.streamId,
-        'window_size': pull.windowSize,
-      });
-      _streamEmitters[pull.streamId]?.releaseChunks(pull.windowSize);
+      _dispatchStreamPull(_decodePayloadFromValidatedFrame(frame));
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
         'Failed to handle rpc:stream.pull',
@@ -318,6 +399,31 @@ class SocketIOTransportClientV2 implements ITransportClient {
         stackTrace,
       );
     }
+  }
+
+  Future<void> _handleStreamPullFromFrameAsync(PayloadFrame frame) async {
+    try {
+      final payload = await _decodePayloadFromValidatedFrameAsync(frame);
+      _dispatchStreamPull(payload);
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Failed to handle rpc:stream.pull',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  void _dispatchStreamPull(dynamic payload) {
+    if (payload is! Map<String, dynamic>) {
+      return;
+    }
+    final pull = RpcStreamPull.fromJson(payload);
+    _logMessage('INFO', 'rpc:stream.pull', {
+      'stream_id': pull.streamId,
+      'window_size': pull.windowSize,
+    });
+    _streamEmitters[pull.streamId]?.releaseChunks(pull.windowSize);
   }
 
   Future<void> _emitRequestAck(dynamic requestId) async {
@@ -377,11 +483,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
         return;
       } on Exception catch (e) {
         if (attempt < maxRetries) {
+          _metricsCollector?.recordRpcResponseAckRetry();
           AppLogger.warning(
             'rpc:response ack timeout, retrying (${attempt + 1}/$maxRetries)',
             e,
           );
+          await Future<void>.delayed(
+            DeliveryGuaranteeConfig.responseAckRetryDelayAfterAttempt(attempt),
+          );
         } else {
+          _metricsCollector?.recordRpcResponseAckFallbackWithoutAck();
           AppLogger.warning(
             'rpc:response ack failed after $maxRetries retries, sending without ack',
             e,
@@ -464,7 +575,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('disconnect', (reason) {
         _logMessage('RECEIVED', 'disconnect', reason);
         _heartbeat.stop();
-        unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
+        _runTransportFuture(
+          _rpcDispatcher.cancelActiveStreamOnDisconnect(),
+          'cancelActiveStreamOnDisconnect',
+        );
       });
 
       // Protocol negotiation response
@@ -478,10 +592,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('rpc:request', (data) {
         _logMessage('RECEIVED', 'rpc:request', data);
         if (!_tryAcquireRpcHandlerSlot()) {
-          unawaited(_emitRpcConcurrencyLimited(data));
+          _runTransportFuture(
+            _emitRpcConcurrencyLimited(data),
+            'emitRpcConcurrencyLimited',
+          );
           return;
         }
-        unawaited(_handleRpcRequestWithRelease(data));
+        _runTransportFuture(
+          _handleRpcRequestWithRelease(data),
+          'handleRpcRequestWithRelease',
+        );
       });
 
       if (_featureFlags.enableSocketBackpressure) {
@@ -540,7 +660,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'resilience: capabilities_timeout re_register_count=$_capabilitiesReRegisterCount '
             'max=${ConnectionConstants.capabilitiesMaxReRegisterAttempts}',
           );
-          unawaited(_sendAgentRegister());
+          _runTransportFuture(_sendAgentRegister(), 'sendAgentRegister');
           _startCapabilitiesTimeoutTimer();
         } else {
           AppLogger.warning(
@@ -578,62 +698,90 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// Handles protocol capabilities negotiation.
   void _handleCapabilitiesNegotiation(dynamic data) {
     try {
-      final payload = _decodeIncomingPayloadOrThrow(data);
-      if (payload is! Map<String, dynamic>) {
-        throw StateError('agent:capabilities payload must be an object');
-      }
-      if (_featureFlags.enableSocketSchemaValidation) {
-        final validation = _contractValidator.validateAgentCapabilitiesEnvelope(
-          payload,
+      final frame = _parseAndValidateTransportFrame(data);
+      if (incomingPayloadFrameNeedsAsyncDecode(frame)) {
+        _runTransportFuture(
+          _completeCapabilitiesNegotiationFromFrameAsync(frame),
+          'completeCapabilitiesNegotiationFromFrameAsync',
         );
-        if (validation.isError()) {
-          final failure = validation.exceptionOrNull()! as domain.Failure;
-          throw StateError(failure.message);
-        }
+        return;
       }
-
-      final agentCapabilities = _localCapabilities();
-      final serverCapabilities = payload['capabilities'] != null
-          ? ProtocolCapabilities.fromJson(
-              payload['capabilities'] as Map<String, dynamic>,
-            )
-          : agentCapabilities;
-
-      _currentProtocol = _negotiator.negotiate(
-        agentCapabilities: agentCapabilities,
-        serverCapabilities: serverCapabilities,
+      _applyNegotiatedCapabilitiesPayload(
+        _decodePayloadFromValidatedFrame(frame),
       );
-      _validateNegotiatedTransportContract(
-        agentCapabilities: agentCapabilities,
-        serverCapabilities: serverCapabilities,
-      );
-      _capabilitiesTimeoutTimer?.cancel();
-      _capabilitiesTimeoutTimer = null;
-      _hasReceivedCapabilities = true;
-      _receivePipelineByKey.clear();
-
-      final limits = _currentProtocol.effectiveLimits;
-      AppLogger.info(
-        'Protocol negotiated: ${_currentProtocol.protocol}, '
-        'encoding: ${_currentProtocol.encoding}, '
-        'compression: ${_currentProtocol.compression}, '
-        'limits: payload=${limits.maxPayloadBytes}B, '
-        'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
-      );
-
-      _heartbeat.start();
     } on Object catch (error, stackTrace) {
-      AppLogger.error(
-        'Failed to negotiate mandatory transport contract',
-        error,
-        stackTrace,
-      );
-      _heartbeat.stop();
-      _socket?.disconnect();
-      _socket?.dispose();
-      _socket = null;
-      _onReconnectionNeeded?.call();
+      _abortCapabilitiesNegotiation(error, stackTrace);
     }
+  }
+
+  Future<void> _completeCapabilitiesNegotiationFromFrameAsync(
+    PayloadFrame frame,
+  ) async {
+    try {
+      final payload = await _decodePayloadFromValidatedFrameAsync(frame);
+      _applyNegotiatedCapabilitiesPayload(payload);
+    } on Object catch (error, stackTrace) {
+      _abortCapabilitiesNegotiation(error, stackTrace);
+    }
+  }
+
+  void _applyNegotiatedCapabilitiesPayload(dynamic payload) {
+    if (payload is! Map<String, dynamic>) {
+      throw StateError('agent:capabilities payload must be an object');
+    }
+    if (_featureFlags.enableSocketSchemaValidation) {
+      final validation = _contractValidator.validateAgentCapabilitiesEnvelope(
+        payload,
+      );
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()! as domain.Failure;
+        throw StateError(failure.message);
+      }
+    }
+
+    final agentCapabilities = _localCapabilities();
+    final serverCapabilities = payload['capabilities'] != null
+        ? ProtocolCapabilities.fromJson(
+            payload['capabilities'] as Map<String, dynamic>,
+          )
+        : agentCapabilities;
+
+    _currentProtocol = _negotiator.negotiate(
+      agentCapabilities: agentCapabilities,
+      serverCapabilities: serverCapabilities,
+    );
+    _validateNegotiatedTransportContract(
+      agentCapabilities: agentCapabilities,
+      serverCapabilities: serverCapabilities,
+    );
+    _capabilitiesTimeoutTimer?.cancel();
+    _capabilitiesTimeoutTimer = null;
+    _hasReceivedCapabilities = true;
+    _receivePipelineByKey.clear();
+
+    final limits = _currentProtocol.effectiveLimits;
+    AppLogger.info(
+      'Protocol negotiated: ${_currentProtocol.protocol}, '
+      'encoding: ${_currentProtocol.encoding}, '
+      'compression: ${_currentProtocol.compression}, '
+      'limits: payload=${limits.maxPayloadBytes}B, '
+      'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
+    );
+
+    _heartbeat.start();
+  }
+
+  void _abortCapabilitiesNegotiation(Object error, StackTrace stackTrace) {
+    AppLogger.error(
+      'Failed to negotiate mandatory transport contract',
+      error,
+      stackTrace,
+    );
+    _heartbeat.stop();
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+    _onReconnectionNeeded?.call();
   }
 
   /// Handles RPC v2 request.
@@ -648,7 +796,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       try {
-        payload = await _decodeIncomingPayloadOrThrowAsync(payload);
+        payload = await _decodeIncomingPayloadAdaptive(payload);
       } on domain.Failure catch (failure) {
         final mapped = _mapInboundTransportDecodeFailure(failure);
         await _sendSchemaValidationError(
@@ -735,58 +883,77 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
       socketAck?.call();
 
-      final guardResult = _rpcRequestGuard.evaluate(request);
-      if (guardResult != RpcRequestGuardResult.allow) {
-        final errorResponse = _buildRpcErrorResponse(
-          id: request.id,
-          code: _guardResultToCode(guardResult),
-          technicalMessage: _guardResultToTechnicalMessage(guardResult),
-        );
-        await _emitRpcResponse(errorResponse);
-        return;
-      }
-
-      if (request.method == 'rpc.discover') {
-        if (!_featureFlags.enableSocketNotificationsContract ||
-            !request.isNotification) {
-          final doc = await _getOpenRpcDocument();
-          final response = _attachRequestTraceToResponse(
-            request,
-            RpcResponse.success(
-              id: request.id,
-              result: doc,
-            ),
-          );
-          await _emitRpcResponse(response);
+      final registeredOutboundCompressionIds = <String>[];
+      if (_featureFlags.enablePerRequestOutboundCompression &&
+          !request.isNotification &&
+          request.id != null) {
+        final outboundMode =
+            tryParseOutboundCompressionWire(request.meta?.outboundCompression);
+        if (outboundMode != null) {
+          final idKey = request.id.toString();
+          _outboundCompressionByRpcId[idKey] = outboundMode;
+          registeredOutboundCompressionIds.add(idKey);
         }
-        return;
-      }
-      final clientToken = _extractClientTokenFromRpcParams(request.params);
-      final streamEmitter =
-          !request.isNotification && _featureFlags.enableSocketStreamingChunks
-          ? _createStreamEmitter()
-          : null;
-      final response = await _rpcDispatcher.dispatch(
-        request,
-        _agentId,
-        clientToken: clientToken,
-        streamEmitter: streamEmitter,
-        limits: _currentProtocol.effectiveLimits,
-        negotiatedExtensions: _currentProtocol.negotiatedExtensions,
-      );
-      final tracedResponse = _attachRequestTraceToResponse(request, response);
-      _logAuthorizationDecision(
-        request: request,
-        response: tracedResponse,
-        clientToken: clientToken,
-      );
-
-      if (_featureFlags.enableSocketNotificationsContract &&
-          request.isNotification) {
-        return;
       }
 
-      await _emitRpcResponse(tracedResponse);
+      try {
+        final guardResult = _rpcRequestGuard.evaluate(request);
+        if (guardResult != RpcRequestGuardResult.allow) {
+          final errorResponse = _buildRpcErrorResponse(
+            id: request.id,
+            code: _guardResultToCode(guardResult),
+            technicalMessage: _guardResultToTechnicalMessage(guardResult),
+          );
+          await _emitRpcResponse(errorResponse);
+          return;
+        }
+
+        if (request.method == 'rpc.discover') {
+          if (!_featureFlags.enableSocketNotificationsContract ||
+              !request.isNotification) {
+            final doc = await _getOpenRpcDocument();
+            final response = _attachRequestTraceToResponse(
+              request,
+              RpcResponse.success(
+                id: request.id,
+                result: doc,
+              ),
+            );
+            await _emitRpcResponse(response);
+          }
+          return;
+        }
+        final clientToken = _extractClientTokenFromRpcParams(request.params);
+        final streamEmitter =
+            !request.isNotification && _featureFlags.enableSocketStreamingChunks
+            ? _createStreamEmitter()
+            : null;
+        final response = await _rpcDispatcher.dispatch(
+          request,
+          _agentId,
+          clientToken: clientToken,
+          streamEmitter: streamEmitter,
+          limits: _currentProtocol.effectiveLimits,
+          negotiatedExtensions: _currentProtocol.negotiatedExtensions,
+        );
+        final tracedResponse = _attachRequestTraceToResponse(request, response);
+        _logAuthorizationDecision(
+          request: request,
+          response: tracedResponse,
+          clientToken: clientToken,
+        );
+
+        if (_featureFlags.enableSocketNotificationsContract &&
+            request.isNotification) {
+          return;
+        }
+
+        await _emitRpcResponse(tracedResponse);
+      } finally {
+        registeredOutboundCompressionIds.forEach(
+          _outboundCompressionByRpcId.remove,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC request',
@@ -941,74 +1108,115 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       }
 
-      final responses = <({int index, RpcResponse response})>[];
-
-      for (var index = 0; index < requests.length; index++) {
-        final request = requests[index];
-        final guardResult = _rpcRequestGuard.evaluate(request);
-        if (guardResult != RpcRequestGuardResult.allow) {
-          final errorResponse = _buildRpcErrorResponse(
-            id: request.id,
-            code: _guardResultToCode(guardResult),
-            technicalMessage: _guardResultToTechnicalMessage(guardResult),
-          );
-          if (!request.isNotification) {
-            responses.add((index: index, response: errorResponse));
+      late final OutboundCompressionMode? batchExplicitOutboundMode;
+      if (_featureFlags.enablePerRequestOutboundCompression) {
+        final batchOutboundResult = _resolveBatchOutboundCompression(requests);
+        if (batchOutboundResult.isError()) {
+          final failure =
+              batchOutboundResult.exceptionOrNull() as domain.Failure?;
+          if (failure != null) {
+            await _sendSchemaValidationError(
+              null,
+              _validationFailureCode(failure),
+              failure.message,
+            );
           }
-          continue;
+          return;
         }
+        batchExplicitOutboundMode = batchOutboundResult.getOrThrow().mode;
+      } else {
+        batchExplicitOutboundMode = null;
+      }
 
-        if (request.method == 'rpc.discover') {
-          if (!_featureFlags.enableSocketNotificationsContract ||
-              !request.isNotification) {
-            final doc = await _getOpenRpcDocument();
-            responses.add((
-              index: index,
-              response: _attachRequestTraceToResponse(
-                request,
-                RpcResponse.success(
-                  id: request.id,
-                  result: doc,
+      final registeredBatchCompressionIds = <String>[];
+      if (batchExplicitOutboundMode != null) {
+        for (final r in requests) {
+          if (!r.isNotification && r.id != null) {
+            final idKey = r.id.toString();
+            _outboundCompressionByRpcId[idKey] = batchExplicitOutboundMode;
+            registeredBatchCompressionIds.add(idKey);
+          }
+        }
+      }
+
+      try {
+        final responses = <({int index, RpcResponse response})>[];
+
+        for (var index = 0; index < requests.length; index++) {
+          final request = requests[index];
+          final guardResult = _rpcRequestGuard.evaluate(request);
+          if (guardResult != RpcRequestGuardResult.allow) {
+            final errorResponse = _buildRpcErrorResponse(
+              id: request.id,
+              code: _guardResultToCode(guardResult),
+              technicalMessage: _guardResultToTechnicalMessage(guardResult),
+            );
+            if (!request.isNotification) {
+              responses.add((index: index, response: errorResponse));
+            }
+            continue;
+          }
+
+          if (request.method == 'rpc.discover') {
+            if (!_featureFlags.enableSocketNotificationsContract ||
+                !request.isNotification) {
+              final doc = await _getOpenRpcDocument();
+              responses.add((
+                index: index,
+                response: _attachRequestTraceToResponse(
+                  request,
+                  RpcResponse.success(
+                    id: request.id,
+                    result: doc,
+                  ),
                 ),
-              ),
-            ));
+              ));
+            }
+            continue;
           }
-          continue;
+
+          final clientToken = _extractClientTokenFromRpcParams(request.params);
+          final response = await _rpcDispatcher.dispatch(
+            request,
+            _agentId,
+            clientToken: clientToken,
+            limits: _currentProtocol.effectiveLimits,
+            negotiatedExtensions: _currentProtocol.negotiatedExtensions,
+          );
+          final tracedResponse = _attachRequestTraceToResponse(
+            request,
+            response,
+          );
+          _logAuthorizationDecision(
+            request: request,
+            response: tracedResponse,
+            clientToken: clientToken,
+          );
+          if (_featureFlags.enableSocketNotificationsContract &&
+              request.isNotification) {
+            continue;
+          }
+          responses.add((index: index, response: tracedResponse));
         }
 
-        final clientToken = _extractClientTokenFromRpcParams(request.params);
-        final response = await _rpcDispatcher.dispatch(
-          request,
-          _agentId,
-          clientToken: clientToken,
-          limits: _currentProtocol.effectiveLimits,
-          negotiatedExtensions: _currentProtocol.negotiatedExtensions,
-        );
-        final tracedResponse = _attachRequestTraceToResponse(request, response);
-        _logAuthorizationDecision(
-          request: request,
-          response: tracedResponse,
-          clientToken: clientToken,
-        );
-        if (_featureFlags.enableSocketNotificationsContract &&
-            request.isNotification) {
-          continue;
+        if (responses.isEmpty) {
+          return;
         }
-        responses.add((index: index, response: tracedResponse));
-      }
 
-      if (responses.isEmpty) {
-        return;
+        // Invariant: items are appended in ascending `index` (loop order). The
+        // JSON-RPC batch response array must stay in the same order as requests
+        // when `orderedBatchResponses` is negotiated; no extra sort is required.
+        final batchResponse = responses.map((entry) => entry.response).toList();
+        _pendingRpcResponseIsBatchArray = true;
+        _pendingBatchOutboundExplicitMode = batchExplicitOutboundMode;
+        await _emitRpcResponse(batchResponse);
+      } finally {
+        _pendingRpcResponseIsBatchArray = false;
+        _pendingBatchOutboundExplicitMode = null;
+        registeredBatchCompressionIds.forEach(
+          _outboundCompressionByRpcId.remove,
+        );
       }
-
-      final orderedResponses = _supportsOrderedBatchResponses()
-          ? (responses.toList()
-                  ..sort((left, right) => left.index.compareTo(right.index)))
-                .map((entry) => entry.response)
-                .toList()
-          : responses.map((entry) => entry.response).toList();
-      final batchResponse = orderedResponses;
-      await _emitRpcResponse(batchResponse);
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC batch request',
@@ -1024,7 +1232,17 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _emitEvent(String event, dynamic logicalPayload) {
-    unawaited(_emitEventAsync(event, logicalPayload));
+    unawaited(
+      _emitEventAsync(event, logicalPayload).catchError(
+        (Object error, StackTrace stack) {
+          AppLogger.error(
+            'Async emit failed for $event',
+            error,
+            stack,
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _emitEventAsync(String event, dynamic logicalPayload) async {
@@ -1042,6 +1260,26 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _socket!.emit(event, outgoingPayload);
   }
 
+  /// Same as [_emitEventAsync] but throws when the frame cannot be sent so
+  /// stream backpressure can treat failures as hard errors.
+  Future<void> _emitEventAsyncForStream(
+    String event,
+    dynamic logicalPayload,
+  ) async {
+    if (_socket == null) {
+      throw StateError('Cannot emit $event: socket not connected');
+    }
+    final outgoingPayload = await _prepareOutgoingPayloadAsync(
+      event,
+      logicalPayload,
+    );
+    if (outgoingPayload == null) {
+      throw StateError('Failed to prepare $event payload for transport');
+    }
+    _logMessage('SENT', event, logicalPayload);
+    _socket!.emit(event, outgoingPayload);
+  }
+
   Future<dynamic> _prepareOutgoingPayloadAsync(
     String event,
     dynamic logicalPayload,
@@ -1053,7 +1291,62 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return null;
     }
 
-    final prepareResult = await _createSendPipeline().prepareSendAsync(
+    OutboundCompressionMode? clientOutboundMode;
+    if (_featureFlags.enablePerRequestOutboundCompression) {
+      if (event == 'rpc:response') {
+        if (logicalPayload is List<dynamic>) {
+          if (_pendingRpcResponseIsBatchArray) {
+            clientOutboundMode = _pendingBatchOutboundExplicitMode;
+            _pendingRpcResponseIsBatchArray = false;
+            _pendingBatchOutboundExplicitMode = null;
+          }
+        } else if (logicalPayload is Map<String, dynamic>) {
+          final dynamic id = logicalPayload['id'];
+          if (id != null) {
+            clientOutboundMode = _outboundCompressionByRpcId[id.toString()];
+          }
+        }
+      } else if (event == 'rpc:chunk' || event == 'rpc:complete') {
+        if (logicalPayload is Map<String, dynamic>) {
+          final dynamic rid = logicalPayload['request_id'];
+          if (rid != null) {
+            clientOutboundMode = _outboundCompressionByRpcId[rid.toString()];
+          }
+        }
+      }
+    } else if (logicalPayload is List<dynamic> &&
+        _pendingRpcResponseIsBatchArray) {
+      _pendingRpcResponseIsBatchArray = false;
+      _pendingBatchOutboundExplicitMode = null;
+    }
+
+    final pipeline = _createSendPipeline(
+      clientOutboundMode: clientOutboundMode,
+    );
+    if (_featureFlags.enableSocketOutboundCompressionDebugLog &&
+        (event == 'rpc:response' ||
+            event == 'rpc:chunk' ||
+            event == 'rpc:complete')) {
+      final negotiated =
+          _hasReceivedCapabilities ? _currentProtocol.compression : 'gzip';
+      final gzipCappedByNegotiation =
+          clientOutboundMode == OutboundCompressionMode.gzip &&
+          pipeline.compression == 'none' &&
+          negotiated == 'none';
+      final correlationId = _extractRequestId(logicalPayload);
+      final traceId = _extractTraceId(logicalPayload);
+      AppLogger.debug(
+        'Outbound compression [$event] pipeline=${pipeline.compression} '
+        'hubHint=${clientOutboundMode?.name ?? '—'} '
+        'appMode=${_featureFlags.outboundCompressionMode.name} '
+        'negotiated=$negotiated'
+        '${correlationId != null ? ' requestId=$correlationId' : ''}'
+        '${traceId != null ? ' traceId=$traceId' : ''}'
+        '${gzipCappedByNegotiation ? ' (hub gzip hint capped by negotiation)' : ''}',
+      );
+    }
+
+    final prepareResult = await pipeline.prepareSendAsync(
       logicalPayload,
       traceId: _extractTraceId(logicalPayload),
       requestId: _extractRequestId(logicalPayload),
@@ -1096,7 +1389,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return frame.toJson();
   }
 
-  dynamic _decodeIncomingPayloadOrThrow(dynamic payload) {
+  PayloadFrame _parseAndValidateTransportFrame(dynamic payload) {
     if (!_looksLikePayloadFrame(payload)) {
       throw domain.ValidationFailure.withContext(
         message: 'Application payload must be a PayloadFrame',
@@ -1104,99 +1397,73 @@ class SocketIOTransportClientV2 implements ITransportClient {
       );
     }
 
-    try {
-      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
-      final localCapabilities = _localCapabilities();
-      if (!localCapabilities.supportsEncoding(frame.enc)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Unsupported payload encoding: ${frame.enc}',
-          context: {'encoding': frame.enc},
-        );
-      }
-      if (!localCapabilities.supportsCompression(frame.cmp)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Unsupported payload compression: ${frame.cmp}',
-          context: {'compression': frame.cmp},
-        );
-      }
-      if (!_verifyIncomingFrameSignature(frame)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Invalid transport frame signature',
-          context: {
-            'request_id': frame.requestId,
-            'transport_signature_invalid': true,
-          },
-        );
-      }
-
-      final processed = _createReceivePipeline(frame).receiveProcess(
-        frame,
-        maxCompressedBytes:
-            _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
-        maxOriginalBytes:
-            _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
-        maxInflationRatio: _currentProtocol.maxInflationRatio,
-      );
-      if (processed.isError()) {
-        throw processed.exceptionOrNull()! as domain.Failure;
-      }
-      return processed.getOrThrow();
-    } on domain.Failure {
-      rethrow;
-    } on Exception catch (error) {
+    final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
+    final localCapabilities = _localCapabilities();
+    if (!localCapabilities.supportsEncoding(frame.enc)) {
       throw domain.ValidationFailure.withContext(
-        message: 'Failed to decode transport frame',
-        cause: error,
-        context: {'payloadType': payload.runtimeType.toString()},
+        message: 'Unsupported payload encoding: ${frame.enc}',
+        context: {'encoding': frame.enc},
       );
     }
+    if (!localCapabilities.supportsCompression(frame.cmp)) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Unsupported payload compression: ${frame.cmp}',
+        context: {'compression': frame.cmp},
+      );
+    }
+    if (!_verifyIncomingFrameSignature(frame)) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Invalid transport frame signature',
+        context: {
+          'request_id': frame.requestId,
+          'transport_signature_invalid': true,
+        },
+      );
+    }
+    return frame;
   }
 
-  Future<dynamic> _decodeIncomingPayloadOrThrowAsync(dynamic payload) async {
-    if (!_looksLikePayloadFrame(payload)) {
-      throw domain.ValidationFailure.withContext(
-        message: 'Application payload must be a PayloadFrame',
-        context: {'payloadType': payload.runtimeType.toString()},
-      );
+  dynamic _decodePayloadFromValidatedFrame(PayloadFrame frame) {
+    final pipeline = _createReceivePipeline(frame);
+    final processed = pipeline.receiveProcess(
+      frame,
+      maxCompressedBytes:
+          _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
+      maxOriginalBytes: _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
+      maxInflationRatio: _currentProtocol.maxInflationRatio,
+    );
+    if (processed.isError()) {
+      throw processed.exceptionOrNull()! as domain.Failure;
     }
+    _metricsCollector?.recordTransportInboundDecodeSync();
+    return processed.getOrThrow();
+  }
 
+  Future<dynamic> _decodePayloadFromValidatedFrameAsync(
+    PayloadFrame frame,
+  ) async {
+    final pipeline = _createReceivePipeline(frame);
+    final processed = await pipeline.receiveProcessAsync(
+      frame,
+      maxCompressedBytes:
+          _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
+      maxOriginalBytes: _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
+      maxInflationRatio: _currentProtocol.maxInflationRatio,
+    );
+    if (processed.isError()) {
+      throw processed.exceptionOrNull()! as domain.Failure;
+    }
+    _metricsCollector?.recordTransportInboundDecodeAsync();
+    return processed.getOrThrow();
+  }
+
+  Future<dynamic> _decodeIncomingPayloadAdaptive(dynamic payload) async {
     try {
-      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
-      final localCapabilities = _localCapabilities();
-      if (!localCapabilities.supportsEncoding(frame.enc)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Unsupported payload encoding: ${frame.enc}',
-          context: {'encoding': frame.enc},
-        );
+      final frame = _parseAndValidateTransportFrame(payload);
+      if (incomingPayloadFrameNeedsAsyncDecode(frame)) {
+        return _decodePayloadFromValidatedFrameAsync(frame);
       }
-      if (!localCapabilities.supportsCompression(frame.cmp)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Unsupported payload compression: ${frame.cmp}',
-          context: {'compression': frame.cmp},
-        );
-      }
-      if (!_verifyIncomingFrameSignature(frame)) {
-        throw domain.ValidationFailure.withContext(
-          message: 'Invalid transport frame signature',
-          context: {
-            'request_id': frame.requestId,
-            'transport_signature_invalid': true,
-          },
-        );
-      }
-
-      final processed = await _createReceivePipeline(frame).receiveProcessAsync(
-        frame,
-        maxCompressedBytes:
-            _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
-        maxOriginalBytes:
-            _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
-        maxInflationRatio: _currentProtocol.maxInflationRatio,
-      );
-      if (processed.isError()) {
-        throw processed.exceptionOrNull()! as domain.Failure;
-      }
-      return processed.getOrThrow();
+      return _decodePayloadFromValidatedFrame(frame);
     } on domain.Failure {
       rethrow;
     } on Exception catch (error) {
@@ -1408,7 +1675,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _cachedSendPipeline = null;
     _sendPipelineCacheKey = '';
     _receivePipelineByKey.clear();
-    unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
+    _outboundCompressionByRpcId.clear();
+    _pendingRpcResponseIsBatchArray = false;
+    _pendingBatchOutboundExplicitMode = null;
+    _runTransportFuture(
+      _rpcDispatcher.cancelActiveStreamOnDisconnect(),
+      'cancelActiveStreamOnDisconnect',
+    );
     final socket = _socket;
     _socket = null;
     _streamEmitters.clear();
@@ -1640,17 +1913,39 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _handleHeartbeatAck(dynamic data) {
-    dynamic payload = data;
     try {
-      payload = _decodeIncomingPayloadOrThrow(data);
+      final frame = _parseAndValidateTransportFrame(data);
+      if (incomingPayloadFrameNeedsAsyncDecode(frame)) {
+        _runTransportFuture(
+          _handleHeartbeatAckFromFrameAsync(frame),
+          'handleHeartbeatAckFromFrameAsync',
+        );
+        return;
+      }
+      _finalizeHeartbeatAck(_decodePayloadFromValidatedFrame(frame));
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
         'Invalid hub:heartbeat_ack payload',
         error,
         stackTrace,
       );
-      return;
     }
+  }
+
+  Future<void> _handleHeartbeatAckFromFrameAsync(PayloadFrame frame) async {
+    try {
+      final payload = await _decodePayloadFromValidatedFrameAsync(frame);
+      _finalizeHeartbeatAck(payload);
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Invalid hub:heartbeat_ack payload',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  void _finalizeHeartbeatAck(dynamic payload) {
     _heartbeat.onAckReceived();
     _logMessage('RECEIVED', 'hub:heartbeat_ack', payload);
   }
@@ -1682,7 +1977,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     Map<String, dynamic> payload,
   ) async {
     if (_socket == null) {
-      return;
+      throw StateError('Cannot emit $event: socket not connected');
     }
 
     if (_featureFlags.enableSocketSchemaValidation) {
@@ -1697,11 +1992,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
       if (validation.isError()) {
         final failure = validation.exceptionOrNull()! as domain.Failure;
         AppLogger.error('Invalid $event payload: ${failure.message}');
-        return;
+        throw StateError(
+          'Stream contract validation failed for $event: ${failure.message}',
+        );
       }
     }
 
-    await _emitEventAsync(event, payload);
+    await _emitEventAsyncForStream(event, payload);
   }
 
   bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {
@@ -1713,15 +2010,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
   bool _allowsNullIdNotifications() {
     final extensionValue = _currentProtocol
         .negotiatedExtensions['notificationNullIdCompatibility'];
-    if (extensionValue is bool) {
-      return extensionValue;
-    }
-    return true;
-  }
-
-  bool _supportsOrderedBatchResponses() {
-    final extensionValue =
-        _currentProtocol.negotiatedExtensions['orderedBatchResponses'];
     if (extensionValue is bool) {
       return extensionValue;
     }

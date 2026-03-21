@@ -12,6 +12,7 @@ void main() {
         'request_id': 'r-1',
         'agent_id': 'a-1',
         'timestamp': '2026-03-12T10:00:00Z',
+        'outbound_compression': 'gzip',
       };
 
       final meta = RpcProtocolMeta.fromJson(json);
@@ -25,6 +26,7 @@ void main() {
       expect(meta.requestId, equals('r-1'));
       expect(meta.agentId, equals('a-1'));
       expect(meta.timestamp, equals('2026-03-12T10:00:00Z'));
+      expect(meta.outboundCompression, equals('gzip'));
     });
 
     test('should serialize to json only non-null fields', () {

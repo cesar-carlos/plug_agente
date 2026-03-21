@@ -117,7 +117,7 @@ handshake.
 | `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
 | `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
 | `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>` | (quando `enableSocketStreamingChunks`) |
-| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows }>` | (quando `enableSocketStreamingChunks`) |
+| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
 | `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`     | (quando `enableSocketBackpressure`)       |
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
@@ -185,6 +185,7 @@ Fluxo atual para resultados grandes:
 2. Agente inicia execucao; se resultado exceder limite, retorna resposta inicial
    com `stream_id` e emite `rpc:chunk` para cada lote ordenado.
 3. Agente emite `rpc:complete` ao finalizar com `total_rows` e resumo.
+   Se o stream for interrompido por backpressure, erro ODBC ou falha de envio apos chunks parciais, o agente emite ainda `rpc:complete` com `terminal_status`: `aborted` (ex.: fila/backpressure) ou `error` (ex.: falha de execucao), para o hub fechar o stream de forma deterministica; o `rpc:response` associado pode ser erro.
 4. Se `enableSocketBackpressure`: agente espera `rpc:stream.pull` antes de enviar
    proximos chunks; `window_size` controla quantos chunks enviar por pull.
 5. **Overflow de buffer**: se a fila de chunks atingir o limite (`maxBackpressureChunkQueueSize`)
@@ -316,6 +317,16 @@ Response (notification nao gera item):
 | `meta.request_id`  | string            | recomendado    | ID unico do request (correlacao)  |
 | `meta.agent_id`    | string            | sim (response) | Identificador do agente           |
 | `meta.timestamp`   | string (ISO-8601) | sim            | Instante UTC do envio             |
+| `meta.outbound_compression` | string (`none`, `gzip`, `auto`) | opcional | Sobrescreve a politica local do agente para compressao **agente -> hub** no `PayloadFrame` deste pedido (e nos `rpc:chunk` / `rpc:complete` com o mesmo `id`). Se omitido, usa-se a configuracao do agente (`Desligado` / `Sempre GZIP` / `Automatico`). Continua a valer o limiar `compressionThreshold` e a negociacao: se a sessao so permitir `none`, o fio permanece `cmp: none` mesmo com hint `gzip`. Pode ser desativado no agente (`enablePerRequestOutboundCompression` / definicao em configuracao). |
+
+### Notificacoes (`id` ausente)
+
+- Pedidos **notification** (sem `id` no JSON-RPC) **nao** associam resposta nem correlacao por `id`; o agente **nao** aplica `meta.outbound_compression` a saidas desse pedido (o campo e ignorado para esse caso).
+- O mesmo se aplica quando o hub envia `meta.outbound_compression` mas o pedido nao tem `id` utilizavel para correlacionar `rpc:chunk` / `rpc:complete`.
+
+### Nota operacional (largura de banda)
+
+- Mesmo com hint `gzip`, payloads muito grandes ou politicas do hub podem impor `cmp: none` ou limites (`maxCompressedPayloadBytes`, etc.); o agente deve respeitar a negociacao e os limites da sessao. Planeje largura de banda e limites no hub para picos de trafego nao comprimido.
 
 ### Politica de obrigatoriedade
 
@@ -326,6 +337,16 @@ Response (notification nao gera item):
 - Responses sempre incluem `api_version` e `meta` quando a feature flag esta ativa.
 - `traceparent`/`tracestate` sao o formato recomendado para rastreamento
   distribuido; `trace_id` permanece como compatibilidade legada.
+
+### `meta.outbound_compression` (batch JSON-RPC)
+
+- A resposta de batch e um **unico** array logico dentro de um `PayloadFrame`;
+  por isso todos os itens do batch que definirem `meta.outbound_compression`
+  devem usar o **mesmo** valor; valores diferentes no mesmo batch geram
+  `invalid_request` antes do despacho.
+- Itens sem o campo podem misturar-se com itens que o definem apenas se o valor
+  for **unico** entre os que definem (ex.: um item com `gzip` e demais sem campo
+  aplicam `gzip` ao frame da resposta em batch).
 
 ### Exemplo completo (request + response)
 
@@ -436,7 +457,9 @@ Response:
   `auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
   `auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
   `rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
-  `rpc_sql_execute_materialized_response`.
+  `rpc_sql_execute_materialized_response`, `rpc_stream_terminal_complete_emitted`,
+  `rpc_stream_terminal_complete_failed`, `rpc_response_ack_retry`,
+  `rpc_response_ack_fallback_without_ack`.
 - Requests paginadas seguem o caminho request/response tradicional; nao usam
   streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ativo.
 - `options.cursor`: token opaco de continuacao retornado em
@@ -691,6 +714,11 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
   }
 }
 ```
+
+- **Ordem do array em batch JSON-RPC:** o agente monta o array de respostas na
+  ordem crescente do indice do request no batch (mesma ordem de iteracao do
+  processamento). Notifications nao geram entrada; correlacione cada resposta
+  pelo `id` JSON-RPC.
 
 ## Catalogo de Erros
 
@@ -1029,7 +1057,8 @@ O array `compressions` no handshake reflete o que o agente **anuncia** para o
 hub (`gzip` + `none` quando compressao outbound nao esta desligada, ou apenas
 `none` quando o modo outbound e `none`). O modo **automatico** de compressao
 (`OutboundCompressionMode.auto`) nao adiciona um terceiro valor no fio: o frame
-continua com `cmp: gzip` ou `cmp: none`.
+continua com `cmp: gzip` ou `cmp: none`. Quem recebe usa apenas esses campos
+por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP).
 
 ## Compatibilidade e Fallback
 
@@ -1098,6 +1127,10 @@ continua com `cmp: gzip` ou `cmp: none`.
 - Contadores operacionais em memoria para observabilidade de resiliencia:
   `timeout_cancel_success`, `timeout_cancel_failure`,
   `transaction_rollback_failure` e `idempotency_fingerprint_mismatch`.
+- Decodificacao inbound do `PayloadFrame` (apos validacao do frame):
+  `transport_inbound_decode_sync` e `transport_inbound_decode_async`
+  (`MetricsCollector`), para distinguir caminho sincrono vs isolate em cargas
+  grandes ou gzip pesado.
 
 ## Politica de versao e deprecacao
 
@@ -1281,6 +1314,9 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   `cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
   permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
   devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
+  O hub pode sobrescrever a politica padrao do agente por pedido com
+  `meta.outbound_compression` (ver tabela `meta` e secao de batch); a
+  negociacao `compressions: none` na sessao continua a impedir GZIP outbound.
 - Nao existe metodo RPC generico de transferencia de arquivo no contrato atual;
   qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
   e, depois, transportado dentro do `PayloadFrame`.
@@ -1486,6 +1522,10 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `docs/communication/schemas/rpc.stream.chunk.schema.json`
 - `docs/communication/schemas/rpc.stream.complete.schema.json`
 - `docs/communication/schemas/rpc.stream.pull.schema.json`
+
+### Frame fisico (PayloadFrame)
+
+- `docs/communication/schemas/payload-frame.schema.json`
 
 ### OpenRPC
 

@@ -206,6 +206,12 @@ void main() {
         () => mockFeatureFlags.enableSocketCancelMethod,
       ).thenReturn(false);
       when(
+        () => mockFeatureFlags.enablePerRequestOutboundCompression,
+      ).thenReturn(true);
+      when(
+        () => mockFeatureFlags.enableSocketOutboundCompressionDebugLog,
+      ).thenReturn(false);
+      when(
         () => mockNegotiator.negotiate(
           agentCapabilities: any(named: 'agentCapabilities'),
           serverCapabilities: any(named: 'serverCapabilities'),
@@ -779,6 +785,434 @@ void main() {
           expect(mode, 'preserve');
         },
       );
+    });
+
+    group('meta.outbound_compression', () {
+      Future<void> connectWithCapabilities() async {
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        await connectFuture;
+        emitEvent(
+          'agent:capabilities',
+          encodeWirePayload({
+            'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+          }),
+        );
+        emitted.clear();
+      }
+
+      test('uses cmp none for large response when client hints none', () async {
+        await connectWithCapabilities();
+        when(
+          () => mockDispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer(
+          (_) async => RpcResponse.success(
+            id: 'req-big',
+            result: <String, dynamic>{'pad': 'a' * 3000},
+          ),
+        );
+
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-big',
+            'params': {'sql': 'SELECT 1'},
+            'meta': {'outbound_compression': 'none'},
+          }),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        final wire = emitted.firstWhere((e) => e.event == 'rpc:response').data
+            as Map<String, dynamic>;
+        expect(wire['cmp'], 'none');
+        expect((wire['originalSize'] as num) > 1024, isTrue);
+      });
+
+      test('uses cmp none when session negotiates none despite gzip hint',
+          () async {
+        when(
+          () => mockNegotiator.negotiate(
+            agentCapabilities: any(named: 'agentCapabilities'),
+            serverCapabilities: any(named: 'serverCapabilities'),
+            preferJsonRpcV2: any(named: 'preferJsonRpcV2'),
+          ),
+        ).thenReturn(
+          const ProtocolConfig(
+            protocol: 'jsonrpc-v2',
+            encoding: 'json',
+            compression: 'none',
+            signatureAlgorithms: ['hmac-sha256'],
+            negotiatedExtensions: {
+              'binaryPayload': true,
+              'transportFrame': 'payload-frame/1.0',
+              'notificationNullIdCompatibility': true,
+              'signatureRequired': false,
+              'signatureAlgorithms': ['hmac-sha256'],
+            },
+          ),
+        );
+
+        await connectWithCapabilities();
+        when(
+          () => mockDispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer(
+          (_) async => RpcResponse.success(
+            id: 'req-s',
+            result: <String, dynamic>{'pad': 'b' * 3000},
+          ),
+        );
+
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-s',
+            'params': {'sql': 'SELECT 1'},
+            'meta': {'outbound_compression': 'gzip'},
+          }),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        final wire = emitted.firstWhere((e) => e.event == 'rpc:response').data
+            as Map<String, dynamic>;
+        expect(wire['cmp'], 'none');
+      });
+
+      test(
+        'ignores meta.outbound_compression when per-request flag is off',
+        () async {
+          when(
+            () => mockFeatureFlags.enablePerRequestOutboundCompression,
+          ).thenReturn(false);
+
+          await connectWithCapabilities();
+          when(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).thenAnswer(
+            (_) async => RpcResponse.success(
+              id: 'req-big',
+              result: <String, dynamic>{'pad': 'a' * 3000},
+            ),
+          );
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'req-big',
+              'params': {'sql': 'SELECT 1'},
+              'meta': {'outbound_compression': 'none'},
+            }),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          final wire =
+              emitted.firstWhere((e) => e.event == 'rpc:response').data
+                  as Map<String, dynamic>;
+          expect(wire['cmp'], 'gzip');
+        },
+      );
+
+      test(
+        'batch applies single gzip hint to whole frame when other items omit meta',
+        () async {
+          await connectWithCapabilities();
+          when(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).thenAnswer((invocation) async {
+            final req = invocation.positionalArguments[0] as RpcRequest;
+            return RpcResponse.success(
+              id: req.id,
+              result: <String, dynamic>{'pad': 'z' * 2000},
+            );
+          });
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<dynamic>[
+              <String, dynamic>{
+                'jsonrpc': '2.0',
+                'method': 'sql.execute',
+                'id': 'a',
+                'params': {'sql': 'SELECT 1'},
+                'meta': {'outbound_compression': 'gzip'},
+              },
+              <String, dynamic>{
+                'jsonrpc': '2.0',
+                'method': 'sql.execute',
+                'id': 'b',
+                'params': {'sql': 'SELECT 2'},
+              },
+            ]),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          verify(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).called(2);
+
+          final wire =
+              emitted.firstWhere((e) => e.event == 'rpc:response').data
+                  as Map<String, dynamic>;
+          expect(wire['cmp'], 'gzip');
+        },
+      );
+
+      test('batch rejects conflicting outbound_compression hints', () async {
+        await connectWithCapabilities();
+
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<dynamic>[
+            <String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'a',
+              'params': {'sql': 'SELECT 1'},
+              'meta': {'outbound_compression': 'none'},
+            },
+            <String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'b',
+              'params': {'sql': 'SELECT 2'},
+              'meta': {'outbound_compression': 'gzip'},
+            },
+          ]),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        verifyNever(
+          () => mockDispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        );
+
+        final errPayload =
+            decodeWirePayload(
+                  emitted
+                      .firstWhere((e) => e.event == 'rpc:response')
+                      .data,
+                )
+                as Map<String, dynamic>;
+        final error = errPayload['error'] as Map<String, dynamic>?;
+        expect(error, isNotNull);
+        expect(error!['code'], RpcErrorCode.invalidRequest);
+        expect(
+          (error['data'] as Map<String, dynamic>?)?['technical_message'],
+          contains('outbound_compression'),
+        );
+      });
+
+      test(
+        'uses cmp none for rpc:chunk, rpc:complete and rpc:response when client '
+        'hints none (streaming)',
+        () async {
+          when(
+            () => mockFeatureFlags.enableSocketStreamingChunks,
+          ).thenReturn(true);
+          await connectWithCapabilities();
+          when(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).thenAnswer((Invocation invocation) async {
+            final emitter =
+                invocation.namedArguments[const Symbol('streamEmitter')]
+                    as IRpcStreamEmitter?;
+            expect(emitter, isNotNull);
+            await emitter!.emitChunk(
+              RpcStreamChunk(
+                streamId: 'stream-sid',
+                requestId: 'req-st',
+                chunkIndex: 0,
+                rows: <Map<String, dynamic>>[
+                  <String, dynamic>{'pad': 'z' * 500},
+                ],
+                totalChunks: 1,
+              ),
+            );
+            await emitter.emitComplete(
+              const RpcStreamComplete(
+                streamId: 'stream-sid',
+                requestId: 'req-st',
+                totalRows: 1,
+                affectedRows: 1,
+                executionId: 'ex-1',
+                startedAt: '2020-01-01T00:00:00.000Z',
+                finishedAt: '2020-01-01T00:00:00.001Z',
+              ),
+            );
+            return RpcResponse.success(
+              id: 'req-st',
+              result: <String, dynamic>{
+                'stream_id': 'stream-sid',
+                'rows': <Map<String, dynamic>>[],
+                'row_count': 0,
+              },
+            );
+          });
+
+          emitEvent(
+            'rpc:request',
+            encodeWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'method': 'sql.execute',
+              'id': 'req-st',
+              'params': <String, dynamic>{'sql': 'SELECT 1'},
+              'meta': <String, dynamic>{'outbound_compression': 'none'},
+            }),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          verify(
+            () => mockDispatcher.dispatch(
+              any(),
+              any(),
+              clientToken: any(named: 'clientToken'),
+              streamEmitter: any(named: 'streamEmitter'),
+              limits: any(named: 'limits'),
+              negotiatedExtensions: any(named: 'negotiatedExtensions'),
+            ),
+          ).called(1);
+
+          final chunkWire =
+              emitted.firstWhere((e) => e.event == 'rpc:chunk').data
+                  as Map<String, dynamic>;
+          expect(chunkWire['cmp'], 'none');
+
+          final completeWire =
+              emitted.firstWhere((e) => e.event == 'rpc:complete').data
+                  as Map<String, dynamic>;
+          expect(completeWire['cmp'], 'none');
+
+          final respWire =
+              emitted.firstWhere((e) => e.event == 'rpc:response').data
+                  as Map<String, dynamic>;
+          expect(respWire['cmp'], 'none');
+        },
+      );
+    });
+
+    test('disconnect clears connection and reconnect still processes rpc',
+        () async {
+      var connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload(<String, dynamic>{
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      emitted.clear();
+
+      final disconnectResult = await client.disconnect();
+      expect(disconnectResult.isSuccess(), isTrue);
+
+      connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload(<String, dynamic>{
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      emitted.clear();
+
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(
+          id: 'after-disc',
+          result: <String, dynamic>{'ok': true},
+        ),
+      );
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'after-disc',
+          'params': <String, dynamic>{'sql': 'SELECT 1'},
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      verify(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
     });
 
     group('integration with real dispatcher', () {

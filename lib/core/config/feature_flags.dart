@@ -48,6 +48,10 @@ class FeatureFlags {
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
   static const _keyEnableOdbcPaginatedSqlDebugLog =
       'feature_enable_odbc_paginated_sql_debug_log';
+  static const _keyEnablePerRequestOutboundCompression =
+      'feature_enable_per_request_outbound_compression';
+  static const _keyEnableSocketOutboundCompressionDebugLog =
+      'feature_enable_socket_outbound_compression_debug_log';
 
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload =>
@@ -272,6 +276,24 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableOdbcPaginatedSqlDebugLog, value);
   }
 
+  /// When true, `meta.outbound_compression` on inbound JSON-RPC may override
+  /// [outboundCompressionMode] for that request's outbound PayloadFrames.
+  bool get enablePerRequestOutboundCompression =>
+      _prefs.getBool(_keyEnablePerRequestOutboundCompression) ?? true;
+
+  Future<void> setEnablePerRequestOutboundCompression(bool value) async {
+    await _prefs.setBool(_keyEnablePerRequestOutboundCompression, value);
+  }
+
+  /// Debug log for outbound compression decisions (app mode vs hub hint vs
+  /// negotiated session caps).
+  bool get enableSocketOutboundCompressionDebugLog =>
+      _prefs.getBool(_keyEnableSocketOutboundCompressionDebugLog) ?? false;
+
+  Future<void> setEnableSocketOutboundCompressionDebugLog(bool value) async {
+    await _prefs.setBool(_keyEnableSocketOutboundCompressionDebugLog, value);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
@@ -296,5 +318,7 @@ class FeatureFlags {
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
+    await setEnablePerRequestOutboundCompression(true);
+    await setEnableSocketOutboundCompressionDebugLog(false);
   }
 }

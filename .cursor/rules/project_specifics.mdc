@@ -124,10 +124,11 @@ Future<Result<User>> getById(String id) async {
 
 ## Testes E2E e Integracao
 
-- Testes que usam API, ODBC ou outros recursos reais dependem de variaveis no `.env`
-- Use `E2EEnv` (`test/helpers/e2e_env.dart`) para acessar variaveis; chame `E2EEnv.load()` no inicio de `main()` do teste
+- `test/live/` — testes com tag `live` (API/ODBC/RPC reais); dependem de `.env`; use `loadLiveTestEnv()` ou `E2EEnv.load()` no `main`
+- `test/integration/` — integracao offline (mocks), sem ODBC/API live
+- Use `E2EEnv` (`test/helpers/e2e_env.dart`) e helpers `skipUnless*` / `skipReason*` para mensagens de `skip` consistentes
 - Variaveis obrigatorias por tipo: `RUN_LIVE_API_TESTS` e `API_TEST_BASE_URL` para API; `ODBC_TEST_DSN*` para ODBC
-- Testes E2E devem usar `skip` quando variaveis nao estiverem definidas, com mensagem clara
+- Correr `flutter test --exclude-tags=live` exclui os ficheiros `@Tags(['live'])`; ver `dart_test.yaml` e `docs/testing/e2e_setup.md`
 - Rode `dart run tool/check_e2e_env.dart` para verificar configuracao antes dos testes
 - Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
 
@@ -155,6 +156,12 @@ result.fold(
   },
 );
 ```
+
+## Socket outbound compression
+
+- `FeatureFlags.enablePerRequestOutboundCompression` (default true) liga o uso de `meta.outbound_compression` nos pedidos; quando false, so vale o modo local do agente.
+- `FeatureFlags.enableSocketOutboundCompressionDebugLog` (default false) regista em debug a decisao efetiva de compressao outbound (apenas `rpc:response`, `rpc:chunk`, `rpc:complete`, com correlacao quando existir).
+- Ao fechar o socket, o transporte limpa o mapa de hints por `id` e o estado pendente de batch para evitar aplicacao stale apos reconexao.
 
 ## Desktop e Runtime
 

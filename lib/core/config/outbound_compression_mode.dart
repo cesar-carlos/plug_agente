@@ -13,3 +13,18 @@ enum OutboundCompressionMode {
 
   String get storageName => name;
 }
+
+/// Parses `meta.outbound_compression` wire value; returns null if absent.
+///
+/// Invalid strings return null (request validators should reject before this runs).
+OutboundCompressionMode? tryParseOutboundCompressionWire(String? wire) {
+  if (wire == null || wire.isEmpty) {
+    return null;
+  }
+  for (final m in OutboundCompressionMode.values) {
+    if (m.name == wire) {
+      return m;
+    }
+  }
+  return null;
+}

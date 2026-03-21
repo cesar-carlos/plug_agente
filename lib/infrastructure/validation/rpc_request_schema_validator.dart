@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -107,6 +108,7 @@ class RpcRequestSchemaValidator {
       'request_id',
       'agent_id',
       'timestamp',
+      'outbound_compression',
     };
     final extraFields = meta.keys.where((key) => !knownFields.contains(key));
     if (extraFields.isNotEmpty) {
@@ -123,11 +125,20 @@ class RpcRequestSchemaValidator {
       'request_id',
       'agent_id',
       'timestamp',
+      'outbound_compression',
     ]) {
       final value = meta[key];
       if (value != null && value is! String) {
         return _invalidRequest('Field "meta.$key" must be a string');
       }
+    }
+
+    final outboundCompression = meta['outbound_compression'] as String?;
+    if (outboundCompression != null &&
+        tryParseOutboundCompressionWire(outboundCompression) == null) {
+      return _invalidRequest(
+        'Field "meta.outbound_compression" must be one of: none, gzip, auto',
+      );
     }
 
     final timestamp = meta['timestamp'] as String?;

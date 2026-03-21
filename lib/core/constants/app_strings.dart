@@ -74,9 +74,17 @@ class AppStrings {
   static const String wsOutboundCompressionGzip = 'Sempre GZIP';
   static const String wsOutboundCompressionAuto = 'Automático';
   static const String wsOutboundCompressionDescription =
-      'Automático: acima do limite negociado, o agente comprime com GZIP apenas '
-      'se o resultado for menor que o JSON em UTF-8 (evita CPU e tráfego em '
-      'dados pouco compressíveis).';
+      'Define o modo por defeito para PayloadFrames agente → hub. «Automático» '
+      'aplica GZIP só quando o binário comprimido fica menor que o JSON em '
+      'UTF-8 (respeitando o limiar negociado), evitando CPU e tráfego em dados '
+      'pouco compressíveis. O contrato completo está em '
+      'docs/communication/socket_communication_standard.md.';
+
+  static const String wsPerRequestOutboundCompressionLabel =
+      'Permitir override por pedido (meta do hub)';
+  static const String wsPerRequestOutboundCompressionDescription =
+      'Quando desligado, o agente ignora `meta.outbound_compression` nos '
+      'pedidos JSON-RPC e usa apenas o modo escolhido acima.';
 
   // Diagnostics (advanced)
   static const String diagnosticsSectionTitle = 'Diagnóstico avançado';
@@ -90,6 +98,13 @@ class AppStrings {
   static const String diagnosticsOdbcPaginatedSqlLogDescription =
       'Quando ativado, o agente registra a SQL final após reescrita de '
       'paginação gerenciada (developer log).';
+
+  static const String diagnosticsSocketOutboundCompressionDebugLogLabel =
+      'Log de compressão outbound (socket)';
+  static const String diagnosticsSocketOutboundCompressionDebugLogDescription =
+      'Em nível debug, regista o modo da app, o hint do hub (se aplicável), a '
+      'compressão negociada e o `cmp` efetivo apenas em `rpc:response`, '
+      '`rpc:chunk` e `rpc:complete` (com `requestId` / `traceId` quando existirem).';
 
   // Client Token Settings
   static const String ctSectionTitle = 'Client Token Authorization';

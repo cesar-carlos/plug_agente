@@ -142,6 +142,38 @@ void main() {
         expect(result.isError(), isTrue);
       });
 
+      test('should succeed when meta.outbound_compression is valid', () {
+        for (final mode in ['none', 'gzip', 'auto']) {
+          final data = <String, dynamic>{
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'req-1',
+            'params': {'sql': 'SELECT 1'},
+            'meta': {'outbound_compression': mode},
+          };
+
+          final result = validator.validateSingle(data);
+
+          check(result.isSuccess()).isTrue();
+        }
+      });
+
+      test('should fail when meta.outbound_compression is invalid', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {'sql': 'SELECT 1'},
+          'meta': {'outbound_compression': 'lz4'},
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.message, contains('outbound_compression'));
+      });
+
       test(
         'should fail with invalidParams for sql.execute schema violations',
         () {

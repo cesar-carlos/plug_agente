@@ -72,6 +72,14 @@ Regras:
 - `compressedSize` deve refletir o tamanho efetivamente transmitido.
 - `signature` e opcional, mas quando presente cobre o frame de transporte.
 
+### Descoberta do formato por mensagem (sem inferir modo do emissor)
+
+Cada frame informa explicitamente `enc` e `cmp`. O receptor **nao** deduz se o
+emissor estava em modo Automático, Sempre GZIP ou Desligado: ele apenas le os
+campos do frame e aplica decode/descompressao. No fio existem somente
+`cmp: gzip` ou `cmp: none`; o modo Automático do agente só decide qual dos dois
+usar naquele envio.
+
 Representacao de `payload` por plataforma:
 
 - Dart/Flutter: `Uint8List` ou `List<int>`
@@ -135,6 +143,21 @@ Quando o cliente consumir capacidades do outro lado:
   `compressions` (se o peer anunciar so `none`, nao exigir gzip outbound)
 - considerar a sessao apta ao modo obrigatorio apenas se
   `extensions.binaryPayload == true`
+
+### Preferencia por pedido (`meta.outbound_compression`)
+
+Opcionalmente o hub pode enviar em cada JSON-RPC request `meta.outbound_compression`
+com `none`, `gzip` ou `auto`, alinhado a semantica do agente (mesmo significado
+que o modo configurado na UI). Isso altera apenas o `PayloadFrame` de **saida**
+(`rpc:response`, e `rpc:chunk` / `rpc:complete` ligados ao mesmo `id`). Sem o
+campo, aplica-se a politica padrao do agente. O limiar `compressionThreshold`
+e a negociacao (`compressions` no handshake) continuam a limitar o que e possivel
+no fio. Em batch JSON-RPC, todos os itens que **definirem**
+`meta.outbound_compression` devem usar o **mesmo** valor; valores diferentes no
+mesmo batch sao rejeitados. Itens **sem** o campo podem coexistir com itens que
+o definem desde que exista no maximo **um** valor distinto entre os que o
+definem (ex.: um item com `gzip` e os restantes sem `meta.outbound_compression`
+aplicam `gzip` ao `PayloadFrame` unico da resposta em batch).
 
 ## Assinatura e validacao logica
 
@@ -279,3 +302,9 @@ nao sao clientes compativeis com este contrato de transporte.
 
 Postman e ferramentas equivalentes, quando nao conseguem cumprir esse fluxo,
 nao devem ser usadas para homologacao do contrato Socket.IO.
+
+## Schema JSON (frame fisico)
+
+Validacao estrutural opcional do envelope:
+
+- `docs/communication/schemas/payload-frame.schema.json`
