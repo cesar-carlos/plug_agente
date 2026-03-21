@@ -148,12 +148,13 @@ class MessageModal extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (message != null)
-              type == MessageType.error
-                  ? SelectableText(
-                      message!,
-                      style: context.bodyText,
-                    )
-                  : Text(message!, style: context.bodyText),
+              switch (type) {
+                MessageType.error || MessageType.warning => SelectableText(
+                  message!,
+                  style: context.bodyText,
+                ),
+                _ => Text(message!, style: context.bodyText),
+              },
             if (content != null) ...[
               if (message != null) const SizedBox(height: AppSpacing.md),
               content!,

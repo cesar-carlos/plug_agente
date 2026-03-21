@@ -1,9 +1,14 @@
 import 'package:plug_agente/core/utils/split_sql_statements.dart';
+import 'package:plug_agente/core/utils/sql_keyword_scan.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Heuristic SQL classifier for client-token authorization (operation + table/view
+/// names). It is not a full parser: nested SQL, some dialect-specific syntax,
+/// and adversarial spacing may be misclassified; sensitive deployments should
+/// pair this with hub-side validation and least-privilege ODBC credentials.
 class SqlOperationClassification {
   const SqlOperationClassification({
     required this.operation,
@@ -133,7 +138,7 @@ class SqlOperationClassifier {
     for (final keyword in keywords) {
       var searchIndex = 0;
       while (searchIndex < sql.length) {
-        final keywordIndex = _findKeyword(lowerSql, keyword, searchIndex);
+        final keywordIndex = findSqlKeyword(lowerSql, keyword, searchIndex);
         if (keywordIndex < 0) {
           break;
         }
@@ -156,7 +161,7 @@ class SqlOperationClassifier {
 
   String? _extractUpdateTarget(String sql) {
     final lowerSql = sql.toLowerCase();
-    final updateIndex = _findKeyword(lowerSql, 'update', 0);
+    final updateIndex = findSqlKeyword(lowerSql, 'update', 0);
     if (updateIndex < 0) {
       return null;
     }
@@ -166,7 +171,8 @@ class SqlOperationClassifier {
     }
 
     final hasFromClause =
-        _findKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 || _findKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
+        findSqlKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 ||
+            findSqlKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
     if (hasFromClause && _looksLikeAlias(parsed.value)) {
       return null;
     }
@@ -188,12 +194,12 @@ class SqlOperationClassifier {
     final aliases = <String>{};
     final lowerSql = sql.toLowerCase();
     var index = _skipWhitespace(sql, 0);
-    if (!_isKeywordAt(lowerSql, 'with', index)) {
+    if (!sqlIsKeywordAt(lowerSql, 'with', index)) {
       return aliases;
     }
     index = _skipWhitespace(sql, index + 4);
 
-    if (_isKeywordAt(lowerSql, 'recursive', index)) {
+    if (sqlIsKeywordAt(lowerSql, 'recursive', index)) {
       index = _skipWhitespace(sql, index + 9);
     }
 
@@ -217,7 +223,7 @@ class SqlOperationClassifier {
         index = _skipWhitespace(sql, closeColumnList + 1);
       }
 
-      if (!_isKeywordAt(lowerSql, 'as', index)) {
+      if (!sqlIsKeywordAt(lowerSql, 'as', index)) {
         break;
       }
       index = _skipWhitespace(sql, index + 2);
@@ -248,32 +254,6 @@ class SqlOperationClassifier {
     }
     final parts = normalized.split('.');
     return parts.isNotEmpty && cteAliases.contains(parts.last);
-  }
-
-  int _findKeyword(String lowerSql, String keyword, int start) {
-    var index = start;
-    while (index < lowerSql.length) {
-      final candidate = lowerSql.indexOf(keyword, index);
-      if (candidate < 0) {
-        return -1;
-      }
-      if (_isKeywordAt(lowerSql, keyword, candidate)) {
-        return candidate;
-      }
-      index = candidate + 1;
-    }
-    return -1;
-  }
-
-  bool _isKeywordAt(String lowerSql, String keyword, int index) {
-    if (index < 0) {
-      return false;
-    }
-    final end = index + keyword.length;
-    if (end > lowerSql.length || !lowerSql.startsWith(keyword, index)) {
-      return false;
-    }
-    return _isWordBoundary(lowerSql, index - 1) && _isWordBoundary(lowerSql, end);
   }
 
   _ParsedIdentifier? _readQualifiedIdentifier(String sql, int start) {
@@ -363,13 +343,6 @@ class SqlOperationClassifier {
 
   bool _isIdentifierPart(String char) {
     return _identifierPart.hasMatch(char);
-  }
-
-  bool _isWordBoundary(String sql, int index) {
-    if (index < 0 || index >= sql.length) {
-      return true;
-    }
-    return !_isIdentifierPart(sql[index]);
   }
 
   int _findClosingParenthesis(String sql, int openIndex) {

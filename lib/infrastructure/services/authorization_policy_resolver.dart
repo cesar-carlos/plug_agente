@@ -185,15 +185,11 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Future<Result<ClientTokenPolicy>> _resolvePolicyDecodeOnly(
     String token,
   ) async {
+    // Decode-only path: no signature verification. Acceptable only in
+    // controlled setups (e.g. local/dev). Prefer JWKS verification in
+    // production when `enableSocketJwksValidation` and a verifier are wired.
+    // resolvePolicy rejects empty credentials before calling this method.
     final rawToken = normalizeClientCredentialToken(token);
-    if (rawToken.isEmpty) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Missing client token',
-          context: {'authentication': true},
-        ),
-      );
-    }
 
     final segments = rawToken.split('.');
     if (segments.length < 2) {
@@ -225,7 +221,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           },
         ),
       );
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Failed to parse token policy',

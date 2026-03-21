@@ -28,8 +28,11 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Test (exclude live tag)
-        run: flutter test --exclude-tags=live
+      - name: Test with coverage (exclude live tag)
+        run: flutter test --coverage --exclude-tags=live
+
+      - name: Coverage gate (lib/domain + lib/application)
+        run: dart run tool/check_coverage_gate.dart
 
       - name: Test live tag (skips without secrets)
         run: flutter test --tags=live

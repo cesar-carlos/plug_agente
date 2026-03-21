@@ -377,5 +377,50 @@ void main() {
 
       check(result).isFalse();
     });
+
+    test('toJson serializes policy fields', () {
+      const policy = ClientTokenPolicy(
+        clientId: 'c1',
+        agentId: 'a1',
+        payload: <String, dynamic>{'k': 1},
+        allTables: true,
+        allViews: false,
+        allPermissions: false,
+        rules: [
+          ClientTokenRule(
+            resource: DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 't',
+            ),
+            permissions: ClientPermissionSet(
+              canRead: true,
+              canUpdate: false,
+              canDelete: false,
+            ),
+            effect: ClientTokenRuleEffect.allow,
+          ),
+        ],
+      );
+
+      check(policy.toJson()).deepEquals(<String, dynamic>{
+        'client_id': 'c1',
+        'agent_id': 'a1',
+        'payload': <String, dynamic>{'k': 1},
+        'all_tables': true,
+        'all_views': false,
+        'all_permissions': false,
+        'is_revoked': false,
+        'rules': [
+          <String, dynamic>{
+            'resource_type': 'table',
+            'resource': 't',
+            'effect': 'allow',
+            'read': true,
+            'update': false,
+            'delete': false,
+          },
+        ],
+      });
+    });
   });
 }

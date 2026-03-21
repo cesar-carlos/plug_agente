@@ -82,6 +82,32 @@ void main() {
       );
     });
 
+    test(
+      'should include update wording in user message when update is denied',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildReadOnlyPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'UPDATE dbo.users SET x = 1',
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as ConfigurationFailure;
+            expect(
+              authFailure.context['user_message'] as String,
+              contains('alterar'),
+            );
+          },
+        );
+      },
+    );
+
     test('should reuse cached decision and avoid resolver call', () async {
       when(
         () => resolver.resolvePolicy(any()),
@@ -164,6 +190,104 @@ void main() {
         expect(ordersEntry!.allowed, isFalse);
       },
     );
+
+    test(
+      'should fail with invalid_policy when SQL cannot be classified',
+      () async {
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'CREATE TABLE dbo.t (id int)',
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as ConfigurationFailure;
+            expect(authFailure.context['reason'], equals('invalid_policy'));
+            expect(
+              authFailure.context['user_message'] as String,
+              contains('autorizacao'),
+            );
+          },
+        );
+        verifyNever(() => resolver.resolvePolicy(any()));
+      },
+    );
+
+    test('should use revoked user message when policy is revoked', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer(
+        (_) async => const Success(
+          ClientTokenPolicy(
+            clientId: 'c1',
+            allTables: true,
+            allViews: true,
+            allPermissions: true,
+            isRevoked: true,
+            rules: [],
+          ),
+        ),
+      );
+
+      final result = await useCase.call(
+        token: 'tok',
+        sql: 'SELECT * FROM dbo.users',
+      );
+
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as ConfigurationFailure;
+          expect(authFailure.context['reason'], equals('token_revoked'));
+          expect(
+            authFailure.context['user_message'] as String,
+            contains('revogado'),
+          );
+        },
+      );
+    });
+
+    test('should deny immediately when decision cache has rejection', () async {
+      const token = 'cached-deny';
+      final tokenHash = hashClientCredentialToken(token);
+      final key = '$tokenHash|read|dbo.users';
+      decisionCache.put(
+        key,
+        AuthorizationDecisionCacheEntry(
+          allowed: false,
+          reason: 'missing_permission',
+          expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+        ),
+      );
+
+      final result = await useCase.call(
+        token: token,
+        sql: 'SELECT * FROM dbo.users',
+      );
+
+      expect(result.isError(), isTrue);
+      verifyNever(() => resolver.resolvePolicy(any()));
+    });
+
+    test('should work without decision cache', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+      final bare = AuthorizeSqlOperation(
+        SqlOperationClassifier(),
+        ClientTokenValidationService(resolver),
+      );
+
+      final result = await bare.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+      expect(result.isSuccess(), isTrue);
+    });
   });
 }
 

@@ -46,27 +46,27 @@ séries que não devem misturar-se.
 Pré-requisitos: `.env` com DSN como nos outros testes em `test/live/` (ver
 `docs/testing/e2e_setup.md` e `.env.example`).
 
-| Variável | Função |
-|----------|--------|
-| `ODBC_E2E_BENCHMARK=true` | Habilita `odbc_rpc_benchmark_live_e2e_test.dart`. |
-| `ODBC_E2E_BENCHMARK_RECORD=true` | Anexa uma linha JSON por DSN ao histórico. |
-| `ODBC_E2E_BENCHMARK_FILE` | Caminho opcional do JSONL (padrão: `benchmark/e2e_odbc_rpc.jsonl`). |
-| `ODBC_E2E_BENCHMARK_DB_HOSTING` | `local` ou `remote` — contexto para gráficos (opcional). |
-| `ODBC_E2E_BENCHMARK_MAX_MS_*` | Limites opcionais de regressão (ms); ver tabela abaixo. |
-| `ODBC_E2E_REQUIRE_MULTI_RESULT` | Se `true`, o **benchmark** também falha quando `last_has_payload` é false no caso multi-result (alinhado ao E2E RPC). |
+| Variável                         | Função                                                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ODBC_E2E_BENCHMARK=true`        | Habilita `odbc_rpc_benchmark_live_e2e_test.dart`.                                                                     |
+| `ODBC_E2E_BENCHMARK_RECORD=true` | Anexa uma linha JSON por DSN ao histórico.                                                                            |
+| `ODBC_E2E_BENCHMARK_FILE`        | Caminho opcional do JSONL (padrão: `benchmark/e2e_odbc_rpc.jsonl`).                                                   |
+| `ODBC_E2E_BENCHMARK_DB_HOSTING`  | `local` ou `remote` — contexto para gráficos (opcional).                                                              |
+| `ODBC_E2E_BENCHMARK_MAX_MS_*`    | Limites opcionais de regressão (ms); ver tabela abaixo.                                                               |
+| `ODBC_E2E_REQUIRE_MULTI_RESULT`  | Se `true`, o **benchmark** também falha quando `last_has_payload` é false no caso multi-result (alinhado ao E2E RPC). |
 
 **Limites de regressão** (falham o teste se excedidos). Comparado com `median_ms`
 dos casos com amostras; `rpc_sql_execute_multi_result` usa a mediana das
 iterações.
 
-| Sufixo env | Chave em `cases` |
-|------------|------------------|
+| Sufixo env     | Chave em `cases`               |
+| -------------- | ------------------------------ |
 | `MATERIALIZED` | `rpc_sql_execute_materialized` |
-| `BATCH_READS` | `rpc_sql_execute_batch_reads` |
+| `BATCH_READS`  | `rpc_sql_execute_batch_reads`  |
 | `NAMED_PARAMS` | `rpc_sql_execute_named_params` |
 | `MULTI_RESULT` | `rpc_sql_execute_multi_result` |
-| `BATCH_TX` | `rpc_sql_execute_batch_tx` |
-| `STREAMING` | `rpc_sql_execute_streaming` |
+| `BATCH_TX`     | `rpc_sql_execute_batch_tx`     |
+| `STREAMING`    | `rpc_sql_execute_streaming`    |
 
 Exemplo: `ODBC_E2E_BENCHMARK_MAX_MS_MATERIALIZED=800`.
 
@@ -94,14 +94,14 @@ A tag `benchmark` está em `dart_test.yaml` junto com `live`.
 Implementação: `test/live/odbc_rpc_benchmark_live_e2e_test.dart` e
 `test/helpers/e2e_benchmark_recorder.dart`.
 
-| Chave em `cases` | Descrição resumida |
-|------------------|-------------------|
-| `rpc_sql_execute_materialized` | `sql.execute` SELECT materializado. |
-| `rpc_sql_execute_batch_reads` | `sql.executeBatch` com três SELECTs. |
-| `rpc_sql_execute_named_params` | `sql.execute` com `params`. |
+| Chave em `cases`               | Descrição resumida                                      |
+| ------------------------------ | ------------------------------------------------------- |
+| `rpc_sql_execute_materialized` | `sql.execute` SELECT materializado.                     |
+| `rpc_sql_execute_batch_reads`  | `sql.executeBatch` com três SELECTs.                    |
+| `rpc_sql_execute_named_params` | `sql.execute` com `params`.                             |
 | `rpc_sql_execute_multi_result` | `multi_result` (várias iterações) + `last_has_payload`. |
-| `rpc_sql_execute_batch_tx` | `sql.executeBatch` com `transaction: true`. |
-| `rpc_sql_execute_streaming` | `sql.execute` com stream (chunk size 1). |
+| `rpc_sql_execute_batch_tx`     | `sql.executeBatch` com `transaction: true`.             |
+| `rpc_sql_execute_streaming`    | `sql.execute` com stream (chunk size 1).                |
 
 ## Esquema JSONL (`schema_version`)
 
@@ -126,13 +126,13 @@ ficheiro existir.
 
 ## Testes unitários (cobertura sem ODBC)
 
-| Área | Ficheiros |
-|------|-----------|
-| Stats / JSONL / paths | `test/helpers/e2e_benchmark_recorder_test.dart` |
-| Limites `MAX_MS` | `test/helpers/e2e_benchmark_assertions_test.dart` |
-| Variáveis `E2EEnv` (benchmark) | `test/helpers/e2e_env_benchmark_test.dart` |
-| Resumo JSONL (lógica partilhada com o CLI) | `test/tool/e2e_benchmark_summary_test.dart` |
-| Filtro LCOV por prefixo de caminho | `test/tool/lcov_path_filter_test.dart` |
+| Área                                       | Ficheiros                                         |
+| ------------------------------------------ | ------------------------------------------------- |
+| Stats / JSONL / paths                      | `test/helpers/e2e_benchmark_recorder_test.dart`   |
+| Limites `MAX_MS`                           | `test/helpers/e2e_benchmark_assertions_test.dart` |
+| Variáveis `E2EEnv` (benchmark)             | `test/helpers/e2e_env_benchmark_test.dart`        |
+| Resumo JSONL (lógica partilhada com o CLI) | `test/tool/e2e_benchmark_summary_test.dart`       |
+| Filtro LCOV por prefixo de caminho         | `test/tool/lcov_path_filter_test.dart`            |
 
 A lógica do `dart run tool/summarize_e2e_benchmark.dart` está em
 `tool/e2e_benchmark_summary.dart` para ser testada sem I/O.
