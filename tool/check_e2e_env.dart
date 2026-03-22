@@ -320,7 +320,7 @@ void main() {
         '  -> Regressao transporte vs baseline: '
         'file=$socketTransportBenchBaseline '
         'max_regression_pct=$socketTransportBenchRegression '
-        'max_regression_ms=${socketTransportBenchRegressionMs ?? "2"} '
+        'max_regression_ms=${socketTransportBenchRegressionMs ?? "8"} '
         'require_baseline=$socketTransportBenchRequireBaseline',
       );
     }

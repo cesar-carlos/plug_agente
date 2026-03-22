@@ -59,5 +59,36 @@ void main() {
         ],
       );
     });
+
+    test(
+      'raises native pool size to concurrency for async worker timeout safety',
+      () {
+        final resolved = resolveOdbcE2eBenchmarkProfiles(
+          matrixRaw: 'native:4:8',
+          poolModeRaw: null,
+          poolSizeRaw: null,
+          concurrencyRaw: null,
+          defaultPoolSize: 4,
+          defaultConcurrency: 1,
+        );
+
+        expect(resolved.source, OdbcE2eBenchmarkProfileSource.customMatrix);
+        expect(resolved.profiles.single.key, 'native_p8_c8');
+      },
+    );
+
+    test('single native profile is normalized when pool smaller than concurrency', () {
+      final resolved = resolveOdbcE2eBenchmarkProfiles(
+        matrixRaw: null,
+        poolModeRaw: 'native',
+        poolSizeRaw: '4',
+        concurrencyRaw: '8',
+        defaultPoolSize: 4,
+        defaultConcurrency: 1,
+      );
+
+      expect(resolved.source, OdbcE2eBenchmarkProfileSource.single);
+      expect(resolved.profiles.single.key, 'native_p8_c8');
+    });
   });
 }

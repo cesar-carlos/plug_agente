@@ -7,6 +7,8 @@ const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
 const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
 const _keyUseNativeOdbcPool = 'odbc_use_native_pool';
+const _keyLeaseIdleTtlSeconds = 'odbc_lease_idle_ttl_seconds';
+const _keyLeaseWarmupCount = 'odbc_lease_warmup_count';
 
 /// Implementacao de [IOdbcConnectionSettings] com store global de configuracoes.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
@@ -18,6 +20,8 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   int _maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
   bool _useNativeOdbcPool = false;
+  int _leaseIdleTtlSeconds = ConnectionConstants.defaultLeaseIdleTtlSeconds;
+  int _leaseWarmupCount = ConnectionConstants.defaultLeaseWarmupCount;
 
   @override
   int get poolSize => _poolSize;
@@ -35,6 +39,12 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   bool get useNativeOdbcPool => _useNativeOdbcPool;
 
   @override
+  int get leaseIdleTtlSeconds => _leaseIdleTtlSeconds;
+
+  @override
+  int get leaseWarmupCount => _leaseWarmupCount;
+
+  @override
   Future<void> load() async {
     _poolSize = _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
     _loginTimeoutSeconds = _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds;
@@ -42,6 +52,20 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
         _prefs.getInt(_keyMaxResultBufferMb) ?? (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
     _streamingChunkSizeKb = _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb;
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
+    final rawTtl = _prefs.getInt(_keyLeaseIdleTtlSeconds);
+    if (rawTtl == null) {
+      _leaseIdleTtlSeconds = ConnectionConstants.defaultLeaseIdleTtlSeconds;
+    } else if (rawTtl < 0 || rawTtl > ConnectionConstants.maxLeaseIdleTtlSeconds) {
+      _leaseIdleTtlSeconds = ConnectionConstants.defaultLeaseIdleTtlSeconds;
+    } else {
+      _leaseIdleTtlSeconds = rawTtl;
+    }
+    final rawWarmup = _prefs.getInt(_keyLeaseWarmupCount);
+    if (rawWarmup == null || rawWarmup < 0) {
+      _leaseWarmupCount = ConnectionConstants.defaultLeaseWarmupCount;
+    } else {
+      _leaseWarmupCount = rawWarmup.clamp(0, ConnectionConstants.maxLeaseWarmupCount);
+    }
   }
 
   @override
@@ -72,5 +96,19 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> setUseNativeOdbcPool(bool value) async {
     await _prefs.setBool(_keyUseNativeOdbcPool, value);
     _useNativeOdbcPool = value;
+  }
+
+  @override
+  Future<void> setLeaseIdleTtlSeconds(int value) async {
+    final clamped = value.clamp(0, ConnectionConstants.maxLeaseIdleTtlSeconds);
+    await _prefs.setInt(_keyLeaseIdleTtlSeconds, clamped);
+    _leaseIdleTtlSeconds = clamped;
+  }
+
+  @override
+  Future<void> setLeaseWarmupCount(int value) async {
+    final clamped = value.clamp(0, ConnectionConstants.maxLeaseWarmupCount);
+    await _prefs.setInt(_keyLeaseWarmupCount, clamped);
+    _leaseWarmupCount = clamped;
   }
 }

@@ -266,6 +266,57 @@ void main() {
       verify(() => mockService.disconnect('lease-1')).called(1);
     });
 
+    test('warmIdleLeases should no-op when leaseWarmupCount is zero', () async {
+      mockSettings.leaseWarmupCount = 0;
+      final w = await pool.warmIdleLeases('DSN=Test');
+      expect(w.isSuccess(), isTrue);
+      verifyNever(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      );
+    });
+
+    test('warmIdleLeases should no-op when idle TTL is zero', () async {
+      mockSettings.leaseWarmupCount = 3;
+      mockSettings.leaseIdleTtlSeconds = 0;
+      pool = OdbcConnectionPool(mockService, mockSettings);
+      final w = await pool.warmIdleLeases('DSN=Test');
+      expect(w.isSuccess(), isTrue);
+      verifyNever(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      );
+    });
+
+    test(
+      'warmIdleLeases should open idle leases up to warmup cap',
+      () async {
+        mockSettings.poolSize = 3;
+        mockSettings.leaseWarmupCount = 2;
+        mockSettings.leaseIdleTtlSeconds = 60;
+        var n = 0;
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          n++;
+          return Success(
+            Connection(
+              id: 'w-$n',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+
+        final warm = await pool.warmIdleLeases('DSN=Test');
+        expect(warm.isSuccess(), isTrue);
+        expect(n, 2);
+        verifyNever(() => mockService.disconnect(any()));
+
+        final acquired = await pool.acquire('DSN=Test');
+        expect(acquired.getOrNull(), 'w-2');
+      },
+    );
+
     test(
       'should return Failure from closeAll when any disconnect fails',
       () async {

@@ -110,12 +110,34 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
   static const _configCacheTtl = Duration(seconds: 2);
   static const int _multiResultSqlLogPreviewChars = 120;
+  final Set<String> _leaseWarmupKeys = <String>{};
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
     RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
     RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
     RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
   ];
+
+  void _scheduleLeasePoolWarmupIfNeeded(String connectionString) {
+    if (_settings.useNativeOdbcPool || _settings.leaseWarmupCount <= 0) {
+      return;
+    }
+    if (!_leaseWarmupKeys.add(connectionString)) {
+      return;
+    }
+    unawaited(
+      _connectionPool.warmIdleLeases(connectionString).then((Result<void> r) {
+        if (r.isError()) {
+          _leaseWarmupKeys.remove(connectionString);
+        }
+      }),
+    );
+  }
+
+  Future<Result<String>> _acquireFromPool(String connectionString) async {
+    _scheduleLeasePoolWarmupIfNeeded(connectionString);
+    return _connectionPool.acquire(connectionString);
+  }
 
   static String _previewSqlForLog(String sql) {
     final collapsed = sql.replaceAll(_previewSqlWhitespaceCollapse, ' ').trim();
@@ -233,7 +255,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _cachedConfigFetchedAt = DateTime.now();
         return Success(config);
       },
-      (error) => Failure(error),
+      Failure.new,
     );
   }
 
@@ -499,7 +521,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       preparedExecution: preparedExecution,
     );
 
-    final poolResult = await _connectionPool.acquire(connectionString);
+    final poolResult = await _acquireFromPool(connectionString);
 
     if (poolResult.isError()) {
       stopwatch.stop();
@@ -815,7 +837,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final poolResult = await _connectionPool.acquire(connectionString);
+    final poolResult = await _acquireFromPool(connectionString);
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
       _metrics.recordConnectionPoolAcquireFailure();
@@ -1228,7 +1250,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString, {
     Duration? timeout,
   }) async {
-    final poolResult = await _connectionPool.acquire(connectionString);
+    final poolResult = await _acquireFromPool(connectionString);
 
     if (poolResult.isError()) {
       _metrics.recordConnectionPoolAcquireFailure();

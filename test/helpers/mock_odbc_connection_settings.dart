@@ -7,6 +7,8 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
     this.maxResultBufferMb = 32,
     this.streamingChunkSizeKb = 1024,
     this.useNativeOdbcPool = false,
+    this.leaseIdleTtlSeconds = 30,
+    this.leaseWarmupCount = 0,
   });
 
   @override
@@ -23,6 +25,12 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   bool useNativeOdbcPool;
+
+  @override
+  int leaseIdleTtlSeconds;
+
+  @override
+  int leaseWarmupCount;
 
   @override
   Future<void> load() async {}
@@ -45,4 +53,12 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   @override
   Future<void> setUseNativeOdbcPool(bool value) async =>
       useNativeOdbcPool = value;
+
+  @override
+  Future<void> setLeaseIdleTtlSeconds(int value) async =>
+      leaseIdleTtlSeconds = value;
+
+  @override
+  Future<void> setLeaseWarmupCount(int value) async =>
+      leaseWarmupCount = value;
 }

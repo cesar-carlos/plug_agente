@@ -38,6 +38,14 @@ class RpcError {
 
     return json;
   }
+
+  @override
+  String toString() {
+    if (data == null) {
+      return 'RpcError(code: $code, message: $message)';
+    }
+    return 'RpcError(code: $code, message: $message, data: $data)';
+  }
 }
 
 /// Problem Details style error data (RFC 9457 inspired).

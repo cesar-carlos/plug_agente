@@ -291,4 +291,9 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     return const Success(unit);
   }
+
+  @override
+  Future<Result<void>> warmIdleLeases(String connectionString) async {
+    return const Success(unit);
+  }
 }

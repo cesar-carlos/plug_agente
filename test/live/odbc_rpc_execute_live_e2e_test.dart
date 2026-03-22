@@ -12,6 +12,7 @@ import '../helpers/odbc_e2e_recording_stream_emitter.dart';
 import '../helpers/odbc_e2e_row_assertions.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
 import '../helpers/odbc_e2e_rpc_request_builders.dart';
+import '../helpers/rpc_response_test_helpers.dart';
 
 /// E2E: `sql.execute` (multi-result) and `sql.executeBatch` (SELECT/DML) against
 /// real ODBC databases. Covers contract cases from `docs/communication/` (batch
@@ -231,7 +232,7 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(selectBatch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 3);
@@ -340,7 +341,7 @@ void _registerTargetGroup(String label, String connectionString) {
           ),
         );
 
-        expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         final body = resp.result! as Map<String, dynamic>;
         expect(body['stream_id'], isNotNull);
         expect(body['row_count'], 0);
@@ -447,7 +448,7 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(combined, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 5);
@@ -570,7 +571,7 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(batch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 3);
@@ -656,7 +657,7 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(batch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 2);

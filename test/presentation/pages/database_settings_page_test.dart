@@ -48,6 +48,10 @@ class _FakeConnectionPool implements IConnectionPool {
   @override
   Future<Result<void>> release(String connectionId) async =>
       const Success(unit);
+
+  @override
+  Future<Result<void>> warmIdleLeases(String connectionString) async =>
+      const Success(unit);
 }
 
 Future<void> pumpDatabaseSettings(

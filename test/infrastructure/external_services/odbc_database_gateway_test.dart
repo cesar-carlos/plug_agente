@@ -50,6 +50,9 @@ void main() {
         metrics,
         mockSettings,
       );
+      when(
+        () => mockConnectionPool.warmIdleLeases(any()),
+      ).thenAnswer((_) async => const Success(unit));
     });
 
     group('testConnection and bootstrap failures', () {

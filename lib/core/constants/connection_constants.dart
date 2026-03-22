@@ -14,6 +14,18 @@ class ConnectionConstants {
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;
 
+  /// Idle ODBC lease reuse TTL (seconds). Zero disables keeping idle handles.
+  static const int defaultLeaseIdleTtlSeconds = 30;
+
+  /// Max seconds allowed for [defaultLeaseIdleTtlSeconds] / persisted TTL.
+  static const int maxLeaseIdleTtlSeconds = 86400;
+
+  /// Optional pre-opened idle leases per DSN (lease pool only; 0 = off).
+  static const int defaultLeaseWarmupCount = 0;
+
+  /// Upper bound for configured lease warmup count (per connection string).
+  static const int maxLeaseWarmupCount = 32;
+
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;
 

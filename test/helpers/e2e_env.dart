@@ -208,6 +208,40 @@ class E2EEnv {
     return value;
   }
 
+  /// `sql.executeBatch` read benchmark: number of SELECT commands (min 3, max 32).
+  static int get odbcE2eBenchmarkBatchCommandCount {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_BATCH_COMMAND_COUNT') ?? '',
+    );
+    if (value == null || value < 3) {
+      return 3;
+    }
+    return value.clamp(3, 32);
+  }
+
+  /// When > 0, materialized `sql.execute` uses this `max_rows` (else seed row count).
+  static int get odbcE2eBenchmarkMaterializedMaxRows {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_MATERIALIZED_MAX_ROWS') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return 0;
+    }
+    return value.clamp(1, 500000);
+  }
+
+  /// When > 0, runs an extra benchmark case with this many `A` bytes in `bench_waste`
+  /// (idempotency fingerprint + JSON canonicalization cost).
+  static int get odbcE2eBenchmarkIdempotencyWasteBytes {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_IDEMPOTENCY_WASTE_BYTES') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return 0;
+    }
+    return value.clamp(1, 2 * 1024 * 1024);
+  }
+
   /// Login timeout used by benchmark ODBC settings.
   static int get odbcE2eBenchmarkLoginTimeoutSeconds {
     final value = int.tryParse(
@@ -337,6 +371,7 @@ class E2EEnv {
     add('BATCH_READS_PARALLEL', 'rpc_sql_execute_batch_reads_parallel');
     add('MULTI_RESULT_PARALLEL', 'rpc_sql_execute_multi_result_parallel');
     add('WRITE_DML_PARALLEL', 'rpc_sql_execute_write_dml_parallel');
+    add('IDEMPOTENCY_HEAVY', 'rpc_sql_execute_idempotency_heavy_params');
     return out;
   }
 

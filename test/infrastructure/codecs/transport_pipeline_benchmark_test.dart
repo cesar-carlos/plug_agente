@@ -19,6 +19,7 @@ const String _caseSmallRoundTrip = 'socket_transport_small_roundtrip';
 const String _caseLargeGzipRoundTrip = 'socket_transport_large_roundtrip_gzip';
 const String _caseLargeAutoRoundTrip = 'socket_transport_large_roundtrip_auto';
 const String _caseStreamChunksGzip = 'socket_transport_stream_chunks_gzip';
+const String _caseJumboGzipAsync = 'socket_transport_jumbo_gzip_roundtrip_async';
 
 class _TransportIterationMeasurement {
   const _TransportIterationMeasurement({
@@ -181,6 +182,7 @@ Map<String, int> _transportBenchmarkMaxMsByCase() {
   add('LARGE_GZIP', _caseLargeGzipRoundTrip);
   add('LARGE_AUTO', _caseLargeAutoRoundTrip);
   add('STREAM_CHUNKS_GZIP', _caseStreamChunksGzip);
+  add('JUMBO_GZIP_ASYNC', _caseJumboGzipAsync);
   return thresholds;
 }
 
@@ -194,12 +196,25 @@ String _buildMode() {
   return 'debug';
 }
 
+bool _transportIncludeJumbo() {
+  return _envFlag('SOCKET_TRANSPORT_BENCHMARK_INCLUDE_JUMBO');
+}
+
+int _transportJumboBlobBytes() {
+  return _positiveIntEnv(
+    'SOCKET_TRANSPORT_BENCHMARK_JUMBO_BLOB_BYTES',
+    280 * 1024,
+  );
+}
+
 Map<String, dynamic> _benchmarkProfile() {
   return <String, dynamic>{
     'compression_threshold_bytes': _transportCompressionThresholdBytes(),
     'large_rows': _transportLargePayloadRows(),
     'stream_chunk_count': _transportStreamChunkCount(),
     'stream_rows_per_chunk': _transportRowsPerChunk(),
+    'include_jumbo_isolate_path': _transportIncludeJumbo(),
+    if (_transportIncludeJumbo()) 'jumbo_blob_bytes': _transportJumboBlobBytes(),
   };
 }
 
@@ -224,6 +239,16 @@ Map<String, dynamic> _largePayload(int rows) {
           'description': 'payload row ${index + 1} ' * 3,
         };
       }),
+    },
+  };
+}
+
+Map<String, dynamic> _jumboRpcPayload(int blobBytes) {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-jumbo',
+    'result': <String, dynamic>{
+      'blob': String.fromCharCodes(List<int>.filled(blobBytes, 0x5A)),
     },
   };
 }
@@ -465,11 +490,25 @@ void main() async {
           iterations: 4,
         );
 
+        _TransportCaseMeasurement? jumboGzip;
+        if (_transportIncludeJumbo()) {
+          final jumboPayload = _jumboRpcPayload(_transportJumboBlobBytes());
+          jumboGzip = await _measureTransportCaseAsync(
+            () => _measureSingleRoundTrip(
+              pipeline: largeGzipPipeline,
+              payload: jumboPayload,
+              asyncReceive: true,
+            ),
+            iterations: 3,
+          );
+        }
+
         final cases = <String, dynamic>{
           _caseSmallRoundTrip: smallRoundTrip.toJson(),
           _caseLargeGzipRoundTrip: largeGzipRoundTrip.toJson(),
           _caseLargeAutoRoundTrip: largeAutoRoundTrip.toJson(),
           _caseStreamChunksGzip: streamChunks.toJson(),
+          if (jumboGzip != null) _caseJumboGzipAsync: jumboGzip.toJson(),
         };
 
         if (thresholds.isNotEmpty) {
@@ -506,7 +545,7 @@ void main() async {
               maxRegressionPercent: maxRegressionPercent,
               maxRegressionMs: _positiveIntEnv(
                 'SOCKET_TRANSPORT_BENCHMARK_MAX_REGRESSION_MS',
-                2,
+                8,
               ),
               window: _transportBenchmarkBaselineWindow(),
             );

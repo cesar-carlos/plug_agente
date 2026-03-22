@@ -16,6 +16,28 @@ RpcRequest e2eRpcExecute({
   );
 }
 
+/// Extra top-level keys are ignored by SqlExecuteParamsReader but included in
+/// idempotency fingerprinting (large `bench_waste` stresses hash/JSON path).
+RpcRequest e2eRpcExecuteWithBenchPayload({
+  required String id,
+  required String sql,
+  required int wasteBytes,
+  Map<String, dynamic>? options,
+}) {
+  return RpcRequest(
+    jsonrpc: '2.0',
+    method: 'sql.execute',
+    id: id,
+    params: <String, dynamic>{
+      'sql': sql,
+      'bench_waste': String.fromCharCodes(
+        List<int>.filled(wasteBytes, 0x41),
+      ),
+      if (options != null && options.isNotEmpty) 'options': options,
+    },
+  );
+}
+
 /// `sql.execute` with top-level `params` (see `rpc.params.sql-execute.schema.json`).
 RpcRequest e2eRpcExecuteWithParams({
   required String id,

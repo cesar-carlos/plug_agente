@@ -35,4 +35,10 @@ abstract class IConnectionPool {
 
   /// Runs a health check on native pools when supported; lease pool is a no-op.
   Future<Result<void>> healthCheckAll();
+
+  /// Pre-opens idle lease connections for [connectionString] (lease pool only).
+  ///
+  /// Native pool implementations return success without work. When idle reuse
+  /// is disabled (TTL zero), returns success immediately.
+  Future<Result<void>> warmIdleLeases(String connectionString);
 }

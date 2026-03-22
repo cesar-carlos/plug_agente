@@ -134,6 +134,7 @@ Future<void> setupDependencies({
   // Register capabilities globally
   getIt.registerSingleton<RuntimeCapabilities>(capabilities);
 
+  // odbc_fast async path uses a per-request worker timeout (default ~30s).
   _odbcLocator.initialize(useAsync: true);
   final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
   getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);

@@ -44,6 +44,29 @@ const List<OdbcE2eBenchmarkProfile> kDefaultOdbcE2eBenchmarkProfiles =
       ),
     ];
 
+/// Native ODBC uses `odbc_fast`'s single async worker (~30s request timeout per
+/// call). When benchmark concurrency exceeds pool size, queued worker requests
+/// can exceed that timeout even though the pool is not logically exhausted.
+List<OdbcE2eBenchmarkProfile> normalizeOdbcE2eBenchmarkProfilesForNativeWorker(
+  List<OdbcE2eBenchmarkProfile> profiles,
+) {
+  return profiles
+      .map((OdbcE2eBenchmarkProfile p) {
+        if (p.poolMode != 'native') {
+          return p;
+        }
+        if (p.poolSize >= p.concurrency) {
+          return p;
+        }
+        return OdbcE2eBenchmarkProfile(
+          poolMode: p.poolMode,
+          poolSize: p.concurrency,
+          concurrency: p.concurrency,
+        );
+      })
+      .toList(growable: false);
+}
+
 ResolvedOdbcE2eBenchmarkProfiles resolveOdbcE2eBenchmarkProfiles({
   required String? matrixRaw,
   required String? poolModeRaw,
@@ -60,7 +83,7 @@ ResolvedOdbcE2eBenchmarkProfiles resolveOdbcE2eBenchmarkProfiles({
   if (parsedMatrix.isNotEmpty) {
     return ResolvedOdbcE2eBenchmarkProfiles(
       source: OdbcE2eBenchmarkProfileSource.customMatrix,
-      profiles: parsedMatrix,
+      profiles: normalizeOdbcE2eBenchmarkProfilesForNativeWorker(parsedMatrix),
     );
   }
 
@@ -71,19 +94,23 @@ ResolvedOdbcE2eBenchmarkProfiles resolveOdbcE2eBenchmarkProfiles({
   if (hasExplicitSingle) {
     return ResolvedOdbcE2eBenchmarkProfiles(
       source: OdbcE2eBenchmarkProfileSource.single,
-      profiles: <OdbcE2eBenchmarkProfile>[
-        OdbcE2eBenchmarkProfile(
-          poolMode: _normalizePoolMode(poolModeRaw),
-          poolSize: _parsePositiveInt(poolSizeRaw) ?? defaultPoolSize,
-          concurrency: _parsePositiveInt(concurrencyRaw) ?? defaultConcurrency,
-        ),
-      ],
+      profiles: normalizeOdbcE2eBenchmarkProfilesForNativeWorker(
+        <OdbcE2eBenchmarkProfile>[
+          OdbcE2eBenchmarkProfile(
+            poolMode: _normalizePoolMode(poolModeRaw),
+            poolSize: _parsePositiveInt(poolSizeRaw) ?? defaultPoolSize,
+            concurrency: _parsePositiveInt(concurrencyRaw) ?? defaultConcurrency,
+          ),
+        ],
+      ),
     );
   }
 
-  return const ResolvedOdbcE2eBenchmarkProfiles(
+  return ResolvedOdbcE2eBenchmarkProfiles(
     source: OdbcE2eBenchmarkProfileSource.defaultMatrix,
-    profiles: kDefaultOdbcE2eBenchmarkProfiles,
+    profiles: normalizeOdbcE2eBenchmarkProfilesForNativeWorker(
+      List<OdbcE2eBenchmarkProfile>.from(kDefaultOdbcE2eBenchmarkProfiles),
+    ),
   );
 }
 

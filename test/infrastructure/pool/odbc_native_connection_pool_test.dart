@@ -372,5 +372,12 @@ void main() {
 
       expect(health.isSuccess(), isTrue);
     });
+
+    test('warmIdleLeases should succeed without touching the ODBC service', () async {
+      final result = await pool.warmIdleLeases('DSN=Test');
+      expect(result.isSuccess(), isTrue);
+      verifyNever(() => mockService.poolCreate(any(), any()));
+      verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
+    });
   });
 }

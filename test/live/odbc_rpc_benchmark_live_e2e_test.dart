@@ -22,6 +22,7 @@ import '../helpers/odbc_e2e_live_sql.dart';
 import '../helpers/odbc_e2e_recording_stream_emitter.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
 import '../helpers/odbc_e2e_rpc_request_builders.dart';
+import '../helpers/rpc_response_test_helpers.dart';
 
 const String _caseMaterialized = 'rpc_sql_execute_materialized';
 const String _caseBatchReads = 'rpc_sql_execute_batch_reads';
@@ -36,6 +37,8 @@ const String _caseStreamingChunks = 'rpc_sql_execute_streaming_chunks';
 const String _caseMaterializedParallel = 'rpc_sql_execute_materialized_parallel';
 const String _caseBatchReadsParallel = 'rpc_sql_execute_batch_reads_parallel';
 const String _caseMultiResultParallel = 'rpc_sql_execute_multi_result_parallel';
+const String _caseIdempotencyHeavyParams =
+    'rpc_sql_execute_idempotency_heavy_params';
 
 class _StreamingIterationMeasurement {
   const _StreamingIterationMeasurement({
@@ -114,6 +117,9 @@ Map<String, dynamic> _benchmarkProfile(
     'login_timeout_seconds': settings.loginTimeoutSeconds,
     'max_result_buffer_mb': settings.maxResultBufferMb,
     'streaming_chunk_size_kb': settings.streamingChunkSizeKb,
+    'batch_command_count': E2EEnv.odbcE2eBenchmarkBatchCommandCount,
+    'materialized_max_rows': E2EEnv.odbcE2eBenchmarkMaterializedMaxRows,
+    'idempotency_waste_bytes': E2EEnv.odbcE2eBenchmarkIdempotencyWasteBytes,
   };
 }
 
@@ -148,6 +154,23 @@ List<Map<String, dynamic>> _batchReadCommands(
     <String, dynamic>{'sql': sql.selectIdCodeAmtFromId(splitId + 1)},
     <String, dynamic>{'sql': sql.countAll},
   ];
+}
+
+List<Map<String, dynamic>> _batchReadCommandsExtended(
+  OdbcE2eLiveSql sql,
+  int rowCount,
+  int commandCount,
+) {
+  final base = _batchReadCommands(sql, rowCount);
+  if (commandCount <= base.length) {
+    return base.sublist(0, commandCount);
+  }
+  final out = List<Map<String, dynamic>>.from(base);
+  for (var i = base.length; i < commandCount; i++) {
+    final id = (i % rowCount) + 1;
+    out.add(<String, dynamic>{'sql': sql.selectIdCodeAmtById(id)});
+  }
+  return out;
 }
 
 String _multiResultSql(
@@ -578,8 +601,16 @@ void _registerBenchmarkGroup(
         h.metrics.clear();
         final benchmarkConcurrency = profile.concurrency;
         final midId = (benchmarkSeedRows / 2).ceil();
-        final batchCommands = _batchReadCommands(sql, benchmarkSeedRows);
+        final batchCommands = _batchReadCommandsExtended(
+          sql,
+          benchmarkSeedRows,
+          E2EEnv.odbcE2eBenchmarkBatchCommandCount,
+        );
         final multiResultSql = _multiResultSql(sql, benchmarkSeedRows);
+        final materializedMaxRows = E2EEnv.odbcE2eBenchmarkMaterializedMaxRows;
+        final effectiveMaterializedMaxRows = materializedMaxRows > 0
+            ? materializedMaxRows
+            : benchmarkSeedRows;
 
         var seq = 0;
         String benchId(String kind) => 'bench-$kind-${seq++}';
@@ -593,17 +624,59 @@ void _registerBenchmarkGroup(
             e2eRpcExecute(
               id: benchId('mat'),
               sql: sql.selectIdCodeAmtOrderById,
+              options: <String, dynamic>{'max_rows': effectiveMaterializedMaxRows},
             ),
             'e2e-agent',
           );
-          expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+          expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
         });
         final materializedCase = _attachCaseMetrics(
-          materialized.toJson(),
+          <String, dynamic>{
+            ...materialized.toJson(),
+            'max_rows': effectiveMaterializedMaxRows,
+          },
           beforeMetrics: materializedBeforeMetrics,
           beforeLatencyOffsets: materializedBeforeLatency,
           metrics: h.metrics,
         );
+
+        Map<String, dynamic>? idempotencyHeavyCase;
+        final idemWaste = E2EEnv.odbcE2eBenchmarkIdempotencyWasteBytes;
+        if (idemWaste > 0) {
+          final idemBeforeMetrics = _metricsSnapshot(h.metrics);
+          final idemBeforeLatency = _latencySampleOffsetsSnapshot(h.metrics);
+          final idemStats = await E2eBenchmarkStats.measureAsync(
+            () async {
+              final resp = await h.dispatcher.dispatch(
+                e2eRpcExecuteWithBenchPayload(
+                  id: benchId('idem'),
+                  sql: sql.selectIdCodeAmtOrderById,
+                  wasteBytes: idemWaste,
+                  options: <String, dynamic>{
+                    'max_rows': benchmarkSeedRows,
+                  },
+                ),
+                'e2e-agent',
+              );
+              expect(
+                resp.isSuccess,
+                isTrue,
+                reason: describeRpcResponseFailure(resp),
+              );
+            },
+            warmup: 1,
+            iterations: 3,
+          );
+          idempotencyHeavyCase = _attachCaseMetrics(
+            <String, dynamic>{
+              ...idemStats.toJson(),
+              'bench_waste_bytes': idemWaste,
+            },
+            beforeMetrics: idemBeforeMetrics,
+            beforeLatencyOffsets: idemBeforeLatency,
+            metrics: h.metrics,
+          );
+        }
 
         final batchReadsBeforeMetrics = _metricsSnapshot(h.metrics);
         final batchReadsBeforeLatency = _latencySampleOffsetsSnapshot(
@@ -622,7 +695,7 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
           },
           warmup: 1,
           iterations: 6,
@@ -648,7 +721,7 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
           },
           warmup: 1,
           iterations: 6,
@@ -678,7 +751,11 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(multiResp.isSuccess, isTrue, reason: '${multiResp.error}');
+            expect(
+              multiResp.isSuccess,
+              isTrue,
+              reason: describeRpcResponseFailure(multiResp),
+            );
             final multiMap = multiResp.result! as Map<String, dynamic>;
             lastMultiHasPayload = _multiResultHasPayload(multiMap);
           },
@@ -713,7 +790,7 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
           },
           warmup: 1,
           iterations: 4,
@@ -743,7 +820,7 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
           },
           warmup: 1,
           iterations: 4,
@@ -899,7 +976,7 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
             },
             concurrency: benchmarkConcurrency,
           );
@@ -930,7 +1007,7 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
             },
             concurrency: benchmarkConcurrency,
           );
@@ -961,7 +1038,7 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
               final body = resp.result! as Map<String, dynamic>;
               parallelMultiHasPayload = parallelMultiHasPayload && _multiResultHasPayload(body);
             },
@@ -999,7 +1076,7 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
             },
             concurrency: benchmarkConcurrency,
           );
@@ -1016,6 +1093,7 @@ void _registerBenchmarkGroup(
 
         final cases = <String, dynamic>{
           _caseMaterialized: materializedCase,
+          _caseIdempotencyHeavyParams: ?idempotencyHeavyCase,
           _caseBatchReads: batchReadsCase,
           _caseNamedParams: namedParamsCase,
           _caseMultiResult: multiResultCase,

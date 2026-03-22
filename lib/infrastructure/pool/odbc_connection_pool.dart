@@ -88,11 +88,25 @@ class OdbcConnectionPool implements IConnectionPool {
     MetricsCollector? metricsCollector,
     Duration? idleConnectionTtl,
   }) : _metrics = metricsCollector,
-       _idleConnectionTtl = idleConnectionTtl ?? const Duration(seconds: 30);
+       _idleTtlOverride = idleConnectionTtl;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final MetricsCollector? _metrics;
-  final Duration _idleConnectionTtl;
+  final Duration? _idleTtlOverride;
+
+  Duration get _idleConnectionTtl {
+    final override = _idleTtlOverride;
+    if (override != null) {
+      return override;
+    }
+    final seconds = _settings.leaseIdleTtlSeconds;
+    if (seconds <= 0) {
+      return Duration.zero;
+    }
+    return Duration(
+      seconds: seconds.clamp(1, ConnectionConstants.maxLeaseIdleTtlSeconds),
+    );
+  }
 
   final Map<String, Set<String>> _leasedIdsByConnectionString = {};
   final Set<String> _leasedIds = {};
@@ -316,6 +330,61 @@ class OdbcConnectionPool implements IConnectionPool {
         ),
       ),
     );
+  }
+
+  @override
+  Future<Result<void>> warmIdleLeases(String connectionString) async {
+    if (_settings.leaseWarmupCount <= 0 || _idleConnectionTtl <= Duration.zero) {
+      return const Success(unit);
+    }
+    final target = _settings.leaseWarmupCount.clamp(
+      0,
+      ConnectionConstants.maxLeaseWarmupCount,
+    );
+    final cappedTarget = target > _maxLeases ? _maxLeases : target;
+    final existingIdle = _idleByConnectionString[connectionString]?.length ?? 0;
+    final need = cappedTarget - existingIdle;
+    if (need <= 0) {
+      return const Success(unit);
+    }
+
+    for (var i = 0; i < need; i++) {
+      try {
+        await _leases().enter();
+      } on Object catch (error) {
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_warmup_lease',
+          ),
+        );
+      }
+
+      final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+      final connectResult = await _service.connect(
+        connectionString,
+        options: options,
+      );
+
+      if (connectResult.isError()) {
+        _releaseLeaseSlot();
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            connectResult.exceptionOrNull()!,
+            operation: 'pool_warmup_connect',
+          ),
+        );
+      }
+
+      final connectionId = connectResult.getOrNull()!.id;
+      _trackLeasedConnection(connectionId, connectionString);
+      final released = await release(connectionId);
+      if (released.isError()) {
+        return released;
+      }
+    }
+
+    return const Success(unit);
   }
 
   @override

@@ -39,9 +39,9 @@ jobs:
             pool_mode: lease
             pool_size: 4
             concurrency: 8
-          - label: native_p4_c8
+          - label: native_p8_c8
             pool_mode: native
-            pool_size: 4
+            pool_size: 8
             concurrency: 8
     steps:
       - name: Checkout

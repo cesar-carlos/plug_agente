@@ -82,20 +82,20 @@ git push origin v1.0.0
 
 Formato: `MAJOR.MINOR.PATCH+BUILD`
 
-| Parte | Uso |
-|-------|-----|
-| MAJOR | Mudanças incompatíveis |
+| Parte | Uso                               |
+| ----- | --------------------------------- |
+| MAJOR | Mudanças incompatíveis            |
 | MINOR | Novas funcionalidades compatíveis |
-| PATCH | Correções de bugs |
-| BUILD | Número de build (opcional) |
+| PATCH | Correções de bugs                 |
+| BUILD | Número de build (opcional)        |
 
 Consulte [version_strategy.md](version_strategy.md) para detalhes.
 
 ## Scripts Relacionados
 
-| Script | Propósito |
-|--------|-----------|
-| `installer/update_version.py` | Sincroniza versão em setup.iss e app_version.g.dart |
+| Script                         | Propósito                                                     |
+| ------------------------------ | ------------------------------------------------------------- |
+| `installer/update_version.py`  | Sincroniza versão em setup.iss e app_version.g.dart           |
 | `installer/build_installer.py` | Executa update_version.py, build Flutter e compila Inno Setup |
 
 ## Comandos Rápidos
