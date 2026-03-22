@@ -4,7 +4,18 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
 import 'package:result_dart/result_dart.dart';
 
+typedef OdbcDriverCheckerProcessRun =
+    Future<ProcessResult> Function(
+      String executable,
+      List<String> arguments, {
+      bool runInShell,
+    });
+
 class OdbcDriverChecker implements IOdbcDriverChecker {
+  OdbcDriverChecker({OdbcDriverCheckerProcessRun? processRun}) : _processRun = processRun ?? Process.run;
+
+  final OdbcDriverCheckerProcessRun _processRun;
+
   @override
   Future<Result<bool>> checkDriverInstalled(String driverName) async {
     if (driverName.trim().isEmpty) {
@@ -14,7 +25,7 @@ class OdbcDriverChecker implements IOdbcDriverChecker {
     }
 
     try {
-      final result = await Process.run('powershell', [
+      final result = await _processRun('powershell', [
         '-Command',
         'Get-OdbcDriver | Select-Object -ExpandProperty Name',
       ], runInShell: true);

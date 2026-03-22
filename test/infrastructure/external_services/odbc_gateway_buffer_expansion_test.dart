@@ -14,6 +14,12 @@ void main() {
         OdbcGatewayBufferExpansion.extractRequiredBufferBytes('no match here'),
         isNull,
       );
+      expect(
+        OdbcGatewayBufferExpansion.extractRequiredBufferBytes(
+          'need not-a-number bytes',
+        ),
+        isNull,
+      );
     });
 
     test('calculateExpandedBufferBytes doubles when no required size', () {
@@ -45,6 +51,31 @@ void main() {
       );
       expect(next, OdbcGatewayBufferExpansion.maxAutoExpandedBufferBytes);
     });
+
+    test(
+      'calculateExpandedBufferBytes caps required-plus-margin at max bytes',
+      () {
+        const current = 32 * 1024 * 1024;
+        final next = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
+          currentBufferBytes: current,
+          errorMessage:
+              'need ${OdbcGatewayBufferExpansion.maxAutoExpandedBufferBytes} bytes',
+        );
+        expect(next, OdbcGatewayBufferExpansion.maxAutoExpandedBufferBytes);
+      },
+    );
+
+    test(
+      'calculateExpandedBufferBytes keeps current when required plus margin is below it',
+      () {
+        const current = 8 * 1024 * 1024;
+        final next = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
+          currentBufferBytes: current,
+          errorMessage: 'need 1000 bytes',
+        );
+        expect(next, current);
+      },
+    );
 
     test('messageIndicatesBufferTooSmall is case insensitive', () {
       expect(

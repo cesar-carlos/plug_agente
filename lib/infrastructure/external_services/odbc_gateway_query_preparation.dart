@@ -22,9 +22,7 @@ class OdbcPreparedQueryExecution {
 /// Pagination validation and SQL preparation for `OdbcDatabaseGateway`.
 ///
 /// Keeps gateway thinner and allows direct unit tests of these rules.
-class OdbcGatewayQueryPreparation {
-  OdbcGatewayQueryPreparation._();
-
+abstract final class OdbcGatewayQueryPreparation {
   static domain.ValidationFailure? validatePaginationForDatabase(
     QueryRequest request,
     DatabaseType databaseType,
@@ -48,8 +46,7 @@ class OdbcGatewayQueryPreparation {
     }
 
     final requiresExplicitOrderBy =
-        databaseType == DatabaseType.sqlServer ||
-        databaseType == DatabaseType.sybaseAnywhere;
+        databaseType == DatabaseType.sqlServer || databaseType == DatabaseType.sybaseAnywhere;
     if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
       return domain.ValidationFailure(
         'Page-offset pagination requires an explicit ORDER BY for '

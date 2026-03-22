@@ -9,8 +9,12 @@ import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Limits concurrent in-flight ODBC leases. Each successful `enter` call is
-/// paired with `leave` when the lease ends.
+/// Limits concurrent in-flight ODBC leases.
+///
+/// Invariant: `_active` counts slots currently granted. When [leave] completes
+/// a waiter instead of decrementing, that waiter takes over the freed slot
+/// without a second `enter` increment — the slot is transferred from the
+/// releaser to the next acquirer.
 final class _LeaseLimiter {
   _LeaseLimiter({required int maxLeases}) : _maxLeases = maxLeases > 0 ? maxLeases : 1;
 
@@ -186,10 +190,26 @@ class OdbcConnectionPool implements IConnectionPool {
     );
 
     final idList = ids.toList(growable: false);
+    final errors = <String>[];
     for (final id in idList) {
-      await _service.disconnect(id);
+      final disconnectResult = await _service.disconnect(id);
+      disconnectResult.fold(
+        (_) {},
+        (error) => errors.add(
+          error is OdbcError ? error.message : error.toString(),
+        ),
+      );
       _leasedIds.remove(id);
       _releaseLeaseSlot();
+    }
+
+    if (errors.isNotEmpty) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          Exception(errors.join(', ')),
+          operation: 'pool_recycle',
+        ),
+      );
     }
     return const Success(unit);
   }

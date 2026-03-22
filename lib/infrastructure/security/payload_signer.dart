@@ -64,8 +64,7 @@ class PayloadSigner {
   PayloadSignature signFrame(PayloadFrame frame) {
     final keyId = activeKeyId;
     final secret = _keys[keyId]!;
-    final canonicalBytes =
-        _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
+    final canonicalBytes = _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
     final hmacValue = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return PayloadSignature(
       alg: supportedAlgorithm,
@@ -80,8 +79,7 @@ class PayloadSigner {
     final secret = _keys[signature.keyId];
     if (secret == null) return false;
 
-    final canonicalBytes =
-        _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
+    final canonicalBytes = _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
     final expected = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return _constantTimeEquals(expected, signature.value);
   }

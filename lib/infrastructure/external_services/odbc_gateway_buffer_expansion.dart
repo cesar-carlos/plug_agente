@@ -1,9 +1,7 @@
 /// Helpers for expanding ODBC max result buffer after driver "buffer too small" errors.
 ///
 /// Extracted from `OdbcDatabaseGateway` for unit testing and readability.
-class OdbcGatewayBufferExpansion {
-  OdbcGatewayBufferExpansion._();
-
+abstract final class OdbcGatewayBufferExpansion {
   static const int bufferRetryMarginBytes = 1024 * 1024;
   static const int maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
 

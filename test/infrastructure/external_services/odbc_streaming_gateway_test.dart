@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:result_dart/result_dart.dart';
@@ -12,6 +13,10 @@ import '../../helpers/mock_odbc_connection_settings.dart';
 class MockOdbcService extends Mock implements OdbcService {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const ConnectionOptions());
+  });
+
   group('OdbcStreamingGateway', () {
     late MockOdbcService mockService;
     late MockOdbcConnectionSettings mockSettings;
@@ -21,6 +26,47 @@ void main() {
       mockService = MockOdbcService();
       mockSettings = MockOdbcConnectionSettings();
       gateway = OdbcStreamingGateway(mockService, mockSettings);
+    });
+
+    test('should use default login timeout in connect options when setting is 0', () async {
+      mockSettings.loginTimeoutSeconds = 0;
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-login',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      final controller = StreamController<Result<QueryResult>>();
+      when(
+        () => mockService.streamQuery('conn-login', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-login'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final done = gateway.executeQueryStream(
+        'SELECT 1',
+        'DSN=Test',
+        (_) async {},
+      );
+      await controller.close();
+      await done;
+
+      final verification = verify(
+        () => mockService.connect('DSN=Test', options: captureAny(named: 'options')),
+      );
+      verification.called(1);
+      final options = verification.captured.single as ConnectionOptions;
+      expect(options.loginTimeout, ConnectionConstants.defaultLoginTimeout);
     });
 
     test('should split streamed rows by fetchSize', () async {

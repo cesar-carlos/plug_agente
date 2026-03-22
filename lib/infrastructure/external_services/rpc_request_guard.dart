@@ -19,9 +19,7 @@ class RpcRequestGuard {
        _rateLimitWindow = rateLimitWindow,
        _maxRequestsPerWindow = maxRequestsPerWindow,
        _replayWindow = replayWindow,
-       _maxReplayCacheEntries =
-           maxReplayCacheEntries ??
-           _defaultMaxReplayCacheEntries(maxRequestsPerWindow);
+       _maxReplayCacheEntries = maxReplayCacheEntries ?? _defaultMaxReplayCacheEntries(maxRequestsPerWindow);
 
   final DateTime Function() _nowProvider;
   final Duration _rateLimitWindow;
@@ -83,8 +81,7 @@ class RpcRequestGuard {
 
   void _evictExpiredFromTimeline(DateTime now) {
     final cutoff = now.subtract(_rateLimitWindow);
-    while (_rpcRequestTimeline.isNotEmpty &&
-        _rpcRequestTimeline.first.isBefore(cutoff)) {
+    while (_rpcRequestTimeline.isNotEmpty && _rpcRequestTimeline.first.isBefore(cutoff)) {
       _rpcRequestTimeline.removeFirst();
     }
   }

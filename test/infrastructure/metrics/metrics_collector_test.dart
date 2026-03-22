@@ -415,6 +415,28 @@ void main() {
       );
     });
 
+    group('connection pool counters', () {
+      test('should increment acquire and release failure counters', () {
+        expect(collector.connectionPoolAcquireFailureCount, 0);
+        expect(collector.connectionPoolReleaseFailureCount, 0);
+
+        collector.recordConnectionPoolAcquireFailure();
+        collector.recordConnectionPoolAcquireFailure();
+        collector.recordConnectionPoolReleaseFailure();
+
+        expect(collector.connectionPoolAcquireFailureCount, 2);
+        expect(collector.connectionPoolReleaseFailureCount, 1);
+        expect(
+          collector.eventCounters['connection_pool_acquire_failure'],
+          2,
+        );
+        expect(
+          collector.eventCounters['connection_pool_release_failure'],
+          1,
+        );
+      });
+    });
+
     group('exportToJson', () {
       test('should export metrics as JSON', () {
         // Arrange

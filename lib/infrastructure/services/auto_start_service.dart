@@ -26,8 +26,7 @@ class AutoStartService implements IStartupService {
   }) : _processRunner = processRunner ?? Process.run,
        _processStarter = processStarter ?? _defaultProcessStarter;
 
-  static const String _runKeyPath =
-      r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run';
+  static const String _runKeyPath = r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run';
   static const String _runValueName = 'Plug Agente';
 
   final ProcessRunner _processRunner;
@@ -289,8 +288,7 @@ class AutoStartService implements IStartupService {
 
   bool _isAccessDenied(ProcessResult result) {
     final output = '${result.stdout}\n${result.stderr}'.toLowerCase();
-    return output.contains('access is denied') ||
-        output.contains('acesso negado');
+    return output.contains('access is denied') || output.contains('acesso negado');
   }
 
   bool _isUacCancelled(ProcessResult result) {

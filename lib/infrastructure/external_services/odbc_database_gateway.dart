@@ -70,7 +70,8 @@ class _BatchTransactionStart {
 /// - Simplified code (no manual column extraction)
 /// - Built-in error handling with Result types
 /// - Connection pooling for reduced overhead
-/// - Performance metrics collection
+/// - Performance metrics collection ([MetricsCollector] pool counters count
+///   each acquire/release attempt, not deduplicated across retries)
 class OdbcDatabaseGateway implements IDatabaseGateway {
   OdbcDatabaseGateway(
     this._configRepository,
@@ -432,6 +433,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         error: error,
       );
 
+      _metrics.recordConnectionPoolAcquireFailure();
       _metrics.recordFailure(
         queryId: request.id,
         query: request.query,
@@ -659,24 +661,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
 
       if (recycleAfterRelease) {
-        if (!context.ownedConnection) {
-          await _tryRecoverPoolAfterInvalidConnectionId(
-            context.connectionString,
-          );
-        }
         continue;
       }
     }
 
-    return Failure(
-      domain.QueryExecutionFailure.withContext(
-        message: 'Batch transaction start failed after retry',
-        context: {
-          'reason': 'transaction_failed',
-          'operation': 'transaction_begin',
-        },
-      ),
+    // Invariant: every loop iteration returns from inside the try block or
+    // continues after a recycled invalid pooled handle.
+    // coverage:ignore-start
+    throw StateError(
+      'executeBatch: retry loop finished without returning a result',
     );
+    // coverage:ignore-end
   }
 
   Future<void> _releaseBatchConnection(_BatchExecutionContext context) async {
@@ -694,13 +689,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
-      final failure = initResult.exceptionOrNull();
-      if (failure != null) {
-        return Failure(failure);
-      }
-      return Failure(
-        domain.ConnectionFailure('Failed to initialize ODBC for batch'),
-      );
+      return Failure(initResult.exceptionOrNull()!);
     }
 
     final configResult = await _configRepository.getCurrentConfig();
@@ -753,6 +742,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final poolResult = await _connectionPool.acquire(connectionString);
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
+      _metrics.recordConnectionPoolAcquireFailure();
       return Failure(
         OdbcFailureMapper.mapPoolError(
           error,
@@ -1039,6 +1029,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final poolResult = await _connectionPool.acquire(connectionString);
 
     if (poolResult.isError()) {
+      _metrics.recordConnectionPoolAcquireFailure();
       return Failure(
         OdbcFailureMapper.mapPoolError(
           poolResult.exceptionOrNull()!,
@@ -1425,13 +1416,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (resolved.isNotEmpty) {
         return _overrideDatabaseInConnectionString(resolved, override);
       }
+      // Current [Config.resolveConnectionString] never yields empty; kept for
+      // forward-compatible edge cases.
+      // coverage:ignore-start
       return OdbcConnectionBuilder.build(overriddenDatabaseConfig);
+      // coverage:ignore-end
     }
 
     if (resolved.isNotEmpty) {
       return resolved;
     }
+    // coverage:ignore-start
     return OdbcConnectionBuilder.build(databaseConfig);
+    // coverage:ignore-end
   }
 
   String _overrideDatabaseInConnectionString(
@@ -1465,6 +1462,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final releaseError = releaseResult.exceptionOrNull()!;
+    _metrics.recordConnectionPoolReleaseFailure();
     developer.log(
       'Failed to release pooled connection: $connectionId',
       name: 'database_gateway',
@@ -1497,7 +1495,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
 
     return ConnectionOptions(
-      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+      loginTimeout: Duration(
+        seconds: OdbcConnectionOptionsBuilder.effectiveLoginTimeoutSeconds(
+          _settings,
+        ),
+      ),
       queryTimeout: ConnectionConstants.defaultQueryTimeout,
       maxResultBufferBytes: expandedBufferBytes,
       initialResultBufferBytes: initialResultBufferBytes,
@@ -1549,10 +1551,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _queryFailureIndicatesInvalidConnectionId(domain.Failure failure) {
-    final ctx = failure.context;
-    final err = ctx['error'] != null
-        ? ctx['error'].toString()
-        : failure.message;
+    final err =
+        failure.context['error']?.toString() ?? failure.message;
     return _isInvalidConnectionIdError(err);
   }
 

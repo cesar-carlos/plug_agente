@@ -51,8 +51,6 @@ class OdbcGatewayQueryResultMapper {
   static List<Map<String, dynamic>> buildColumnMetadata(
     List<String> columns,
   ) {
-    return columns
-        .map((column) => <String, dynamic>{'name': column})
-        .toList(growable: false);
+    return columns.map((column) => <String, dynamic>{'name': column}).toList(growable: false);
   }
 }

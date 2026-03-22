@@ -38,5 +38,25 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'effectiveLoginTimeoutSeconds uses default when setting is non-positive',
+      () {
+        final settings = _MockSettings();
+        when(() => settings.maxResultBufferMb).thenReturn(32);
+        when(() => settings.loginTimeoutSeconds).thenReturn(0);
+
+        expect(
+          OdbcConnectionOptionsBuilder.effectiveLoginTimeoutSeconds(settings),
+          ConnectionConstants.defaultLoginTimeout.inSeconds,
+        );
+
+        final options = OdbcConnectionOptionsBuilder.forQueryExecution(settings);
+        expect(
+          options.loginTimeout,
+          ConnectionConstants.defaultLoginTimeout,
+        );
+      },
+    );
   });
 }

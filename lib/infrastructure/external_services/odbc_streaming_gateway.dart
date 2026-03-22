@@ -44,7 +44,11 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     );
 
     return ConnectionOptions(
-      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
+      loginTimeout: Duration(
+        seconds: OdbcConnectionOptionsBuilder.effectiveLoginTimeoutSeconds(
+          _settings,
+        ),
+      ),
       queryTimeout: const Duration(minutes: 5),
       maxResultBufferBytes: maxResultBufferBytes,
       initialResultBufferBytes: initialResultBufferBytes,

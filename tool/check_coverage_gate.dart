@@ -3,10 +3,11 @@
 /// Fails if aggregated line coverage for `lib/domain/` or `lib/application/`
 /// under [coverage/lcov.info] is below configured minimums.
 ///
-/// Default minimums match the current non-live test suite baseline (~71% domain,
-/// ~75% application). Tighten over time via env (values 0–1 or 0–100):
+/// Default minimums match the current non-live test suite baseline. Tighten via
+/// env (values 0–1 or 0–100):
 /// - `COVERAGE_MIN_LIB_DOMAIN`
 /// - `COVERAGE_MIN_LIB_APPLICATION`
+/// - `COVERAGE_MIN_LIB_INFRA_POOL` (`lib/infrastructure/pool/`)
 ///
 /// Usage: `dart run tool/check_coverage_gate.dart [path/to/lcov.info]`
 library;
@@ -62,16 +63,22 @@ void main(List<String> args) {
     Platform.environment['COVERAGE_MIN_LIB_APPLICATION'],
     0.74,
   );
+  final minInfraPool = _parseMinRatio(
+    Platform.environment['COVERAGE_MIN_LIB_INFRA_POOL'],
+    0.88,
+  );
 
   final records = lcov.parseLcovSummaries(file.readAsStringSync());
   final domain = _aggregateForPrefix(records, 'lib/domain/');
   final application = _aggregateForPrefix(records, 'lib/application/');
+  final infraPool = _aggregateForPrefix(records, 'lib/infrastructure/pool/');
 
   double ratio(int found, int hit) =>
       found <= 0 ? 1.0 : hit / found;
 
   final domainRatio = ratio(domain.found, domain.hit);
   final appRatio = ratio(application.found, application.hit);
+  final poolRatio = ratio(infraPool.found, infraPool.hit);
 
   var ok = true;
   if (domainRatio < minDomain) {
@@ -88,10 +95,18 @@ void main(List<String> args) {
       '(${application.hit}/${application.found} lines) < ${(100 * minApplication).toStringAsFixed(1)}%',
     );
   }
+  if (poolRatio < minInfraPool) {
+    ok = false;
+    stderr.writeln(
+      'Coverage gate failed: lib/infrastructure/pool/ ${(100 * poolRatio).toStringAsFixed(1)}% '
+      '(${infraPool.hit}/${infraPool.found} lines) < ${(100 * minInfraPool).toStringAsFixed(1)}%',
+    );
+  }
 
   if (!ok) {
     stderr.writeln(
-      'Adjust tests or set COVERAGE_MIN_LIB_DOMAIN / COVERAGE_MIN_LIB_APPLICATION.',
+      'Adjust tests or set COVERAGE_MIN_LIB_DOMAIN, '
+      'COVERAGE_MIN_LIB_APPLICATION, COVERAGE_MIN_LIB_INFRA_POOL.',
     );
     exitCode = 1;
     return;
@@ -101,6 +116,8 @@ void main(List<String> args) {
     'Coverage gate OK: lib/domain/ ${(100 * domainRatio).toStringAsFixed(1)}% '
     '(${domain.hit}/${domain.found}), '
     'lib/application/ ${(100 * appRatio).toStringAsFixed(1)}% '
-    '(${application.hit}/${application.found})',
+    '(${application.hit}/${application.found}), '
+    'lib/infrastructure/pool/ ${(100 * poolRatio).toStringAsFixed(1)}% '
+    '(${infraPool.hit}/${infraPool.found})',
   );
 }

@@ -191,6 +191,61 @@ void main() {
         // Assert
         expect(isTransient, isFalse);
       });
+
+      test(
+        'should treat retryable false as non-transient even when message '
+        'matches connection heuristics',
+        () {
+          final failure = domain.ConnectionFailure.withContext(
+            message: 'Connection timeout',
+            context: {'retryable': false},
+          );
+
+          expect(retryManager.isTransientFailure(failure), isFalse);
+        },
+      );
+
+      test('should treat retryable true as transient for server failure', () {
+        final failure = domain.ServerFailure.withContext(
+          message: 'Hub busy',
+          context: {'retryable': true},
+        );
+
+        expect(retryManager.isTransientFailure(failure), isTrue);
+      });
+
+      test(
+        'should not treat retryable true on validation failure as transient',
+        () {
+          final failure = domain.ValidationFailure.withContext(
+            message: 'Bad SQL',
+            context: {'retryable': true},
+          );
+
+          expect(retryManager.isTransientFailure(failure), isFalse);
+        },
+      );
+    });
+
+    group('execute with Result Failure context', () {
+      test('should not retry when Failure has retryable false', () async {
+        var attempts = 0;
+        final result = await retryManager.execute<String>(
+          () async {
+            attempts++;
+            return Failure(
+              domain.ConnectionFailure.withContext(
+                message: 'Connection timeout',
+                context: {'retryable': false},
+              ),
+            );
+          },
+          initialDelayMs: 10,
+        );
+
+        expect(result.isError(), isTrue);
+        expect(attempts, 1);
+      });
     });
   });
 }

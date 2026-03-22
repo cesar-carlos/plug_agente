@@ -1,9 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+
+class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 QueryRequest _baseRequest({
   String query = 'SELECT 1',
@@ -97,6 +101,40 @@ void main() {
           expect(failure, isNull);
         },
       );
+
+      test(
+        'should require ORDER BY for SQL Anywhere when pagination is present',
+        () {
+          const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+          final failure =
+              OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+                _baseRequest(
+                  query: 'SELECT * FROM t',
+                  pagination: pagination,
+                ),
+                DatabaseType.sybaseAnywhere,
+              );
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('ORDER BY'));
+        },
+      );
+
+      test(
+        'should reject managed pagination when SQL already has LIMIT',
+        () {
+          const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+          final failure =
+              OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+                _baseRequest(
+                  query: 'SELECT * FROM t LIMIT 10',
+                  pagination: pagination,
+                ),
+                DatabaseType.postgresql,
+              );
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('LIMIT'));
+        },
+      );
     });
 
     group('prepareQueryExecution', () {
@@ -111,9 +149,74 @@ void main() {
         );
         expect(prepared.sql, 'SELECT 1');
       });
+
+      test('should rewrite SQL for offset pagination when managed', () {
+        const pagination = QueryPaginationRequest(
+          page: 2,
+          pageSize: 10,
+          orderBy: [
+            QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id'),
+          ],
+        );
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(
+            query: 'SELECT * FROM t',
+            pagination: pagination,
+          ),
+          _config(DatabaseType.sqlServer),
+        );
+        expect(prepared.sql, isNot(equals('SELECT * FROM t')));
+        expect(prepared.sql.toUpperCase(), contains('SELECT'));
+      });
+
+      test('should use cursor paginated SQL when stable cursor is set', () {
+        const orderBy = [
+          QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id'),
+        ];
+        final cursor = const QueryPaginationCursor(
+          page: 1,
+          pageSize: 10,
+          queryHash: 'qh1',
+          orderBy: orderBy,
+          lastRowValues: <Object>[1],
+        ).toToken();
+        final pagination = QueryPaginationRequest(
+          page: 2,
+          pageSize: 10,
+          cursor: cursor,
+          queryHash: 'qh1',
+          orderBy: orderBy,
+          lastRowValues: const [1],
+        );
+        expect(pagination.usesStableCursor, isTrue);
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(
+            query: 'SELECT * FROM t',
+            pagination: pagination,
+          ),
+          _config(DatabaseType.sqlServer),
+        );
+        expect(prepared.sql, isNot(equals('SELECT * FROM t')));
+      });
     });
 
     group('validateQueryExecutionMode', () {
+      test('should reject multi-result with named parameters', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1; SELECT 2',
+          parameters: {'p': 1},
+        );
+        final failure = OdbcGatewayQueryPreparation.validateQueryExecutionMode(
+          _baseRequest(
+            query: 'SELECT 1; SELECT 2',
+            expectMultipleResults: true,
+          ),
+          prepared,
+        );
+        expect(failure, isNotNull);
+        expect(failure!.message, contains('named parameters'));
+      });
+
       test('should reject multi-result with pagination', () {
         const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
         final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
@@ -216,6 +319,139 @@ void main() {
           prepared,
         );
         expect(use, isTrue);
+      });
+    });
+
+    group('maybeLogPaginatedSqlRewrite', () {
+      late MockFeatureFlags flags;
+
+      setUp(() {
+        flags = MockFeatureFlags();
+      });
+
+      test('should return when featureFlags is null', () {
+        const pagination = QueryPaginationRequest(
+          page: 2,
+          pageSize: 10,
+          orderBy: [
+            QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id'),
+          ],
+        );
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(query: 'SELECT * FROM t', pagination: pagination),
+          _config(DatabaseType.sqlServer),
+        );
+        expect(
+          () => OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+            featureFlags: null,
+            request: _baseRequest(
+              query: 'SELECT * FROM t',
+              pagination: pagination,
+            ),
+            databaseConfig: _config(DatabaseType.sqlServer),
+            preparedExecution: prepared,
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('should return when debug log flag is disabled', () {
+        when(() => flags.enableOdbcPaginatedSqlDebugLog).thenReturn(false);
+        const pagination = QueryPaginationRequest(
+          page: 2,
+          pageSize: 10,
+          orderBy: [
+            QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id'),
+          ],
+        );
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(query: 'SELECT * FROM t', pagination: pagination),
+          _config(DatabaseType.sqlServer),
+        );
+        OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+          featureFlags: flags,
+          request: _baseRequest(
+            query: 'SELECT * FROM t',
+            pagination: pagination,
+          ),
+          databaseConfig: _config(DatabaseType.sqlServer),
+          preparedExecution: prepared,
+        );
+        verify(() => flags.enableOdbcPaginatedSqlDebugLog).called(1);
+      });
+
+      test('should return when pagination is absent', () {
+        when(() => flags.enableOdbcPaginatedSqlDebugLog).thenReturn(true);
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1',
+          parameters: null,
+        );
+        OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+          featureFlags: flags,
+          request: _baseRequest(),
+          databaseConfig: _config(DatabaseType.sqlServer),
+          preparedExecution: prepared,
+        );
+      });
+
+      test('should return when preserve_sql is set', () {
+        when(() => flags.enableOdbcPaginatedSqlDebugLog).thenReturn(true);
+        const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(
+            pagination: pagination,
+            sqlHandlingMode: SqlHandlingMode.preserve,
+          ),
+          _config(DatabaseType.sqlServer),
+        );
+        OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+          featureFlags: flags,
+          request: _baseRequest(
+            pagination: pagination,
+            sqlHandlingMode: SqlHandlingMode.preserve,
+          ),
+          databaseConfig: _config(DatabaseType.sqlServer),
+          preparedExecution: prepared,
+        );
+      });
+
+      test('should return when rewritten SQL matches original', () {
+        when(() => flags.enableOdbcPaginatedSqlDebugLog).thenReturn(true);
+        const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+        OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+          featureFlags: flags,
+          request: _baseRequest(pagination: pagination),
+          databaseConfig: _config(DatabaseType.sqlServer),
+          preparedExecution: const OdbcPreparedQueryExecution(
+            sql: 'SELECT 1',
+            parameters: null,
+          ),
+        );
+      });
+
+      test('should log when flag enabled and SQL was rewritten', () {
+        when(() => flags.enableOdbcPaginatedSqlDebugLog).thenReturn(true);
+        const pagination = QueryPaginationRequest(
+          page: 2,
+          pageSize: 10,
+          orderBy: [
+            QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id'),
+          ],
+        );
+        final prepared = OdbcGatewayQueryPreparation.prepareQueryExecution(
+          _baseRequest(query: 'SELECT * FROM t', pagination: pagination),
+          _config(DatabaseType.sqlServer),
+        );
+        expect(prepared.sql.trim(), isNot(equals('SELECT * FROM t')));
+        OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
+          featureFlags: flags,
+          request: _baseRequest(
+            query: 'SELECT * FROM t',
+            pagination: pagination,
+          ),
+          databaseConfig: _config(DatabaseType.sqlServer),
+          preparedExecution: prepared,
+        );
       });
     });
   });
