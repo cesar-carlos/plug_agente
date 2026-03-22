@@ -62,6 +62,18 @@ class _BatchTransactionStart {
   final int? transactionId;
 }
 
+class _BatchMultiResultFastPath {
+  const _BatchMultiResultFastPath({
+    required this.agentId,
+    required this.sql,
+    required this.commandCount,
+  });
+
+  final String agentId;
+  final String sql;
+  final int commandCount;
+}
+
 /// ODBC Database Gateway using odbc_fast package.
 ///
 /// This implementation provides:
@@ -92,7 +104,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final FeatureFlags? _featureFlags;
   final Uuid _uuid;
   bool _initialized = false;
+  Config? _cachedConfig;
+  DateTime? _cachedConfigFetchedAt;
+  Future<Result<Config>>? _configLoadInFlight;
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
+  static const _configCacheTtl = Duration(seconds: 2);
   static const int _multiResultSqlLogPreviewChars = 120;
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
@@ -111,6 +127,36 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   ConnectionOptions get _connectionOptions =>
       OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+
+  Future<Result<Connection>> _connectDirect(
+    String connectionString, {
+    ConnectionOptions? options,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final result = await _service.connect(
+      connectionString,
+      options: options ?? _connectionOptions,
+    );
+    stopwatch.stop();
+    _metrics.recordDirectConnectionConnectLatency(stopwatch.elapsed);
+    return result;
+  }
+
+  Future<Result<void>> _disconnectDirect(String connectionId) async {
+    final stopwatch = Stopwatch()..start();
+    final result = await _service.disconnect(connectionId);
+    stopwatch.stop();
+    _metrics.recordDirectConnectionDisconnectLatency(stopwatch.elapsed);
+    return result.fold(
+      (_) => const Success(unit),
+      (error) => Failure(
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'disconnect_direct',
+        ),
+      ),
+    );
+  }
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -150,6 +196,44 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           ),
         );
       },
+    );
+  }
+
+  Future<Result<Config>> _getCurrentConfig() async {
+    final now = DateTime.now();
+    final cached = _cachedConfig;
+    final cachedAt = _cachedConfigFetchedAt;
+    if (cached != null &&
+        cachedAt != null &&
+        now.difference(cachedAt) <= _configCacheTtl) {
+      return Success(cached);
+    }
+
+    final inFlight = _configLoadInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final loadFuture = _loadAndCacheCurrentConfig();
+    _configLoadInFlight = loadFuture;
+    try {
+      return await loadFuture;
+    } finally {
+      if (identical(_configLoadInFlight, loadFuture)) {
+        _configLoadInFlight = null;
+      }
+    }
+  }
+
+  Future<Result<Config>> _loadAndCacheCurrentConfig() async {
+    final configResult = await _configRepository.getCurrentConfig();
+    return configResult.fold(
+      (config) {
+        _cachedConfig = config;
+        _cachedConfigFetchedAt = DateTime.now();
+        return Success(config);
+      },
+      (error) => Failure(error),
     );
   }
 
@@ -266,16 +350,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
       }
 
-      final connResult = await _service.connect(
-        connectionString,
-        options: _connectionOptions,
-      );
+      final connResult = await _connectDirect(connectionString);
 
       return connResult.fold(
         (connection) async {
-          final disconnectResult = await _service.disconnect(
-            connection.id,
-          );
+          final disconnectResult = await _disconnectDirect(connection.id);
           return disconnectResult.fold(
             (_) => const Success(true),
             (error) => Failure(
@@ -314,7 +393,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return initResult.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _getCurrentConfig();
 
         return configResult.fold(
           (config) async {
@@ -676,7 +755,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   Future<void> _releaseBatchConnection(_BatchExecutionContext context) async {
     if (context.ownedConnection) {
-      await _service.disconnect(context.connectionId);
+      await _disconnectDirect(context.connectionId);
       return;
     }
     await _releaseConnectionSafely(context.connectionId);
@@ -692,7 +771,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return Failure(initResult.exceptionOrNull()!);
     }
 
-    final configResult = await _configRepository.getCurrentConfig();
+    final configResult = await _getCurrentConfig();
     if (configResult.isError()) {
       return Failure(
         domain.ConfigurationFailure(
@@ -711,10 +790,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
 
     if (useOwnedConnection) {
-      final connectResult = await _service.connect(
-        connectionString,
-        options: _connectionOptions,
-      );
+      final connectResult = await _connectDirect(connectionString);
       return connectResult.fold(
         (connection) {
           return Success(
@@ -815,6 +891,116 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return const Success(unit);
   }
 
+  _BatchMultiResultFastPath? _buildBatchMultiResultFastPath(
+    String agentId,
+    List<SqlCommand> commands,
+    SqlExecutionOptions options,
+  ) {
+    if (options.transaction || commands.length < 2) {
+      return null;
+    }
+
+    final sqlParts = <String>[];
+    for (final command in commands) {
+      if (command.params != null && command.params!.isNotEmpty) {
+        return null;
+      }
+      final validation = SqlValidator.validateSqlForExecution(command.sql);
+      if (validation.isError()) {
+        return null;
+      }
+      final normalized = command.sql.trimLeft().toLowerCase();
+      if (!normalized.startsWith('select ') &&
+          !normalized.startsWith('with ')) {
+        return null;
+      }
+      sqlParts.add(command.sql.trim().replaceFirst(RegExp(r';+\s*$'), ''));
+    }
+
+    return _BatchMultiResultFastPath(
+      agentId: agentId,
+      sql: sqlParts.join(';\n'),
+      commandCount: commands.length,
+    );
+  }
+
+  Future<Result<List<SqlCommandResult>>?> _tryExecuteBatchViaMultiResult({
+    required _BatchExecutionContext context,
+    required _BatchMultiResultFastPath fastPath,
+    required SqlExecutionOptions options,
+  }) async {
+    final request = QueryRequest(
+      id: _uuid.v4(),
+      agentId: fastPath.agentId,
+      query: fastPath.sql,
+      timestamp: DateTime.now(),
+      expectMultipleResults: true,
+    );
+
+    try {
+      final outcome = await _runQueryExecutionWithTimeout(
+        connId: context.connectionId,
+        request: request,
+        preparedExecution: OdbcPreparedQueryExecution(
+          sql: fastPath.sql,
+          parameters: null,
+        ),
+        connectionString: context.connectionString,
+        timeout: _remainingTimeout(context.deadline),
+      );
+      if (!outcome.isSuccess) {
+        developer.log(
+          'Batch multi_result fast-path failed; falling back to sequential execution',
+          name: 'database_gateway',
+          level: 800,
+          error: outcome.error,
+        );
+        return null;
+      }
+
+      final response = outcome.response!;
+      if (_isVacuousMultiResultResponse(request, response) ||
+          response.resultSets.length != fastPath.commandCount ||
+          response.items.any((QueryResponseItem item) => item.isRowCount)) {
+        developer.log(
+          'Batch multi_result fast-path returned unexpected payload; falling back to sequential execution',
+          name: 'database_gateway',
+          level: 800,
+        );
+        return null;
+      }
+
+      return Success(
+        response.resultSets
+            .map((QueryResultSet resultSet) {
+              final limitedRows = truncateSqlResultRows(
+                resultSet.rows,
+                options.maxRows,
+              );
+              return SqlCommandResult.success(
+                index: resultSet.index,
+                rows: limitedRows,
+                rowCount: limitedRows.length,
+                affectedRows: resultSet.affectedRows,
+                columnMetadata: resultSet.columnMetadata,
+              );
+            })
+            .toList(growable: false),
+      );
+    } on TimeoutException {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Batch multi_result fast-path threw; falling back to sequential execution',
+        name: 'database_gateway',
+        level: 800,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   Future<Result<List<SqlCommandResult>>> _executeBatchCommands({
     required _BatchExecutionContext context,
     required String agentId,
@@ -822,6 +1008,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required SqlExecutionOptions options,
     required int? transactionId,
   }) async {
+    final fastPath = _buildBatchMultiResultFastPath(
+      agentId,
+      commands,
+      options,
+    );
+    if (fastPath != null) {
+      final fastPathResult = await _tryExecuteBatchViaMultiResult(
+        context: context,
+        fastPath: fastPath,
+        options: options,
+      );
+      if (fastPathResult != null) {
+        return fastPathResult;
+      }
+    }
+
     final results = <SqlCommandResult>[];
 
     for (var i = 0; i < commands.length; i++) {
@@ -972,7 +1174,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return initResult.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _getCurrentConfig();
 
         return configResult.fold(
           (config) async {
@@ -1170,9 +1372,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
   ) async {
     try {
-      final disconnectResult = await _service
-          .disconnect(connectionId)
-          .timeout(_bestEffortCancelDisconnectTimeout);
+      final disconnectResult = await _disconnectDirect(
+        connectionId,
+      ).timeout(_bestEffortCancelDisconnectTimeout);
       if (disconnectResult.isSuccess()) {
         _metrics.recordTimeoutCancelSuccess();
       } else {
@@ -1239,9 +1441,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     bool afterVacuousPooledMulti = false,
   }) async {
-    final connectResult = await _service.connect(
+    final connectResult = await _connectDirect(
       connectionString,
-      options: options ?? _connectionOptions,
+      options: options,
     );
 
     return connectResult.fold(
@@ -1315,7 +1517,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             ),
           );
         } finally {
-          await _service.disconnect(connection.id);
+          await _disconnectDirect(connection.id);
         }
       },
       (error) {
@@ -1343,10 +1545,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString, {
     Duration? timeout,
   }) async {
-    final connectResult = await _service.connect(
-      connectionString,
-      options: _connectionOptions,
-    );
+    final connectResult = await _connectDirect(connectionString);
 
     return connectResult.fold(
       (connection) async {
@@ -1383,7 +1582,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             ),
           );
         } finally {
-          await _service.disconnect(connection.id);
+          await _disconnectDirect(connection.id);
         }
       },
       (error) => Failure(
@@ -1551,8 +1750,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _queryFailureIndicatesInvalidConnectionId(domain.Failure failure) {
-    final err =
-        failure.context['error']?.toString() ?? failure.message;
+    final err = failure.context['error']?.toString() ?? failure.message;
     return _isInvalidConnectionIdError(err);
   }
 

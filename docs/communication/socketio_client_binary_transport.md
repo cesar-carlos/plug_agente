@@ -238,13 +238,20 @@ function encodeFrame(
   { requestId, traceId, compressionThreshold = 1024 },
 ) {
   const plainBytes = Buffer.from(JSON.stringify(message), "utf8");
-  const useCompression = plainBytes.length >= compressionThreshold;
-  const wireBytes = useCompression ? gzipSync(plainBytes) : plainBytes;
+  let cmp = "none";
+  let wireBytes = plainBytes;
+  if (plainBytes.length >= compressionThreshold) {
+    const gz = gzipSync(plainBytes);
+    if (gz.length < plainBytes.length) {
+      cmp = "gzip";
+      wireBytes = gz;
+    }
+  }
 
   return {
     schemaVersion: "1.0",
     enc: "json",
-    cmp: useCompression ? "gzip" : "none",
+    cmp,
     contentType: "application/json",
     originalSize: plainBytes.length,
     compressedSize: wireBytes.length,
@@ -265,6 +272,8 @@ function decodeFrame(frame) {
   return JSON.parse(plainBytes.toString("utf8"));
 }
 ```
+
+O exemplo acima segue o modo **automatico** do contrato: acima do limiar, `gzip` so quando o bloco comprimido e **menor** que o JSON UTF-8 bruto; caso contrario `cmp: none` (alinhado ao plug_agente Dart e ao hub `plug_server`).
 
 ## Exemplo em Dart
 

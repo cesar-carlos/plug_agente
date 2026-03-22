@@ -1,6 +1,7 @@
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 
@@ -11,10 +12,19 @@ import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart
 /// testing performance or after upstream fixes to native pool buffers.
 IConnectionPool createOdbcConnectionPool(
   OdbcService service,
-  IOdbcConnectionSettings settings,
-) {
+  IOdbcConnectionSettings settings, {
+  MetricsCollector? metricsCollector,
+}) {
   if (settings.useNativeOdbcPool) {
-    return OdbcNativeConnectionPool(service, settings);
+    return OdbcNativeConnectionPool(
+      service,
+      settings,
+      metricsCollector: metricsCollector,
+    );
   }
-  return OdbcConnectionPool(service, settings);
+  return OdbcConnectionPool(
+    service,
+    settings,
+    metricsCollector: metricsCollector,
+  );
 }

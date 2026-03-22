@@ -4,8 +4,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.d
 
 /// In-memory LRU-bounded cache: [get] refreshes recency; evicts oldest when
 /// over [maxEntries].
-class InMemoryAuthorizationDecisionCache
-    implements IAuthorizationDecisionCache {
+class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache {
   InMemoryAuthorizationDecisionCache({this.maxEntries = 8192})
     : _entries = LinkedHashMap<String, AuthorizationDecisionCacheEntry>();
 
@@ -46,8 +45,7 @@ class InMemoryAuthorizationDecisionCache
   @override
   void invalidateForCredentialHash(String credentialHash) {
     final prefix = '$credentialHash|';
-    final toRemove =
-        _entries.keys.where((String k) => k.startsWith(prefix)).toList();
+    final toRemove = _entries.keys.where((String k) => k.startsWith(prefix)).toList();
     toRemove.forEach(_entries.remove);
   }
 

@@ -13,7 +13,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_database_gatew
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -39,6 +39,9 @@ class OdbcE2eRpcHarness {
     required this.metrics,
     required this.featureFlags,
   });
+
+  static odbc.ServiceLocator? _sharedLocator;
+  static bool _sharedLocatorInitialized = false;
 
   final odbc.ServiceLocator locator;
   final IConnectionPool connectionPool;
@@ -75,14 +78,23 @@ class OdbcE2eRpcHarness {
   /// Returns null when ODBC failed to initialize.
   static Future<OdbcE2eRpcHarness?> open(
     String dsn,
-    OdbcE2eSqlDialect dialect,
-  ) async {
-    final locator = odbc.ServiceLocator()..initialize(useAsync: true);
-    final service = locator.asyncService;
-    final init = await service.initialize();
-    if (init.isError()) {
-      locator.shutdown();
+    OdbcE2eSqlDialect dialect, {
+    MockOdbcConnectionSettings? connectionSettings,
+    bool useSharedLocator = false,
+  }) async {
+    final locator = useSharedLocator
+        ? await _acquireSharedLocator()
+        : (odbc.ServiceLocator()..initialize(useAsync: true));
+    if (locator == null) {
       return null;
+    }
+    final service = locator.asyncService;
+    if (!useSharedLocator) {
+      final init = await service.initialize();
+      if (init.isError()) {
+        locator.shutdown();
+        return null;
+      }
     }
 
     final configRepo = MockAgentConfigRepository();
@@ -92,21 +104,26 @@ class OdbcE2eRpcHarness {
       (_) => Future.value(Success(cfg)),
     );
 
-    final pool = OdbcConnectionPool(service, MockOdbcConnectionSettings());
+    final settings = connectionSettings ?? MockOdbcConnectionSettings();
     final retry = RetryManager();
     final metrics = MetricsCollector()..clear();
+    final pool = createOdbcConnectionPool(
+      service,
+      settings,
+      metricsCollector: metrics,
+    );
     final gateway = OdbcDatabaseGateway(
       configRepo,
       service,
       pool,
       retry,
       metrics,
-      MockOdbcConnectionSettings(),
+      settings,
     );
 
     final streamingGateway = OdbcStreamingGateway(
       service,
-      MockOdbcConnectionSettings(),
+      settings,
     );
 
     final normalizer = QueryNormalizerService(QueryNormalizer());
@@ -150,8 +167,43 @@ class OdbcE2eRpcHarness {
     );
   }
 
-  Future<void> shutdown() async {
-    await connectionPool.closeAll();
+  static Future<odbc.ServiceLocator?> _acquireSharedLocator() async {
+    final existing = _sharedLocator;
+    if (existing != null && _sharedLocatorInitialized) {
+      return existing;
+    }
+
+    final locator =
+        existing ?? (odbc.ServiceLocator()..initialize(useAsync: true));
+    final init = await locator.asyncService.initialize();
+    if (init.isError()) {
+      locator.shutdown();
+      if (identical(locator, _sharedLocator)) {
+        _sharedLocator = null;
+      }
+      _sharedLocatorInitialized = false;
+      return null;
+    }
+
+    _sharedLocator = locator;
+    _sharedLocatorInitialized = true;
+    return locator;
+  }
+
+  static Future<void> shutdownSharedLocator() async {
+    final locator = _sharedLocator;
+    if (locator == null) {
+      return;
+    }
     locator.shutdown();
+    _sharedLocator = null;
+    _sharedLocatorInitialized = false;
+  }
+
+  Future<void> shutdown({bool shutdownLocator = true}) async {
+    await connectionPool.closeAll();
+    if (shutdownLocator) {
+      locator.shutdown();
+    }
   }
 }

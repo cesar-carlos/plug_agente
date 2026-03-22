@@ -39,12 +39,31 @@ class MetricsCollector implements IMetricsCollector {
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
   static const String _connectionPoolAcquireFailureCounter = 'connection_pool_acquire_failure';
   static const String _connectionPoolReleaseFailureCounter = 'connection_pool_release_failure';
+  static const String _connectionPoolAcquireLatencyMsTotalCounter = 'connection_pool_acquire_latency_ms_total';
+  static const String _connectionPoolAcquireLatencySamplesCounter = 'connection_pool_acquire_latency_samples';
+  static const String _connectionPoolReleaseLatencyMsTotalCounter = 'connection_pool_release_latency_ms_total';
+  static const String _connectionPoolReleaseLatencySamplesCounter = 'connection_pool_release_latency_samples';
+  static const String _connectionPoolWaitLatencyMsTotalCounter = 'connection_pool_wait_latency_ms_total';
+  static const String _connectionPoolWaitLatencySamplesCounter = 'connection_pool_wait_latency_samples';
+  static const String _connectionPoolActivePeakCounter = 'connection_pool_active_peak';
+  static const String _connectionPoolWaitersPeakCounter = 'connection_pool_waiters_peak';
+  static const String _connectionDirectConnectLatencyMsTotalCounter = 'connection_direct_connect_latency_ms_total';
+  static const String _connectionDirectConnectLatencySamplesCounter = 'connection_direct_connect_latency_samples';
+  static const String _connectionDirectDisconnectLatencyMsTotalCounter =
+      'connection_direct_disconnect_latency_ms_total';
+  static const String _connectionDirectDisconnectLatencySamplesCounter = 'connection_direct_disconnect_latency_samples';
 
   static const int _maxMetrics = 10000;
+  static const int _maxLatencySamples = 4096;
 
   final List<QueryMetrics> _metrics = [];
   final _metricsController = StreamController<QueryMetrics>.broadcast();
   final Map<String, int> _eventCounters = <String, int>{};
+  final List<int> _connectionPoolAcquireLatencySamplesMs = <int>[];
+  final List<int> _connectionPoolReleaseLatencySamplesMs = <int>[];
+  final List<int> _connectionPoolWaitLatencySamplesMs = <int>[];
+  final List<int> _connectionDirectConnectLatencySamplesMs = <int>[];
+  final List<int> _connectionDirectDisconnectLatencySamplesMs = <int>[];
 
   @override
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
@@ -78,6 +97,31 @@ class MetricsCollector implements IMetricsCollector {
   int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
   int get connectionPoolAcquireFailureCount => _eventCounters[_connectionPoolAcquireFailureCounter] ?? 0;
   int get connectionPoolReleaseFailureCount => _eventCounters[_connectionPoolReleaseFailureCounter] ?? 0;
+  int get connectionPoolAcquireLatencyMsTotal => _eventCounters[_connectionPoolAcquireLatencyMsTotalCounter] ?? 0;
+  int get connectionPoolAcquireLatencySamples => _eventCounters[_connectionPoolAcquireLatencySamplesCounter] ?? 0;
+  int get connectionPoolReleaseLatencyMsTotal => _eventCounters[_connectionPoolReleaseLatencyMsTotalCounter] ?? 0;
+  int get connectionPoolReleaseLatencySamples => _eventCounters[_connectionPoolReleaseLatencySamplesCounter] ?? 0;
+  int get connectionPoolWaitLatencyMsTotal => _eventCounters[_connectionPoolWaitLatencyMsTotalCounter] ?? 0;
+  int get connectionPoolWaitLatencySamples => _eventCounters[_connectionPoolWaitLatencySamplesCounter] ?? 0;
+  int get connectionPoolActivePeak => _eventCounters[_connectionPoolActivePeakCounter] ?? 0;
+  int get connectionPoolWaitersPeak => _eventCounters[_connectionPoolWaitersPeakCounter] ?? 0;
+  int get connectionDirectConnectLatencyMsTotal => _eventCounters[_connectionDirectConnectLatencyMsTotalCounter] ?? 0;
+  int get connectionDirectConnectLatencySamples => _eventCounters[_connectionDirectConnectLatencySamplesCounter] ?? 0;
+  int get connectionDirectDisconnectLatencyMsTotal =>
+      _eventCounters[_connectionDirectDisconnectLatencyMsTotalCounter] ?? 0;
+  int get connectionDirectDisconnectLatencySamples =>
+      _eventCounters[_connectionDirectDisconnectLatencySamplesCounter] ?? 0;
+  List<int> get connectionPoolAcquireLatencySamplesMs => List.unmodifiable(_connectionPoolAcquireLatencySamplesMs);
+  List<int> get connectionPoolReleaseLatencySamplesMs => List.unmodifiable(_connectionPoolReleaseLatencySamplesMs);
+  List<int> get connectionPoolWaitLatencySamplesMs => List.unmodifiable(_connectionPoolWaitLatencySamplesMs);
+  List<int> get connectionDirectConnectLatencySamplesMs => List.unmodifiable(_connectionDirectConnectLatencySamplesMs);
+  List<int> get connectionDirectDisconnectLatencySamplesMs =>
+      List.unmodifiable(_connectionDirectDisconnectLatencySamplesMs);
+  int? get connectionPoolAcquireLatencyP95Ms => _p95(_connectionPoolAcquireLatencySamplesMs);
+  int? get connectionPoolReleaseLatencyP95Ms => _p95(_connectionPoolReleaseLatencySamplesMs);
+  int? get connectionPoolWaitLatencyP95Ms => _p95(_connectionPoolWaitLatencySamplesMs);
+  int? get connectionDirectConnectLatencyP95Ms => _p95(_connectionDirectConnectLatencySamplesMs);
+  int? get connectionDirectDisconnectLatencyP95Ms => _p95(_connectionDirectDisconnectLatencySamplesMs);
 
   Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
 
@@ -85,6 +129,11 @@ class MetricsCollector implements IMetricsCollector {
   void clear() {
     _metrics.clear();
     _eventCounters.clear();
+    _connectionPoolAcquireLatencySamplesMs.clear();
+    _connectionPoolReleaseLatencySamplesMs.clear();
+    _connectionPoolWaitLatencySamplesMs.clear();
+    _connectionDirectConnectLatencySamplesMs.clear();
+    _connectionDirectDisconnectLatencySamplesMs.clear();
   }
 
   void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
@@ -134,6 +183,74 @@ class MetricsCollector implements IMetricsCollector {
 
   /// One increment per failed [IConnectionPool.release] from the gateway.
   void recordConnectionPoolReleaseFailure() => _incrementEventCounter(_connectionPoolReleaseFailureCounter);
+
+  void recordConnectionPoolAcquireLatency(Duration latency) {
+    _recordLatencySample(
+      _connectionPoolAcquireLatencySamplesMs,
+      latency.inMilliseconds,
+    );
+    _addToEventCounter(
+      _connectionPoolAcquireLatencyMsTotalCounter,
+      latency.inMilliseconds,
+    );
+    _incrementEventCounter(_connectionPoolAcquireLatencySamplesCounter);
+  }
+
+  void recordConnectionPoolReleaseLatency(Duration latency) {
+    _recordLatencySample(
+      _connectionPoolReleaseLatencySamplesMs,
+      latency.inMilliseconds,
+    );
+    _addToEventCounter(
+      _connectionPoolReleaseLatencyMsTotalCounter,
+      latency.inMilliseconds,
+    );
+    _incrementEventCounter(_connectionPoolReleaseLatencySamplesCounter);
+  }
+
+  void recordConnectionPoolWaitLatency(Duration latency) {
+    _recordLatencySample(
+      _connectionPoolWaitLatencySamplesMs,
+      latency.inMilliseconds,
+    );
+    _addToEventCounter(
+      _connectionPoolWaitLatencyMsTotalCounter,
+      latency.inMilliseconds,
+    );
+    _incrementEventCounter(_connectionPoolWaitLatencySamplesCounter);
+  }
+
+  void recordConnectionPoolActivePeak(int activeCount) {
+    _recordPeakEventCounter(_connectionPoolActivePeakCounter, activeCount);
+  }
+
+  void recordConnectionPoolWaitersPeak(int waiterCount) {
+    _recordPeakEventCounter(_connectionPoolWaitersPeakCounter, waiterCount);
+  }
+
+  void recordDirectConnectionConnectLatency(Duration latency) {
+    _recordLatencySample(
+      _connectionDirectConnectLatencySamplesMs,
+      latency.inMilliseconds,
+    );
+    _addToEventCounter(
+      _connectionDirectConnectLatencyMsTotalCounter,
+      latency.inMilliseconds,
+    );
+    _incrementEventCounter(_connectionDirectConnectLatencySamplesCounter);
+  }
+
+  void recordDirectConnectionDisconnectLatency(Duration latency) {
+    _recordLatencySample(
+      _connectionDirectDisconnectLatencySamplesMs,
+      latency.inMilliseconds,
+    );
+    _addToEventCounter(
+      _connectionDirectDisconnectLatencyMsTotalCounter,
+      latency.inMilliseconds,
+    );
+    _incrementEventCounter(_connectionDirectDisconnectLatencySamplesCounter);
+  }
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({
@@ -216,6 +333,36 @@ class MetricsCollector implements IMetricsCollector {
 
   void _incrementEventCounter(String counter) {
     _eventCounters[counter] = (_eventCounters[counter] ?? 0) + 1;
+  }
+
+  void _addToEventCounter(String counter, int delta) {
+    _eventCounters[counter] = (_eventCounters[counter] ?? 0) + delta;
+  }
+
+  void _recordPeakEventCounter(String counter, int value) {
+    final current = _eventCounters[counter] ?? 0;
+    if (value > current) {
+      _eventCounters[counter] = value;
+    }
+  }
+
+  void _recordLatencySample(List<int> target, int sampleMs) {
+    target.add(sampleMs);
+    if (target.length > _maxLatencySamples) {
+      target.removeRange(0, target.length - _maxLatencySamples);
+    }
+  }
+
+  int? _p95(List<int> samples) {
+    if (samples.isEmpty) {
+      return null;
+    }
+    final sorted = List<int>.from(samples)..sort();
+    final index = ((sorted.length * 0.95).ceil() - 1).clamp(
+      0,
+      sorted.length - 1,
+    );
+    return sorted[index];
   }
 
   /// Exporta metricas para JSON.

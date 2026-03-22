@@ -172,7 +172,7 @@ class SqlOperationClassifier {
 
     final hasFromClause =
         findSqlKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 ||
-            findSqlKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
+        findSqlKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
     if (hasFromClause && _looksLikeAlias(parsed.value)) {
       return null;
     }

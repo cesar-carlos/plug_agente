@@ -28,5 +28,22 @@ K=v
       final m = parseDotEnvContent("Z='w'");
       expect(m['Z'], 'w');
     });
+
+    test('should strip inline notes from unquoted values', () {
+      final m = parseDotEnvContent(
+        'ODBC_E2E_BENCHMARK_RECORD=true — append JSONL locally\n',
+      );
+      expect(m['ODBC_E2E_BENCHMARK_RECORD'], 'true');
+    });
+
+    test('should preserve semicolon-separated DSN values', () {
+      final m = parseDotEnvContent(
+        'ODBC_TEST_DSN=DRIVER={SQL Anywhere 16};UID=dba;PWD=sql\n',
+      );
+      expect(
+        m['ODBC_TEST_DSN'],
+        'DRIVER={SQL Anywhere 16};UID=dba;PWD=sql',
+      );
+    });
   });
 }

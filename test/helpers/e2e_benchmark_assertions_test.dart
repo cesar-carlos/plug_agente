@@ -60,4 +60,118 @@ void main() {
       );
     });
   });
+
+  group('selectComparableE2eBenchmarkRecords', () {
+    test(
+      'should keep only records with matching target, build and profile',
+      () {
+        final selected = selectComparableE2eBenchmarkRecords(
+          records: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'target_label': 'primary',
+              'build_mode': 'debug',
+              'database_hosting': 'local',
+              'benchmark_profile': <String, dynamic>{
+                'pool_mode': 'lease',
+                'pool_size': 2,
+              },
+              'cases': <String, dynamic>{},
+            },
+            <String, dynamic>{
+              'target_label': 'primary',
+              'build_mode': 'debug',
+              'database_hosting': 'remote',
+              'benchmark_profile': <String, dynamic>{
+                'pool_mode': 'lease',
+                'pool_size': 2,
+              },
+              'cases': <String, dynamic>{},
+            },
+            <String, dynamic>{
+              'target_label': 'primary',
+              'build_mode': 'profile',
+              'database_hosting': 'local',
+              'benchmark_profile': <String, dynamic>{
+                'pool_mode': 'lease',
+                'pool_size': 2,
+              },
+              'cases': <String, dynamic>{},
+            },
+          ],
+          targetLabel: 'primary',
+          buildMode: 'debug',
+          benchmarkProfile: <String, dynamic>{
+            'pool_mode': 'lease',
+            'pool_size': 2,
+          },
+          databaseHosting: 'local',
+        );
+
+        expect(selected, hasLength(1));
+        expect(selected.single['database_hosting'], 'local');
+      },
+    );
+  });
+
+  group('assertE2eBenchmarkWithinRegressionBudget', () {
+    test('should pass when current cases stay within regression budget', () {
+      assertE2eBenchmarkWithinRegressionBudget(
+        cases: <String, dynamic>{
+          'rpc_sql_execute_materialized': <String, dynamic>{'median_ms': 112},
+        },
+        baselineRecords: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'cases': <String, dynamic>{
+              'rpc_sql_execute_materialized': <String, dynamic>{
+                'median_ms': 100,
+              },
+            },
+          },
+          <String, dynamic>{
+            'cases': <String, dynamic>{
+              'rpc_sql_execute_materialized': <String, dynamic>{
+                'median_ms': 110,
+              },
+            },
+          },
+        ],
+        maxRegressionPercent: 10,
+        maxRegressionMs: 5,
+      );
+    });
+
+    test('should fail when current case exceeds regression budget', () {
+      expect(
+        () => assertE2eBenchmarkWithinRegressionBudget(
+          cases: <String, dynamic>{
+            'rpc_sql_execute_multi_result': <String, dynamic>{'median_ms': 140},
+          },
+          baselineRecords: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'cases': <String, dynamic>{
+                'rpc_sql_execute_multi_result': <String, dynamic>{
+                  'median_ms': 100,
+                },
+              },
+            },
+          ],
+          maxRegressionPercent: 10,
+        ),
+        throwsA(isA<TestFailure>()),
+      );
+    });
+
+    test('should fail when there are no comparable baseline records', () {
+      expect(
+        () => assertE2eBenchmarkWithinRegressionBudget(
+          cases: <String, dynamic>{
+            'rpc_sql_execute_streaming': <String, dynamic>{'median_ms': 20},
+          },
+          baselineRecords: const <Map<String, dynamic>>[],
+          maxRegressionPercent: 15,
+        ),
+        throwsA(isA<TestFailure>()),
+      );
+    });
+  });
 }

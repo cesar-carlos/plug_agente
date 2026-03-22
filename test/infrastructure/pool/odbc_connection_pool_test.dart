@@ -61,8 +61,8 @@ void main() {
 
       final second = await secondFuture;
       expect(second.isSuccess(), isTrue);
-      expect(second.getOrNull(), 'lease-2');
-      expect(leaseCounter, 2);
+      expect(second.getOrNull(), 'lease-1');
+      expect(leaseCounter, 1);
     });
 
     test('should connect for each acquire with options', () async {
@@ -98,39 +98,46 @@ void main() {
       ).called(2);
     });
 
-    test('should disconnect on release and track leases', () async {
-      when(
-        () => mockService.connect(
-          any(),
-          options: any(named: 'options'),
-        ),
-      ).thenAnswer(
-        (_) async => Success(
-          Connection(
-            id: 'lease-1',
-            connectionString: 'DSN=Test',
-            createdAt: DateTime.now(),
-            isActive: true,
+    test(
+      'should keep released connections as idle leases and track active count',
+      () async {
+        when(
+          () => mockService.connect(
+            any(),
+            options: any(named: 'options'),
           ),
-        ),
-      );
-      when(() => mockService.disconnect(any())).thenAnswer(
-        (_) async => const Success(unit),
-      );
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'lease-1',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.disconnect(any())).thenAnswer(
+          (_) async => const Success(unit),
+        );
 
-      final acquired = await pool.acquire('DSN=Test');
-      expect(acquired.getOrNull(), 'lease-1');
+        final acquired = await pool.acquire('DSN=Test');
+        expect(acquired.getOrNull(), 'lease-1');
 
-      final activeBefore = await pool.getActiveCount();
-      expect(activeBefore.getOrNull(), 1);
+        final activeBefore = await pool.getActiveCount();
+        expect(activeBefore.getOrNull(), 1);
 
-      final released = await pool.release('lease-1');
-      expect(released.isSuccess(), isTrue);
-      verify(() => mockService.disconnect('lease-1')).called(1);
+        final released = await pool.release('lease-1');
+        expect(released.isSuccess(), isTrue);
+        verifyNever(() => mockService.disconnect('lease-1'));
 
-      final activeAfter = await pool.getActiveCount();
-      expect(activeAfter.getOrNull(), 0);
-    });
+        final activeAfter = await pool.getActiveCount();
+        expect(activeAfter.getOrNull(), 0);
+
+        final closed = await pool.closeAll();
+        expect(closed.isSuccess(), isTrue);
+        verify(() => mockService.disconnect('lease-1')).called(1);
+      },
+    );
 
     test('closeAll should disconnect every leased connection', () async {
       var n = 0;
@@ -196,6 +203,11 @@ void main() {
     );
 
     test('should return Failure when disconnect fails on release', () async {
+      pool = OdbcConnectionPool(
+        mockService,
+        mockSettings,
+        idleConnectionTtl: Duration.zero,
+      );
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
       ).thenAnswer(
@@ -216,6 +228,41 @@ void main() {
       final released = await pool.release('lease-1');
 
       expect(released.isError(), isTrue);
+      verify(() => mockService.disconnect('lease-1')).called(1);
+    });
+
+    test('should drop expired idle leases before acquiring again', () async {
+      pool = OdbcConnectionPool(
+        mockService,
+        mockSettings,
+        idleConnectionTtl: const Duration(milliseconds: 1),
+      );
+      var connectionCounter = 0;
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((_) async {
+        connectionCounter++;
+        return Success(
+          Connection(
+            id: 'lease-$connectionCounter',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => mockService.disconnect(any())).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final first = await pool.acquire('DSN=Test');
+      expect(first.getOrNull(), 'lease-1');
+      await pool.release('lease-1');
+      await Future<void>.delayed(const Duration(milliseconds: 3));
+
+      final second = await pool.acquire('DSN=Test');
+      expect(second.getOrNull(), 'lease-2');
       verify(() => mockService.disconnect('lease-1')).called(1);
     });
 
@@ -283,37 +330,40 @@ void main() {
       expect(secondResult.isError(), isTrue);
     });
 
-    test('recycle should disconnect all leases for that connection string', () async {
-      mockSettings.poolSize = 4;
-      var n = 0;
-      when(
-        () => mockService.connect(any(), options: any(named: 'options')),
-      ).thenAnswer((_) async {
-        n++;
-        return Success(
-          Connection(
-            id: 'id-$n',
-            connectionString: 'DSN=Test',
-            createdAt: DateTime.now(),
-            isActive: true,
-          ),
+    test(
+      'recycle should disconnect all leases for that connection string',
+      () async {
+        mockSettings.poolSize = 4;
+        var n = 0;
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          n++;
+          return Success(
+            Connection(
+              id: 'id-$n',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(any())).thenAnswer(
+          (_) async => const Success(unit),
         );
-      });
-      when(() => mockService.disconnect(any())).thenAnswer(
-        (_) async => const Success(unit),
-      );
 
-      await pool.acquire('DSN=Test');
-      await pool.acquire('DSN=Test');
+        await pool.acquire('DSN=Test');
+        await pool.acquire('DSN=Test');
 
-      final recycled = await pool.recycle('DSN=Test');
-      expect(recycled.isSuccess(), isTrue);
-      verify(() => mockService.disconnect('id-1')).called(1);
-      verify(() => mockService.disconnect('id-2')).called(1);
+        final recycled = await pool.recycle('DSN=Test');
+        expect(recycled.isSuccess(), isTrue);
+        verify(() => mockService.disconnect('id-1')).called(1);
+        verify(() => mockService.disconnect('id-2')).called(1);
 
-      final active = await pool.getActiveCount();
-      expect(active.getOrNull(), 0);
-    });
+        final active = await pool.getActiveCount();
+        expect(active.getOrNull(), 0);
+      },
+    );
 
     test(
       'recycle should return Failure when disconnect fails but still free lease slots',
@@ -355,11 +405,14 @@ void main() {
       },
     );
 
-    test('recycle should succeed when no leases exist for connection string', () async {
-      final result = await pool.recycle('DSN=Unknown');
-      expect(result.isSuccess(), isTrue);
-      verifyNever(() => mockService.disconnect(any()));
-    });
+    test(
+      'recycle should succeed when no leases exist for connection string',
+      () async {
+        final result = await pool.recycle('DSN=Unknown');
+        expect(result.isSuccess(), isTrue);
+        verifyNever(() => mockService.disconnect(any()));
+      },
+    );
 
     test(
       'should use defaultPoolSize when poolSize is zero',
@@ -397,7 +450,7 @@ void main() {
         await pool.release('c-1');
         final fifthResult = await fifth;
         expect(fifthResult.isSuccess(), isTrue);
-        expect(connectCount, ConnectionConstants.defaultPoolSize + 1);
+        expect(connectCount, ConnectionConstants.defaultPoolSize);
       },
     );
   });

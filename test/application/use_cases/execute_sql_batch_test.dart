@@ -130,7 +130,133 @@ void main() {
     });
 
     test(
-      'should pass shrinking ODBC timeouts between non-transactional commands',
+      'should delegate non-transaction multi-command batches to gateway '
+      'executeBatch when all commands are valid',
+      () async {
+        final gateway = _MockGateway();
+        final normalizer = _MockNormalizer();
+        final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+
+        when(
+          () => gateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => Success([
+            SqlCommandResult.success(
+              index: 0,
+              rows: const [
+                {'A': ' x '},
+                {'A': ' y '},
+              ],
+            ),
+            SqlCommandResult.success(
+              index: 1,
+              rows: const [
+                {'B': ' z '},
+              ],
+            ),
+          ]),
+        );
+        when(() => normalizer.normalize(any())).thenAnswer(
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final out = await batch.call(
+          'agent',
+          const [
+            SqlCommand(sql: 'SELECT A FROM t'),
+            SqlCommand(sql: 'SELECT B FROM t'),
+          ],
+          options: const SqlExecutionOptions(maxRows: 1),
+        );
+
+        expect(out.isSuccess(), isTrue);
+        final items = out.getOrNull()!;
+        expect(items, hasLength(2));
+        expect(items[0].rows, hasLength(1));
+        expect(items[1].rows, hasLength(1));
+        verify(
+          () => gateway.executeBatch(
+            'agent',
+            any(
+              that: isA<List<SqlCommand>>().having(
+                (List<SqlCommand> commands) => commands.length,
+                'length',
+                2,
+              ),
+            ),
+            options: any(named: 'options'),
+            database: any(named: 'database'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).called(1);
+        verifyNever(
+          () => gateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'should keep sequential path when a non-transaction batch has invalid SQL',
+      () async {
+        final gateway = _MockGateway();
+        final normalizer = _MockNormalizer();
+        final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+
+        when(() => gateway.executeQuery(any())).thenAnswer(
+          (_) async => Success(
+            QueryResponse(
+              id: 'q',
+              requestId: 'r',
+              agentId: 'agent',
+              data: const [
+                {'ok': true},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+        when(() => normalizer.normalize(any())).thenAnswer(
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        final out = await batch.call(
+          'agent',
+          const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'DROP TABLE forbidden'),
+          ],
+        );
+
+        expect(out.isSuccess(), isTrue);
+        final items = out.getOrNull()!;
+        expect(items, hasLength(2));
+        expect(items[0].ok, isTrue);
+        expect(items[1].ok, isFalse);
+        verifyNever(
+          () => gateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        );
+        verify(() => gateway.executeQuery(any())).called(1);
+      },
+    );
+
+    test(
+      'should pass shrinking ODBC timeouts on the sequential fallback path',
       () async {
         final gateway = _MockGateway();
         final normalizer = _MockNormalizer();
@@ -169,6 +295,7 @@ void main() {
           'agent',
           [
             const SqlCommand(sql: 'SELECT 1'),
+            const SqlCommand(sql: 'DROP TABLE forbidden'),
             const SqlCommand(sql: 'SELECT 2'),
           ],
           timeout: const Duration(seconds: 30),
@@ -217,19 +344,13 @@ void main() {
           'agent',
           [
             const SqlCommand(sql: 'SELECT 1'),
+            const SqlCommand(sql: 'DROP TABLE forbidden'),
             const SqlCommand(sql: 'SELECT 2'),
           ],
           timeout: const Duration(milliseconds: 1),
         );
 
         expect(out.isError(), isTrue);
-        verify(
-          () => gateway.executeQuery(
-            any(),
-            timeout: any(named: 'timeout'),
-            database: any(named: 'database'),
-          ),
-        ).called(1);
       },
     );
   });

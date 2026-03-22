@@ -2,6 +2,7 @@ import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
@@ -50,6 +51,22 @@ class ExecuteSqlBatch {
       if (validation.isError()) {
         validationResults[i] = validation.exceptionOrNull()! as domain.Failure;
       }
+    }
+
+    if (validationResults.isEmpty && commands.length > 1) {
+      final batchResult = await _databaseGateway.executeBatch(
+        agentId,
+        commands,
+        database: database,
+        options: opts,
+        timeout: timeout,
+      );
+      return batchResult.fold(
+        (List<SqlCommandResult> commandResults) => Success(
+          _normalizeBatchResults(commandResults, opts),
+        ),
+        Failure.new,
+      );
     }
 
     // Execute commands
@@ -145,6 +162,42 @@ class ExecuteSqlBatch {
     }
 
     return Success(results);
+  }
+
+  List<SqlCommandResult> _normalizeBatchResults(
+    List<SqlCommandResult> results,
+    SqlExecutionOptions options,
+  ) {
+    return results
+        .map((SqlCommandResult result) {
+          if (!result.ok || result.rows == null) {
+            return result;
+          }
+
+          final normalized = _normalizerService.normalize(
+            QueryResponse(
+              id: 'batch-${result.index}',
+              requestId: 'batch-${result.index}',
+              agentId: 'batch',
+              data: result.rows!,
+              affectedRows: result.affectedRows,
+              timestamp: DateTime.now(),
+              columnMetadata: result.columnMetadata,
+            ),
+          );
+          final limitedRows = truncateSqlResultRows(
+            normalized.data,
+            options.maxRows,
+          );
+          return SqlCommandResult.success(
+            index: result.index,
+            rows: limitedRows,
+            rowCount: limitedRows.length,
+            affectedRows: normalized.affectedRows,
+            columnMetadata: normalized.columnMetadata,
+          );
+        })
+        .toList(growable: false);
   }
 
   QueryRequest queryRequestForCommand(

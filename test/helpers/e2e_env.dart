@@ -3,16 +3,25 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../../tool/e2e_benchmark_profile_parse.dart';
 import '../../tool/e2e_dotenv_parse.dart';
 
 /// Environment variables for E2E and live integration tests.
 ///
-/// Loads from .env (when present) and falls back to [Platform.environment].
+/// Loads from .env (when present), with [Platform.environment] taking
+/// precedence for shell/CI overrides.
 /// Copy .env.example to .env and define the variables for the tests you run.
 class E2EEnv {
   E2EEnv._();
 
   static bool _loaded = false;
+  static const int _defaultOdbcE2eBenchmarkPoolSize = 4;
+  static const int _defaultOdbcE2eBenchmarkConcurrency = 1;
+  static const int _defaultOdbcE2eBenchmarkSeedRows = 32;
+  static const int _defaultOdbcE2eBenchmarkMaxResultBufferMb = 32;
+  static const int _defaultOdbcE2eBenchmarkStreamingChunkSizeKb = 1024;
+  static const int _defaultOdbcE2eBenchmarkLoginTimeoutSeconds = 30;
+  static const int _defaultOdbcE2eBenchmarkBaselineWindow = 5;
 
   /// Keys from project-root `.env` (same parser as `tool/check_e2e_env.dart`).
   static final Map<String, String> _fileEnv = <String, String>{};
@@ -57,6 +66,8 @@ class E2EEnv {
   }
 
   static String? _get(String key) {
+    final fromPlatform = Platform.environment[key]?.trim();
+    if (fromPlatform != null && fromPlatform.isNotEmpty) return fromPlatform;
     final fromFile = _fileEnv[key]?.trim();
     if (fromFile != null && fromFile.isNotEmpty) return fromFile;
     try {
@@ -138,6 +149,76 @@ class E2EEnv {
   static bool get odbcE2eBenchmarkRecordEnabled =>
       _get('ODBC_E2E_BENCHMARK_RECORD') == 'true';
 
+  /// Pool strategy used by benchmark harness (`lease` or `native`).
+  static String get odbcE2eBenchmarkPoolMode {
+    final value =
+        _get('ODBC_E2E_BENCHMARK_POOL_MODE')?.trim().toLowerCase() ?? '';
+    if (value == 'native') {
+      return 'native';
+    }
+    return 'lease';
+  }
+
+  /// Max parallel ODBC leases / native pool size for benchmark harness.
+  static int get odbcE2eBenchmarkPoolSize {
+    final value = int.tryParse(_get('ODBC_E2E_BENCHMARK_POOL_SIZE') ?? '');
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkPoolSize;
+    }
+    return value;
+  }
+
+  /// Parallel requests per benchmark iteration.
+  static int get odbcE2eBenchmarkConcurrency {
+    final value = int.tryParse(_get('ODBC_E2E_BENCHMARK_CONCURRENCY') ?? '');
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkConcurrency;
+    }
+    return value;
+  }
+
+  /// Seed row count used by benchmark setup queries.
+  static int get odbcE2eBenchmarkSeedRows {
+    final value = int.tryParse(_get('ODBC_E2E_BENCHMARK_SEED_ROWS') ?? '');
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkSeedRows;
+    }
+    return value;
+  }
+
+  /// Result buffer size used by benchmark ODBC settings.
+  static int get odbcE2eBenchmarkMaxResultBufferMb {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_MAX_RESULT_BUFFER_MB') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkMaxResultBufferMb;
+    }
+    return value;
+  }
+
+  /// Streaming chunk size in KB used by benchmark ODBC settings.
+  static int get odbcE2eBenchmarkStreamingChunkSizeKb {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_STREAMING_CHUNK_SIZE_KB') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkStreamingChunkSizeKb;
+    }
+    return value;
+  }
+
+  /// Login timeout used by benchmark ODBC settings.
+  static int get odbcE2eBenchmarkLoginTimeoutSeconds {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_LOGIN_TIMEOUT_SECONDS') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkLoginTimeoutSeconds;
+    }
+    return value;
+  }
+
   /// Path to JSONL benchmark history (project-relative or absolute).
   /// Default: `benchmark/e2e_odbc_rpc.jsonl` when recording is enabled.
   static String get odbcE2eBenchmarkRecordFile {
@@ -148,8 +229,70 @@ class E2EEnv {
     return 'benchmark${Platform.pathSeparator}e2e_odbc_rpc.jsonl';
   }
 
+  /// Optional JSONL baseline file used for regression checks.
+  static String? get odbcE2eBenchmarkBaselineFile {
+    final custom = _get('ODBC_E2E_BENCHMARK_BASELINE_FILE')?.trim();
+    if (custom == null || custom.isEmpty) {
+      return null;
+    }
+    return custom;
+  }
+
+  /// Allowed latency regression over the comparable baseline mean.
+  static double? get odbcE2eBenchmarkMaxRegressionPercent {
+    final raw = _get('ODBC_E2E_BENCHMARK_MAX_REGRESSION_PERCENT')?.trim();
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final value = double.tryParse(raw);
+    if (value == null || value < 0) {
+      return null;
+    }
+    return value;
+  }
+
+  /// Fixed latency slack (ms) added to the percentual regression budget.
+  static int get odbcE2eBenchmarkMaxRegressionMs {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_MAX_REGRESSION_MS') ?? '',
+    );
+    if (value == null || value < 0) {
+      return 0;
+    }
+    return value;
+  }
+
+  /// Number of comparable prior records used to compute the regression baseline.
+  static int get odbcE2eBenchmarkBaselineWindow {
+    final value = int.tryParse(
+      _get('ODBC_E2E_BENCHMARK_BASELINE_WINDOW') ?? '',
+    );
+    if (value == null || value <= 0) {
+      return _defaultOdbcE2eBenchmarkBaselineWindow;
+    }
+    return value;
+  }
+
+  /// Enforce at least one timeout/cancel failure sample in benchmark case.
+  static bool get odbcE2eBenchmarkRequireTimeoutCancel =>
+      _get('ODBC_E2E_BENCHMARK_REQUIRE_TIMEOUT_CANCEL') == 'true';
+
   static const String skipReasonOdbcE2eBenchmark =
       'Defina ODBC_E2E_BENCHMARK=true no .env para rodar benchmarks ODBC RPC.';
+
+  static ResolvedOdbcE2eBenchmarkProfiles get odbcE2eBenchmarkProfileSet {
+    return resolveOdbcE2eBenchmarkProfiles(
+      matrixRaw: _get('ODBC_E2E_BENCHMARK_MATRIX'),
+      poolModeRaw: _get('ODBC_E2E_BENCHMARK_POOL_MODE'),
+      poolSizeRaw: _get('ODBC_E2E_BENCHMARK_POOL_SIZE'),
+      concurrencyRaw: _get('ODBC_E2E_BENCHMARK_CONCURRENCY'),
+      defaultPoolSize: _defaultOdbcE2eBenchmarkPoolSize,
+      defaultConcurrency: _defaultOdbcE2eBenchmarkConcurrency,
+    );
+  }
+
+  static List<OdbcE2eBenchmarkProfile> get odbcE2eBenchmarkProfiles =>
+      odbcE2eBenchmarkProfileSet.profiles;
 
   /// Optional context for charts: `local` | `remote` (`ODBC_E2E_BENCHMARK_DB_HOSTING`).
   static String? get odbcE2eBenchmarkDbHosting {
@@ -186,7 +329,14 @@ class E2EEnv {
     add('NAMED_PARAMS', 'rpc_sql_execute_named_params');
     add('MULTI_RESULT', 'rpc_sql_execute_multi_result');
     add('BATCH_TX', 'rpc_sql_execute_batch_tx');
+    add('WRITE_DML', 'rpc_sql_execute_write_dml');
+    add('TIMEOUT_CANCEL', 'rpc_sql_execute_timeout_cancel');
     add('STREAMING', 'rpc_sql_execute_streaming');
+    add('STREAMING_CHUNKS', 'rpc_sql_execute_streaming_chunks');
+    add('MATERIALIZED_PARALLEL', 'rpc_sql_execute_materialized_parallel');
+    add('BATCH_READS_PARALLEL', 'rpc_sql_execute_batch_reads_parallel');
+    add('MULTI_RESULT_PARALLEL', 'rpc_sql_execute_multi_result_parallel');
+    add('WRITE_DML_PARALLEL', 'rpc_sql_execute_write_dml_parallel');
     return out;
   }
 

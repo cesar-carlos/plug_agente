@@ -169,6 +169,7 @@ void registerPlugDependencyGraph(
       () => createOdbcConnectionPool(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
+        metricsCollector: getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)

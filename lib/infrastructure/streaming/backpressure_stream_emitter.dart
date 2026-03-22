@@ -10,21 +10,17 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 /// when credit is available. Initial credit is 1; [releaseChunks] adds more.
 class BackpressureStreamEmitter implements IRpcStreamEmitter {
   BackpressureStreamEmitter({
-    required Future<void> Function(String event, Map<String, dynamic> payload)
-    emit,
-    required void Function(String streamId, BackpressureStreamEmitter emitter)
-    onRegister,
+    required Future<void> Function(String event, Map<String, dynamic> payload) emit,
+    required void Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
     required void Function(String streamId) onUnregister,
     int? maxQueueSize,
   }) : _emit = emit,
        _onRegister = onRegister,
        _onUnregister = onUnregister,
-       _maxQueueSize =
-           maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
+       _maxQueueSize = maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
 
   final Future<void> Function(String event, Map<String, dynamic> payload) _emit;
-  final void Function(String streamId, BackpressureStreamEmitter emitter)
-  _onRegister;
+  final void Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
   final void Function(String streamId) _onUnregister;
   final int _maxQueueSize;
 

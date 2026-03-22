@@ -221,6 +221,131 @@ void main() {
       });
 
       test(
+        'executeQuery should reuse cached config across hot calls',
+        () async {
+          const pooledConnectionId = 'pool-cache';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+          final config = _buildConfig(connectionString);
+          final requestA = QueryRequest(
+            id: 'req-cache-1',
+            agentId: config.agentId,
+            query: 'SELECT 1',
+            timestamp: DateTime.now(),
+          );
+          final requestB = QueryRequest(
+            id: 'req-cache-2',
+            agentId: config.agentId,
+            query: 'SELECT 2',
+            timestamp: DateTime.now(),
+          );
+
+          when(() => mockService.initialize()).thenAnswer((_) async {
+            return const Success(unit);
+          });
+          when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+            _,
+          ) async {
+            return Success(config);
+          });
+          when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+            return const Success(pooledConnectionId);
+          });
+          when(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledConnectionId,
+            ),
+          ).thenAnswer((_) async {
+            return const Success(
+              QueryResult(
+                columns: ['x'],
+                rows: [
+                  [1],
+                ],
+                rowCount: 1,
+              ),
+            );
+          });
+          when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer(
+            (_) async => const Success(unit),
+          );
+
+          final first = await gateway.executeQuery(requestA);
+          final second = await gateway.executeQuery(requestB);
+
+          expect(first.isSuccess(), isTrue);
+          expect(second.isSuccess(), isTrue);
+          verify(() => mockConfigRepository.getCurrentConfig()).called(1);
+        },
+      );
+
+      test(
+        'executeQuery should deduplicate concurrent config loads when cache is cold',
+        () async {
+          const pooledConnectionId = 'pool-cache-cold';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+          final config = _buildConfig(connectionString);
+          final requestA = QueryRequest(
+            id: 'req-cache-cold-1',
+            agentId: config.agentId,
+            query: 'SELECT 1',
+            timestamp: DateTime.now(),
+          );
+          final requestB = QueryRequest(
+            id: 'req-cache-cold-2',
+            agentId: config.agentId,
+            query: 'SELECT 2',
+            timestamp: DateTime.now(),
+          );
+          final gate = Completer<void>();
+
+          when(() => mockService.initialize()).thenAnswer((_) async {
+            return const Success(unit);
+          });
+          when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+            _,
+          ) async {
+            await gate.future;
+            return Success(config);
+          });
+          when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+            return const Success(pooledConnectionId);
+          });
+          when(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledConnectionId,
+            ),
+          ).thenAnswer((_) async {
+            return const Success(
+              QueryResult(
+                columns: ['x'],
+                rows: [
+                  [1],
+                ],
+                rowCount: 1,
+              ),
+            );
+          });
+          when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer(
+            (_) async => const Success(unit),
+          );
+
+          final firstFuture = gateway.executeQuery(requestA);
+          final secondFuture = gateway.executeQuery(requestB);
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+          gate.complete();
+
+          final first = await firstFuture;
+          final second = await secondFuture;
+
+          expect(first.isSuccess(), isTrue);
+          expect(second.isSuccess(), isTrue);
+          verify(() => mockConfigRepository.getCurrentConfig()).called(1);
+        },
+      );
+
+      test(
         'executeQuery should map generic pooled query failure without pool fallback',
         () async {
           const pooledConnectionId = 'pool-query-fail';
@@ -2283,6 +2408,190 @@ void main() {
           expect(items[0].ok, isTrue);
           expect(items[1].ok, isFalse);
           expect(items[1].error, contains('batch item failed'));
+        },
+      );
+
+      test(
+        'non-transactional read-only batch should use multi-result fast-path',
+        () async {
+          const pooledId = 'pool-batch-multi';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+          final config = _buildConfig(connectionString);
+
+          when(() => mockService.initialize()).thenAnswer((_) async {
+            return const Success(unit);
+          });
+          when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+            _,
+          ) async {
+            return Success(config);
+          });
+          when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+            return const Success(pooledId);
+          });
+          when(
+            () => mockService.executeQueryMultiFull(
+              pooledId,
+              any(),
+            ),
+          ).thenAnswer((_) async {
+            return const Success(
+              QueryResultMulti(
+                items: [
+                  QueryResultMultiItem.resultSet(
+                    QueryResult(
+                      columns: ['a'],
+                      rows: [
+                        [1],
+                        [2],
+                      ],
+                      rowCount: 2,
+                    ),
+                  ),
+                  QueryResultMultiItem.resultSet(
+                    QueryResult(
+                      columns: ['b'],
+                      rows: [
+                        [3],
+                      ],
+                      rowCount: 1,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          });
+          when(() => mockConnectionPool.release(pooledId)).thenAnswer((
+            _,
+          ) async {
+            return const Success(unit);
+          });
+
+          final result = await gateway.executeBatch(
+            config.agentId,
+            const [
+              SqlCommand(sql: 'SELECT a FROM t ORDER BY a'),
+              SqlCommand(sql: 'SELECT b FROM t ORDER BY b'),
+            ],
+            options: const SqlExecutionOptions(maxRows: 1),
+          );
+
+          expect(result.isSuccess(), isTrue);
+          final items = result.getOrNull()!;
+          expect(items, hasLength(2));
+          expect(items[0].rows, [
+            {'a': 1},
+          ]);
+          expect(items[1].rows, [
+            {'b': 3},
+          ]);
+          verify(
+            () => mockService.executeQueryMultiFull(pooledId, any()),
+          ).called(
+            1,
+          );
+          verifyNever(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledId,
+            ),
+          );
+        },
+      );
+
+      test(
+        'non-transactional read-only batch should fallback when multi-result '
+        'payload is incomplete',
+        () async {
+          const pooledId = 'pool-batch-fallback';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+          final config = _buildConfig(connectionString);
+          var executeQueryCalls = 0;
+
+          when(() => mockService.initialize()).thenAnswer((_) async {
+            return const Success(unit);
+          });
+          when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+            _,
+          ) async {
+            return Success(config);
+          });
+          when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+            return const Success(pooledId);
+          });
+          when(
+            () => mockService.executeQueryMultiFull(
+              pooledId,
+              any(),
+            ),
+          ).thenAnswer((_) async {
+            return const Success(
+              QueryResultMulti(
+                items: [
+                  QueryResultMultiItem.resultSet(
+                    QueryResult(
+                      columns: ['only_one'],
+                      rows: [
+                        [1],
+                      ],
+                      rowCount: 1,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          });
+          when(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledId,
+            ),
+          ).thenAnswer((_) async {
+            executeQueryCalls++;
+            return Success(
+              QueryResult(
+                columns: ['value'],
+                rows: [
+                  [executeQueryCalls],
+                ],
+                rowCount: 1,
+              ),
+            );
+          });
+          when(() => mockConnectionPool.release(pooledId)).thenAnswer((
+            _,
+          ) async {
+            return const Success(unit);
+          });
+
+          final result = await gateway.executeBatch(
+            config.agentId,
+            const [
+              SqlCommand(sql: 'SELECT 1 AS value'),
+              SqlCommand(sql: 'SELECT 2 AS value'),
+            ],
+          );
+
+          expect(result.isSuccess(), isTrue);
+          final items = result.getOrNull()!;
+          expect(items, hasLength(2));
+          expect(items[0].rows, [
+            {'value': 1},
+          ]);
+          expect(items[1].rows, [
+            {'value': 2},
+          ]);
+          verify(
+            () => mockService.executeQueryMultiFull(pooledId, any()),
+          ).called(
+            1,
+          );
+          verify(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledId,
+            ),
+          ).called(2);
         },
       );
 

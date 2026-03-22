@@ -1,14 +1,48 @@
-# Optional: run ODBC RPC benchmark on a self-hosted or configured Windows runner.
-# Configure repository secrets: ODBC_TEST_DSN (and optionally SQL Server / PostgreSQL).
-# Artifact: benchmark/e2e_odbc_rpc.jsonl (when recording succeeds).
-name: E2E ODBC benchmark (manual)
+name: E2E benchmarks (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      build_mode:
+        description: Flutter test build mode
+        required: true
+        default: profile
+        type: choice
+        options:
+          - debug
+          - profile
+          - release
+      run_odbc_benchmark:
+        description: Run ODBC RPC benchmark matrix
+        required: true
+        default: true
+        type: boolean
+      run_socket_transport_e2e_benchmark:
+        description: Run socket transport E2E benchmark
+        required: true
+        default: false
+        type: boolean
 
 jobs:
-  benchmark:
+  odbc-benchmark:
+    if: ${{ inputs.run_odbc_benchmark }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - label: lease_p2_c4
+            pool_mode: lease
+            pool_size: 2
+            concurrency: 4
+          - label: lease_p4_c8
+            pool_mode: lease
+            pool_size: 4
+            concurrency: 8
+          - label: native_p4_c8
+            pool_mode: native
+            pool_size: 4
+            concurrency: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,22 +58,74 @@ jobs:
 
       - name: ODBC RPC benchmark (live + record)
         env:
-          ODBC_E2E_BENCHMARK: 'true'
-          ODBC_E2E_BENCHMARK_RECORD: 'true'
+          ODBC_E2E_BENCHMARK: "true"
+          ODBC_E2E_BENCHMARK_RECORD: "true"
+          ODBC_E2E_BENCHMARK_POOL_MODE: ${{ matrix.profile.pool_mode }}
+          ODBC_E2E_BENCHMARK_POOL_SIZE: ${{ matrix.profile.pool_size }}
+          ODBC_E2E_BENCHMARK_CONCURRENCY: ${{ matrix.profile.concurrency }}
           ODBC_TEST_DSN: ${{ secrets.ODBC_TEST_DSN }}
           ODBC_TEST_DSN_SQL_SERVER: ${{ secrets.ODBC_TEST_DSN_SQL_SERVER }}
           ODBC_TEST_DSN_POSTGRESQL: ${{ secrets.ODBC_TEST_DSN_POSTGRESQL }}
-        run: flutter test test/live/odbc_rpc_benchmark_live_e2e_test.dart
+        shell: pwsh
+        run: |
+          $mode = '${{ inputs.build_mode }}'
+          $modeArg = ''
+          if ($mode -eq 'profile') { $modeArg = '--profile' }
+          elseif ($mode -eq 'release') { $modeArg = '--release' }
+          Write-Host "Running ODBC benchmark ($mode) profile=${{ matrix.profile.label }}"
+          flutter test $modeArg test/live/odbc_rpc_benchmark_live_e2e_test.dart
 
-      - name: Summarize JSONL (informational)
+      - name: Summarize ODBC JSONL (informational)
         if: always()
         run: dart run tool/summarize_e2e_benchmark.dart
         continue-on-error: true
 
-      - name: Upload benchmark JSONL
+      - name: Upload ODBC benchmark JSONL
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-odbc-benchmark-jsonl
+          name: e2e-odbc-benchmark-${{ matrix.profile.label }}-${{ inputs.build_mode }}
           path: benchmark/e2e_odbc_rpc.jsonl
+          if-no-files-found: ignore
+
+  socket-transport-e2e-benchmark:
+    if: ${{ inputs.run_socket_transport_e2e_benchmark }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Socket transport E2E benchmark (record)
+        env:
+          SOCKET_TRANSPORT_E2E_BENCHMARK: "true"
+          SOCKET_TRANSPORT_E2E_BENCHMARK_RECORD: "true"
+        shell: pwsh
+        run: |
+          $mode = '${{ inputs.build_mode }}'
+          $modeArg = ''
+          if ($mode -eq 'profile') { $modeArg = '--profile' }
+          elseif ($mode -eq 'release') { $modeArg = '--release' }
+          Write-Host "Running socket transport E2E benchmark ($mode)"
+          flutter test $modeArg test/infrastructure/external_services/socket_transport_e2e_benchmark_test.dart
+
+      - name: Summarize socket transport JSONL (informational)
+        if: always()
+        run: dart run tool/summarize_e2e_benchmark.dart benchmark/socket_transport_e2e.jsonl
+        continue-on-error: true
+
+      - name: Upload socket transport benchmark JSONL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: socket-transport-e2e-benchmark-${{ inputs.build_mode }}
+          path: benchmark/socket_transport_e2e.jsonl
           if-no-files-found: ignore

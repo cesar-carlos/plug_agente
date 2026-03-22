@@ -170,9 +170,25 @@ SELECT COUNT(*) AS row_count FROM $tableName;
   String selectIdCodeAmtById(int id) =>
       'SELECT id, code, amt FROM $tableName WHERE id = $id';
 
+  /// Full ordered dataset used by benchmarks and streaming probes.
+  String get selectIdCodeAmtOrderById =>
+      'SELECT id, code, amt FROM $tableName ORDER BY id';
+
+  /// Ordered range anchored at the first row.
+  String selectIdCodeAmtUpToId(int id) =>
+      'SELECT id, code, amt FROM $tableName WHERE id <= $id ORDER BY id';
+
+  /// Ordered range anchored at [id].
+  String selectIdCodeAmtFromId(int id) =>
+      'SELECT id, code, amt FROM $tableName WHERE id >= $id ORDER BY id';
+
   /// Stable ordering for pagination / streaming probes.
   String get selectIdCodeOrderById =>
       'SELECT id, code FROM $tableName ORDER BY id';
+
+  /// Benchmark-oriented multi-result probe using two range selects plus count.
+  String multiResultBenchmarkProbe(int splitId) =>
+      '${selectIdCodeAmtUpToId(splitId)}; ${selectIdCodeAmtFromId(splitId + 1)}; $countAll';
 
   /// ODBC named placeholder for [key] (`@key` on SQL Server, `:key` elsewhere).
   String namedPlaceholder(String key) => switch (dialect) {

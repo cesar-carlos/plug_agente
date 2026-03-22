@@ -6,18 +6,25 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Pool ODBC usando pool nativo do `odbc_fast` (conexões do pool não recebem
 /// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
 /// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
 class OdbcNativeConnectionPool implements IConnectionPool {
-  OdbcNativeConnectionPool(this._service, this._settings);
+  OdbcNativeConnectionPool(
+    this._service,
+    this._settings, {
+    MetricsCollector? metricsCollector,
+  }) : _metrics = metricsCollector;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final MetricsCollector? _metrics;
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
+  int _estimatedActiveConnections = 0;
 
   Duration get _poolConnectionAcquireTimeout => Duration(
     seconds: _settings.loginTimeoutSeconds > 0
@@ -107,6 +114,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     return poolResult.fold(
       (poolId) async {
+        final stopwatch = Stopwatch()..start();
         late final Result<Connection> connResult;
         try {
           connResult = await _service
@@ -120,6 +128,8 @@ class OdbcNativeConnectionPool implements IConnectionPool {
                 ),
               );
         } on TimeoutException catch (error) {
+          stopwatch.stop();
+          _metrics?.recordConnectionPoolAcquireLatency(stopwatch.elapsed);
           return Failure(
             OdbcFailureMapper.mapPoolError(
               error,
@@ -127,9 +137,15 @@ class OdbcNativeConnectionPool implements IConnectionPool {
             ),
           );
         }
+        stopwatch.stop();
+        _metrics?.recordConnectionPoolAcquireLatency(stopwatch.elapsed);
 
         return connResult.fold(
           (connection) {
+            _estimatedActiveConnections++;
+            _metrics?.recordConnectionPoolActivePeak(
+              _estimatedActiveConnections,
+            );
             return Success(connection.id);
           },
           (error) => Failure(
@@ -146,10 +162,18 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> release(String connectionId) async {
+    final stopwatch = Stopwatch()..start();
     final result = await _service.poolReleaseConnection(connectionId);
+    stopwatch.stop();
+    _metrics?.recordConnectionPoolReleaseLatency(stopwatch.elapsed);
 
     return result.fold(
-      (_) => const Success(unit),
+      (_) {
+        if (_estimatedActiveConnections > 0) {
+          _estimatedActiveConnections--;
+        }
+        return const Success(unit);
+      },
       (error) => Failure(
         OdbcFailureMapper.mapPoolError(
           error,
@@ -179,6 +203,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     _pools.clear();
     _poolCreationFutures.clear();
+    _estimatedActiveConnections = 0;
 
     if (errors.isNotEmpty) {
       return Failure(
@@ -207,7 +232,10 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     final closeResult = await _service.poolClose(poolId);
     return closeResult.fold(
-      (_) => const Success(unit),
+      (_) {
+        _estimatedActiveConnections = 0;
+        return const Success(unit);
+      },
       (error) => Failure(
         OdbcFailureMapper.mapPoolError(
           error,

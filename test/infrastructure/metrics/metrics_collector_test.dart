@@ -307,6 +307,9 @@ void main() {
         collector.recordTimeoutCancelFailure();
         collector.recordTransactionRollbackFailure();
         collector.recordIdempotencyFingerprintMismatch();
+        collector.recordConnectionPoolAcquireLatency(
+          const Duration(milliseconds: 5),
+        );
 
         collector.clear();
 
@@ -325,6 +328,8 @@ void main() {
         expect(collector.rpcStreamTerminalCompleteFailedCount, 0);
         expect(collector.rpcResponseAckRetryCount, 0);
         expect(collector.rpcResponseAckFallbackWithoutAckCount, 0);
+        expect(collector.connectionPoolAcquireLatencySamplesMs, isEmpty);
+        expect(collector.connectionPoolAcquireLatencyP95Ms, isNull);
       });
     });
 
@@ -433,6 +438,67 @@ void main() {
         expect(
           collector.eventCounters['connection_pool_release_failure'],
           1,
+        );
+      });
+
+      test('should accumulate pool and direct connection latency counters', () {
+        collector.recordConnectionPoolAcquireLatency(
+          const Duration(milliseconds: 12),
+        );
+        collector.recordConnectionPoolAcquireLatency(
+          const Duration(milliseconds: 8),
+        );
+        collector.recordConnectionPoolReleaseLatency(
+          const Duration(milliseconds: 5),
+        );
+        collector.recordConnectionPoolWaitLatency(
+          const Duration(milliseconds: 3),
+        );
+        collector.recordConnectionPoolActivePeak(4);
+        collector.recordConnectionPoolActivePeak(2);
+        collector.recordConnectionPoolWaitersPeak(3);
+        collector.recordConnectionPoolWaitersPeak(1);
+        collector.recordDirectConnectionConnectLatency(
+          const Duration(milliseconds: 9),
+        );
+        collector.recordDirectConnectionDisconnectLatency(
+          const Duration(milliseconds: 7),
+        );
+
+        expect(collector.connectionPoolAcquireLatencyMsTotal, 20);
+        expect(collector.connectionPoolAcquireLatencySamples, 2);
+        expect(collector.connectionPoolReleaseLatencyMsTotal, 5);
+        expect(collector.connectionPoolReleaseLatencySamples, 1);
+        expect(collector.connectionPoolWaitLatencyMsTotal, 3);
+        expect(collector.connectionPoolWaitLatencySamples, 1);
+        expect(collector.connectionPoolActivePeak, 4);
+        expect(collector.connectionPoolWaitersPeak, 3);
+        expect(collector.connectionDirectConnectLatencyMsTotal, 9);
+        expect(collector.connectionDirectConnectLatencySamples, 1);
+        expect(collector.connectionDirectDisconnectLatencyMsTotal, 7);
+        expect(collector.connectionDirectDisconnectLatencySamples, 1);
+        expect(collector.connectionPoolAcquireLatencySamplesMs, [12, 8]);
+        expect(collector.connectionPoolReleaseLatencySamplesMs, [5]);
+        expect(collector.connectionPoolWaitLatencySamplesMs, [3]);
+        expect(collector.connectionDirectConnectLatencySamplesMs, [9]);
+        expect(collector.connectionDirectDisconnectLatencySamplesMs, [7]);
+        expect(collector.connectionPoolAcquireLatencyP95Ms, 12);
+        expect(collector.connectionPoolReleaseLatencyP95Ms, 5);
+        expect(collector.connectionPoolWaitLatencyP95Ms, 3);
+        expect(collector.connectionDirectConnectLatencyP95Ms, 9);
+        expect(collector.connectionDirectDisconnectLatencyP95Ms, 7);
+        expect(
+          collector.eventCounters['connection_pool_acquire_latency_ms_total'],
+          20,
+        );
+        expect(
+          collector.eventCounters['connection_pool_active_peak'],
+          4,
+        );
+        expect(
+          collector
+              .eventCounters['connection_direct_disconnect_latency_ms_total'],
+          7,
         );
       });
     });

@@ -14,14 +14,37 @@ Map<String, String> parseDotEnvContent(String content) {
     if (idx <= 0) continue;
     final key = trimmed.substring(0, idx).trim();
     var value = trimmed.substring(idx + 1).trim();
-    if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    final isDoubleQuoted =
+        value.startsWith('"') && value.endsWith('"') && value.length >= 2;
+    final isSingleQuoted =
+        value.startsWith("'") && value.endsWith("'") && value.length >= 2;
+    if (isDoubleQuoted) {
       value = value.substring(1, value.length - 1);
-    } else if (value.startsWith("'") &&
-        value.endsWith("'") &&
-        value.length >= 2) {
+    } else if (isSingleQuoted) {
       value = value.substring(1, value.length - 1);
+    } else {
+      value = _stripInlineNote(value);
     }
     result[key] = value;
   }
   return result;
+}
+
+String _stripInlineNote(String value) {
+  const markers = <String>[
+    ' #',
+    ' \u2013 ',
+    ' \u2014 ',
+  ];
+  var cutIndex = value.length;
+  for (final marker in markers) {
+    final idx = value.indexOf(marker);
+    if (idx >= 0 && idx < cutIndex) {
+      cutIndex = idx;
+    }
+  }
+  if (cutIndex == value.length) {
+    return value;
+  }
+  return value.substring(0, cutIndex).trimRight();
 }

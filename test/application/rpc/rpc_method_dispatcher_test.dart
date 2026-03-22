@@ -131,6 +131,10 @@ void main() {
       ).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
+      when(() => mockNormalizer.normalize(any())).thenAnswer(
+        (Invocation invocation) =>
+            invocation.positionalArguments[0] as QueryResponse,
+      );
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -1190,21 +1194,29 @@ void main() {
         },
       );
 
-      final queryResponse1 = QueryResponse(
-        id: 'exec-1',
-        requestId: 'req-1',
-        agentId: 'agent-1',
-        data: [
-          {'id': 1, 'name': 'John'},
-        ],
-        timestamp: DateTime.now(),
-      );
-
       when(
-        () => mockGateway.executeQuery(any()),
-      ).thenAnswer((_) async => Success(queryResponse1));
-      when(() => mockNormalizer.normalize(any())).thenAnswer(
-        (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        () => mockGateway.executeBatch(
+          any(),
+          any(),
+          database: any(named: 'database'),
+          options: any(named: 'options'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer(
+        (_) async => Success([
+          SqlCommandResult.success(
+            index: 0,
+            rows: const [
+              {'id': 1, 'name': 'John'},
+            ],
+          ),
+          SqlCommandResult.success(
+            index: 1,
+            rows: const [
+              {'count': 1},
+            ],
+          ),
+        ]),
       );
 
       final response = await dispatcher.dispatch(request, 'agent-1');
@@ -1225,32 +1237,32 @@ void main() {
 
         final captured = <Duration?>[];
         when(
-          () => mockGateway.executeQuery(
+          () => mockGateway.executeBatch(
             any(),
-            timeout: any(named: 'timeout'),
+            any(),
             database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
           ),
-        ).thenAnswer((invocation) async {
-          const sym = Symbol('timeout');
+        ).thenAnswer((Invocation invocation) async {
+          const timeoutSymbol = Symbol('timeout');
           captured.add(
-            invocation.namedArguments.containsKey(sym)
-                ? invocation.namedArguments[sym] as Duration?
+            invocation.namedArguments.containsKey(timeoutSymbol)
+                ? invocation.namedArguments[timeoutSymbol] as Duration?
                 : null,
           );
           await Future<void>.delayed(const Duration(milliseconds: 5));
-          return Success(
-            QueryResponse(
-              id: 'e',
-              requestId: 'r',
-              agentId: 'agent-1',
-              data: const [],
-              timestamp: DateTime.now(),
+          return Success([
+            SqlCommandResult.success(
+              index: 0,
+              rows: const <Map<String, dynamic>>[],
             ),
-          );
+            SqlCommandResult.success(
+              index: 1,
+              rows: const <Map<String, dynamic>>[],
+            ),
+          ]);
         });
-        when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
-        );
 
         const request = RpcRequest(
           jsonrpc: '2.0',
@@ -1271,14 +1283,9 @@ void main() {
         final response = await dispatcher.dispatch(request, 'agent-1');
 
         expect(response.isSuccess, isTrue);
-        expect(captured, hasLength(2));
-        expect(captured[0], isNotNull);
-        final first = captured[0]!;
-        expect(first.inMilliseconds, lessThanOrEqualTo(8000));
-        expect(captured[1], isNotNull);
-        final second = captured[1]!;
-        expect(second.inMilliseconds, lessThanOrEqualTo(8000));
-        expect(second, lessThan(first));
+        expect(captured, hasLength(1));
+        expect(captured.single, isNotNull);
+        expect(captured.single!.inMilliseconds, lessThanOrEqualTo(8000));
       },
     );
 
@@ -1309,21 +1316,29 @@ void main() {
           },
         );
 
-        final queryResponse = QueryResponse(
-          id: 'exec-1',
-          requestId: 'req-1',
-          agentId: 'agent-1',
-          data: const [
-            {'id': 1, 'name': 'John'},
-          ],
-          timestamp: DateTime.now(),
-        );
-
         when(
-          () => mockGateway.executeQuery(any()),
-        ).thenAnswer((_) async => Success(queryResponse));
-        when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => Success([
+            SqlCommandResult.success(
+              index: 0,
+              rows: const [
+                {'id': 1, 'name': 'John'},
+              ],
+            ),
+            SqlCommandResult.success(
+              index: 1,
+              rows: const [
+                {'id': 1, 'name': 'John'},
+              ],
+            ),
+          ]),
         );
 
         final response = await dispatcher.dispatch(
@@ -1360,36 +1375,37 @@ void main() {
           },
         );
 
-        var callCount = 0;
+        late List<SqlCommand> capturedCommands;
         when(
-          () => mockGateway.executeQuery(any()),
-        ).thenAnswer((invocation) async {
-          callCount++;
-          final query = invocation.positionalArguments[0] as QueryRequest;
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((Invocation invocation) async {
+          capturedCommands =
+              invocation.positionalArguments[1] as List<SqlCommand>;
           return Success(
-            QueryResponse(
-              id: 'exec-$callCount',
-              requestId: 'req-1',
-              agentId: 'agent-1',
-              data: [
-                {'sql': query.query},
-              ],
-              timestamp: DateTime.now(),
-            ),
+            List<SqlCommandResult>.generate(capturedCommands.length, (
+              int index,
+            ) {
+              return SqlCommandResult.success(
+                index: index,
+                rows: <Map<String, dynamic>>[
+                  <String, dynamic>{'sql': capturedCommands[index].sql},
+                ],
+              );
+            }),
           );
         });
-        when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
-        );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
 
         check(response.isSuccess).isTrue();
-        final captured = verify(
-          () => mockGateway.executeQuery(captureAny()),
-        ).captured.cast<QueryRequest>();
         check(
-          captured.map((query) => query.query).join('|'),
+          capturedCommands.map((command) => command.sql).join('|'),
         ).equals(
           'SELECT * FROM users WHERE id = 1|SELECT * FROM users '
           'WHERE id = 2|SELECT * FROM users WHERE id = 3',
@@ -1421,33 +1437,36 @@ void main() {
           },
         );
 
+        late List<SqlCommand> capturedCommands;
         when(
-          () => mockGateway.executeQuery(any()),
-        ).thenAnswer((invocation) async {
-          final query = invocation.positionalArguments[0] as QueryRequest;
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((Invocation invocation) async {
+          capturedCommands =
+              invocation.positionalArguments[1] as List<SqlCommand>;
           return Success(
-            QueryResponse(
-              id: 'exec-1',
-              requestId: 'req-1',
-              agentId: 'agent-1',
-              data: [
-                {'sql': query.query},
-              ],
-              timestamp: DateTime.now(),
-            ),
+            List<SqlCommandResult>.generate(capturedCommands.length, (
+              int index,
+            ) {
+              return SqlCommandResult.success(
+                index: index,
+                rows: <Map<String, dynamic>>[
+                  <String, dynamic>{'sql': capturedCommands[index].sql},
+                ],
+              );
+            }),
           );
         });
-        when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
-        );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
 
         check(response.isSuccess).isTrue();
-        final captured = verify(
-          () => mockGateway.executeQuery(captureAny()),
-        ).captured.cast<QueryRequest>();
-        check(captured.map((query) => query.query).join('|')).equals(
+        check(capturedCommands.map((command) => command.sql).join('|')).equals(
           [
             'SELECT * FROM users WHERE id = 1',
             'SELECT * FROM users WHERE id = 10',
@@ -1475,7 +1494,15 @@ void main() {
 
         check(response.isError).isTrue();
         check(response.error!.code).equals(RpcErrorCode.invalidParams);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+          ),
+        );
       },
     );
 
