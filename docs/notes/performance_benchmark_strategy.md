@@ -257,6 +257,9 @@ Implementacao atual:
 
 - `test/infrastructure/codecs/transport_pipeline_benchmark_test.dart`
 - `test/infrastructure/external_services/socket_transport_e2e_benchmark_test.dart`
+- Micro-benchmarks (gzip VM + `GzipCompressor`): `test/benchmark/gzip_codec_benchmark_test.dart` (`CODEC_GZIP_BENCHMARK=true`), `test/benchmark/gzip_compressor_benchmark_test.dart` (`GZIP_COMPRESSOR_BENCHMARK=true`)
+
+No agente Dart, o GZIP do `PayloadFrame` e das primitivas partilhadas usa **zlib da VM** (`dart:io`), nao `package:archive`. O segundo formato (linhas de query em mapa com `compressed_data` em base64) esta em `lib/infrastructure/compression/gzip_compressor.dart`, com limiares para evitar `compute` em payloads pequenos.
 
 #### 3. Benchmark full path
 
@@ -403,7 +406,29 @@ Ja implementado:
 - registro de `benchmark_profile` no JSONL;
 - benchmark transport-bound (pipeline + socket E2E);
 - p95 por estagio anexado por caso;
-- testes unitarios dos helpers de regressao e perfis.
+- testes unitarios dos helpers de regressao e perfis;
+- normalizacao de perfis `native` quando `pool_size < concurrency` (worker
+  `odbc_fast` com timeout por pedido ~30s; ver
+  `normalizeOdbcE2eBenchmarkProfilesForNativeWorker`);
+- `build_mode` real (debug/profile/release) no JSONL do benchmark socket E2E.
+
+### Baseline JSONL e perfil `native`
+
+Registros antigos com `benchmark_profile.pool_mode: native` e `pool_size` menor
+que `concurrency` (ex.: `native_p4_c8`) deixam de ser comparaveis ao codigo
+atual: o harness passa a usar `pool_size` efetivo igual a `concurrency`
+(`native_p8_c8`). Regrave o baseline ou alinhe a matriz em `.env` com
+`native:8:8`.
+
+### Melhorias operacionais sugeridas
+
+- Gates de latencia: preferir `flutter test --profile` (ou workflow manual com
+  `build_mode: profile`) em vez de `debug` local.
+- Ajustar `ODBC_E2E_BENCHMARK_MAX_REGRESSION_MS` / socket E2E
+  `SOCKET_TRANSPORT_E2E_BENCHMARK_MAX_REGRESSION_MS` quando o ambiente for
+  ruidoso.
+- `odbc_fast`: o `ServiceLocator` ainda nao expoe `requestTimeout` do
+  `AsyncNativeOdbcConnection`; evolucao futura depende do pacote ou de wrapper.
 
 Arquivos relevantes:
 
@@ -414,8 +439,13 @@ Arquivos relevantes:
 - `test/helpers/e2e_env_benchmark_test.dart`
 - `test/infrastructure/codecs/transport_pipeline_benchmark_test.dart`
 - `test/infrastructure/external_services/socket_transport_e2e_benchmark_test.dart`
+- `test/benchmark/gzip_codec_benchmark_test.dart`
+- `test/benchmark/gzip_compressor_benchmark_test.dart`
+- `lib/infrastructure/codecs/compression_codec.dart`
+- `lib/infrastructure/compression/gzip_compressor.dart`
 - `tool/e2e_benchmark_profile_parse.dart`
 - `test/tool/e2e_benchmark_profile_parse_test.dart`
+- `test/helpers/rpc_response_test_helpers.dart`
 
 ## Roadmap Tecnico de Evolucao
 

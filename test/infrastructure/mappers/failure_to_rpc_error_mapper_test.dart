@@ -108,6 +108,39 @@ void main() {
       expect(rpcError.code, equals(RpcErrorCode.compressionFailed));
     });
 
+    test('should map PayloadEncodingFailure decode to decodingFailed', () {
+      final failure = PayloadEncodingFailure.withContext(
+        message: 'Bad JSON',
+        context: {'operation': 'decode'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+
+      expect(rpcError.code, equals(RpcErrorCode.decodingFailed));
+    });
+
+    test('should map PayloadEncodingFailure jsonDecode to decodingFailed', () {
+      final failure = PayloadEncodingFailure.withContext(
+        message: 'Bad JSON',
+        context: {'operation': 'jsonDecode'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+
+      expect(rpcError.code, equals(RpcErrorCode.decodingFailed));
+    });
+
+    test('should map PayloadEncodingFailure encode to invalidPayload', () {
+      final failure = PayloadEncodingFailure.withContext(
+        message: 'Cannot encode',
+        context: {'operation': 'encode'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+
+      expect(rpcError.code, equals(RpcErrorCode.invalidPayload));
+    });
+
     test('should include Problem Details data', () {
       final failure = QueryExecutionFailure.withContext(
         message: 'Query failed',

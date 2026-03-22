@@ -44,9 +44,6 @@ dependencies:
   # Communication
   socket_io_client: ^3.1.4
 
-  # Compression
-  archive: ^3.4.9
-
   # Persistência
   drift: ^2.22.1
   sqlite3_flutter_libs: ^0.5.28

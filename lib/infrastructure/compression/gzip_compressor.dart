@@ -1,40 +1,47 @@
 import 'dart:convert';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_compressor.dart';
+import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:result_dart/result_dart.dart';
 
-List<Map<String, dynamic>> _compressInIsolate(List<Map<String, dynamic>> data) {
-  final jsonString = jsonEncode(data);
-  final bytes = utf8.encode(jsonString);
-  final compressedBytes = GZipEncoder().encode(bytes);
+/// Below this UTF-8 JSON size, compress runs on the caller isolate (no
+/// [compute]) to avoid isolate hop overhead for small row batches.
+const int gzipRowComputeMinUtf8Bytes = 8192;
 
-  if (compressedBytes == null) {
-    throw StateError('GZipEncoder returned null');
-  }
+/// Below this compressed byte size (after base64 decode), decompress runs on
+/// the caller isolate.
+const int gzipRowComputeMinCompressedBytes = 8192;
 
-  final base64String = base64.encode(compressedBytes);
+/// Query/response row compression: JSON-encode rows, GZIP, then base64 in a map.
+///
+/// Distinct from PayloadFrame transport (`TransportPipeline` on Socket.IO).
+List<Map<String, dynamic>> _wrapperFromPlainUtf8Bytes(Uint8List plainBytes) {
+  final compressedBytes = gzipCompressBytesOrThrow(plainBytes);
   return [
     {
-      'compressed_data': base64String,
+      'compressed_data': base64Encode(compressedBytes),
       'is_compressed': true,
-      'original_size': bytes.length,
+      'original_size': plainBytes.length,
     },
   ];
 }
 
-List<Map<String, dynamic>> _decompressInIsolate(
-  List<Map<String, dynamic>> data,
-) {
+/// Top-level for [compute]: pass JSON text so the caller isolate does not
+/// [jsonEncode] twice.
+List<Map<String, dynamic>> _compressFromJsonString(String jsonString) {
+  return _wrapperFromPlainUtf8Bytes(utf8.encode(jsonString));
+}
+
+List<Map<String, dynamic>> _decompressRows(List<Map<String, dynamic>> data) {
   if (data.length != 1 || !data.first.containsKey('compressed_data') || data.first['is_compressed'] != true) {
     return data;
   }
 
   final base64String = data.first['compressed_data'] as String;
-  final compressedBytes = base64.decode(base64String);
-  final decompressedBytes = GZipDecoder().decodeBytes(compressedBytes);
+  final compressedBytes = base64Decode(base64String);
+  final decompressedBytes = gzipDecompressBytesOrThrow(compressedBytes);
   final jsonString = utf8.decode(decompressedBytes);
 
   return List<Map<String, dynamic>>.from(
@@ -60,9 +67,14 @@ class GzipCompressor implements ICompressor {
     List<Map<String, dynamic>> data,
   ) async {
     try {
-      final result = await compute(_compressInIsolate, data);
+      final jsonString = jsonEncode(data);
+      final plainBytes = utf8.encode(jsonString);
+      if (plainBytes.length <= gzipRowComputeMinUtf8Bytes) {
+        return Success(_wrapperFromPlainUtf8Bytes(plainBytes));
+      }
+      final result = await compute(_compressFromJsonString, jsonString);
       return Success(result);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         _buildFailure(
           'Failed to compress data',
@@ -78,9 +90,17 @@ class GzipCompressor implements ICompressor {
     List<Map<String, dynamic>> data,
   ) async {
     try {
-      final result = await compute(_decompressInIsolate, data);
+      if (data.length != 1 || !data.first.containsKey('compressed_data') || data.first['is_compressed'] != true) {
+        return Success(data);
+      }
+      final base64String = data.first['compressed_data'] as String;
+      final compressedBytes = base64Decode(base64String);
+      if (compressedBytes.length <= gzipRowComputeMinCompressedBytes) {
+        return Success(_decompressRows(data));
+      }
+      final result = await compute(_decompressRows, data);
       return Success(result);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         _buildFailure(
           'Failed to decompress data',

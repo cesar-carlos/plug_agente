@@ -208,6 +208,24 @@ class CompressionFailure extends Failure {
   bool get isTransient => true;
 }
 
+/// JSON (or other payload) encode/decode failed — distinct from wire compression.
+class PayloadEncodingFailure extends Failure {
+  PayloadEncodingFailure(String message) : super(message, 'PAYLOAD_ENCODING_ERROR');
+
+  PayloadEncodingFailure.withContext({
+    required super.message,
+    super.code,
+    super.cause,
+    super.timestamp,
+    super.context,
+  }) : super.withContext(
+         defaultCode: 'PAYLOAD_ENCODING_ERROR',
+       );
+
+  @override
+  bool get isRecoverable => true;
+}
+
 class NotificationFailure extends Failure {
   NotificationFailure(String message) : super(message, 'NOTIFICATION_ERROR');
 

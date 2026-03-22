@@ -39,7 +39,7 @@ class JsonPayloadCodec implements IPayloadCodec {
       return Success(bytes);
     } on Exception catch (error) {
       return Failure(
-        domain.CompressionFailure.withContext(
+        domain.PayloadEncodingFailure.withContext(
           message: 'Failed to encode JSON',
           cause: error,
           context: {'operation': 'encode', 'encoding': 'json'},
@@ -56,7 +56,7 @@ class JsonPayloadCodec implements IPayloadCodec {
       return Success(decoded as Object);
     } on Exception catch (error) {
       return Failure(
-        domain.CompressionFailure.withContext(
+        domain.PayloadEncodingFailure.withContext(
           message: 'Failed to decode JSON',
           cause: error,
           context: {'operation': 'decode', 'encoding': 'json'},

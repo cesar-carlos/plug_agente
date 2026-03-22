@@ -22,7 +22,10 @@ docs/
 |  |- auto_update_setup.md
 |  |- testing_auto_update.md
 |  \- version_strategy.md
-\- notes/
+|- testing/
+|  \- e2e_setup.md
+|- notes/
+|  \- performance_benchmark_strategy.md
 ```
 
 ## Links rapidos
@@ -32,3 +35,6 @@ docs/
 - [Guia de cliente Socket com transporte binario](communication/socketio_client_binary_transport.md)
 - [OpenRPC do agente](communication/openrpc.json)
 - [Guia de instalacao](install/readme.md)
+- [Testes E2E, `.env` e benchmarks](testing/e2e_setup.md)
+- [Estrategia de performance / benchmarks](notes/performance_benchmark_strategy.md)
+- [Benchmarks (JSONL, comandos)](../benchmark/README.md)

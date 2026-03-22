@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -37,17 +36,20 @@ Uint8List jsonUtf8EncodePayloadInIsolate(Object? data) {
   return raw is Uint8List ? raw : Uint8List.fromList(raw);
 }
 
-Uint8List _compressGzipInIsolate(Uint8List data) {
-  final compressedBytes = GZipEncoder().encode(data);
-  if (compressedBytes == null) {
-    throw StateError('GZipEncoder returned null');
+Result<Uint8List> _resolveFramePayloadBytes(PayloadFrame frame) {
+  final dynamic payload = frame.payload;
+  if (payload is Uint8List) {
+    return Success(payload);
   }
-  return Uint8List.fromList(compressedBytes);
-}
-
-Uint8List _decompressGzipInIsolate(Uint8List compressed) {
-  final decompressedBytes = GZipDecoder().decodeBytes(compressed);
-  return Uint8List.fromList(decompressedBytes);
+  if (payload is List<int>) {
+    return Success(Uint8List.fromList(payload));
+  }
+  return Failure(
+    domain.ValidationFailure.withContext(
+      message: 'Frame payload is not binary data',
+      context: {'payloadType': payload.runtimeType.toString()},
+    ),
+  );
 }
 
 bool _shouldRunGzipCompression(
@@ -66,6 +68,10 @@ bool _shouldRunGzipCompression(
 /// Handles the complete bidirectional flow:
 /// Send: data -> encode -> compress -> frame
 /// Receive: frame -> decompress -> decode -> data
+///
+/// This is the **Socket.IO PayloadFrame** path (binary `payload` + `cmp`/`enc`).
+/// For SQL result rows wrapped as JSON maps with `compressed_data` (base64), use
+/// `lib/infrastructure/compression/gzip_compressor.dart`.
 class TransportPipeline {
   TransportPipeline({
     required this.encoding,
@@ -90,6 +96,9 @@ class TransportPipeline {
   final _uuid = const Uuid();
 
   /// Prepares a payload for sending.
+  ///
+  /// Prefer [prepareSendAsync] for real Socket.IO emits so large gzip/JSON can
+  /// run in a worker isolate. [prepareSend] suits tests and small sync flows.
   ///
   /// Flow: data -> encode -> compress (if needed) -> frame
   Result<PayloadFrame> prepareSend(
@@ -192,7 +201,7 @@ class TransportPipeline {
           encodedBytes = await compute(jsonUtf8EncodePayloadInIsolate, data);
         } on Object catch (error) {
           return Failure(
-            domain.CompressionFailure.withContext(
+            domain.PayloadEncodingFailure.withContext(
               message: 'Failed to encode JSON in isolate',
               cause: error,
               context: {'operation': 'jsonEncode', 'encoding': 'json'},
@@ -221,7 +230,7 @@ class TransportPipeline {
         final useIsolate = originalSize >= gzipIsolateThresholdBytes;
         final Uint8List compressedBytes;
         if (useIsolate) {
-          compressedBytes = await compute(_compressGzipInIsolate, encodedBytes);
+          compressedBytes = await compute(gzipCompressBytesOrThrow, encodedBytes);
         } else {
           final gzipCodec = CompressionCodecFactory.getCodec('gzip');
           final compressResult = gzipCodec.compress(encodedBytes);
@@ -293,24 +302,11 @@ class TransportPipeline {
         );
       }
 
-      Uint8List bytes;
-
-      // Ensure payload is bytes
-      if (frame.payload is! Uint8List) {
-        if (frame.payload is List<int>) {
-          bytes = Uint8List.fromList(frame.payload as List<int>);
-        } else {
-          final payloadType = frame.payload.runtimeType.toString();
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Frame payload is not binary data',
-              context: {'payloadType': payloadType},
-            ),
-          );
-        }
-      } else {
-        bytes = frame.payload as Uint8List;
+      final bytesResult = _resolveFramePayloadBytes(frame);
+      if (bytesResult.isError()) {
+        return Failure(bytesResult.exceptionOrNull()!);
       }
+      final bytes = bytesResult.getOrThrow();
 
       if (bytes.length != frame.compressedSize) {
         return Failure(
@@ -440,23 +436,11 @@ class TransportPipeline {
         );
       }
 
-      Uint8List bytes;
-
-      if (frame.payload is! Uint8List) {
-        if (frame.payload is List<int>) {
-          bytes = Uint8List.fromList(frame.payload as List<int>);
-        } else {
-          final payloadType = frame.payload.runtimeType.toString();
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Frame payload is not binary data',
-              context: {'payloadType': payloadType},
-            ),
-          );
-        }
-      } else {
-        bytes = frame.payload as Uint8List;
+      final bytesResult = _resolveFramePayloadBytes(frame);
+      if (bytesResult.isError()) {
+        return Failure(bytesResult.exceptionOrNull()!);
       }
+      final bytes = bytesResult.getOrThrow();
 
       if (bytes.length != frame.compressedSize) {
         return Failure(
@@ -500,7 +484,7 @@ class TransportPipeline {
             (bytes.length >= gzipIsolateThresholdBytes || frame.originalSize >= gzipIsolateThresholdBytes);
         if (useGzipIsolate) {
           try {
-            decodableBytes = await compute(_decompressGzipInIsolate, bytes);
+            decodableBytes = await compute(gzipDecompressBytesOrThrow, bytes);
           } on Object catch (error) {
             return Failure(
               domain.CompressionFailure.withContext(
@@ -565,7 +549,7 @@ class TransportPipeline {
           decoded = await compute(_jsonDecodeUtf8PayloadInIsolate, decodableBytes);
         } on Object catch (error) {
           return Failure(
-            domain.CompressionFailure.withContext(
+            domain.PayloadEncodingFailure.withContext(
               message: 'Failed to decode JSON payload',
               cause: error,
               context: {'operation': 'jsonDecode', 'encoding': 'json'},

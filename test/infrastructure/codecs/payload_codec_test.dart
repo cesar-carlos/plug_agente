@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 
 void main() {
@@ -62,6 +63,7 @@ void main() {
       final result = codec.decode(invalidBytes);
 
       expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<PayloadEncodingFailure>());
     });
 
     test('should have correct encoding and content type', () {

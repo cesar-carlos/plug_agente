@@ -90,6 +90,15 @@ void main() {
     });
   });
 
+  group('gzip byte primitives', () {
+    test('gzipCompressBytesOrThrow round-trips with gzipDecompressBytesOrThrow', () {
+      final data = Uint8List.fromList(utf8.encode('Hello World! ' * 200));
+      final compressed = gzipCompressBytesOrThrow(data);
+      expect(compressed.length, lessThan(data.length));
+      expect(gzipDecompressBytesOrThrow(compressed), equals(data));
+    });
+  });
+
   group('CompressionCodecFactory', () {
     test('should return GzipCompressionCodec for gzip', () {
       final codec = CompressionCodecFactory.getCodec('gzip');

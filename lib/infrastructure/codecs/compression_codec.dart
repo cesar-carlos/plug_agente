@@ -1,8 +1,34 @@
+import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
+
+/// Converts VM gzip encode/decode output to [Uint8List] without copying when
+/// the result is already a [Uint8List].
+Uint8List _listToUint8List(List<int> bytes) {
+  if (bytes.isEmpty) {
+    return Uint8List(0);
+  }
+  if (bytes is Uint8List) {
+    return bytes;
+  }
+  return Uint8List.fromList(bytes);
+}
+
+/// Shared GZIP byte primitives for codecs, transport pipeline isolates, and
+/// row-level gzip in `gzip_compressor.dart`. Uses VM `dart:io` gzip (zlib),
+/// not `package:archive`.
+Uint8List gzipCompressBytesOrThrow(Uint8List data) {
+  final encoded = gzip.encode(data);
+  return _listToUint8List(encoded);
+}
+
+/// Decompresses a GZIP byte stream; throws if the input is not valid GZIP.
+Uint8List gzipDecompressBytesOrThrow(Uint8List compressed) {
+  final decoded = gzip.decode(compressed);
+  return _listToUint8List(decoded);
+}
 
 /// Codec for compressing and decompressing data.
 abstract class ICompressionCodec {
@@ -26,19 +52,8 @@ class GzipCompressionCodec implements ICompressionCodec {
   @override
   Result<Uint8List> compress(Uint8List data) {
     try {
-      final compressedBytes = GZipEncoder().encode(data);
-
-      if (compressedBytes == null) {
-        return Failure(
-          domain.CompressionFailure.withContext(
-            message: 'GZIP encoder returned null',
-            context: {'operation': 'compress', 'algorithm': 'gzip'},
-          ),
-        );
-      }
-
-      return Success(Uint8List.fromList(compressedBytes));
-    } on Exception catch (error) {
+      return Success(gzipCompressBytesOrThrow(data));
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to compress with GZIP',
@@ -52,9 +67,8 @@ class GzipCompressionCodec implements ICompressionCodec {
   @override
   Result<Uint8List> decompress(Uint8List data) {
     try {
-      final decompressedBytes = GZipDecoder().decodeBytes(data);
-      return Success(Uint8List.fromList(decompressedBytes));
-    } on Exception catch (error) {
+      return Success(gzipDecompressBytesOrThrow(data));
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to decompress with GZIP',

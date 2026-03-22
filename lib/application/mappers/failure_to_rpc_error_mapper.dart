@@ -96,6 +96,14 @@ class FailureToRpcErrorMapper {
       return RpcErrorCode.networkError;
     }
 
+    if (failure is PayloadEncodingFailure) {
+      final op = failure.context['operation'];
+      if (op == 'decode' || op == 'jsonDecode') {
+        return RpcErrorCode.decodingFailed;
+      }
+      return RpcErrorCode.invalidPayload;
+    }
+
     if (failure is CompressionFailure) {
       if (failure.context['operation'] == 'decompress') {
         return RpcErrorCode.decodingFailed;
@@ -161,6 +169,7 @@ class FailureToRpcErrorMapper {
     if (failure is NetworkFailure) return '$baseUri/network-error';
     if (failure is ConfigurationFailure) return '$baseUri/configuration-error';
     if (failure is ConnectionFailure) return '$baseUri/connection-error';
+    if (failure is PayloadEncodingFailure) return '$baseUri/payload-encoding-error';
     if (failure is CompressionFailure) return '$baseUri/compression-error';
     if (failure is ServerFailure) return '$baseUri/server-error';
     if (failure is NotFoundFailure) return '$baseUri/not-found';

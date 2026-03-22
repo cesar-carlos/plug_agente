@@ -4,11 +4,11 @@ Testes que usam recursos reais (API, ODBC) dependem de variáveis no `.env`.
 
 ## Estrutura `test/`
 
-| Pasta | Conteúdo |
-| ----- | -------- |
-| `test/live/` | Testes com tag **`live`**: rede, ODBC real, RPC real. Podem ficar em **skip** sem `.env`. |
-| `test/integration/` | Integração **offline** (mocks/fakes), sem ODBC nem API live. |
-| Restantes (`test/application`, `test/infrastructure`, …) | Unitários / widget / integração leve. |
+| Pasta                                                    | Conteúdo                                                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `test/live/`                                             | Testes com tag **`live`**: rede, ODBC real, RPC real. Podem ficar em **skip** sem `.env`. |
+| `test/integration/`                                      | Integração **offline** (mocks/fakes), sem ODBC nem API live.                              |
+| Restantes (`test/application`, `test/infrastructure`, …) | Unitários / widget / integração leve.                                                     |
 
 **Tag `live`:** definida em `dart_test.yaml`. Correr `flutter test --exclude-tags=live` exclui toda a pasta semântica live (ficheiros anotados com `@Tags(['live'])`). Atalhos: `tool/flutter_test_no_api.bat` (Windows) ou `tool/flutter_test_no_api.sh` (Unix).
 
@@ -32,11 +32,11 @@ Testes que usam recursos reais (API, ODBC) dependem de variáveis no `.env`.
 
 ### API (`test/live/api_live_test.dart`)
 
-| Variável               | Obrigatória | Descrição                                            |
-| ---------------------- | ----------- | ---------------------------------------------------- |
+| Variável               | Obrigatória | Descrição                                                     |
+| ---------------------- | ----------- | ------------------------------------------------------------- |
 | `RUN_LIVE_API_TESTS`   | Não         | `true` para executar testes de API; omitir/false no dia a dia |
-| `API_TEST_BASE_URL`    | Não         | URL base (default: `http://31.97.29.223:3000/`)      |
-| `API_TEST_TIMEOUT_URL` | Não         | URL para teste de timeout (default: IP não roteável) |
+| `API_TEST_BASE_URL`    | Não         | URL base (default: `http://31.97.29.223:3000/`)               |
+| `API_TEST_TIMEOUT_URL` | Não         | URL para teste de timeout (default: IP não roteável)          |
 
 ### ODBC streaming (`test/live/odbc_streaming_live_test.dart`)
 
@@ -65,33 +65,47 @@ Cada grupo cria uma tabela com nome único (`plug_agente_e2e_live_<uuid>`) para 
 | Variável                        | Obrigatória | Descrição                                                                                      |
 | ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
 | `ODBC_E2E_REQUIRE_MULTI_RESULT` | Não         | `true`: falha se `multi_result` não devolver `result_sets`/linhas (sem fallback RPC no teste). |
-| `ODBC_E2E_TRANSACTIONAL_BATCH`  | Não         | `true`: habilita o 4.º teste do grupo (`sql.executeBatch` com `transaction: true`).           |
+| `ODBC_E2E_TRANSACTIONAL_BATCH`  | Não         | `true`: habilita o 4.º teste do grupo (`sql.executeBatch` com `transaction: true`).            |
 
 ### ODBC RPC benchmark (latência + histórico JSONL)
 
 Documentação completa: [`benchmark/README.md`](../../benchmark/README.md).
 
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `ODBC_E2E_BENCHMARK` | Sim (para correr) | `true`: executa `test/live/odbc_rpc_benchmark_live_e2e_test.dart`. |
-| `ODBC_E2E_BENCHMARK_RECORD` | Não | `true`: anexa linhas ao ficheiro JSONL (padrão `benchmark/e2e_odbc_rpc.jsonl`). |
-| `ODBC_E2E_BENCHMARK_FILE` | Não | Caminho alternativo do JSONL. |
-| `ODBC_E2E_BENCHMARK_DB_HOSTING` | Não | `local` ou `remote` — metadado para gráficos. |
-| `ODBC_E2E_BENCHMARK_MAX_MS_*` | Não | Limites de regressão por caso (ex.: `ODBC_E2E_BENCHMARK_MAX_MS_MATERIALIZED`). |
+| Variável                        | Obrigatória       | Descrição                                                                       |
+| ------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `ODBC_E2E_BENCHMARK`            | Sim (para correr) | `true`: executa `test/live/odbc_rpc_benchmark_live_e2e_test.dart`.              |
+| `ODBC_E2E_BENCHMARK_RECORD`     | Não               | `true`: anexa linhas ao ficheiro JSONL (padrão `benchmark/e2e_odbc_rpc.jsonl`). |
+| `ODBC_E2E_BENCHMARK_FILE`       | Não               | Caminho alternativo do JSONL.                                                   |
+| `ODBC_E2E_BENCHMARK_DB_HOSTING` | Não               | `local` ou `remote` — metadado para gráficos.                                   |
+| `ODBC_E2E_BENCHMARK_MAX_MS_*`   | Não               | Limites de regressão por caso (ex.: `ODBC_E2E_BENCHMARK_MAX_MS_MATERIALIZED`).  |
 
 Resumo do histórico: `dart run tool/summarize_e2e_benchmark.dart`.
 
 CI opcional (manual): `.github/workflows/e2e_benchmark_optional.yml`.
 
+### Micro-benchmarks gzip / compressor (tag `benchmark`)
+
+Suites leves que medem apenas CPU de gzip e do `GzipCompressor` (sem Socket.IO nem ODBC). Documentação detalhada: [`benchmark/README.md`](../../benchmark/README.md) (secções 4 e 5).
+
+| Variável                         | Obrigatória       | Descrição                                                                                                                                        |
+| -------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CODEC_GZIP_BENCHMARK`           | Sim (para correr) | `true`: executa `test/benchmark/gzip_codec_benchmark_test.dart` (primitivas byte-a-byte).                                                        |
+| `CODEC_GZIP_BENCHMARK_ITERATIONS` | Não               | Iterações (default 24).                                                                                                                          |
+| `CODEC_GZIP_BENCHMARK_PAYLOAD_KB` | Não              | Tamanho do buffer de teste em KiB (default 256).                                                                                                   |
+| `GZIP_COMPRESSOR_BENCHMARK`      | Sim (para correr) | `true`: executa `test/benchmark/gzip_compressor_benchmark_test.dart` (mapas `compressed_data` + base64).                                        |
+| `GZIP_COMPRESSOR_BENCHMARK_*`    | Não               | Ver comentários no ficheiro de teste / `benchmark/README.md` (iterações, contagem de linhas, tamanho de payload por linha).                      |
+
+**Importante:** estes testes leem `Platform.environment`. O Flutter **não** carrega automaticamente o `.env` para variáveis de processo; defina-as no shell (por exemplo `CODEC_GZIP_BENCHMARK=true flutter test ...`) ou use a mesma convenção que o vosso CI. Os benchmarks de transporte (`SOCKET_TRANSPORT_*`) continuam a usar `E2EEnv` / `.env` via `loadLiveTestEnv()`.
+
 #### Métricas esperadas (diagnóstico)
 
 Chaves estáveis no `MetricsCollector` (exportação, ex.: OpenTelemetry):
 
-| Contador (chave)                      | Quando incrementa                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `multi_result_pool_vacuous_fallback`  | Multi-result no pool devolveu sucesso mas envelope vazio; gateway repetiu em conexão direta. |
-| `multi_result_direct_still_vacuous`   | Mesmo em conexão direta o multi-result seguiu vazio (driver/edge case).             |
-| `transactional_batch_direct_path`     | Cada `executeBatch` com `transaction: true` executado pelo caminho ODBC direto.     |
+| Contador (chave)                     | Quando incrementa                                                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `multi_result_pool_vacuous_fallback` | Multi-result no pool devolveu sucesso mas envelope vazio; gateway repetiu em conexão direta. |
+| `multi_result_direct_still_vacuous`  | Mesmo em conexão direta o multi-result seguiu vazio (driver/edge case).                      |
+| `transactional_batch_direct_path`    | Cada `executeBatch` com `transaction: true` executado pelo caminho ODBC direto.              |
 
 O 3.º teste do grupo valida multi-result e, quando há dados, espera `multi_result_direct_still_vacuous` = 0. O 4.º teste (opcional) espera `transactional_batch_direct_path` ≥ 1.
 
@@ -189,7 +203,8 @@ Edite as variáveis no início de cada script. Consulte `docs/database/sql_anywh
 - `test/helpers/odbc_e2e_row_assertions.dart` – leitura de colunas ODBC case-insensitive nos testes
 - `test/helpers/odbc_e2e_rpc_harness.dart` – gateway real + `RpcMethodDispatcher` para E2E RPC
 - `.env.example` – template com todas as variáveis documentadas
-- `benchmark/README.md` – estratégia de benchmark ODBC RPC (JSONL, `run_id`, limites)
+- `benchmark/README.md` – suites de benchmark (ODBC RPC, transporte Socket, micro gzip)
+- `test/benchmark/gzip_codec_benchmark_test.dart` / `test/benchmark/gzip_compressor_benchmark_test.dart` – micro-benchmarks gzip (variáveis `CODEC_GZIP_*` / `GZIP_COMPRESSOR_*`)
 - `tool/summarize_e2e_benchmark.dart` – resumo textual do histórico JSONL
 - `docs/database/sql_anywhere_connection.md` – formato de connection string SQL Anywhere
 

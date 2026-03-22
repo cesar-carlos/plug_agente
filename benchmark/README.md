@@ -59,6 +59,20 @@ Case keys:
 - `socket_transport_e2e_ack_retry`
 - `socket_transport_e2e_streaming_backpressure`
 
+### 4) GZIP byte primitives (VM zlib)
+
+- Test: `test/benchmark/gzip_codec_benchmark_test.dart`
+- Gate: `CODEC_GZIP_BENCHMARK=true` (**process environment**, not read from `.env` by the test)
+- Optional: `CODEC_GZIP_BENCHMARK_ITERATIONS` (default 24), `CODEC_GZIP_BENCHMARK_PAYLOAD_KB` (default 256)
+- Measures: `gzipCompressBytesOrThrow` / `gzipDecompressBytesOrThrow` (`dart:io` gzip), used by `TransportPipeline` and `GzipCompressor`
+
+### 5) GzipCompressor (rows + base64 wrapper)
+
+- Test: `test/benchmark/gzip_compressor_benchmark_test.dart`
+- Gate: `GZIP_COMPRESSOR_BENCHMARK=true` (**process environment**)
+- Optional: `GZIP_COMPRESSOR_BENCHMARK_ITERATIONS`, `GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS`, `GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS`, `GZIP_COMPRESSOR_BENCHMARK_LARGE_ROW_PAYLOAD_CHARS`
+- Covers sync path (small UTF-8 JSON) vs `compute` path (large JSON), aligned with `gzipRowComputeMinUtf8Bytes` in `lib/infrastructure/compression/gzip_compressor.dart`
+
 ## Profiles and comparability
 
 For ODBC benchmark, profile compatibility is based on:
@@ -111,6 +125,8 @@ flutter test --tags benchmark
 flutter test test/live/odbc_rpc_benchmark_live_e2e_test.dart
 flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart
 flutter test test/infrastructure/external_services/socket_transport_e2e_benchmark_test.dart
+CODEC_GZIP_BENCHMARK=true flutter test test/benchmark/gzip_codec_benchmark_test.dart --tags benchmark
+GZIP_COMPRESSOR_BENCHMARK=true flutter test test/benchmark/gzip_compressor_benchmark_test.dart --tags benchmark
 dart run tool/summarize_e2e_benchmark.dart
 dart run tool/summarize_e2e_benchmark.dart benchmark/socket_transport_e2e.jsonl
 ```

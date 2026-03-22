@@ -5,5 +5,7 @@ tags:
       Run `flutter test --exclude-tags=live` for a faster local/CI pass.
   benchmark:
     description: >
-      Performance-style E2E (e.g. ODBC RPC timings). Often gated by ODBC_E2E_BENCHMARK=true.
-      Run `flutter test --tags benchmark` only when you intend to measure latency.
+      Performance-style tests (ODBC RPC, socket transport, gzip micro-benchmarks).
+      Often gated by env flags (e.g. ODBC_E2E_BENCHMARK, SOCKET_TRANSPORT_BENCHMARK,
+      CODEC_GZIP_BENCHMARK, GZIP_COMPRESSOR_BENCHMARK). Run `flutter test --tags benchmark`
+      only when you intend to measure latency.

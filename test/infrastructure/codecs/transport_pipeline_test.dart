@@ -215,6 +215,80 @@ void main() {
     );
 
     test(
+      'receiveProcessAsync matches receiveProcess when gzip isolate path is used',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: 1,
+        );
+        final pad = 'p' * (gzipIsolateThresholdBytes + 2048);
+        final originalData = {'blob': pad};
+        final frame = pipeline.prepareSend(originalData).getOrThrow();
+        expect(frame.cmp, equals('gzip'));
+        expect(frame.originalSize, greaterThanOrEqualTo(gzipIsolateThresholdBytes));
+
+        const relaxedInflation = 500.0;
+        final syncResult = pipeline.receiveProcess(
+          frame,
+          maxInflationRatio: relaxedInflation,
+        );
+        final asyncResult = await pipeline.receiveProcessAsync(
+          frame,
+          maxInflationRatio: relaxedInflation,
+        );
+        expect(syncResult.isSuccess(), isTrue);
+        expect(asyncResult.isSuccess(), isTrue);
+        expect(asyncResult.getOrThrow(), equals(syncResult.getOrThrow()));
+      },
+    );
+
+    test(
+      'prepareSendAsync matches prepareSend for large gzip payloads',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: 1,
+        );
+        final pad = 'q' * (gzipIsolateThresholdBytes + 2048);
+        final originalData = {'blob': pad};
+
+        const traceId = 'bench-trace';
+        const requestId = 'bench-req';
+        final syncFrame = pipeline
+            .prepareSend(originalData, traceId: traceId, requestId: requestId)
+            .getOrThrow();
+        final asyncResult = await pipeline.prepareSendAsync(
+          originalData,
+          traceId: traceId,
+          requestId: requestId,
+        );
+        expect(asyncResult.isSuccess(), isTrue);
+        final asyncFrame = asyncResult.getOrThrow();
+
+        expect(asyncFrame.cmp, equals(syncFrame.cmp));
+        expect(asyncFrame.originalSize, equals(syncFrame.originalSize));
+        expect(asyncFrame.compressedSize, equals(syncFrame.compressedSize));
+        expect(asyncFrame.payload, equals(syncFrame.payload));
+
+        const relaxedInflation = 500.0;
+        expect(
+          pipeline
+              .receiveProcess(syncFrame, maxInflationRatio: relaxedInflation)
+              .getOrThrow(),
+          equals(originalData),
+        );
+        expect(
+          pipeline
+              .receiveProcess(asyncFrame, maxInflationRatio: relaxedInflation)
+              .getOrThrow(),
+          equals(originalData),
+        );
+      },
+    );
+
+    test(
       'receiveProcessAsync decodes large JSON via isolate when above threshold',
       () async {
         final pipeline = TransportPipeline(

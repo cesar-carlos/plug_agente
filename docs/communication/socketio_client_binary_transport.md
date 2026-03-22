@@ -119,9 +119,16 @@ Ao receber qualquer evento de aplicacao:
 - Rejeitar `cmp` nao suportado.
 - Aplicar limite de expansao para evitar zip bomb.
 - Nao assumir que toda mensagem vira `gzip`; suportar `cmp: none`.
-- Mapear falha de decode para `-32010`.
-- Mapear falha de compressao/descompressao para `-32011`.
-- Mapear excesso de payload para `-32009`.
+- Mapear falha de **decode** do conteudo ja descomprimido (ex.: JSON invalido apos `cmp: none` ou apos gunzip) para `-32010`.
+- Mapear falha de **compressao/descompressao GZIP** do blob em `payload` para `-32011`.
+- Mapear **excesso de payload** / limites negociados para `-32009`.
+- Quando o erro for de **encode JSON** do payload logico antes de montar o frame (payload invalido para serializar), mapear para `-32009` (`invalid payload`), nao confundir com `-32011`.
+
+### Implementacao de referencia (Plug Agente, Dart)
+
+- **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
+- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`dart:io` gzip** (zlib da VM), partilhadas com o pipeline e com o compressor de linhas.
+- **Segundo formato (nao e o frame):** respostas SQL podem usar `GzipCompressor` (`lib/infrastructure/compression/gzip_compressor.dart`): lista de maps com `compressed_data` (base64) e `is_compressed`; e independente do envelope `PayloadFrame` acima.
 
 ## Handshake e capabilities
 
