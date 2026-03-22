@@ -152,6 +152,48 @@ void main() {
       expect(m.containsKey('rpc_sql_execute_batch_reads'), isFalse);
     });
 
+    test('odbcE2eBenchmarkMaxMsByCase parses IDEMPOTENCY_HEAVY suffix', () {
+      E2EEnv.seedFileEnvForTesting(<String, String>{
+        'ODBC_E2E_BENCHMARK_MAX_MS_IDEMPOTENCY_HEAVY': '2400',
+      });
+      expect(
+        E2EEnv.odbcE2eBenchmarkMaxMsByCase['rpc_sql_execute_idempotency_heavy_params'],
+        2400,
+      );
+    });
+
+    test('odbcE2eBenchmarkBatchCommandCount defaults and clamps', () {
+      expect(E2EEnv.odbcE2eBenchmarkBatchCommandCount, 3);
+
+      E2EEnv.seedFileEnvForTesting(<String, String>{
+        'ODBC_E2E_BENCHMARK_BATCH_COMMAND_COUNT': '40',
+      });
+      expect(E2EEnv.odbcE2eBenchmarkBatchCommandCount, 32);
+
+      E2EEnv.seedFileEnvForTesting(<String, String>{
+        'ODBC_E2E_BENCHMARK_BATCH_COMMAND_COUNT': 'x',
+      });
+      expect(E2EEnv.odbcE2eBenchmarkBatchCommandCount, 3);
+    });
+
+    test('odbcE2eBenchmarkMaterializedMaxRows defaults and clamps', () {
+      expect(E2EEnv.odbcE2eBenchmarkMaterializedMaxRows, 0);
+
+      E2EEnv.seedFileEnvForTesting(<String, String>{
+        'ODBC_E2E_BENCHMARK_MATERIALIZED_MAX_ROWS': '500',
+      });
+      expect(E2EEnv.odbcE2eBenchmarkMaterializedMaxRows, 500);
+    });
+
+    test('odbcE2eBenchmarkIdempotencyWasteBytes defaults and clamps', () {
+      expect(E2EEnv.odbcE2eBenchmarkIdempotencyWasteBytes, 0);
+
+      E2EEnv.seedFileEnvForTesting(<String, String>{
+        'ODBC_E2E_BENCHMARK_IDEMPOTENCY_WASTE_BYTES': '9999999',
+      });
+      expect(E2EEnv.odbcE2eBenchmarkIdempotencyWasteBytes, 2 * 1024 * 1024);
+    });
+
     test('benchmark profiles default to the tuned matrix', () {
       final resolved = E2EEnv.odbcE2eBenchmarkProfileSet;
 

@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -90,6 +91,19 @@ bool _requireBaseline() {
   return _envFlag('SOCKET_TRANSPORT_E2E_BENCHMARK_REQUIRE_BASELINE');
 }
 
+/// When `SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT=false`,
+/// skips full outgoing RPC contract validation (faster; default validates).
+bool _strictOutgoingContract() {
+  final raw =
+      E2EEnv.get('SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT')
+          ?.trim()
+          .toLowerCase();
+  if (raw == 'false') {
+    return false;
+  }
+  return true;
+}
+
 Map<String, int> _maxMsByCase() {
   final out = <String, int>{};
   void add(String suffix, String caseKey) {
@@ -108,7 +122,15 @@ Map<String, int> _maxMsByCase() {
   return out;
 }
 
-String _buildMode() => 'debug';
+String _e2eSocketTransportBenchmarkBuildMode() {
+  if (kReleaseMode) {
+    return 'release';
+  }
+  if (kProfileMode) {
+    return 'profile';
+  }
+  return 'debug';
+}
 
 List<Map<String, dynamic>> _loadBaselineRecords(String configuredPath) {
   final file = resolveE2eBenchmarkOutputFile(configuredPath);
@@ -230,9 +252,9 @@ void main() async {
           ),
         ).thenReturn(socket);
         when(() => socket.connected).thenReturn(true);
-        when(() => socket.connect()).thenReturn(socket);
-        when(() => socket.disconnect()).thenReturn(socket);
-        when(() => socket.dispose()).thenReturn(null);
+        when(socket.connect).thenReturn(socket);
+        when(socket.disconnect).thenReturn(socket);
+        when(socket.dispose).thenReturn(null);
         when(() => socket.on(any<String>(), any())).thenAnswer((invocation) {
           handlers[invocation.positionalArguments[0] as String] =
               invocation.positionalArguments[1] as Function;
@@ -280,7 +302,7 @@ void main() async {
         when(() => featureFlags.enableSocketSchemaValidation).thenReturn(false);
         when(
           () => featureFlags.enableSocketOutgoingContractValidation,
-        ).thenReturn(true);
+        ).thenReturn(_strictOutgoingContract());
         when(
           () => featureFlags.enableSocketSummarizeLargePayloadLogs,
         ).thenReturn(false);
@@ -333,7 +355,7 @@ void main() async {
         );
 
         when(
-          () => dispatcher.cancelActiveStreamOnDisconnect(),
+          dispatcher.cancelActiveStreamOnDisconnect,
         ).thenAnswer((_) async {});
         when(
           () => dispatcher.dispatch(
@@ -450,7 +472,6 @@ void main() async {
             await dispatchAndWait(nextId('rpc'));
           },
           warmup: 1,
-          iterations: 8,
         );
 
         final ackRetry = await E2eBenchmarkStats.measureAsync(
@@ -470,6 +491,9 @@ void main() async {
           warmup: 1,
           iterations: 6,
         );
+
+        // Isolate streaming phase from ack-retry callbacks / pending futures.
+        await Future<void>.delayed(const Duration(milliseconds: 25));
 
         final streamingBackpressure = await E2eBenchmarkStats.measureAsync(
           () async {
@@ -514,13 +538,14 @@ void main() async {
           final comparableBaseline = selectComparableE2eBenchmarkRecords(
             records: _loadBaselineRecords(baselineFile),
             targetLabel: 'socket_transport_e2e',
-            buildMode: _buildMode(),
+            buildMode: _e2eSocketTransportBenchmarkBuildMode(),
             benchmarkProfile: <String, dynamic>{
               'ack_failures': _positiveIntEnv(
                 'SOCKET_TRANSPORT_E2E_BENCHMARK_ACK_FAILS',
                 1,
               ),
               'stream_chunks': 4,
+              'strict_outgoing_contract': _strictOutgoingContract(),
             },
           );
           if (_requireBaseline()) {
@@ -556,7 +581,7 @@ void main() async {
               'run_id': const Uuid().v4(),
               'recorded_at': DateTime.now().toUtc().toIso8601String(),
               'target_label': 'socket_transport_e2e',
-              'build_mode': _buildMode(),
+              'build_mode': _e2eSocketTransportBenchmarkBuildMode(),
               'git_revision': resolveE2eGitRevision(),
               'dart_platform': Platform.operatingSystem,
               'dart_version': Platform.version.split('\n').first,
@@ -566,6 +591,7 @@ void main() async {
                   1,
                 ),
                 'stream_chunks': 4,
+                'strict_outgoing_contract': _strictOutgoingContract(),
               },
               'cases': cases,
             },

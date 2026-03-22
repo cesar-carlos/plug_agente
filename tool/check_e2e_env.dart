@@ -1,7 +1,5 @@
 // ignore_for_file: avoid_print
 
-library;
-
 import 'dart:io';
 
 import 'e2e_benchmark_profile_parse.dart';
@@ -112,6 +110,12 @@ void main() {
   );
   final socketTransportBenchRequireBaseline =
       get('SOCKET_TRANSPORT_BENCHMARK_REQUIRE_BASELINE') == 'true';
+  final socketTransportBenchIncludeJumbo =
+      get('SOCKET_TRANSPORT_BENCHMARK_INCLUDE_JUMBO') == 'true';
+  final socketTransportBenchJumboBytes = get(
+        'SOCKET_TRANSPORT_BENCHMARK_JUMBO_BLOB_BYTES',
+      ) ??
+      '286720';
 
   final socketTransportE2eBench =
       get('SOCKET_TRANSPORT_E2E_BENCHMARK') == 'true';
@@ -137,6 +141,12 @@ void main() {
   );
   final socketTransportE2eRequireBaseline =
       get('SOCKET_TRANSPORT_E2E_BENCHMARK_REQUIRE_BASELINE') == 'true';
+  final socketTransportE2eStrictOutgoing =
+      get('SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT') ?? 'true';
+
+  final retryManagerBench = get('RETRY_MANAGER_BENCHMARK') == 'true';
+  final idempotencyFingerprintBench =
+      get('IDEMPOTENCY_FINGERPRINT_BENCHMARK') == 'true';
 
   final resolvedBenchProfiles = resolveOdbcE2eBenchmarkProfiles(
     matrixRaw: get('ODBC_E2E_BENCHMARK_MATRIX'),
@@ -314,6 +324,10 @@ void main() {
         'require_baseline=$socketTransportBenchRequireBaseline',
       );
     }
+    print(
+      '  -> Jumbo isolate roundtrip: include_jumbo=$socketTransportBenchIncludeJumbo '
+      'jumbo_blob_bytes=$socketTransportBenchJumboBytes',
+    );
   } else {
     print(
       '  -> transport_pipeline_benchmark_test: ignorado (defina SOCKET_TRANSPORT_BENCHMARK=true).',
@@ -337,6 +351,10 @@ void main() {
     if (socketTransportE2eAckFails != null) {
       print('  -> Perfil: ack_fails=$socketTransportE2eAckFails');
     }
+    print(
+      '  -> strict_outgoing_contract: $socketTransportE2eStrictOutgoing '
+      '(defina SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT=false para desligar)',
+    );
     if (socketTransportE2eBenchBaseline != null &&
         socketTransportE2eBenchRegression != null) {
       print(
@@ -353,6 +371,14 @@ void main() {
       '  -> socket_transport_e2e_benchmark_test: ignorado (defina SOCKET_TRANSPORT_E2E_BENCHMARK=true).',
     );
   }
+
+  print('');
+  print(
+    'RETRY_MANAGER_BENCHMARK: ${retryManagerBench ? "true (retry_manager_benchmark_test)" : "nao definido ou false"}',
+  );
+  print(
+    'IDEMPOTENCY_FINGERPRINT_BENCHMARK: ${idempotencyFingerprintBench ? "true (idempotency_fingerprint_benchmark_test)" : "nao definido ou false"}',
+  );
 
   print('');
   print('Integracao offline (sem .env / rede / ODBC):');
