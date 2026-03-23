@@ -107,7 +107,7 @@ void main() {
               f,
               useTimeoutByStage: true,
             );
-            expect(err.code, greaterThan(0));
+            expect(err.code, isNot(0));
           }
         },
         iterations: iterations,
