@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
@@ -9,15 +10,26 @@ import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-/// Bytes above which compression runs in isolate to avoid jank.
-const int gzipIsolateThresholdBytes = 32 * 1024;
+/// Bytes above which **inbound** gzip / JSON uses worker isolates (decode path).
+const int gzipIsolateDecodeThresholdBytes = 32 * 1024;
+
+/// Extra slack for **outbound** gzip isolate vs decode: avoids flapping when
+/// compressed wire size is smaller than UTF-8 JSON size.
+const int gzipIsolateEncodeSlackBytes = 4 * 1024;
+
+/// Threshold for outbound gzip [compute] (encode path).
+const int gzipIsolateEncodeThresholdBytes = gzipIsolateDecodeThresholdBytes + gzipIsolateEncodeSlackBytes;
+
+/// Kept for benchmarks/tests; same as [gzipIsolateDecodeThresholdBytes].
+const int gzipIsolateThresholdBytes = gzipIsolateDecodeThresholdBytes;
 
 /// Whether inbound processing should use [TransportPipeline.receiveProcessAsync]
 /// so gzip decompression and/or JSON decode can run off the UI isolate.
 bool incomingPayloadFrameNeedsAsyncDecode(PayloadFrame frame) {
   switch (frame.cmp) {
     case 'gzip':
-      return frame.compressedSize >= gzipIsolateThresholdBytes || frame.originalSize >= gzipIsolateThresholdBytes;
+      return frame.compressedSize >= gzipIsolateDecodeThresholdBytes ||
+          frame.originalSize >= gzipIsolateDecodeThresholdBytes;
     case 'none':
       return frame.enc == 'json' && frame.originalSize >= jsonPayloadIsolateEncodeThresholdBytes;
     default:
@@ -26,8 +38,8 @@ bool incomingPayloadFrameNeedsAsyncDecode(PayloadFrame frame) {
 }
 
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
-  final jsonString = utf8.decode(bytes);
-  return jsonDecode(jsonString) as Object;
+  final dynamic decoded = utf8.decoder.fuse(json.decoder).convert(bytes);
+  return decoded as Object;
 }
 
 /// Top-level for [compute]: JSON-serializable values only.
@@ -40,6 +52,9 @@ Result<Uint8List> _resolveFramePayloadBytes(PayloadFrame frame) {
   final dynamic payload = frame.payload;
   if (payload is Uint8List) {
     return Success(payload);
+  }
+  if (payload is Uint8ClampedList) {
+    return Success(Uint8List.sublistView(payload));
   }
   if (payload is List<int>) {
     return Success(Uint8List.fromList(payload));
@@ -78,6 +93,7 @@ class TransportPipeline {
     required this.compression,
     this.compressionThreshold = 1024,
     this.schemaVersion = '1.0',
+    this.gzipOutboundZlibLevel = gzipTransportZlibLevel,
   });
 
   /// Selected encoding format.
@@ -92,6 +108,10 @@ class TransportPipeline {
 
   /// Schema version for the payload frame.
   final String schemaVersion;
+
+  /// Zlib level for outbound PayloadFrame gzip (`1` = fast). From prefs or
+  /// [gzipTransportZlibLevel] default when constructed without override.
+  final int gzipOutboundZlibLevel;
 
   final _uuid = const Uuid();
 
@@ -130,14 +150,21 @@ class TransportPipeline {
       int compressedSize;
 
       if (shouldCompress) {
-        final gzipCodec = CompressionCodecFactory.getCodec('gzip');
-        final compressResult = gzipCodec.compress(encodedBytes);
-
-        if (compressResult.isError()) {
-          return Failure(compressResult.exceptionOrNull()!);
+        late final Uint8List compressedBytes;
+        try {
+          compressedBytes = gzipCompressBytesOrThrow(
+            encodedBytes,
+            compressionLevel: gzipOutboundZlibLevel,
+          );
+        } on Object catch (error) {
+          return Failure(
+            domain.CompressionFailure.withContext(
+              message: 'Failed to compress with GZIP',
+              cause: error,
+              context: {'operation': 'compress', 'algorithm': 'gzip'},
+            ),
+          );
         }
-
-        final compressedBytes = compressResult.getOrThrow();
         if (compression == 'auto' && compressedBytes.length >= originalSize) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
@@ -183,7 +210,7 @@ class TransportPipeline {
   }
 
   /// Async variant: uses [compute] for gzip when payload exceeds
-  /// [gzipIsolateThresholdBytes] to avoid jank on the main isolate.
+  /// [gzipIsolateEncodeThresholdBytes] to avoid jank on the main isolate.
   Future<Result<PayloadFrame>> prepareSendAsync(
     dynamic data, {
     String? traceId,
@@ -227,17 +254,28 @@ class TransportPipeline {
       int compressedSize;
 
       if (shouldCompress) {
-        final useIsolate = originalSize >= gzipIsolateThresholdBytes;
-        final Uint8List compressedBytes;
+        final useIsolate = originalSize >= gzipIsolateEncodeThresholdBytes;
+        late final Uint8List compressedBytes;
         if (useIsolate) {
-          compressedBytes = await compute(gzipCompressBytesOrThrow, encodedBytes);
+          compressedBytes = await compute(
+            gzipCompressWithLevelForIsolate,
+            (encodedBytes, gzipOutboundZlibLevel),
+          );
         } else {
-          final gzipCodec = CompressionCodecFactory.getCodec('gzip');
-          final compressResult = gzipCodec.compress(encodedBytes);
-          if (compressResult.isError()) {
-            return Failure(compressResult.exceptionOrNull()!);
+          try {
+            compressedBytes = gzipCompressBytesOrThrow(
+              encodedBytes,
+              compressionLevel: gzipOutboundZlibLevel,
+            );
+          } on Object catch (error) {
+            return Failure(
+              domain.CompressionFailure.withContext(
+                message: 'Failed to compress with GZIP',
+                cause: error,
+                context: {'operation': 'compress', 'algorithm': 'gzip'},
+              ),
+            );
           }
-          compressedBytes = compressResult.getOrThrow();
         }
         if (compression == 'auto' && compressedBytes.length >= originalSize) {
           finalBytes = encodedBytes;
@@ -419,7 +457,7 @@ class TransportPipeline {
   }
 
   /// Like [receiveProcess], but runs GZIP decompression in an isolate when the
-  /// compressed payload is at least [gzipIsolateThresholdBytes].
+  /// compressed payload is at least [gzipIsolateDecodeThresholdBytes].
   Future<Result<dynamic>> receiveProcessAsync(
     PayloadFrame frame, {
     int? maxCompressedBytes,
@@ -481,7 +519,7 @@ class TransportPipeline {
       if (frame.cmp != 'none') {
         final useGzipIsolate =
             frame.cmp == 'gzip' &&
-            (bytes.length >= gzipIsolateThresholdBytes || frame.originalSize >= gzipIsolateThresholdBytes);
+            (bytes.length >= gzipIsolateDecodeThresholdBytes || frame.originalSize >= gzipIsolateDecodeThresholdBytes);
         if (useGzipIsolate) {
           try {
             decodableBytes = await compute(gzipDecompressBytesOrThrow, bytes);
@@ -546,7 +584,10 @@ class TransportPipeline {
       final Object decoded;
       if (frame.enc == 'json' && decodableBytes.length >= jsonPayloadIsolateEncodeThresholdBytes) {
         try {
-          decoded = await compute(_jsonDecodeUtf8PayloadInIsolate, decodableBytes);
+          decoded = await compute(
+            _jsonDecodeUtf8PayloadInIsolate,
+            decodableBytes,
+          );
         } on Object catch (error) {
           return Failure(
             domain.PayloadEncodingFailure.withContext(

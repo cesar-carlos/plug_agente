@@ -9,15 +9,18 @@ class _MockResolver extends Mock implements IAuthorizationPolicyResolver {}
 
 void main() {
   group('ClientTokenValidationService', () {
-    test('validate returns failure without calling resolver when token is blank', () async {
-      final resolver = _MockResolver();
-      final service = ClientTokenValidationService(resolver);
+    test(
+      'validate returns failure without calling resolver when token is blank',
+      () async {
+        final resolver = _MockResolver();
+        final service = ClientTokenValidationService(resolver);
 
-      final result = await service.validate('  \t  ');
+        final result = await service.validate('  \t  ');
 
-      expect(result.isError(), isTrue);
-      verifyNever(() => resolver.resolvePolicy(any()));
-    });
+        expect(result.isError(), isTrue);
+        verifyNever(() => resolver.resolvePolicy(any()));
+      },
+    );
 
     test('validate delegates to resolver for non-empty token', () async {
       final resolver = _MockResolver();

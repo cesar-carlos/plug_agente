@@ -51,8 +51,7 @@ class JsonPayloadCodec implements IPayloadCodec {
   @override
   Result<dynamic> decode(Uint8List bytes) {
     try {
-      final jsonString = utf8.decode(bytes);
-      final decoded = jsonDecode(jsonString);
+      final dynamic decoded = utf8.decoder.fuse(json.decoder).convert(bytes);
       return Success(decoded as Object);
     } on Exception catch (error) {
       return Failure(

@@ -14,10 +14,9 @@ String _computeFormattedData(dynamic data) {
   try {
     String raw;
     if (data is Map || data is List) {
-      final compact = jsonEncode(data);
-      raw = compact.length > _maxFormattedDataChars
-          ? compact
-          : const JsonEncoder.withIndent('  ').convert(data);
+      // Always compact JSON: pretty-print duplicates work and is much slower on
+      // medium/large structures; truncation handles display size.
+      raw = jsonEncode(data);
     } else {
       raw = data.toString();
     }

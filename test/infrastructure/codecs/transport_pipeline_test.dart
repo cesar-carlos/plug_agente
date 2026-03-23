@@ -226,7 +226,10 @@ void main() {
         final originalData = {'blob': pad};
         final frame = pipeline.prepareSend(originalData).getOrThrow();
         expect(frame.cmp, equals('gzip'));
-        expect(frame.originalSize, greaterThanOrEqualTo(gzipIsolateThresholdBytes));
+        expect(
+          frame.originalSize,
+          greaterThanOrEqualTo(gzipIsolateThresholdBytes),
+        );
 
         const relaxedInflation = 500.0;
         final syncResult = pipeline.receiveProcess(

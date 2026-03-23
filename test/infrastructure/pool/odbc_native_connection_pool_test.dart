@@ -269,31 +269,34 @@ void main() {
       expect(recycled.isError(), isTrue);
     });
 
-    test('getActiveCount should sum active connections from pool state', () async {
-      when(
-        () => mockService.poolCreate(any(), any()),
-      ).thenAnswer((_) async => const Success(20));
-      when(
-        () => mockService.poolGetConnection(20),
-      ).thenAnswer(
-        (_) async => Success(
-          Connection(
-            id: 'c1',
-            connectionString: 'DSN=Test',
-            createdAt: DateTime.now(),
-            isActive: true,
+    test(
+      'getActiveCount should sum active connections from pool state',
+      () async {
+        when(
+          () => mockService.poolCreate(any(), any()),
+        ).thenAnswer((_) async => const Success(20));
+        when(
+          () => mockService.poolGetConnection(20),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'c1',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
           ),
-        ),
-      );
-      when(() => mockService.poolGetState(20)).thenAnswer(
-        (_) async => const Success(PoolState(size: 6, idle: 2)),
-      );
+        );
+        when(() => mockService.poolGetState(20)).thenAnswer(
+          (_) async => const Success(PoolState(size: 6, idle: 2)),
+        );
 
-      await pool.acquire('DSN=Test');
-      final count = await pool.getActiveCount();
+        await pool.acquire('DSN=Test');
+        final count = await pool.getActiveCount();
 
-      expect(count.getOrNull(), 4);
-    });
+        expect(count.getOrNull(), 4);
+      },
+    );
 
     test('healthCheckAll should fail when pool is unhealthy', () async {
       when(
@@ -373,11 +376,16 @@ void main() {
       expect(health.isSuccess(), isTrue);
     });
 
-    test('warmIdleLeases should succeed without touching the ODBC service', () async {
-      final result = await pool.warmIdleLeases('DSN=Test');
-      expect(result.isSuccess(), isTrue);
-      verifyNever(() => mockService.poolCreate(any(), any()));
-      verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
-    });
+    test(
+      'warmIdleLeases should succeed without touching the ODBC service',
+      () async {
+        final result = await pool.warmIdleLeases('DSN=Test');
+        expect(result.isSuccess(), isTrue);
+        verifyNever(() => mockService.poolCreate(any(), any()));
+        verifyNever(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        );
+      },
+    );
   });
 }

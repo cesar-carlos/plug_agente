@@ -13,12 +13,15 @@ void main() async {
   await loadLiveTestEnv();
 
   final connectionString = E2EEnv.odbcConnectionStringAny;
-  final connectionStringValid = connectionString != null && connectionString.trim().isNotEmpty;
+  final connectionStringValid =
+      connectionString != null && connectionString.trim().isNotEmpty;
   final smokeQuery = E2EEnv.odbcSmokeQuery;
-  final longRunningQuery = connectionString != null && connectionString.trim().isNotEmpty
+  final longRunningQuery =
+      connectionString != null && connectionString.trim().isNotEmpty
       ? E2EEnv.odbcLongQueryForDsn(connectionString)
       : null;
-  final longQueryValid = longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
+  final longQueryValid =
+      longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
 
   group('ODBC streaming live', () {
     OdbcLiveBootstrap? bootstrap;
@@ -83,7 +86,8 @@ void main() async {
           reason: 'ODBC init failed or DSN not configured',
         );
 
-        const unionProbe = 'SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3';
+        const unionProbe =
+            'SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3';
         var chunkEvents = 0;
         var totalRows = 0;
         final result = await gateway.executeQueryStream(

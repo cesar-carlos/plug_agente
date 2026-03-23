@@ -210,7 +210,8 @@ class CompressionFailure extends Failure {
 
 /// JSON (or other payload) encode/decode failed — distinct from wire compression.
 class PayloadEncodingFailure extends Failure {
-  PayloadEncodingFailure(String message) : super(message, 'PAYLOAD_ENCODING_ERROR');
+  PayloadEncodingFailure(String message)
+    : super(message, 'PAYLOAD_ENCODING_ERROR');
 
   PayloadEncodingFailure.withContext({
     required super.message,

@@ -138,6 +138,32 @@ class E2eBenchmarkStats {
   };
 
   /// Runs [body] [warmup] times, then collects [iterations] samples (wall clock).
+  static E2eBenchmarkStats measureSync(
+    void Function() body, {
+    int warmup = 2,
+    int iterations = 8,
+  }) {
+    for (var i = 0; i < warmup; i++) {
+      body();
+    }
+    final samples = <int>[];
+    final sw = Stopwatch();
+    for (var i = 0; i < iterations; i++) {
+      sw
+        ..reset()
+        ..start();
+      body();
+      sw.stop();
+      samples.add(sw.elapsedMilliseconds);
+    }
+    return E2eBenchmarkStats(
+      warmup: warmup,
+      iterations: iterations,
+      samplesMs: samples,
+    );
+  }
+
+  /// Runs [body] [warmup] times, then collects [iterations] samples (wall clock).
   static Future<E2eBenchmarkStats> measureAsync(
     Future<void> Function() body, {
     int warmup = 2,

@@ -40,10 +40,13 @@ void main() {
         resourceType: DatabaseResourceType.table,
         name: 'T1',
       );
-      expect(r.toJson(), equals(<String, dynamic>{
-        'resource_type': 'table',
-        'resource': 't1',
-      }));
+      expect(
+        r.toJson(),
+        equals(<String, dynamic>{
+          'resource_type': 'table',
+          'resource': 't1',
+        }),
+      );
     });
 
     test('equality uses type and normalized name', () {

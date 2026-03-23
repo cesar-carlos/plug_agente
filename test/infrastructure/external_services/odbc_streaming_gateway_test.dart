@@ -28,46 +28,52 @@ void main() {
       gateway = OdbcStreamingGateway(mockService, mockSettings);
     });
 
-    test('should use default login timeout in connect options when setting is 0', () async {
-      mockSettings.loginTimeoutSeconds = 0;
-      when(() => mockService.initialize()).thenAnswer(
-        (_) async => const Success(unit),
-      );
-      when(
-        () => mockService.connect(any(), options: any(named: 'options')),
-      ).thenAnswer(
-        (_) async => Success(
-          Connection(
-            id: 'conn-login',
-            connectionString: 'DSN=Test',
-            createdAt: DateTime.now(),
-            isActive: true,
+    test(
+      'should use default login timeout in connect options when setting is 0',
+      () async {
+        mockSettings.loginTimeoutSeconds = 0;
+        when(() => mockService.initialize()).thenAnswer(
+          (_) async => const Success(unit),
+        );
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'conn-login',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
           ),
-        ),
-      );
-      final controller = StreamController<Result<QueryResult>>();
-      when(
-        () => mockService.streamQuery('conn-login', any()),
-      ).thenAnswer((_) => controller.stream);
-      when(
-        () => mockService.disconnect('conn-login'),
-      ).thenAnswer((_) async => const Success(unit));
+        );
+        final controller = StreamController<Result<QueryResult>>();
+        when(
+          () => mockService.streamQuery('conn-login', any()),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockService.disconnect('conn-login'),
+        ).thenAnswer((_) async => const Success(unit));
 
-      final done = gateway.executeQueryStream(
-        'SELECT 1',
-        'DSN=Test',
-        (_) async {},
-      );
-      await controller.close();
-      await done;
+        final done = gateway.executeQueryStream(
+          'SELECT 1',
+          'DSN=Test',
+          (_) async {},
+        );
+        await controller.close();
+        await done;
 
-      final verification = verify(
-        () => mockService.connect('DSN=Test', options: captureAny(named: 'options')),
-      );
-      verification.called(1);
-      final options = verification.captured.single as ConnectionOptions;
-      expect(options.loginTimeout, ConnectionConstants.defaultLoginTimeout);
-    });
+        final verification = verify(
+          () => mockService.connect(
+            'DSN=Test',
+            options: captureAny(named: 'options'),
+          ),
+        );
+        verification.called(1);
+        final options = verification.captured.single as ConnectionOptions;
+        expect(options.loginTimeout, ConnectionConstants.defaultLoginTimeout);
+      },
+    );
 
     test('should split streamed rows by fetchSize', () async {
       final controller = StreamController<Result<QueryResult>>();

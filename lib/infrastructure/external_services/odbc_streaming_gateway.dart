@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -34,9 +35,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
     final maxResultBufferBytes = max(
       normalizedChunkSize,
-      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) *
-          1024 *
-          1024,
+      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
     );
     final initialResultBufferBytes = min(
       ConnectionConstants.defaultInitialResultBufferBytes,
@@ -83,8 +82,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           operation: 'initialize_streaming_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message':
-                'Não foi possível inicializar o ambiente ODBC para streaming.',
+            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
       ),
@@ -173,7 +171,10 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
             await chunkResult.fold(
               (queryResult) async {
                 // Converter chunk e notificar callback
-                final rows = _convertQueryResultToMaps(queryResult);
+                final rows =
+                    OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+                  queryResult,
+                );
                 if (rows.isNotEmpty) {
                   for (final part in _chunkRows(rows, fetchSize)) {
                     await onChunk(part);
@@ -234,9 +235,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     _cancelReason = reason;
     _isCancelRequested = true;
     try {
-      final result = await _service
-          .disconnect(activeConnectionId)
-          .timeout(_cancelDisconnectTimeout);
+      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(
@@ -272,20 +271,4 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     }
   }
 
-  /// Converte QueryResult para lista de maps.
-  List<Map<String, dynamic>> _convertQueryResultToMaps(QueryResult result) {
-    final columns = result.columns;
-    final colCount = columns.length;
-    if (colCount == 0) {
-      return result.rows.map((_) => <String, dynamic>{}).toList();
-    }
-    return result.rows.map((dynamic row) {
-      final listRow = row as List<dynamic>;
-      final map = <String, dynamic>{};
-      for (var i = 0; i < colCount; i++) {
-        map[columns[i]] = listRow[i];
-      }
-      return map;
-    }).toList();
-  }
 }

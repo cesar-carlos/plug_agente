@@ -69,7 +69,9 @@ class AuthorizeSqlOperation {
                 resource: resource,
               );
               if (!allowed) {
-                final reason = policy.isRevoked ? 'token_revoked' : 'missing_permission';
+                final reason = policy.isRevoked
+                    ? 'token_revoked'
+                    : 'missing_permission';
                 _cacheDecision(
                   key: decisionKeys[i],
                   allowed: false,
@@ -240,9 +242,11 @@ class _DecisionCachePhase {
   factory _DecisionCachePhase.denied(domain.ConfigurationFailure failure) =>
       _DecisionCachePhase._(fastFailure: failure);
 
-  factory _DecisionCachePhase.allCachedAllowed() => _DecisionCachePhase._(allSatisfiedByCache: true);
+  factory _DecisionCachePhase.allCachedAllowed() =>
+      _DecisionCachePhase._(allSatisfiedByCache: true);
 
-  factory _DecisionCachePhase.needsCheck(List<int> indices) => _DecisionCachePhase._(pendingIndices: indices);
+  factory _DecisionCachePhase.needsCheck(List<int> indices) =>
+      _DecisionCachePhase._(pendingIndices: indices);
 
   final domain.ConfigurationFailure? fastFailure;
   final bool allSatisfiedByCache;

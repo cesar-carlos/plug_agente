@@ -15,5 +15,6 @@ String normalizeClientCredentialToken(String token) {
 ///
 /// Used for authorization decision keys and policy cache keys so the same
 /// credential string yields one stable identifier.
-String hashClientCredentialToken(String token) =>
-    sha256.convert(utf8.encode(normalizeClientCredentialToken(token))).toString();
+String hashClientCredentialToken(String token) => sha256
+    .convert(utf8.encode(normalizeClientCredentialToken(token)))
+    .toString();

@@ -26,9 +26,10 @@ void main() {
 
     test('should return failure when PowerShell exits non-zero', () async {
       final checker = OdbcDriverChecker(
-        processRun: (String _, List<String> _, {bool runInShell = false}) async {
-          return ProcessResult(0, 1, '', 'cmd failed');
-        },
+        processRun:
+            (String _, List<String> _, {bool runInShell = false}) async {
+              return ProcessResult(0, 1, '', 'cmd failed');
+            },
       );
       final result = await checker.checkDriverInstalled('SQL Server');
       final failure = result.fold(
@@ -41,9 +42,10 @@ void main() {
 
     test('should return true when stdout contains driver name', () async {
       final checker = OdbcDriverChecker(
-        processRun: (String _, List<String> _, {bool runInShell = false}) async {
-          return ProcessResult(0, 0, 'ODBC Driver 18 for SQL Server\n', '');
-        },
+        processRun:
+            (String _, List<String> _, {bool runInShell = false}) async {
+              return ProcessResult(0, 0, 'ODBC Driver 18 for SQL Server\n', '');
+            },
       );
       final result = await checker.checkDriverInstalled('SQL Server');
       expect(
@@ -54,9 +56,10 @@ void main() {
 
     test('should return false when stdout omits driver name', () async {
       final checker = OdbcDriverChecker(
-        processRun: (String _, List<String> _, {bool runInShell = false}) async {
-          return ProcessResult(0, 0, 'Some Other Driver\n', '');
-        },
+        processRun:
+            (String _, List<String> _, {bool runInShell = false}) async {
+              return ProcessResult(0, 0, 'Some Other Driver\n', '');
+            },
       );
       final result = await checker.checkDriverInstalled('SQL Server');
       expect(
@@ -67,9 +70,10 @@ void main() {
 
     test('should map ProcessException to configuration failure', () async {
       final checker = OdbcDriverChecker(
-        processRun: (String _, List<String> _, {bool runInShell = false}) async {
-          throw const ProcessException('powershell', ['-Command'], 'boom');
-        },
+        processRun:
+            (String _, List<String> _, {bool runInShell = false}) async {
+              throw const ProcessException('powershell', ['-Command'], 'boom');
+            },
       );
       final result = await checker.checkDriverInstalled('SQL Server');
       final failure = result.fold(
@@ -83,9 +87,10 @@ void main() {
       'should map unexpected exceptions to configuration failure with context',
       () async {
         final checker = OdbcDriverChecker(
-          processRun: (String _, List<String> _, {bool runInShell = false}) async {
-            throw Exception('unexpected');
-          },
+          processRun:
+              (String _, List<String> _, {bool runInShell = false}) async {
+                throw Exception('unexpected');
+              },
         );
         final result = await checker.checkDriverInstalled('MyDriver');
         final failure = result.fold(

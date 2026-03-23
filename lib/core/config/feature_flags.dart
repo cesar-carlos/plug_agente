@@ -10,8 +10,10 @@ class FeatureFlags {
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';
   static const _keyEnableCompression = 'feature_enable_compression';
-  static const _keyOutboundCompressionMode = 'feature_outbound_compression_mode';
+  static const _keyOutboundCompressionMode =
+      'feature_outbound_compression_mode';
   static const _keyCompressionThreshold = 'feature_compression_threshold';
+  static const _keyOutboundGzipZlibLevel = 'feature_outbound_gzip_zlib_level';
   static const _keyEnableClientTokenAuthorization =
       'feature_enable_client_token_authorization';
   static const _keyEnableSocketApiVersionMeta =
@@ -32,6 +34,8 @@ class FeatureFlags {
       'feature_enable_socket_schema_validation';
   static const _keyEnableSocketOutgoingContractValidation =
       'feature_enable_socket_outgoing_contract_validation';
+  static const _keyEnableFastSocketContractRowValidation =
+      'feature_enable_fast_socket_contract_row_validation';
   static const _keyEnableSocketSummarizeLargePayloadLogs =
       'feature_enable_socket_summarize_large_payload_logs';
   static const _keyEnableSocketJwksValidation =
@@ -112,6 +116,20 @@ class FeatureFlags {
 
   Future<void> setCompressionThreshold(int value) async {
     await _prefs.setInt(_keyCompressionThreshold, value);
+  }
+
+  /// Zlib level (1–9) for outbound PayloadFrame gzip. Lower = less CPU, larger
+  /// wire size. Default `1` matches transport fast preset in compression codec.
+  int get outboundGzipZlibLevel {
+    final v = _prefs.getInt(_keyOutboundGzipZlibLevel);
+    if (v == null) {
+      return 1;
+    }
+    return v.clamp(1, 9);
+  }
+
+  Future<void> setOutboundGzipZlibLevel(int value) async {
+    await _prefs.setInt(_keyOutboundGzipZlibLevel, value.clamp(1, 9));
   }
 
   /// Whether client token authorization is enabled (enforcement before SQL).
@@ -197,6 +215,16 @@ class FeatureFlags {
 
   Future<void> setEnableSocketOutgoingContractValidation(bool value) async {
     await _prefs.setBool(_keyEnableSocketOutgoingContractValidation, value);
+  }
+
+  /// When true with outgoing contract validation, skips per-row / per-metadata
+  /// element type checks (only ensures values are lists). Reduces CPU on huge
+  /// `rows` arrays; weaker wire-shape guarantees.
+  bool get enableFastSocketContractRowValidation =>
+      _prefs.getBool(_keyEnableFastSocketContractRowValidation) ?? false;
+
+  Future<void> setEnableFastSocketContractRowValidation(bool value) async {
+    await _prefs.setBool(_keyEnableFastSocketContractRowValidation, value);
   }
 
   /// When true, large payloads passed to the socket message tracer are replaced
@@ -299,6 +327,7 @@ class FeatureFlags {
     await setEnableBinaryPayload(true);
     await setOutboundCompressionMode(OutboundCompressionMode.gzip);
     await setCompressionThreshold(1024);
+    await setOutboundGzipZlibLevel(1);
     await setEnableClientTokenAuthorization(true);
     await setEnableSocketApiVersionMeta(true);
     await setEnableSocketNotificationsContract(true);
@@ -309,6 +338,7 @@ class FeatureFlags {
     await setEnableSocketCancelMethod(true);
     await setEnableSocketSchemaValidation(true);
     await setEnableSocketOutgoingContractValidation(true);
+    await setEnableFastSocketContractRowValidation(false);
     await setEnableSocketSummarizeLargePayloadLogs(true);
     await setEnableSocketJwksValidation(false);
     await setEnableSocketRevokedTokenInSession(false);

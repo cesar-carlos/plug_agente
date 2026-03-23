@@ -73,6 +73,33 @@ Case keys:
 - Optional: `GZIP_COMPRESSOR_BENCHMARK_ITERATIONS`, `GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS`, `GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS`, `GZIP_COMPRESSOR_BENCHMARK_LARGE_ROW_PAYLOAD_CHARS`
 - Covers sync path (small UTF-8 JSON) vs `compute` path (large JSON), aligned with `gzipRowComputeMinUtf8Bytes` in `lib/infrastructure/compression/gzip_compressor.dart`
 
+### 6) Micro-benchmarks (validation, mapping, serialization)
+
+Gated via `.env` / `Platform.environment` (same merge as `E2EEnv`), tag `benchmark`, optional JSONL append with `*_RECORD=true`.
+
+| Suite | Test file | Gate | Notes |
+| --- | --- | --- | --- |
+| RPC request schema | `test/infrastructure/validation/rpc_request_schema_benchmark_test.dart` | `RPC_REQUEST_SCHEMA_BENCHMARK=true` | `*_BATCH_SIZE`, `*_ITERATIONS`, `*_FILE` |
+| RPC contract | `test/infrastructure/validation/rpc_contract_benchmark_test.dart` | `RPC_CONTRACT_BENCHMARK=true` | `*_RESULT_ROWS`, `*_ITERATIONS` |
+| ODBC row map | `test/infrastructure/external_services/odbc_result_map_benchmark_test.dart` | `ODBC_RESULT_MAP_BENCHMARK=true` | `*_ROWS`, `*_COLS`, offline |
+| Query normalizer | `test/application/services/query_normalizer_benchmark_test.dart` | `QUERY_NORMALIZER_BENCHMARK=true` | `*_ROWS` |
+| Canonical JSON (idempotency) | `test/application/rpc/canonicalize_json_benchmark_test.dart` | `CANONICALIZE_JSON_BENCHMARK=true` | `*_MAP_KEYS` |
+| Payload codec | `test/infrastructure/codecs/payload_codec_benchmark_test.dart` | `PAYLOAD_CODEC_BENCHMARK=true` | `*_LIST_LEN` |
+| Stream chunk JSON | `test/infrastructure/streaming/stream_chunk_serialize_benchmark_test.dart` | `STREAM_CHUNK_SERIALIZE_BENCHMARK=true` | `*_ROWS` |
+| Idempotency store | `test/infrastructure/stores/idempotency_store_benchmark_test.dart` | `IDEMPOTENCY_STORE_BENCHMARK=true` | `*_ENTRIES` |
+| SQL execute result map | `test/application/rpc/sql_execute_result_payload_benchmark_test.dart` | `SQL_EXECUTE_RESULT_PAYLOAD_BENCHMARK=true` | `*_RESULT_SETS`, `*_ROWS` |
+| SQL scan (split + dangerous) | `test/core/utils/sql_scan_benchmark_test.dart` | `SQL_SCAN_BENCHMARK=true` | `*_LITERAL_CLAUSES` |
+| SqlValidator | `test/application/validation/sql_validator_benchmark_test.dart` | `SQL_VALIDATOR_BENCHMARK=true` | `*_SPACE_PAD`, `*_ORDER_TERMS` (2 test cases) |
+| SqlOperationClassifier | `test/application/services/sql_classifier_benchmark_test.dart` | `SQL_CLASSIFIER_BENCHMARK=true` | `*_SPACE_PAD` |
+| JSON size heuristic | `test/core/utils/json_size_heuristic_benchmark_test.dart` | `JSON_SIZE_HEURISTIC_BENCHMARK=true` | `*_MAP_KEYS`, `*_BUDGET` |
+| Client token hash | `test/core/utils/client_token_hash_benchmark_test.dart` | `CLIENT_TOKEN_HASH_BENCHMARK=true` | `*_TOKEN_CHARS` |
+| RpcBatch parse | `test/domain/protocol/rpc_batch_parse_benchmark_test.dart` | `RPC_BATCH_PARSE_BENCHMARK=true` | `*_PARAM_PAD` (size 32 batch) |
+| RpcRequestGuard | `test/infrastructure/external_services/rpc_request_guard_benchmark_test.dart` | `RPC_REQUEST_GUARD_BENCHMARK=true` | `*_EVALUATIONS`, `*_REPLAY_CAP` |
+| Failure → RpcError map | `test/application/mappers/failure_to_rpc_error_mapper_benchmark_test.dart` | `FAILURE_TO_RPC_ERROR_MAPPER_BENCHMARK=true` | `*_ROUNDS` |
+| Policy JWT decode-only | `test/infrastructure/services/authorization_policy_decode_benchmark_test.dart` | `POLICY_DECODE_BENCHMARK=true` | `*_PAYLOAD_PAD`, async |
+
+Also: **Idempotency fingerprint** (`IDEMPOTENCY_FINGERPRINT_BENCHMARK`) and **RetryManager** (`RETRY_MANAGER_BENCHMARK`) in `test/application/` and `test/infrastructure/retry/`.
+
 ## Profiles and comparability
 
 For ODBC benchmark, profile compatibility is based on:

@@ -21,31 +21,39 @@ import 'package:plug_agente/infrastructure/compression/compression.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final runBenchmark = Platform.environment['GZIP_COMPRESSOR_BENCHMARK'] == 'true';
+  final runBenchmark =
+      Platform.environment['GZIP_COMPRESSOR_BENCHMARK'] == 'true';
 
   group('GzipCompressor benchmark', () {
     test(
       'measures row compress+decompress (below and above UTF-8 threshold)',
       () async {
-        final iterations = int.tryParse(
-              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_ITERATIONS'] ?? '',
+        final iterations =
+            int.tryParse(
+              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_ITERATIONS'] ??
+                  '',
             ) ??
             10;
         expect(iterations, greaterThan(0));
 
-        final smallRowCount = int.tryParse(
-              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS'] ?? '',
+        final smallRowCount =
+            int.tryParse(
+              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS'] ??
+                  '',
             ) ??
             24;
         expect(smallRowCount, greaterThan(0));
 
-        final largeRowCount = int.tryParse(
-              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS'] ?? '',
+        final largeRowCount =
+            int.tryParse(
+              Platform.environment['GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS'] ??
+                  '',
             ) ??
             400;
         expect(largeRowCount, greaterThan(0));
 
-        final largeRowPayloadChars = int.tryParse(
+        final largeRowPayloadChars =
+            int.tryParse(
               Platform.environment['GZIP_COMPRESSOR_BENCHMARK_LARGE_ROW_PAYLOAD_CHARS'] ??
                   '',
             ) ??
@@ -62,20 +70,27 @@ void main() {
         expect(
           smallUtf8,
           lessThanOrEqualTo(gzipRowComputeMinUtf8Bytes),
-          reason: 'Tune GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS so small case stays sync',
+          reason:
+              'Tune GZIP_COMPRESSOR_BENCHMARK_SMALL_ROWS so small case stays sync',
         );
         expect(
           largeUtf8,
           greaterThan(gzipRowComputeMinUtf8Bytes),
-          reason: 'Tune GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS so large case uses compute',
+          reason:
+              'Tune GZIP_COMPRESSOR_BENCHMARK_LARGE_ROWS so large case uses compute',
         );
 
-        Future<void> runCase(String label, List<Map<String, dynamic>> rows) async {
+        Future<void> runCase(
+          String label,
+          List<Map<String, dynamic>> rows,
+        ) async {
           final wall = Stopwatch()..start();
           for (var i = 0; i < iterations; i++) {
             final compressed = await compressor.compress(rows);
             expect(compressed.isSuccess(), isTrue, reason: label);
-            final decompressed = await compressor.decompress(compressed.getOrThrow());
+            final decompressed = await compressor.decompress(
+              compressed.getOrThrow(),
+            );
             expect(decompressed.isSuccess(), isTrue, reason: label);
             expect(decompressed.getOrThrow(), equals(rows), reason: label);
           }

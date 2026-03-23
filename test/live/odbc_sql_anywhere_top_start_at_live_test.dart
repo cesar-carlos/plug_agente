@@ -29,7 +29,9 @@ ORDER BY table_id ASC
 
   final skipTopStartAt = !dsnValid
       ? E2EEnv.skipReasonNoOdbcDsnPrimary
-      : (!looksLikeSqlAnywhere ? E2EEnv.skipReasonSqlAnywhereDriverMismatch : false);
+      : (!looksLikeSqlAnywhere
+            ? E2EEnv.skipReasonSqlAnywhereDriverMismatch
+            : false);
 
   group('ODBC SQL Anywhere TOP START AT live', () {
     OdbcLiveBootstrap? bootstrap;

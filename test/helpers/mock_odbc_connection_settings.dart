@@ -59,6 +59,5 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
       leaseIdleTtlSeconds = value;
 
   @override
-  Future<void> setLeaseWarmupCount(int value) async =>
-      leaseWarmupCount = value;
+  Future<void> setLeaseWarmupCount(int value) async => leaseWarmupCount = value;
 }

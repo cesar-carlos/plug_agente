@@ -29,7 +29,8 @@ class MockJwtJwksVerifier extends Mock implements JwtJwksVerifier {}
 
 class MockTokenAuditStore extends Mock implements ITokenAuditStore {}
 
-class MockClientTokenPolicyCache extends Mock implements IClientTokenPolicyCache {}
+class MockClientTokenPolicyCache extends Mock
+    implements IClientTokenPolicyCache {}
 
 class MockAuthorizationCacheMetrics extends Mock
     implements IAuthorizationCacheMetrics {}
@@ -389,24 +390,27 @@ void main() {
       },
     );
 
-    test('should record audit when token is missing after normalization', () async {
-      resolver = AuthorizationPolicyResolver(
-        mockFeatureFlags,
-        tokenAuditStore: mockTokenAuditStore,
-      );
+    test(
+      'should record audit when token is missing after normalization',
+      () async {
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          tokenAuditStore: mockTokenAuditStore,
+        );
 
-      await resolver.resolvePolicy('   ');
+        await resolver.resolvePolicy('   ');
 
-      final captured = verify(
-        () => mockTokenAuditStore.record(captureAny()),
-      ).captured;
-      expect(captured, isNotEmpty);
-      final event = captured.first as TokenAuditEvent;
-      expect(
-        event.eventType,
-        equals(TokenAuditEventType.authorizationDenied),
-      );
-    });
+        final captured = verify(
+          () => mockTokenAuditStore.record(captureAny()),
+        ).captured;
+        expect(captured, isNotEmpty);
+        final event = captured.first as TokenAuditEvent;
+        expect(
+          event.eventType,
+          equals(TokenAuditEventType.authorizationDenied),
+        );
+      },
+    );
 
     test('should return cached policy without hitting local store', () async {
       final policyCache = MockClientTokenPolicyCache();
@@ -495,11 +499,14 @@ void main() {
       expect(stored.rules, isEmpty);
     });
 
-    test('should fail decode-only path when token has no payload segment', () async {
-      final result = await resolver.resolvePolicy('only-one-part');
+    test(
+      'should fail decode-only path when token has no payload segment',
+      () async {
+        final result = await resolver.resolvePolicy('only-one-part');
 
-      expect(result.isError(), isTrue);
-    });
+        expect(result.isError(), isTrue);
+      },
+    );
 
     test('should fail when JWT payload is not valid base64', () async {
       final header = base64Url.encode(utf8.encode('{"alg":"none"}'));
@@ -654,7 +661,10 @@ void main() {
         ),
       ).captured;
       expect(captured, hasLength(1));
-      expect((captured.single as ClientTokenPolicy).clientId, equals('jwks-cached'));
+      expect(
+        (captured.single as ClientTokenPolicy).clientId,
+        equals('jwks-cached'),
+      );
     });
 
     test('should cache policy after successful decode-only JWT', () async {
@@ -682,7 +692,10 @@ void main() {
         ),
       ).captured;
       expect(captured, hasLength(1));
-      expect((captured.single as ClientTokenPolicy).clientId, equals('decode-cached'));
+      expect(
+        (captured.single as ClientTokenPolicy).clientId,
+        equals('decode-cached'),
+      );
     });
 
     test(

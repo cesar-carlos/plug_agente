@@ -163,7 +163,8 @@ void _registerTargetGroup(String label, String connectionString) {
         );
         final h = harness!;
 
-        final beforeFromDb = h.metrics.rpcSqlExecuteStreamingFromDbResponseCount;
+        final beforeFromDb =
+            h.metrics.rpcSqlExecuteStreamingFromDbResponseCount;
         final emitter = OdbcE2eRecordingRpcStreamEmitter();
         final streamReq = e2eRpcExecute(
           id: 'e2e-stream-from-db',
@@ -232,7 +233,11 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(selectBatch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+        expect(
+          resp.isSuccess,
+          isTrue,
+          reason: describeRpcResponseFailure(resp),
+        );
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 3);
@@ -326,7 +331,8 @@ void _registerTargetGroup(String label, String connectionString) {
           ).thenReturn(true);
         });
 
-        final beforeChunks = h.metrics.rpcSqlExecuteStreamingChunksResponseCount;
+        final beforeChunks =
+            h.metrics.rpcSqlExecuteStreamingChunksResponseCount;
         final emitter = OdbcE2eRecordingRpcStreamEmitter();
         final resp = await h.dispatcher.dispatch(
           e2eRpcExecute(
@@ -341,7 +347,11 @@ void _registerTargetGroup(String label, String connectionString) {
           ),
         );
 
-        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+        expect(
+          resp.isSuccess,
+          isTrue,
+          reason: describeRpcResponseFailure(resp),
+        );
         final body = resp.result! as Map<String, dynamic>;
         expect(body['stream_id'], isNotNull);
         expect(body['row_count'], 0);
@@ -448,7 +458,11 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(combined, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+        expect(
+          resp.isSuccess,
+          isTrue,
+          reason: describeRpcResponseFailure(resp),
+        );
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 5);
@@ -509,7 +523,9 @@ void _registerTargetGroup(String label, String connectionString) {
         );
         final probeResp = await h.dispatcher.dispatch(probe, 'e2e-agent');
         expect(probeResp.isSuccess, isTrue, reason: '${probeResp.error}');
-        final probeRows = (probeResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+        final probeRows =
+            (probeResp.result! as Map<String, dynamic>)['rows']
+                as List<dynamic>?;
         expect(probeRows, isNotNull);
         expect(probeRows, hasLength(1));
         final amt = e2eFirstNumericForKeyContaining(
@@ -571,7 +587,11 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(batch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+        expect(
+          resp.isSuccess,
+          isTrue,
+          reason: describeRpcResponseFailure(resp),
+        );
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 3);
@@ -584,11 +604,13 @@ void _registerTargetGroup(String label, String connectionString) {
 
         final verify = e2eRpcExecute(
           id: 'e2e-verify-12-14',
-          sql: 'SELECT id FROM ${sql.tableName} WHERE id IN (12, 13, 14) ORDER BY id',
+          sql:
+              'SELECT id FROM ${sql.tableName} WHERE id IN (12, 13, 14) ORDER BY id',
         );
         final vResp = await h.dispatcher.dispatch(verify, 'e2e-agent');
         expect(vResp.isSuccess, isTrue, reason: '${vResp.error}');
-        final vRows = (vResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+        final vRows =
+            (vResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
         expect(vRows, isNotNull);
         expect(vRows, hasLength(3));
       },
@@ -614,7 +636,9 @@ void _registerTargetGroup(String label, String connectionString) {
           'e2e-agent',
         );
         expect(namedResp.isSuccess, isTrue, reason: '${namedResp.error}');
-        final rows = (namedResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+        final rows =
+            (namedResp.result! as Map<String, dynamic>)['rows']
+                as List<dynamic>?;
         expect(rows, isNotNull);
         expect(rows, hasLength(1));
         expect(
@@ -657,7 +681,11 @@ void _registerTargetGroup(String label, String connectionString) {
         );
 
         final resp = await h.dispatcher.dispatch(batch, 'e2e-agent');
-        expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+        expect(
+          resp.isSuccess,
+          isTrue,
+          reason: describeRpcResponseFailure(resp),
+        );
         final map = resp.result! as Map<String, dynamic>;
         expect(map['failed_commands'], 0);
         expect(map['successful_commands'], 2);
@@ -716,7 +744,9 @@ void _registerTargetGroup(String label, String connectionString) {
         );
         final probeResp = await h.dispatcher.dispatch(probe, 'e2e-agent');
         expect(probeResp.isSuccess, isTrue, reason: '${probeResp.error}');
-        final pRows = (probeResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+        final pRows =
+            (probeResp.result! as Map<String, dynamic>)['rows']
+                as List<dynamic>?;
         expect(pRows, isNotNull);
         expect(pRows, hasLength(1));
         expect(
@@ -773,7 +803,9 @@ void _registerTargetGroup(String label, String connectionString) {
           );
           final pickResp = await h.dispatcher.dispatch(pickOne, 'e2e-agent');
           expect(pickResp.isSuccess, isTrue, reason: '${pickResp.error}');
-          final pickRows = (pickResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+          final pickRows =
+              (pickResp.result! as Map<String, dynamic>)['rows']
+                  as List<dynamic>?;
           expect(pickRows, isNotNull);
           expect(pickRows, isNotEmpty);
 
@@ -790,7 +822,9 @@ void _registerTargetGroup(String label, String connectionString) {
             isTrue,
             reason: '${countFallbackResp.error}',
           );
-          final countRows = (countFallbackResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
+          final countRows =
+              (countFallbackResp.result! as Map<String, dynamic>)['rows']
+                  as List<dynamic>?;
           expect(countRows, isNotNull);
           expect(countRows, isNotEmpty);
         } else {
@@ -887,7 +921,9 @@ void _registerTargetGroup(String label, String connectionString) {
         expect(probeRows, isNotNull);
         expect(probeRows, hasLength(1));
         final probeRow = probeRows!.first as Map<String, dynamic>;
-        final lowerKeys = probeRow.keys.map((dynamic k) => k.toString().toLowerCase()).toSet();
+        final lowerKeys = probeRow.keys
+            .map((dynamic k) => k.toString().toLowerCase())
+            .toSet();
         expect(lowerKeys, contains('code'));
         expect(lowerKeys, contains('amt'));
         expect(

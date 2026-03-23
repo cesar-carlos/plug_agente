@@ -24,13 +24,15 @@ void main() {
     test(
       'measures compress+decompress throughput on repetitive payload',
       () {
-        final iterations = int.tryParse(
+        final iterations =
+            int.tryParse(
               Platform.environment['CODEC_GZIP_BENCHMARK_ITERATIONS'] ?? '',
             ) ??
             24;
         expect(iterations, greaterThan(0));
 
-        final payloadSizeKb = int.tryParse(
+        final payloadSizeKb =
+            int.tryParse(
               Platform.environment['CODEC_GZIP_BENCHMARK_PAYLOAD_KB'] ?? '',
             ) ??
             256;

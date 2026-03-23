@@ -6,7 +6,8 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
-import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure;
+import 'package:plug_agente/domain/errors/failures.dart'
+    show ConfigurationFailure;
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
@@ -136,11 +137,13 @@ void main() {
 
         await useCase.call(
           token: 'tok',
-          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+          sql:
+              'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
         );
         await useCase.call(
           token: 'tok',
-          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+          sql:
+              'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
         );
 
         verify(() => resolver.resolvePolicy(any())).called(1);

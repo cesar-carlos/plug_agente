@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 
@@ -24,6 +28,28 @@ void main() {
         ),
       );
     });
+
+    test(
+      'buildIdempotencyFingerprintForEnvelope matches buffer sha256 of JsonUtf8',
+      () {
+        final envelope = <String, dynamic>{
+          'method': 'sql.execute',
+          'params': <String, dynamic>{
+            'sql': 'SELECT 1',
+            'n': 3.25,
+            'flag': true,
+          },
+        };
+        final canonical = canonicalizeJsonValueForIdempotency(envelope);
+        final raw = JsonUtf8Encoder().convert(canonical);
+        final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+        final expected = sha256.convert(bytes).toString();
+        expect(
+          buildIdempotencyFingerprintForEnvelope(envelope),
+          equals(expected),
+        );
+      },
+    );
 
     test(
       'resolveIdempotencyFingerprint matches sync for small payload',

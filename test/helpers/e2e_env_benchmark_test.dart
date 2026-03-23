@@ -157,7 +157,8 @@ void main() {
         'ODBC_E2E_BENCHMARK_MAX_MS_IDEMPOTENCY_HEAVY': '2400',
       });
       expect(
-        E2EEnv.odbcE2eBenchmarkMaxMsByCase['rpc_sql_execute_idempotency_heavy_params'],
+        E2EEnv
+            .odbcE2eBenchmarkMaxMsByCase['rpc_sql_execute_idempotency_heavy_params'],
         2400,
       );
     });

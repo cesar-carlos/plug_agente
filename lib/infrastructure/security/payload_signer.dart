@@ -57,14 +57,25 @@ class PayloadSigner {
     if (secret == null) return false;
 
     final canonicalBytes = _canonicalizeUtf8(payload);
-    final expected = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
-    return _constantTimeEquals(expected, signature.value);
+    final expectedDigest = _hmacDigest(canonicalBytes, secret);
+    Uint8List actualBytes;
+    try {
+      actualBytes = base64Decode(signature.value);
+    } on FormatException {
+      return false;
+    }
+    if (actualBytes.length != expectedDigest.bytes.length) {
+      return false;
+    }
+    return _constantTimeBytesEquals(expectedDigest.bytes, actualBytes);
   }
 
   PayloadSignature signFrame(PayloadFrame frame) {
     final keyId = activeKeyId;
     final secret = _keys[keyId]!;
-    final canonicalBytes = _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
+    final canonicalBytes = _canonicalizeFrameUtf8(
+      frame.copyWith(clearSignature: true),
+    );
     final hmacValue = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
     return PayloadSignature(
       alg: supportedAlgorithm,
@@ -79,9 +90,20 @@ class PayloadSigner {
     final secret = _keys[signature.keyId];
     if (secret == null) return false;
 
-    final canonicalBytes = _canonicalizeFrameUtf8(frame.copyWith(clearSignature: true));
-    final expected = _computeHmacFromUtf8Bytes(canonicalBytes, secret);
-    return _constantTimeEquals(expected, signature.value);
+    final canonicalBytes = _canonicalizeFrameUtf8(
+      frame.copyWith(clearSignature: true),
+    );
+    final expectedDigest = _hmacDigest(canonicalBytes, secret);
+    Uint8List actualBytes;
+    try {
+      actualBytes = base64Decode(signature.value);
+    } on FormatException {
+      return false;
+    }
+    if (actualBytes.length != expectedDigest.bytes.length) {
+      return false;
+    }
+    return _constantTimeBytesEquals(expectedDigest.bytes, actualBytes);
   }
 
   Uint8List _canonicalizeUtf8(Map<String, dynamic> payload) {
@@ -117,16 +139,21 @@ class PayloadSigner {
   }
 
   String _computeHmacFromUtf8Bytes(Uint8List data, String secret) {
-    final key = utf8.encode(secret);
-    final digest = Hmac(sha256, key).convert(data);
-    return base64Encode(digest.bytes);
+    return base64Encode(_hmacDigest(data, secret).bytes);
   }
 
-  bool _constantTimeEquals(String a, String b) {
-    if (a.length != b.length) return false;
+  Digest _hmacDigest(Uint8List data, String secret) {
+    final key = utf8.encode(secret);
+    return Hmac(sha256, key).convert(data);
+  }
+
+  bool _constantTimeBytesEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) {
+      return false;
+    }
     var result = 0;
     for (var i = 0; i < a.length; i++) {
-      result |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+      result |= a[i] ^ b[i];
     }
     return result == 0;
   }

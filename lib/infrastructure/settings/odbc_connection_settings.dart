@@ -64,7 +64,10 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
     if (rawWarmup == null || rawWarmup < 0) {
       _leaseWarmupCount = ConnectionConstants.defaultLeaseWarmupCount;
     } else {
-      _leaseWarmupCount = rawWarmup.clamp(0, ConnectionConstants.maxLeaseWarmupCount);
+      _leaseWarmupCount = rawWarmup.clamp(
+        0,
+        ConnectionConstants.maxLeaseWarmupCount,
+      );
     }
   }
 

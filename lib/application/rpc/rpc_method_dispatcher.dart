@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
+import 'package:plug_agente/application/rpc/sql_execute_result_payload_builder.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -11,7 +12,8 @@ import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
-import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
+import 'package:plug_agente/core/utils/split_sql_statements.dart'
+    show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -205,7 +207,9 @@ class RpcMethodDispatcher {
     final requestParameters = paramReader.boundParams;
     final database = paramReader.database;
 
-    if (multiResultRequested && requestParameters != null && requestParameters.isNotEmpty) {
+    if (multiResultRequested &&
+        requestParameters != null &&
+        requestParameters.isNotEmpty) {
       return _invalidParams(
         request,
         'multi_result is not supported with named parameters',
@@ -232,7 +236,8 @@ class RpcMethodDispatcher {
       return idempotentEarly;
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -246,7 +251,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       final authDenied = await _authorizeSqlExecuteWithClientToken(
         request: request,
         sql: sql,
@@ -323,7 +330,8 @@ class RpcMethodDispatcher {
             : truncateSqlResultRows(normalized.data, maxRows);
         final wasTruncated =
             multiResultSetsTruncated ||
-            (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
+            (!normalized.resultSets.isNotEmpty &&
+                limitedRows.length != normalized.data.length);
         final useStreaming =
             _featureFlags.enableSocketStreamingChunks &&
             streamEmitter != null &&
@@ -339,8 +347,14 @@ class RpcMethodDispatcher {
           var overflowed = false;
           var streamedRowCount = 0;
 
-          for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
-            final chunkEnd = i + limits.streamingChunkSize > rows.length ? rows.length : i + limits.streamingChunkSize;
+          for (
+            var i = 0;
+            i < rows.length && !overflowed;
+            i += limits.streamingChunkSize
+          ) {
+            final chunkEnd = i + limits.streamingChunkSize > rows.length
+                ? rows.length
+                : i + limits.streamingChunkSize;
             final chunkRows = rows.sublist(i, chunkEnd);
             if (!await streamEmitter.emitChunk(
               RpcStreamChunk(
@@ -414,14 +428,18 @@ class RpcMethodDispatcher {
             'affected_rows': normalized.affectedRows,
             'returned_rows': rows.length,
             if (wasTruncated) 'truncated': true,
-            if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
-            if (normalized.pagination != null) 'pagination': _buildPaginationResult(normalized.pagination!),
+            if (normalized.columnMetadata != null)
+              'column_metadata': normalized.columnMetadata,
+            if (normalized.pagination != null)
+              'pagination': SqlExecuteResultPayloadBuilder.buildPaginationResult(
+                normalized.pagination!,
+              ),
           };
 
           return RpcResponse.success(id: request.id, result: resultData);
         }
 
-        final resultData = _buildExecuteResultData(
+        final resultData = SqlExecuteResultPayloadBuilder.buildExecuteResultData(
           normalized,
           startedAt: queryRequest.timestamp,
           finishedAt: normalized.timestamp,
@@ -510,7 +528,9 @@ class RpcMethodDispatcher {
         config.resolveConnectionString(),
         (chunk) async {
           if (columnMetadata == null && chunk.isNotEmpty) {
-            columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
+            columnMetadata = chunk.first.keys
+                .map((k) => <String, dynamic>{'name': k, 'type': 'string'})
+                .toList();
           }
           totalRows += chunk.length;
           if (!await streamEmitter.emitChunk(
@@ -584,7 +604,9 @@ class RpcMethodDispatcher {
           'rows': <Map<String, dynamic>>[],
           'row_count': 0,
           'affected_rows': totalRows,
-          ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
+          ...?(columnMetadata != null
+              ? {'column_metadata': columnMetadata}
+              : null),
         },
       );
       _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
@@ -653,7 +675,9 @@ class RpcMethodDispatcher {
 
     final params = request.params as Map<String, dynamic>;
     final commandsJson = params['commands'] as List<dynamic>?;
-    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_sqlBatchTotalBudgetDuration) : null;
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_sqlBatchTotalBudgetDuration)
+        : null;
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       final options = params['options'] as Map<String, dynamic>?;
       if (options?['page'] != null || options?['page_size'] != null) {
@@ -702,7 +726,9 @@ class RpcMethodDispatcher {
       }
 
       final executionOrderRaw = commandJson['execution_order'];
-      final executionOrder = executionOrderRaw != null ? jsonNonNegativeInt(executionOrderRaw) : null;
+      final executionOrder = executionOrderRaw != null
+          ? jsonNonNegativeInt(executionOrderRaw)
+          : null;
       if (executionOrderRaw != null && executionOrder == null) {
         return _invalidParams(
           request,
@@ -742,9 +768,12 @@ class RpcMethodDispatcher {
       return left.requestIndex.compareTo(right.requestIndex);
     });
 
-    final commands = commandPlans.map((plan) => plan.command).toList(growable: false);
+    final commands = commandPlans
+        .map((plan) => plan.command)
+        .toList(growable: false);
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -758,7 +787,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       final authorizedSqlFingerprints = <String>{};
       for (final cmd in commands) {
         final authFingerprint = _authorizationFingerprint(cmd.sql);
@@ -805,10 +836,14 @@ class RpcMethodDispatcher {
 
     // Parse options
     final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
+    final options = optionsJson != null
+        ? SqlExecutionOptions.fromJson(optionsJson)
+        : const SqlExecutionOptions();
     final effectiveOptions = SqlExecutionOptions(
       timeoutMs: options.timeoutMs,
-      maxRows: options.maxRows < limits.maxRows ? options.maxRows : limits.maxRows,
+      maxRows: options.maxRows < limits.maxRows
+          ? options.maxRows
+          : limits.maxRows,
       transaction: options.transaction,
     );
 
@@ -892,7 +927,9 @@ class RpcMethodDispatcher {
     required String clientToken,
     required DateTime? deadline,
   }) async {
-    final statements = !multiResultRequested ? <String>[sql] : sqlStatementsForClientTokenAuthorization(sql);
+    final statements = !multiResultRequested
+        ? <String>[sql]
+        : sqlStatementsForClientTokenAuthorization(sql);
 
     final authorizedFingerprints = <String>{};
     for (final raw in statements) {
@@ -1169,7 +1206,8 @@ class RpcMethodDispatcher {
     final executionId = params['execution_id'] as String?;
     final requestId = params['request_id'] as String?;
 
-    if ((executionId == null || executionId.isEmpty) && (requestId == null || requestId.isEmpty)) {
+    if ((executionId == null || executionId.isEmpty) &&
+        (requestId == null || requestId.isEmpty)) {
       return _invalidParams(
         request,
         'At least one of execution_id or request_id is required',
@@ -1345,7 +1383,10 @@ class RpcMethodDispatcher {
   }
 
   String _authorizationFingerprint(String sql) {
-    return sql.trim().replaceAll(_authorizationSqlWhitespaceCollapse, ' ').toLowerCase();
+    return sql
+        .trim()
+        .replaceAll(_authorizationSqlWhitespaceCollapse, ' ')
+        .toLowerCase();
   }
 
   int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {
@@ -1354,7 +1395,9 @@ class RpcMethodDispatcher {
     if (requestedMaxRows == null) {
       return negotiatedMaxRows;
     }
-    return requestedMaxRows < negotiatedMaxRows ? requestedMaxRows : negotiatedMaxRows;
+    return requestedMaxRows < negotiatedMaxRows
+        ? requestedMaxRows
+        : negotiatedMaxRows;
   }
 
   bool _resolveMultiResult(Map<String, dynamic> params) {
@@ -1378,7 +1421,9 @@ class RpcMethodDispatcher {
         errorMessage: 'execution_mode must be a string',
       );
     }
-    if (executionMode != null && executionMode != 'managed' && executionMode != 'preserve') {
+    if (executionMode != null &&
+        executionMode != 'managed' &&
+        executionMode != 'preserve') {
       return const _ResolvedSqlHandlingMode(
         errorMessage: 'execution_mode must be "managed" or "preserve"',
       );
@@ -1392,7 +1437,8 @@ class RpcMethodDispatcher {
     }
     if (preserveSql == true && executionMode == 'managed') {
       return const _ResolvedSqlHandlingMode(
-        errorMessage: 'preserve_sql cannot be true when execution_mode is "managed"',
+        errorMessage:
+            'preserve_sql cannot be true when execution_mode is "managed"',
       );
     }
 
@@ -1406,10 +1452,14 @@ class RpcMethodDispatcher {
     final resolvedMode = executionMode == 'preserve' || preserveSql == true
         ? SqlHandlingMode.preserve
         : SqlHandlingMode.managed;
-    final hasManagedPagination = options['page'] != null || options['page_size'] != null || options['cursor'] != null;
+    final hasManagedPagination =
+        options['page'] != null ||
+        options['page_size'] != null ||
+        options['cursor'] != null;
     if (resolvedMode == SqlHandlingMode.preserve && hasManagedPagination) {
       return const _ResolvedSqlHandlingMode(
-        errorMessage: 'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
+        errorMessage:
+            'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
       );
     }
 
@@ -1436,7 +1486,9 @@ class RpcMethodDispatcher {
       plan = paginationPlanResult.getOrNull();
     } else {
       final failure = paginationPlanResult.exceptionOrNull()! as domain.Failure;
-      final isMissingOrderBy = failure.message == 'Paginated queries must declare an explicit ORDER BY clause';
+      final isMissingOrderBy =
+          failure.message ==
+          'Paginated queries must declare an explicit ORDER BY clause';
       if (cursor != null || !isMissingOrderBy) {
         return _ResolvedPagination(errorMessage: failure.message);
       }
@@ -1446,7 +1498,8 @@ class RpcMethodDispatcher {
       final stablePlan = plan;
       if (stablePlan == null) {
         return const _ResolvedPagination(
-          errorMessage: 'Cursor pagination requires an explicit ORDER BY clause',
+          errorMessage:
+              'Cursor pagination requires an explicit ORDER BY clause',
         );
       }
       if (page != null || pageSize != null) {
@@ -1508,12 +1561,14 @@ class RpcMethodDispatcher {
 
     if (page == null || pageSize == null || page < 1 || pageSize < 1) {
       return const _ResolvedPagination(
-        errorMessage: 'page and page_size must be provided together and be >= 1',
+        errorMessage:
+            'page and page_size must be provided together and be >= 1',
       );
     }
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       return const _ResolvedPagination(
-        errorMessage: 'Negotiated protocol does not allow page-offset pagination',
+        errorMessage:
+            'Negotiated protocol does not allow page-offset pagination',
       );
     }
     if (pageSize > negotiatedMaxRows) {
@@ -1532,91 +1587,6 @@ class RpcMethodDispatcher {
         orderBy: plan?.orderBy ?? const [],
       ),
     );
-  }
-
-  Map<String, dynamic> _buildPaginationResult(QueryPaginationInfo pagination) {
-    return {
-      'page': pagination.page,
-      'page_size': pagination.pageSize,
-      'returned_rows': pagination.returnedRows,
-      'has_next_page': pagination.hasNextPage,
-      'has_previous_page': pagination.hasPreviousPage,
-      if (pagination.currentCursor != null) 'current_cursor': pagination.currentCursor,
-      if (pagination.nextCursor != null) 'next_cursor': pagination.nextCursor,
-    };
-  }
-
-  Map<String, dynamic> _buildExecuteResultData(
-    QueryResponse response, {
-    required DateTime startedAt,
-    required DateTime finishedAt,
-    required List<Map<String, dynamic>> limitedRows,
-    required bool wasTruncated,
-    required SqlHandlingMode sqlHandlingMode,
-    required int effectiveMaxRows,
-    bool forceMultiResultEnvelope = false,
-  }) {
-    final resultData = <String, dynamic>{
-      'execution_id': response.id,
-      'started_at': startedAt.toIso8601String(),
-      'finished_at': finishedAt.toIso8601String(),
-      'sql_handling_mode': sqlHandlingMode.name,
-      'max_rows_handling': 'response_truncation',
-      'effective_max_rows': effectiveMaxRows,
-      'rows': limitedRows,
-      'row_count': limitedRows.length,
-    };
-
-    if (response.affectedRows != null) {
-      resultData['affected_rows'] = response.affectedRows;
-    }
-    if (wasTruncated) {
-      resultData['truncated'] = true;
-    }
-    if (response.columnMetadata != null) {
-      resultData['column_metadata'] = response.columnMetadata;
-    }
-    if (response.pagination != null) {
-      resultData['pagination'] = _buildPaginationResult(response.pagination!);
-    }
-    if (forceMultiResultEnvelope || response.hasMultiResult) {
-      resultData['multi_result'] = true;
-      resultData['result_set_count'] = response.resultSets.length;
-      resultData['item_count'] = response.items.length;
-      resultData['result_sets'] = response.resultSets.map(_buildResultSetPayload).toList(growable: false);
-      resultData['items'] = response.items.map(_buildResponseItemPayload).toList(growable: false);
-    }
-
-    return resultData;
-  }
-
-  Map<String, dynamic> _buildResultSetPayload(
-    QueryResultSet resultSet, {
-    bool includeIndex = true,
-  }) {
-    return {
-      if (includeIndex) 'index': resultSet.index,
-      'rows': resultSet.rows,
-      'row_count': resultSet.rowCount,
-      if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
-      if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
-    };
-  }
-
-  Map<String, dynamic> _buildResponseItemPayload(QueryResponseItem item) {
-    if (item.resultSet != null) {
-      return {
-        'type': 'result_set',
-        'index': item.index,
-        'result_set_index': item.resultSet!.index,
-        ..._buildResultSetPayload(item.resultSet!, includeIndex: false),
-      };
-    }
-    return {
-      'type': 'row_count',
-      'index': item.index,
-      'affected_rows': item.rowCount,
-    };
   }
 
   QueryResponse _applyMaxRowsToMultiResultSets(
@@ -1654,7 +1624,9 @@ class RpcMethodDispatcher {
           return item;
         })
         .toList(growable: false);
-    final primary = newSets.isNotEmpty ? newSets.first : const QueryResultSet(index: 0, rows: [], rowCount: 0);
+    final primary = newSets.isNotEmpty
+        ? newSets.first
+        : const QueryResultSet(index: 0, rows: [], rowCount: 0);
     return QueryResponse(
       id: response.id,
       requestId: response.requestId,
@@ -1690,8 +1662,10 @@ class RpcMethodDispatcher {
     required String? requestId,
     required _ActiveStreamExecution activeExecution,
   }) {
-    final executionMatches = executionId != null && executionId == activeExecution.executionId;
-    final requestMatches = requestId != null && requestId == activeExecution.requestId;
+    final executionMatches =
+        executionId != null && executionId == activeExecution.executionId;
+    final requestMatches =
+        requestId != null && requestId == activeExecution.requestId;
     return executionMatches || requestMatches;
   }
 

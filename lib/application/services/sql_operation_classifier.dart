@@ -86,7 +86,9 @@ class SqlOperationClassifier {
     if (sql.startsWith('select ') || sql.startsWith('with ')) {
       return SqlOperation.read;
     }
-    if (sql.startsWith('update ') || sql.startsWith('insert ') || sql.startsWith('merge ')) {
+    if (sql.startsWith('update ') ||
+        sql.startsWith('insert ') ||
+        sql.startsWith('merge ')) {
       return SqlOperation.update;
     }
     if (sql.startsWith('delete ')) {
@@ -125,7 +127,9 @@ class SqlOperationClassifier {
       resources.addAll(_extractByKeywords(sql, const ['from']));
     }
 
-    return resources.where((resource) => !_isCteAliasReference(resource, cteAliases)).toList();
+    return resources
+        .where((resource) => !_isCteAliasReference(resource, cteAliases))
+        .toList();
   }
 
   Set<DatabaseResource> _extractByKeywords(
@@ -187,7 +191,9 @@ class SqlOperationClassifier {
     if (trimmed.contains('.')) {
       return false;
     }
-    return !trimmed.startsWith('[') && !trimmed.startsWith('"') && !trimmed.startsWith('`');
+    return !trimmed.startsWith('[') &&
+        !trimmed.startsWith('"') &&
+        !trimmed.startsWith('`');
   }
 
   Set<String> _extractCteAliases(String sql) {

@@ -91,12 +91,35 @@ void main() {
   });
 
   group('gzip byte primitives', () {
-    test('gzipCompressBytesOrThrow round-trips with gzipDecompressBytesOrThrow', () {
-      final data = Uint8List.fromList(utf8.encode('Hello World! ' * 200));
-      final compressed = gzipCompressBytesOrThrow(data);
-      expect(compressed.length, lessThan(data.length));
-      expect(gzipDecompressBytesOrThrow(compressed), equals(data));
-    });
+    test(
+      'gzipCompressBytesOrThrow round-trips with gzipDecompressBytesOrThrow',
+      () {
+        final data = Uint8List.fromList(utf8.encode('Hello World! ' * 200));
+        final compressed = gzipCompressBytesOrThrow(data);
+        expect(compressed.length, lessThan(data.length));
+        expect(gzipDecompressBytesOrThrow(compressed), equals(data));
+      },
+    );
+
+    test(
+      'GzipCompressionCodec.transport round-trips and uses fast compression level',
+      () {
+        final data = Uint8List.fromList(utf8.encode('Hello World! ' * 200));
+        final defaultC = const GzipCompressionCodec()
+            .compress(data)
+            .getOrThrow();
+        final fastC = GzipCompressionCodec.transport
+            .compress(data)
+            .getOrThrow();
+        expect(gzipDecompressBytesOrThrow(fastC), equals(data));
+        expect(
+          fastC.length,
+          greaterThanOrEqualTo(defaultC.length),
+          reason:
+              'best-speed gzip is usually larger than default for same input',
+        );
+      },
+    );
   });
 
   group('CompressionCodecFactory', () {

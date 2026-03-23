@@ -34,11 +34,11 @@ class RetryManager implements IRetryManager {
         lastException = e;
 
         // Se não deve retry ou última tentativa, propagar erro
-        if (!isTransientFailure(lastException!) || attempts >= maxAttempts) {
-          return Failure(lastException!);
+        if (!isTransientFailure(e) || attempts >= maxAttempts) {
+          return Failure(e);
         }
 
-        AppLogger.info(
+        AppLogger.debug(
           'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
         );
         // Aguardar com exponential backoff para próxima tentativa
@@ -53,18 +53,20 @@ class RetryManager implements IRetryManager {
       }
 
       // Falha - armazenar e verificar se deve fazer retry
-      result.fold((success) => throw StateError('Fold called on success'), (
-        exception,
-      ) {
-        lastException = exception;
-      });
+      final err = result.exceptionOrNull();
+      if (err is! Exception) {
+        return Failure(
+          Exception('RetryManager: failure without Exception payload'),
+        );
+      }
+      lastException = err;
 
       // Se não deve retry ou última tentativa, propagar erro
-      if (!isTransientFailure(lastException!) || attempts >= maxAttempts) {
-        return Failure(lastException!);
+      if (!isTransientFailure(err) || attempts >= maxAttempts) {
+        return Failure(err);
       }
 
-      AppLogger.info(
+      AppLogger.debug(
         'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
       );
       // Aguardar com exponential backoff para próxima tentativa

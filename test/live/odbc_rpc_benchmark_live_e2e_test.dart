@@ -34,7 +34,8 @@ const String _caseWriteDmlParallel = 'rpc_sql_execute_write_dml_parallel';
 const String _caseTimeoutCancel = 'rpc_sql_execute_timeout_cancel';
 const String _caseStreamingDb = 'rpc_sql_execute_streaming';
 const String _caseStreamingChunks = 'rpc_sql_execute_streaming_chunks';
-const String _caseMaterializedParallel = 'rpc_sql_execute_materialized_parallel';
+const String _caseMaterializedParallel =
+    'rpc_sql_execute_materialized_parallel';
 const String _caseBatchReadsParallel = 'rpc_sql_execute_batch_reads_parallel';
 const String _caseMultiResultParallel = 'rpc_sql_execute_multi_result_parallel';
 const String _caseIdempotencyHeavyParams =
@@ -205,7 +206,8 @@ String _timeoutProbeSql(OdbcE2eLiveSql sql) =>
     'SELECT a.id AS a_id, b.id AS b_id, c.id AS c_id '
     'FROM ${sql.tableName} a, ${sql.tableName} b, ${sql.tableName} c';
 
-bool _requireTimeoutCancelFailure() => E2EEnv.odbcE2eBenchmarkRequireTimeoutCancel;
+bool _requireTimeoutCancelFailure() =>
+    E2EEnv.odbcE2eBenchmarkRequireTimeoutCancel;
 
 Map<String, dynamic> _statsWithConcurrency(
   E2eBenchmarkStats stats, {
@@ -361,26 +363,37 @@ class _LatencySampleOffsets {
 }
 
 Map<String, int> _metricsSnapshot(MetricsCollector m) => <String, int>{
-  'rpc_sql_execute_materialized_response': m.rpcSqlExecuteMaterializedResponseCount,
-  'rpc_sql_execute_streaming_from_db_response': m.rpcSqlExecuteStreamingFromDbResponseCount,
-  'rpc_sql_execute_streaming_chunks_response': m.rpcSqlExecuteStreamingChunksResponseCount,
+  'rpc_sql_execute_materialized_response':
+      m.rpcSqlExecuteMaterializedResponseCount,
+  'rpc_sql_execute_streaming_from_db_response':
+      m.rpcSqlExecuteStreamingFromDbResponseCount,
+  'rpc_sql_execute_streaming_chunks_response':
+      m.rpcSqlExecuteStreamingChunksResponseCount,
   'multi_result_pool_vacuous_fallback': m.multiResultPoolVacuousFallbackCount,
   'multi_result_direct_still_vacuous': m.multiResultDirectStillVacuousCount,
   'transactional_batch_direct_path': m.transactionalBatchDirectPathCount,
   'connection_pool_acquire_failure': m.connectionPoolAcquireFailureCount,
   'connection_pool_release_failure': m.connectionPoolReleaseFailureCount,
-  'connection_pool_acquire_latency_ms_total': m.connectionPoolAcquireLatencyMsTotal,
-  'connection_pool_acquire_latency_samples': m.connectionPoolAcquireLatencySamples,
-  'connection_pool_release_latency_ms_total': m.connectionPoolReleaseLatencyMsTotal,
-  'connection_pool_release_latency_samples': m.connectionPoolReleaseLatencySamples,
+  'connection_pool_acquire_latency_ms_total':
+      m.connectionPoolAcquireLatencyMsTotal,
+  'connection_pool_acquire_latency_samples':
+      m.connectionPoolAcquireLatencySamples,
+  'connection_pool_release_latency_ms_total':
+      m.connectionPoolReleaseLatencyMsTotal,
+  'connection_pool_release_latency_samples':
+      m.connectionPoolReleaseLatencySamples,
   'connection_pool_wait_latency_ms_total': m.connectionPoolWaitLatencyMsTotal,
   'connection_pool_wait_latency_samples': m.connectionPoolWaitLatencySamples,
   'connection_pool_active_peak': m.connectionPoolActivePeak,
   'connection_pool_waiters_peak': m.connectionPoolWaitersPeak,
-  'connection_direct_connect_latency_ms_total': m.connectionDirectConnectLatencyMsTotal,
-  'connection_direct_connect_latency_samples': m.connectionDirectConnectLatencySamples,
-  'connection_direct_disconnect_latency_ms_total': m.connectionDirectDisconnectLatencyMsTotal,
-  'connection_direct_disconnect_latency_samples': m.connectionDirectDisconnectLatencySamples,
+  'connection_direct_connect_latency_ms_total':
+      m.connectionDirectConnectLatencyMsTotal,
+  'connection_direct_connect_latency_samples':
+      m.connectionDirectConnectLatencySamples,
+  'connection_direct_disconnect_latency_ms_total':
+      m.connectionDirectDisconnectLatencyMsTotal,
+  'connection_direct_disconnect_latency_samples':
+      m.connectionDirectDisconnectLatencySamples,
 };
 
 _LatencySampleOffsets _latencySampleOffsetsSnapshot(MetricsCollector m) {
@@ -426,7 +439,8 @@ Map<String, int> _metricsDelta(
   Map<String, int> after,
 ) {
   return <String, int>{
-    for (final key in _metricsDeltaKeys) key: (after[key] ?? 0) - (before[key] ?? 0),
+    for (final key in _metricsDeltaKeys)
+      key: (after[key] ?? 0) - (before[key] ?? 0),
   };
 }
 
@@ -624,11 +638,17 @@ void _registerBenchmarkGroup(
             e2eRpcExecute(
               id: benchId('mat'),
               sql: sql.selectIdCodeAmtOrderById,
-              options: <String, dynamic>{'max_rows': effectiveMaterializedMaxRows},
+              options: <String, dynamic>{
+                'max_rows': effectiveMaterializedMaxRows,
+              },
             ),
             'e2e-agent',
           );
-          expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+          expect(
+            resp.isSuccess,
+            isTrue,
+            reason: describeRpcResponseFailure(resp),
+          );
         });
         final materializedCase = _attachCaseMetrics(
           <String, dynamic>{
@@ -695,7 +715,11 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+            expect(
+              resp.isSuccess,
+              isTrue,
+              reason: describeRpcResponseFailure(resp),
+            );
           },
           warmup: 1,
           iterations: 6,
@@ -721,7 +745,11 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+            expect(
+              resp.isSuccess,
+              isTrue,
+              reason: describeRpcResponseFailure(resp),
+            );
           },
           warmup: 1,
           iterations: 6,
@@ -790,7 +818,11 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+            expect(
+              resp.isSuccess,
+              isTrue,
+              reason: describeRpcResponseFailure(resp),
+            );
           },
           warmup: 1,
           iterations: 4,
@@ -820,7 +852,11 @@ void _registerBenchmarkGroup(
               ),
               'e2e-agent',
             );
-            expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+            expect(
+              resp.isSuccess,
+              isTrue,
+              reason: describeRpcResponseFailure(resp),
+            );
           },
           warmup: 1,
           iterations: 4,
@@ -863,8 +899,10 @@ void _registerBenchmarkGroup(
           beforeLatencyOffsets: timeoutCancelBeforeLatency,
           metrics: h.metrics,
         );
-        timeoutCancelCase['timeout_cancel_failure_samples'] = timeoutCancelFailureCount;
-        timeoutCancelCase['timeout_cancel_success_samples'] = timeoutCancelSuccessCount;
+        timeoutCancelCase['timeout_cancel_failure_samples'] =
+            timeoutCancelFailureCount;
+        timeoutCancelCase['timeout_cancel_success_samples'] =
+            timeoutCancelSuccessCount;
         if (_requireTimeoutCancelFailure()) {
           expect(
             timeoutCancelFailureCount,
@@ -964,9 +1002,10 @@ void _registerBenchmarkGroup(
         var parallelMultiHasPayload = true;
         if (benchmarkConcurrency > 1) {
           final materializedParallelBeforeMetrics = _metricsSnapshot(h.metrics);
-          final materializedParallelBeforeLatency = _latencySampleOffsetsSnapshot(
-            h.metrics,
-          );
+          final materializedParallelBeforeLatency =
+              _latencySampleOffsetsSnapshot(
+                h.metrics,
+              );
           final materializedParallelStats = await _measureConcurrentAsync(
             (int invocation) async {
               final resp = await h.dispatcher.dispatch(
@@ -976,7 +1015,11 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+              expect(
+                resp.isSuccess,
+                isTrue,
+                reason: describeRpcResponseFailure(resp),
+              );
             },
             concurrency: benchmarkConcurrency,
           );
@@ -1007,7 +1050,11 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+              expect(
+                resp.isSuccess,
+                isTrue,
+                reason: describeRpcResponseFailure(resp),
+              );
             },
             concurrency: benchmarkConcurrency,
           );
@@ -1022,9 +1069,10 @@ void _registerBenchmarkGroup(
           );
 
           final multiResultParallelBeforeMetrics = _metricsSnapshot(h.metrics);
-          final multiResultParallelBeforeLatency = _latencySampleOffsetsSnapshot(
-            h.metrics,
-          );
+          final multiResultParallelBeforeLatency =
+              _latencySampleOffsetsSnapshot(
+                h.metrics,
+              );
           final multiResultParallelStats = await _measureConcurrentAsync(
             (int invocation) async {
               final resp = await h.dispatcher.dispatch(
@@ -1038,9 +1086,14 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+              expect(
+                resp.isSuccess,
+                isTrue,
+                reason: describeRpcResponseFailure(resp),
+              );
               final body = resp.result! as Map<String, dynamic>;
-              parallelMultiHasPayload = parallelMultiHasPayload && _multiResultHasPayload(body);
+              parallelMultiHasPayload =
+                  parallelMultiHasPayload && _multiResultHasPayload(body);
             },
             concurrency: benchmarkConcurrency,
             iterations: 3,
@@ -1076,7 +1129,11 @@ void _registerBenchmarkGroup(
                 ),
                 'e2e-agent',
               );
-              expect(resp.isSuccess, isTrue, reason: describeRpcResponseFailure(resp));
+              expect(
+                resp.isSuccess,
+                isTrue,
+                reason: describeRpcResponseFailure(resp),
+              );
             },
             concurrency: benchmarkConcurrency,
           );
@@ -1134,7 +1191,8 @@ void _registerBenchmarkGroup(
         }
 
         final baselineFile = E2EEnv.odbcE2eBenchmarkBaselineFile;
-        final maxRegressionPercent = E2EEnv.odbcE2eBenchmarkMaxRegressionPercent;
+        final maxRegressionPercent =
+            E2EEnv.odbcE2eBenchmarkMaxRegressionPercent;
         if (baselineFile != null && maxRegressionPercent != null) {
           final comparableBaseline = selectComparableE2eBenchmarkRecords(
             records: _loadBaselineRecords(baselineFile),

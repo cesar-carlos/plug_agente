@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_compressor.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
@@ -28,10 +29,13 @@ List<Map<String, dynamic>> _wrapperFromPlainUtf8Bytes(Uint8List plainBytes) {
   ];
 }
 
-/// Top-level for [compute]: pass JSON text so the caller isolate does not
-/// [jsonEncode] twice.
-List<Map<String, dynamic>> _compressFromJsonString(String jsonString) {
-  return _wrapperFromPlainUtf8Bytes(utf8.encode(jsonString));
+/// Top-level for [compute]: JSON UTF-8 encode + gzip + base64 wrapper in one isolate.
+List<Map<String, dynamic>> _compressJsonRowsInIsolate(
+  List<Map<String, dynamic>> data,
+) {
+  final raw = JsonUtf8Encoder().convert(data);
+  final plainBytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+  return _wrapperFromPlainUtf8Bytes(plainBytes);
 }
 
 List<Map<String, dynamic>> _decompressRows(List<Map<String, dynamic>> data) {
@@ -42,11 +46,8 @@ List<Map<String, dynamic>> _decompressRows(List<Map<String, dynamic>> data) {
   final base64String = data.first['compressed_data'] as String;
   final compressedBytes = base64Decode(base64String);
   final decompressedBytes = gzipDecompressBytesOrThrow(compressedBytes);
-  final jsonString = utf8.decode(decompressedBytes);
-
-  return List<Map<String, dynamic>>.from(
-    jsonDecode(jsonString) as Iterable<dynamic>,
-  );
+  final dynamic decoded = utf8.decoder.fuse(json.decoder).convert(decompressedBytes);
+  return List<Map<String, dynamic>>.from(decoded as Iterable<dynamic>);
 }
 
 class GzipCompressor implements ICompressor {
@@ -67,12 +68,16 @@ class GzipCompressor implements ICompressor {
     List<Map<String, dynamic>> data,
   ) async {
     try {
-      final jsonString = jsonEncode(data);
-      final plainBytes = utf8.encode(jsonString);
+      if (jsonTreeLikelyExceedsByteBudget(data, gzipRowComputeMinUtf8Bytes)) {
+        final result = await compute(_compressJsonRowsInIsolate, data);
+        return Success(result);
+      }
+      final raw = JsonUtf8Encoder().convert(data);
+      final plainBytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
       if (plainBytes.length <= gzipRowComputeMinUtf8Bytes) {
         return Success(_wrapperFromPlainUtf8Bytes(plainBytes));
       }
-      final result = await compute(_compressFromJsonString, jsonString);
+      final result = await compute(_compressJsonRowsInIsolate, data);
       return Success(result);
     } on Object catch (error) {
       return Failure(

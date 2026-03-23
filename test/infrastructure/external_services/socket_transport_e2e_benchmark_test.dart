@@ -94,10 +94,9 @@ bool _requireBaseline() {
 /// When `SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT=false`,
 /// skips full outgoing RPC contract validation (faster; default validates).
 bool _strictOutgoingContract() {
-  final raw =
-      E2EEnv.get('SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT')
-          ?.trim()
-          .toLowerCase();
+  final raw = E2EEnv.get(
+    'SOCKET_TRANSPORT_E2E_BENCHMARK_STRICT_OUTGOING_CONTRACT',
+  )?.trim().toLowerCase();
   if (raw == 'false') {
     return false;
   }
@@ -299,10 +298,14 @@ void main() async {
           OutboundCompressionMode.gzip,
         );
         when(() => featureFlags.compressionThreshold).thenReturn(1024);
+        when(() => featureFlags.outboundGzipZlibLevel).thenReturn(1);
         when(() => featureFlags.enableSocketSchemaValidation).thenReturn(false);
         when(
           () => featureFlags.enableSocketOutgoingContractValidation,
         ).thenReturn(_strictOutgoingContract());
+        when(
+          () => featureFlags.enableFastSocketContractRowValidation,
+        ).thenReturn(false);
         when(
           () => featureFlags.enableSocketSummarizeLargePayloadLogs,
         ).thenReturn(false);

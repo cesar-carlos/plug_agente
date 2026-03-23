@@ -1,8 +1,30 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+
+/// Collects the single digest emitted by chunked SHA-256 conversion.
+/// The crypto package's digest sink type is not part of its public export.
+class _Sha256DigestCollector implements Sink<Digest> {
+  Digest? _digest;
+
+  @override
+  void add(Digest data) {
+    _digest = data;
+  }
+
+  @override
+  void close() {}
+
+  Digest get value {
+    final d = _digest;
+    if (d == null) {
+      throw StateError('SHA-256 chunked conversion produced no digest');
+    }
+    return d;
+  }
+}
 
 /// Canonical JSON fingerprint for idempotency (stable key ordering).
 ///
@@ -10,8 +32,12 @@ import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 /// same SHA-256 as before this module was extracted.
 String buildIdempotencyFingerprintForEnvelope(Map<String, dynamic> envelope) {
   final canonicalPayload = canonicalizeJsonValueForIdempotency(envelope);
-  final encoded = jsonEncode(canonicalPayload);
-  return sha256.convert(utf8.encode(encoded)).toString();
+  final digestCollector = _Sha256DigestCollector();
+  final hashSink = sha256.startChunkedConversion(digestCollector);
+  final jsonSink = JsonUtf8Encoder().startChunkedConversion(hashSink);
+  jsonSink.add(canonicalPayload);
+  jsonSink.close();
+  return digestCollector.value.toString();
 }
 
 /// Resolves fingerprint on the main isolate or in a worker when [params] are
@@ -25,7 +51,7 @@ Future<String> resolveIdempotencyFingerprint(
     'params': params,
   };
   if (jsonTreeLikelyExceedsByteBudget(
-    params,
+    envelope,
     jsonPayloadIsolateEncodeThresholdBytes,
   )) {
     return compute(buildIdempotencyFingerprintForEnvelope, envelope);
@@ -37,12 +63,14 @@ dynamic canonicalizeJsonValueForIdempotency(dynamic value) {
   if (value is Map<String, dynamic>) {
     final sortedKeys = value.keys.toList(growable: false)..sort();
     return <String, dynamic>{
-      for (final String key in sortedKeys) key: canonicalizeJsonValueForIdempotency(value[key]),
+      for (final String key in sortedKeys)
+        key: canonicalizeJsonValueForIdempotency(value[key]),
     };
   }
   if (value is Map) {
     final normalized = value.map(
-      (dynamic key, dynamic v) => MapEntry(key.toString(), canonicalizeJsonValueForIdempotency(v)),
+      (dynamic key, dynamic v) =>
+          MapEntry(key.toString(), canonicalizeJsonValueForIdempotency(v)),
     );
     final sortedKeys = normalized.keys.toList(growable: false)..sort();
     return <String, dynamic>{

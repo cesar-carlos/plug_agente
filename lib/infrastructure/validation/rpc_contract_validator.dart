@@ -36,7 +36,14 @@ class RpcContractValidator {
     return _validateCapabilities(capabilities);
   }
 
-  Result<void> validateResponse(Map<String, dynamic> data) {
+  /// When [validateRowElementTypes] is false, list fields such as result rows,
+  /// stream chunk rows, and column metadata skip per-element `Map` checks (only
+  /// the list type is validated). Pair with `enableFastSocketContractRowValidation`
+  /// when weaker wire-shape checks are acceptable for lower CPU on huge arrays.
+  Result<void> validateResponse(
+    Map<String, dynamic> data, {
+    bool validateRowElementTypes = true,
+  }) {
     if (data['jsonrpc'] != '2.0') {
       return _invalid('Field "jsonrpc" must be exactly "2.0"');
     }
@@ -81,10 +88,16 @@ class RpcContractValidator {
     if (result is! Map<String, dynamic>) {
       return _invalid('Field "result" must be an object');
     }
-    return _validateResult(result);
+    return _validateResult(
+      result,
+      validateRowElementTypes: validateRowElementTypes,
+    );
   }
 
-  Result<void> validateBatchResponse(List<dynamic> data) {
+  Result<void> validateBatchResponse(
+    List<dynamic> data, {
+    bool validateRowElementTypes = true,
+  }) {
     if (data.isEmpty) {
       return _invalid('Batch response cannot be empty');
     }
@@ -94,7 +107,10 @@ class RpcContractValidator {
       if (item is! Map<String, dynamic>) {
         return _invalid('Batch response item at index $i must be an object');
       }
-      final result = validateResponse(item);
+      final result = validateResponse(
+        item,
+        validateRowElementTypes: validateRowElementTypes,
+      );
       if (result.isError()) {
         final failure = result.exceptionOrNull()! as domain.Failure;
         return _invalid('Batch response item at index $i: ${failure.message}');
@@ -104,7 +120,10 @@ class RpcContractValidator {
     return const Success(unit);
   }
 
-  Result<void> validateStreamChunk(Map<String, dynamic> data) {
+  Result<void> validateStreamChunk(
+    Map<String, dynamic> data, {
+    bool validateRowElementTypes = true,
+  }) {
     if (!_isNonEmptyString(data['stream_id'])) {
       return _invalid('Field "stream_id" must be a non-empty string');
     }
@@ -120,7 +139,8 @@ class RpcContractValidator {
     if (rows is! List<dynamic>) {
       return _invalid('Field "rows" must be an array');
     }
-    if (rows.any((row) => row is! Map<String, dynamic>)) {
+    if (validateRowElementTypes &&
+        rows.any((row) => row is! Map<String, dynamic>)) {
       return _invalid('Field "rows" must contain objects only');
     }
 
@@ -131,7 +151,9 @@ class RpcContractValidator {
 
     final columnMetadata = data['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> || columnMetadata.any((item) => item is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> ||
+            (validateRowElementTypes &&
+                columnMetadata.any((item) => item is! Map<String, dynamic>)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -201,7 +223,10 @@ class RpcContractValidator {
     }
   }
 
-  Result<void> _validateResult(Map<String, dynamic> result) {
+  Result<void> _validateResult(
+    Map<String, dynamic> result, {
+    bool validateRowElementTypes = true,
+  }) {
     for (final key in [
       'execution_id',
       'stream_id',
@@ -235,13 +260,18 @@ class RpcContractValidator {
     }
 
     final rows = result['rows'];
-    if (rows != null && (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>))) {
+    if (rows != null &&
+        (rows is! List<dynamic> ||
+            (validateRowElementTypes &&
+                rows.any((row) => row is! Map<String, dynamic>)))) {
       return _invalid('Field "rows" must be an array of objects');
     }
 
     final columnMetadata = result['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> || columnMetadata.any((item) => item is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> ||
+            (validateRowElementTypes &&
+                columnMetadata.any((item) => item is! Map<String, dynamic>)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -290,7 +320,10 @@ class RpcContractValidator {
         return _invalid('Field "result_sets" must be an array');
       }
       for (final item in resultSets) {
-        final validation = _validateResultSetItem(item);
+        final validation = _validateResultSetItem(
+          item,
+          validateRowElementTypes: validateRowElementTypes,
+        );
         if (validation.isError()) {
           return validation;
         }
@@ -308,7 +341,15 @@ class RpcContractValidator {
       final first = items.first;
       final isBatchShape = first is Map<String, dynamic> && first.containsKey('ok');
       for (final item in items) {
-        final validation = isBatchShape ? _validateBatchCommandResultItem(item) : _validateResponseItem(item);
+        final validation = isBatchShape
+            ? _validateBatchCommandResultItem(
+                item,
+                validateRowElementTypes: validateRowElementTypes,
+              )
+            : _validateResponseItem(
+                item,
+                validateRowElementTypes: validateRowElementTypes,
+              );
         if (validation.isError()) {
           return validation;
         }
@@ -340,7 +381,10 @@ class RpcContractValidator {
     return const Success(unit);
   }
 
-  Result<void> _validateBatchCommandResultItem(dynamic item) {
+  Result<void> _validateBatchCommandResultItem(
+    dynamic item, {
+    bool validateRowElementTypes = true,
+  }) {
     if (item is! Map<String, dynamic>) {
       return _invalid('Field "items" must contain objects');
     }
@@ -364,7 +408,10 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows != null && (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>))) {
+    if (rows != null &&
+        (rows is! List<dynamic> ||
+            (validateRowElementTypes &&
+                rows.any((row) => row is! Map<String, dynamic>)))) {
       return _invalid('Field "items[].rows" must be an array of objects');
     }
 
@@ -377,7 +424,9 @@ class RpcContractValidator {
 
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> || columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> ||
+            (validateRowElementTypes &&
+                columnMetadata.any((entry) => entry is! Map<String, dynamic>)))) {
       return _invalid(
         'Field "items[].column_metadata" must be an array of objects',
       );
@@ -386,7 +435,10 @@ class RpcContractValidator {
     return const Success(unit);
   }
 
-  Result<void> _validateResultSetItem(dynamic item) {
+  Result<void> _validateResultSetItem(
+    dynamic item, {
+    bool validateRowElementTypes = true,
+  }) {
     if (item is! Map<String, dynamic>) {
       return _invalid('Field "result_sets" must contain objects');
     }
@@ -397,7 +449,9 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>)) {
+    if (rows is! List<dynamic> ||
+        (validateRowElementTypes &&
+            rows.any((row) => row is! Map<String, dynamic>))) {
       return _invalid('Field "result_sets[].rows" must be an array of objects');
     }
 
@@ -410,7 +464,9 @@ class RpcContractValidator {
 
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> || columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> ||
+            (validateRowElementTypes &&
+                columnMetadata.any((entry) => entry is! Map<String, dynamic>)))) {
       return _invalid(
         'Field "result_sets[].column_metadata" must be an array of objects',
       );
@@ -419,7 +475,10 @@ class RpcContractValidator {
     return const Success(unit);
   }
 
-  Result<void> _validateResponseItem(dynamic item) {
+  Result<void> _validateResponseItem(
+    dynamic item, {
+    bool validateRowElementTypes = true,
+  }) {
     if (item is! Map<String, dynamic>) {
       return _invalid('Field "items" must contain objects');
     }
@@ -447,7 +506,10 @@ class RpcContractValidator {
       return _invalid('Field "items[].result_set_index" must be >= 0');
     }
 
-    return _validateResultSetItem(item);
+    return _validateResultSetItem(
+      item,
+      validateRowElementTypes: validateRowElementTypes,
+    );
   }
 
   Result<void> _validateMeta(dynamic meta) {

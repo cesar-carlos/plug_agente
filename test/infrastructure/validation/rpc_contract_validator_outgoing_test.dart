@@ -199,31 +199,33 @@ void main() {
       expect(validator.validateResponse(payload).isError(), isTrue);
     });
 
-    test('should reject when result_set_count does not match result_sets length',
-        () {
-      final payload = <String, dynamic>{
-        'jsonrpc': '2.0',
-        'id': 'mr6',
-        'result': {
-          'execution_id': 'e1',
-          'started_at': '2026-01-01T00:00:00Z',
-          'finished_at': '2026-01-01T00:00:01Z',
-          'multi_result': true,
-          'result_set_count': 9,
-          'rows': <Map<String, dynamic>>[],
-          'row_count': 0,
-          'result_sets': [
-            {
-              'index': 0,
-              'rows': <Map<String, dynamic>>[],
-              'row_count': 0,
-            },
-          ],
-        },
-      };
+    test(
+      'should reject when result_set_count does not match result_sets length',
+      () {
+        final payload = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'mr6',
+          'result': {
+            'execution_id': 'e1',
+            'started_at': '2026-01-01T00:00:00Z',
+            'finished_at': '2026-01-01T00:00:01Z',
+            'multi_result': true,
+            'result_set_count': 9,
+            'rows': <Map<String, dynamic>>[],
+            'row_count': 0,
+            'result_sets': [
+              {
+                'index': 0,
+                'rows': <Map<String, dynamic>>[],
+                'row_count': 0,
+              },
+            ],
+          },
+        };
 
-      expect(validator.validateResponse(payload).isError(), isTrue);
-    });
+        expect(validator.validateResponse(payload).isError(), isTrue);
+      },
+    );
 
     test('should reject when item_count does not match items length', () {
       final payload = <String, dynamic>{
@@ -253,6 +255,45 @@ void main() {
       };
 
       expect(validator.validateResponse(payload).isError(), isTrue);
+    });
+  });
+
+  group('validateRowElementTypes fast path', () {
+    test('should accept non-map row entries when validateRowElementTypes is false',
+        () {
+      final payload = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': 1,
+        'result': <String, dynamic>{
+          'rows': <dynamic>[1, 2, 3],
+          'row_count': 3,
+        },
+      };
+      expect(
+        validator.validateResponse(
+          payload,
+          validateRowElementTypes: false,
+        ).isSuccess(),
+        isTrue,
+      );
+      expect(validator.validateResponse(payload).isError(), isTrue);
+    });
+
+    test('validateStreamChunk skips row map check when false', () {
+      final chunk = <String, dynamic>{
+        'stream_id': 's1',
+        'request_id': 'r1',
+        'chunk_index': 0,
+        'rows': <dynamic>['not-a-map'],
+      };
+      expect(
+        validator.validateStreamChunk(
+          chunk,
+          validateRowElementTypes: false,
+        ).isSuccess(),
+        isTrue,
+      );
+      expect(validator.validateStreamChunk(chunk).isError(), isTrue);
     });
   });
 

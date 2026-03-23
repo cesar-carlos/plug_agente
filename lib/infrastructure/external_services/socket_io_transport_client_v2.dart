@@ -285,7 +285,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         : _featureFlags.compressionThreshold;
     final cacheKey =
         '${_currentProtocol.encoding}|$pipelineCompression|$threshold|$_hasReceivedCapabilities|'
-        '${clientOutboundMode?.name ?? 'app'}';
+        '${clientOutboundMode?.name ?? 'app'}|${_featureFlags.outboundGzipZlibLevel}';
     if (_cachedSendPipeline != null && _sendPipelineCacheKey == cacheKey) {
       return _cachedSendPipeline!;
     }
@@ -293,6 +293,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       encoding: _currentProtocol.encoding,
       compression: pipelineCompression,
       compressionThreshold: threshold,
+      gzipOutboundZlibLevel: _featureFlags.outboundGzipZlibLevel,
     );
     _cachedSendPipeline = pipeline;
     _sendPipelineCacheKey = cacheKey;
@@ -866,7 +867,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       final registeredOutboundCompressionIds = <String>[];
       if (_featureFlags.enablePerRequestOutboundCompression && !request.isNotification && request.id != null) {
-        final outboundMode = tryParseOutboundCompressionWire(request.meta?.outboundCompression);
+        final outboundMode = tryParseOutboundCompressionWire(
+          request.meta?.outboundCompression,
+        );
         if (outboundMode != null) {
           final idKey = request.id.toString();
           _outboundCompressionByRpcId[idKey] = outboundMode;
@@ -1512,9 +1515,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return payload;
     }
 
+    final strictRowTypes = !_featureFlags.enableFastSocketContractRowValidation;
     final validation = payload is List<dynamic>
-        ? _contractValidator.validateBatchResponse(payload)
-        : _contractValidator.validateResponse(payload as Map<String, dynamic>);
+        ? _contractValidator.validateBatchResponse(
+            payload,
+            validateRowElementTypes: strictRowTypes,
+          )
+        : _contractValidator.validateResponse(
+            payload as Map<String, dynamic>,
+            validateRowElementTypes: strictRowTypes,
+          );
     if (validation.isSuccess()) {
       return payload;
     }
@@ -1924,7 +1934,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (_featureFlags.enableSocketSchemaValidation) {
       Result<void> validation;
       if (event == 'rpc:chunk') {
-        validation = _contractValidator.validateStreamChunk(payload);
+        validation = _contractValidator.validateStreamChunk(
+          payload,
+          validateRowElementTypes:
+              !_featureFlags.enableFastSocketContractRowValidation,
+        );
       } else if (event == 'rpc:complete') {
         validation = _contractValidator.validateStreamComplete(payload);
       } else {

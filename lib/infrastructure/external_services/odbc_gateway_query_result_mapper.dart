@@ -39,10 +39,15 @@ class OdbcGatewayQueryResultMapper {
   static List<Map<String, dynamic>> convertQueryResultToMaps(
     QueryResult result,
   ) {
+    final columns = result.columns;
+    final colCount = columns.length;
+    if (colCount == 0) {
+      return result.rows.map((_) => <String, dynamic>{}).toList();
+    }
     return result.rows.map((row) {
       final map = <String, dynamic>{};
-      for (var i = 0; i < result.columns.length; i++) {
-        map[result.columns[i]] = row[i];
+      for (var i = 0; i < colCount; i++) {
+        map[columns[i]] = row[i];
       }
       return map;
     }).toList();

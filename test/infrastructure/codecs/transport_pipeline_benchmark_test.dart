@@ -19,7 +19,8 @@ const String _caseSmallRoundTrip = 'socket_transport_small_roundtrip';
 const String _caseLargeGzipRoundTrip = 'socket_transport_large_roundtrip_gzip';
 const String _caseLargeAutoRoundTrip = 'socket_transport_large_roundtrip_auto';
 const String _caseStreamChunksGzip = 'socket_transport_stream_chunks_gzip';
-const String _caseJumboGzipAsync = 'socket_transport_jumbo_gzip_roundtrip_async';
+const String _caseJumboGzipAsync =
+    'socket_transport_jumbo_gzip_roundtrip_async';
 
 class _TransportIterationMeasurement {
   const _TransportIterationMeasurement({
@@ -214,7 +215,8 @@ Map<String, dynamic> _benchmarkProfile() {
     'stream_chunk_count': _transportStreamChunkCount(),
     'stream_rows_per_chunk': _transportRowsPerChunk(),
     'include_jumbo_isolate_path': _transportIncludeJumbo(),
-    if (_transportIncludeJumbo()) 'jumbo_blob_bytes': _transportJumboBlobBytes(),
+    if (_transportIncludeJumbo())
+      'jumbo_blob_bytes': _transportJumboBlobBytes(),
   };
 }
 

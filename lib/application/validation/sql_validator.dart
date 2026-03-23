@@ -166,7 +166,9 @@ class SqlValidator {
 
     return Success(
       SqlPaginationPlan(
-        queryFingerprint: sha256.convert(utf8.encode(_normalizeForFingerprint(normalizedQuery))).toString(),
+        queryFingerprint: sha256
+            .convert(utf8.encode(_normalizeForFingerprint(normalizedQuery)))
+            .toString(),
         orderBy: orderTerms.whereType<QueryPaginationOrderTerm>().toList(),
       ),
     );
@@ -385,6 +387,9 @@ class SqlValidator {
   }
 
   static String _normalizeForFingerprint(String query) {
-    return query.replaceAll(_normalizeFingerprintWhitespace, ' ').trim().toLowerCase();
+    return query
+        .replaceAll(_normalizeFingerprintWhitespace, ' ')
+        .trim()
+        .toLowerCase();
   }
 }

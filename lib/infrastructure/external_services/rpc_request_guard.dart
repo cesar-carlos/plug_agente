@@ -58,19 +58,11 @@ class RpcRequestGuard {
   }
 
   void _evictReplayCacheToCap() {
+    // [Map] preserves insertion order; each request id is inserted once, so
+    // removing [keys.first] evicts the oldest insertion in O(1) per step.
     while (_recentRpcRequestIds.length > _maxReplayCacheEntries) {
-      String? oldestKey;
-      DateTime? oldestTime;
-      for (final e in _recentRpcRequestIds.entries) {
-        if (oldestTime == null || e.value.isBefore(oldestTime)) {
-          oldestTime = e.value;
-          oldestKey = e.key;
-        }
-      }
-      if (oldestKey == null) {
-        return;
-      }
-      _recentRpcRequestIds.remove(oldestKey);
+      final firstKey = _recentRpcRequestIds.keys.first;
+      _recentRpcRequestIds.remove(firstKey);
     }
   }
 

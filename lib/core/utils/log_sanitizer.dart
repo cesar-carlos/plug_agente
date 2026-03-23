@@ -104,7 +104,9 @@ class LogSanitizer {
       final sanitized = <dynamic>[];
       for (var i = 0; i < take; i++) {
         final e = value[i];
-        if (e is Map) {
+        if (e is Map<String, dynamic>) {
+          sanitized.add(_sanitizeMapDepth(e, depth));
+        } else if (e is Map) {
           sanitized.add(_sanitizeMapDepth(Map<String, dynamic>.from(e), depth));
         } else {
           sanitized.add(e);
@@ -130,6 +132,9 @@ class LogSanitizer {
 
   /// Sanitizes dynamic data (map, list, or other) for display.
   static dynamic sanitize(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return _sanitizeMapDepth(data, 0);
+    }
     if (data is Map) {
       return _sanitizeMapDepth(Map<String, dynamic>.from(data), 0);
     }

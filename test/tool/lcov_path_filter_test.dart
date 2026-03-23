@@ -46,7 +46,9 @@ SF:lib/unrelated/a.dart
 DA:1,1
 end_of_record
 ''';
-      final out = filterLcovByPathPrefixes(raw, <String>['lib/application/rpc/']);
+      final out = filterLcovByPathPrefixes(raw, <String>[
+        'lib/application/rpc/',
+      ]);
       check(out.trim().isEmpty).isTrue();
     });
 
