@@ -12,6 +12,16 @@ import 'package:result_dart/result_dart.dart';
 class RpcRequestSchemaValidator {
   const RpcRequestSchemaValidator();
 
+  static const Set<String> _metaKnownFieldNames = {
+    'trace_id',
+    'traceparent',
+    'tracestate',
+    'request_id',
+    'agent_id',
+    'timestamp',
+    'outbound_compression',
+  };
+
   Result<void> validateSingle(
     Map<String, dynamic> data, {
     TransportLimits limits = const TransportLimits(),
@@ -101,16 +111,8 @@ class RpcRequestSchemaValidator {
   }
 
   Result<void> _validateMeta(Map<String, dynamic> meta) {
-    const knownFields = {
-      'trace_id',
-      'traceparent',
-      'tracestate',
-      'request_id',
-      'agent_id',
-      'timestamp',
-      'outbound_compression',
-    };
-    final extraFields = meta.keys.where((key) => !knownFields.contains(key));
+    final extraFields =
+        meta.keys.where((key) => !_metaKnownFieldNames.contains(key));
     if (extraFields.isNotEmpty) {
       return _invalidRequest(
         'Field "meta" contains unsupported properties: '
@@ -118,15 +120,7 @@ class RpcRequestSchemaValidator {
       );
     }
 
-    for (final key in [
-      'trace_id',
-      'traceparent',
-      'tracestate',
-      'request_id',
-      'agent_id',
-      'timestamp',
-      'outbound_compression',
-    ]) {
+    for (final key in _metaKnownFieldNames) {
       final value = meta[key];
       if (value != null && value is! String) {
         return _invalidRequest('Field "meta.$key" must be a string');

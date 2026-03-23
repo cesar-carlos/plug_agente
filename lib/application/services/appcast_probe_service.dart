@@ -52,7 +52,9 @@ class AppcastProbeService implements IAppcastProbeService {
       );
 
       final response = await request.close().timeout(timeout);
-      final body = await response.transform(const SystemEncoding().decoder).join();
+      final body = await response
+          .transform(const SystemEncoding().decoder)
+          .join();
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return AppcastProbeResult(

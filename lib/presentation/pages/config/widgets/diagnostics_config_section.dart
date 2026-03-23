@@ -14,8 +14,7 @@ class DiagnosticsConfigSection extends StatefulWidget {
   const DiagnosticsConfigSection({super.key});
 
   @override
-  State<DiagnosticsConfigSection> createState() =>
-      _DiagnosticsConfigSectionState();
+  State<DiagnosticsConfigSection> createState() => _DiagnosticsConfigSectionState();
 }
 
 class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
@@ -28,8 +27,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   void initState() {
     super.initState();
     _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog;
-    _socketOutboundCompressionDebugLog =
-        _flags.enableSocketOutboundCompressionDebugLog;
+    _socketOutboundCompressionDebugLog = _flags.enableSocketOutboundCompressionDebugLog;
   }
 
   @override
@@ -37,8 +35,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
     super.didChangeDependencies();
     final odbcLog = _flags.enableOdbcPaginatedSqlDebugLog;
     final socketCmpLog = _flags.enableSocketOutboundCompressionDebugLog;
-    if (odbcLog != _odbcPaginatedSqlLog ||
-        socketCmpLog != _socketOutboundCompressionDebugLog) {
+    if (odbcLog != _odbcPaginatedSqlLog || socketCmpLog != _socketOutboundCompressionDebugLog) {
       setState(() {
         _odbcPaginatedSqlLog = odbcLog;
         _socketOutboundCompressionDebugLog = socketCmpLog;
@@ -117,8 +114,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   SettingsToggleTile(
-                    label:
-                        AppStrings.diagnosticsSocketOutboundCompressionDebugLogLabel,
+                    label: AppStrings.diagnosticsSocketOutboundCompressionDebugLogLabel,
                     value: _socketOutboundCompressionDebugLog,
                     onChanged: (bool value) {
                       unawaited(
@@ -137,8 +133,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    AppStrings
-                        .diagnosticsSocketOutboundCompressionDebugLogDescription,
+                    AppStrings.diagnosticsSocketOutboundCompressionDebugLogDescription,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                 ],

@@ -58,9 +58,7 @@ class ConnectionStatusWidget extends StatelessWidget {
                     ? l10n.connectionStatusDbConnected
                     : l10n.connectionStatusDbDisconnected,
                 style: context.bodyText.copyWith(
-                  color: connectionProvider.isDbConnected
-                      ? AppColors.success
-                      : AppColors.disabled,
+                  color: connectionProvider.isDbConnected ? AppColors.success : AppColors.disabled,
                 ),
               ),
             ],

@@ -15,6 +15,18 @@ void main() {
       expect(info, isNull);
     });
 
+    test('should return empty list when there are no rows', () {
+      const result = QueryResult(
+        columns: ['id'],
+        rows: [],
+        rowCount: 0,
+      );
+      final maps = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+        result,
+      );
+      expect(maps, isEmpty);
+    });
+
     test('should map rows and column metadata from QueryResult', () {
       const result = QueryResult(
         columns: ['id', 'name'],

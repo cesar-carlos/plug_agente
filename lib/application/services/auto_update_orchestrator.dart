@@ -43,7 +43,9 @@ class AutoUpdaterGateway implements IAutoUpdaterGateway {
   }
 }
 
-class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestrator {
+class AutoUpdateOrchestrator
+    with UpdaterListener
+    implements IAutoUpdateOrchestrator {
   AutoUpdateOrchestrator(
     this._capabilities, {
     IAutoUpdaterGateway updaterGateway = const AutoUpdaterGateway(),
@@ -278,7 +280,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         );
       },
     );
-    if (_isManualCheck && _manualCheckCompleter != null && !_manualCheckCompleter!.isCompleted) {
+    if (_isManualCheck &&
+        _manualCheckCompleter != null &&
+        !_manualCheckCompleter!.isCompleted) {
       _manualCheckCompleter!.complete(result);
     }
   }

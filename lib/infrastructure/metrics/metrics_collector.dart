@@ -47,6 +47,10 @@ class MetricsCollector implements IMetricsCollector {
   static const String _connectionPoolWaitLatencySamplesCounter = 'connection_pool_wait_latency_samples';
   static const String _connectionPoolActivePeakCounter = 'connection_pool_active_peak';
   static const String _connectionPoolWaitersPeakCounter = 'connection_pool_waiters_peak';
+  static const String _connectionPoolLeaseSlotReclaimedAfterDisconnectFailureCounter =
+      'connection_pool_lease_slot_reclaimed_after_disconnect_failure';
+  static const String _odbcStreamingQueryStreamRejectedBusyCounter = 'odbc_streaming_query_stream_rejected_busy';
+  static const String _odbcStreamingCancelDisconnectTimeoutCounter = 'odbc_streaming_cancel_disconnect_timeout';
   static const String _connectionDirectConnectLatencyMsTotalCounter = 'connection_direct_connect_latency_ms_total';
   static const String _connectionDirectConnectLatencySamplesCounter = 'connection_direct_connect_latency_samples';
   static const String _connectionDirectDisconnectLatencyMsTotalCounter =
@@ -105,6 +109,12 @@ class MetricsCollector implements IMetricsCollector {
   int get connectionPoolWaitLatencySamples => _eventCounters[_connectionPoolWaitLatencySamplesCounter] ?? 0;
   int get connectionPoolActivePeak => _eventCounters[_connectionPoolActivePeakCounter] ?? 0;
   int get connectionPoolWaitersPeak => _eventCounters[_connectionPoolWaitersPeakCounter] ?? 0;
+  int get connectionPoolLeaseSlotReclaimedAfterDisconnectFailureCount =>
+      _eventCounters[_connectionPoolLeaseSlotReclaimedAfterDisconnectFailureCounter] ?? 0;
+  int get odbcStreamingQueryStreamRejectedBusyCount =>
+      _eventCounters[_odbcStreamingQueryStreamRejectedBusyCounter] ?? 0;
+  int get odbcStreamingCancelDisconnectTimeoutCount =>
+      _eventCounters[_odbcStreamingCancelDisconnectTimeoutCounter] ?? 0;
   int get connectionDirectConnectLatencyMsTotal => _eventCounters[_connectionDirectConnectLatencyMsTotalCounter] ?? 0;
   int get connectionDirectConnectLatencySamples => _eventCounters[_connectionDirectConnectLatencySamplesCounter] ?? 0;
   int get connectionDirectDisconnectLatencyMsTotal =>
@@ -227,6 +237,17 @@ class MetricsCollector implements IMetricsCollector {
   void recordConnectionPoolWaitersPeak(int waiterCount) {
     _recordPeakEventCounter(_connectionPoolWaitersPeakCounter, waiterCount);
   }
+
+  /// Lease pool: pool release failed to disconnect but the lease slot was still
+  /// reclaimed so the pool does not stay exhausted indefinitely.
+  void recordConnectionPoolLeaseSlotReclaimedAfterDisconnectFailure() =>
+      _incrementEventCounter(_connectionPoolLeaseSlotReclaimedAfterDisconnectFailureCounter);
+
+  void recordOdbcStreamingQueryStreamRejectedBusy() =>
+      _incrementEventCounter(_odbcStreamingQueryStreamRejectedBusyCounter);
+
+  void recordOdbcStreamingCancelDisconnectTimeout() =>
+      _incrementEventCounter(_odbcStreamingCancelDisconnectTimeoutCounter);
 
   void recordDirectConnectionConnectLatency(Duration latency) {
     _recordLatencySample(

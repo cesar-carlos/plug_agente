@@ -58,7 +58,8 @@ class AuthService {
           );
         }
       },
-      (failure) => Failure(domain_errors.NotFoundFailure('No configuration found')),
+      (failure) =>
+          Failure(domain_errors.NotFoundFailure('No configuration found')),
     );
   }
 }

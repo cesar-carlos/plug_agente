@@ -201,7 +201,7 @@ void main() {
       expect(result.isError(), isTrue);
       verify(
         () => mockService.disconnect('conn-cancel'),
-      ).called(1);
+      ).called(2);
     });
 
     test(
@@ -336,7 +336,55 @@ void main() {
         expect(result.isError(), isTrue);
         verify(
           () => mockService.disconnect('conn-disconnect'),
-        ).called(1);
+        ).called(2);
+      },
+    );
+
+    test(
+      'should reject a second executeQueryStream while the first is active',
+      () async {
+        final controller = StreamController<Result<QueryResult>>();
+
+        when(() => mockService.initialize()).thenAnswer(
+          (_) async => const Success(unit),
+        );
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'conn-busy',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(
+          () => mockService.streamQuery('conn-busy', any()),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockService.disconnect(any()),
+        ).thenAnswer((_) async => const Success(unit));
+
+        unawaited(
+          gateway.executeQueryStream(
+            'SELECT 1',
+            'DSN=Test',
+            (_) async {},
+          ),
+        );
+        await pumpEventQueue();
+
+        final second = await gateway.executeQueryStream(
+          'SELECT 2',
+          'DSN=Test',
+          (_) async {},
+        );
+
+        expect(second.isError(), isTrue);
+
+        await controller.close();
       },
     );
   });

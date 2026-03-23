@@ -200,7 +200,9 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<IRevokedTokenStore>(InMemoryRevokedTokenStore.new)
     ..registerLazySingleton<ITokenAuditStore>(
-      () => getIt<FeatureFlags>().enableTokenAudit ? FileTokenAuditStore() : NoopTokenAuditStore(),
+      () => getIt<FeatureFlags>().enableTokenAudit
+          ? FileTokenAuditStore()
+          : NoopTokenAuditStore(),
     )
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
@@ -214,7 +216,8 @@ void registerPlugDependencyGraph(
         authMetrics: getIt<IAuthorizationMetricsCollector>(),
         deprecationMetrics: getIt<IDeprecationMetricsCollector>(),
         dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
-        onIdempotencyFingerprintMismatch: getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
+        onIdempotencyFingerprintMismatch:
+            getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
       ),
     )
@@ -223,7 +226,10 @@ void registerPlugDependencyGraph(
         final signingKey = dotenv.env['PAYLOAD_SIGNING_KEY']?.trim();
         final signingKeyId = dotenv.env['PAYLOAD_SIGNING_KEY_ID']?.trim();
         PayloadSigner? payloadSigner;
-        if (signingKey != null && signingKey.isNotEmpty && signingKeyId != null && signingKeyId.isNotEmpty) {
+        if (signingKey != null &&
+            signingKey.isNotEmpty &&
+            signingKeyId != null &&
+            signingKeyId.isNotEmpty) {
           payloadSigner = PayloadSigner(keys: {signingKeyId: signingKey});
         }
         return SocketIOTransportClientV2(
@@ -251,6 +257,7 @@ void registerPlugDependencyGraph(
       () => OdbcStreamingGateway(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
+        metricsCollector: getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
@@ -274,20 +281,31 @@ void registerPlugDependencyGraph(
         if (jwksUrlOverride != null && jwksUrlOverride.isNotEmpty) {
           return JwksConfig(
             jwksUrl: jwksUrlOverride,
-            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_ISSUER']
+                : null,
+            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                ? dotenv.env['JWKS_AUDIENCE']
+                : null,
           );
         }
-        final configResult = await getIt<IAgentConfigRepository>().getCurrentConfig();
+        final configResult = await getIt<IAgentConfigRepository>()
+            .getCurrentConfig();
         return configResult.fold(
           (config) {
             final base = config.serverUrl.trim();
             if (base.isEmpty) return null;
-            final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+            final normalized = base.endsWith('/')
+                ? base.substring(0, base.length - 1)
+                : base;
             return JwksConfig(
               jwksUrl: '$normalized/.well-known/jwks.json',
-              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_ISSUER']
+                  : null,
+              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false
+                  ? dotenv.env['JWKS_AUDIENCE']
+                  : null,
             );
           },
           (_) => null,

@@ -25,7 +25,9 @@ class ConfigService {
   }
 
   String _buildSqlServerConnectionString(Config config) {
-    final driver = config.odbcDriverName.isNotEmpty ? config.odbcDriverName : 'ODBC Driver 17 for SQL Server';
+    final driver = config.odbcDriverName.isNotEmpty
+        ? config.odbcDriverName
+        : 'ODBC Driver 17 for SQL Server';
     final buffer = StringBuffer('DRIVER={$driver};')
       ..write('SERVER=${config.host},${config.port};')
       ..write('DATABASE=${config.databaseName};')
@@ -37,7 +39,9 @@ class ConfigService {
   }
 
   String _buildPostgreSqlConnectionString(Config config) {
-    final driver = config.odbcDriverName.isNotEmpty ? config.odbcDriverName : OdbcDrivers.postgresqlUnicode;
+    final driver = config.odbcDriverName.isNotEmpty
+        ? config.odbcDriverName
+        : OdbcDrivers.postgresqlUnicode;
     final buffer = StringBuffer('DRIVER={$driver};')
       ..write('SERVER=${config.host};')
       ..write('PORT=${config.port};')

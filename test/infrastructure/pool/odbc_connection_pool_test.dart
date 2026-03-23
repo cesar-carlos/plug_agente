@@ -229,6 +229,25 @@ void main() {
 
       expect(released.isError(), isTrue);
       verify(() => mockService.disconnect('lease-1')).called(1);
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-2',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.disconnect('lease-2')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      final afterFailure = await pool.acquire('DSN=Test');
+      expect(afterFailure.isSuccess(), isTrue);
+      expect(afterFailure.getOrNull(), 'lease-2');
     });
 
     test('should drop expired idle leases before acquiring again', () async {
@@ -285,6 +304,48 @@ void main() {
         () => mockService.connect(any(), options: any(named: 'options')),
       );
     });
+
+    test(
+      'concurrent warmIdleLeases should serialize per connection string',
+      () async {
+        mockSettings.poolSize = 2;
+        mockSettings.leaseWarmupCount = 1;
+        mockSettings.leaseIdleTtlSeconds = 60;
+        var n = 0;
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          n++;
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+          return Success(
+            Connection(
+              id: 'warm-$n',
+              connectionString: 'DSN=Test',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(any())).thenAnswer(
+          (_) async => const Success(unit),
+        );
+
+        final results = await Future.wait([
+          pool.warmIdleLeases('DSN=Test'),
+          pool.warmIdleLeases('DSN=Test'),
+        ]);
+        expect(results.every((Result<void> r) => r.isSuccess()), isTrue);
+        expect(n, 1);
+      },
+    );
+
+    test(
+      'healthCheckAll should succeed when lease invariants hold',
+      () async {
+        final health = await pool.healthCheckAll();
+        expect(health.isSuccess(), isTrue);
+      },
+    );
 
     test(
       'warmIdleLeases should open idle leases up to warmup cap',

@@ -114,6 +114,9 @@ class OdbcConnectionPool implements IConnectionPool {
   final Map<String, List<_IdleConnectionEntry>> _idleByConnectionString = {};
   final Set<String> _idleIds = {};
 
+  /// Serializes [warmIdleLeases] per connection string to avoid duplicate opens.
+  final Map<String, Future<void>> _warmupSerialByConnectionString = {};
+
   _LeaseLimiter? _leaseLimiterInstance;
 
   _LeaseLimiter _leases() => _leaseLimiterInstance ??= _LeaseLimiter(
@@ -323,12 +326,24 @@ class OdbcConnectionPool implements IConnectionPool {
         _releaseLeaseSlot();
         return const Success(unit);
       },
-      (error) => Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'pool_release',
-        ),
-      ),
+      (error) {
+        developer.log(
+          'Disconnect failed during lease pool release; reclaiming lease slot '
+          'to avoid indefinite pool exhaustion. If this repeats, call '
+          'recycle() for the connection string.',
+          name: 'connection_pool',
+          level: 900,
+          error: error,
+        );
+        _metrics?.recordConnectionPoolLeaseSlotReclaimedAfterDisconnectFailure();
+        _releaseLeaseSlot();
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'pool_release',
+          ),
+        );
+      },
     );
   }
 
@@ -337,6 +352,24 @@ class OdbcConnectionPool implements IConnectionPool {
     if (_settings.leaseWarmupCount <= 0 || _idleConnectionTtl <= Duration.zero) {
       return const Success(unit);
     }
+
+    final previous = _warmupSerialByConnectionString[connectionString];
+    final gate = Completer<void>();
+    _warmupSerialByConnectionString[connectionString] = gate.future;
+    try {
+      if (previous != null) {
+        await previous;
+      }
+      return await _warmIdleLeasesUnderLock(connectionString);
+    } finally {
+      gate.complete();
+      if (identical(_warmupSerialByConnectionString[connectionString], gate.future)) {
+        _warmupSerialByConnectionString.remove(connectionString);
+      }
+    }
+  }
+
+  Future<Result<void>> _warmIdleLeasesUnderLock(String connectionString) async {
     final target = _settings.leaseWarmupCount.clamp(
       0,
       ConnectionConstants.maxLeaseWarmupCount,
@@ -483,6 +516,26 @@ class OdbcConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> healthCheckAll() async {
+    final overlap = _leasedIds.intersection(_idleIds);
+    if (overlap.isNotEmpty) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Lease pool invariant violated: id in leased and idle: $overlap'),
+          operation: 'pool_health_check',
+        ),
+      );
+    }
+    if (_leasedIds.length > _maxLeases) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError(
+            'Lease pool invariant violated: leased ${_leasedIds.length} '
+            'exceeds max $_maxLeases',
+          ),
+          operation: 'pool_health_check',
+        ),
+      );
+    }
     return const Success(unit);
   }
 }

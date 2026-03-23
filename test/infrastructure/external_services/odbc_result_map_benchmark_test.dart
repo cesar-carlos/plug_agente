@@ -88,6 +88,13 @@ void main() {
         iterations: iterations,
       );
 
+      // ignore: avoid_print
+      print(
+        '[benchmark.odbc_result_map] rows=$rowCount cols=$colCount '
+        'iterations=$iterations median_ms=${stats.medianMs} '
+        'p90_ms=${stats.p90Ms} mean_ms=${stats.meanMs.toStringAsFixed(2)}',
+      );
+
       if (E2EEnv.get('ODBC_RESULT_MAP_BENCHMARK_RECORD') == 'true') {
         final custom = E2EEnv.get('ODBC_RESULT_MAP_BENCHMARK_FILE')?.trim();
         final relative = (custom != null && custom.isNotEmpty)

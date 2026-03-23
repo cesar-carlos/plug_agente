@@ -10,21 +10,29 @@ class ProtocolNegotiator {
     required ProtocolCapabilities serverCapabilities,
     bool preferJsonRpcV2 = true,
   }) {
-    final commonProtocols = agentCapabilities.protocols.where(serverCapabilities.protocols.contains).toList();
+    final commonProtocols = agentCapabilities.protocols
+        .where(serverCapabilities.protocols.contains)
+        .toList();
     final selectedProtocol =
-        preferJsonRpcV2 && commonProtocols.contains('jsonrpc-v2') && agentCapabilities.supportsJsonRpcV2
+        preferJsonRpcV2 &&
+            commonProtocols.contains('jsonrpc-v2') &&
+            agentCapabilities.supportsJsonRpcV2
         ? 'jsonrpc-v2'
         : (commonProtocols.isNotEmpty ? commonProtocols.first : 'jsonrpc-v2');
 
     // 2. Select encoding (prefer json for compatibility)
-    final commonEncodings = agentCapabilities.encodings.where(serverCapabilities.encodings.contains).toList();
+    final commonEncodings = agentCapabilities.encodings
+        .where(serverCapabilities.encodings.contains)
+        .toList();
 
     final selectedEncoding = commonEncodings.contains('json')
         ? 'json'
         : (commonEncodings.isNotEmpty ? commonEncodings.first : 'json');
 
     // 3. Select compression (prefer gzip if both support it)
-    final commonCompressions = agentCapabilities.compressions.where(serverCapabilities.compressions.contains).toList();
+    final commonCompressions = agentCapabilities.compressions
+        .where(serverCapabilities.compressions.contains)
+        .toList();
 
     final selectedCompression = commonCompressions.contains('gzip')
         ? 'gzip'
@@ -111,20 +119,23 @@ class ProtocolNegotiator {
     }
 
     final notificationNullIdCompatibility =
-        (agentExtensions['notificationNullIdCompatibility'] as bool? ?? false) &&
+        (agentExtensions['notificationNullIdCompatibility'] as bool? ??
+            false) &&
         (serverExtensions['notificationNullIdCompatibility'] as bool? ?? false);
     if (notificationNullIdCompatibility) {
       negotiated['notificationNullIdCompatibility'] = true;
     }
 
     final binaryPayload =
-        (agentExtensions['binaryPayload'] as bool? ?? false) && (serverExtensions['binaryPayload'] as bool? ?? false);
+        (agentExtensions['binaryPayload'] as bool? ?? false) &&
+        (serverExtensions['binaryPayload'] as bool? ?? false);
     if (binaryPayload) {
       negotiated['binaryPayload'] = true;
     }
 
     final transportFrame = agentExtensions['transportFrame'];
-    if (transportFrame != null && transportFrame == serverExtensions['transportFrame']) {
+    if (transportFrame != null &&
+        transportFrame == serverExtensions['transportFrame']) {
       negotiated['transportFrame'] = transportFrame;
     }
 
@@ -149,7 +160,8 @@ class ProtocolNegotiator {
     }
 
     final signatureScope = agentExtensions['signatureScope'];
-    if (signatureScope != null && signatureScope == serverExtensions['signatureScope']) {
+    if (signatureScope != null &&
+        signatureScope == serverExtensions['signatureScope']) {
       negotiated['signatureScope'] = signatureScope;
     }
 
@@ -195,8 +207,12 @@ class ProtocolNegotiator {
   ) {
     final agentValue = agentExtensions['compressionThreshold'];
     final serverValue = serverExtensions['compressionThreshold'];
-    final agentThreshold = agentValue is int && agentValue > 0 ? agentValue : 1024;
-    final serverThreshold = serverValue is int && serverValue > 0 ? serverValue : 1024;
+    final agentThreshold = agentValue is int && agentValue > 0
+        ? agentValue
+        : 1024;
+    final serverThreshold = serverValue is int && serverValue > 0
+        ? serverValue
+        : 1024;
     return agentThreshold < serverThreshold ? agentThreshold : serverThreshold;
   }
 
@@ -206,8 +222,12 @@ class ProtocolNegotiator {
   ) {
     final agentValue = agentExtensions['maxInflationRatio'];
     final serverValue = serverExtensions['maxInflationRatio'];
-    final agentRatio = agentValue is num && agentValue >= 1 ? agentValue.toDouble() : 20;
-    final serverRatio = serverValue is num && serverValue >= 1 ? serverValue.toDouble() : 20;
+    final agentRatio = agentValue is num && agentValue >= 1
+        ? agentValue.toDouble()
+        : 20;
+    final serverRatio = serverValue is num && serverValue >= 1
+        ? serverValue.toDouble()
+        : 20;
     return (agentRatio < serverRatio ? agentRatio : serverRatio).toDouble();
   }
 

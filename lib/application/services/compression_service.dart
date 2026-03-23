@@ -11,7 +11,9 @@ class CompressionService {
     final result = await _compressor.compress(response.data);
     if (result.isError()) {
       final failure = result.exceptionOrNull()!;
-      final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+      final failureMessage = failure is domain.Failure
+          ? failure.message
+          : failure.toString();
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to compress response data',
@@ -71,7 +73,9 @@ class CompressionService {
     final result = await _compressor.decompress(response.data);
     if (result.isError()) {
       final failure = result.exceptionOrNull()!;
-      final failureMessage = failure is domain.Failure ? failure.message : failure.toString();
+      final failureMessage = failure is domain.Failure
+          ? failure.message
+          : failure.toString();
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to decompress response data',

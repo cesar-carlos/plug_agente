@@ -41,16 +41,30 @@ class OdbcGatewayQueryResultMapper {
   ) {
     final columns = result.columns;
     final colCount = columns.length;
-    if (colCount == 0) {
-      return result.rows.map((_) => <String, dynamic>{}).toList();
+    final rows = result.rows;
+    final rowCount = rows.length;
+    if (rowCount == 0) {
+      return <Map<String, dynamic>>[];
     }
-    return result.rows.map((row) {
-      final map = <String, dynamic>{};
-      for (var i = 0; i < colCount; i++) {
-        map[columns[i]] = row[i];
-      }
-      return map;
-    }).toList();
+    if (colCount == 0) {
+      return List<Map<String, dynamic>>.generate(
+        rowCount,
+        (_) => <String, dynamic>{},
+        growable: false,
+      );
+    }
+    return List<Map<String, dynamic>>.generate(
+      rowCount,
+      (int r) {
+        final row = rows[r];
+        final map = <String, dynamic>{};
+        for (var i = 0; i < colCount; i++) {
+          map[columns[i]] = row[i];
+        }
+        return map;
+      },
+      growable: false,
+    );
   }
 
   static List<Map<String, dynamic>> buildColumnMetadata(

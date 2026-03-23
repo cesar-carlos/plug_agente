@@ -12,7 +12,11 @@ class InputValidators {
     String value, {
     String? message,
   }) {
-    final schema = z.string().email(message: message ?? 'Invalid email address').trim().toLowerCase();
+    final schema = z
+        .string()
+        .email(message: message ?? 'Invalid email address')
+        .trim()
+        .toLowerCase();
 
     return schema.parseSafe(value);
   }
@@ -46,7 +50,10 @@ class InputValidators {
     String value, {
     String? message,
   }) {
-    final schema = z.string().httpUrl(message: message ?? 'Invalid HTTP(S) URL').trim();
+    final schema = z
+        .string()
+        .httpUrl(message: message ?? 'Invalid HTTP(S) URL')
+        .trim();
 
     return schema.parseSafe(value);
   }
@@ -55,7 +62,11 @@ class InputValidators {
     String value, {
     String? message,
   }) {
-    final schema = z.string().hostname(message: message ?? 'Invalid hostname').trim().toLowerCase();
+    final schema = z
+        .string()
+        .hostname(message: message ?? 'Invalid hostname')
+        .trim()
+        .toLowerCase();
 
     return schema.parseSafe(value);
   }
@@ -64,7 +75,10 @@ class InputValidators {
     String value, {
     String? message,
   }) {
-    final schema = z.string().ipv4(message: message ?? 'Invalid IPv4 address').trim();
+    final schema = z
+        .string()
+        .ipv4(message: message ?? 'Invalid IPv4 address')
+        .trim();
 
     return schema.parseSafe(value);
   }
@@ -125,7 +139,9 @@ class InputValidators {
         .toLowerCase()
         .refine(
           _usernameCharClass.hasMatch,
-          message: message ?? 'Username can only contain letters, numbers, underscores, and hyphens',
+          message:
+              message ??
+              'Username can only contain letters, numbers, underscores, and hyphens',
         );
 
     return schema.parseSafe(value);
@@ -141,16 +157,21 @@ class InputValidators {
         .string()
         .min(
           minLength,
-          message: message ?? 'Database name must be at least $minLength character(s)',
+          message:
+              message ??
+              'Database name must be at least $minLength character(s)',
         )
         .max(
           maxLength,
-          message: message ?? 'Database name must be at most $maxLength characters',
+          message:
+              message ?? 'Database name must be at most $maxLength characters',
         )
         .trim()
         .refine(
           _databaseNameCharClass.hasMatch,
-          message: message ?? 'Database name can only contain letters, numbers, and underscores',
+          message:
+              message ??
+              'Database name can only contain letters, numbers, and underscores',
         );
 
     return schema.parseSafe(value);

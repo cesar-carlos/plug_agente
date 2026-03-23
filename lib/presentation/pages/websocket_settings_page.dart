@@ -112,8 +112,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     final currentStatus = connectionProvider.status;
     final currentError = connectionProvider.error;
 
-    if (_previousConnectionStatus != ConnectionStatus.connected &&
-        currentStatus == ConnectionStatus.connected) {
+    if (_previousConnectionStatus != ConnectionStatus.connected && currentStatus == ConnectionStatus.connected) {
       _showConnectionSuccessModal();
     }
 
@@ -214,9 +213,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized &&
-        !configProvider.isLoading &&
-        configProvider.currentConfig != null) {
+    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
     } else if (configProvider.isLoading) {
       unawaited(
@@ -280,12 +277,10 @@ class _WebSocketSettingsTabbedContent extends StatefulWidget {
   final ConfigProvider configProvider;
 
   @override
-  State<_WebSocketSettingsTabbedContent> createState() =>
-      _WebSocketSettingsTabbedContentState();
+  State<_WebSocketSettingsTabbedContent> createState() => _WebSocketSettingsTabbedContentState();
 }
 
-class _WebSocketSettingsTabbedContentState
-    extends State<_WebSocketSettingsTabbedContent> {
+class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbedContent> {
   int _selectedTabIndex = 0;
   late List<SettingsTabItem> _tabItems;
 
@@ -298,8 +293,7 @@ class _WebSocketSettingsTabbedContentState
   @override
   void didUpdateWidget(covariant _WebSocketSettingsTabbedContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.formController != widget.formController ||
-        oldWidget.configProvider != widget.configProvider) {
+    if (oldWidget.formController != widget.formController || oldWidget.configProvider != widget.configProvider) {
       _tabItems = _buildTabItems();
     }
   }

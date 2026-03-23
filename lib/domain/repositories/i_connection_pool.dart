@@ -15,9 +15,10 @@ abstract class IConnectionPool {
 
   /// Returns a connection to the pool or disconnects the lease, depending on impl.
   ///
-  /// Lease pool: on [Failure] (e.g. disconnect error), the implementation may
-  /// keep the lease slot reserved so the connection id is not double-used; callers
-  /// may need [recycle] / [closeAll] / process restart. See concrete pool docs.
+  /// Lease pool: on [Failure] (e.g. disconnect error), implementations should
+  /// still return [Failure] for observability, but may reclaim the lease limiter
+  /// slot so the pool cannot deadlock indefinitely; the native handle may need
+  /// [recycle] if disconnect errors persist. See concrete pool docs.
   Future<Result<void>> release(String connectionId);
 
   /// Closes every connection / native pool tracked by this instance.
@@ -33,7 +34,8 @@ abstract class IConnectionPool {
   /// Best-effort count of in-use connections (semantics depend on implementation).
   Future<Result<int>> getActiveCount();
 
-  /// Runs a health check on native pools when supported; lease pool is a no-op.
+  /// Runs a health check on native pools when supported; lease pool validates
+  /// internal invariants (leased vs idle, capacity).
   Future<Result<void>> healthCheckAll();
 
   /// Pre-opens idle lease connections for [connectionString] (lease pool only).

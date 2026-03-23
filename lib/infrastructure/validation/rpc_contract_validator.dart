@@ -9,6 +9,16 @@ import 'package:result_dart/result_dart.dart';
 class RpcContractValidator {
   const RpcContractValidator();
 
+  /// O(n) object-map check without a per-call `Iterable.any` closure.
+  static bool _listElementsAreObjectMaps(List<dynamic> list) {
+    for (final Object? element in list) {
+      if (element is! Map<String, dynamic>) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Result<void> validateAgentRegister(Map<String, dynamic> data) {
     final agentId = data['agentId'];
     if (agentId is! String || agentId.trim().isEmpty) {
@@ -139,8 +149,7 @@ class RpcContractValidator {
     if (rows is! List<dynamic>) {
       return _invalid('Field "rows" must be an array');
     }
-    if (validateRowElementTypes &&
-        rows.any((row) => row is! Map<String, dynamic>)) {
+    if (validateRowElementTypes && !_listElementsAreObjectMaps(rows)) {
       return _invalid('Field "rows" must contain objects only');
     }
 
@@ -153,7 +162,7 @@ class RpcContractValidator {
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
             (validateRowElementTypes &&
-                columnMetadata.any((item) => item is! Map<String, dynamic>)))) {
+                !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -262,8 +271,7 @@ class RpcContractValidator {
     final rows = result['rows'];
     if (rows != null &&
         (rows is! List<dynamic> ||
-            (validateRowElementTypes &&
-                rows.any((row) => row is! Map<String, dynamic>)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
       return _invalid('Field "rows" must be an array of objects');
     }
 
@@ -271,7 +279,7 @@ class RpcContractValidator {
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
             (validateRowElementTypes &&
-                columnMetadata.any((item) => item is! Map<String, dynamic>)))) {
+                !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -410,8 +418,7 @@ class RpcContractValidator {
     final rows = item['rows'];
     if (rows != null &&
         (rows is! List<dynamic> ||
-            (validateRowElementTypes &&
-                rows.any((row) => row is! Map<String, dynamic>)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
       return _invalid('Field "items[].rows" must be an array of objects');
     }
 
@@ -426,7 +433,7 @@ class RpcContractValidator {
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
             (validateRowElementTypes &&
-                columnMetadata.any((entry) => entry is! Map<String, dynamic>)))) {
+                !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid(
         'Field "items[].column_metadata" must be an array of objects',
       );
@@ -450,8 +457,7 @@ class RpcContractValidator {
 
     final rows = item['rows'];
     if (rows is! List<dynamic> ||
-        (validateRowElementTypes &&
-            rows.any((row) => row is! Map<String, dynamic>))) {
+        (validateRowElementTypes && !_listElementsAreObjectMaps(rows))) {
       return _invalid('Field "result_sets[].rows" must be an array of objects');
     }
 
@@ -466,7 +472,7 @@ class RpcContractValidator {
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
             (validateRowElementTypes &&
-                columnMetadata.any((entry) => entry is! Map<String, dynamic>)))) {
+                !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid(
         'Field "result_sets[].column_metadata" must be an array of objects',
       );

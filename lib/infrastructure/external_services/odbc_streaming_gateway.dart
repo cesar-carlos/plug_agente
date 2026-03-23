@@ -11,6 +11,7 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -19,9 +20,20 @@ import 'package:result_dart/result_dart.dart';
 /// Implementa streaming incremental usando streamQuery da odbc_fast,
 /// processando resultados em chunks sem carregar tudo em memória.
 class OdbcStreamingGateway implements IStreamingDatabaseGateway {
-  OdbcStreamingGateway(this._service, this._settings);
+  OdbcStreamingGateway(
+    this._service,
+    this._settings, {
+    MetricsCollector? metricsCollector,
+  }) : _metrics = metricsCollector;
+
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final MetricsCollector? _metrics;
+
+  /// Prevents overlapping streams from clobbering the active connection id and
+  /// leaking the first connection.
+  Object? _streamExecutionOwner;
+
   String? _activeConnectionId;
   bool _isCancelRequested = false;
   StreamingCancelReason _cancelReason = StreamingCancelReason.user;
@@ -97,28 +109,39 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     int fetchSize = 1000,
     int chunkSizeBytes = 1024 * 1024,
   }) async {
-    _isCancelRequested = false;
-    _cancelReason = StreamingCancelReason.user;
-
-    final initResult = await _ensureInitialized();
-    if (initResult.isError()) {
-      final initFailure = initResult.exceptionOrNull();
-      if (initFailure != null) {
-        return Failure(initFailure);
-      }
+    final owner = Object();
+    if (_streamExecutionOwner != null) {
+      _metrics?.recordOdbcStreamingQueryStreamRejectedBusy();
       return Failure(
-        domain.ConnectionFailure('Falha desconhecida ao inicializar ODBC'),
+        domain.ValidationFailure(
+          'Another database query stream is already in progress.',
+        ),
       );
     }
+    _streamExecutionOwner = owner;
+    try {
+      _isCancelRequested = false;
+      _cancelReason = StreamingCancelReason.user;
 
-    // Conectar com opções otimizadas para streaming
-    final connResult = await _service.connect(
-      connectionString,
-      options: _buildStreamingConnectionOptions(chunkSizeBytes),
-    );
+      final initResult = await _ensureInitialized();
+      if (initResult.isError()) {
+        final initFailure = initResult.exceptionOrNull();
+        if (initFailure != null) {
+          return Failure(initFailure);
+        }
+        return Failure(
+          domain.ConnectionFailure('Falha desconhecida ao inicializar ODBC'),
+        );
+      }
 
-    return connResult.fold(
-      (connection) async {
+      // Conectar com opções otimizadas para streaming
+      final connResult = await _service.connect(
+        connectionString,
+        options: _buildStreamingConnectionOptions(chunkSizeBytes),
+      );
+
+      return await connResult.fold<Future<Result<void>>>(
+        (connection) async {
         _activeConnectionId = connection.id;
         try {
           // Usar streaming real para processar chunks incrementalmente
@@ -204,23 +227,34 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
             ),
           );
         } finally {
-          if (_activeConnectionId == connection.id) {
-            await _service.disconnect(connection.id);
-          }
+          final disconnectResult = await _service.disconnect(connection.id);
+          disconnectResult.fold(
+            (_) {},
+            (Object error) {
+              app_log.AppLogger.debug(
+                'streaming gateway: best-effort disconnect failed '
+                'connection_id=${connection.id}',
+                error,
+              );
+            },
+          );
           if (_activeConnectionId == connection.id) {
             _activeConnectionId = null;
           }
         }
       },
-      (error) {
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            error,
-            operation: 'connect_streaming',
-          ),
-        );
-      },
+      (error) async => Failure(
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'connect_streaming',
+        ),
+      ),
     );
+    } finally {
+      if (identical(_streamExecutionOwner, owner)) {
+        _streamExecutionOwner = null;
+      }
+    }
   }
 
   @override
@@ -252,6 +286,13 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
         ),
       );
     } on TimeoutException {
+      _metrics?.recordOdbcStreamingCancelDisconnectTimeout();
+      app_log.AppLogger.debug(
+        'streaming gateway: cancel disconnect timed out after '
+        '${_cancelDisconnectTimeout.inSeconds}s '
+        '(connection_id=$activeConnectionId); stream cleanup still runs in '
+        'executeQueryStream finally.',
+      );
       return const Success(unit);
     } finally {
       if (_activeConnectionId == activeConnectionId) {

@@ -61,28 +61,38 @@ Future<String> resolveIdempotencyFingerprint(
 
 dynamic canonicalizeJsonValueForIdempotency(dynamic value) {
   if (value is Map<String, dynamic>) {
-    final sortedKeys = value.keys.toList(growable: false)..sort();
+    final entries = value.entries.toList(growable: false)
+      ..sort((a, b) => a.key.compareTo(b.key));
     return <String, dynamic>{
-      for (final String key in sortedKeys)
-        key: canonicalizeJsonValueForIdempotency(value[key]),
+      for (final e in entries)
+        e.key: canonicalizeJsonValueForIdempotency(e.value),
     };
   }
   if (value is Map) {
-    final normalized = value.map(
-      (dynamic key, dynamic v) =>
-          MapEntry(key.toString(), canonicalizeJsonValueForIdempotency(v)),
-    );
-    final sortedKeys = normalized.keys.toList(growable: false)..sort();
+    final normalized = <MapEntry<String, dynamic>>[];
+    for (final e in value.entries) {
+      normalized.add(
+        MapEntry(
+          e.key.toString(),
+          canonicalizeJsonValueForIdempotency(e.value),
+        ),
+      );
+    }
+    normalized.sort((a, b) => a.key.compareTo(b.key));
     return <String, dynamic>{
-      for (final String key in sortedKeys) key: normalized[key],
+      for (final e in normalized) e.key: e.value,
     };
   }
   if (value is List) {
-    return value
-        .map(canonicalizeJsonValueForIdempotency)
-        .toList(
-          growable: false,
-        );
+    final len = value.length;
+    if (len == 0) {
+      return <dynamic>[];
+    }
+    return List<dynamic>.generate(
+      len,
+      (int i) => canonicalizeJsonValueForIdempotency(value[i]),
+      growable: false,
+    );
   }
   return value;
 }
