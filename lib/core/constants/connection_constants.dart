@@ -21,7 +21,7 @@ class ConnectionConstants {
   static const int maxLeaseIdleTtlSeconds = 86400;
 
   /// Optional pre-opened idle leases per DSN (lease pool only; 0 = off).
-  static const int defaultLeaseWarmupCount = 0;
+  static const int defaultLeaseWarmupCount = 1;
 
   /// Upper bound for configured lease warmup count (per connection string).
   static const int maxLeaseWarmupCount = 32;

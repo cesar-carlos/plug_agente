@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_compressor.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
@@ -29,12 +28,8 @@ List<Map<String, dynamic>> _wrapperFromPlainUtf8Bytes(Uint8List plainBytes) {
   ];
 }
 
-/// Top-level for [compute]: JSON UTF-8 encode + gzip + base64 wrapper in one isolate.
-List<Map<String, dynamic>> _compressJsonRowsInIsolate(
-  List<Map<String, dynamic>> data,
-) {
-  final raw = JsonUtf8Encoder().convert(data);
-  final plainBytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+/// Top-level for [compute]: gzip + base64 wrapper from already-encoded UTF-8 JSON.
+List<Map<String, dynamic>> _compressPlainUtf8InIsolate(Uint8List plainBytes) {
   return _wrapperFromPlainUtf8Bytes(plainBytes);
 }
 
@@ -68,16 +63,12 @@ class GzipCompressor implements ICompressor {
     List<Map<String, dynamic>> data,
   ) async {
     try {
-      if (jsonTreeLikelyExceedsByteBudget(data, gzipRowComputeMinUtf8Bytes)) {
-        final result = await compute(_compressJsonRowsInIsolate, data);
-        return Success(result);
-      }
       final raw = JsonUtf8Encoder().convert(data);
       final plainBytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
       if (plainBytes.length <= gzipRowComputeMinUtf8Bytes) {
         return Success(_wrapperFromPlainUtf8Bytes(plainBytes));
       }
-      final result = await compute(_compressJsonRowsInIsolate, data);
+      final result = await compute(_compressPlainUtf8InIsolate, plainBytes);
       return Success(result);
     } on Object catch (error) {
       return Failure(

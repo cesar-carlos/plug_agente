@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -6,6 +9,7 @@ import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -124,6 +128,22 @@ void main() {
       return frame.toJson();
     }
 
+    Future<void> connectWithNegotiatedCapabilities({
+      ProtocolCapabilities? capabilities,
+    }) async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities':
+              (capabilities ?? ProtocolCapabilities.defaultCapabilities()).toJson(),
+        }),
+      );
+      emitted.clear();
+    }
+
     setUp(() {
       mockDataSource = MockSocketDataSource();
       mockNegotiator = MockProtocolNegotiator();
@@ -159,6 +179,10 @@ void main() {
       when(() => mockSocket.connect()).thenReturn(mockSocket);
       when(() => mockSocket.disconnect()).thenReturn(mockSocket);
       when(() => mockSocket.dispose()).thenReturn(null);
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(
+        () => mockSocket.emitWithAckAsync(any<String>(), any<dynamic>()),
+      ).thenAnswer((_) async {});
 
       when(() => mockFeatureFlags.enableSocketBackpressure).thenReturn(false);
       when(() => mockFeatureFlags.enableBinaryPayload).thenReturn(true);
@@ -268,6 +292,50 @@ void main() {
         (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
         isA<Map<String, dynamic>>(),
       );
+      final load = registerPayload['load'] as Map<String, dynamic>;
+      expect(load['active_handlers'], 0);
+      expect(load['max_handlers'], ConnectionConstants.maxConcurrentRpcHandlers);
+    });
+
+    test('should reject rpc requests before capabilities negotiation', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-early',
+          'params': {'sql': 'SELECT 1'},
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      verifyNever(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+      final responsePayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
+              as Map<String, dynamic>;
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.invalidRequest);
+      expect(
+        (error['data'] as Map<String, dynamic>)['reason'],
+        'protocol_not_ready',
+      );
     });
 
     test(
@@ -292,10 +360,7 @@ void main() {
           ),
         );
 
-        final connectFuture = client.connect('https://hub.test', 'agent-1');
-        emitEvent('connect');
-        await connectFuture;
-        emitted.clear();
+        await connectWithNegotiatedCapabilities();
 
         emitEvent(
           'rpc:request',
@@ -480,10 +545,7 @@ void main() {
     );
 
     test('should respond to rpc.discover with OpenRPC document', () async {
-      final connectFuture = client.connect('https://hub.test', 'agent-1');
-      emitEvent('connect');
-      await connectFuture;
-      emitted.clear();
+      await connectWithNegotiatedCapabilities();
 
       emitEvent(
         'rpc:request',
@@ -602,10 +664,7 @@ void main() {
     );
 
     test('should reject rpc request that is not a PayloadFrame', () async {
-      final connectFuture = client.connect('https://hub.test', 'agent-1');
-      emitEvent('connect');
-      await connectFuture;
-      emitted.clear();
+      await connectWithNegotiatedCapabilities();
 
       emitEvent('rpc:request', <String, dynamic>{
         'jsonrpc': '2.0',
@@ -625,6 +684,78 @@ void main() {
         (responsePayload['error'] as Map<String, dynamic>)['code'],
         RpcErrorCode.invalidPayload,
       );
+    });
+
+    test('should map malformed JSON payload to decodingFailed', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      emitted.clear();
+
+      final badJsonFrame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: utf8.encode('{"bad"').length,
+        compressedSize: utf8.encode('{"bad"').length,
+        payload: Uint8List.fromList(utf8.encode('{"bad"')),
+        requestId: 'req-bad-json',
+      );
+
+      emitEvent('rpc:request', badJsonFrame.toJson());
+
+      await Future<void>.delayed(Duration.zero);
+
+      final responsePayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
+              as Map<String, dynamic>;
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.decodingFailed);
+    });
+
+    test('should map invalid gzip payload to compressionFailed', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      emitted.clear();
+
+      final invalidGzipFrame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'gzip',
+        contentType: 'application/json',
+        originalSize: 32,
+        compressedSize: 8,
+        payload: Uint8List.fromList(utf8.encode('not-gzip')),
+        requestId: 'req-bad-gzip',
+      );
+
+      emitEvent('rpc:request', invalidGzipFrame.toJson());
+
+      await Future<void>.delayed(Duration.zero);
+
+      final responsePayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'rpc:response').data,
+              )
+              as Map<String, dynamic>;
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.compressionFailed);
     });
 
     group('execution_mode', () {
@@ -654,10 +785,7 @@ void main() {
             ),
           );
 
-          final connectFuture = client.connect('https://hub.test', 'agent-1');
-          emitEvent('connect');
-          await connectFuture;
-          emitted.clear();
+          await connectWithNegotiatedCapabilities();
 
           emitEvent(
             'rpc:request',
@@ -735,10 +863,7 @@ void main() {
             ),
           );
 
-          final connectFuture = client.connect('https://hub.test', 'agent-1');
-          emitEvent('connect');
-          await connectFuture;
-          emitted.clear();
+          await connectWithNegotiatedCapabilities();
 
           emitEvent(
             'rpc:request',
@@ -1268,6 +1393,12 @@ void main() {
           );
           emitEvent('connect');
           await connectFuture;
+          emitEvent(
+            'agent:capabilities',
+            encodeWirePayload({
+              'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+            }),
+          );
           emitted.clear();
 
           emitEvent(

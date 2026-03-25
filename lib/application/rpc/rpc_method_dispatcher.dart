@@ -1481,18 +1481,11 @@ class RpcMethodDispatcher {
     }
 
     final paginationPlanResult = SqlValidator.validatePaginationQuery(sql);
-    SqlPaginationPlan? plan;
-    if (paginationPlanResult.isSuccess()) {
-      plan = paginationPlanResult.getOrNull();
-    } else {
+    if (paginationPlanResult.isError()) {
       final failure = paginationPlanResult.exceptionOrNull()! as domain.Failure;
-      final isMissingOrderBy =
-          failure.message ==
-          'Paginated queries must declare an explicit ORDER BY clause';
-      if (cursor != null || !isMissingOrderBy) {
-        return _ResolvedPagination(errorMessage: failure.message);
-      }
+      return _ResolvedPagination(errorMessage: failure.message);
     }
+    final plan = paginationPlanResult.getOrNull();
 
     if (cursor != null) {
       final stablePlan = plan;

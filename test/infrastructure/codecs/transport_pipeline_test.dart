@@ -114,6 +114,32 @@ void main() {
       expect(result.getOrThrow(), equals(originalData));
     });
 
+    test('should accept base64 payload representation in frame json', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+
+      final originalData = {'message': 'Hello base64'};
+      final frame = pipeline.prepareSend(originalData).getOrThrow();
+      final base64Frame = PayloadFrame(
+        schemaVersion: frame.schemaVersion,
+        enc: frame.enc,
+        cmp: frame.cmp,
+        contentType: frame.contentType,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        payload: base64Encode(frame.payload as Uint8List),
+        traceId: frame.traceId,
+        requestId: frame.requestId,
+      );
+
+      final result = pipeline.receiveProcess(base64Frame);
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow(), equals(originalData));
+    });
+
     test('should handle round-trip with compression', () {
       final pipeline = TransportPipeline(
         encoding: 'json',

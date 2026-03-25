@@ -468,7 +468,7 @@ void main() {
           method: 'sql.execute',
           id: 'req-1',
           params: {
-            'sql': 'SELECT 1 AS n; SELECT 2 AS n;',
+            'sql': 'SELECT 1 AS n ORDER BY n',
             'options': {
               'multi_result': true,
               'page': 1,
@@ -552,7 +552,7 @@ void main() {
       },
     );
 
-    test('should allow offset pagination without explicit order by', () async {
+    test('should reject offset pagination without explicit order by', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
         method: 'sql.execute',
@@ -563,37 +563,16 @@ void main() {
         },
       );
 
-      final queryResponse = QueryResponse(
-        id: 'exec-1',
-        requestId: 'req-1',
-        agentId: 'agent-1',
-        data: const [
-          {'id': 1},
-        ],
-        timestamp: DateTime.now(),
-        pagination: const QueryPaginationInfo(
-          page: 1,
-          pageSize: 25,
-          returnedRows: 1,
-          hasNextPage: true,
-          hasPreviousPage: false,
-        ),
-      );
-      when(
-        () => mockGateway.executeQuery(any()),
-      ).thenAnswer((_) async => Success(queryResponse));
-      when(
-        () => mockNormalizer.normalize(any()),
-      ).thenAnswer((_) => queryResponse);
-
       final response = await dispatcher.dispatch(request, 'agent-1');
 
-      expect(response.isSuccess, isTrue);
-      final captured =
-          verify(() => mockGateway.executeQuery(captureAny())).captured.single
-              as QueryRequest;
-      expect(captured.pagination, isNotNull);
-      expect(captured.pagination!.orderBy, isEmpty);
+      expect(response.isError, isTrue);
+      expect(response.error!.code, RpcErrorCode.invalidParams);
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(
+        data['technical_message'],
+        'Paginated queries must declare an explicit ORDER BY clause',
+      );
+      verifyNever(() => mockGateway.executeQuery(any()));
     });
 
     test('should reject cursor pagination without explicit order by', () async {

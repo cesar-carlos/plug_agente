@@ -59,6 +59,20 @@ Result<Uint8List> _resolveFramePayloadBytes(PayloadFrame frame) {
   if (payload is List<int>) {
     return Success(Uint8List.fromList(payload));
   }
+  if (payload is String) {
+    try {
+      final normalized = base64.normalize(payload);
+      return Success(Uint8List.fromList(base64Decode(normalized)));
+    } on FormatException catch (error) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Frame payload is not valid base64 data',
+          cause: error,
+          context: {'payloadType': payload.runtimeType.toString()},
+        ),
+      );
+    }
+  }
   return Failure(
     domain.ValidationFailure.withContext(
       message: 'Frame payload is not binary data',

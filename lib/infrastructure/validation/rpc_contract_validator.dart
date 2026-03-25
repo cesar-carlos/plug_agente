@@ -35,6 +35,21 @@ class RpcContractValidator {
       return _invalid('Field "capabilities" must be an object');
     }
 
+    final load = data['load'];
+    if (load != null) {
+      if (load is! Map<String, dynamic>) {
+        return _invalid('Field "load" must be an object when present');
+      }
+      final active = load['active_handlers'];
+      final maxHandlers = load['max_handlers'];
+      if (active is! int || active < 0) {
+        return _invalid('Field "load.active_handlers" must be a non-negative int');
+      }
+      if (maxHandlers is! int || maxHandlers <= 0) {
+        return _invalid('Field "load.max_handlers" must be a positive int');
+      }
+    }
+
     return _validateCapabilities(capabilities);
   }
 
@@ -161,8 +176,7 @@ class RpcContractValidator {
     final columnMetadata = data['column_metadata'];
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
-            (validateRowElementTypes &&
-                !_listElementsAreObjectMaps(columnMetadata)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -269,17 +283,14 @@ class RpcContractValidator {
     }
 
     final rows = result['rows'];
-    if (rows != null &&
-        (rows is! List<dynamic> ||
-            (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
+    if (rows != null && (rows is! List<dynamic> || (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
       return _invalid('Field "rows" must be an array of objects');
     }
 
     final columnMetadata = result['column_metadata'];
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
-            (validateRowElementTypes &&
-                !_listElementsAreObjectMaps(columnMetadata)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -416,9 +427,7 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows != null &&
-        (rows is! List<dynamic> ||
-            (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
+    if (rows != null && (rows is! List<dynamic> || (validateRowElementTypes && !_listElementsAreObjectMaps(rows)))) {
       return _invalid('Field "items[].rows" must be an array of objects');
     }
 
@@ -432,8 +441,7 @@ class RpcContractValidator {
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
-            (validateRowElementTypes &&
-                !_listElementsAreObjectMaps(columnMetadata)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid(
         'Field "items[].column_metadata" must be an array of objects',
       );
@@ -456,8 +464,7 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows is! List<dynamic> ||
-        (validateRowElementTypes && !_listElementsAreObjectMaps(rows))) {
+    if (rows is! List<dynamic> || (validateRowElementTypes && !_listElementsAreObjectMaps(rows))) {
       return _invalid('Field "result_sets[].rows" must be an array of objects');
     }
 
@@ -471,8 +478,7 @@ class RpcContractValidator {
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
         (columnMetadata is! List<dynamic> ||
-            (validateRowElementTypes &&
-                !_listElementsAreObjectMaps(columnMetadata)))) {
+            (validateRowElementTypes && !_listElementsAreObjectMaps(columnMetadata)))) {
       return _invalid(
         'Field "result_sets[].column_metadata" must be an array of objects',
       );

@@ -108,8 +108,14 @@ class RetryManager implements IRetryManager {
         return true;
       }
 
-      // Erros de conexão podem ser transientes
       if (exception is domain.ConnectionFailure) {
+        final explicitRetryable = exception.context['retryable'];
+        if (explicitRetryable == false) {
+          return false;
+        }
+        if (explicitRetryable == true) {
+          return true;
+        }
         final message = exception.message.toLowerCase();
         return message.contains('timeout') ||
             message.contains('connection') ||

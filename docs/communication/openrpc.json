@@ -3,7 +3,7 @@
   "info": {
     "title": "Plug Agente Socket RPC",
     "version": "2.5.0",
-    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. sql.execute results include effective_max_rows when applicable; managed pagination SQL shape depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Inbound JSON-RPC requests may include optional meta.outbound_compression (none | gzip | auto) to influence agent→hub PayloadFrame compression for that call and matching rpc:chunk / rpc:complete; see docs/communication/socket_communication_standard.md."
+    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. Application events are transported only inside PayloadFrame envelopes after agent:capabilities negotiation; requests sent earlier are rejected with invalid_request / protocol_not_ready. sql.execute results include effective_max_rows when applicable, and managed pagination requires an explicit ORDER BY for both page/page_size and cursor flows; generated SQL shape still depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Inbound JSON-RPC requests may include optional meta.outbound_compression (none | gzip | auto) to influence agent→hub PayloadFrame compression for that call and matching rpc:chunk / rpc:complete; see docs/communication/socket_communication_standard.md."
   },
   "servers": [
     {

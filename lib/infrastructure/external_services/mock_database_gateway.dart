@@ -13,6 +13,9 @@ class MockDatabaseGateway implements IDatabaseGateway {
   final Uuid _uuid;
 
   @override
+  void invalidateConfigCache() {}
+
+  @override
   Future<Result<bool>> testConnection(String connectionString) async {
     // Simulate connection test
     if (connectionString.contains('fail')) {

@@ -359,6 +359,7 @@ void registerPlugDependencyGraph(
       () => SaveAgentConfig(
         getIt<IAgentConfigRepository>(),
         getIt<ConfigService>(),
+        getIt<IDatabaseGateway>(),
       ),
     )
     ..registerLazySingleton(

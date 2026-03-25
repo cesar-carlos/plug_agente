@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.error.v1.json",
   "title": "RPC Error",
-  "description": "JSON-RPC 2.0 error with structured error.data fields",
+  "description": "JSON-RPC 2.0 error with structured error.data fields. Common transport/runtime reasons include protocol_not_ready, invalid_payload, decoding_failed and compression_failed.",
   "type": "object",
   "required": ["code", "message"],
   "properties": {
@@ -12,11 +12,20 @@
       "type": "object",
       "required": ["reason", "category", "retryable", "user_message", "technical_message", "correlation_id", "timestamp"],
       "properties": {
-        "reason": { "type": "string" },
-        "category": { "type": "string" },
+        "reason": {
+          "type": "string",
+          "description": "Machine-readable reason such as invalid_params, protocol_not_ready, invalid_payload, decoding_failed or compression_failed"
+        },
+        "category": {
+          "type": "string",
+          "description": "High-level category such as validation, network, auth or server"
+        },
         "retryable": { "type": "boolean" },
         "user_message": { "type": "string" },
-        "technical_message": { "type": "string" },
+        "technical_message": {
+          "type": "string",
+          "description": "Implementation-oriented message safe to log and inspect during integration"
+        },
         "correlation_id": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       }

@@ -29,9 +29,24 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   String? _streamId;
   bool _registered = false;
   int _sendCredit = 1;
+  bool _cancelled = false;
+
+  /// Drops queued work and unregisters from the transport map (e.g. on disconnect).
+  void cancel() {
+    if (_cancelled) {
+      return;
+    }
+    _cancelled = true;
+    _chunkQueue.clear();
+    _pendingComplete = null;
+    if (_registered && _streamId != null) {
+      _onUnregister(_streamId!);
+      _registered = false;
+    }
+  }
 
   void releaseChunks(int windowSize) {
-    if (windowSize <= 0) return;
+    if (_cancelled || windowSize <= 0) return;
     _sendCredit += windowSize;
     unawaited(
       _flush().catchError((Object error, StackTrace stackTrace) {
@@ -45,6 +60,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   }
 
   Future<void> _flush() async {
+    if (_cancelled) {
+      return;
+    }
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();
@@ -90,6 +108,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   @override
   Future<bool> emitChunk(RpcStreamChunk chunk) async {
+    if (_cancelled) {
+      return false;
+    }
     if (!_registered) {
       _streamId = chunk.streamId;
       _onRegister(_streamId!, this);
@@ -106,6 +127,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   @override
   Future<void> emitComplete(RpcStreamComplete complete) async {
+    if (_cancelled) {
+      return;
+    }
     _pendingComplete = complete;
     await _maybeEmitComplete();
   }

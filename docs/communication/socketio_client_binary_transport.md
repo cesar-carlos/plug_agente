@@ -60,7 +60,8 @@ Formato esperado:
 
 Regras:
 
-- `payload` contem bytes binarios.
+- `payload` contem bytes binarios; em serializacao JSON tambem pode aparecer
+  como string base64 equivalente.
 - `enc` descreve o formato antes da compressao. Valor padrao: `json`.
 - `cmp` descreve o algoritmo aplicado ao payload codificado.
 - `cmp` pode ser `gzip` ou `none`.
@@ -150,6 +151,9 @@ Quando o cliente consumir capacidades do outro lado:
   `compressions` (se o peer anunciar so `none`, nao exigir gzip outbound)
 - considerar a sessao apta ao modo obrigatorio apenas se
   `extensions.binaryPayload == true`
+- nao enviar `rpc:request` antes de receber `agent:capabilities`; o runtime
+  atual rejeita pedidos antecipados com `invalid_request` e
+  `reason: protocol_not_ready`
 
 ### Preferencia por pedido (`meta.outbound_compression`)
 

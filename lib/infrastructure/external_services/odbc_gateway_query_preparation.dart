@@ -45,12 +45,9 @@ abstract final class OdbcGatewayQueryPreparation {
       );
     }
 
-    final requiresExplicitOrderBy =
-        databaseType == DatabaseType.sqlServer || databaseType == DatabaseType.sybaseAnywhere;
-    if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
+    if (pagination.orderBy.isEmpty) {
       return domain.ValidationFailure(
-        'Page-offset pagination requires an explicit ORDER BY for '
-        'SQL Server and SQL Anywhere',
+        'Managed pagination requires an explicit ORDER BY clause',
       );
     }
 

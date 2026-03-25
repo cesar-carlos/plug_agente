@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 
 void main() {
@@ -324,6 +325,34 @@ void main() {
         'request_id': '1',
         'total_rows': 0,
         'terminal_status': 'invalid',
+      });
+      expect(result.isError(), isTrue);
+    });
+  });
+
+  group('RpcContractValidator agent:register', () {
+    test('should accept optional load with handler counts', () {
+      final result = validator.validateAgentRegister(<String, dynamic>{
+        'agentId': 'a1',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'load': <String, int>{
+          'active_handlers': 2,
+          'max_handlers': 32,
+        },
+      });
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should reject load with invalid max_handlers', () {
+      final result = validator.validateAgentRegister(<String, dynamic>{
+        'agentId': 'a1',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'load': <String, int>{
+          'active_handlers': 0,
+          'max_handlers': 0,
+        },
       });
       expect(result.isError(), isTrue);
     });

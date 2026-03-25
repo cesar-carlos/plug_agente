@@ -20,8 +20,7 @@ import '../../helpers/mock_odbc_connection_settings.dart';
 
 class MockOdbcService extends Mock implements OdbcService {}
 
-class MockAgentConfigRepository extends Mock
-    implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
 class MockConnectionPool extends Mock implements IConnectionPool {}
 
@@ -214,8 +213,7 @@ void main() {
         final result = await gateway.executeQuery(request);
 
         expect(result.isError(), isTrue);
-        final failure =
-            result.exceptionOrNull()! as domain.ConfigurationFailure;
+        final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
         expect(
           failure.message,
           contains('Failed to load database configuration'),
@@ -278,6 +276,66 @@ void main() {
 
           expect(first.isSuccess(), isTrue);
           expect(second.isSuccess(), isTrue);
+          verify(() => mockConfigRepository.getCurrentConfig()).called(1);
+        },
+      );
+
+      test(
+        'invalidateConfigCache should force reload on next executeQuery',
+        () async {
+          const pooledConnectionId = 'pool-inv-cache';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+          final config = _buildConfig(connectionString);
+          final requestA = QueryRequest(
+            id: 'req-inv-1',
+            agentId: config.agentId,
+            query: 'SELECT 1',
+            timestamp: DateTime.now(),
+          );
+          final requestB = QueryRequest(
+            id: 'req-inv-2',
+            agentId: config.agentId,
+            query: 'SELECT 2',
+            timestamp: DateTime.now(),
+          );
+
+          when(() => mockService.initialize()).thenAnswer((_) async {
+            return const Success(unit);
+          });
+          when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+            _,
+          ) async {
+            return Success(config);
+          });
+          when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+            return const Success(pooledConnectionId);
+          });
+          when(
+            () => mockService.executeQuery(
+              any(),
+              connectionId: pooledConnectionId,
+            ),
+          ).thenAnswer((_) async {
+            return const Success(
+              QueryResult(
+                columns: ['x'],
+                rows: [
+                  [1],
+                ],
+                rowCount: 1,
+              ),
+            );
+          });
+          when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer(
+            (_) async => const Success(unit),
+          );
+
+          await gateway.executeQuery(requestA);
+          verify(() => mockConfigRepository.getCurrentConfig()).called(1);
+
+          gateway.invalidateConfigCache();
+
+          await gateway.executeQuery(requestB);
           verify(() => mockConfigRepository.getCurrentConfig()).called(1);
         },
       );
@@ -380,8 +438,7 @@ void main() {
           ).thenAnswer((_) async {
             return const Failure(
               QueryError(
-                message:
-                    'Arithmetic overflow during data type conversion in batch',
+                message: 'Arithmetic overflow during data type conversion in batch',
               ),
             );
           });
@@ -927,8 +984,7 @@ void main() {
         () async {
           const pooledId = 'pool-buf';
           const directId = 'direct-buf';
-          const connectionString =
-              'Driver={ODBC Driver};Server=localhost;DATABASE=master;';
+          const connectionString = 'Driver={ODBC Driver};Server=localhost;DATABASE=master;';
           final config = _buildConfig(connectionString);
           final request = QueryRequest(
             id: 'req-buf-fallback',
@@ -1302,8 +1358,7 @@ void main() {
         'should pass database override into pool acquire connection string',
         () async {
           const pooledId = 'pool-db-ov';
-          const baseCs =
-              'Driver={ODBC Driver};Server=localhost;DATABASE=master;UID=u;';
+          const baseCs = 'Driver={ODBC Driver};Server=localhost;DATABASE=master;UID=u;';
           final config = _buildConfig(baseCs);
           final request = QueryRequest(
             id: 'req-db-ov',
@@ -1365,8 +1420,7 @@ void main() {
         'should override Initial Catalog segment when database override is set',
         () async {
           const pooledId = 'pool-ic-ov';
-          const baseCs =
-              'Driver={ODBC Driver};Server=localhost;Initial Catalog=master;';
+          const baseCs = 'Driver={ODBC Driver};Server=localhost;Initial Catalog=master;';
           final config = _buildConfig(baseCs);
           final request = QueryRequest(
             id: 'req-ic-ov',
@@ -2285,8 +2339,7 @@ void main() {
           );
 
           expect(result.isError(), isTrue);
-          final failure =
-              result.exceptionOrNull()! as domain.ConfigurationFailure;
+          final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
           expect(
             failure.message,
             'Failed to load database configuration for batch execution',
@@ -3111,8 +3164,7 @@ void main() {
           );
 
           expect(result.isError(), isTrue);
-          final failure =
-              result.exceptionOrNull()! as domain.QueryExecutionFailure;
+          final failure = result.exceptionOrNull()! as domain.QueryExecutionFailure;
           expect(failure.message, contains('Batch SQL execution timeout'));
         },
       );
@@ -3871,7 +3923,7 @@ void main() {
     });
 
     test(
-      'should allow PostgreSQL pagination without explicit order by terms',
+      'should require ORDER BY for PostgreSQL when pagination is active',
       () async {
         const pooledConnectionId = 'pool-pg-no-order';
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -3902,41 +3954,18 @@ void main() {
         when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
-        when(
-          () => mockService.executeQuery(
-            any(),
-            connectionId: pooledConnectionId,
-          ),
-        ).thenAnswer((_) async {
-          return const Success(
-            QueryResult(
-              columns: ['id'],
-              rows: [
-                [1],
-              ],
-              rowCount: 1,
-            ),
-          );
-        });
-        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
-          _,
-        ) async {
-          return const Success(unit);
-        });
 
         final result = await gateway.executeQuery(request);
 
-        expect(result.isSuccess(), isTrue);
-        final capturedSql =
-            verify(
-                  () => mockService.executeQuery(
-                    captureAny(),
-                    connectionId: pooledConnectionId,
-                  ),
-                ).captured.single
-                as String;
-        expect(capturedSql, contains('LIMIT 11 OFFSET 0'));
-        expect(capturedSql, isNot(contains('ORDER BY')));
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as domain.Failure;
+        expect(failure.message, contains('ORDER BY'));
+        verifyNever(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        );
       },
     );
 
@@ -3984,8 +4013,7 @@ void main() {
     test(
       'should prefer persisted connection string instead of rebuilding one',
       () async {
-        const persistedConnectionString =
-            'DSN=PersistedConnection;Encrypt=yes;';
+        const persistedConnectionString = 'DSN=PersistedConnection;Encrypt=yes;';
         final config = _buildConfig(persistedConnectionString);
         final request = QueryRequest(
           id: 'req-conn-string',
@@ -4198,8 +4226,7 @@ void main() {
       final request = QueryRequest(
         id: 'req-multi',
         agentId: config.agentId,
-        query:
-            'SELECT 1 AS first_value; UPDATE users SET active = 1; SELECT 2 AS second_value;',
+        query: 'SELECT 1 AS first_value; UPDATE users SET active = 1; SELECT 2 AS second_value;',
         timestamp: DateTime.now(),
         expectMultipleResults: true,
       );

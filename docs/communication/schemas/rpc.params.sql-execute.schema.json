@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.params.sql-execute.v1.json",
   "title": "sql.execute params",
-  "description": "Parameters for the sql.execute RPC method",
+  "description": "Parameters for the sql.execute RPC method. Managed pagination requires an explicit ORDER BY clause for both page/page_size and cursor continuation.",
   "type": "object",
   "required": ["sql"],
   "properties": {
@@ -50,16 +50,16 @@
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "1-based page number for paginated SELECT execution"
+          "description": "1-based page number for paginated SELECT execution. Must be sent together with page_size, and the SQL must declare an explicit ORDER BY clause."
         },
         "page_size": {
           "type": "integer",
           "minimum": 1,
-          "description": "Maximum number of rows to return for the current page"
+          "description": "Maximum number of rows to return for the current page. Must be sent together with page, and the SQL must declare an explicit ORDER BY clause."
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque continuation cursor returned in result.pagination.next_cursor"
+          "description": "Opaque continuation cursor returned in result.pagination.next_cursor. Cursor continuation also requires the SQL to declare an explicit ORDER BY clause compatible with managed pagination."
         },
         "execution_mode": {
           "type": "string",
@@ -72,7 +72,7 @@
         },
         "multi_result": {
           "type": "boolean",
-          "description": "Enables multi-result execution for SQL batches that can return multiple result sets. Cannot be combined with pagination or named parameters."
+          "description": "Enables multi-result execution for SQL batches that can return multiple result sets. Cannot be combined with pagination or named parameters; those combinations are rejected before dispatch."
         }
       },
       "additionalProperties": false,

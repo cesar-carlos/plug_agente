@@ -111,8 +111,7 @@ class RpcRequestSchemaValidator {
   }
 
   Result<void> _validateMeta(Map<String, dynamic> meta) {
-    final extraFields =
-        meta.keys.where((key) => !_metaKnownFieldNames.contains(key));
+    final extraFields = meta.keys.where((key) => !_metaKnownFieldNames.contains(key));
     if (extraFields.isNotEmpty) {
       return _invalidRequest(
         'Field "meta" contains unsupported properties: '

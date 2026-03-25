@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/payload-frame.v1.json",
   "title": "PayloadFrame (transport envelope)",
-  "description": "Physical Socket.IO envelope for application events. Logical JSON-RPC lives inside payload after decode/decompress. Receivers must use enc and cmp on each frame; cmp is always gzip or none on the wire (emitter auto mode is not a third cmp value).",
+  "description": "Physical Socket.IO envelope for application events. Logical JSON-RPC lives inside payload after decode/decompress. Receivers must use enc and cmp on each frame; cmp is always gzip or none on the wire (emitter auto mode is not a third cmp value). The runtime accepts payload as raw bytes or as a base64 string representation in JSON serialization.",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -43,7 +43,7 @@
       "description": "Byte length of the payload field on the wire"
     },
     "payload": {
-      "description": "Wire bytes: UTF-8 JSON when cmp is none, or gzip of those bytes when cmp is gzip. In JSON serialization this is often an array of byte values (0-255) or a binary Buffer.",
+      "description": "Wire bytes: UTF-8 JSON when cmp is none, or gzip of those bytes when cmp is gzip. In JSON serialization this may appear as an array of byte values (0-255), a platform binary object (for example Buffer), or a base64 string.",
       "oneOf": [
         {
           "type": "array",
@@ -55,7 +55,8 @@
         },
         {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64 representation accepted by the current runtime for JSON-serialized frames"
         }
       ]
     },

@@ -22,48 +22,48 @@ binario esta documentado em
 
 ## Status de implementacao
 
-| Item                                                                 | Status                                                             |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| JSON-RPC 2.0 (`rpc:request`/`rpc:response`)                          | implemented                                                        |
-| Metodo `sql.execute`                                                 | implemented                                                        |
-| Metodo `sql.executeBatch`                                            | implemented                                                        |
-| Catalogo de erros RPC                                                | implemented                                                        |
-| Negociacao de capacidades                                            | implemented                                                        |
-| Transporte binario em `PayloadFrame`                                 | implemented (default com `enableBinaryPayload`)                    |
-| Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                  |
-| Compatibilidade de leitura para payload JSON cru                     | implemented (temporario para rollout/homologacao)                  |
-| `sql.cancel`                                                         | implemented (via feature flag)                                     |
-| Streaming chunked                                                    | implemented (via feature flag; acima de `streaming_row_threshold`) |
-| Streaming direto do banco (SELECT sem params)                        | implemented (via enableSocketStreamingFromDb)                      |
-| Backpressure                                                         | implemented (window_size em rpc:stream.pull controla envio)        |
-| Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                    |
-| Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                    |
-| Garantia de entrega por evento (ack/retry)                           | implemented (via feature flag)                                     |
-| Timeout por etapa (SQL, transporte, ack)                             | implemented (via feature flag)                                     |
-| Idempotencia por `idempotency_key` (sql.execute/batch)               | implemented (via feature flag)                                     |
-| Connection state recovery                                            | implemented (agent-side retry/backoff)                             |
-| Politica de auth no reconnect                                        | implemented (agent-side)                                           |
-| Rate limiting por evento                                             | implemented (agent-side)                                           |
-| Schema JSON oficial de contrato                                      | implemented (envelope + params + streaming)                        |
-| Schema de params por metodo (sql.execute/batch/cancel)               | implemented (docs/communication/schemas/)                          |
-| Schema de streaming (chunk/complete/pull)                            | implemented (docs/communication/schemas/)                          |
-| Politica de versao e deprecacao                                      | implemented (neste documento)                                      |
-| Limites negociados por transporte                                    | implemented (negociacao via TransportLimits no handshake)          |
-| Assinatura opcional de payload                                       | implemented (HMAC-SHA256; feature flag `enablePayloadSigning`)     |
-| Validacao de schema na entrada (rpc:request)                         | implemented (via feature flag)                                     |
-| Validacao de contrato na saida (`rpc:response`, batch, streaming)   | implemented (via `enableSocketOutgoingContractValidation`; acima de ~2 MiB UTF-8 a validacao de saida e omitida por custo) |
-| Resumo de payloads grandes no tracer Socket (`onMessage`)            | implemented (via `enableSocketSummarizeLargePayloadLogs`; limiar 8 KiB UTF-8 estimado) |
-| Client token authorization (opaco + hash lookup)                     | implemented (default on)                                           |
-| Validacao criptografica de token (JWKS)                              | implemented (via feature flag; fallback)                           |
-| Revogacao em sessao ativa                                            | implemented (via feature flag)                                     |
-| Observabilidade de autorizacao (collector allow/deny)                | implemented                                                        |
-| Logs de decisao de autorizacao no transporte (`AUTH`)                | implemented                                                        |
-| Resumo de autorizacao no dashboard (`WebSocketLogViewer`)            | implemented                                                        |
-| Refresh de auth em runtime (`token_revoked`/`authentication_failed`) | implemented                                                        |
-| Heartbeat de sessao (`agent:heartbeat`/`hub:heartbeat_ack`)          | implemented (agent-side)                                           |
-| Recovery de conexao curta com retry/backoff                          | implemented (agent-side)                                           |
-| Replay protection por janela de request ID                           | implemented (agent-side)                                           |
-| Auditoria de token management                                        | implemented (via feature flag)                                     |
+| Item                                                                 | Status                                                                                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| JSON-RPC 2.0 (`rpc:request`/`rpc:response`)                          | implemented                                                                                                                |
+| Metodo `sql.execute`                                                 | implemented                                                                                                                |
+| Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
+| Catalogo de erros RPC                                                | implemented                                                                                                                |
+| Negociacao de capacidades                                            | implemented                                                                                                                |
+| Transporte binario em `PayloadFrame`                                 | implemented (default com `enableBinaryPayload`)                                                                            |
+| Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                                                                          |
+| Compatibilidade de leitura para payload JSON cru                     | not supported in current runtime                                                                                           |
+| `sql.cancel`                                                         | implemented (via feature flag)                                                                                             |
+| Streaming chunked                                                    | implemented (via feature flag; acima de `streaming_row_threshold`)                                                         |
+| Streaming direto do banco (SELECT sem params)                        | implemented (via enableSocketStreamingFromDb)                                                                              |
+| Backpressure                                                         | implemented (window_size em rpc:stream.pull controla envio)                                                                |
+| Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                                                                            |
+| Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
+| Garantia de entrega por evento (ack/retry)                           | implemented (via feature flag)                                                                                             |
+| Timeout por etapa (SQL, transporte, ack)                             | implemented (via feature flag)                                                                                             |
+| Idempotencia por `idempotency_key` (sql.execute/batch)               | implemented (via feature flag)                                                                                             |
+| Connection state recovery                                            | implemented (agent-side retry/backoff)                                                                                     |
+| Politica de auth no reconnect                                        | implemented (agent-side)                                                                                                   |
+| Rate limiting por evento                                             | implemented (agent-side)                                                                                                   |
+| Schema JSON oficial de contrato                                      | implemented (envelope + params + streaming)                                                                                |
+| Schema de params por metodo (sql.execute/batch/cancel)               | implemented (docs/communication/schemas/)                                                                                  |
+| Schema de streaming (chunk/complete/pull)                            | implemented (docs/communication/schemas/)                                                                                  |
+| Politica de versao e deprecacao                                      | implemented (neste documento)                                                                                              |
+| Limites negociados por transporte                                    | implemented (negociacao via TransportLimits no handshake)                                                                  |
+| Assinatura opcional de payload                                       | implemented (HMAC-SHA256; feature flag `enablePayloadSigning`)                                                             |
+| Validacao de schema na entrada (rpc:request)                         | implemented (via feature flag)                                                                                             |
+| Validacao de contrato na saida (`rpc:response`, batch, streaming)    | implemented (via `enableSocketOutgoingContractValidation`; acima de ~2 MiB UTF-8 a validacao de saida e omitida por custo) |
+| Resumo de payloads grandes no tracer Socket (`onMessage`)            | implemented (via `enableSocketSummarizeLargePayloadLogs`; limiar 8 KiB UTF-8 estimado)                                     |
+| Client token authorization (opaco + hash lookup)                     | implemented (default on)                                                                                                   |
+| Validacao criptografica de token (JWKS)                              | implemented (via feature flag; fallback)                                                                                   |
+| Revogacao em sessao ativa                                            | implemented (via feature flag)                                                                                             |
+| Observabilidade de autorizacao (collector allow/deny)                | implemented                                                                                                                |
+| Logs de decisao de autorizacao no transporte (`AUTH`)                | implemented                                                                                                                |
+| Resumo de autorizacao no dashboard (`WebSocketLogViewer`)            | implemented                                                                                                                |
+| Refresh de auth em runtime (`token_revoked`/`authentication_failed`) | implemented                                                                                                                |
+| Heartbeat de sessao (`agent:heartbeat`/`hub:heartbeat_ack`)          | implemented (agent-side)                                                                                                   |
+| Recovery de conexao curta com retry/backoff                          | implemented (agent-side)                                                                                                   |
+| Replay protection por janela de request ID                           | implemented (agent-side)                                                                                                   |
+| Auditoria de token management                                        | implemented (via feature flag)                                                                                             |
 
 ## Plug JSON-RPC Profile
 
@@ -77,8 +77,8 @@ Esse profile formaliza extensoes que nao fazem parte do JSON-RPC puro:
 - metadata operacional em `api_version` + `meta`
 - payload de erro estruturado em `error.data`
 - limites negociados no handshake
-- paginacao por `page/page_size` (offset; `ORDER BY` opcional) e por `cursor`
-  keyset (`ORDER BY` obrigatorio para estabilidade)
+- paginacao por `page/page_size` e por `cursor`, sempre exigindo `ORDER BY`
+  explicito para estabilidade e reescrita gerenciada
 
 As semanticas ativas podem ser anunciadas em `capabilities.extensions` no
 handshake.
@@ -109,16 +109,16 @@ handshake.
 
 ## Mapa rapido de eventos
 
-| Evento               | Direcao       | Payload esperado                               | Resposta                                  |
-| -------------------- | ------------- | ---------------------------------------------- | ----------------------------------------- |
-| `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>` | `agent:capabilities`                 |
-| `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`               | define protocolo efetivo                  |
-| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`           | `rpc:response`                            |
-| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`    | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`   | (quando `enableSocketDeliveryGuarantees`) |
-| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>` | (quando `enableSocketStreamingChunks`) |
+| Evento               | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
+| -------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>`                    | `agent:capabilities`                                                                                                                                       |
+| `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
+| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
+| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
 | `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
-| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`     | (quando `enableSocketBackpressure`)       |
+| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
 de um tempo limite (ex.: 8 s) apos `agent:register`, o agente reenvia `agent:register`
@@ -128,7 +128,8 @@ ate N vezes (ex.: 2). Apos esgotar as tentativas, o agente força reconexao.
 `agent:capabilities`. O agente so considera o protocolo pronto apos a negociacao
 completa. O `connect` pode retornar sucesso assim que o transporte Socket.IO
 estabelece conexao; o agente envia `agent:register` e aguarda `agent:capabilities`
-antes de aceitar RPCs.
+antes de aceitar RPCs. Se o hub enviar RPC antes disso, o agente rejeita a
+request com erro de contrato (`invalid_request`, `reason: protocol_not_ready`).
 
 ## Camadas do transporte
 
@@ -308,16 +309,16 @@ Response (notification nao gera item):
 
 ### Definicao
 
-| Campo              | Tipo              | Obrigatorio    | Descricao                         |
-| ------------------ | ----------------- | -------------- | --------------------------------- |
-| `api_version`      | string            | sim (v2.1+)    | Versao do contrato (ex.: `"2.1"`) |
-| `meta.trace_id`    | string            | recomendado    | ID de rastreamento distribuido    |
-| `meta.traceparent` | string            | recomendado    | W3C Trace Context principal       |
-| `meta.tracestate`  | string            | opcional       | W3C Trace Context vendor-specific |
-| `meta.request_id`  | string            | recomendado    | ID unico do request (correlacao)  |
-| `meta.agent_id`    | string            | sim (response) | Identificador do agente           |
-| `meta.timestamp`   | string (ISO-8601) | sim            | Instante UTC do envio             |
-| `meta.outbound_compression` | string (`none`, `gzip`, `auto`) | opcional | Sobrescreve a politica local do agente para compressao **agente -> hub** no `PayloadFrame` deste pedido (e nos `rpc:chunk` / `rpc:complete` com o mesmo `id`). Se omitido, usa-se a configuracao do agente (`Desligado` / `Sempre GZIP` / `Automatico`). Continua a valer o limiar `compressionThreshold` e a negociacao: se a sessao so permitir `none`, o fio permanece `cmp: none` mesmo com hint `gzip`. Pode ser desativado no agente (`enablePerRequestOutboundCompression` / definicao em configuracao). |
+| Campo                       | Tipo                            | Obrigatorio    | Descricao                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api_version`               | string                          | sim (v2.1+)    | Versao do contrato (ex.: `"2.1"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `meta.trace_id`             | string                          | recomendado    | ID de rastreamento distribuido                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `meta.traceparent`          | string                          | recomendado    | W3C Trace Context principal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `meta.tracestate`           | string                          | opcional       | W3C Trace Context vendor-specific                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `meta.request_id`           | string                          | recomendado    | ID unico do request (correlacao)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `meta.agent_id`             | string                          | sim (response) | Identificador do agente                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `meta.timestamp`            | string (ISO-8601)               | sim            | Instante UTC do envio                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `meta.outbound_compression` | string (`none`, `gzip`, `auto`) | opcional       | Sobrescreve a politica local do agente para compressao **agente -> hub** no `PayloadFrame` deste pedido (e nos `rpc:chunk` / `rpc:complete` com o mesmo `id`). Se omitido, usa-se a configuracao do agente (`Desligado` / `Sempre GZIP` / `Automatico`). Continua a valer o limiar `compressionThreshold` e a negociacao: se a sessao so permitir `none`, o fio permanece `cmp: none` mesmo com hint `gzip`. Pode ser desativado no agente (`enablePerRequestOutboundCompression` / definicao em configuracao). |
 
 ### Notificacoes (`id` ausente)
 
@@ -760,22 +761,22 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 ## Erros acionaveis para clientes
 
-| Codigo   | Cenario comum                                             | Acao recomendada no cliente                            |
-| -------- | --------------------------------------------------------- | ------------------------------------------------------ |
-| `-32700` | JSON malformado                                           | corrigir serializacao JSON e reenviar                  |
-| `-32600` | request invalida                                          | validar contrato antes de enviar                       |
-| `-32601` | metodo inexistente                                        | ajustar nome do metodo para um suportado               |
-| `-32602` | parametros invalidos                                      | corrigir payload antes de reenviar                     |
-| `-32603` | erro interno                                              | retry com backoff; se persistir, acionar suporte       |
-| `-32001` | falha de autenticacao ou token ausente                    | incluir `client_token` em params ou renovar credencial |
-| `-32002` | sem permissao (token revogado, nao encontrado, ou negado) | ocultar acao na UI e orientar contato com admin        |
-| `-32008` | timeout                                                   | retry com backoff e observabilidade                    |
-| `-32009` | payload invalido                                          | validar schema e encoding antes do envio               |
-| `-32010` | falha de decode                                           | verificar content-type/encoding e compatibilidade      |
-| `-32011` | falha de compressao                                       | reenviar sem compressao (fallback) e registrar erro    |
-| `-32012` | erro de rede                                              | reconectar socket e repetir com controle               |
+| Codigo   | Cenario comum                                                                                      | Acao recomendada no cliente                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `-32700` | JSON malformado                                                                                    | corrigir serializacao JSON e reenviar                                                               |
+| `-32600` | request invalida                                                                                   | validar contrato antes de enviar                                                                    |
+| `-32601` | metodo inexistente                                                                                 | ajustar nome do metodo para um suportado                                                            |
+| `-32602` | parametros invalidos                                                                               | corrigir payload antes de reenviar                                                                  |
+| `-32603` | erro interno                                                                                       | retry com backoff; se persistir, acionar suporte                                                    |
+| `-32001` | falha de autenticacao ou token ausente                                                             | incluir `client_token` em params ou renovar credencial                                              |
+| `-32002` | sem permissao (token revogado, nao encontrado, ou negado)                                          | ocultar acao na UI e orientar contato com admin                                                     |
+| `-32008` | timeout                                                                                            | retry com backoff e observabilidade                                                                 |
+| `-32009` | payload invalido                                                                                   | validar schema e encoding antes do envio                                                            |
+| `-32010` | falha de decode                                                                                    | verificar content-type/encoding e compatibilidade                                                   |
+| `-32011` | falha de compressao                                                                                | reenviar sem compressao (fallback) e registrar erro                                                 |
+| `-32012` | erro de rede                                                                                       | reconectar socket e repetir com controle                                                            |
 | `-32013` | cota por janela (`RpcRequestGuard`) **ou** limite de handlers `rpc:request` concorrentes no agente | backoff; reduzir taxa enviada ao agente; ver `technical_message` (distingue janela vs concorrencia) |
-| `-32014` | request duplicada (replay)                                | reenviar com novo `id`/correlation                     |
+| `-32014` | request duplicada (replay)                                                                         | reenviar com novo `id`/correlation                                                                  |
 
 ### Formato de erro
 
@@ -915,30 +916,30 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 
 ### `reason`
 
-| Codigo   | `reason` recomendado                                     |
-| -------- | -------------------------------------------------------- |
-| `-32700` | `json_parse_error`                                       |
-| `-32600` | `invalid_request`                                        |
-| `-32601` | `method_not_found`                                       |
-| `-32602` | `invalid_params`                                         |
-| `-32603` | `internal_error`                                         |
+| Codigo   | `reason` recomendado                                                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-32700` | `json_parse_error`                                                                                                             |
+| `-32600` | `invalid_request` ou `protocol_not_ready`                                                                                      |
+| `-32601` | `method_not_found`                                                                                                             |
+| `-32602` | `invalid_params`                                                                                                               |
+| `-32603` | `internal_error`                                                                                                               |
 | `-32001` | `authentication_failed`, `missing_client_token` ou `invalid_signature` (falha de HMAC no `PayloadFrame` ou no envelope logico) |
-| `-32002` | `unauthorized` (ex.: `token_revoked`, `token_not_found`) |
-| `-32008` | `timeout`                                                |
-| `-32009` | `invalid_payload`                                        |
-| `-32010` | `decoding_failed`                                        |
-| `-32011` | `compression_failed`                                     |
-| `-32012` | `network_error`                                          |
-| `-32013` | `rate_limited`                                           |
-| `-32014` | `replay_detected`                                        |
-| `-32101` | `sql_validation_failed`                                  |
-| `-32102` | `sql_execution_failed`                                   |
-| `-32103` | `transaction_failed`                                     |
-| `-32104` | `connection_pool_exhausted`                              |
-| `-32105` | `result_too_large`                                       |
-| `-32106` | `database_connection_failed`                             |
-| `-32107` | `query_timeout`                                          |
-| `-32108` | `invalid_database_config`                                |
+| `-32002` | `unauthorized` (ex.: `token_revoked`, `token_not_found`)                                                                       |
+| `-32008` | `timeout`                                                                                                                      |
+| `-32009` | `invalid_payload`                                                                                                              |
+| `-32010` | `decoding_failed`                                                                                                              |
+| `-32011` | `compression_failed`                                                                                                           |
+| `-32012` | `network_error`                                                                                                                |
+| `-32013` | `rate_limited`                                                                                                                 |
+| `-32014` | `replay_detected`                                                                                                              |
+| `-32101` | `sql_validation_failed`                                                                                                        |
+| `-32102` | `sql_execution_failed`                                                                                                         |
+| `-32103` | `transaction_failed`                                                                                                           |
+| `-32104` | `connection_pool_exhausted`                                                                                                    |
+| `-32105` | `result_too_large`                                                                                                             |
+| `-32106` | `database_connection_failed`                                                                                                   |
+| `-32107` | `query_timeout`                                                                                                                |
+| `-32108` | `invalid_database_config`                                                                                                      |
 
 Regras:
 
@@ -984,12 +985,12 @@ Regras:
 
 ### Rate limiting e cota de concorrencia (agent-side)
 
-| Parametro                   | Valor padrao              | Descricao                                                                 |
-| --------------------------- | ------------------------- | ------------------------------------------------------------------------- |
-| `rateLimitWindow`           | 1 minuto                  | Janela deslizante para contagem de eventos recebidos                        |
-| `maxRequestsPerWindow`      | 120                       | Maximo de eventos contados na janela antes do guard de taxa                 |
-| `maxConcurrentRpcHandlers`  | 32                        | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo      |
-| Codigo de erro (ambos)      | `-32013` (`rate_limited`) | HTTP 429; `error.data.reason` permanece `rate_limited`                      |
+| Parametro                  | Valor padrao              | Descricao                                                              |
+| -------------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `rateLimitWindow`          | 1 minuto                  | Janela deslizante para contagem de eventos recebidos                   |
+| `maxRequestsPerWindow`     | 120                       | Maximo de eventos contados na janela antes do guard de taxa            |
+| `maxConcurrentRpcHandlers` | 32                        | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo |
+| Codigo de erro (ambos)     | `-32013` (`rate_limited`) | HTTP 429; `error.data.reason` permanece `rate_limited`                 |
 
 O codigo `-32013` e reutilizado para duas politicas independentes: (1) excesso de
 volume na janela deslizante (`RpcRequestGuard`) e (2) saturacao do pool de
@@ -1065,10 +1066,9 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 ## Compatibilidade e Fallback
 
-- O agente transmite eventos de aplicacao como `PayloadFrame` binario quando
-  `enableBinaryPayload` estiver ativo.
-- O agente ainda aceita payload logico JSON cru no recebimento como
-  compatibilidade temporaria de rollout/homologacao.
+- O agente transmite eventos de aplicacao em `PayloadFrame` binario.
+- O runtime atual **nao** aceita payload logico JSON cru em eventos de
+  aplicacao; clientes devem sempre enviar `PayloadFrame`.
 - Eventos legados fora do contrato v2 continuam fora do escopo deste
   documento.
 
@@ -1308,8 +1308,8 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 ## Limitacoes e observacoes do estado atual
 
 - O transporte ativo usa `PayloadFrame` binario como camada fisica padrao.
-- A leitura de payload logico JSON cru ainda existe apenas como compatibilidade
-  temporaria para rollout.
+- O runtime atual nao oferece fallback para payload logico JSON cru em eventos
+  de aplicacao.
 - A compressao de **envio** (agente -> hub) segue o limiar negociado
   `compressionThreshold`. No modo **automatico** (`OutboundCompressionMode.auto`
   nas configuracoes do agente), o GZIP e aplicado apenas quando o bloco

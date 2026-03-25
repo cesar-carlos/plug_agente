@@ -4,6 +4,9 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract class IDatabaseGateway {
+  /// Drops any in-memory cached agent config so the next operation reloads from persistence.
+  void invalidateConfigCache();
+
   Future<Result<bool>> testConnection(String connectionString);
   Future<Result<QueryResponse>> executeQuery(
     QueryRequest request, {

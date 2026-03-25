@@ -192,14 +192,17 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     );
 
     final errors = <String>[];
+    final poolIds = _pools.values.toList(growable: false);
 
-    for (final poolId in _pools.values) {
-      final result = await _service.poolClose(poolId);
-      result.fold(
-        (_) {},
-        (error) => errors.add(_odbcErrorMessage(error)),
-      );
-    }
+    await Future.wait(
+      poolIds.map((int poolId) async {
+        final result = await _service.poolClose(poolId);
+        result.fold(
+          (_) {},
+          (Object error) => errors.add(_odbcErrorMessage(error)),
+        );
+      }),
+    );
 
     _pools.clear();
     _poolCreationFutures.clear();

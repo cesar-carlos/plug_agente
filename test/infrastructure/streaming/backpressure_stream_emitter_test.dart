@@ -349,6 +349,53 @@ void main() {
       check(unregistered).isTrue();
     });
 
+    test('cancel should clear queue unregister and reject further chunks', () async {
+      var unregistered = false;
+      final emitter = createEmitter(
+        onUnregister: (_) => unregistered = true,
+      );
+
+      await emitter.emitChunk(
+        const RpcStreamChunk(
+          streamId: 's-1',
+          requestId: 'req-1',
+          chunkIndex: 0,
+          rows: [
+            {'id': 1},
+          ],
+        ),
+      );
+      await emitter.emitChunk(
+        const RpcStreamChunk(
+          streamId: 's-1',
+          requestId: 'req-1',
+          chunkIndex: 1,
+          rows: [
+            {'id': 2},
+          ],
+        ),
+      );
+
+      emitter.cancel();
+      check(unregistered).isTrue();
+
+      final accepted = await emitter.emitChunk(
+        const RpcStreamChunk(
+          streamId: 's-1',
+          requestId: 'req-1',
+          chunkIndex: 2,
+          rows: [
+            {'id': 3},
+          ],
+        ),
+      );
+      check(accepted).isFalse();
+
+      emitter.releaseChunks(10);
+      await Future<void>.delayed(Duration.zero);
+      check(emitted).length.equals(1);
+    });
+
     test('should ignore releaseChunks with windowSize <= 0', () async {
       final emitter = createEmitter();
 

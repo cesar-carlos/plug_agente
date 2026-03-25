@@ -86,6 +86,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Timer? _capabilitiesTimeoutTimer;
   int _capabilitiesReRegisterCount = 0;
   int _activeRpcHandlers = 0;
+  int _lastNotifiedRpcLoadBand = 0;
+  bool _rpcLoadBandNotifyInitialized = false;
 
   /// Per JSON-RPC `id`: optional client override for agent->hub frame compression.
   final Map<String, OutboundCompressionMode> _outboundCompressionByRpcId = {};
@@ -160,11 +162,40 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return false;
     }
     _activeRpcHandlers++;
+    _maybeNotifyRpcLoadBandChange();
     return true;
   }
 
   void _releaseRpcHandlerSlot() {
     _activeRpcHandlers--;
+    _maybeNotifyRpcLoadBandChange();
+  }
+
+  int _computeRpcLoadBand() {
+    const max = ConnectionConstants.maxConcurrentRpcHandlers;
+    if (max <= 0) {
+      return 0;
+    }
+    final pct = (_activeRpcHandlers * 100) ~/ max;
+    if (pct >= 90) {
+      return 2;
+    }
+    if (pct >= 50) {
+      return 1;
+    }
+    return 0;
+  }
+
+  void _maybeNotifyRpcLoadBandChange() {
+    if (!_rpcLoadBandNotifyInitialized || _socket == null || !_socket!.connected) {
+      return;
+    }
+    final band = _computeRpcLoadBand();
+    if (band == _lastNotifiedRpcLoadBand) {
+      return;
+    }
+    _lastNotifiedRpcLoadBand = band;
+    _runTransportFuture(_sendAgentRegister(), 'sendAgentRegister_load_band');
   }
 
   void _runTransportFuture(Future<void> future, String label) {
@@ -660,10 +691,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<void> _sendAgentRegister() async {
     final agentCapabilities = _localCapabilities();
 
-    final registerData = {
+    final registerData = <String, dynamic>{
       'agentId': _agentId,
       'timestamp': DateTime.now().toIso8601String(),
       'capabilities': agentCapabilities.toJson(),
+      'load': <String, int>{
+        'active_handlers': _activeRpcHandlers,
+        'max_handlers': ConnectionConstants.maxConcurrentRpcHandlers,
+      },
     };
 
     if (_featureFlags.enableSocketSchemaValidation) {
@@ -676,6 +711,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
 
     await _emitEventAsync('agent:register', registerData);
+    _lastNotifiedRpcLoadBand = _computeRpcLoadBand();
+    _rpcLoadBandNotifyInitialized = true;
   }
 
   /// Handles protocol capabilities negotiation.
@@ -788,6 +825,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
           failure.message,
           errorReason: mapped.reason,
         );
+        socketAck?.call();
+        return;
+      }
+
+      if (!_hasReceivedCapabilities) {
+        await _rejectRpcBeforeCapabilitiesNegotiation(payload);
         socketAck?.call();
         return;
       }
@@ -1643,9 +1686,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _rpcDispatcher.cancelActiveStreamOnDisconnect(),
       'cancelActiveStreamOnDisconnect',
     );
+    for (final emitter in _streamEmitters.values) {
+      emitter.cancel();
+    }
+    _streamEmitters.clear();
+    _rpcLoadBandNotifyInitialized = false;
+    _lastNotifiedRpcLoadBand = 0;
     final socket = _socket;
     _socket = null;
-    _streamEmitters.clear();
     if (socket == null) {
       return;
     }
@@ -2121,6 +2169,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
     await _emitRpcResponse(errorResponse);
   }
 
+  Future<void> _rejectRpcBeforeCapabilitiesNegotiation(dynamic payload) async {
+    final dynamic id = payload is Map<String, dynamic> ? payload['id'] : null;
+    await _emitRpcResponse(
+      _buildRpcErrorResponse(
+        id: id,
+        code: RpcErrorCode.invalidRequest,
+        technicalMessage:
+            'Protocol not ready: agent:capabilities has not been negotiated yet',
+        errorReason: 'protocol_not_ready',
+      ),
+    );
+  }
+
   ({int code, String? reason}) _mapInboundTransportDecodeFailure(
     domain.Failure failure,
   ) {
@@ -2129,6 +2190,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
         code: RpcErrorCode.authenticationFailed,
         reason: RpcErrorCode.reasonInvalidSignature,
       );
+    }
+    if (failure is domain.PayloadEncodingFailure) {
+      final operation = failure.context['operation'];
+      if (operation == 'decode' || operation == 'jsonDecode') {
+        return (code: RpcErrorCode.decodingFailed, reason: null);
+      }
+    }
+    if (failure is domain.CompressionFailure &&
+        failure.context['operation'] == 'decompress') {
+      return (code: RpcErrorCode.compressionFailed, reason: null);
     }
     return (code: RpcErrorCode.invalidPayload, reason: null);
   }

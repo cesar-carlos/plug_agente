@@ -108,7 +108,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   DateTime? _cachedConfigFetchedAt;
   Future<Result<Config>>? _configLoadInFlight;
   static const _bestEffortCancelDisconnectTimeout = Duration(seconds: 2);
-  static const _configCacheTtl = Duration(seconds: 2);
+  static const _configCacheTtl = Duration(seconds: 60);
   static const int _multiResultSqlLogPreviewChars = 120;
   final Set<String> _leaseWarmupKeys = <String>{};
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
@@ -127,9 +127,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
     unawaited(
       _connectionPool.warmIdleLeases(connectionString).then((Result<void> r) {
-        if (r.isError()) {
-          _leaseWarmupKeys.remove(connectionString);
-        }
+        _leaseWarmupKeys.remove(connectionString);
       }),
     );
   }
@@ -253,6 +251,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       },
       Failure.new,
     );
+  }
+
+  @override
+  void invalidateConfigCache() {
+    _cachedConfig = null;
+    _cachedConfigFetchedAt = null;
   }
 
   String _odbcErrorMessage(Object error) {

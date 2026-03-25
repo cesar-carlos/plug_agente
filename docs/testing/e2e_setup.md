@@ -87,13 +87,13 @@ CI opcional (manual): `.github/workflows/e2e_benchmark_optional.yml`.
 
 Suites leves que medem apenas CPU de gzip e do `GzipCompressor` (sem Socket.IO nem ODBC). Documentação detalhada: [`benchmark/README.md`](../../benchmark/README.md) (secções 4 e 5).
 
-| Variável                         | Obrigatória       | Descrição                                                                                                                                        |
-| -------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CODEC_GZIP_BENCHMARK`           | Sim (para correr) | `true`: executa `test/benchmark/gzip_codec_benchmark_test.dart` (primitivas byte-a-byte).                                                        |
-| `CODEC_GZIP_BENCHMARK_ITERATIONS` | Não               | Iterações (default 24).                                                                                                                          |
-| `CODEC_GZIP_BENCHMARK_PAYLOAD_KB` | Não              | Tamanho do buffer de teste em KiB (default 256).                                                                                                   |
-| `GZIP_COMPRESSOR_BENCHMARK`      | Sim (para correr) | `true`: executa `test/benchmark/gzip_compressor_benchmark_test.dart` (mapas `compressed_data` + base64).                                        |
-| `GZIP_COMPRESSOR_BENCHMARK_*`    | Não               | Ver comentários no ficheiro de teste / `benchmark/README.md` (iterações, contagem de linhas, tamanho de payload por linha).                      |
+| Variável                          | Obrigatória       | Descrição                                                                                                                   |
+| --------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `CODEC_GZIP_BENCHMARK`            | Sim (para correr) | `true`: executa `test/benchmark/gzip_codec_benchmark_test.dart` (primitivas byte-a-byte).                                   |
+| `CODEC_GZIP_BENCHMARK_ITERATIONS` | Não               | Iterações (default 24).                                                                                                     |
+| `CODEC_GZIP_BENCHMARK_PAYLOAD_KB` | Não               | Tamanho do buffer de teste em KiB (default 256).                                                                            |
+| `GZIP_COMPRESSOR_BENCHMARK`       | Sim (para correr) | `true`: executa `test/benchmark/gzip_compressor_benchmark_test.dart` (mapas `compressed_data` + base64).                    |
+| `GZIP_COMPRESSOR_BENCHMARK_*`     | Não               | Ver comentários no ficheiro de teste / `benchmark/README.md` (iterações, contagem de linhas, tamanho de payload por linha). |
 
 **Importante:** estes testes leem `Platform.environment`. O Flutter **não** carrega automaticamente o `.env` para variáveis de processo; defina-as no shell (por exemplo `CODEC_GZIP_BENCHMARK=true flutter test ...`) ou use a mesma convenção que o vosso CI. Os benchmarks de transporte (`SOCKET_TRANSPORT_*`) continuam a usar `E2EEnv` / `.env` via `loadLiveTestEnv()`.
 

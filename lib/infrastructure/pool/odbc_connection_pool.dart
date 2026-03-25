@@ -369,6 +369,43 @@ class OdbcConnectionPool implements IConnectionPool {
     }
   }
 
+  Future<Result<void>> _warmOneIdleLease(String connectionString) async {
+    try {
+      await _leases().enter();
+    } on Object catch (error) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_warmup_lease',
+        ),
+      );
+    }
+
+    final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+    final connectResult = await _service.connect(
+      connectionString,
+      options: options,
+    );
+
+    if (connectResult.isError()) {
+      _releaseLeaseSlot();
+      return Failure(
+        OdbcFailureMapper.mapConnectionError(
+          connectResult.exceptionOrNull()!,
+          operation: 'pool_warmup_connect',
+        ),
+      );
+    }
+
+    final connectionId = connectResult.getOrNull()!.id;
+    _trackLeasedConnection(connectionId, connectionString);
+    final released = await release(connectionId);
+    if (released.isError()) {
+      return released;
+    }
+    return const Success(unit);
+  }
+
   Future<Result<void>> _warmIdleLeasesUnderLock(String connectionString) async {
     final target = _settings.leaseWarmupCount.clamp(
       0,
@@ -381,42 +418,17 @@ class OdbcConnectionPool implements IConnectionPool {
       return const Success(unit);
     }
 
-    for (var i = 0; i < need; i++) {
-      try {
-        await _leases().enter();
-      } on Object catch (error) {
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_warmup_lease',
-          ),
-        );
-      }
-
-      final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
-      final connectResult = await _service.connect(
-        connectionString,
-        options: options,
-      );
-
-      if (connectResult.isError()) {
-        _releaseLeaseSlot();
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            connectResult.exceptionOrNull()!,
-            operation: 'pool_warmup_connect',
-          ),
-        );
-      }
-
-      final connectionId = connectResult.getOrNull()!.id;
-      _trackLeasedConnection(connectionId, connectionString);
-      final released = await release(connectionId);
-      if (released.isError()) {
-        return released;
+    final results = await Future.wait(
+      List<Future<Result<void>>>.generate(
+        need,
+        (_) => _warmOneIdleLease(connectionString),
+      ),
+    );
+    for (final r in results) {
+      if (r.isError()) {
+        return Failure(r.exceptionOrNull()!);
       }
     }
-
     return const Success(unit);
   }
 
@@ -433,15 +445,17 @@ class OdbcConnectionPool implements IConnectionPool {
       ..._leasedIds,
       ..._idleIds,
     }.toList(growable: false);
-    for (final id in ids) {
-      final result = await _service.disconnect(id);
-      result.fold(
-        (_) {},
-        (error) => errors.add(
-          error is OdbcError ? error.message : error.toString(),
-        ),
-      );
-    }
+    await Future.wait(
+      ids.map((String id) async {
+        final result = await _service.disconnect(id);
+        result.fold(
+          (_) {},
+          (Object error) => errors.add(
+            error is OdbcError ? error.message : error.toString(),
+          ),
+        );
+      }),
+    );
     _leasedIds.clear();
     _leasedConnectionStringById.clear();
     _leasedIdsByConnectionString.clear();
