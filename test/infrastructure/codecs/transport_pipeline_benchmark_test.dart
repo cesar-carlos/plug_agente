@@ -19,8 +19,14 @@ const String _caseSmallRoundTrip = 'socket_transport_small_roundtrip';
 const String _caseLargeGzipRoundTrip = 'socket_transport_large_roundtrip_gzip';
 const String _caseLargeAutoRoundTrip = 'socket_transport_large_roundtrip_auto';
 const String _caseStreamChunksGzip = 'socket_transport_stream_chunks_gzip';
-const String _caseJumboGzipAsync =
-    'socket_transport_jumbo_gzip_roundtrip_async';
+const String _caseJumboGzipAsync = 'socket_transport_jumbo_gzip_roundtrip_async';
+const String _caseMediumNone = 'socket_transport_medium_none';
+const String _caseMediumGzip = 'socket_transport_medium_gzip';
+const String _caseMediumAuto = 'socket_transport_medium_auto';
+const String _caseBelowThresholdAuto = 'socket_transport_below_threshold_auto';
+const String _caseAtThresholdGzip = 'socket_transport_at_threshold_gzip';
+const String _caseAboveThresholdAuto = 'socket_transport_above_threshold_auto';
+const String _caseLargeNonCompressibleAuto = 'socket_transport_large_non_compressible_auto';
 
 class _TransportIterationMeasurement {
   const _TransportIterationMeasurement({
@@ -215,8 +221,7 @@ Map<String, dynamic> _benchmarkProfile() {
     'stream_chunk_count': _transportStreamChunkCount(),
     'stream_rows_per_chunk': _transportRowsPerChunk(),
     'include_jumbo_isolate_path': _transportIncludeJumbo(),
-    if (_transportIncludeJumbo())
-      'jumbo_blob_bytes': _transportJumboBlobBytes(),
+    if (_transportIncludeJumbo()) 'jumbo_blob_bytes': _transportJumboBlobBytes(),
   };
 }
 
@@ -251,6 +256,77 @@ Map<String, dynamic> _jumboRpcPayload(int blobBytes) {
     'id': 'req-jumbo',
     'result': <String, dynamic>{
       'blob': String.fromCharCodes(List<int>.filled(blobBytes, 0x5A)),
+    },
+  };
+}
+
+Map<String, dynamic> _mediumPayload() {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-medium',
+    'result': <String, dynamic>{
+      'rows': List<Map<String, dynamic>>.generate(100, (index) {
+        return <String, dynamic>{
+          'id': index + 1,
+          'code': 'code_${index + 1}',
+          'amt': 10 + (index / 10),
+          'description': 'compressible payload row ${index + 1} ',
+        };
+      }),
+    },
+  };
+}
+
+Map<String, dynamic> _belowThresholdPayload() {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-below',
+    'result': <String, dynamic>{
+      'text': 'Short compressible payload below threshold ',
+    },
+  };
+}
+
+Map<String, dynamic> _atThresholdPayload() {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-at-threshold',
+    'result': <String, dynamic>{
+      'text': String.fromCharCodes(List<int>.filled(900, 0x41)),
+    },
+  };
+}
+
+Map<String, dynamic> _aboveThresholdPayload() {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-above',
+    'result': <String, dynamic>{
+      'rows': List<Map<String, dynamic>>.generate(500, (index) {
+        return <String, dynamic>{
+          'id': index + 1,
+          'code': 'code_${index + 1}',
+          'value': index * 2.5,
+          'description': 'compressible above threshold row ${index + 1} ',
+        };
+      }),
+    },
+  };
+}
+
+Map<String, dynamic> _largeNonCompressiblePayload() {
+  return <String, dynamic>{
+    'jsonrpc': '2.0',
+    'id': 'req-non-compressible',
+    'result': <String, dynamic>{
+      'rows': List<Map<String, dynamic>>.generate(1000, (index) {
+        return <String, dynamic>{
+          'id': index + 1,
+          'uuid':
+              'a1b2c3d4-${index.toString().padLeft(4, "0")}-9876-fedc-${(index * 7919).toString().padLeft(12, "0")}',
+          'random': (index * 7919) % 10000,
+        };
+      }),
     },
   };
 }
@@ -505,12 +581,97 @@ void main() async {
           );
         }
 
+        final mediumPayload = _mediumPayload();
+        final mediumNonePipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+          compressionThreshold: compressionThreshold,
+        );
+        final mediumGzipPipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: compressionThreshold,
+        );
+        final mediumAutoPipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'auto',
+          compressionThreshold: compressionThreshold,
+        );
+
+        final mediumNone = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumNonePipeline,
+            payload: mediumPayload,
+            asyncReceive: false,
+          ),
+        );
+        final mediumGzip = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumGzipPipeline,
+            payload: mediumPayload,
+            asyncReceive: false,
+          ),
+        );
+        final mediumAuto = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumAutoPipeline,
+            payload: mediumPayload,
+            asyncReceive: false,
+          ),
+        );
+
+        final belowThresholdPayload = _belowThresholdPayload();
+        final belowThresholdAuto = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumAutoPipeline,
+            payload: belowThresholdPayload,
+            asyncReceive: false,
+          ),
+          iterations: 8,
+        );
+
+        final atThresholdPayload = _atThresholdPayload();
+        final atThresholdGzip = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumGzipPipeline,
+            payload: atThresholdPayload,
+            asyncReceive: false,
+          ),
+        );
+
+        final aboveThresholdPayload = _aboveThresholdPayload();
+        final aboveThresholdAuto = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumAutoPipeline,
+            payload: aboveThresholdPayload,
+            asyncReceive: true,
+          ),
+          iterations: 5,
+        );
+
+        final largeNonCompressiblePayload = _largeNonCompressiblePayload();
+        final largeNonCompressibleAuto = await _measureTransportCaseAsync(
+          () => _measureSingleRoundTrip(
+            pipeline: mediumAutoPipeline,
+            payload: largeNonCompressiblePayload,
+            asyncReceive: true,
+          ),
+          iterations: 4,
+        );
+
         final cases = <String, dynamic>{
           _caseSmallRoundTrip: smallRoundTrip.toJson(),
           _caseLargeGzipRoundTrip: largeGzipRoundTrip.toJson(),
           _caseLargeAutoRoundTrip: largeAutoRoundTrip.toJson(),
           _caseStreamChunksGzip: streamChunks.toJson(),
           if (jumboGzip != null) _caseJumboGzipAsync: jumboGzip.toJson(),
+          _caseMediumNone: mediumNone.toJson(),
+          _caseMediumGzip: mediumGzip.toJson(),
+          _caseMediumAuto: mediumAuto.toJson(),
+          _caseBelowThresholdAuto: belowThresholdAuto.toJson(),
+          _caseAtThresholdGzip: atThresholdGzip.toJson(),
+          _caseAboveThresholdAuto: aboveThresholdAuto.toJson(),
+          _caseLargeNonCompressibleAuto: largeNonCompressibleAuto.toJson(),
         };
 
         if (thresholds.isNotEmpty) {

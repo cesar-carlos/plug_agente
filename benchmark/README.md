@@ -59,6 +59,36 @@ Case keys:
 - `socket_transport_e2e_ack_retry`
 - `socket_transport_e2e_streaming_backpressure`
 
+### 3.1) PayloadFrame transport benchmark
+
+- Test: `test/infrastructure/codecs/payload_frame_transport_benchmark_test.dart`
+- Gate: `PAYLOAD_FRAME_BENCHMARK=true`
+- Optional record: `PAYLOAD_FRAME_BENCHMARK_RECORD=true`
+- Default output: `benchmark/payload_frame_transport.jsonl`
+- Optional baseline: `PAYLOAD_FRAME_BENCHMARK_BASELINE_FILE`
+- Config: `PAYLOAD_FRAME_BENCHMARK_*` (see `.env.example`)
+
+Measures isolated `PayloadFrame` creation, encoding, compression (`none`, `gzip`,
+`auto`), signing, and decode cost. Includes metrics for:
+
+- `original_bytes`, `final_bytes`, `bytes_saved`, `compression_ratio`
+- `wire_compression_counts` (distribution of actual compression modes)
+- `used_async_encode`, `used_async_decode`, `used_signature`, `auto_fell_back_to_none`
+
+Case keys:
+
+- `payloadframe_outbound_small_none`
+- `payloadframe_outbound_small_auto`
+- `payloadframe_outbound_medium_gzip`
+- `payloadframe_outbound_medium_auto`
+- `payloadframe_outbound_large_gzip_async`
+- `payloadframe_outbound_large_auto_not_worth_it`
+- `payloadframe_outbound_signed_gzip`
+- `payloadframe_inbound_small_none`
+- `payloadframe_inbound_large_gzip_sync`
+- `payloadframe_inbound_large_gzip_async`
+- `payloadframe_roundtrip_frame_gzip`
+
 ### 4) GZIP byte primitives (VM zlib)
 
 - Test: `test/benchmark/gzip_codec_benchmark_test.dart`
@@ -152,6 +182,7 @@ flutter test --tags benchmark
 flutter test test/live/odbc_rpc_benchmark_live_e2e_test.dart
 flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart
 flutter test test/infrastructure/external_services/socket_transport_e2e_benchmark_test.dart
+flutter test test/infrastructure/codecs/payload_frame_transport_benchmark_test.dart
 CODEC_GZIP_BENCHMARK=true flutter test test/benchmark/gzip_codec_benchmark_test.dart --tags benchmark
 GZIP_COMPRESSOR_BENCHMARK=true flutter test test/benchmark/gzip_compressor_benchmark_test.dart --tags benchmark
 dart run tool/summarize_e2e_benchmark.dart

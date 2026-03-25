@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -108,7 +109,8 @@ class TransportPipeline {
     this.compressionThreshold = 1024,
     this.schemaVersion = '1.0',
     this.gzipOutboundZlibLevel = gzipTransportZlibLevel,
-  });
+    MetricsCollector? metricsCollector,
+  }) : _metricsCollector = metricsCollector;
 
   /// Selected encoding format.
   final String encoding;
@@ -127,6 +129,7 @@ class TransportPipeline {
   /// [gzipTransportZlibLevel] default when constructed without override.
   final int gzipOutboundZlibLevel;
 
+  final MetricsCollector? _metricsCollector;
   final _uuid = const Uuid();
 
   /// Prepares a payload for sending.
@@ -151,6 +154,7 @@ class TransportPipeline {
 
       final encodedBytes = encodeResult.getOrThrow();
       final originalSize = encodedBytes.length;
+      _metricsCollector?.recordTransportOutboundEncodeSync();
 
       // 2. Compress (if threshold met and mode requests gzip or auto)
       final shouldCompress = _shouldRunGzipCompression(
@@ -170,6 +174,7 @@ class TransportPipeline {
             encodedBytes,
             compressionLevel: gzipOutboundZlibLevel,
           );
+          _metricsCollector?.recordTransportOutboundCompressSync();
         } on Object catch (error) {
           return Failure(
             domain.CompressionFailure.withContext(
@@ -183,6 +188,7 @@ class TransportPipeline {
           finalBytes = encodedBytes;
           finalCompression = 'none';
           compressedSize = originalSize;
+          _metricsCollector?.recordTransportOutboundAutoFallbackToNone();
         } else {
           finalBytes = compressedBytes;
           finalCompression = 'gzip';
@@ -192,6 +198,12 @@ class TransportPipeline {
         finalBytes = encodedBytes;
         finalCompression = 'none';
         compressedSize = originalSize;
+      }
+
+      if (finalCompression == 'none') {
+        _metricsCollector?.recordTransportOutboundCompressionNone();
+      } else if (finalCompression == 'gzip') {
+        _metricsCollector?.recordTransportOutboundCompressionGzip();
       }
 
       // 3. Create frame
@@ -240,6 +252,7 @@ class TransportPipeline {
           )) {
         try {
           encodedBytes = await compute(jsonUtf8EncodePayloadInIsolate, data);
+          _metricsCollector?.recordTransportOutboundEncodeAsync();
         } on Object catch (error) {
           return Failure(
             domain.PayloadEncodingFailure.withContext(
@@ -255,6 +268,7 @@ class TransportPipeline {
           return Failure(encodeResult.exceptionOrNull()!);
         }
         encodedBytes = encodeResult.getOrThrow();
+        _metricsCollector?.recordTransportOutboundEncodeSync();
       }
       final originalSize = encodedBytes.length;
       final shouldCompress = _shouldRunGzipCompression(
@@ -275,12 +289,14 @@ class TransportPipeline {
             gzipCompressWithLevelForIsolate,
             (encodedBytes, gzipOutboundZlibLevel),
           );
+          _metricsCollector?.recordTransportOutboundCompressAsync();
         } else {
           try {
             compressedBytes = gzipCompressBytesOrThrow(
               encodedBytes,
               compressionLevel: gzipOutboundZlibLevel,
             );
+            _metricsCollector?.recordTransportOutboundCompressSync();
           } on Object catch (error) {
             return Failure(
               domain.CompressionFailure.withContext(
@@ -295,6 +311,7 @@ class TransportPipeline {
           finalBytes = encodedBytes;
           finalCompression = 'none';
           compressedSize = originalSize;
+          _metricsCollector?.recordTransportOutboundAutoFallbackToNone();
         } else {
           finalBytes = compressedBytes;
           finalCompression = 'gzip';
@@ -304,6 +321,12 @@ class TransportPipeline {
         finalBytes = encodedBytes;
         finalCompression = 'none';
         compressedSize = originalSize;
+      }
+
+      if (finalCompression == 'none') {
+        _metricsCollector?.recordTransportOutboundCompressionNone();
+      } else if (finalCompression == 'gzip') {
+        _metricsCollector?.recordTransportOutboundCompressionGzip();
       }
 
       final frame = PayloadFrame(

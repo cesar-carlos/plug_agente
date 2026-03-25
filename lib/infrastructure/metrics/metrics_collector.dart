@@ -33,6 +33,14 @@ class MetricsCollector implements IMetricsCollector {
   static const String _rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
   static const String _transportInboundDecodeSyncCounter = 'transport_inbound_decode_sync';
   static const String _transportInboundDecodeAsyncCounter = 'transport_inbound_decode_async';
+  static const String _transportOutboundEncodeSyncCounter = 'transport_outbound_encode_sync';
+  static const String _transportOutboundEncodeAsyncCounter = 'transport_outbound_encode_async';
+  static const String _transportOutboundCompressSyncCounter = 'transport_outbound_compress_sync';
+  static const String _transportOutboundCompressAsyncCounter = 'transport_outbound_compress_async';
+  static const String _transportOutboundAutoFallbackToNoneCounter = 'transport_outbound_auto_fallback_to_none';
+  static const String _transportOutboundFrameSignedCounter = 'transport_outbound_frame_signed';
+  static const String _transportOutboundCompressionNoneCounter = 'transport_outbound_compression_none';
+  static const String _transportOutboundCompressionGzipCounter = 'transport_outbound_compression_gzip';
   static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
   static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
   static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
@@ -95,6 +103,14 @@ class MetricsCollector implements IMetricsCollector {
   int get rpcSqlExecuteMaterializedResponseCount => _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
   int get transportInboundDecodeSyncCount => _eventCounters[_transportInboundDecodeSyncCounter] ?? 0;
   int get transportInboundDecodeAsyncCount => _eventCounters[_transportInboundDecodeAsyncCounter] ?? 0;
+  int get transportOutboundEncodeSyncCount => _eventCounters[_transportOutboundEncodeSyncCounter] ?? 0;
+  int get transportOutboundEncodeAsyncCount => _eventCounters[_transportOutboundEncodeAsyncCounter] ?? 0;
+  int get transportOutboundCompressSyncCount => _eventCounters[_transportOutboundCompressSyncCounter] ?? 0;
+  int get transportOutboundCompressAsyncCount => _eventCounters[_transportOutboundCompressAsyncCounter] ?? 0;
+  int get transportOutboundAutoFallbackToNoneCount => _eventCounters[_transportOutboundAutoFallbackToNoneCounter] ?? 0;
+  int get transportOutboundFrameSignedCount => _eventCounters[_transportOutboundFrameSignedCounter] ?? 0;
+  int get transportOutboundCompressionNoneCount => _eventCounters[_transportOutboundCompressionNoneCounter] ?? 0;
+  int get transportOutboundCompressionGzipCount => _eventCounters[_transportOutboundCompressionGzipCounter] ?? 0;
   int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
   int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
   int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
@@ -179,6 +195,39 @@ class MetricsCollector implements IMetricsCollector {
   void recordTransportInboundDecodeSync() => _incrementEventCounter(_transportInboundDecodeSyncCounter);
 
   void recordTransportInboundDecodeAsync() => _incrementEventCounter(_transportInboundDecodeAsyncCounter);
+
+  void recordTransportOutboundEncodeSync() => _incrementEventCounter(_transportOutboundEncodeSyncCounter);
+
+  void recordTransportOutboundEncodeAsync() => _incrementEventCounter(_transportOutboundEncodeAsyncCounter);
+
+  void recordTransportOutboundCompressSync() => _incrementEventCounter(_transportOutboundCompressSyncCounter);
+
+  void recordTransportOutboundCompressAsync() => _incrementEventCounter(_transportOutboundCompressAsyncCounter);
+
+  void recordTransportOutboundAutoFallbackToNone() =>
+      _incrementEventCounter(_transportOutboundAutoFallbackToNoneCounter);
+
+  void recordTransportOutboundFrameSigned() => _incrementEventCounter(_transportOutboundFrameSignedCounter);
+
+  void recordTransportOutboundCompressionNone() => _incrementEventCounter(_transportOutboundCompressionNoneCounter);
+
+  void recordTransportOutboundCompressionGzip() => _incrementEventCounter(_transportOutboundCompressionGzipCounter);
+
+  void recordTransportOutboundEventCompression({
+    required String event,
+    required String compression,
+  }) {
+    final normalizedCompression = compression == 'gzip' ? 'gzip' : 'none';
+    final normalizedEvent = switch (event) {
+      'rpc:response' => 'rpc_response',
+      'rpc:chunk' => 'rpc_chunk',
+      'rpc:complete' => 'rpc_complete',
+      _ => event.replaceAll(':', '_'),
+    };
+    _incrementEventCounter(
+      'transport_outbound_${normalizedEvent}_$normalizedCompression',
+    );
+  }
 
   void recordRpcStreamTerminalCompleteEmitted() => _incrementEventCounter(_rpcStreamTerminalCompleteEmittedCounter);
 

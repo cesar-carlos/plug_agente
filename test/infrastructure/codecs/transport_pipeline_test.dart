@@ -285,9 +285,7 @@ void main() {
 
         const traceId = 'bench-trace';
         const requestId = 'bench-req';
-        final syncFrame = pipeline
-            .prepareSend(originalData, traceId: traceId, requestId: requestId)
-            .getOrThrow();
+        final syncFrame = pipeline.prepareSend(originalData, traceId: traceId, requestId: requestId).getOrThrow();
         final asyncResult = await pipeline.prepareSendAsync(
           originalData,
           traceId: traceId,
@@ -303,15 +301,11 @@ void main() {
 
         const relaxedInflation = 500.0;
         expect(
-          pipeline
-              .receiveProcess(syncFrame, maxInflationRatio: relaxedInflation)
-              .getOrThrow(),
+          pipeline.receiveProcess(syncFrame, maxInflationRatio: relaxedInflation).getOrThrow(),
           equals(originalData),
         );
         expect(
-          pipeline
-              .receiveProcess(asyncFrame, maxInflationRatio: relaxedInflation)
-              .getOrThrow(),
+          pipeline.receiveProcess(asyncFrame, maxInflationRatio: relaxedInflation).getOrThrow(),
           equals(originalData),
         );
       },

@@ -23,6 +23,7 @@ import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
@@ -39,12 +40,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required FeatureFlags featureFlags,
     PayloadSigner? payloadSigner,
     MetricsCollector? metricsCollector,
+    ProtocolMetricsCollector? protocolMetricsCollector,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
        _payloadSigner = payloadSigner,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector,
+       _protocolMetricsCollector = protocolMetricsCollector;
 
   final SocketDataSource _dataSource;
   final ProtocolNegotiator _negotiator;
@@ -52,6 +55,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final FeatureFlags _featureFlags;
   final PayloadSigner? _payloadSigner;
   final MetricsCollector? _metricsCollector;
+  final ProtocolMetricsCollector? _protocolMetricsCollector;
 
   io.Socket? _socket;
   String _agentId = '';
@@ -325,6 +329,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       compression: pipelineCompression,
       compressionThreshold: threshold,
       gzipOutboundZlibLevel: _featureFlags.outboundGzipZlibLevel,
+      metricsCollector: _metricsCollector,
     );
     _cachedSendPipeline = pipeline;
     _sendPipelineCacheKey = cacheKey;
@@ -383,6 +388,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       compression: frame.cmp,
       compressionThreshold: _currentProtocol.compressionThreshold,
       schemaVersion: frame.schemaVersion,
+      metricsCollector: _metricsCollector,
     );
     _receivePipelineByKey[key] = pipeline;
     return pipeline;
@@ -1392,7 +1398,28 @@ class SocketIOTransportClientV2 implements ITransportClient {
       frame = frame.copyWith(
         signature: signer.signFrame(frame).toJson(),
       );
+      _metricsCollector?.recordTransportOutboundFrameSigned();
     }
+
+    if (event == 'rpc:response' || event == 'rpc:chunk' || event == 'rpc:complete') {
+      _metricsCollector?.recordTransportOutboundEventCompression(
+        event: event,
+        compression: frame.cmp,
+      );
+    }
+
+    _protocolMetricsCollector?.record(
+      ProtocolMetrics(
+        timestamp: DateTime.now(),
+        protocol: _currentProtocol.protocol,
+        encoding: frame.enc,
+        compression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        direction: 'outbound',
+      ),
+    );
+
     return frame.toJson();
   }
 
@@ -1431,6 +1458,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   dynamic _decodePayloadFromValidatedFrame(PayloadFrame frame) {
+    _protocolMetricsCollector?.record(
+      ProtocolMetrics(
+        timestamp: DateTime.now(),
+        protocol: _currentProtocol.protocol,
+        encoding: frame.enc,
+        compression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        direction: 'inbound',
+      ),
+    );
+
     final pipeline = _createReceivePipeline(frame);
     final processed = pipeline.receiveProcess(
       frame,
@@ -1448,6 +1487,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<dynamic> _decodePayloadFromValidatedFrameAsync(
     PayloadFrame frame,
   ) async {
+    _protocolMetricsCollector?.record(
+      ProtocolMetrics(
+        timestamp: DateTime.now(),
+        protocol: _currentProtocol.protocol,
+        encoding: frame.enc,
+        compression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        direction: 'inbound',
+      ),
+    );
+
     final pipeline = _createReceivePipeline(frame);
     final processed = await pipeline.receiveProcessAsync(
       frame,

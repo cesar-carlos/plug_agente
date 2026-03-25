@@ -48,8 +48,7 @@ void main() {
       test(
         'skipped — set PAYLOAD_CODEC_BENCHMARK=true to run',
         () {},
-        skip:
-            'Defina PAYLOAD_CODEC_BENCHMARK=true no .env para medir encode/decode.',
+        skip: 'Defina PAYLOAD_CODEC_BENCHMARK=true no .env para medir encode/decode.',
       );
     });
     return;

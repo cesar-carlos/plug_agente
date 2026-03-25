@@ -142,114 +142,113 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
       return await connResult.fold<Future<Result<void>>>(
         (connection) async {
-        _activeConnectionId = connection.id;
-        try {
-          // Usar streaming real para processar chunks incrementalmente
-          await for (final chunkResult in _service.streamQuery(
-            connection.id,
-            query,
-          )) {
-            if (_isCancelRequested) {
-              if (_cancelReason == StreamingCancelReason.playgroundRowCap) {
-                return const Success(unit);
-              }
-              if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
+          _activeConnectionId = connection.id;
+          try {
+            // Usar streaming real para processar chunks incrementalmente
+            await for (final chunkResult in _service.streamQuery(
+              connection.id,
+              query,
+            )) {
+              if (_isCancelRequested) {
+                if (_cancelReason == StreamingCancelReason.playgroundRowCap) {
+                  return const Success(unit);
+                }
+                if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
+                  return Failure(
+                    OdbcFailureMapper.mapStreamingError(
+                      StateError('stream_cancelled_backpressure_overflow'),
+                      operation: 'executeQueryStream',
+                      context: {
+                        'connectionId': connection.id,
+                        'rpc_error_code': RpcErrorCode.resultTooLarge,
+                        'reason': 'backpressure_overflow',
+                      },
+                    ),
+                  );
+                }
+                if (_cancelReason == StreamingCancelReason.socketDisconnect) {
+                  app_log.AppLogger.info(
+                    'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
+                  );
+                  return Failure(
+                    OdbcFailureMapper.mapStreamingError(
+                      StateError('stream_cancelled_on_disconnect'),
+                      operation: 'executeQueryStream',
+                      context: {
+                        'connectionId': connection.id,
+                        'reason': 'socket_disconnect',
+                      },
+                    ),
+                  );
+                }
                 return Failure(
                   OdbcFailureMapper.mapStreamingError(
-                    StateError('stream_cancelled_backpressure_overflow'),
+                    StateError('stream_cancelled'),
                     operation: 'executeQueryStream',
-                    context: {
-                      'connectionId': connection.id,
-                      'rpc_error_code': RpcErrorCode.resultTooLarge,
-                      'reason': 'backpressure_overflow',
-                    },
+                    context: {'connectionId': connection.id},
+                    cancelledByUser: true,
                   ),
                 );
               }
-              if (_cancelReason == StreamingCancelReason.socketDisconnect) {
-                app_log.AppLogger.info(
-                  'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
-                );
-                return Failure(
-                  OdbcFailureMapper.mapStreamingError(
-                    StateError('stream_cancelled_on_disconnect'),
-                    operation: 'executeQueryStream',
-                    context: {
-                      'connectionId': connection.id,
-                      'reason': 'socket_disconnect',
-                    },
-                  ),
-                );
-              }
-              return Failure(
-                OdbcFailureMapper.mapStreamingError(
-                  StateError('stream_cancelled'),
-                  operation: 'executeQueryStream',
-                  context: {'connectionId': connection.id},
-                  cancelledByUser: true,
-                ),
+
+              await chunkResult.fold(
+                (queryResult) async {
+                  // Converter chunk e notificar callback
+                  final rows = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+                    queryResult,
+                  );
+                  if (rows.isNotEmpty) {
+                    for (final part in _chunkRows(rows, fetchSize)) {
+                      await onChunk(part);
+                    }
+                  }
+                },
+                (error) {
+                  throw Exception(_odbcErrorMessage(error));
+                },
               );
             }
 
-            await chunkResult.fold(
-              (queryResult) async {
-                // Converter chunk e notificar callback
-                final rows =
-                    OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
-                  queryResult,
+            return const Success(unit);
+          } on Exception catch (e) {
+            final context = <String, dynamic>{
+              'connectionId': connection.id,
+            };
+            if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
+              context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
+              context['reason'] = 'backpressure_overflow';
+            }
+            return Failure(
+              OdbcFailureMapper.mapStreamingError(
+                e,
+                operation: 'executeQueryStream',
+                context: context,
+              ),
+            );
+          } finally {
+            final disconnectResult = await _service.disconnect(connection.id);
+            disconnectResult.fold(
+              (_) {},
+              (Object error) {
+                app_log.AppLogger.debug(
+                  'streaming gateway: best-effort disconnect failed '
+                  'connection_id=${connection.id}',
+                  error,
                 );
-                if (rows.isNotEmpty) {
-                  for (final part in _chunkRows(rows, fetchSize)) {
-                    await onChunk(part);
-                  }
-                }
-              },
-              (error) {
-                throw Exception(_odbcErrorMessage(error));
               },
             );
+            if (_activeConnectionId == connection.id) {
+              _activeConnectionId = null;
+            }
           }
-
-          return const Success(unit);
-        } on Exception catch (e) {
-          final context = <String, dynamic>{
-            'connectionId': connection.id,
-          };
-          if (_cancelReason == StreamingCancelReason.backpressureOverflow) {
-            context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
-            context['reason'] = 'backpressure_overflow';
-          }
-          return Failure(
-            OdbcFailureMapper.mapStreamingError(
-              e,
-              operation: 'executeQueryStream',
-              context: context,
-            ),
-          );
-        } finally {
-          final disconnectResult = await _service.disconnect(connection.id);
-          disconnectResult.fold(
-            (_) {},
-            (Object error) {
-              app_log.AppLogger.debug(
-                'streaming gateway: best-effort disconnect failed '
-                'connection_id=${connection.id}',
-                error,
-              );
-            },
-          );
-          if (_activeConnectionId == connection.id) {
-            _activeConnectionId = null;
-          }
-        }
-      },
-      (error) async => Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'connect_streaming',
+        },
+        (error) async => Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'connect_streaming',
+          ),
         ),
-      ),
-    );
+      );
     } finally {
       if (identical(_streamExecutionOwner, owner)) {
         _streamExecutionOwner = null;
@@ -311,5 +310,4 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
       yield rows.sublist(i, end);
     }
   }
-
 }

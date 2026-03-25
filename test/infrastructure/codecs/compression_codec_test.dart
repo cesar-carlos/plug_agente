@@ -105,18 +105,13 @@ void main() {
       'GzipCompressionCodec.transport round-trips and uses fast compression level',
       () {
         final data = Uint8List.fromList(utf8.encode('Hello World! ' * 200));
-        final defaultC = const GzipCompressionCodec()
-            .compress(data)
-            .getOrThrow();
-        final fastC = GzipCompressionCodec.transport
-            .compress(data)
-            .getOrThrow();
+        final defaultC = const GzipCompressionCodec().compress(data).getOrThrow();
+        final fastC = GzipCompressionCodec.transport.compress(data).getOrThrow();
         expect(gzipDecompressBytesOrThrow(fastC), equals(data));
         expect(
           fastC.length,
           greaterThanOrEqualTo(defaultC.length),
-          reason:
-              'best-speed gzip is usually larger than default for same input',
+          reason: 'best-speed gzip is usually larger than default for same input',
         );
       },
     );
