@@ -8,6 +8,7 @@ import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -269,6 +270,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   ProtocolCapabilities _localCapabilities() {
     final cacheKey =
         '${_featureFlags.enableBinaryPayload}|'
+        '${_featureFlags.enableSocketBackpressure}|'
         '${_featureFlags.outboundCompressionMode.name}|'
         '${_featureFlags.compressionThreshold}|'
         '$_localSignatureRequired|'
@@ -282,6 +284,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
           ? const ['none']
           : const ['gzip', 'none'],
       compressionThreshold: _featureFlags.compressionThreshold,
+      protocolReadyAck: true,
+      recommendedStreamPullWindowSize:
+          _featureFlags.enableSocketBackpressure ? 1 : null,
+      maxStreamPullWindowSize: _featureFlags.enableSocketBackpressure
+          ? ConnectionConstants.maxBackpressureChunkQueueSize
+          : null,
       signatureRequired: _localSignatureRequired,
       signatureAlgorithms: _localSignatureAlgorithms,
     );
@@ -794,6 +802,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
     );
 
+    _emitAgentReady();
     _heartbeat.start();
   }
 
@@ -1953,6 +1962,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
       'protocol': _currentProtocol.protocol,
     };
     _emitEvent('agent:heartbeat', payload);
+  }
+
+  void _emitAgentReady() {
+    final payload = <String, dynamic>{
+      'agent_id': _agentId,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'protocol': _currentProtocol.protocol,
+    };
+    _emitEvent(AppConstants.socketEventAgentReady, payload);
   }
 
   void _logHeartbeatEvent(String direction, String event, dynamic data) {

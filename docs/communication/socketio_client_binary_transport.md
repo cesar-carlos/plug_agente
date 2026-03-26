@@ -22,6 +22,7 @@ O padrao abaixo se aplica a todos os eventos de aplicacao:
 
 - `agent:register`
 - `agent:capabilities`
+- `agent:ready`
 - `agent:heartbeat`
 - `hub:heartbeat_ack`
 - `rpc:request`
@@ -144,6 +145,12 @@ Quando o cliente anunciar capacidades:
   **automatico** de compressao: no fio continuam apenas `cmp: gzip` ou `cmp: none`.
 - `encodings` deve incluir `json`
 - `extensions.binaryPayload` deve ser `true`
+- `extensions.protocolReadyAck` pode ser `true`; nesse caso, depois de receber
+  `agent:capabilities`, o agente emite `agent:ready` para liberar hubs que usam
+  readiness explicito
+- `extensions.recommendedStreamPullWindowSize` e
+  `extensions.maxStreamPullWindowSize` podem anunciar hints para o hub ajustar
+  `rpc:stream.pull` quando houver backpressure
 
 Quando o cliente consumir capacidades do outro lado:
 
@@ -154,6 +161,8 @@ Quando o cliente consumir capacidades do outro lado:
 - nao enviar `rpc:request` antes de receber `agent:capabilities`; o runtime
   atual rejeita pedidos antecipados com `invalid_request` e
   `reason: protocol_not_ready`
+- para hubs com readiness explicito, considerar a sessao plenamente pronta apos
+  `agent:capabilities` e o envio subsequente de `agent:ready`
 
 ### Preferencia por pedido (`meta.outbound_compression`)
 

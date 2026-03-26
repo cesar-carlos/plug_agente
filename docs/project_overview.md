@@ -1,4 +1,4 @@
-﻿# Plug Server - Visao Geral do Projeto
+# Plug Server - Visao Geral do Projeto
 
 ## Objetivo
 
@@ -166,6 +166,7 @@ O protocolo documentado no agente utiliza eventos como:
 
 - `agent:register`
 - `agent:capabilities`
+- `agent:ready`
 - `agent:heartbeat`
 - `hub:heartbeat_ack`
 - `rpc:request`
@@ -255,7 +256,7 @@ O projeto ja possui:
 - middlewares de seguranca
 - health checks
 - Socket.IO com namespaces `/agents` e `/consumers`
-- registro de agentes em tempo real no namespace `/agents` (`agent:register`, `agent:capabilities`)
+- registro de agentes em tempo real no namespace `/agents` (`agent:register`, `agent:capabilities`, `agent:ready`)
 - negociacao de capacidades com o agente
 - roteamento RPC via REST (`POST /api/v1/agents/commands`) para namespace `/agents`
 - roteamento RPC via Socket (`agents:command` no namespace `/consumers`)

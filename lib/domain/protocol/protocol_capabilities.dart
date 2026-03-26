@@ -32,12 +32,16 @@ class ProtocolCapabilities {
     double maxInflationRatio = 20,
     bool signatureRequired = false,
     List<String> signatureAlgorithms = const ['hmac-sha256'],
+    bool protocolReadyAck = false,
+    int? recommendedStreamPullWindowSize,
+    int? maxStreamPullWindowSize,
   }) {
     final extensions = <String, dynamic>{
       'batchSupport': true,
       'binaryPayload': binaryPayload,
       'compressionThreshold': compressionThreshold,
       'maxInflationRatio': maxInflationRatio,
+      'protocolReadyAck': protocolReadyAck,
       'signatureRequired': signatureRequired,
       'signatureScope': 'transport-frame',
       'signatureAlgorithms': signatureAlgorithms,
@@ -51,6 +55,13 @@ class ProtocolCapabilities {
     };
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';
+    }
+    if (recommendedStreamPullWindowSize != null) {
+      extensions['recommendedStreamPullWindowSize'] =
+          recommendedStreamPullWindowSize;
+    }
+    if (maxStreamPullWindowSize != null) {
+      extensions['maxStreamPullWindowSize'] = maxStreamPullWindowSize;
     }
 
     return ProtocolCapabilities(

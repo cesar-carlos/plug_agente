@@ -36,6 +36,7 @@ binario esta documentado em
 | Streaming chunked                                                    | implemented (via feature flag; acima de `streaming_row_threshold`)                                                         |
 | Streaming direto do banco (SELECT sem params)                        | implemented (via enableSocketStreamingFromDb)                                                                              |
 | Backpressure                                                         | implemented (window_size em rpc:stream.pull controla envio)                                                                |
+| Ack explicito de prontidao (`agent:ready`)                           | implemented (agent-side; opcional e retrocompativel)                                                                       |
 | Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                                                                            |
 | Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
 | Garantia de entrega por evento (ack/retry)                           | implemented (via feature flag)                                                                                             |
@@ -92,6 +93,8 @@ handshake.
   - inclui identificacao e capacidades
 - `agent:capabilities`
   - recebido do hub para definir protocolo efetivo
+- `agent:ready`
+  - enviado pelo agente apos concluir a negociacao efetiva do protocolo
 
 ### Heartbeat de sessao
 
@@ -113,6 +116,7 @@ handshake.
 | -------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities }>`                    | `agent:capabilities`                                                                                                                                       |
 | `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
+| `agent:ready`        | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                |
 | `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
 | `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
 | `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
@@ -127,9 +131,11 @@ ate N vezes (ex.: 2). Apos esgotar as tentativas, o agente força reconexao.
 **Readiness:** O hub nao deve enviar `rpc:request` antes de o agente ter recebido
 `agent:capabilities`. O agente so considera o protocolo pronto apos a negociacao
 completa. O `connect` pode retornar sucesso assim que o transporte Socket.IO
-estabelece conexao; o agente envia `agent:register` e aguarda `agent:capabilities`
-antes de aceitar RPCs. Se o hub enviar RPC antes disso, o agente rejeita a
-request com erro de contrato (`invalid_request`, `reason: protocol_not_ready`).
+estabelece conexao; o agente envia `agent:register`, aguarda
+`agent:capabilities` e, em seguida, emite `agent:ready` como ack explicito
+retrocompativel para hubs que anunciam `extensions.protocolReadyAck`. Se o hub
+enviar RPC antes disso, o agente rejeita a request com erro de contrato
+(`invalid_request`, `reason: protocol_not_ready`).
 
 ## Camadas do transporte
 
@@ -193,6 +199,12 @@ Fluxo atual para resultados grandes:
    e o hub nao enviar `rpc:stream.pull` a tempo, o agente **nao descarta** chunks silenciosamente.
    Em vez disso, cancela o stream e retorna erro RPC `resultTooLarge` (`-32105`) com
    `reason: backpressure_overflow`. O hub deve consumir mais rapido ou aumentar `window_size`.
+
+Quando `enableSocketBackpressure` esta ativo, o agente tambem anuncia em
+`capabilities.extensions`:
+
+- `recommendedStreamPullWindowSize`: `1` (preserva o modelo atual de credito inicial unitario)
+- `maxStreamPullWindowSize`: `maxBackpressureChunkQueueSize` (limite superior recomendado ao hub)
 
 Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 `lib/domain/protocol/rpc_stream.dart`.
@@ -1039,6 +1051,7 @@ Exemplo de capacidades anunciadas (alinhado a
     "binaryPayload": true,
     "transportFrame": "payload-frame/1.0",
     "compressionThreshold": 1024,
+    "protocolReadyAck": true,
     "maxInflationRatio": 20,
     "signatureRequired": false,
     "signatureScope": "transport-frame",
@@ -1053,6 +1066,9 @@ Exemplo de capacidades anunciadas (alinhado a
   }
 }
 ```
+
+Quando o backpressure esta ativo, o mesmo bloco `extensions` tambem pode incluir
+`recommendedStreamPullWindowSize` e `maxStreamPullWindowSize`.
 
 O mapa `limits` negociado segue a secao "Limites negociados por transporte"; nao
 e repetido neste exemplo.
@@ -1334,6 +1350,8 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   envia por vez; credito inicial de 1 chunk.
 - `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
   contrato formal na secao "api_version e meta".
+- `agent:ready` e enviado apos `agent:capabilities` como ack explicito de
+  prontidao; hubs antigos podem ignorar o evento sem impacto funcional.
 - Notification JSON-RPC (sem `id`) formalizada na secao "Notification JSON-RPC";
   enforcement via `enableSocketNotificationsContract`.
 - Regras estritas de batch formalizadas na secao "Regras formais de batch";
@@ -1479,6 +1497,15 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `max_rows` em modo `preserve` permanece como truncamento da response, sem
   reescrita da SQL enviada pelo cliente.
 
+### Ajustes pos-v2.5 (readiness explicito e hints de backpressure)
+
+- `agent:ready` adicionado como evento opcional apos `agent:capabilities`.
+- `extensions.protocolReadyAck = true` passa a anunciar suporte ao ack explicito
+  de prontidao.
+- `extensions.recommendedStreamPullWindowSize` e
+  `extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
+  hub ajustar `rpc:stream.pull`.
+
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
@@ -1508,6 +1535,7 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `docs/communication/schemas/rpc.batch.response.schema.json`
 - `docs/communication/schemas/agent.register.schema.json`
 - `docs/communication/schemas/agent.capabilities.schema.json`
+- `docs/communication/schemas/agent.ready.schema.json`
 
 ### Params por metodo
 

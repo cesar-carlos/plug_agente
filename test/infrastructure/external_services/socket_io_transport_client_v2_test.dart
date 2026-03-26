@@ -292,9 +292,65 @@ void main() {
         (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
         isA<Map<String, dynamic>>(),
       );
+      final extensions =
+          (registerPayload['capabilities'] as Map<String, dynamic>)['extensions']
+              as Map<String, dynamic>;
+      expect(extensions['protocolReadyAck'], isTrue);
       final load = registerPayload['load'] as Map<String, dynamic>;
       expect(load['active_handlers'], 0);
       expect(load['max_handlers'], ConnectionConstants.maxConcurrentRpcHandlers);
+    });
+
+    test(
+      'should advertise stream pull window hints when backpressure is enabled',
+      () async {
+        when(() => mockFeatureFlags.enableSocketBackpressure).thenReturn(true);
+
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        final result = await connectFuture;
+
+        expect(result.isSuccess(), isTrue);
+        final registerPayload =
+            decodeWirePayload(
+                  emitted
+                      .firstWhere((item) => item.event == 'agent:register')
+                      .data,
+                )
+                as Map<String, dynamic>;
+        final extensions =
+            (registerPayload['capabilities'] as Map<String, dynamic>)['extensions']
+                as Map<String, dynamic>;
+        expect(extensions['recommendedStreamPullWindowSize'], 1);
+        expect(
+          extensions['maxStreamPullWindowSize'],
+          ConnectionConstants.maxBackpressureChunkQueueSize,
+        );
+      },
+    );
+
+    test('should emit agent:ready after capabilities negotiation', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.any((item) => item.event == 'agent:ready'), isTrue);
+      final readyPayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'agent:ready').data,
+              )
+              as Map<String, dynamic>;
+      expect(readyPayload['agent_id'], 'agent-1');
+      expect(readyPayload['protocol'], 'jsonrpc-v2');
     });
 
     test('should reject rpc requests before capabilities negotiation', () async {
