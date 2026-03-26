@@ -22,6 +22,7 @@ class GeneralConfigSection extends StatelessWidget {
     this.startupSupported = true,
     this.startupError,
     this.supportsAutoUpdate = true,
+    this.updateCheckInProgress = false,
     super.key,
   });
 
@@ -42,6 +43,7 @@ class GeneralConfigSection extends StatelessWidget {
   final bool startupSupported;
   final String? startupError;
   final bool supportsAutoUpdate;
+  final bool updateCheckInProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +111,8 @@ class GeneralConfigSection extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(FluentIcons.refresh),
-                    onPressed: onCheckUpdates,
+                    onPressed:
+                        updateCheckInProgress ? null : onCheckUpdates,
                   ),
                 ],
               )

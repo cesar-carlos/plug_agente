@@ -24,7 +24,7 @@ Detalhes e checklist em [requirements.md](requirements.md).
 | ------------------------------------------------ | ----------------------------------------------- |
 | [release_guide.md](release_guide.md)             | Criar e publicar release com instalador         |
 | [version_strategy.md](version_strategy.md)       | Regras de versionamento e tags                  |
-| [auto_update_setup.md](auto_update_setup.md)     | Configurar feed/appcast e assinatura DSA        |
+| [auto_update_setup.md](auto_update_setup.md)     | Configurar feed/appcast (HTTPS)                 |
 | [testing_auto_update.md](testing_auto_update.md) | Validar fluxo automático e silencioso de update |
 
 ## Scripts

@@ -42,10 +42,10 @@ Resumo:
 
 ## Auto-Update via GitHub
 
-- **Feed**: `appcast.xml` (formato Sparkle/WinSparkle)
+- **Feed**: `appcast.xml` (formato Sparkle, sem assinatura DSA)
 - **Hospedagem**: GitHub Raw ou GitHub Pages
 - **Workflow**: `.github/workflows/update-appcast.yml` atualiza o feed automaticamente em cada release publicado
-- **Assinatura**: todos os releases exigem `DSA_PRIVATE_KEY`
+- **Assinatura**: não usada; o cliente confia em HTTPS e hosts GitHub permitidos.
 
 ## Scripts de Desenvolvimento (Python)
 

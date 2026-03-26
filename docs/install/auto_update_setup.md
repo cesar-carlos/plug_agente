@@ -7,31 +7,28 @@ Este documento explica como configurar e testar o sistema de atualização autom
 
 ## Visão Geral
 
-O sistema de atualização automática permite que o aplicativo verifique e
-instale atualizações automaticamente. Utiliza o pacote `auto_updater`
-(WinSparkle no Windows) com feed no formato Sparkle.
+O aplicativo lê um feed **Sparkle** (RSS/XML) por **HTTPS**, compara a versão remota com a instalada e, se houver atualização, **abre o URL do instalador no navegador** padrão. Não há assinatura DSA/WinSparkle nem chaves no repositório ou no executável.
+
+**Modelo de confiança:** TLS + URLs em hosts GitHub permitidos (`github.com`, `*.githubusercontent.com`, etc.).
 
 O auto-update só é ativado quando `AUTO_UPDATE_FEED_URL` está configurado e aponta para um feed Sparkle (URL terminando em `.xml`).
 
-Ordem de resolução da configuração:
+Ordem de resolução da configuração do feed:
 
 1. `--dart-define=AUTO_UPDATE_FEED_URL=...` no build (recomendado para release)
 2. `.env` em runtime (fallback para desenvolvimento/testes)
 
-Sem essa variável válida, o recurso fica desabilitado.
-
 Em modo degradado (Windows Server 2012/2016+), o auto-update não é suportado e a seção de atualizações exibe mensagem informativa.
 
-Comportamento atual da aplicação:
+Comportamento:
 
-- checagem automática em background (intervalo configurável via `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, padrão 1 hora, mínimo 1 hora);
-- checagem inicial ao subir o app;
-- checagem manual pela UI usa fluxo foreground do WinSparkle (pode exibir progresso nativo);
-- fluxo de download/aplicação permanece silencioso em background; a atualização é aplicada ao fechar o app.
+- checagem em background ao subir o app (registo em log se existir versão mais nova);
+- polling em background a cada `AUTO_UPDATE_CHECK_INTERVAL_SECONDS` (mínimo 3600; omissão = 3600), além da checagem imediata no arranque;
+- checagem manual nas definições: compara versões e, se houver update, abre o download no browser.
 
 ## Opção Recomendada: GitHub Releases + GitHub Raw
 
-O projeto está configurado para usar **GitHub Releases** para hospedar os executáveis e **GitHub Raw** (ou GitHub Pages) para hospedar o `appcast.xml`. O GitHub Actions atualiza o `appcast.xml` automaticamente quando um release é criado.
+O projeto usa **GitHub Releases** para os executáveis e **GitHub Raw** (ou GitHub Pages) para o `appcast.xml`. O GitHub Actions atualiza o `appcast.xml` em cada release publicado (sem assinatura DSA).
 
 ### Configuração Inicial (Uma vez)
 
@@ -75,40 +72,12 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 1. **Build do aplicativo:** `flutter build windows --release`
 2. **Criar instalador:** `python installer/build_installer.py`
 3. **Criar release no GitHub:** Consulte [release_guide.md](release_guide.md)
-4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
-5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
-
-### 4. Assinatura DSA (obrigatória para todos os releases)
-
-O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates.
-No workflow atual, qualquer release (inclusive pre-release) falha se a assinatura DSA não estiver configurada e gerada.
-
-1. **Gerar chaves** (uma vez):
-
-   ```bash
-   dart run auto_updater:generate_keys
-   ```
-
-   Isso cria `dsa_priv.pem` e `dsa_pub.pem`.
-
-2. **Adicionar chave pública ao app** – em `windows/runner/Runner.rc`:
-
-   ```
-   // WinSparkle
-   DSAPub DSAPEM "../../dsa_pub.pem"
-   ```
-
-3. **Configurar secret no GitHub** – em Settings → Secrets → Actions:
-   - Nome: `DSA_PRIVATE_KEY`
-   - Valor: conteúdo completo do arquivo `dsa_priv.pem`
-
-4. **Backup da chave privada** – guarde `dsa_priv.pem` em local seguro. Sem ela, usuários não poderão atualizar.
-
-Com o secret configurado, o workflow `update-appcast` assina automaticamente cada release e adiciona `sparkle:dsaSignature` ao appcast.
+4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml` (sem `sparkle:dsaSignature`)
+5. Clientes recebem indicação de atualização na verificação manual ou veem log em background
 
 ### Estrutura do appcast.xml
 
-O arquivo é mantido automaticamente pelo GitHub Actions:
+O arquivo é mantido automaticamente pelo GitHub Actions. Exemplo de `enclosure` (sem assinatura):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -129,6 +98,11 @@ O arquivo é mantido automaticamente pelo GitHub Actions:
   </channel>
 </rss>
 ```
+
+## Segurança
+
+- Use **HTTPS** para o appcast e para o URL do instalador.
+- Não há verificação criptográfica do binário no cliente; mitigue com origem confiável (GitHub) e revisão de releases.
 
 ## Documentação Relacionada
 

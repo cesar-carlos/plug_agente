@@ -28,6 +28,7 @@ class ConfigPage extends StatefulWidget {
 class _ConfigPageState extends State<ConfigPage> {
   String _lastUpdateCheck = AppStrings.configLastUpdateNever;
   String _appVersion = AppConstants.appVersion;
+  bool _isUpdateCheckRunning = false;
 
   @override
   void initState() {
@@ -92,6 +93,9 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _checkUpdates() async {
+    if (_isUpdateCheckRunning) {
+      return;
+    }
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
       SettingsFeedback.showError(
@@ -103,21 +107,24 @@ class _ConfigPageState extends State<ConfigPage> {
     }
 
     setState(() {
+      _isUpdateCheckRunning = true;
       _lastUpdateCheck = AppStrings.configUpdatesChecking;
     });
 
-    final result = await orchestrator.checkManual();
+    try {
+      final result = await orchestrator.checkManual();
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) {
+        return;
+      }
 
-    final checkedAt = _formatLastUpdateCheck(DateTime.now());
-    setState(() {
-      _lastUpdateCheck = '${AppStrings.configLastUpdatePrefix}$checkedAt';
-    });
+      final checkedAt = _formatLastUpdateCheck(DateTime.now());
+      setState(() {
+        _isUpdateCheckRunning = false;
+        _lastUpdateCheck = '${AppStrings.configLastUpdatePrefix}$checkedAt';
+      });
 
-    result.fold(
+      result.fold(
       (isUpdateAvailable) {
         final message = isUpdateAvailable
             ? AppStrings.configUpdatesAvailable
@@ -142,6 +149,11 @@ class _ConfigPageState extends State<ConfigPage> {
         );
       },
     );
+    } finally {
+      if (mounted && _isUpdateCheckRunning) {
+        setState(() => _isUpdateCheckRunning = false);
+      }
+    }
   }
 
   @override
@@ -180,6 +192,7 @@ class _ConfigPageState extends State<ConfigPage> {
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
+            updateCheckInProgress: _isUpdateCheckRunning,
             onCheckUpdates: _checkUpdates,
           ),
         ),

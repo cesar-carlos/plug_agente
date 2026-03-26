@@ -8,31 +8,31 @@
    <title>Version 1.1.0+16</title>
    <pubDate>Fri, 20 Mar 2026 14:41:49 +0000</pubDate>
    <description>Nova Versão 1.1.0+16 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.0/PlugAgente-Setup-1.1.0.exe" sparkle:version="1.1.0+16" sparkle:os="windows" length="35924380" type="application/octet-stream" sparkle:dsaSignature="MD0CHEvfUIGIRyATFSUdC9BliywkNmXAx7UIBhBMjnQCHQCXXctRcTsQOgg++y7y7BrMjENZgHa/awdYYwMi" />
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.0/PlugAgente-Setup-1.1.0.exe" sparkle:version="1.1.0+16" sparkle:os="windows" length="35924380" type="application/octet-stream" />
   </item>
   <item>
    <title>Version 1.0.13+14</title>
    <pubDate>Wed, 18 Mar 2026 19:36:21 +0000</pubDate>
    <description>Nova Versão 1.0.13+14 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.13/PlugAgente-Setup-1.0.13.exe" sparkle:version="1.0.13+14" sparkle:os="windows" length="35845472" type="application/octet-stream" sparkle:dsaSignature="MD0CHFp4vpwd5j2ou2fkfNhYxkjAzidkPBHJp8aGuEUCHQCfGHTjgH5GdFKUnzLNZQmKJINc3SULb1oQGuNE" />
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.13/PlugAgente-Setup-1.0.13.exe" sparkle:version="1.0.13+14" sparkle:os="windows" length="35845472" type="application/octet-stream" />
   </item>
   <item>
    <title>Version 1.0.12+13</title>
    <pubDate>Wed, 18 Mar 2026 17:45:10 +0000</pubDate>
    <description>Nova Versão 1.0.12+13 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.12/PlugAgente-Setup-1.0.12.exe" sparkle:version="1.0.12+13" sparkle:os="windows" length="35793978" type="application/octet-stream" sparkle:dsaSignature="MD0CHDsHa11jE/EqC26k91BPghCCgifvgWZTmX2TasQCHQCS5YBrEVjWX4hOkXEqnKCBEkRgeQeUqtcHMDN8" />
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.12/PlugAgente-Setup-1.0.12.exe" sparkle:version="1.0.12+13" sparkle:os="windows" length="35793978" type="application/octet-stream" />
   </item>
   <item>
    <title>Version 1.0.11+12</title>
    <pubDate>Wed, 18 Mar 2026 15:32:38 +0000</pubDate>
    <description>Nova Versão 1.0.11+12 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.11/PlugAgente-Setup-1.0.11.exe" sparkle:version="1.0.11+12" sparkle:os="windows" length="35785404" type="application/octet-stream" sparkle:dsaSignature="MD0CHBedo7bKzBgoUtEe8xxZ4+UOMZdwzOP64Qb7UuoCHQCD/ztvsszBSAnWH8Gwhr+d2kBSMS5BQw7VIyCk" />
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.11/PlugAgente-Setup-1.0.11.exe" sparkle:version="1.0.11+12" sparkle:os="windows" length="35785404" type="application/octet-stream" />
   </item>
   <item>
    <title>Version 1.0.10</title>
    <pubDate>Wed, 18 Mar 2026 15:14:17 +0000</pubDate>
    <description>Nova Versão 1.0.10 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.10/PlugAgente-Setup-1.0.10.exe" sparkle:version="1.0.10" sparkle:os="windows" sparkle:dsaSignature="MDwCHHjkWkSkoAgupC1E0K+vO5flsVRhOULr90kAHv4CHDgOWVXMtCYAUcY1cVhMGIasP+SvnS30OXb6ao0=" length="35787783" type="application/octet-stream" />
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.10/PlugAgente-Setup-1.0.10.exe" sparkle:version="1.0.10" sparkle:os="windows" length="35787783" type="application/octet-stream" />
   </item>
  </channel>
 </rss>

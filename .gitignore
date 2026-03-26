@@ -3,8 +3,9 @@
 .env.*
 !.env.example
 
-# DSA private key (never commit; add to GitHub Secrets as DSA_PRIVATE_KEY)
+# DSA keys (legacy; app no longer uses WinSparkle signing)
 dsa_priv.pem
+dsa_pub.pem
 
 # Miscellaneous
 *.class

@@ -90,7 +90,6 @@ dependencies:
 
   # Version/update
   package_info_plus: ^9.0.0
-  auto_updater: ^1.0.0
 
   # Secrets
   flutter_secure_storage: ^10.0.0

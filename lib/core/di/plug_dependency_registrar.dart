@@ -5,13 +5,13 @@ import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
-import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
+import 'package:plug_agente/application/services/tls_trust_auto_update_orchestrator.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
@@ -366,7 +366,7 @@ void registerPlugDependencyGraph(
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
-      () => AutoUpdateOrchestrator(getIt<RuntimeCapabilities>()),
+      () => TlsTrustAutoUpdateOrchestrator(getIt<RuntimeCapabilities>()),
     )
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))

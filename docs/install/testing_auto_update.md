@@ -1,6 +1,6 @@
 # Guia de Teste - Auto-Update (1h + silencioso)
 
-Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
+Validação do fluxo automático no Windows com appcast Sparkle (HTTPS) + GitHub.
 
 ## Pré-requisitos
 
@@ -57,7 +57,7 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 ### Workflow não executou
 
 - Release sem asset `PlugAgente-Setup-{versao}.exe` compatível com a tag.
-- Secret `DSA_PRIVATE_KEY` ausente (workflow falha por política de assinatura obrigatória em qualquer release).
+- O workflow publica o appcast **sem** `sparkle:dsaSignature` (comportamento esperado).
 
 ### Feed não configurado
 
