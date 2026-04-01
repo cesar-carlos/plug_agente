@@ -7,6 +7,9 @@
   "properties": {
     "agentId": { "type": "string", "minLength": 1 },
     "timestamp": { "type": "string", "format": "date-time" },
+    "profile": {
+      "$ref": "./agent.profile.schema.json"
+    },
     "capabilities": {
       "type": "object",
       "required": ["protocols", "encodings", "compressions", "extensions", "limits"],

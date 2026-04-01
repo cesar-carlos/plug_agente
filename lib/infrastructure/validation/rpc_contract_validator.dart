@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -23,7 +24,25 @@ class RpcContractValidator {
       return _invalid('Field "capabilities" must be an object');
     }
 
+    final profile = data['profile'];
+    if (profile != null) {
+      final profileValidation = _validateAgentProfile(profile);
+      if (profileValidation.isError()) {
+        return profileValidation;
+      }
+    }
+
     return _validateCapabilities(capabilities);
+  }
+
+  Result<void> _validateAgentProfile(dynamic profile) {
+    final result = AgentProfile.fromRpcPayload(profile);
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      return _invalid(failure.message);
+    }
+
+    return const Success(unit);
   }
 
   Result<void> validateAgentCapabilitiesEnvelope(Map<String, dynamic> data) {

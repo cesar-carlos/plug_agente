@@ -39,7 +39,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -110,6 +110,21 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
           WHERE updated_at IS NULL
           ''',
         );
+      }
+      if (from < 10) {
+        await m.addColumn(configTable, configTable.nome);
+        await m.addColumn(configTable, configTable.nomeFantasia);
+        await m.addColumn(configTable, configTable.cnaeCnpjCpf);
+        await m.addColumn(configTable, configTable.telefone);
+        await m.addColumn(configTable, configTable.celular);
+        await m.addColumn(configTable, configTable.email);
+        await m.addColumn(configTable, configTable.endereco);
+        await m.addColumn(configTable, configTable.numeroEndereco);
+        await m.addColumn(configTable, configTable.bairro);
+        await m.addColumn(configTable, configTable.cep);
+        await m.addColumn(configTable, configTable.nomeMunicipio);
+        await m.addColumn(configTable, configTable.ufMunicipio);
+        await m.addColumn(configTable, configTable.observacao);
       }
       await _createClientTokenIndexes();
     },

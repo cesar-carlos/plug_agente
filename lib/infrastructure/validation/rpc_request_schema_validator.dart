@@ -60,6 +60,7 @@ class RpcRequestSchemaValidator {
         limits.maxRows,
       ),
       'sql.cancel' => _validateSqlCancelParams(data['params']),
+      'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       _ => const Success(unit),
     };
   }
@@ -392,6 +393,28 @@ class RpcRequestSchemaValidator {
     }
 
     return const Success(unit);
+  }
+
+  Result<void> _validateAgentGetProfileParams(dynamic params) {
+    if (params == null) {
+      return const Success(unit);
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object when present for method agent.getProfile',
+      );
+    }
+    const allowedKeys = {'client_token', 'clientToken', 'auth'};
+    final extraKeys = params.keys.where(
+      (String key) => !allowedKeys.contains(key),
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    return _validateTokenAliases(params);
   }
 
   Result<void> _validateTokenAliases(Map<String, dynamic> params) {

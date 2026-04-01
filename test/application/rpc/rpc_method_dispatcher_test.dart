@@ -159,6 +159,119 @@ void main() {
       expect(data['correlation_id'], equals('req-1'));
     });
 
+    test(
+      'should require client token for agent.getProfile when auth is enabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'agent.getProfile',
+          id: 'req-profile-auth',
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(
+          response.error!.code,
+          equals(RpcErrorCode.authenticationFailed),
+        );
+      },
+    );
+
+    test('should return normalized profile for agent.getProfile', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final mockConfigRepo = MockAgentConfigRepository();
+      final config = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17',
+        connectionString: 'DSN=Test',
+        username: 'u',
+        databaseName: 'db',
+        host: 'localhost',
+        port: 1433,
+        nome: 'Empresa Exemplo',
+        nomeFantasia: 'Fantasia Exemplo',
+        cnaeCnpjCpf: '529.982.247-25',
+        telefone: '(11) 3333-4444',
+        celular: '(11) 98888-7777',
+        email: 'CONTATO@EXEMPLO.COM',
+        endereco: 'Rua Central',
+        numeroEndereco: '123',
+        bairro: 'Centro',
+        cep: '01001-000',
+        nomeMunicipio: 'Sao Paulo',
+        ufMunicipio: 'sp',
+        observacao: 'Observacao',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      when(
+        mockConfigRepo.getCurrentConfig,
+      ).thenAnswer((_) async => Success(config));
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        featureFlags: mockFeatureFlags,
+        configRepository: mockConfigRepo,
+        streamingGateway: mockStreamingGateway,
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'agent.getProfile',
+        id: 'req-profile',
+        params: {
+          'client_token': 'bearer-xyz',
+        },
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'bearer-xyz',
+      );
+
+      check(response.isSuccess).isTrue();
+      final result = response.result as Map<String, dynamic>;
+      final profile = result['profile'] as Map<String, dynamic>;
+      final address = profile['address'] as Map<String, dynamic>;
+      check(result['agent_id']).equals('agent-1');
+      check(profile['document']).equals('52998224725');
+      check(profile['document_type']).equals('cpf');
+      check(profile['phone']).equals('1133334444');
+      check(profile['mobile']).equals('11988887777');
+      check(profile['email']).equals('contato@exemplo.com');
+      check(address['postal_code']).equals('01001000');
+      check(address['state']).equals('SP');
+      verify(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).called(1);
+    });
+
     test('should return invalidParams when sql is missing', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -416,8 +529,7 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(
@@ -1048,7 +1160,9 @@ void main() {
       'should cap sql.executeBatch ODBC timeout with options.timeout_ms when '
       'stage budgets are enabled',
       () async {
-        when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketTimeoutByStage,
+        ).thenReturn(true);
 
         final captured = <Duration?>[];
         when(
@@ -1076,8 +1190,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         const request = RpcRequest(
@@ -1151,8 +1264,7 @@ void main() {
           () => mockGateway.executeQuery(any()),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(
@@ -1208,8 +1320,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
@@ -1268,8 +1379,7 @@ void main() {
           );
         });
         when(() => mockNormalizer.normalize(any())).thenAnswer(
-          (invocation) =>
-              invocation.positionalArguments[0] as QueryResponse,
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');

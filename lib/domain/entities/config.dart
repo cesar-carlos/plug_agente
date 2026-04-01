@@ -22,6 +22,19 @@ class Config {
     this.authUsername,
     this.authPassword,
     this.password,
+    this.nome = '',
+    this.nomeFantasia = '',
+    this.cnaeCnpjCpf = '',
+    this.telefone = '',
+    this.celular = '',
+    this.email = '',
+    this.endereco = '',
+    this.numeroEndereco = '',
+    this.bairro = '',
+    this.cep = '',
+    this.nomeMunicipio = '',
+    this.ufMunicipio = '',
+    this.observacao = '',
   });
   final String id;
   final String serverUrl;
@@ -38,6 +51,19 @@ class Config {
   final String databaseName;
   final String host;
   final int port;
+  final String nome;
+  final String nomeFantasia;
+  final String cnaeCnpjCpf;
+  final String telefone;
+  final String celular;
+  final String email;
+  final String endereco;
+  final String numeroEndereco;
+  final String bairro;
+  final String cep;
+  final String nomeMunicipio;
+  final String ufMunicipio;
+  final String observacao;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -57,6 +83,19 @@ class Config {
     String? databaseName,
     String? host,
     int? port,
+    String? nome,
+    String? nomeFantasia,
+    String? cnaeCnpjCpf,
+    String? telefone,
+    String? celular,
+    String? email,
+    String? endereco,
+    String? numeroEndereco,
+    String? bairro,
+    String? cep,
+    String? nomeMunicipio,
+    String? ufMunicipio,
+    String? observacao,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -76,6 +115,19 @@ class Config {
       databaseName: databaseName ?? this.databaseName,
       host: host ?? this.host,
       port: port ?? this.port,
+      nome: nome ?? this.nome,
+      nomeFantasia: nomeFantasia ?? this.nomeFantasia,
+      cnaeCnpjCpf: cnaeCnpjCpf ?? this.cnaeCnpjCpf,
+      telefone: telefone ?? this.telefone,
+      celular: celular ?? this.celular,
+      email: email ?? this.email,
+      endereco: endereco ?? this.endereco,
+      numeroEndereco: numeroEndereco ?? this.numeroEndereco,
+      bairro: bairro ?? this.bairro,
+      cep: cep ?? this.cep,
+      nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
+      ufMunicipio: ufMunicipio ?? this.ufMunicipio,
+      observacao: observacao ?? this.observacao,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

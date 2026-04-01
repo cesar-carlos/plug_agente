@@ -171,6 +171,154 @@ class $ConfigTableTable extends ConfigTable
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _nomeMeta = const VerificationMeta('nome');
+  @override
+  late final GeneratedColumn<String> nome = GeneratedColumn<String>(
+    'nome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _nomeFantasiaMeta = const VerificationMeta(
+    'nomeFantasia',
+  );
+  @override
+  late final GeneratedColumn<String> nomeFantasia = GeneratedColumn<String>(
+    'nome_fantasia',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _cnaeCnpjCpfMeta = const VerificationMeta(
+    'cnaeCnpjCpf',
+  );
+  @override
+  late final GeneratedColumn<String> cnaeCnpjCpf = GeneratedColumn<String>(
+    'cnae_cnpj_cpf',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _telefoneMeta = const VerificationMeta(
+    'telefone',
+  );
+  @override
+  late final GeneratedColumn<String> telefone = GeneratedColumn<String>(
+    'telefone',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _celularMeta = const VerificationMeta(
+    'celular',
+  );
+  @override
+  late final GeneratedColumn<String> celular = GeneratedColumn<String>(
+    'celular',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+    'email',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _enderecoMeta = const VerificationMeta(
+    'endereco',
+  );
+  @override
+  late final GeneratedColumn<String> endereco = GeneratedColumn<String>(
+    'endereco',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _numeroEnderecoMeta = const VerificationMeta(
+    'numeroEndereco',
+  );
+  @override
+  late final GeneratedColumn<String> numeroEndereco = GeneratedColumn<String>(
+    'numero_endereco',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _bairroMeta = const VerificationMeta('bairro');
+  @override
+  late final GeneratedColumn<String> bairro = GeneratedColumn<String>(
+    'bairro',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _cepMeta = const VerificationMeta('cep');
+  @override
+  late final GeneratedColumn<String> cep = GeneratedColumn<String>(
+    'cep',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _nomeMunicipioMeta = const VerificationMeta(
+    'nomeMunicipio',
+  );
+  @override
+  late final GeneratedColumn<String> nomeMunicipio = GeneratedColumn<String>(
+    'nome_municipio',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _ufMunicipioMeta = const VerificationMeta(
+    'ufMunicipio',
+  );
+  @override
+  late final GeneratedColumn<String> ufMunicipio = GeneratedColumn<String>(
+    'uf_municipio',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _observacaoMeta = const VerificationMeta(
+    'observacao',
+  );
+  @override
+  late final GeneratedColumn<String> observacao = GeneratedColumn<String>(
+    'observacao',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -210,6 +358,19 @@ class $ConfigTableTable extends ConfigTable
     databaseName,
     host,
     port,
+    nome,
+    nomeFantasia,
+    cnaeCnpjCpf,
+    telefone,
+    celular,
+    email,
+    endereco,
+    numeroEndereco,
+    bairro,
+    cep,
+    nomeMunicipio,
+    ufMunicipio,
+    observacao,
     createdAt,
     updatedAt,
   ];
@@ -344,6 +505,99 @@ class $ConfigTableTable extends ConfigTable
     } else if (isInserting) {
       context.missing(_portMeta);
     }
+    if (data.containsKey('nome')) {
+      context.handle(
+        _nomeMeta,
+        nome.isAcceptableOrUnknown(data['nome']!, _nomeMeta),
+      );
+    }
+    if (data.containsKey('nome_fantasia')) {
+      context.handle(
+        _nomeFantasiaMeta,
+        nomeFantasia.isAcceptableOrUnknown(
+          data['nome_fantasia']!,
+          _nomeFantasiaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cnae_cnpj_cpf')) {
+      context.handle(
+        _cnaeCnpjCpfMeta,
+        cnaeCnpjCpf.isAcceptableOrUnknown(
+          data['cnae_cnpj_cpf']!,
+          _cnaeCnpjCpfMeta,
+        ),
+      );
+    }
+    if (data.containsKey('telefone')) {
+      context.handle(
+        _telefoneMeta,
+        telefone.isAcceptableOrUnknown(data['telefone']!, _telefoneMeta),
+      );
+    }
+    if (data.containsKey('celular')) {
+      context.handle(
+        _celularMeta,
+        celular.isAcceptableOrUnknown(data['celular']!, _celularMeta),
+      );
+    }
+    if (data.containsKey('email')) {
+      context.handle(
+        _emailMeta,
+        email.isAcceptableOrUnknown(data['email']!, _emailMeta),
+      );
+    }
+    if (data.containsKey('endereco')) {
+      context.handle(
+        _enderecoMeta,
+        endereco.isAcceptableOrUnknown(data['endereco']!, _enderecoMeta),
+      );
+    }
+    if (data.containsKey('numero_endereco')) {
+      context.handle(
+        _numeroEnderecoMeta,
+        numeroEndereco.isAcceptableOrUnknown(
+          data['numero_endereco']!,
+          _numeroEnderecoMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bairro')) {
+      context.handle(
+        _bairroMeta,
+        bairro.isAcceptableOrUnknown(data['bairro']!, _bairroMeta),
+      );
+    }
+    if (data.containsKey('cep')) {
+      context.handle(
+        _cepMeta,
+        cep.isAcceptableOrUnknown(data['cep']!, _cepMeta),
+      );
+    }
+    if (data.containsKey('nome_municipio')) {
+      context.handle(
+        _nomeMunicipioMeta,
+        nomeMunicipio.isAcceptableOrUnknown(
+          data['nome_municipio']!,
+          _nomeMunicipioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('uf_municipio')) {
+      context.handle(
+        _ufMunicipioMeta,
+        ufMunicipio.isAcceptableOrUnknown(
+          data['uf_municipio']!,
+          _ufMunicipioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('observacao')) {
+      context.handle(
+        _observacaoMeta,
+        observacao.isAcceptableOrUnknown(data['observacao']!, _observacaoMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -429,6 +683,58 @@ class $ConfigTableTable extends ConfigTable
         DriftSqlType.int,
         data['${effectivePrefix}port'],
       )!,
+      nome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nome'],
+      )!,
+      nomeFantasia: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nome_fantasia'],
+      )!,
+      cnaeCnpjCpf: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cnae_cnpj_cpf'],
+      )!,
+      telefone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}telefone'],
+      )!,
+      celular: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}celular'],
+      )!,
+      email: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}email'],
+      )!,
+      endereco: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}endereco'],
+      )!,
+      numeroEndereco: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}numero_endereco'],
+      )!,
+      bairro: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bairro'],
+      )!,
+      cep: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cep'],
+      )!,
+      nomeMunicipio: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nome_municipio'],
+      )!,
+      ufMunicipio: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uf_municipio'],
+      )!,
+      observacao: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}observacao'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -462,6 +768,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
   final String databaseName;
   final String host;
   final int port;
+  final String nome;
+  final String nomeFantasia;
+  final String cnaeCnpjCpf;
+  final String telefone;
+  final String celular;
+  final String email;
+  final String endereco;
+  final String numeroEndereco;
+  final String bairro;
+  final String cep;
+  final String nomeMunicipio;
+  final String ufMunicipio;
+  final String observacao;
   final DateTime createdAt;
   final DateTime updatedAt;
   const ConfigData({
@@ -480,6 +799,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     required this.databaseName,
     required this.host,
     required this.port,
+    required this.nome,
+    required this.nomeFantasia,
+    required this.cnaeCnpjCpf,
+    required this.telefone,
+    required this.celular,
+    required this.email,
+    required this.endereco,
+    required this.numeroEndereco,
+    required this.bairro,
+    required this.cep,
+    required this.nomeMunicipio,
+    required this.ufMunicipio,
+    required this.observacao,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -511,6 +843,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     map['database_name'] = Variable<String>(databaseName);
     map['host'] = Variable<String>(host);
     map['port'] = Variable<int>(port);
+    map['nome'] = Variable<String>(nome);
+    map['nome_fantasia'] = Variable<String>(nomeFantasia);
+    map['cnae_cnpj_cpf'] = Variable<String>(cnaeCnpjCpf);
+    map['telefone'] = Variable<String>(telefone);
+    map['celular'] = Variable<String>(celular);
+    map['email'] = Variable<String>(email);
+    map['endereco'] = Variable<String>(endereco);
+    map['numero_endereco'] = Variable<String>(numeroEndereco);
+    map['bairro'] = Variable<String>(bairro);
+    map['cep'] = Variable<String>(cep);
+    map['nome_municipio'] = Variable<String>(nomeMunicipio);
+    map['uf_municipio'] = Variable<String>(ufMunicipio);
+    map['observacao'] = Variable<String>(observacao);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -543,6 +888,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
+      nome: Value(nome),
+      nomeFantasia: Value(nomeFantasia),
+      cnaeCnpjCpf: Value(cnaeCnpjCpf),
+      telefone: Value(telefone),
+      celular: Value(celular),
+      email: Value(email),
+      endereco: Value(endereco),
+      numeroEndereco: Value(numeroEndereco),
+      bairro: Value(bairro),
+      cep: Value(cep),
+      nomeMunicipio: Value(nomeMunicipio),
+      ufMunicipio: Value(ufMunicipio),
+      observacao: Value(observacao),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -569,6 +927,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       databaseName: serializer.fromJson<String>(json['databaseName']),
       host: serializer.fromJson<String>(json['host']),
       port: serializer.fromJson<int>(json['port']),
+      nome: serializer.fromJson<String>(json['nome']),
+      nomeFantasia: serializer.fromJson<String>(json['nomeFantasia']),
+      cnaeCnpjCpf: serializer.fromJson<String>(json['cnaeCnpjCpf']),
+      telefone: serializer.fromJson<String>(json['telefone']),
+      celular: serializer.fromJson<String>(json['celular']),
+      email: serializer.fromJson<String>(json['email']),
+      endereco: serializer.fromJson<String>(json['endereco']),
+      numeroEndereco: serializer.fromJson<String>(json['numeroEndereco']),
+      bairro: serializer.fromJson<String>(json['bairro']),
+      cep: serializer.fromJson<String>(json['cep']),
+      nomeMunicipio: serializer.fromJson<String>(json['nomeMunicipio']),
+      ufMunicipio: serializer.fromJson<String>(json['ufMunicipio']),
+      observacao: serializer.fromJson<String>(json['observacao']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -592,6 +963,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       'databaseName': serializer.toJson<String>(databaseName),
       'host': serializer.toJson<String>(host),
       'port': serializer.toJson<int>(port),
+      'nome': serializer.toJson<String>(nome),
+      'nomeFantasia': serializer.toJson<String>(nomeFantasia),
+      'cnaeCnpjCpf': serializer.toJson<String>(cnaeCnpjCpf),
+      'telefone': serializer.toJson<String>(telefone),
+      'celular': serializer.toJson<String>(celular),
+      'email': serializer.toJson<String>(email),
+      'endereco': serializer.toJson<String>(endereco),
+      'numeroEndereco': serializer.toJson<String>(numeroEndereco),
+      'bairro': serializer.toJson<String>(bairro),
+      'cep': serializer.toJson<String>(cep),
+      'nomeMunicipio': serializer.toJson<String>(nomeMunicipio),
+      'ufMunicipio': serializer.toJson<String>(ufMunicipio),
+      'observacao': serializer.toJson<String>(observacao),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -613,6 +997,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     String? databaseName,
     String? host,
     int? port,
+    String? nome,
+    String? nomeFantasia,
+    String? cnaeCnpjCpf,
+    String? telefone,
+    String? celular,
+    String? email,
+    String? endereco,
+    String? numeroEndereco,
+    String? bairro,
+    String? cep,
+    String? nomeMunicipio,
+    String? ufMunicipio,
+    String? observacao,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => ConfigData(
@@ -631,6 +1028,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     databaseName: databaseName ?? this.databaseName,
     host: host ?? this.host,
     port: port ?? this.port,
+    nome: nome ?? this.nome,
+    nomeFantasia: nomeFantasia ?? this.nomeFantasia,
+    cnaeCnpjCpf: cnaeCnpjCpf ?? this.cnaeCnpjCpf,
+    telefone: telefone ?? this.telefone,
+    celular: celular ?? this.celular,
+    email: email ?? this.email,
+    endereco: endereco ?? this.endereco,
+    numeroEndereco: numeroEndereco ?? this.numeroEndereco,
+    bairro: bairro ?? this.bairro,
+    cep: cep ?? this.cep,
+    nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
+    ufMunicipio: ufMunicipio ?? this.ufMunicipio,
+    observacao: observacao ?? this.observacao,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -665,6 +1075,31 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           : this.databaseName,
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
+      nome: data.nome.present ? data.nome.value : this.nome,
+      nomeFantasia: data.nomeFantasia.present
+          ? data.nomeFantasia.value
+          : this.nomeFantasia,
+      cnaeCnpjCpf: data.cnaeCnpjCpf.present
+          ? data.cnaeCnpjCpf.value
+          : this.cnaeCnpjCpf,
+      telefone: data.telefone.present ? data.telefone.value : this.telefone,
+      celular: data.celular.present ? data.celular.value : this.celular,
+      email: data.email.present ? data.email.value : this.email,
+      endereco: data.endereco.present ? data.endereco.value : this.endereco,
+      numeroEndereco: data.numeroEndereco.present
+          ? data.numeroEndereco.value
+          : this.numeroEndereco,
+      bairro: data.bairro.present ? data.bairro.value : this.bairro,
+      cep: data.cep.present ? data.cep.value : this.cep,
+      nomeMunicipio: data.nomeMunicipio.present
+          ? data.nomeMunicipio.value
+          : this.nomeMunicipio,
+      ufMunicipio: data.ufMunicipio.present
+          ? data.ufMunicipio.value
+          : this.ufMunicipio,
+      observacao: data.observacao.present
+          ? data.observacao.value
+          : this.observacao,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -688,6 +1123,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ..write('databaseName: $databaseName, ')
           ..write('host: $host, ')
           ..write('port: $port, ')
+          ..write('nome: $nome, ')
+          ..write('nomeFantasia: $nomeFantasia, ')
+          ..write('cnaeCnpjCpf: $cnaeCnpjCpf, ')
+          ..write('telefone: $telefone, ')
+          ..write('celular: $celular, ')
+          ..write('email: $email, ')
+          ..write('endereco: $endereco, ')
+          ..write('numeroEndereco: $numeroEndereco, ')
+          ..write('bairro: $bairro, ')
+          ..write('cep: $cep, ')
+          ..write('nomeMunicipio: $nomeMunicipio, ')
+          ..write('ufMunicipio: $ufMunicipio, ')
+          ..write('observacao: $observacao, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -695,7 +1143,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     serverUrl,
     agentId,
@@ -711,9 +1159,22 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     databaseName,
     host,
     port,
+    nome,
+    nomeFantasia,
+    cnaeCnpjCpf,
+    telefone,
+    celular,
+    email,
+    endereco,
+    numeroEndereco,
+    bairro,
+    cep,
+    nomeMunicipio,
+    ufMunicipio,
+    observacao,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -733,6 +1194,19 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           other.databaseName == this.databaseName &&
           other.host == this.host &&
           other.port == this.port &&
+          other.nome == this.nome &&
+          other.nomeFantasia == this.nomeFantasia &&
+          other.cnaeCnpjCpf == this.cnaeCnpjCpf &&
+          other.telefone == this.telefone &&
+          other.celular == this.celular &&
+          other.email == this.email &&
+          other.endereco == this.endereco &&
+          other.numeroEndereco == this.numeroEndereco &&
+          other.bairro == this.bairro &&
+          other.cep == this.cep &&
+          other.nomeMunicipio == this.nomeMunicipio &&
+          other.ufMunicipio == this.ufMunicipio &&
+          other.observacao == this.observacao &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -753,6 +1227,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
   final Value<String> databaseName;
   final Value<String> host;
   final Value<int> port;
+  final Value<String> nome;
+  final Value<String> nomeFantasia;
+  final Value<String> cnaeCnpjCpf;
+  final Value<String> telefone;
+  final Value<String> celular;
+  final Value<String> email;
+  final Value<String> endereco;
+  final Value<String> numeroEndereco;
+  final Value<String> bairro;
+  final Value<String> cep;
+  final Value<String> nomeMunicipio;
+  final Value<String> ufMunicipio;
+  final Value<String> observacao;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -772,6 +1259,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.databaseName = const Value.absent(),
     this.host = const Value.absent(),
     this.port = const Value.absent(),
+    this.nome = const Value.absent(),
+    this.nomeFantasia = const Value.absent(),
+    this.cnaeCnpjCpf = const Value.absent(),
+    this.telefone = const Value.absent(),
+    this.celular = const Value.absent(),
+    this.email = const Value.absent(),
+    this.endereco = const Value.absent(),
+    this.numeroEndereco = const Value.absent(),
+    this.bairro = const Value.absent(),
+    this.cep = const Value.absent(),
+    this.nomeMunicipio = const Value.absent(),
+    this.ufMunicipio = const Value.absent(),
+    this.observacao = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -792,6 +1292,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     required String databaseName,
     required String host,
     required int port,
+    this.nome = const Value.absent(),
+    this.nomeFantasia = const Value.absent(),
+    this.cnaeCnpjCpf = const Value.absent(),
+    this.telefone = const Value.absent(),
+    this.celular = const Value.absent(),
+    this.email = const Value.absent(),
+    this.endereco = const Value.absent(),
+    this.numeroEndereco = const Value.absent(),
+    this.bairro = const Value.absent(),
+    this.cep = const Value.absent(),
+    this.nomeMunicipio = const Value.absent(),
+    this.ufMunicipio = const Value.absent(),
+    this.observacao = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -820,6 +1333,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Expression<String>? databaseName,
     Expression<String>? host,
     Expression<int>? port,
+    Expression<String>? nome,
+    Expression<String>? nomeFantasia,
+    Expression<String>? cnaeCnpjCpf,
+    Expression<String>? telefone,
+    Expression<String>? celular,
+    Expression<String>? email,
+    Expression<String>? endereco,
+    Expression<String>? numeroEndereco,
+    Expression<String>? bairro,
+    Expression<String>? cep,
+    Expression<String>? nomeMunicipio,
+    Expression<String>? ufMunicipio,
+    Expression<String>? observacao,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -840,6 +1366,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (databaseName != null) 'database_name': databaseName,
       if (host != null) 'host': host,
       if (port != null) 'port': port,
+      if (nome != null) 'nome': nome,
+      if (nomeFantasia != null) 'nome_fantasia': nomeFantasia,
+      if (cnaeCnpjCpf != null) 'cnae_cnpj_cpf': cnaeCnpjCpf,
+      if (telefone != null) 'telefone': telefone,
+      if (celular != null) 'celular': celular,
+      if (email != null) 'email': email,
+      if (endereco != null) 'endereco': endereco,
+      if (numeroEndereco != null) 'numero_endereco': numeroEndereco,
+      if (bairro != null) 'bairro': bairro,
+      if (cep != null) 'cep': cep,
+      if (nomeMunicipio != null) 'nome_municipio': nomeMunicipio,
+      if (ufMunicipio != null) 'uf_municipio': ufMunicipio,
+      if (observacao != null) 'observacao': observacao,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -862,6 +1401,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Value<String>? databaseName,
     Value<String>? host,
     Value<int>? port,
+    Value<String>? nome,
+    Value<String>? nomeFantasia,
+    Value<String>? cnaeCnpjCpf,
+    Value<String>? telefone,
+    Value<String>? celular,
+    Value<String>? email,
+    Value<String>? endereco,
+    Value<String>? numeroEndereco,
+    Value<String>? bairro,
+    Value<String>? cep,
+    Value<String>? nomeMunicipio,
+    Value<String>? ufMunicipio,
+    Value<String>? observacao,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -882,6 +1434,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       databaseName: databaseName ?? this.databaseName,
       host: host ?? this.host,
       port: port ?? this.port,
+      nome: nome ?? this.nome,
+      nomeFantasia: nomeFantasia ?? this.nomeFantasia,
+      cnaeCnpjCpf: cnaeCnpjCpf ?? this.cnaeCnpjCpf,
+      telefone: telefone ?? this.telefone,
+      celular: celular ?? this.celular,
+      email: email ?? this.email,
+      endereco: endereco ?? this.endereco,
+      numeroEndereco: numeroEndereco ?? this.numeroEndereco,
+      bairro: bairro ?? this.bairro,
+      cep: cep ?? this.cep,
+      nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
+      ufMunicipio: ufMunicipio ?? this.ufMunicipio,
+      observacao: observacao ?? this.observacao,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -936,6 +1501,45 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     if (port.present) {
       map['port'] = Variable<int>(port.value);
     }
+    if (nome.present) {
+      map['nome'] = Variable<String>(nome.value);
+    }
+    if (nomeFantasia.present) {
+      map['nome_fantasia'] = Variable<String>(nomeFantasia.value);
+    }
+    if (cnaeCnpjCpf.present) {
+      map['cnae_cnpj_cpf'] = Variable<String>(cnaeCnpjCpf.value);
+    }
+    if (telefone.present) {
+      map['telefone'] = Variable<String>(telefone.value);
+    }
+    if (celular.present) {
+      map['celular'] = Variable<String>(celular.value);
+    }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
+    if (endereco.present) {
+      map['endereco'] = Variable<String>(endereco.value);
+    }
+    if (numeroEndereco.present) {
+      map['numero_endereco'] = Variable<String>(numeroEndereco.value);
+    }
+    if (bairro.present) {
+      map['bairro'] = Variable<String>(bairro.value);
+    }
+    if (cep.present) {
+      map['cep'] = Variable<String>(cep.value);
+    }
+    if (nomeMunicipio.present) {
+      map['nome_municipio'] = Variable<String>(nomeMunicipio.value);
+    }
+    if (ufMunicipio.present) {
+      map['uf_municipio'] = Variable<String>(ufMunicipio.value);
+    }
+    if (observacao.present) {
+      map['observacao'] = Variable<String>(observacao.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -966,6 +1570,19 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
           ..write('databaseName: $databaseName, ')
           ..write('host: $host, ')
           ..write('port: $port, ')
+          ..write('nome: $nome, ')
+          ..write('nomeFantasia: $nomeFantasia, ')
+          ..write('cnaeCnpjCpf: $cnaeCnpjCpf, ')
+          ..write('telefone: $telefone, ')
+          ..write('celular: $celular, ')
+          ..write('email: $email, ')
+          ..write('endereco: $endereco, ')
+          ..write('numeroEndereco: $numeroEndereco, ')
+          ..write('bairro: $bairro, ')
+          ..write('cep: $cep, ')
+          ..write('nomeMunicipio: $nomeMunicipio, ')
+          ..write('ufMunicipio: $ufMunicipio, ')
+          ..write('observacao: $observacao, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1872,6 +2489,19 @@ typedef $$ConfigTableTableCreateCompanionBuilder =
       required String databaseName,
       required String host,
       required int port,
+      Value<String> nome,
+      Value<String> nomeFantasia,
+      Value<String> cnaeCnpjCpf,
+      Value<String> telefone,
+      Value<String> celular,
+      Value<String> email,
+      Value<String> endereco,
+      Value<String> numeroEndereco,
+      Value<String> bairro,
+      Value<String> cep,
+      Value<String> nomeMunicipio,
+      Value<String> ufMunicipio,
+      Value<String> observacao,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -1893,6 +2523,19 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<String> databaseName,
       Value<String> host,
       Value<int> port,
+      Value<String> nome,
+      Value<String> nomeFantasia,
+      Value<String> cnaeCnpjCpf,
+      Value<String> telefone,
+      Value<String> celular,
+      Value<String> email,
+      Value<String> endereco,
+      Value<String> numeroEndereco,
+      Value<String> bairro,
+      Value<String> cep,
+      Value<String> nomeMunicipio,
+      Value<String> ufMunicipio,
+      Value<String> observacao,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -1979,6 +2622,71 @@ class $$ConfigTableTableFilterComposer
 
   ColumnFilters<int> get port => $composableBuilder(
     column: $table.port,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nomeFantasia => $composableBuilder(
+    column: $table.nomeFantasia,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cnaeCnpjCpf => $composableBuilder(
+    column: $table.cnaeCnpjCpf,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get telefone => $composableBuilder(
+    column: $table.telefone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get celular => $composableBuilder(
+    column: $table.celular,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get endereco => $composableBuilder(
+    column: $table.endereco,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numeroEndereco => $composableBuilder(
+    column: $table.numeroEndereco,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bairro => $composableBuilder(
+    column: $table.bairro,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cep => $composableBuilder(
+    column: $table.cep,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nomeMunicipio => $composableBuilder(
+    column: $table.nomeMunicipio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ufMunicipio => $composableBuilder(
+    column: $table.ufMunicipio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get observacao => $composableBuilder(
+    column: $table.observacao,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2077,6 +2785,71 @@ class $$ConfigTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nomeFantasia => $composableBuilder(
+    column: $table.nomeFantasia,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cnaeCnpjCpf => $composableBuilder(
+    column: $table.cnaeCnpjCpf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get telefone => $composableBuilder(
+    column: $table.telefone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get celular => $composableBuilder(
+    column: $table.celular,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get endereco => $composableBuilder(
+    column: $table.endereco,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get numeroEndereco => $composableBuilder(
+    column: $table.numeroEndereco,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bairro => $composableBuilder(
+    column: $table.bairro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cep => $composableBuilder(
+    column: $table.cep,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nomeMunicipio => $composableBuilder(
+    column: $table.nomeMunicipio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ufMunicipio => $composableBuilder(
+    column: $table.ufMunicipio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get observacao => $composableBuilder(
+    column: $table.observacao,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2156,6 +2929,57 @@ class $$ConfigTableTableAnnotationComposer
   GeneratedColumn<int> get port =>
       $composableBuilder(column: $table.port, builder: (column) => column);
 
+  GeneratedColumn<String> get nome =>
+      $composableBuilder(column: $table.nome, builder: (column) => column);
+
+  GeneratedColumn<String> get nomeFantasia => $composableBuilder(
+    column: $table.nomeFantasia,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cnaeCnpjCpf => $composableBuilder(
+    column: $table.cnaeCnpjCpf,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get telefone =>
+      $composableBuilder(column: $table.telefone, builder: (column) => column);
+
+  GeneratedColumn<String> get celular =>
+      $composableBuilder(column: $table.celular, builder: (column) => column);
+
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<String> get endereco =>
+      $composableBuilder(column: $table.endereco, builder: (column) => column);
+
+  GeneratedColumn<String> get numeroEndereco => $composableBuilder(
+    column: $table.numeroEndereco,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get bairro =>
+      $composableBuilder(column: $table.bairro, builder: (column) => column);
+
+  GeneratedColumn<String> get cep =>
+      $composableBuilder(column: $table.cep, builder: (column) => column);
+
+  GeneratedColumn<String> get nomeMunicipio => $composableBuilder(
+    column: $table.nomeMunicipio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get ufMunicipio => $composableBuilder(
+    column: $table.ufMunicipio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get observacao => $composableBuilder(
+    column: $table.observacao,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -2209,6 +3033,19 @@ class $$ConfigTableTableTableManager
                 Value<String> databaseName = const Value.absent(),
                 Value<String> host = const Value.absent(),
                 Value<int> port = const Value.absent(),
+                Value<String> nome = const Value.absent(),
+                Value<String> nomeFantasia = const Value.absent(),
+                Value<String> cnaeCnpjCpf = const Value.absent(),
+                Value<String> telefone = const Value.absent(),
+                Value<String> celular = const Value.absent(),
+                Value<String> email = const Value.absent(),
+                Value<String> endereco = const Value.absent(),
+                Value<String> numeroEndereco = const Value.absent(),
+                Value<String> bairro = const Value.absent(),
+                Value<String> cep = const Value.absent(),
+                Value<String> nomeMunicipio = const Value.absent(),
+                Value<String> ufMunicipio = const Value.absent(),
+                Value<String> observacao = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2228,6 +3065,19 @@ class $$ConfigTableTableTableManager
                 databaseName: databaseName,
                 host: host,
                 port: port,
+                nome: nome,
+                nomeFantasia: nomeFantasia,
+                cnaeCnpjCpf: cnaeCnpjCpf,
+                telefone: telefone,
+                celular: celular,
+                email: email,
+                endereco: endereco,
+                numeroEndereco: numeroEndereco,
+                bairro: bairro,
+                cep: cep,
+                nomeMunicipio: nomeMunicipio,
+                ufMunicipio: ufMunicipio,
+                observacao: observacao,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -2249,6 +3099,19 @@ class $$ConfigTableTableTableManager
                 required String databaseName,
                 required String host,
                 required int port,
+                Value<String> nome = const Value.absent(),
+                Value<String> nomeFantasia = const Value.absent(),
+                Value<String> cnaeCnpjCpf = const Value.absent(),
+                Value<String> telefone = const Value.absent(),
+                Value<String> celular = const Value.absent(),
+                Value<String> email = const Value.absent(),
+                Value<String> endereco = const Value.absent(),
+                Value<String> numeroEndereco = const Value.absent(),
+                Value<String> bairro = const Value.absent(),
+                Value<String> cep = const Value.absent(),
+                Value<String> nomeMunicipio = const Value.absent(),
+                Value<String> ufMunicipio = const Value.absent(),
+                Value<String> observacao = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -2268,6 +3131,19 @@ class $$ConfigTableTableTableManager
                 databaseName: databaseName,
                 host: host,
                 port: port,
+                nome: nome,
+                nomeFantasia: nomeFantasia,
+                cnaeCnpjCpf: cnaeCnpjCpf,
+                telefone: telefone,
+                celular: celular,
+                email: email,
+                endereco: endereco,
+                numeroEndereco: numeroEndereco,
+                bairro: bairro,
+                cep: cep,
+                nomeMunicipio: nomeMunicipio,
+                ufMunicipio: ufMunicipio,
+                observacao: observacao,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
