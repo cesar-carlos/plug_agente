@@ -79,8 +79,7 @@ class QueryResponse {
   final List<QueryResultSet> resultSets;
   final List<QueryResponseItem> items;
 
-  bool get hasMultiResult =>
-      resultSets.length > 1 || items.any((item) => item.isRowCount);
+  bool get hasMultiResult => resultSets.length > 1 || items.any((item) => item.isRowCount);
 
   @override
   bool operator ==(Object other) {

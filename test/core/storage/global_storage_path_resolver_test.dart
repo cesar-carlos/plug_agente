@@ -23,10 +23,9 @@ void main() {
     test('should return first writable candidate directory', () async {
       final writableCandidate = p.join(tempDir.path, 'candidate1');
 
-      final resolvedDirectory =
-          await GlobalStoragePathResolver.resolveWritableAppDirectory(
-            candidateDirectories: <String>[writableCandidate],
-          );
+      final resolvedDirectory = await GlobalStoragePathResolver.resolveWritableAppDirectory(
+        candidateDirectories: <String>[writableCandidate],
+      );
 
       expect(resolvedDirectory, writableCandidate);
       expect(Directory(writableCandidate).existsSync(), isTrue);
@@ -39,13 +38,12 @@ void main() {
         await invalidFile.writeAsString('locked');
 
         final writableCandidate = p.join(tempDir.path, 'candidate2');
-        final resolvedDirectory =
-            await GlobalStoragePathResolver.resolveWritableAppDirectory(
-              candidateDirectories: <String>[
-                invalidFile.path,
-                writableCandidate,
-              ],
-            );
+        final resolvedDirectory = await GlobalStoragePathResolver.resolveWritableAppDirectory(
+          candidateDirectories: <String>[
+            invalidFile.path,
+            writableCandidate,
+          ],
+        );
 
         expect(resolvedDirectory, writableCandidate);
         expect(Directory(writableCandidate).existsSync(), isTrue);

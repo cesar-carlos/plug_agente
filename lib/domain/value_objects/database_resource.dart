@@ -14,8 +14,7 @@ class DatabaseResource {
   });
 
   factory DatabaseResource.fromJson(Map<String, dynamic> json) {
-    final typeValue = (json['resource_type'] as String? ?? 'unknown')
-        .toLowerCase();
+    final typeValue = (json['resource_type'] as String? ?? 'unknown').toLowerCase();
     final resourceType = switch (typeValue) {
       'table' => DatabaseResourceType.table,
       'view' => DatabaseResourceType.view,
@@ -42,9 +41,7 @@ class DatabaseResource {
     if (identical(this, other)) {
       return true;
     }
-    return other is DatabaseResource &&
-        other.resourceType == resourceType &&
-        other.normalizedName == normalizedName;
+    return other is DatabaseResource && other.resourceType == resourceType && other.normalizedName == normalizedName;
   }
 
   @override

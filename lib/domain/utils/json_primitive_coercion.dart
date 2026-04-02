@@ -28,8 +28,7 @@ int? jsonPositiveInt(Object? value) {
   return n;
 }
 
-int jsonPositiveIntWithDefault(Object? value, int defaultValue) =>
-    jsonPositiveInt(value) ?? defaultValue;
+int jsonPositiveIntWithDefault(Object? value, int defaultValue) => jsonPositiveInt(value) ?? defaultValue;
 
 /// Whole number >= 0, or null if missing / invalid.
 int? jsonNonNegativeInt(Object? value) {
@@ -40,5 +39,4 @@ int? jsonNonNegativeInt(Object? value) {
   return n;
 }
 
-int jsonNonNegativeIntWithDefault(Object? value, int defaultValue) =>
-    jsonNonNegativeInt(value) ?? defaultValue;
+int jsonNonNegativeIntWithDefault(Object? value, int defaultValue) => jsonNonNegativeInt(value) ?? defaultValue;

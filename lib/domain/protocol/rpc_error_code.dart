@@ -195,22 +195,11 @@ abstract class RpcErrorCode {
   /// Returns an error category for [`code`].
   static String getCategory(int code) {
     return switch (code) {
-      parseError ||
-      invalidRequest ||
-      methodNotFound ||
-      invalidParams => categoryValidation,
+      parseError || invalidRequest || methodNotFound || invalidParams => categoryValidation,
       authenticationFailed || unauthorized => categoryAuth,
       timeout || networkError => categoryNetwork,
-      invalidPayload ||
-      decodingFailed ||
-      compressionFailed ||
-      rateLimited ||
-      replayDetected => categoryTransport,
-      sqlValidationFailed ||
-      sqlExecutionFailed ||
-      transactionFailed ||
-      resultTooLarge ||
-      queryTimeout => categorySql,
+      invalidPayload || decodingFailed || compressionFailed || rateLimited || replayDetected => categoryTransport,
+      sqlValidationFailed || sqlExecutionFailed || transactionFailed || resultTooLarge || queryTimeout => categorySql,
       connectionPoolExhausted ||
       databaseConnectionFailed ||
       invalidDatabaseConfig ||
@@ -254,36 +243,22 @@ abstract class RpcErrorCode {
   /// Returns a user-facing localized message for [`code`].
   static String getUserMessage(int code) {
     return switch (code) {
-      parseError ||
-      invalidRequest ||
-      invalidParams => 'Requisicao invalida. Revise os dados enviados.',
+      parseError || invalidRequest || invalidParams => 'Requisicao invalida. Revise os dados enviados.',
       methodNotFound => 'Metodo nao suportado por esta versao do agente.',
-      authenticationFailed =>
-        'Falha de autenticacao. Gere um novo token e tente novamente.',
+      authenticationFailed => 'Falha de autenticacao. Gere um novo token e tente novamente.',
       unauthorized => 'Voce nao tem permissao para executar esta operacao.',
-      timeout ||
-      queryTimeout => 'A operacao excedeu o tempo limite. Tente novamente.',
-      invalidPayload ||
-      decodingFailed ||
-      compressionFailed => 'Falha ao processar os dados da requisicao.',
+      timeout || queryTimeout => 'A operacao excedeu o tempo limite. Tente novamente.',
+      invalidPayload || decodingFailed || compressionFailed => 'Falha ao processar os dados da requisicao.',
       networkError => 'Conexao com o hub foi perdida. Tente novamente.',
-      rateLimited =>
-        'Muitas requisicoes em pouco tempo. Aguarde e tente novamente.',
-      replayDetected =>
-        'Requisicao duplicada detectada. Gere um novo ID e tente novamente.',
+      rateLimited => 'Muitas requisicoes em pouco tempo. Aguarde e tente novamente.',
+      replayDetected => 'Requisicao duplicada detectada. Gere um novo ID e tente novamente.',
       sqlValidationFailed => 'Comando SQL invalido. Revise a consulta enviada.',
-      sqlExecutionFailed ||
-      transactionFailed => 'Falha ao executar o comando SQL.',
-      connectionPoolExhausted =>
-        'Limite de conexoes atingido. Aguarde e tente novamente.',
-      resultTooLarge =>
-        'Resultado muito grande. Aplique filtros e tente novamente.',
-      databaseConnectionFailed =>
-        'Nao foi possivel conectar ao banco de dados.',
-      invalidDatabaseConfig =>
-        'Configuracao do banco invalida. Revise os dados de conexao.',
-      executionNotFound =>
-        'Execucao nao encontrada. Pode ter sido finalizada ou nunca iniciada.',
+      sqlExecutionFailed || transactionFailed => 'Falha ao executar o comando SQL.',
+      connectionPoolExhausted => 'Limite de conexoes atingido. Aguarde e tente novamente.',
+      resultTooLarge => 'Resultado muito grande. Aplique filtros e tente novamente.',
+      databaseConnectionFailed => 'Nao foi possivel conectar ao banco de dados.',
+      invalidDatabaseConfig => 'Configuracao do banco invalida. Revise os dados de conexao.',
+      executionNotFound => 'Execucao nao encontrada. Pode ter sido finalizada ou nunca iniciada.',
       executionCancelled => 'Execucao cancelada pelo usuario.',
       _ => 'Falha interna no processamento da requisicao.',
     };

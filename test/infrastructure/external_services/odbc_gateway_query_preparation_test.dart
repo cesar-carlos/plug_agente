@@ -40,24 +40,22 @@ void main() {
   group('OdbcGatewayQueryPreparation', () {
     group('validatePaginationForDatabase', () {
       test('should return null when there is no pagination', () {
-        final failure =
-            OdbcGatewayQueryPreparation.validatePaginationForDatabase(
-              _baseRequest(),
-              DatabaseType.sqlServer,
-            );
+        final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+          _baseRequest(),
+          DatabaseType.sqlServer,
+        );
         expect(failure, isNull);
       });
 
       test('should reject preserve_sql with managed pagination', () {
         const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
-        final failure =
-            OdbcGatewayQueryPreparation.validatePaginationForDatabase(
-              _baseRequest(
-                pagination: pagination,
-                sqlHandlingMode: SqlHandlingMode.preserve,
-              ),
-              DatabaseType.sqlServer,
-            );
+        final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+          _baseRequest(
+            pagination: pagination,
+            sqlHandlingMode: SqlHandlingMode.preserve,
+          ),
+          DatabaseType.sqlServer,
+        );
         expect(failure, isNotNull);
         expect(
           failure!.message,
@@ -69,14 +67,13 @@ void main() {
         'should require ORDER BY for SQL Server when pagination is present',
         () {
           const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
-          final failure =
-              OdbcGatewayQueryPreparation.validatePaginationForDatabase(
-                _baseRequest(
-                  query: 'SELECT * FROM t',
-                  pagination: pagination,
-                ),
-                DatabaseType.sqlServer,
-              );
+          final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+            _baseRequest(
+              query: 'SELECT * FROM t',
+              pagination: pagination,
+            ),
+            DatabaseType.sqlServer,
+          );
           expect(failure, isNotNull);
           expect(failure!.message, contains('ORDER BY'));
         },
@@ -86,14 +83,13 @@ void main() {
         'should allow PostgreSQL pagination without ORDER BY terms',
         () {
           const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
-          final failure =
-              OdbcGatewayQueryPreparation.validatePaginationForDatabase(
-                _baseRequest(
-                  query: 'SELECT * FROM t',
-                  pagination: pagination,
-                ),
-                DatabaseType.postgresql,
-              );
+          final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+            _baseRequest(
+              query: 'SELECT * FROM t',
+              pagination: pagination,
+            ),
+            DatabaseType.postgresql,
+          );
           expect(failure, isNull);
         },
       );

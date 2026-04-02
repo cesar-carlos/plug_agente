@@ -9,12 +9,10 @@ void main() async {
   await E2EEnv.load();
 
   final connectionString = E2EEnv.odbcConnectionStringAny;
-  final connectionStringValid =
-      connectionString != null && connectionString.trim().isNotEmpty;
+  final connectionStringValid = connectionString != null && connectionString.trim().isNotEmpty;
   final smokeQuery = E2EEnv.odbcSmokeQuery;
   final longRunningQuery = E2EEnv.odbcLongQuery;
-  final longQueryValid =
-      longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
+  final longQueryValid = longRunningQuery != null && longRunningQuery.trim().isNotEmpty;
 
   group('ODBC streaming live integration', () {
     late odbc.ServiceLocator locator;

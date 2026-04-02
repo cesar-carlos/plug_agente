@@ -11,12 +11,10 @@ library;
 
 import 'package:odbc_fast/odbc_fast.dart';
 
-const _defaultConnectionString =
-    'DRIVER={SQL Anywhere 16};UID=dba;PWD=sql;DBN=VL;HOST=LOCALHOST;PORT=2650';
+const _defaultConnectionString = 'DRIVER={SQL Anywhere 16};UID=dba;PWD=sql;DBN=VL;HOST=LOCALHOST;PORT=2650';
 
 Future<void> main(List<String> args) async {
-  final connectionString =
-      args.isNotEmpty ? args[0] : _defaultConnectionString;
+  final connectionString = args.isNotEmpty ? args[0] : _defaultConnectionString;
 
   print('Testando conexão ODBC...');
   print('Connection string: ${_maskPassword(connectionString)}');

@@ -18,9 +18,7 @@ class ClientTokenRule {
     return ClientTokenRule(
       resource: DatabaseResource.fromJson(json),
       permissions: ClientPermissionSet.fromJson(json),
-      effect: effectValue == 'deny'
-          ? ClientTokenRuleEffect.deny
-          : ClientTokenRuleEffect.allow,
+      effect: effectValue == 'deny' ? ClientTokenRuleEffect.deny : ClientTokenRuleEffect.allow,
     );
   }
 
@@ -35,11 +33,9 @@ class ClientTokenRule {
 
     return switch (target.resourceType) {
       DatabaseResourceType.table =>
-        resource.resourceType == DatabaseResourceType.table ||
-            resource.resourceType == DatabaseResourceType.unknown,
+        resource.resourceType == DatabaseResourceType.table || resource.resourceType == DatabaseResourceType.unknown,
       DatabaseResourceType.view =>
-        resource.resourceType == DatabaseResourceType.view ||
-            resource.resourceType == DatabaseResourceType.unknown,
+        resource.resourceType == DatabaseResourceType.view || resource.resourceType == DatabaseResourceType.unknown,
       DatabaseResourceType.unknown => true,
     };
   }

@@ -98,9 +98,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ? now.subtract(const Duration(hours: 1))
         : now.subtract(const Duration(hours: 24));
 
-    final filtered = metrics
-        .where((metric) => metric.timestamp.isAfter(cutoff))
-        .toList();
+    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
 
     return MetricsSummary.fromList(filtered);
   }

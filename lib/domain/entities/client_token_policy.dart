@@ -16,10 +16,7 @@ class ClientTokenPolicy {
 
   factory ClientTokenPolicy.fromJson(Map<String, dynamic> json) {
     final rawRules = json['rules'] as List<dynamic>? ?? const <dynamic>[];
-    final parsedRules = rawRules
-        .whereType<Map<String, dynamic>>()
-        .map(ClientTokenRule.fromJson)
-        .toList();
+    final parsedRules = rawRules.whereType<Map<String, dynamic>>().map(ClientTokenRule.fromJson).toList();
 
     return ClientTokenPolicy(
       clientId: json['client_id'] as String? ?? '',
@@ -55,12 +52,10 @@ class ClientTokenPolicy {
       if (!rule.appliesTo(resource)) {
         continue;
       }
-      if (rule.effect == ClientTokenRuleEffect.deny &&
-          rule.affectsOperation(operation)) {
+      if (rule.effect == ClientTokenRuleEffect.deny && rule.affectsOperation(operation)) {
         return false;
       }
-      if (rule.effect == ClientTokenRuleEffect.allow &&
-          rule.affectsOperation(operation)) {
+      if (rule.effect == ClientTokenRuleEffect.allow && rule.affectsOperation(operation)) {
         hasExplicitAllow = true;
       }
     }

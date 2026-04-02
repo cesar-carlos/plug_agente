@@ -72,12 +72,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get msgAuthenticatedSuccessfully => 'Autenticado com sucesso!';
 
   @override
-  String get msgWebSocketConnectedSuccessfully =>
-      'Conectado ao servidor WebSocket com sucesso!';
+  String get msgWebSocketConnectedSuccessfully => 'Conectado ao servidor WebSocket com sucesso!';
 
   @override
-  String get msgDatabaseConnectionSuccessful =>
-      'Conexão com o banco de dados estabelecida com sucesso!';
+  String get msgDatabaseConnectionSuccessful => 'Conexão com o banco de dados estabelecida com sucesso!';
 
   @override
   String get msgConfigSavedSuccessfully => 'Configuração salva com sucesso!';
@@ -102,8 +100,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get queryNoResults => 'Sem resultados';
 
   @override
-  String get queryNoResultsMessage =>
-      'Execute uma consulta SELECT para ver os resultados aqui.';
+  String get queryNoResultsMessage => 'Execute uma consulta SELECT para ver os resultados aqui.';
 
   @override
   String get queryTotalRecords => 'Total de registros';
@@ -115,16 +112,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get queryAffectedRows => 'Linhas afetadas';
 
   @override
-  String get dashboardDescription =>
-      'Monitore o status do seu agente e conexões de banco de dados aqui.';
+  String get dashboardDescription => 'Monitore o status do seu agente e conexões de banco de dados aqui.';
 
   @override
   String get odbcDriverNotFound =>
       'O driver ODBC configurado não foi encontrado neste computador. Revise o driver e a fonte de dados nas configurações.';
 
   @override
-  String get odbcAuthFailed =>
-      'Não foi possível autenticar no banco de dados. Verifique usuário, senha e permissões.';
+  String get odbcAuthFailed => 'Não foi possível autenticar no banco de dados. Verifique usuário, senha e permissões.';
 
   @override
   String get odbcServerUnreachable =>
@@ -135,8 +130,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.';
 
   @override
-  String get odbcConnectionFailed =>
-      'Não foi possível estabelecer conexão com o banco de dados.';
+  String get odbcConnectionFailed => 'Não foi possível estabelecer conexão com o banco de dados.';
 
   @override
   String get odbcDetailPrefix => 'Detalhe ODBC';

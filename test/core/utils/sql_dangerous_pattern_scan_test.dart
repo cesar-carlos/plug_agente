@@ -3,20 +3,23 @@ import 'package:plug_agente/core/utils/sql_dangerous_pattern_scan.dart';
 
 void main() {
   group('sqlContainsTopLevelDangerousPatterns', () {
-    test('should return false when dangerous tokens appear only inside string', () {
-      expect(
-        sqlContainsTopLevelDangerousPatterns(
-          "SELECT 1 WHERE x = ';DROP TABLE t'",
-        ),
-        isFalse,
-      );
-      expect(
-        sqlContainsTopLevelDangerousPatterns(
-          "SELECT 1 WHERE x = '-- not a comment'",
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'should return false when dangerous tokens appear only inside string',
+      () {
+        expect(
+          sqlContainsTopLevelDangerousPatterns(
+            "SELECT 1 WHERE x = ';DROP TABLE t'",
+          ),
+          isFalse,
+        );
+        expect(
+          sqlContainsTopLevelDangerousPatterns(
+            "SELECT 1 WHERE x = '-- not a comment'",
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('should return true for top-level line comment', () {
       expect(

@@ -12,9 +12,7 @@ import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockConfigProvider extends Mock
-    with ChangeNotifier
-    implements ConfigProvider {}
+class MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvider {}
 
 class FakeAgentProfile extends Fake implements AgentProfile {}
 

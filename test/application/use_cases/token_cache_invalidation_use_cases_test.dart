@@ -17,16 +17,13 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockClientTokenRepository extends Mock
-    implements IClientTokenRepository {}
+class MockClientTokenRepository extends Mock implements IClientTokenRepository {}
 
 class MockTokenAuditStore extends Mock implements ITokenAuditStore {}
 
-class MockAuthorizationDecisionCache extends Mock
-    implements IAuthorizationDecisionCache {}
+class MockAuthorizationDecisionCache extends Mock implements IAuthorizationDecisionCache {}
 
-class MockClientTokenPolicyCache extends Mock
-    implements IClientTokenPolicyCache {}
+class MockClientTokenPolicyCache extends Mock implements IClientTokenPolicyCache {}
 
 void main() {
   setUpAll(() {

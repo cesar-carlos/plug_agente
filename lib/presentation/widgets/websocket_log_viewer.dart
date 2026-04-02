@@ -22,9 +22,7 @@ class WebSocketLogViewer extends StatelessWidget {
         return AppCard(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final spacing = constraints.maxHeight < 50
-                  ? AppSpacing.sm
-                  : AppSpacing.md;
+              final spacing = constraints.maxHeight < 50 ? AppSpacing.sm : AppSpacing.md;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,12 +165,9 @@ class _AuthorizationSummaryCard extends StatelessWidget {
 
     final colors = context.appColors;
     final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
-    final missingPermissionRate =
-        (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
-    final tokenNotFoundRate = (summary!.reasonRate('token_not_found') * 100)
-        .toStringAsFixed(1);
-    final tokenRevokedRate = (summary!.reasonRate('token_revoked') * 100)
-        .toStringAsFixed(1);
+    final missingPermissionRate = (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
+    final tokenNotFoundRate = (summary!.reasonRate('token_not_found') * 100).toStringAsFixed(1);
+    final tokenRevokedRate = (summary!.reasonRate('token_revoked') * 100).toStringAsFixed(1);
 
     return Container(
       width: double.infinity,

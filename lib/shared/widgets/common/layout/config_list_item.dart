@@ -37,27 +37,21 @@ class ConfigListItem extends StatelessWidget {
             title,
             style: context.bodyStrong.copyWith(
               fontWeight: FontWeight.w600,
-              color: isSelected
-                  ? colors.selectedForeground
-                  : colors.textPrimary,
+              color: isSelected ? colors.selectedForeground : colors.textPrimary,
             ),
           ),
           if (subtitle != null)
             Text(
               subtitle!,
               style: context.bodyMuted.copyWith(
-                color: isSelected
-                    ? colors.selectedForeground
-                    : colors.textSecondary,
+                color: isSelected ? colors.selectedForeground : colors.textSecondary,
               ),
             ),
           if (trailing != null)
             Text(
               trailing!,
               style: context.bodyMuted.copyWith(
-                color: isSelected
-                    ? colors.selectedForeground
-                    : colors.textSecondary,
+                color: isSelected ? colors.selectedForeground : colors.textSecondary,
               ),
             ),
         ],

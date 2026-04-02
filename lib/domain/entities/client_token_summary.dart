@@ -33,19 +33,16 @@ class ClientTokenSummary {
 
     return ClientTokenSummary(
       id: source['id'] as String? ?? json['id'] as String? ?? '',
-      clientId:
-          source['client_id'] as String? ?? json['client_id'] as String? ?? '',
+      clientId: source['client_id'] as String? ?? json['client_id'] as String? ?? '',
       createdAt: createdAt,
-      isRevoked:
-          source['is_revoked'] as bool? ?? json['is_revoked'] as bool? ?? false,
+      isRevoked: source['is_revoked'] as bool? ?? json['is_revoked'] as bool? ?? false,
       version: source['version'] as int? ?? json['version'] as int? ?? 1,
       updatedAt: _parseDateTimeOrNull(
         source['updated_at'] ?? json['updated_at'],
       ),
       agentId: source['agent_id'] as String?,
       payload: payload,
-      tokenValue:
-          source['token_value'] as String? ?? json['token_value'] as String?,
+      tokenValue: source['token_value'] as String? ?? json['token_value'] as String?,
       allTables: source['all_tables'] as bool? ?? false,
       allViews: source['all_views'] as bool? ?? false,
       allPermissions: source['all_permissions'] as bool? ?? false,
@@ -90,14 +87,10 @@ class ClientTokenSummary {
       createdAt: createdAt ?? this.createdAt,
       isRevoked: isRevoked ?? this.isRevoked,
       version: version ?? this.version,
-      updatedAt: identical(updatedAt, _unset)
-          ? this.updatedAt
-          : updatedAt as DateTime?,
+      updatedAt: identical(updatedAt, _unset) ? this.updatedAt : updatedAt as DateTime?,
       agentId: identical(agentId, _unset) ? this.agentId : agentId as String?,
       payload: payload ?? this.payload,
-      tokenValue: identical(tokenValue, _unset)
-          ? this.tokenValue
-          : tokenValue as String?,
+      tokenValue: identical(tokenValue, _unset) ? this.tokenValue : tokenValue as String?,
       allTables: allTables ?? this.allTables,
       allViews: allViews ?? this.allViews,
       allPermissions: allPermissions ?? this.allPermissions,
@@ -131,9 +124,7 @@ class ClientTokenSummary {
       }
     }
     if (rawValue is int) {
-      final millisecondsSinceEpoch = rawValue > 9999999999
-          ? rawValue
-          : rawValue * 1000;
+      final millisecondsSinceEpoch = rawValue > 9999999999 ? rawValue : rawValue * 1000;
       return DateTime.fromMillisecondsSinceEpoch(
         millisecondsSinceEpoch,
         isUtc: true,

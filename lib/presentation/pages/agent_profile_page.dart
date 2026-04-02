@@ -71,9 +71,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     }
 
     final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized &&
-        !configProvider.isLoading &&
-        configProvider.currentConfig != null) {
+    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
       return;
     }
@@ -372,8 +370,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   @override
   Widget build(BuildContext context) {
     final configProvider = context.watch<ConfigProvider>();
-    final isInitialLoading =
-        configProvider.isLoading && !_formController.fieldsInitialized;
+    final isInitialLoading = configProvider.isLoading && !_formController.fieldsInitialized;
 
     return ScaffoldPage(
       header: PageHeader(
@@ -415,59 +412,44 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                               children: [
                                 AppCard(
                                   child: _AgentProfileSection(
-                                    title:
-                                        AppStrings.agentProfileSectionIdentity,
+                                    title: AppStrings.agentProfileSectionIdentity,
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         _ResponsiveFieldRow(
                                           children: [
                                             AppTextField(
-                                              label: AppStrings
-                                                  .agentProfileFieldName,
-                                              controller: _formController
-                                                  .nomeController,
-                                              validator: (value) =>
-                                                  _requiredValidator(
-                                                    AppStrings
-                                                        .agentProfileFieldName,
-                                                    value,
-                                                  ),
+                                              label: AppStrings.agentProfileFieldName,
+                                              controller: _formController.nomeController,
+                                              validator: (value) => _requiredValidator(
+                                                AppStrings.agentProfileFieldName,
+                                                value,
+                                              ),
                                             ),
                                             AppTextField(
-                                              label: AppStrings
-                                                  .agentProfileFieldTradeName,
-                                              controller: _formController
-                                                  .nomeFantasiaController,
-                                              validator: (value) =>
-                                                  _requiredValidator(
-                                                    AppStrings
-                                                        .agentProfileFieldTradeName,
-                                                    value,
-                                                  ),
+                                              label: AppStrings.agentProfileFieldTradeName,
+                                              controller: _formController.nomeFantasiaController,
+                                              validator: (value) => _requiredValidator(
+                                                AppStrings.agentProfileFieldTradeName,
+                                                value,
+                                              ),
                                             ),
                                           ],
                                         ),
                                         const SizedBox(height: AppSpacing.md),
                                         _ResponsiveFieldActionRow(
                                           field: AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldDocument,
-                                            controller: _formController
-                                                .cnaeCnpjCpfController,
+                                            label: AppStrings.agentProfileFieldDocument,
+                                            controller: _formController.cnaeCnpjCpfController,
                                             fieldSpec: AppFieldSpecs.document,
-                                            validator: (value) =>
-                                                _requiredWithSpec(
-                                                  AppStrings
-                                                      .agentProfileFieldDocument,
-                                                  AppFieldSpecs.document,
-                                                  value,
-                                                ),
+                                            validator: (value) => _requiredWithSpec(
+                                              AppStrings.agentProfileFieldDocument,
+                                              AppFieldSpecs.document,
+                                              value,
+                                            ),
                                           ),
                                           action: AppButton(
-                                            label: AppStrings
-                                                .agentProfileActionLookupCnpj,
+                                            label: AppStrings.agentProfileActionLookupCnpj,
                                             isPrimary: false,
                                             isLoading: _isLookingUpCnpj,
                                             onPressed: () {
@@ -483,40 +465,31 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 _AgentProfileSection(
                                   title: AppStrings.agentProfileSectionContact,
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       _ResponsiveFieldRow(
                                         children: [
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldPhone,
-                                            controller: _formController
-                                                .telefoneController,
+                                            label: AppStrings.agentProfileFieldPhone,
+                                            controller: _formController.telefoneController,
                                             fieldSpec: AppFieldSpecs.phone,
                                           ),
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldMobile,
-                                            controller: _formController
-                                                .celularController,
+                                            label: AppStrings.agentProfileFieldMobile,
+                                            controller: _formController.celularController,
                                             fieldSpec: AppFieldSpecs.mobile,
-                                            validator: (value) =>
-                                                _requiredWithSpec(
-                                                  AppStrings
-                                                      .agentProfileFieldMobile,
-                                                  AppFieldSpecs.mobile,
-                                                  value,
-                                                ),
+                                            validator: (value) => _requiredWithSpec(
+                                              AppStrings.agentProfileFieldMobile,
+                                              AppFieldSpecs.mobile,
+                                              value,
+                                            ),
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: AppSpacing.md),
                                       AppTextField(
-                                        label:
-                                            AppStrings.agentProfileFieldEmail,
-                                        controller:
-                                            _formController.emailController,
+                                        label: AppStrings.agentProfileFieldEmail,
+                                        controller: _formController.emailController,
                                         fieldSpec: AppFieldSpecs.email,
                                         validator: (value) => _requiredWithSpec(
                                           AppStrings.agentProfileFieldEmail,
@@ -531,27 +504,21 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 _AgentProfileSection(
                                   title: AppStrings.agentProfileSectionAddress,
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       _ResponsiveFieldActionRow(
                                         field: AppTextField(
-                                          label: AppStrings
-                                              .agentProfileFieldPostalCode,
-                                          controller:
-                                              _formController.cepController,
+                                          label: AppStrings.agentProfileFieldPostalCode,
+                                          controller: _formController.cepController,
                                           fieldSpec: AppFieldSpecs.cep,
-                                          validator: (value) =>
-                                              _requiredWithSpec(
-                                                AppStrings
-                                                    .agentProfileFieldPostalCode,
-                                                AppFieldSpecs.cep,
-                                                value,
-                                              ),
+                                          validator: (value) => _requiredWithSpec(
+                                            AppStrings.agentProfileFieldPostalCode,
+                                            AppFieldSpecs.cep,
+                                            value,
+                                          ),
                                         ),
                                         action: AppButton(
-                                          label: AppStrings
-                                              .agentProfileActionLookupCep,
+                                          label: AppStrings.agentProfileActionLookupCep,
                                           isPrimary: false,
                                           isLoading: _isLookingUpCep,
                                           onPressed: () {
@@ -564,28 +531,20 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                         flexes: const [3, 1],
                                         children: [
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldStreet,
-                                            controller: _formController
-                                                .enderecoController,
-                                            validator: (value) =>
-                                                _requiredValidator(
-                                                  AppStrings
-                                                      .agentProfileFieldStreet,
-                                                  value,
-                                                ),
+                                            label: AppStrings.agentProfileFieldStreet,
+                                            controller: _formController.enderecoController,
+                                            validator: (value) => _requiredValidator(
+                                              AppStrings.agentProfileFieldStreet,
+                                              value,
+                                            ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldNumber,
-                                            controller: _formController
-                                                .numeroEnderecoController,
-                                            validator: (value) =>
-                                                _requiredValidator(
-                                                  AppStrings
-                                                      .agentProfileFieldNumber,
-                                                  value,
-                                                ),
+                                            label: AppStrings.agentProfileFieldNumber,
+                                            controller: _formController.numeroEnderecoController,
+                                            validator: (value) => _requiredValidator(
+                                              AppStrings.agentProfileFieldNumber,
+                                              value,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -594,42 +553,30 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                         flexes: const [2, 2, 1],
                                         children: [
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldDistrict,
-                                            controller: _formController
-                                                .bairroController,
-                                            validator: (value) =>
-                                                _requiredValidator(
-                                                  AppStrings
-                                                      .agentProfileFieldDistrict,
-                                                  value,
-                                                ),
+                                            label: AppStrings.agentProfileFieldDistrict,
+                                            controller: _formController.bairroController,
+                                            validator: (value) => _requiredValidator(
+                                              AppStrings.agentProfileFieldDistrict,
+                                              value,
+                                            ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldCity,
-                                            controller: _formController
-                                                .nomeMunicipioController,
-                                            validator: (value) =>
-                                                _requiredValidator(
-                                                  AppStrings
-                                                      .agentProfileFieldCity,
-                                                  value,
-                                                ),
+                                            label: AppStrings.agentProfileFieldCity,
+                                            controller: _formController.nomeMunicipioController,
+                                            validator: (value) => _requiredValidator(
+                                              AppStrings.agentProfileFieldCity,
+                                              value,
+                                            ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings
-                                                .agentProfileFieldState,
-                                            controller: _formController
-                                                .ufMunicipioController,
+                                            label: AppStrings.agentProfileFieldState,
+                                            controller: _formController.ufMunicipioController,
                                             fieldSpec: AppFieldSpecs.state,
-                                            validator: (value) =>
-                                                _requiredWithSpec(
-                                                  AppStrings
-                                                      .agentProfileFieldState,
-                                                  AppFieldSpecs.state,
-                                                  value,
-                                                ),
+                                            validator: (value) => _requiredWithSpec(
+                                              AppStrings.agentProfileFieldState,
+                                              AppFieldSpecs.state,
+                                              value,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -641,8 +588,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                   title: AppStrings.agentProfileSectionNotes,
                                   child: AppTextField(
                                     label: AppStrings.agentProfileFieldNotes,
-                                    controller:
-                                        _formController.observacaoController,
+                                    controller: _formController.observacaoController,
                                     maxLines: 5,
                                   ),
                                 ),
@@ -790,8 +736,7 @@ class _ResponsiveFieldRow extends StatelessWidget {
             children: [
               for (var index = 0; index < children.length; index++) ...[
                 children[index],
-                if (index < children.length - 1)
-                  const SizedBox(height: AppSpacing.md),
+                if (index < children.length - 1) const SizedBox(height: AppSpacing.md),
               ],
             ],
           );
@@ -805,8 +750,7 @@ class _ResponsiveFieldRow extends StatelessWidget {
                 flex: flexes?[index] ?? 1,
                 child: children[index],
               ),
-              if (index < children.length - 1)
-                const SizedBox(width: AppSpacing.md),
+              if (index < children.length - 1) const SizedBox(width: AppSpacing.md),
             ],
           ],
         );

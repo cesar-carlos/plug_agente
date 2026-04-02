@@ -108,8 +108,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return '${collapsed.substring(0, _multiResultSqlLogPreviewChars)}…';
   }
 
-  ConnectionOptions get _connectionOptions =>
-      OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+  ConnectionOptions get _connectionOptions => OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
 
   /// Ensures ODBC environment is initialized before operations.
   Future<Result<void>> _ensureInitialized() async {
@@ -143,8 +142,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             operation: 'initialize_odbc',
             context: {
               'reason': 'odbc_initialization_failed',
-              'user_message':
-                  'Não foi possível inicializar o ambiente ODBC neste computador.',
+              'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
             },
           ),
         );
@@ -166,14 +164,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final rawData = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
       queryResult,
     );
-    final paginationResponse =
-        OdbcGatewayQueryResultMapper.buildPaginationResponse(
-          request.pagination,
-          rawData,
-        );
-    final data = paginationResponse == null
-        ? rawData
-        : rawData.take(request.pagination!.pageSize).toList();
+    final paginationResponse = OdbcGatewayQueryResultMapper.buildPaginationResponse(
+      request.pagination,
+      rawData,
+    );
+    final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
 
     return QueryResponse(
       id: _uuid.v4(),
@@ -244,9 +239,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       requestId: request.id,
       agentId: request.agentId,
       data: primaryResultSet.rows,
-      affectedRows: totalAffectedRows > 0
-          ? totalAffectedRows
-          : primaryResultSet.rowCount,
+      affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
       timestamp: DateTime.now(),
       columnMetadata: primaryResultSet.columnMetadata,
       resultSets: resultSets,
@@ -344,8 +337,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           operation: 'initialize_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message':
-                'Não foi possível inicializar o ambiente ODBC neste computador.',
+            'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
           },
         ),
       ),
@@ -390,11 +382,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
   }) async {
     final stopwatch = Stopwatch()..start();
-    final paginationValidation =
-        OdbcGatewayQueryPreparation.validatePaginationForDatabase(
-          request,
-          databaseConfig.databaseType,
-        );
+    final paginationValidation = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+      request,
+      databaseConfig.databaseType,
+    );
     if (paginationValidation != null) {
       return Failure(paginationValidation);
     }
@@ -403,11 +394,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       request,
       databaseConfig,
     );
-    final queryValidation =
-        OdbcGatewayQueryPreparation.validateQueryExecutionMode(
-          request,
-          preparedExecution,
-        );
+    final queryValidation = OdbcGatewayQueryPreparation.validateQueryExecutionMode(
+      request,
+      preparedExecution,
+    );
     if (queryValidation != null) {
       return Failure(queryValidation);
     }
@@ -613,9 +603,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
         if (beginResult.isError()) {
           final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
-          if (options.transaction &&
-              attempt == 0 &&
-              _queryFailureIndicatesInvalidConnectionId(beginFailure)) {
+          if (options.transaction && attempt == 0 && _queryFailureIndicatesInvalidConnectionId(beginFailure)) {
             recycleAfterRelease = true;
           } else {
             return Failure(beginFailure);
@@ -1179,9 +1167,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
   ) async {
     try {
-      final disconnectResult = await _service
-          .disconnect(connectionId)
-          .timeout(_bestEffortCancelDisconnectTimeout);
+      final disconnectResult = await _service.disconnect(connectionId).timeout(_bestEffortCancelDisconnectTimeout);
       if (disconnectResult.isSuccess()) {
         _metrics.recordTimeoutCancelSuccess();
       } else {
@@ -1282,8 +1268,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           }
 
           final response = outcome.response!;
-          if (afterVacuousPooledMulti &&
-              _isVacuousMultiResultResponse(request, response)) {
+          if (afterVacuousPooledMulti && _isVacuousMultiResultResponse(request, response)) {
             _metrics.recordMultiResultDirectStillVacuous();
             developer.log(
               'Direct connection multi-result still vacuous after pooled empty '
@@ -1474,18 +1459,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   ConnectionOptions _buildExpandedConnectionOptions(Object error) {
-    final currentBufferBytes =
-        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) *
-        1024 *
-        1024;
-    final expandedBufferBytes =
-        OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
-          currentBufferBytes: currentBufferBytes,
-          errorMessage: _odbcErrorMessage(error),
-        );
-    final initialResultBufferBytes =
-        expandedBufferBytes <
-            ConnectionConstants.defaultInitialResultBufferBytes
+    final currentBufferBytes = OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024;
+    final expandedBufferBytes = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
+      currentBufferBytes: currentBufferBytes,
+      errorMessage: _odbcErrorMessage(error),
+    );
+    final initialResultBufferBytes = expandedBufferBytes < ConnectionConstants.defaultInitialResultBufferBytes
         ? expandedBufferBytes
         : ConnectionConstants.defaultInitialResultBufferBytes;
 
@@ -1539,9 +1518,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (!request.expectMultipleResults) {
       return false;
     }
-    final hasRows =
-        response.data.isNotEmpty ||
-        response.resultSets.any((QueryResultSet s) => s.rows.isNotEmpty);
+    final hasRows = response.data.isNotEmpty || response.resultSets.any((QueryResultSet s) => s.rows.isNotEmpty);
     final hasNonZeroRowCount = response.items.any(
       (QueryResponseItem i) => i.isRowCount && (i.rowCount ?? 0) > 0,
     );
@@ -1550,9 +1527,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   bool _queryFailureIndicatesInvalidConnectionId(domain.Failure failure) {
     final ctx = failure.context;
-    final err = ctx['error'] != null
-        ? ctx['error'].toString()
-        : failure.message;
+    final err = ctx['error'] != null ? ctx['error'].toString() : failure.message;
     return _isInvalidConnectionIdError(err);
   }
 
@@ -1607,9 +1582,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final queryResult =
-        preparedExecution.parameters != null &&
-            preparedExecution.parameters!.isNotEmpty
+    final queryResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
         ? await _service.executeQueryNamed(
             connectionId,
             preparedExecution.sql,

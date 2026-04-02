@@ -18,9 +18,7 @@ OdbcE2eSqlDialect detectOdbcE2eDialect(String dsn) {
   if (driver.contains('POSTGRE')) {
     return OdbcE2eSqlDialect.postgresql;
   }
-  if (driver.contains('ANYWHERE') ||
-      driver.contains('SYBASE') ||
-      driver.contains('SQLA')) {
+  if (driver.contains('ANYWHERE') || driver.contains('SYBASE') || driver.contains('SQLA')) {
     return OdbcE2eSqlDialect.sqlAnywhere;
   }
   if (driver.contains('SQL SERVER')) {
@@ -49,8 +47,7 @@ class OdbcE2eCoverageSql {
   /// Driver family used for literals and DDL.
   final OdbcE2eSqlDialect dialect;
 
-  String get dropTableIfExists =>
-      'DROP TABLE IF EXISTS $odbcE2eCoverageTableName';
+  String get dropTableIfExists => 'DROP TABLE IF EXISTS $odbcE2eCoverageTableName';
 
   String get createTable => switch (dialect) {
     OdbcE2eSqlDialect.sqlAnywhere =>
@@ -142,13 +139,10 @@ SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName;
   String updateCodeById(int id, String code) =>
       "UPDATE $odbcE2eCoverageTableName SET code = '${code.replaceAll("'", "''")}' WHERE id = $id";
 
-  String deleteById(int id) =>
-      'DELETE FROM $odbcE2eCoverageTableName WHERE id = $id';
+  String deleteById(int id) => 'DELETE FROM $odbcE2eCoverageTableName WHERE id = $id';
 
-  String get countAll =>
-      'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName';
+  String get countAll => 'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName';
 
   /// Single-row probe for batch SELECT coverage (same shape for SA / SQL Server / PostgreSQL).
-  String selectIdCodeAmtById(int id) =>
-      'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = $id';
+  String selectIdCodeAmtById(int id) => 'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = $id';
 }

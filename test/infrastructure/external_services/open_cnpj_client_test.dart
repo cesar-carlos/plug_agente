@@ -10,38 +10,37 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.resolve(
-                  Response<Map<String, dynamic>>(
-                    requestOptions: options,
-                    statusCode: 200,
-                    data: <String, dynamic>{
-                      'cnpj': '11222333000181',
-                      'razao_social': 'ACME LTDA',
-                      'nome_fantasia': 'ACME',
-                      'logradouro': 'Rua A',
-                      'numero': '1',
-                      'bairro': 'Centro',
-                      'cep': '01310100',
-                      'municipio': 'SAO PAULO',
-                      'uf': 'SP',
-                      'telefones': <dynamic>[
-                        <String, dynamic>{
-                          'ddd': '11',
-                          'numero': '34567890',
-                          'is_fax': false,
-                        },
-                        <String, dynamic>{
-                          'ddd': '11',
-                          'numero': '987654321',
-                          'is_fax': false,
-                        },
-                      ],
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'cnpj': '11222333000181',
+                  'razao_social': 'ACME LTDA',
+                  'nome_fantasia': 'ACME',
+                  'logradouro': 'Rua A',
+                  'numero': '1',
+                  'bairro': 'Centro',
+                  'cep': '01310100',
+                  'municipio': 'SAO PAULO',
+                  'uf': 'SP',
+                  'telefones': <dynamic>[
+                    <String, dynamic>{
+                      'ddd': '11',
+                      'numero': '34567890',
+                      'is_fax': false,
                     },
-                  ),
-                );
-              },
+                    <String, dynamic>{
+                      'ddd': '11',
+                      'numero': '987654321',
+                      'is_fax': false,
+                    },
+                  ],
+                },
+              ),
+            );
+          },
         ),
       );
 
@@ -62,19 +61,18 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.reject(
-                  DioException(
-                    requestOptions: options,
-                    response: Response<void>(
-                      requestOptions: options,
-                      statusCode: 404,
-                    ),
-                    type: DioExceptionType.badResponse,
-                  ),
-                );
-              },
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                response: Response<void>(
+                  requestOptions: options,
+                  statusCode: 404,
+                ),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+          },
         ),
       );
 
@@ -94,19 +92,18 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.reject(
-                  DioException(
-                    requestOptions: options,
-                    response: Response<void>(
-                      requestOptions: options,
-                      statusCode: 429,
-                    ),
-                    type: DioExceptionType.badResponse,
-                  ),
-                );
-              },
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                response: Response<void>(
+                  requestOptions: options,
+                  statusCode: 429,
+                ),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+          },
         ),
       );
 
@@ -126,18 +123,17 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.resolve(
-                  Response<Map<String, dynamic>>(
-                    requestOptions: options,
-                    statusCode: 200,
-                    data: <String, dynamic>{
-                      'cnpj': '11222333000181',
-                    },
-                  ),
-                );
-              },
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'cnpj': '11222333000181',
+                },
+              ),
+            );
+          },
         ),
       );
 

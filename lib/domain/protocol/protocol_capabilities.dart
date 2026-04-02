@@ -84,8 +84,7 @@ class ProtocolCapabilities {
   bool supportsEncoding(String encoding) => encodings.contains(encoding);
 
   /// Checks if a specific compression is supported.
-  bool supportsCompression(String compression) =>
-      compressions.contains(compression);
+  bool supportsCompression(String compression) => compressions.contains(compression);
 
   /// Checks if JSON-RPC v2 is supported.
   bool get supportsJsonRpcV2 => protocols.contains('jsonrpc-v2');
@@ -94,8 +93,7 @@ class ProtocolCapabilities {
   bool get supportsBatch => extensions['batchSupport'] as bool? ?? false;
 
   /// Checks if binary payload is supported.
-  bool get supportsBinaryPayload =>
-      extensions['binaryPayload'] as bool? ?? false;
+  bool get supportsBinaryPayload => extensions['binaryPayload'] as bool? ?? false;
 }
 
 /// Negotiated protocol configuration after handshake.
@@ -124,10 +122,8 @@ class ProtocolConfig {
 
   bool get isJsonRpcV2 => protocol == 'jsonrpc-v2';
   bool get usesCompression => compression != 'none';
-  bool get usesBinaryPayload =>
-      negotiatedExtensions['binaryPayload'] as bool? ?? false;
-  bool get usesTransportFrame =>
-      negotiatedExtensions['transportFrame'] == 'payload-frame/1.0';
+  bool get usesBinaryPayload => negotiatedExtensions['binaryPayload'] as bool? ?? false;
+  bool get usesTransportFrame => negotiatedExtensions['transportFrame'] == 'payload-frame/1.0';
 }
 
 /// Transport-level operational limits announced during handshake.
@@ -141,14 +137,8 @@ class TransportLimits {
     this.maxConcurrentStreams = defaultMaxConcurrentStreams,
     this.streamingChunkSize = defaultStreamingChunkSize,
     this.streamingRowThreshold = defaultStreamingRowThreshold,
-  }) : maxCompressedPayloadBytes =
-           maxCompressedPayloadBytes ??
-           maxPayloadBytes ??
-           defaultMaxCompressedPayloadBytes,
-       maxDecodedPayloadBytes =
-           maxDecodedPayloadBytes ??
-           maxPayloadBytes ??
-           defaultMaxDecodedPayloadBytes;
+  }) : maxCompressedPayloadBytes = maxCompressedPayloadBytes ?? maxPayloadBytes ?? defaultMaxCompressedPayloadBytes,
+       maxDecodedPayloadBytes = maxDecodedPayloadBytes ?? maxPayloadBytes ?? defaultMaxDecodedPayloadBytes;
 
   factory TransportLimits.fromJson(Map<String, dynamic> json) {
     return TransportLimits(
@@ -162,13 +152,9 @@ class TransportLimits {
           defaultMaxDecodedPayloadBytes,
       maxRows: json['max_rows'] as int? ?? defaultMaxRows,
       maxBatchSize: json['max_batch_size'] as int? ?? defaultMaxBatchSize,
-      maxConcurrentStreams:
-          json['max_concurrent_streams'] as int? ?? defaultMaxConcurrentStreams,
-      streamingChunkSize:
-          json['streaming_chunk_size'] as int? ?? defaultStreamingChunkSize,
-      streamingRowThreshold:
-          json['streaming_row_threshold'] as int? ??
-          defaultStreamingRowThreshold,
+      maxConcurrentStreams: json['max_concurrent_streams'] as int? ?? defaultMaxConcurrentStreams,
+      streamingChunkSize: json['streaming_chunk_size'] as int? ?? defaultStreamingChunkSize,
+      streamingRowThreshold: json['streaming_row_threshold'] as int? ?? defaultStreamingRowThreshold,
     );
   }
 
@@ -193,24 +179,18 @@ class TransportLimits {
 
   TransportLimits negotiateWith(TransportLimits other) {
     return TransportLimits(
-      maxCompressedPayloadBytes:
-          maxCompressedPayloadBytes < other.maxCompressedPayloadBytes
+      maxCompressedPayloadBytes: maxCompressedPayloadBytes < other.maxCompressedPayloadBytes
           ? maxCompressedPayloadBytes
           : other.maxCompressedPayloadBytes,
-      maxDecodedPayloadBytes:
-          maxDecodedPayloadBytes < other.maxDecodedPayloadBytes
+      maxDecodedPayloadBytes: maxDecodedPayloadBytes < other.maxDecodedPayloadBytes
           ? maxDecodedPayloadBytes
           : other.maxDecodedPayloadBytes,
       maxRows: maxRows < other.maxRows ? maxRows : other.maxRows,
-      maxBatchSize: maxBatchSize < other.maxBatchSize
-          ? maxBatchSize
-          : other.maxBatchSize,
+      maxBatchSize: maxBatchSize < other.maxBatchSize ? maxBatchSize : other.maxBatchSize,
       maxConcurrentStreams: maxConcurrentStreams < other.maxConcurrentStreams
           ? maxConcurrentStreams
           : other.maxConcurrentStreams,
-      streamingChunkSize: streamingChunkSize < other.streamingChunkSize
-          ? streamingChunkSize
-          : other.streamingChunkSize,
+      streamingChunkSize: streamingChunkSize < other.streamingChunkSize ? streamingChunkSize : other.streamingChunkSize,
       streamingRowThreshold: streamingRowThreshold < other.streamingRowThreshold
           ? streamingRowThreshold
           : other.streamingRowThreshold,

@@ -16,9 +16,7 @@ final class OdbcPaginatedSqlBuilder {
     QueryPaginationRequest pagination,
   ) {
     final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
-    final orderByClause = pagination.orderBy.isEmpty
-        ? null
-        : buildOrderByClause(pagination.orderBy);
+    final orderByClause = pagination.orderBy.isEmpty ? null : buildOrderByClause(pagination.orderBy);
     return switch (databaseType) {
       DatabaseType.postgresql =>
         '''
@@ -174,8 +172,7 @@ ORDER BY $orderByClause
     if (value is bool) {
       return switch (databaseType) {
         DatabaseType.postgresql => value ? 'TRUE' : 'FALSE',
-        DatabaseType.sqlServer ||
-        DatabaseType.sybaseAnywhere => value ? '1' : '0',
+        DatabaseType.sqlServer || DatabaseType.sybaseAnywhere => value ? '1' : '0',
       };
     }
     if (value is DateTime) {

@@ -151,18 +151,13 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
       warning: Color.lerp(warning, other.warning, t) ?? warning,
       error: Color.lerp(error, other.error, t) ?? error,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t) ?? textPrimary,
-      textSecondary:
-          Color.lerp(textSecondary, other.textSecondary, t) ?? textSecondary,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t) ?? textSecondary,
       disabled: Color.lerp(disabled, other.disabled, t) ?? disabled,
       surfaceCard: Color.lerp(surfaceCard, other.surfaceCard, t) ?? surfaceCard,
-      surfaceSubtle:
-          Color.lerp(surfaceSubtle, other.surfaceSubtle, t) ?? surfaceSubtle,
+      surfaceSubtle: Color.lerp(surfaceSubtle, other.surfaceSubtle, t) ?? surfaceSubtle,
       border: Color.lerp(border, other.border, t) ?? border,
-      selectedFill:
-          Color.lerp(selectedFill, other.selectedFill, t) ?? selectedFill,
-      selectedForeground:
-          Color.lerp(selectedForeground, other.selectedForeground, t) ??
-          selectedForeground,
+      selectedFill: Color.lerp(selectedFill, other.selectedFill, t) ?? selectedFill,
+      selectedForeground: Color.lerp(selectedForeground, other.selectedForeground, t) ?? selectedForeground,
       brightness: t < 0.5 ? brightness : other.brightness,
     );
   }

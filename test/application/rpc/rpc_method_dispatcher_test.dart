@@ -26,8 +26,7 @@ import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
-class MockQueryNormalizerService extends Mock
-    implements QueryNormalizerService {}
+class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
 
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
@@ -35,11 +34,9 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class MockIdempotencyStore extends Mock implements IIdempotencyStore {}
 
-class MockStreamingDatabaseGateway extends Mock
-    implements IStreamingDatabaseGateway {}
+class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway {}
 
-class MockAgentConfigRepository extends Mock
-    implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
@@ -613,9 +610,7 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured =
-            verify(() => mockGateway.executeQuery(captureAny())).captured.single
-                as QueryRequest;
+        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.page, 2);
         expect(captured.pagination!.pageSize, 25);
@@ -664,9 +659,7 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      final captured =
-          verify(() => mockGateway.executeQuery(captureAny())).captured.single
-              as QueryRequest;
+      final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
       expect(captured.pagination, isNotNull);
       expect(captured.pagination!.orderBy, isEmpty);
     });
@@ -731,9 +724,7 @@ void main() {
         final result = response.result as Map<String, dynamic>;
         expect(result['sql_handling_mode'], 'preserve');
         expect(result['max_rows_handling'], 'response_truncation');
-        final captured =
-            verify(() => mockGateway.executeQuery(captureAny())).captured.single
-                as QueryRequest;
+        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
         expect(captured.preserveSql, isTrue);
         expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
         expect(captured.pagination, isNull);
@@ -801,9 +792,7 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      final captured =
-          verify(() => mockGateway.executeQuery(captureAny())).captured.single
-              as QueryRequest;
+      final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
       expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
     });
 
@@ -860,9 +849,7 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured =
-            verify(() => mockGateway.executeQuery(captureAny())).captured.single
-                as QueryRequest;
+        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.cursor, cursor);
         expect(captured.pagination!.usesStableCursor, isTrue);
@@ -911,9 +898,7 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
           ),
         ).thenAnswer((invocation) async {
-          final onChunk =
-              invocation.positionalArguments[2]
-                  as Future<void> Function(List<Map<String, dynamic>>);
+          final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
           await onChunk([
             {'id': 1, 'name': 'a'},
             {'id': 2, 'name': 'b'},
@@ -1174,9 +1159,7 @@ void main() {
         ).thenAnswer((invocation) async {
           const sym = Symbol('timeout');
           captured.add(
-            invocation.namedArguments.containsKey(sym)
-                ? invocation.namedArguments[sym] as Duration?
-                : null,
+            invocation.namedArguments.containsKey(sym) ? invocation.namedArguments[sym] as Duration? : null,
           );
           await Future<void>.delayed(const Duration(milliseconds: 5));
           return Success(
@@ -1337,8 +1320,7 @@ void main() {
         );
 
         final result = response.result as Map<String, dynamic>;
-        final items = (result['items'] as List<dynamic>)
-            .cast<Map<String, dynamic>>();
+        final items = (result['items'] as List<dynamic>).cast<Map<String, dynamic>>();
         check(items.map((item) => item['index']).join(',')).equals('0,1,2');
       },
     );
@@ -1632,8 +1614,7 @@ void main() {
           method: 'sql.execute',
           id: 'req-multi-deny',
           params: {
-            'sql':
-                'SELECT * FROM dbo.allowed WHERE id = 1; SELECT * FROM dbo.denied',
+            'sql': 'SELECT * FROM dbo.allowed WHERE id = 1; SELECT * FROM dbo.denied',
             'client_token': 'bearer-deny',
             'options': {'multi_result': true},
           },

@@ -10,22 +10,21 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.resolve(
-                  Response<Map<String, dynamic>>(
-                    requestOptions: options,
-                    statusCode: 200,
-                    data: <String, dynamic>{
-                      'cep': '01001-000',
-                      'logradouro': 'Praça da Sé',
-                      'bairro': 'Sé',
-                      'localidade': 'São Paulo',
-                      'uf': 'SP',
-                    },
-                  ),
-                );
-              },
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'cep': '01001-000',
+                  'logradouro': 'Praça da Sé',
+                  'bairro': 'Sé',
+                  'localidade': 'São Paulo',
+                  'uf': 'SP',
+                },
+              ),
+            );
+          },
         ),
       );
 
@@ -43,16 +42,15 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                handler.resolve(
-                  Response<Map<String, dynamic>>(
-                    requestOptions: options,
-                    statusCode: 200,
-                    data: <String, dynamic>{'erro': true},
-                  ),
-                );
-              },
+          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{'erro': true},
+              ),
+            );
+          },
         ),
       );
 
@@ -74,18 +72,17 @@ void main() {
         final dio = Dio();
         dio.interceptors.add(
           InterceptorsWrapper(
-            onRequest:
-                (RequestOptions options, RequestInterceptorHandler handler) {
-                  handler.resolve(
-                    Response<Map<String, dynamic>>(
-                      requestOptions: options,
-                      statusCode: 200,
-                      data: <String, dynamic>{
-                        'cep': '01001-000',
-                      },
-                    ),
-                  );
-                },
+            onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+              handler.resolve(
+                Response<Map<String, dynamic>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: <String, dynamic>{
+                    'cep': '01001-000',
+                  },
+                ),
+              );
+            },
           ),
         );
 

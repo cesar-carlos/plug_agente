@@ -1,13 +1,10 @@
-const String officialAutoUpdateFeedUrl =
-    'https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml';
+const String officialAutoUpdateFeedUrl = 'https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml';
 
 String resolveAutoUpdateFeedUrl({
   required Map<String, String> environment,
   String? fromDefine,
 }) {
-  final normalizedFromDefine =
-      (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_FEED_URL'))
-          .trim();
+  final normalizedFromDefine = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_FEED_URL')).trim();
   if (normalizedFromDefine.isNotEmpty) {
     return normalizedFromDefine;
   }

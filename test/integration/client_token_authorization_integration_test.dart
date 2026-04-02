@@ -27,16 +27,13 @@ import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
-class MockAuthorizationPolicyResolver extends Mock
-    implements IAuthorizationPolicyResolver {}
+class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
-class MockClientTokenLocalDataSource extends Mock
-    implements ClientTokenLocalDataSource {}
+class MockClientTokenLocalDataSource extends Mock implements ClientTokenLocalDataSource {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class MockQueryNormalizerService extends Mock
-    implements QueryNormalizerService {}
+class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
 
 void main() {
   setUpAll(() {

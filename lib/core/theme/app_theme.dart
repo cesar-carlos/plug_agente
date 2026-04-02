@@ -18,8 +18,7 @@ class AppTheme {
     },
   );
 
-  static String get fontFamily =>
-      GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
+  static String get fontFamily => GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
 
   static final FluentThemeData _lightTheme = _buildTheme(
     brightness: Brightness.light,
@@ -35,9 +34,7 @@ class AppTheme {
   static FluentThemeData _buildTheme({
     required Brightness brightness,
   }) {
-    final resources = brightness.isLight
-        ? const ResourceDictionary.light()
-        : const ResourceDictionary.dark();
+    final resources = brightness.isLight ? const ResourceDictionary.light() : const ResourceDictionary.dark();
     final tokens = AppThemeColors.fromTheme(
       brightness: brightness,
       accentColor: accentColor,

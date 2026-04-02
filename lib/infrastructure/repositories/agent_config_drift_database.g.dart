@@ -3,8 +3,7 @@
 part of 'agent_config_drift_database.dart';
 
 // ignore_for_file: type=lint
-class $ConfigTableTable extends ConfigTable
-    with TableInfo<$ConfigTableTable, ConfigData> {
+class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, ConfigData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -866,25 +865,15 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       id: Value(id),
       serverUrl: Value(serverUrl),
       agentId: Value(agentId),
-      authToken: authToken == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authToken),
-      refreshToken: refreshToken == null && nullToAbsent
-          ? const Value.absent()
-          : Value(refreshToken),
-      authUsername: authUsername == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authUsername),
-      authPassword: authPassword == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authPassword),
+      authToken: authToken == null && nullToAbsent ? const Value.absent() : Value(authToken),
+      refreshToken: refreshToken == null && nullToAbsent ? const Value.absent() : Value(refreshToken),
+      authUsername: authUsername == null && nullToAbsent ? const Value.absent() : Value(authUsername),
+      authPassword: authPassword == null && nullToAbsent ? const Value.absent() : Value(authPassword),
       driverName: Value(driverName),
       odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
-      password: password == null && nullToAbsent
-          ? const Value.absent()
-          : Value(password),
+      password: password == null && nullToAbsent ? const Value.absent() : Value(password),
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
@@ -1050,56 +1039,30 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       serverUrl: data.serverUrl.present ? data.serverUrl.value : this.serverUrl,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
       authToken: data.authToken.present ? data.authToken.value : this.authToken,
-      refreshToken: data.refreshToken.present
-          ? data.refreshToken.value
-          : this.refreshToken,
-      authUsername: data.authUsername.present
-          ? data.authUsername.value
-          : this.authUsername,
-      authPassword: data.authPassword.present
-          ? data.authPassword.value
-          : this.authPassword,
-      driverName: data.driverName.present
-          ? data.driverName.value
-          : this.driverName,
-      odbcDriverName: data.odbcDriverName.present
-          ? data.odbcDriverName.value
-          : this.odbcDriverName,
-      connectionString: data.connectionString.present
-          ? data.connectionString.value
-          : this.connectionString,
+      refreshToken: data.refreshToken.present ? data.refreshToken.value : this.refreshToken,
+      authUsername: data.authUsername.present ? data.authUsername.value : this.authUsername,
+      authPassword: data.authPassword.present ? data.authPassword.value : this.authPassword,
+      driverName: data.driverName.present ? data.driverName.value : this.driverName,
+      odbcDriverName: data.odbcDriverName.present ? data.odbcDriverName.value : this.odbcDriverName,
+      connectionString: data.connectionString.present ? data.connectionString.value : this.connectionString,
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
-      databaseName: data.databaseName.present
-          ? data.databaseName.value
-          : this.databaseName,
+      databaseName: data.databaseName.present ? data.databaseName.value : this.databaseName,
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
       nome: data.nome.present ? data.nome.value : this.nome,
-      nomeFantasia: data.nomeFantasia.present
-          ? data.nomeFantasia.value
-          : this.nomeFantasia,
-      cnaeCnpjCpf: data.cnaeCnpjCpf.present
-          ? data.cnaeCnpjCpf.value
-          : this.cnaeCnpjCpf,
+      nomeFantasia: data.nomeFantasia.present ? data.nomeFantasia.value : this.nomeFantasia,
+      cnaeCnpjCpf: data.cnaeCnpjCpf.present ? data.cnaeCnpjCpf.value : this.cnaeCnpjCpf,
       telefone: data.telefone.present ? data.telefone.value : this.telefone,
       celular: data.celular.present ? data.celular.value : this.celular,
       email: data.email.present ? data.email.value : this.email,
       endereco: data.endereco.present ? data.endereco.value : this.endereco,
-      numeroEndereco: data.numeroEndereco.present
-          ? data.numeroEndereco.value
-          : this.numeroEndereco,
+      numeroEndereco: data.numeroEndereco.present ? data.numeroEndereco.value : this.numeroEndereco,
       bairro: data.bairro.present ? data.bairro.value : this.bairro,
       cep: data.cep.present ? data.cep.value : this.cep,
-      nomeMunicipio: data.nomeMunicipio.present
-          ? data.nomeMunicipio.value
-          : this.nomeMunicipio,
-      ufMunicipio: data.ufMunicipio.present
-          ? data.ufMunicipio.value
-          : this.ufMunicipio,
-      observacao: data.observacao.present
-          ? data.observacao.value
-          : this.observacao,
+      nomeMunicipio: data.nomeMunicipio.present ? data.nomeMunicipio.value : this.nomeMunicipio,
+      ufMunicipio: data.ufMunicipio.present ? data.ufMunicipio.value : this.ufMunicipio,
+      observacao: data.observacao.present ? data.observacao.value : this.observacao,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1993,8 +1956,7 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
   }
 }
 
-class ClientTokenCacheData extends DataClass
-    implements Insertable<ClientTokenCacheData> {
+class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCacheData> {
   final String id;
   final String clientId;
   final bool isRevoked;
@@ -2060,16 +2022,10 @@ class ClientTokenCacheData extends DataClass
       clientId: Value(clientId),
       isRevoked: Value(isRevoked),
       version: Value(version),
-      agentId: agentId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(agentId),
-      tokenValue: tokenValue == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tokenValue),
+      agentId: agentId == null && nullToAbsent ? const Value.absent() : Value(agentId),
+      tokenValue: tokenValue == null && nullToAbsent ? const Value.absent() : Value(tokenValue),
       createdAt: Value(createdAt),
-      updatedAt: updatedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(updatedAt),
+      updatedAt: updatedAt == null && nullToAbsent ? const Value.absent() : Value(updatedAt),
       payloadJson: Value(payloadJson),
       allTables: Value(allTables),
       allViews: Value(allViews),
@@ -2165,19 +2121,13 @@ class ClientTokenCacheData extends DataClass
       isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
       version: data.version.present ? data.version.value : this.version,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
-      tokenValue: data.tokenValue.present
-          ? data.tokenValue.value
-          : this.tokenValue,
+      tokenValue: data.tokenValue.present ? data.tokenValue.value : this.tokenValue,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      payloadJson: data.payloadJson.present
-          ? data.payloadJson.value
-          : this.payloadJson,
+      payloadJson: data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
       allTables: data.allTables.present ? data.allTables.value : this.allTables,
       allViews: data.allViews.present ? data.allViews.value : this.allViews,
-      allPermissions: data.allPermissions.present
-          ? data.allPermissions.value
-          : this.allPermissions,
+      allPermissions: data.allPermissions.present ? data.allPermissions.value : this.allPermissions,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
       tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
@@ -2245,8 +2195,7 @@ class ClientTokenCacheData extends DataClass
           other.tokenHash == this.tokenHash);
 }
 
-class ClientTokenCacheTableCompanion
-    extends UpdateCompanion<ClientTokenCacheData> {
+class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheData> {
   final Value<String> id;
   final Value<String> clientId;
   final Value<bool> isRevoked;
@@ -2460,11 +2409,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
-  late final $ClientTokenCacheTableTable clientTokenCacheTable =
-      $ClientTokenCacheTableTable(this);
+  late final $ClientTokenCacheTableTable clientTokenCacheTable = $ClientTokenCacheTableTable(this);
   @override
-  Iterable<TableInfo<Table, Object?>> get allTables =>
-      allSchemaEntities.whereType<TableInfo<Table, Object?>>();
+  Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     configTable,
@@ -2541,8 +2488,7 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ConfigTableTableFilterComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -2701,8 +2647,7 @@ class $$ConfigTableTableFilterComposer
   );
 }
 
-class $$ConfigTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2861,8 +2806,7 @@ class $$ConfigTableTableOrderingComposer
   );
 }
 
-class $$ConfigTableTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2870,17 +2814,13 @@ class $$ConfigTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get serverUrl =>
-      $composableBuilder(column: $table.serverUrl, builder: (column) => column);
+  GeneratedColumn<String> get serverUrl => $composableBuilder(column: $table.serverUrl, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId =>
-      $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
 
-  GeneratedColumn<String> get authToken =>
-      $composableBuilder(column: $table.authToken, builder: (column) => column);
+  GeneratedColumn<String> get authToken => $composableBuilder(column: $table.authToken, builder: (column) => column);
 
   GeneratedColumn<String> get refreshToken => $composableBuilder(
     column: $table.refreshToken,
@@ -2912,25 +2852,20 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get username =>
-      $composableBuilder(column: $table.username, builder: (column) => column);
+  GeneratedColumn<String> get username => $composableBuilder(column: $table.username, builder: (column) => column);
 
-  GeneratedColumn<String> get password =>
-      $composableBuilder(column: $table.password, builder: (column) => column);
+  GeneratedColumn<String> get password => $composableBuilder(column: $table.password, builder: (column) => column);
 
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get host =>
-      $composableBuilder(column: $table.host, builder: (column) => column);
+  GeneratedColumn<String> get host => $composableBuilder(column: $table.host, builder: (column) => column);
 
-  GeneratedColumn<int> get port =>
-      $composableBuilder(column: $table.port, builder: (column) => column);
+  GeneratedColumn<int> get port => $composableBuilder(column: $table.port, builder: (column) => column);
 
-  GeneratedColumn<String> get nome =>
-      $composableBuilder(column: $table.nome, builder: (column) => column);
+  GeneratedColumn<String> get nome => $composableBuilder(column: $table.nome, builder: (column) => column);
 
   GeneratedColumn<String> get nomeFantasia => $composableBuilder(
     column: $table.nomeFantasia,
@@ -2942,28 +2877,22 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get telefone =>
-      $composableBuilder(column: $table.telefone, builder: (column) => column);
+  GeneratedColumn<String> get telefone => $composableBuilder(column: $table.telefone, builder: (column) => column);
 
-  GeneratedColumn<String> get celular =>
-      $composableBuilder(column: $table.celular, builder: (column) => column);
+  GeneratedColumn<String> get celular => $composableBuilder(column: $table.celular, builder: (column) => column);
 
-  GeneratedColumn<String> get email =>
-      $composableBuilder(column: $table.email, builder: (column) => column);
+  GeneratedColumn<String> get email => $composableBuilder(column: $table.email, builder: (column) => column);
 
-  GeneratedColumn<String> get endereco =>
-      $composableBuilder(column: $table.endereco, builder: (column) => column);
+  GeneratedColumn<String> get endereco => $composableBuilder(column: $table.endereco, builder: (column) => column);
 
   GeneratedColumn<String> get numeroEndereco => $composableBuilder(
     column: $table.numeroEndereco,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get bairro =>
-      $composableBuilder(column: $table.bairro, builder: (column) => column);
+  GeneratedColumn<String> get bairro => $composableBuilder(column: $table.bairro, builder: (column) => column);
 
-  GeneratedColumn<String> get cep =>
-      $composableBuilder(column: $table.cep, builder: (column) => column);
+  GeneratedColumn<String> get cep => $composableBuilder(column: $table.cep, builder: (column) => column);
 
   GeneratedColumn<String> get nomeMunicipio => $composableBuilder(
     column: $table.nomeMunicipio,
@@ -2980,11 +2909,9 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$ConfigTableTableTableManager
@@ -3010,12 +2937,9 @@ class $$ConfigTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ConfigTableTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ConfigTableTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ConfigTableTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ConfigTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ConfigTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ConfigTableTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -3148,9 +3072,7 @@ class $$ConfigTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3212,8 +3134,7 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ClientTokenCacheTableTableFilterComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3297,8 +3218,7 @@ class $$ClientTokenCacheTableTableFilterComposer
   );
 }
 
-class $$ClientTokenCacheTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3382,8 +3302,7 @@ class $$ClientTokenCacheTableTableOrderingComposer
   );
 }
 
-class $$ClientTokenCacheTableTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -3391,56 +3310,44 @@ class $$ClientTokenCacheTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get clientId =>
-      $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<bool> get isRevoked =>
-      $composableBuilder(column: $table.isRevoked, builder: (column) => column);
+  GeneratedColumn<bool> get isRevoked => $composableBuilder(column: $table.isRevoked, builder: (column) => column);
 
-  GeneratedColumn<int> get version =>
-      $composableBuilder(column: $table.version, builder: (column) => column);
+  GeneratedColumn<int> get version => $composableBuilder(column: $table.version, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId =>
-      $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
 
   GeneratedColumn<String> get tokenValue => $composableBuilder(
     column: $table.tokenValue,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get payloadJson => $composableBuilder(
     column: $table.payloadJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get allTables =>
-      $composableBuilder(column: $table.allTables, builder: (column) => column);
+  GeneratedColumn<bool> get allTables => $composableBuilder(column: $table.allTables, builder: (column) => column);
 
-  GeneratedColumn<bool> get allViews =>
-      $composableBuilder(column: $table.allViews, builder: (column) => column);
+  GeneratedColumn<bool> get allViews => $composableBuilder(column: $table.allViews, builder: (column) => column);
 
   GeneratedColumn<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get rulesJson =>
-      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+  GeneratedColumn<String> get rulesJson => $composableBuilder(column: $table.rulesJson, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get syncedAt => $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get tokenHash =>
-      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
+  GeneratedColumn<String> get tokenHash => $composableBuilder(column: $table.tokenHash, builder: (column) => column);
 }
 
 class $$ClientTokenCacheTableTableTableManager
@@ -3456,11 +3363,7 @@ class $$ClientTokenCacheTableTableTableManager
           $$ClientTokenCacheTableTableUpdateCompanionBuilder,
           (
             ClientTokenCacheData,
-            BaseReferences<
-              _$AppDatabase,
-              $ClientTokenCacheTableTable,
-              ClientTokenCacheData
-            >,
+            BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
           ),
           ClientTokenCacheData,
           PrefetchHooks Function()
@@ -3472,21 +3375,18 @@ class $$ClientTokenCacheTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ClientTokenCacheTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$ClientTokenCacheTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$ClientTokenCacheTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$ClientTokenCacheTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$ClientTokenCacheTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$ClientTokenCacheTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -3559,9 +3459,7 @@ class $$ClientTokenCacheTableTableTableManager
                 tokenHash: tokenHash,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3579,11 +3477,7 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
       $$ClientTokenCacheTableTableUpdateCompanionBuilder,
       (
         ClientTokenCacheData,
-        BaseReferences<
-          _$AppDatabase,
-          $ClientTokenCacheTableTable,
-          ClientTokenCacheData
-        >,
+        BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
       ),
       ClientTokenCacheData,
       PrefetchHooks Function()
@@ -3592,8 +3486,7 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$ConfigTableTableTableManager get configTable =>
-      $$ConfigTableTableTableManager(_db, _db.configTable);
+  $$ConfigTableTableTableManager get configTable => $$ConfigTableTableTableManager(_db, _db.configTable);
   $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
       $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
 }

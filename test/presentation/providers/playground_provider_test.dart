@@ -12,8 +12,7 @@ import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class MockExecutePlaygroundQuery extends Mock
-    implements ExecutePlaygroundQuery {}
+class MockExecutePlaygroundQuery extends Mock implements ExecutePlaygroundQuery {}
 
 class MockTestDbConnection extends Mock implements TestDbConnection {}
 
@@ -70,9 +69,7 @@ void main() {
       when(
         () => mockExecuteStreamingQuery(any(), any(), any()),
       ).thenAnswer((invocation) async {
-        final onChunk =
-            invocation.positionalArguments[2]
-                as Future<void> Function(List<Map<String, dynamic>>);
+        final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
         await onChunk([
           {'id': 1},
         ]);
@@ -164,8 +161,7 @@ void main() {
           pagination: any(named: 'pagination'),
         ),
       ).thenAnswer((invocation) async {
-        final pagination =
-            invocation.namedArguments[#pagination] as QueryPaginationRequest;
+        final pagination = invocation.namedArguments[#pagination] as QueryPaginationRequest;
         return rd.Success(
           QueryResponse(
             id: 'resp-${pagination.page}',

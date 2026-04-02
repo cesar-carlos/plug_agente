@@ -31,18 +31,14 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> setPoolSize(int value) async => poolSize = value;
 
   @override
-  Future<void> setLoginTimeoutSeconds(int value) async =>
-      loginTimeoutSeconds = value;
+  Future<void> setLoginTimeoutSeconds(int value) async => loginTimeoutSeconds = value;
 
   @override
-  Future<void> setMaxResultBufferMb(int value) async =>
-      maxResultBufferMb = value;
+  Future<void> setMaxResultBufferMb(int value) async => maxResultBufferMb = value;
 
   @override
-  Future<void> setStreamingChunkSizeKb(int value) async =>
-      streamingChunkSizeKb = value;
+  Future<void> setStreamingChunkSizeKb(int value) async => streamingChunkSizeKb = value;
 
   @override
-  Future<void> setUseNativeOdbcPool(bool value) async =>
-      useNativeOdbcPool = value;
+  Future<void> setUseNativeOdbcPool(bool value) async => useNativeOdbcPool = value;
 }

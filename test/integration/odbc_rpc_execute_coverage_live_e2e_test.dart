@@ -241,15 +241,12 @@ void main() async {
             method: 'sql.execute',
             id: 'e2e-fallback-row',
             params: <String, dynamic>{
-              'sql':
-                  'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = 1',
+              'sql': 'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = 1',
             },
           );
           final pickResp = await h.dispatcher.dispatch(pickOne, 'e2e-agent');
           expect(pickResp.isSuccess, isTrue, reason: '${pickResp.error}');
-          final pickRows =
-              (pickResp.result! as Map<String, dynamic>)['rows']
-                  as List<dynamic>?;
+          final pickRows = (pickResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
           expect(pickRows, isNotNull);
           expect(pickRows, isNotEmpty);
 
@@ -258,8 +255,7 @@ void main() async {
             method: 'sql.execute',
             id: 'e2e-fallback-count',
             params: <String, dynamic>{
-              'sql':
-                  'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName',
+              'sql': 'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName',
             },
           );
           final countFallbackResp = await h.dispatcher.dispatch(
@@ -271,9 +267,7 @@ void main() async {
             isTrue,
             reason: '${countFallbackResp.error}',
           );
-          final countRows =
-              (countFallbackResp.result! as Map<String, dynamic>)['rows']
-                  as List<dynamic>?;
+          final countRows = (countFallbackResp.result! as Map<String, dynamic>)['rows'] as List<dynamic>?;
           expect(countRows, isNotNull);
           expect(countRows, isNotEmpty);
         } else {
@@ -386,9 +380,7 @@ void main() async {
         expect(probeRows, isNotNull);
         expect(probeRows, hasLength(1));
         final probeRow = probeRows!.first as Map<String, dynamic>;
-        final lowerKeys = probeRow.keys
-            .map((dynamic k) => k.toString().toLowerCase())
-            .toSet();
+        final lowerKeys = probeRow.keys.map((dynamic k) => k.toString().toLowerCase()).toSet();
         expect(lowerKeys, contains('code'));
         expect(lowerKeys, contains('amt'));
         expect(

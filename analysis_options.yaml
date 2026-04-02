@@ -9,13 +9,16 @@
 # https://pub.dev/packages/very_good_analysis
 include: package:very_good_analysis/analysis_options.yaml
 
+# Matches VS Code dart.lineLength and `dart format` (project-wide page width).
+formatter:
+  page_width: 120
+
 linter:
   rules:
     # Public facing API should be documented
     public_member_api_docs: false
 
-    # Lines should not be longer than 80 characters
-    # Consider increasing this if needed for your project
+    # Formatter uses page_width 120; this lint targets a different default.
     lines_longer_than_80_chars: false
 
     # Allow single-member abstract interfaces for repository contracts

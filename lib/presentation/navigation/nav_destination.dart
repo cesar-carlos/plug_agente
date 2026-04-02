@@ -3,11 +3,27 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 
 enum NavDestination {
-  dashboard(AppRoutes.dashboard, FluentIcons.view_dashboard, AppStrings.navDashboard),
-  agentProfile(AppRoutes.agentProfile, FluentIcons.contact, AppStrings.navAgentProfile),
+  dashboard(
+    AppRoutes.dashboard,
+    FluentIcons.view_dashboard,
+    AppStrings.navDashboard,
+  ),
+  agentProfile(
+    AppRoutes.agentProfile,
+    FluentIcons.contact,
+    AppStrings.navAgentProfile,
+  ),
   playground(AppRoutes.playground, FluentIcons.table, AppStrings.navPlayground),
-  databaseSettings(AppRoutes.databaseSettings, FluentIcons.database, AppStrings.navDatabaseSettings),
-  websocketSettings(AppRoutes.websocketSettings, FluentIcons.plug_connected, AppStrings.navWebSocketSettings),
+  databaseSettings(
+    AppRoutes.databaseSettings,
+    FluentIcons.database,
+    AppStrings.navDatabaseSettings,
+  ),
+  websocketSettings(
+    AppRoutes.websocketSettings,
+    FluentIcons.plug_connected,
+    AppStrings.navWebSocketSettings,
+  ),
   config(AppRoutes.config, FluentIcons.settings, AppStrings.navSettings)
   ;
 

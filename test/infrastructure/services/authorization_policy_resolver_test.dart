@@ -18,8 +18,7 @@ import 'package:result_dart/result_dart.dart';
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class MockClientTokenLocalDataSource extends Mock
-    implements ClientTokenLocalDataSource {}
+class MockClientTokenLocalDataSource extends Mock implements ClientTokenLocalDataSource {}
 
 class MockJwtJwksVerifier extends Mock implements JwtJwksVerifier {}
 

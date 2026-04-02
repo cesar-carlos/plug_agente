@@ -18,8 +18,7 @@ import '../../helpers/mock_odbc_connection_settings.dart';
 
 class MockOdbcService extends Mock implements OdbcService {}
 
-class MockAgentConfigRepository extends Mock
-    implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
 class MockConnectionPool extends Mock implements IConnectionPool {}
 
@@ -755,8 +754,7 @@ void main() {
     test(
       'should prefer persisted connection string instead of rebuilding one',
       () async {
-        const persistedConnectionString =
-            'DSN=PersistedConnection;Encrypt=yes;';
+        const persistedConnectionString = 'DSN=PersistedConnection;Encrypt=yes;';
         final config = _buildConfig(persistedConnectionString);
         final request = QueryRequest(
           id: 'req-conn-string',
@@ -969,8 +967,7 @@ void main() {
       final request = QueryRequest(
         id: 'req-multi',
         agentId: config.agentId,
-        query:
-            'SELECT 1 AS first_value; UPDATE users SET active = 1; SELECT 2 AS second_value;',
+        query: 'SELECT 1 AS first_value; UPDATE users SET active = 1; SELECT 2 AS second_value;',
         timestamp: DateTime.now(),
         expectMultipleResults: true,
       );

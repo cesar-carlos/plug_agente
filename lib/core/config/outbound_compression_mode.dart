@@ -9,7 +9,8 @@ enum OutboundCompressionMode {
   gzip,
 
   /// Like [gzip], but skip compression when the GZIP output is not smaller than raw bytes.
-  auto;
+  auto
+  ;
 
   String get storageName => name;
 }

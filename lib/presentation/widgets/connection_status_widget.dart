@@ -78,9 +78,7 @@ class ConnectionStatusWidget extends StatelessWidget {
                         ? AppStrings.connectionStatusDatabaseConnected
                         : AppStrings.connectionStatusDatabaseDisconnected,
                     style: context.bodyText.copyWith(
-                      color: connectionProvider.isDbConnected
-                          ? colors.success
-                          : colors.disabled,
+                      color: connectionProvider.isDbConnected ? colors.success : colors.disabled,
                     ),
                   ),
                 ),

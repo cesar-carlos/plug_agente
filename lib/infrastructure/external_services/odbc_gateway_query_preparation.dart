@@ -48,8 +48,7 @@ class OdbcGatewayQueryPreparation {
     }
 
     final requiresExplicitOrderBy =
-        databaseType == DatabaseType.sqlServer ||
-        databaseType == DatabaseType.sybaseAnywhere;
+        databaseType == DatabaseType.sqlServer || databaseType == DatabaseType.sybaseAnywhere;
     if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
       return domain.ValidationFailure(
         'Page-offset pagination requires an explicit ORDER BY for '

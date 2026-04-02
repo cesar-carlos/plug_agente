@@ -8,15 +8,15 @@ enum StreamTerminalStatus {
   aborted,
 
   /// Stream was interrupted by an execution error (e.g. ODBC failure).
-  error;
+  error
+  ;
 
   String toJson() => name;
 
-  static StreamTerminalStatus fromJson(String value) =>
-      StreamTerminalStatus.values.firstWhere(
-        (s) => s.name == value,
-        orElse: () => StreamTerminalStatus.error,
-      );
+  static StreamTerminalStatus fromJson(String value) => StreamTerminalStatus.values.firstWhere(
+    (s) => s.name == value,
+    orElse: () => StreamTerminalStatus.error,
+  );
 }
 
 /// Payload for rpc:chunk event.
@@ -34,13 +34,9 @@ class RpcStreamChunk {
     streamId: json['stream_id'] as String,
     requestId: json['request_id'],
     chunkIndex: json['chunk_index'] as int,
-    rows: (json['rows'] as List<dynamic>)
-        .map((e) => e as Map<String, dynamic>)
-        .toList(),
+    rows: (json['rows'] as List<dynamic>).map((e) => e as Map<String, dynamic>).toList(),
     totalChunks: json['total_chunks'] as int?,
-    columnMetadata: (json['column_metadata'] as List<dynamic>?)
-        ?.map((e) => e as Map<String, dynamic>)
-        .toList(),
+    columnMetadata: (json['column_metadata'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList(),
   );
 
   final String streamId;
@@ -74,21 +70,20 @@ class RpcStreamComplete {
     this.terminalStatus,
   });
 
-  factory RpcStreamComplete.fromJson(Map<String, dynamic> json) =>
-      RpcStreamComplete(
-        streamId: json['stream_id'] as String,
-        requestId: json['request_id'],
-        totalRows: json['total_rows'] as int,
-        affectedRows: json['affected_rows'] as int?,
-        executionId: json['execution_id'] as String?,
-        startedAt: json['started_at'] as String?,
-        finishedAt: json['finished_at'] as String?,
-        terminalStatus: json['terminal_status'] != null
-            ? StreamTerminalStatus.fromJson(
-                json['terminal_status'] as String,
-              )
-            : null,
-      );
+  factory RpcStreamComplete.fromJson(Map<String, dynamic> json) => RpcStreamComplete(
+    streamId: json['stream_id'] as String,
+    requestId: json['request_id'],
+    totalRows: json['total_rows'] as int,
+    affectedRows: json['affected_rows'] as int?,
+    executionId: json['execution_id'] as String?,
+    startedAt: json['started_at'] as String?,
+    finishedAt: json['finished_at'] as String?,
+    terminalStatus: json['terminal_status'] != null
+        ? StreamTerminalStatus.fromJson(
+            json['terminal_status'] as String,
+          )
+        : null,
+  );
 
   final String streamId;
   final dynamic requestId;

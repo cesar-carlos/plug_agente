@@ -82,44 +82,35 @@ class E2EEnv {
 
   /// ODBC connection string for integration tests (SQL Anywhere / Sybase).
   /// Uses ODBC_TEST_DSN or ODBC_DSN.
-  static String? get odbcConnectionString =>
-      _get('ODBC_TEST_DSN') ?? _get('ODBC_DSN');
+  static String? get odbcConnectionString => _get('ODBC_TEST_DSN') ?? _get('ODBC_DSN');
 
   /// ODBC connection string for SQL Server E2E tests.
   /// Uses ODBC_TEST_DSN_SQL_SERVER or ODBC_DSN_SQL_SERVER.
-  static String? get odbcSqlServerConnectionString =>
-      _get('ODBC_TEST_DSN_SQL_SERVER') ?? _get('ODBC_DSN_SQL_SERVER');
+  static String? get odbcSqlServerConnectionString => _get('ODBC_TEST_DSN_SQL_SERVER') ?? _get('ODBC_DSN_SQL_SERVER');
 
   /// ODBC connection string for PostgreSQL E2E tests.
   /// Uses ODBC_TEST_DSN_POSTGRESQL or ODBC_DSN_POSTGRESQL.
-  static String? get odbcPostgresqlConnectionString =>
-      _get('ODBC_TEST_DSN_POSTGRESQL') ?? _get('ODBC_DSN_POSTGRESQL');
+  static String? get odbcPostgresqlConnectionString => _get('ODBC_TEST_DSN_POSTGRESQL') ?? _get('ODBC_DSN_POSTGRESQL');
 
   /// First available ODBC DSN for generic integration tests.
   /// Prefers ODBC_TEST_DSN, then SQL Server, then PostgreSQL.
   static String? get odbcConnectionStringAny =>
-      odbcConnectionString ??
-      odbcSqlServerConnectionString ??
-      odbcPostgresqlConnectionString;
+      odbcConnectionString ?? odbcSqlServerConnectionString ?? odbcPostgresqlConnectionString;
 
   /// Smoke query for ODBC integration (default: SELECT 1).
-  static String get odbcSmokeQuery =>
-      _get('ODBC_INTEGRATION_SMOKE_QUERY') ?? 'SELECT 1';
+  static String get odbcSmokeQuery => _get('ODBC_INTEGRATION_SMOKE_QUERY') ?? 'SELECT 1';
 
   /// Optional SQL Anywhere smoke using TOP/START AT (pagination-shaped).
   /// When unset, a built-in query against `sys.systable` is used.
-  static String? get odbcSqlAnywhereTopStartAtQuery =>
-      _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');
+  static String? get odbcSqlAnywhereTopStartAtQuery => _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');
 
   /// When true (`ODBC_E2E_REQUIRE_MULTI_RESULT=true`), RPC coverage E2E fails if
   /// `sql.execute` with `multi_result` returns no `result_sets`/rows (no fallback).
-  static bool get odbcE2eRequireMultiResult =>
-      _get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
+  static bool get odbcE2eRequireMultiResult => _get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
 
   /// When true (`ODBC_E2E_TRANSACTIONAL_BATCH=true`), RPC coverage E2E runs an
   /// extra `sql.executeBatch` with `transaction: true` (validates begin/commit).
-  static bool get odbcE2eTryTransactionalBatch =>
-      _get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
+  static bool get odbcE2eTryTransactionalBatch => _get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
 
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.
@@ -127,16 +118,13 @@ class E2EEnv {
     final conn = odbcConnectionStringAny;
     if (conn == null) return null;
     if (conn == odbcConnectionString) {
-      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ??
-          _get('ODBC_INTEGRATION_LONG_QUERY');
+      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     if (conn == odbcSqlServerConnectionString) {
-      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ??
-          _get('ODBC_INTEGRATION_LONG_QUERY');
+      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     if (conn == odbcPostgresqlConnectionString) {
-      return _get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL') ??
-          _get('ODBC_INTEGRATION_LONG_QUERY');
+      return _get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     return _get('ODBC_INTEGRATION_LONG_QUERY');
   }
@@ -157,6 +145,5 @@ class E2EEnv {
   }
 
   /// Returns [url] if valid, else [fallback].
-  static String _validatedUrl(String url, String fallback) =>
-      _isValidHttpUrl(url) ? url : fallback;
+  static String _validatedUrl(String url, String fallback) => _isValidHttpUrl(url) ? url : fallback;
 }

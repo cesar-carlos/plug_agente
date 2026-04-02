@@ -57,9 +57,7 @@ class QueryPaginationCursor {
                 )
                 .toList()
           : const [],
-      lastRowValues: version >= 2
-          ? (json['last_row_values'] as List<dynamic>? ?? const []).toList()
-          : const [],
+      lastRowValues: version >= 2 ? (json['last_row_values'] as List<dynamic>? ?? const []).toList() : const [],
     );
   }
 
@@ -71,10 +69,7 @@ class QueryPaginationCursor {
   final List<dynamic> lastRowValues;
 
   bool get isLegacyOffsetCursor => offset != null && queryHash == null;
-  bool get isStableCursor =>
-      queryHash != null &&
-      orderBy.isNotEmpty &&
-      lastRowValues.length == orderBy.length;
+  bool get isStableCursor => queryHash != null && orderBy.isNotEmpty && lastRowValues.length == orderBy.length;
 
   String toToken() {
     final encoded = jsonEncode({
@@ -83,8 +78,7 @@ class QueryPaginationCursor {
       'page': page,
       'page_size': pageSize,
       if (queryHash != null) 'query_hash': queryHash,
-      if (orderBy.isNotEmpty)
-        'order_by': orderBy.map((term) => term.toJson()).toList(),
+      if (orderBy.isNotEmpty) 'order_by': orderBy.map((term) => term.toJson()).toList(),
       if (lastRowValues.isNotEmpty) 'last_row_values': lastRowValues,
     });
     return base64Url.encode(utf8.encode(encoded)).replaceAll('=', '');
@@ -114,10 +108,7 @@ class QueryPaginationRequest {
 
   bool get isCursorMode => cursor != null;
   bool get usesStableCursor =>
-      isCursorMode &&
-      queryHash != null &&
-      orderBy.isNotEmpty &&
-      lastRowValues.length == orderBy.length;
+      isCursorMode && queryHash != null && orderBy.isNotEmpty && lastRowValues.length == orderBy.length;
 
   int get offset => _offset ?? (page - 1) * pageSize;
 

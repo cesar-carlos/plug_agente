@@ -73,22 +73,15 @@ class SqlCommandResult {
       index: json['index'] as int,
       ok: json['ok'] as bool,
       rows: json['rows'] != null
-          ? (json['rows'] as List<dynamic>)
-                .map((e) => e as Map<String, dynamic>)
-                .toList()
+          ? (json['rows'] as List<dynamic>).map((e) => e as Map<String, dynamic>).toList()
           : null,
       rowCount: json['row_count'] as int? ?? json['rowCount'] as int?,
-      affectedRows:
-          json['affected_rows'] as int? ?? json['affectedRows'] as int?,
+      affectedRows: json['affected_rows'] as int? ?? json['affectedRows'] as int?,
       error: json['error'] as String?,
       columnMetadata: json['column_metadata'] != null
-          ? (json['column_metadata'] as List<dynamic>)
-                .map((e) => e as Map<String, dynamic>)
-                .toList()
+          ? (json['column_metadata'] as List<dynamic>).map((e) => e as Map<String, dynamic>).toList()
           : json['columnMetadata'] != null
-          ? (json['columnMetadata'] as List<dynamic>)
-                .map((e) => e as Map<String, dynamic>)
-                .toList()
+          ? (json['columnMetadata'] as List<dynamic>).map((e) => e as Map<String, dynamic>).toList()
           : null,
     );
   }

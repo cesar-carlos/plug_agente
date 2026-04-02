@@ -58,10 +58,10 @@ void main() {
   final apiTimeoutUrl = get('API_TEST_TIMEOUT_URL');
   final odbcDsn = get('ODBC_TEST_DSN') ?? get('ODBC_DSN');
   final odbcSqlServer = get('ODBC_TEST_DSN_SQL_SERVER') ?? get('ODBC_DSN_SQL_SERVER');
-  final odbcPostgresql =
-      get('ODBC_TEST_DSN_POSTGRESQL') ?? get('ODBC_DSN_POSTGRESQL');
+  final odbcPostgresql = get('ODBC_TEST_DSN_POSTGRESQL') ?? get('ODBC_DSN_POSTGRESQL');
   final odbcSmoke = get('ODBC_INTEGRATION_SMOKE_QUERY');
-  final odbcLong = get('ODBC_INTEGRATION_LONG_QUERY') ??
+  final odbcLong =
+      get('ODBC_INTEGRATION_LONG_QUERY') ??
       get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ??
       get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ??
       get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL');
@@ -70,9 +70,15 @@ void main() {
 
   print('=== Variáveis E2E / Live Integration Tests ===\n');
 
-  print('RUN_LIVE_API_TESTS: ${runLiveApi ? "OK (true)" : "não definido ou false"}');
-  print('API_TEST_BASE_URL: ${apiBaseUrl ?? "http://31.97.29.223:3000/ (default)"}');
-  print('API_TEST_TIMEOUT_URL: ${apiTimeoutUrl ?? "http://10.255.255.1:9999/ (default)"}');
+  print(
+    'RUN_LIVE_API_TESTS: ${runLiveApi ? "OK (true)" : "não definido ou false"}',
+  );
+  print(
+    'API_TEST_BASE_URL: ${apiBaseUrl ?? "http://31.97.29.223:3000/ (default)"}',
+  );
+  print(
+    'API_TEST_TIMEOUT_URL: ${apiTimeoutUrl ?? "http://10.255.255.1:9999/ (default)"}',
+  );
   if (!runLiveApi) {
     print('  -> api_test: testes serão ignorados');
   } else {
@@ -80,9 +86,15 @@ void main() {
   }
 
   print('');
-  print('ODBC_TEST_DSN / ODBC_DSN (SQL Anywhere): ${odbcDsn != null ? "OK" : "não definido"}');
-  print('ODBC_TEST_DSN_SQL_SERVER: ${odbcSqlServer != null ? "OK" : "não definido"}');
-  print('ODBC_TEST_DSN_POSTGRESQL: ${odbcPostgresql != null ? "OK" : "não definido"}');
+  print(
+    'ODBC_TEST_DSN / ODBC_DSN (SQL Anywhere): ${odbcDsn != null ? "OK" : "não definido"}',
+  );
+  print(
+    'ODBC_TEST_DSN_SQL_SERVER: ${odbcSqlServer != null ? "OK" : "não definido"}',
+  );
+  print(
+    'ODBC_TEST_DSN_POSTGRESQL: ${odbcPostgresql != null ? "OK" : "não definido"}',
+  );
   final anyOdbc = odbcDsn ?? odbcSqlServer ?? odbcPostgresql;
   final anyOdbcValid = anyOdbc != null && anyOdbc.trim().isNotEmpty;
   if (!anyOdbcValid) {
@@ -93,7 +105,9 @@ void main() {
 
   print('');
   print('ODBC_INTEGRATION_SMOKE_QUERY: ${odbcSmoke ?? "SELECT 1 (default)"}');
-  print('ODBC_INTEGRATION_LONG_QUERY*: ${odbcLong ?? "não definido (teste de cancelamento ignorado)"}');
+  print(
+    'ODBC_INTEGRATION_LONG_QUERY*: ${odbcLong ?? "não definido (teste de cancelamento ignorado)"}',
+  );
 
   print('');
   print(
@@ -115,7 +129,9 @@ void main() {
   }
 
   print('');
-  print('Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart');
+  print(
+    'Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart',
+  );
 }
 
 Map<String, String> _loadEnv(File file) {

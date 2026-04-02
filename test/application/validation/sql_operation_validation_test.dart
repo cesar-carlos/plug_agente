@@ -275,9 +275,7 @@ void main() {
         expect(r.isSuccess(), isTrue);
         r.fold(
           (c) {
-            final userResources = c.resources
-                .where((x) => x.normalizedName == 'dbo.users')
-                .toList();
+            final userResources = c.resources.where((x) => x.normalizedName == 'dbo.users').toList();
             expect(userResources.length, 1);
           },
           (_) => fail('Expected success'),

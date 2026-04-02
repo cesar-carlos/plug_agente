@@ -1,5 +1,5 @@
 {
-  // Dart & Flutter settings
+  // Dart & Flutter settings (keep in sync with analysis_options.yaml formatter.page_width)
   "dart.lineLength": 120,
   "dart.flutterSdkPath": null,
   "dart.enableSdkFormatter": true,

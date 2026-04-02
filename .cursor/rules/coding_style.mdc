@@ -106,7 +106,7 @@ import '../models/query_result.dart';
 - Use `const` para valores conhecidos em compile time
 - Use `final` quando a referencia nao muda
 - Use trailing commas em estruturas multiline
-- Mantenha linhas perto de 80 caracteres quando possivel
+- O projeto usa `formatter.page_width` 120 em `analysis_options.yaml`; nao lute contra o `dart format`
 - Prefira interpolacao de strings a concatenacao
 
 ```dart

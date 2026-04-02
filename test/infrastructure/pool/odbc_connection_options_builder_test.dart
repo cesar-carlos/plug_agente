@@ -12,7 +12,9 @@ void main() {
       final settings = _MockSettings();
       when(() => settings.maxResultBufferMb).thenReturn(0);
 
-      final mb = OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(settings);
+      final mb = OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(
+        settings,
+      );
       expect(
         mb,
         ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024),
@@ -23,7 +25,10 @@ void main() {
       final settings = _MockSettings();
       when(() => settings.maxResultBufferMb).thenReturn(256);
 
-      expect(OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(settings), 128);
+      expect(
+        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(settings),
+        128,
+      );
     });
 
     test('forQueryExecution keeps initial buffer within max', () {

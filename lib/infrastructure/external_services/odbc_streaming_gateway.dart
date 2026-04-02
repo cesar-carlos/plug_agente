@@ -34,9 +34,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
     final maxResultBufferBytes = max(
       normalizedChunkSize,
-      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) *
-          1024 *
-          1024,
+      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
     );
     final initialResultBufferBytes = min(
       ConnectionConstants.defaultInitialResultBufferBytes,
@@ -79,8 +77,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           operation: 'initialize_streaming_odbc',
           context: {
             'reason': 'odbc_initialization_failed',
-            'user_message':
-                'Não foi possível inicializar o ambiente ODBC para streaming.',
+            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
       ),
@@ -228,9 +225,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     _cancelReason = reason;
     _isCancelRequested = true;
     try {
-      final result = await _service
-          .disconnect(activeConnectionId)
-          .timeout(_cancelDisconnectTimeout);
+      final result = await _service.disconnect(activeConnectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) => Failure(

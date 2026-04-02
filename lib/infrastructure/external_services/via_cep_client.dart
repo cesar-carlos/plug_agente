@@ -47,11 +47,7 @@ class ViaCepClient {
       final bairro = payload['bairro'];
       final localidade = payload['localidade'];
       final uf = payload['uf'];
-      if (cep is! String ||
-          logradouro is! String ||
-          bairro is! String ||
-          localidade is! String ||
-          uf is! String) {
+      if (cep is! String || logradouro is! String || bairro is! String || localidade is! String || uf is! String) {
         return Failure(
           domain.ServerFailure(AppStrings.msgViaCepInvalidPayload),
         );

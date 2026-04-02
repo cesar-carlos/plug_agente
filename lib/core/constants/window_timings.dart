@@ -11,5 +11,7 @@ class WindowTimings {
   static const Duration trayInitDelay = Duration(milliseconds: 100);
   static const Duration trayContextMenuDelay = Duration(milliseconds: 50);
   static const Duration trayIconClickDelay = Duration(milliseconds: 200);
-  static const Duration trayInteractionWarmupDelay = Duration(milliseconds: 1200);
+  static const Duration trayInteractionWarmupDelay = Duration(
+    milliseconds: 1200,
+  );
 }

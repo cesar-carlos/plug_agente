@@ -4,8 +4,7 @@ import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
-import 'package:plug_agente/domain/entities/sql_command.dart'
-    show SqlCommand, SqlCommandResult, SqlExecutionOptions;
+import 'package:plug_agente/domain/entities/sql_command.dart' show SqlCommand, SqlCommandResult, SqlExecutionOptions;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -146,9 +145,7 @@ void main() {
         ).thenAnswer((invocation) async {
           const sym = Symbol('timeout');
           timeouts.add(
-            invocation.namedArguments.containsKey(sym)
-                ? invocation.namedArguments[sym] as Duration?
-                : null,
+            invocation.namedArguments.containsKey(sym) ? invocation.namedArguments[sym] as Duration? : null,
           );
           await Future<void>.delayed(const Duration(milliseconds: 5));
           return Success(

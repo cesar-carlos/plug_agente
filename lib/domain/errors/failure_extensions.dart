@@ -70,10 +70,7 @@ extension ExceptionToFailureExtension on Object {
   }) {
     final errorMessage = message ?? toString();
 
-    if (this is FormatException ||
-        this is ArgumentError ||
-        this is StateError ||
-        this is NoSuchMethodError) {
+    if (this is FormatException || this is ArgumentError || this is StateError || this is NoSuchMethodError) {
       return ValidationFailure.withContext(
         message: errorMessage,
         context: context,
@@ -137,9 +134,7 @@ extension ResultLoggingExtension on Object {
     }
 
     final failure = this as Failure;
-    return failure is ConfigurationFailure ||
-        failure is ConnectionFailure ||
-        failure is ServerFailure;
+    return failure is ConfigurationFailure || failure is ConnectionFailure || failure is ServerFailure;
   }
 
   bool get isUserRecoverable {

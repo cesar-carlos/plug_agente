@@ -36,8 +36,7 @@ void main() {
           .listSync()
           .whereType<File>()
           .where(
-            (file) =>
-                p.basename(file.path).startsWith('settings.json.corrupt.'),
+            (file) => p.basename(file.path).startsWith('settings.json.corrupt.'),
           )
           .toList();
       expect(quarantinedFiles, isNotEmpty);

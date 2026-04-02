@@ -18,8 +18,5 @@ class AuthCredentials {
   final String password;
   final String agentId;
 
-  bool get isValid =>
-      username.trim().isNotEmpty &&
-      password.trim().isNotEmpty &&
-      agentId.trim().isNotEmpty;
+  bool get isValid => username.trim().isNotEmpty && password.trim().isNotEmpty && agentId.trim().isNotEmpty;
 }

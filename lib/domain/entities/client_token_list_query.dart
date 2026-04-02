@@ -26,8 +26,7 @@ class ClientTokenListQuery {
   final int? page;
   final int? pageSize;
 
-  bool get hasPagination =>
-      page != null && pageSize != null && page! > 0 && pageSize! > 0;
+  bool get hasPagination => page != null && pageSize != null && page! > 0 && pageSize! > 0;
 
   int get offset => hasPagination ? (page! - 1) * pageSize! : 0;
 }

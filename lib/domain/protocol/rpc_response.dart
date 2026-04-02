@@ -55,9 +55,7 @@ class RpcResponse {
       jsonrpc: json['jsonrpc'] as String,
       id: json['id'],
       result: json['result'],
-      error: json['error'] != null
-          ? RpcError.fromJson(json['error'] as Map<String, dynamic>)
-          : null,
+      error: json['error'] != null ? RpcError.fromJson(json['error'] as Map<String, dynamic>) : null,
       apiVersion: json['api_version'] as String?,
       meta: json['meta'] != null
           ? RpcProtocolMeta.fromJson(

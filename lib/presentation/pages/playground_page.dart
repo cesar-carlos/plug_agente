@@ -48,8 +48,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
         _restoreSqlHandlingMode().catchError(
-          (Object e) =>
-              AppLogger.warning('Failed to restore SQL handling mode', e),
+          (Object e) => AppLogger.warning('Failed to restore SQL handling mode', e),
         ),
       );
     });
@@ -209,9 +208,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed &&
-        isShiftPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
@@ -273,8 +270,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                             ),
                             _PlaygroundShortcutChip(
                               icon: FluentIcons.plug_connected,
-                              label:
-                                  AppStrings.playgroundShortcutTestConnection,
+                              label: AppStrings.playgroundShortcutTestConnection,
                             ),
                             _PlaygroundShortcutChip(
                               icon: FluentIcons.clear,
@@ -327,14 +323,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                               ),
                             );
                           },
-                          sqlHandlingModePreserve:
-                              playgroundProvider.sqlHandlingMode ==
-                              SqlHandlingMode.preserve,
+                          sqlHandlingModePreserve: playgroundProvider.sqlHandlingMode == SqlHandlingMode.preserve,
                           onSqlHandlingModeChanged: (value) {
                             playgroundProvider.setSqlHandlingMode(
-                              value
-                                  ? SqlHandlingMode.preserve
-                                  : SqlHandlingMode.managed,
+                              value ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
                             );
                             if (value) {
                               setState(() => _streamingModeEnabled = false);
@@ -357,9 +349,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                             );
                           },
                           useStreamingMode:
-                              config != null &&
-                              playgroundProvider.sqlHandlingMode !=
-                                  SqlHandlingMode.preserve,
+                              config != null && playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
                         ),
                         if (playgroundProvider.lastExecutionHint != null) ...[
                           const SizedBox(height: AppSpacing.md),
@@ -389,30 +379,23 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       hasPreviousPage: playgroundProvider.hasPreviousPage,
                       showPagination:
                           playgroundProvider.hasPagination &&
-                          playgroundProvider.sqlHandlingMode !=
-                              SqlHandlingMode.preserve,
+                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
                       resultSetCount: playgroundProvider.resultSets.length,
-                      selectedResultSetIndex:
-                          playgroundProvider.selectedResultSetIndex,
+                      selectedResultSetIndex: playgroundProvider.selectedResultSetIndex,
                       onPreviousPage:
-                          playgroundProvider.sqlHandlingMode !=
-                                  SqlHandlingMode.preserve &&
+                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
                               playgroundProvider.hasPreviousPage
                           ? () => playgroundProvider.goToPreviousPage()
                           : null,
                       onNextPage:
-                          playgroundProvider.sqlHandlingMode !=
-                                  SqlHandlingMode.preserve &&
+                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
                               playgroundProvider.hasNextPage
                           ? () => playgroundProvider.goToNextPage()
                           : null,
-                      onResultSetChanged:
-                          playgroundProvider.hasMultipleResultSets
+                      onResultSetChanged: playgroundProvider.hasMultipleResultSets
                           ? playgroundProvider.setSelectedResultSetIndex
                           : null,
-                      onPageSizeChanged:
-                          playgroundProvider.sqlHandlingMode !=
-                              SqlHandlingMode.preserve
+                      onPageSizeChanged: playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve
                           ? (value) {
                               unawaited(
                                 playgroundProvider

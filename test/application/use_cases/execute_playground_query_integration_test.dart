@@ -14,8 +14,7 @@ import 'package:uuid/uuid.dart';
 // Mocks
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
-class MockAgentConfigRepository extends Mock
-    implements IAgentConfigRepository {}
+class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
 class MockUuid extends Mock implements Uuid {}
 

@@ -14,8 +14,7 @@ import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_authorization_decision_cache.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockAuthorizationPolicyResolver extends Mock
-    implements IAuthorizationPolicyResolver {}
+class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
 void main() {
   group('AuthorizeSqlOperation', () {
@@ -149,8 +148,7 @@ void main() {
 
         final result = await useCase.call(
           token: token,
-          sql:
-              'SELECT * FROM dbo.users u INNER JOIN dbo.orders o ON u.id = o.user_id',
+          sql: 'SELECT * FROM dbo.users u INNER JOIN dbo.orders o ON u.id = o.user_id',
         );
 
         expect(result.isError(), isTrue);

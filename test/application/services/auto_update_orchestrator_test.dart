@@ -69,8 +69,7 @@ void main() {
     setUp(() {
       dotenv.clean();
       dotenv.loadFromString(
-        envString:
-            'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\nAUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
+        envString: 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\nAUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
       );
     });
 
@@ -194,8 +193,7 @@ void main() {
       });
 
       test('returns Failure when check trigger throws', () async {
-        final fakeGateway = FakeAutoUpdaterGateway()
-          ..checkError = Exception('boom');
+        final fakeGateway = FakeAutoUpdaterGateway()..checkError = Exception('boom');
         final fakeProbe = FakeAppcastProbeService();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),

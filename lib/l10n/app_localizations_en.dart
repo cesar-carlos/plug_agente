@@ -72,12 +72,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgAuthenticatedSuccessfully => 'Authenticated successfully!';
 
   @override
-  String get msgWebSocketConnectedSuccessfully =>
-      'Connected to WebSocket server successfully!';
+  String get msgWebSocketConnectedSuccessfully => 'Connected to WebSocket server successfully!';
 
   @override
-  String get msgDatabaseConnectionSuccessful =>
-      'Database connection established successfully!';
+  String get msgDatabaseConnectionSuccessful => 'Database connection established successfully!';
 
   @override
   String get msgConfigSavedSuccessfully => 'Configuration saved successfully!';
@@ -89,8 +87,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgOdbcDriverNameRequired => 'ODBC Driver name is required';
 
   @override
-  String get msgConnectionCheckFailed =>
-      'Could not connect to database. Check credentials and settings.';
+  String get msgConnectionCheckFailed => 'Could not connect to database. Check credentials and settings.';
 
   @override
   String get btnOk => 'OK';
@@ -102,8 +99,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queryNoResults => 'No results';
 
   @override
-  String get queryNoResultsMessage =>
-      'Execute a SELECT query to see results here.';
+  String get queryNoResultsMessage => 'Execute a SELECT query to see results here.';
 
   @override
   String get queryTotalRecords => 'Total records';
@@ -115,16 +111,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queryAffectedRows => 'Affected rows';
 
   @override
-  String get dashboardDescription =>
-      'Monitor your agent status and database connections here.';
+  String get dashboardDescription => 'Monitor your agent status and database connections here.';
 
   @override
   String get odbcDriverNotFound =>
       'The configured ODBC driver was not found on this computer. Review the driver and data source in settings.';
 
   @override
-  String get odbcAuthFailed =>
-      'Could not authenticate to the database. Check username, password and permissions.';
+  String get odbcAuthFailed => 'Could not authenticate to the database. Check username, password and permissions.';
 
   @override
   String get odbcServerUnreachable =>
@@ -135,8 +129,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'The connection to the database took longer than expected. Confirm the server is accessible and try again.';
 
   @override
-  String get odbcConnectionFailed =>
-      'Could not establish connection to the database.';
+  String get odbcConnectionFailed => 'Could not establish connection to the database.';
 
   @override
   String get odbcDetailPrefix => 'ODBC detail';

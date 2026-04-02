@@ -246,9 +246,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final agentField = find.byWidgetPredicate(
-          (Object? widget) =>
-              widget is TextBox &&
-              widget.placeholder == AppStrings.ctHintAgentId,
+          (Object? widget) => widget is TextBox && widget.placeholder == AppStrings.ctHintAgentId,
         );
         await tester.tap(agentField);
         await tester.pumpAndSettle();
