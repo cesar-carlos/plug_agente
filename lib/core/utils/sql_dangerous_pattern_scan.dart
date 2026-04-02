@@ -136,7 +136,4 @@ bool _dangerousKeywordFollows(String sql, int j) {
 }
 
 bool _isSqlIdentChar(int u) =>
-    (u >= 0x41 && u <= 0x5a) ||
-    (u >= 0x61 && u <= 0x7a) ||
-    (u >= 0x30 && u <= 0x39) ||
-    u == 0x5f;
+    (u >= 0x41 && u <= 0x5a) || (u >= 0x61 && u <= 0x7a) || (u >= 0x30 && u <= 0x39) || u == 0x5f;

@@ -98,9 +98,7 @@ class LogSanitizer {
       return _sanitizeMapDepth(Map<String, dynamic>.from(value), depth);
     }
     if (value is List) {
-      final take = value.length > _maxListElements
-          ? _maxListElements
-          : value.length;
+      final take = value.length > _maxListElements ? _maxListElements : value.length;
       final sanitized = <dynamic>[];
       for (var i = 0; i < take; i++) {
         final e = value[i];

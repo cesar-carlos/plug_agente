@@ -21,17 +21,14 @@ String ensureAgentsNamespaceUrl(String serverUrl) {
   }
 
   final parsedUri = Uri.tryParse(normalizedServerUrl);
-  if (parsedUri == null ||
-      (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
+  if (parsedUri == null || (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
     if (normalizedServerUrl.toLowerCase().endsWith('/agents')) {
       return normalizedServerUrl;
     }
     return joinServerUrlAndPath(normalizedServerUrl, '/agents');
   }
 
-  final pathSegments = parsedUri.pathSegments
-      .where((segment) => segment.isNotEmpty)
-      .toList();
+  final pathSegments = parsedUri.pathSegments.where((segment) => segment.isNotEmpty).toList();
   if (pathSegments.isNotEmpty && pathSegments.last.toLowerCase() == 'agents') {
     return normalizedServerUrl;
   }

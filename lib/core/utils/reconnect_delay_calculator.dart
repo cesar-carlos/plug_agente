@@ -13,14 +13,10 @@ Duration computeReconnectDelay({
   Random? random,
 }) {
   final attemptOffset = attempt - 1;
-  final safeExponent = attemptOffset < 0
-      ? 0
-      : (attemptOffset > 5 ? 5 : attemptOffset);
+  final safeExponent = attemptOffset < 0 ? 0 : (attemptOffset > 5 ? 5 : attemptOffset);
   final multiplier = 1 << safeExponent;
   final seconds = initialDelay.inSeconds * multiplier;
-  final cappedSeconds = seconds > maxDelay.inSeconds
-      ? maxDelay.inSeconds
-      : seconds;
+  final cappedSeconds = seconds > maxDelay.inSeconds ? maxDelay.inSeconds : seconds;
   final baseMs = cappedSeconds * 1000;
   final rng = random ?? Random();
   final jitterFactor = (rng.nextDouble() * 2 - 1) * jitterFraction;
