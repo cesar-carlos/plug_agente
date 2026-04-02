@@ -33,6 +33,7 @@ lib/
 |-- infrastructure/    # ODBC, transporte, datasources, repositories, codecs
 |-- presentation/      # app, boot, pages, providers, controllers, widgets
 |-- core/              # config, DI, routes, theme, logger, runtime, utils
+|-- l10n/              # localizacao gerada e arquivos ARB
 `-- shared/            # componentes e widgets compartilhados
 ```
 
@@ -47,6 +48,8 @@ lib/
 - Services de infraestrutura devem encapsular ODBC, Socket.IO, arquivos, APIs e
   outras fontes externas; mantenha esses services sem estado sempre que
   possivel
+- Contratos de repositories e gateways devem viver nas camadas internas; as
+  implementacoes concretas ficam em `infrastructure`
 - Se uma regra de negocio precisar combinar dados de multiplos repositories,
   faca isso em use case, application service ou camada apropriada, nao em
   service de infraestrutura
@@ -59,8 +62,13 @@ lib/
 - `Provider` para estado de apresentacao
 - `result_dart` para fluxos faliveis
 - `flutter_dotenv` para ambiente
+- `drift` para persistencia estruturada local
+- `shared_preferences` para preferencias leves
+- `flutter_secure_storage` para segredos e credenciais locais
 - `odbc_fast` para acesso ODBC
 - `socket_io_client` para comunicacao com o hub
+- `fluent_ui` para superficies desktop-first
+- `window_manager` e `tray_manager` para integracao com shell do Windows
 
 ## Regras de Dependencia do Projeto
 
@@ -73,6 +81,10 @@ lib/
 - Sempre use `result_dart`; nao introduza `Either`/`dartz`
 - Sempre use `odbc_fast`; nao introduza outro cliente ODBC
 - Sempre use `socket_io_client`; nao substitua por WebSocket cru
+- Sempre use `drift` para persistencia relacional/local estruturada; nao espalhe
+  SQL cru de configuracao pela UI
+- Sempre use `flutter_secure_storage` para dados sensiveis locais; nao grave
+  segredo em storage simples
 
 ## Protocolo Socket.IO
 
@@ -81,8 +93,51 @@ lib/
 - Consulte `docs/communication/socket_communication_standard.md` e
   `docs/communication/socketio_client_binary_transport.md` ao evoluir o
   transporte
+- Consulte `docs/communication/socket_communication_roadmap.md` quando a
+  mudanca alterar a ordem de evolucao planejada do protocolo
 - Schemas em `docs/communication/schemas/` e OpenRPC em
   `docs/communication/openrpc.json` sao a fonte de verdade do contrato
+
+## Organizacao de Constantes
+
+- Separe constantes por responsabilidade e camada; evite uma unica classe
+  gigante que mistura configuracao de app, limites de rede, delays de UI e
+  contratos de protocolo
+- Use `AppConstants` para identidade do app, endpoints padrao e eventos de
+  socket conhecidos na camada de apresentacao ou boot
+- Use `ConnectionConstants` para limites, timeouts e politicas de conexao ODBC
+  e Socket.IO usados em `infrastructure` e `application`
+- Use `WindowConstraints` para tamanhos minimos, maximos e constraints de
+  dialogs e janelas
+- Use `WindowTimings` para delays e contagens de retry relacionados ao ciclo de
+  vida da janela e do tray
+- Constantes exclusivas de uma camada ou servico devem viver perto do ponto de
+  uso; nao mova para constantes globais apenas para "centralizar"
+- Status HTTP amplamente conhecidos (`200`, `401`, `404`) podem ser usados como
+  literais no datasource/client que os interpreta; extraia para constante apenas
+  quando o mesmo valor tiver significado especifico de dominio ou for
+  reutilizado com semantica propria
+
+## Persistencia Local e Configuracao
+
+- Use `drift` para dados locais estruturados, historico, regras e configuracoes
+  que pedem schema claro e migracoes
+- Use `shared_preferences` apenas para preferencias simples e flags leves
+- Use `flutter_secure_storage` para tokens, segredos e credenciais locais
+- Nao misture responsabilidades de persistencia entre provider, widget e service;
+  concentre acesso em datasource/repository
+- Mudancas em tabelas `drift` exigem revisar migracoes, arquivos gerados e o
+  impacto no bootstrap do app
+
+## Localizacao e Strings
+
+- Este repositorio ja usa `flutter_localizations` e arquivos ARB em `lib/l10n/`
+- Prefira strings visiveis ao usuario via localizacao quando a superficie ja
+  estiver integrada ao fluxo de `AppLocalizations`
+- Evite espalhar texto novo de UI em literais quando a tela ja estiver
+  localizada ou compartilhada entre fluxos importantes
+- Mensagens tecnicas, logs e comentarios continuam em ingles quando isso fizer
+  parte da convencao do arquivo ou da camada
 
 ## Erros e Resultados
 
@@ -160,10 +215,14 @@ result.fold(
 
 - Configure janela antes de `runApp()`
 - Use `window_manager` para controle de janela
+- Use `tray_manager` ou a abstracao equivalente do projeto para integracao com
+  tray; nao acople widgets diretamente a APIs da shell
 - Considere atalhos de teclado, foco e resize em todas as telas desktop
 - Para telas desktop-first, prefira Fluent UI como linguagem visual
 - Se uma tela ainda estiver em Material, mantenha o escopo isolado e
   consistente
+- Centralize regras de startup, update, tray, auto-start e politicas de runtime
+  em services/orchestrators dedicados, nao em pages
 
 ## Entry Point
 
@@ -189,6 +248,9 @@ Future<void> main(List<String> args) async {
 - [ ] Services externos continuam sem estado sempre que possivel
 - [ ] Fluxos faliveis retornam `Result<T>` onde faz sentido
 - [ ] Failures estao tipadas e preservam contexto tecnico util
+- [ ] Persistencia local usa a ferramenta correta (`drift`,
+      `shared_preferences`, `flutter_secure_storage`) para cada tipo de dado
+- [ ] Strings de UI respeitam a estrategia atual de localizacao da superficie
 - [ ] Mensagens para usuario sao claras e nao vazam detalhes internos
 - [ ] Testes relevantes cobrem `Result<T>`, failures e contratos alterados
 - [ ] Mudancas de transporte respeitam a documentacao do protocolo Plug

@@ -27,6 +27,8 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
   espalhadas
 - Prefira polimorfismo, estrategias e adaptadores a editar codigo estavel toda
   vez que surge uma variante
+- Em UI e componentes Flutter, prefira primeiro composicao, parametros,
+  builders e contratos pequenos; heranca deve ser excecao, nao padrao
 - Se um fluxo depende de `switch` frequente por tipo, reavalie a modelagem
 
 ## LSP
@@ -60,6 +62,8 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - Se um caso de uso depende de classe concreta, a fronteira provavelmente esta
   errada
 - Se uma interface tem muitos metodos opcionais ou nao usados, aplique ISP
+- Se uma hierarquia de componentes exige overrides frequentes para ajustar
+  pequenos detalhes visuais, prefira um componente base composicional
 
 ## Referencias Cruzadas
 

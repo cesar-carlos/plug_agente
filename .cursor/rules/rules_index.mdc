@@ -20,7 +20,7 @@ alwaysApply: true
 Use these as language-agnostic guidance that can be reused in other stacks.
 
 - **`general_rules.mdc`**: cross-cutting behavior, docs/comments policy, reuse,
-  duplication, magic numbers
+  duplication, magic numbers, refactoring strategy
 - **`clean_architecture.mdc`**: layer boundaries and dependency direction
 - **`solid_principles.mdc`**: SRP/OCP/LSP/ISP/DIP design guidance
 - **`testing.mdc`**: universal test strategy, isolation, mocking, failure-path
@@ -31,23 +31,25 @@ Use these as language-agnostic guidance that can be reused in other stacks.
 Use these only when the codebase is Dart/Flutter.
 
 - **`coding_style.mdc`**: Dart syntax, naming, imports, formatting,
-  async/logging, tooling
+  async/logging, tooling, and modern language features
 - **`null_safety.mdc`**: nullability modeling and safe access patterns
 - **`flutter_widgets.mdc`**: widget composition, local UI state, build/rebuild
-  performance, layout primitives
+  performance, layout primitives, and Provider-friendly composition
 - **`ui_ux_design.mdc`**: desktop design system, interaction patterns,
-  accessibility, responsive desktop behavior
+  accessibility, responsive desktop behavior, and Fluent-first guidance
 - **`testing_dart_flutter.mdc`**: Dart/Flutter test code, widget tests, test
-  harnesses, assertion preferences
+  harnesses, assertion preferences, mocks, and fakes
 
 ### Project-Specific Rules
 
 - **`project_specifics.mdc`**: repo-specific architecture choices, packages,
-  transport contract, typed failures, desktop/runtime decisions
+  transport contract, typed failures, desktop/runtime, persistence, and l10n
+  decisions
 
 ## Coordination Rules
 
-- General behavior, docs/comments, reuse, duplication: `general_rules.mdc`
+- General behavior, docs/comments, reuse, duplication, refactoring strategy:
+  `general_rules.mdc`
 - Layering and import direction: `clean_architecture.mdc`
 - Class and interface design: `solid_principles.mdc`
 - Test strategy in any stack: `testing.mdc`

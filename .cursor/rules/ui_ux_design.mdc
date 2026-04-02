@@ -23,10 +23,14 @@ focus, builders, `RepaintBoundary` e `ListView.builder`, use
 
 - Escolha uma linguagem visual principal por tela/superficie: Fluent UI ou
   Material
+- Neste repositorio, prefira Fluent UI como linguagem principal em telas
+  desktop-first
 - Centralize tokens de cor, tipografia, spacing, radius e elevacao
 - Garanta suporte real a Light/Dark
 - Mantenha estados coerentes: hover, focus, pressed, disabled
 - Evite misturar Fluent e Material na mesma superficie
+- Se um trecho ainda precisar de Material, isole essa escolha em uma subarvore
+  clara e mantenha a experiencia coerente naquele escopo
 
 ## Hierarquia Visual
 
@@ -43,6 +47,8 @@ focus, builders, `RepaintBoundary` e `ListView.builder`, use
 - Implemente hover, cursor adequado e foco visivel
 - Reserve dialogs para decisoes criticas; use feedback menos intrusivo para
   estados comuns
+- Para telas operacionais, prefira estrutura com navegacao persistente,
+  cabecalho claro e area principal orientada a produtividade
 
 ## Estados da Interface
 
@@ -50,6 +56,8 @@ focus, builders, `RepaintBoundary` e `ListView.builder`, use
 - Use mensagens claras e acionaveis
 - Para erros importantes em desktop, prefira superficies copiaveis
 - Use notificacoes transient apenas para eventos informativos
+- Em grids, dashboards e playgrounds, preserve contexto visivel ao trocar entre
+  loading, success e error; evite saltos abruptos de layout
 
 ```dart
 SelectableText.rich(
@@ -73,6 +81,17 @@ SelectableText.rich(
 - Permita submissao por Enter quando fizer sentido
 - Organize formularios para leitura vertical clara
 - Nao esconda erros relevantes em toasts temporarios
+- Em desktop, prefira larguras estaveis, alinhamento consistente de labels e
+  acoes primarias previsiveis
+
+## Localizacao e Texto
+
+- Em superficies ja integradas com `AppLocalizations`, prefira strings vindas
+  da localizacao em vez de novos literais soltos
+- Mantenha terminologia consistente entre navegacao, formularios, erros e
+  feedbacks
+- Textos operacionais devem ser curtos, acionaveis e adequados a usuarios de
+  desktop
 
 ## Acessibilidade
 
@@ -88,6 +107,8 @@ SelectableText.rich(
 - Defina tamanho minimo para evitar colapso de UI
 - Use breakpoints desktop de forma consistente
 - Planeje comportamento para telas largas, medias e compactas
+- Em superficies com tabelas, logs ou playground, priorize aproveitamento de
+  largura sem comprometer legibilidade ou hierarquia
 
 ## Integracoes Desktop
 

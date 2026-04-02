@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
+import 'package:plug_agente/core/constants/window_timings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:window_manager/window_manager.dart';
@@ -80,8 +81,8 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     await windowManager.setSkipTaskbar(true);
     await windowManager.hide();
 
-    for (var attempt = 1; attempt <= AppConstants.windowStartupHideRetryCount; attempt++) {
-      await Future<void>.delayed(AppConstants.windowStartupHideRetryDelay);
+    for (var attempt = 1; attempt <= WindowTimings.startupHideRetryCount; attempt++) {
+      await Future<void>.delayed(WindowTimings.startupHideRetryDelay);
       final isVisible = await windowManager.isVisible();
 
       if (!isVisible) {
@@ -105,7 +106,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     if (isStillVisible) {
       _logger.e(
         'Falha ao ocultar janela na inicialização minimizada após '
-        '${AppConstants.windowStartupHideRetryCount} tentativas',
+        '${WindowTimings.startupHideRetryCount} tentativas',
       );
     }
   }
@@ -158,7 +159,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       _logger.i('🪟 Mostrando janela...');
 
       await windowManager.setSkipTaskbar(false);
-      await Future<void>.delayed(AppConstants.windowShowInitialDelay);
+      await Future<void>.delayed(WindowTimings.showInitialDelay);
 
       final isMinimized = await windowManager.isMinimized();
       final isVisible = await windowManager.isVisible();
@@ -170,7 +171,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       if (isMinimized) {
         _logger.i('🔄 Janela está minimizada, restaurando...');
         await windowManager.restore();
-        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
+        await Future<void>.delayed(WindowTimings.showRestoreDelay);
       }
 
       _logger.i('👁️ Chamando show()...');
@@ -185,14 +186,14 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
           '⚠️ Janela ainda não está visível após show(), tentando restaurar...',
         );
         await windowManager.restore();
-        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
+        await Future<void>.delayed(WindowTimings.showRestoreDelay);
         await windowManager.show();
-        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
+        await Future<void>.delayed(WindowTimings.showRestoreDelay);
       }
 
       _logger.i('🎯 Focando janela...');
       await windowManager.focus();
-      await Future<void>.delayed(AppConstants.windowShowInitialDelay);
+      await Future<void>.delayed(WindowTimings.showInitialDelay);
 
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();
@@ -205,7 +206,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
           '❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!',
         );
         await windowManager.restore();
-        await Future<void>.delayed(AppConstants.windowShowFinalDelay);
+        await Future<void>.delayed(WindowTimings.showFinalDelay);
         await windowManager.show();
         await windowManager.focus();
       }
@@ -214,7 +215,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       try {
         _logger.i('🔄 Tentando método alternativo...');
         await windowManager.restore();
-        await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
+        await Future<void>.delayed(WindowTimings.showRestoreDelay);
         await windowManager.show();
         await windowManager.focus();
       } on Exception catch (e2) {
@@ -226,7 +227,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
 
   Future<void> restore() async {
     await windowManager.restore();
-    await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
+    await Future<void>.delayed(WindowTimings.showRestoreDelay);
     await show();
   }
 

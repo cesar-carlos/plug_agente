@@ -28,8 +28,11 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
   concretas
 - `presentation`: UI, estado visual, navegacao e adaptacao para interacao com o
   usuario
-- `core/shared`: codigo transversal, utilitarios, tema, config e componentes
-  reaproveitaveis
+- `core`: config, DI, runtime, tema, rotas, logging e utilitarios transversais
+- `shared`: widgets, extensoes e componentes reutilizaveis sem ownership de uma
+  feature especifica
+- `l10n`: contratos e gerados de localizacao consumidos pela UI; trate como
+  suporte de apresentacao, nao como dominio
 
 ## Regras de Dependencia
 
@@ -42,15 +45,23 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - `infrastructure` implementa contratos definidos nas camadas mais internas
 - `presentation` pode depender de `application`, `domain`, `core` e `shared`
 - `presentation` nao pode importar `infrastructure` diretamente
+- `shared` nao deve virar uma camada de negocio paralela; mantenha apenas
+  reuso transversal estavel
+- `core` nao deve acumular regra de negocio de feature; use-o apenas para
+  concerns transversais do app
 
 ## Regras de Fronteira
 
 - Coloque efeitos colaterais em `infrastructure`
 - Mantenha `domain` agnostico a tecnologia
 - Exponha contratos nas camadas internas; implemente nas externas
+- Prefira contratos de repositories, gateways e services nas camadas internas;
+  deixe implementacoes concretas em `infrastructure`
 - Nao atravesse camadas por conveniencia com imports diretos
 - Se uma tela precisar de um detalhe tecnico, traduza isso antes em
   `application` ou `core`
+- Arquivos gerados, como codigo de `l10n` ou `build_runner`, nao redefinem a
+  arquitetura; avalie a camada pelo papel do arquivo-fonte que os origina
 
 ## Sinais de Violacao
 
@@ -59,6 +70,9 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - `application` importando widget, provider ou classe de infraestrutura
 - entidades com logica de persistencia, serializacao de transporte ou estado de
   tela
+- `shared` recebendo responsabilidades de fluxo, casos de uso ou acesso a dados
+- `core` virando deposito generico de classes que pertencem a `application` ou
+  `infrastructure`
 
 ## Referencias Cruzadas
 
@@ -71,4 +85,6 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - [ ] A direcao dos imports respeita a arquitetura
 - [ ] Efeitos colaterais ficaram fora de `domain`
 - [ ] `presentation` nao conhece implementacoes concretas de infraestrutura
+- [ ] `core` e `shared` ficaram focados em reutilizacao transversal, sem virar
+      camadas genericas
 - [ ] Contratos vivem em camadas internas e implementacoes nas externas

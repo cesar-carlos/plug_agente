@@ -28,6 +28,8 @@ Nao repita aqui regras de design system e UX desktop. Para isso, use
   muda
 - Separe regra de negocio de estado visual
 - Sempre descarte `FocusNode`, controllers, timers, subscriptions e streams
+- Quando o estado vier de `Provider`, prefira `context.select`, `Selector` ou
+  subwidgets menores para limitar rebuilds
 
 ```dart
 class CounterPanel extends StatefulWidget {
@@ -77,6 +79,16 @@ class _CounterPanelState extends State<CounterPanel> {
 - Mantenha `build()` legivel e raso
 - Nao retorne `Widget` de funcoes auxiliares quando uma classe privada ou
   construtor direto resolver
+- Pages devem orquestrar a tela; componentes reutilizaveis e superficies comuns
+  devem migrar para `shared/` quando aparecerem em mais de um fluxo
+- Para evoluir componentes base, prefira composicao por slots, parametros,
+  builders, tema e pequenos contratos a criar arvores de heranca de widgets
+- Use heranca em widgets apenas quando houver um contrato visual e comportamental
+  realmente estavel, com substituicao clara e baixo risco de overrides
+- Se duas variantes diferem so em partes da superficie, extraia um componente
+  base composicional e injete as diferencas em vez de subclassificar
+- Quando um padrao aparecer em mais de um fluxo, evolua primeiro o componente em
+  `shared/` antes de duplicar ou criar uma nova variante isolada
 
 ```dart
 class UserListPage extends StatelessWidget {
@@ -125,6 +137,8 @@ class _UserListItem extends StatelessWidget {
 - Use `Stack`/`Positioned`/`Align` apenas quando layout linear nao resolver
 - Use `OverlayPortal` ou overlay equivalente para menus, dropdowns e tooltips
   customizados
+- Em desktop, prefira layouts com paineis claros, secoes persistentes e
+  comportamento previsivel ao redimensionar
 
 ```dart
 Row(
@@ -152,6 +166,8 @@ Row(
 - Use `Key` apenas quando necessario: listas, reorder, animacoes
 - Prefira tear-offs e construtores diretos a wrappers desnecessarios quando a
   leitura ficar mais simples
+- Nao leia providers amplos no topo da pagina se apenas pequenos trechos da UI
+  dependem daquele estado
 
 ```dart
 Future<List<int>> _process(List<int> values) async {
@@ -180,6 +196,8 @@ List<int> _squareValues(List<int> values) {
 - Forneca `loadingBuilder` e `errorBuilder` em imagens de rede
 - Adicione labels semanticos para acoes apenas com icone
 - Garanta foco e navegacao por teclado em componentes interativos
+- Prefira componentes de formulario compartilhados quando o projeto ja tiver um
+  padrao estabelecido para campos, dropdowns e mensagens
 
 ```dart
 TextField(
@@ -195,6 +213,27 @@ TextField(
 - Consuma cores, tipografia, spacing e radius a partir do theme/tokens do app
 - Use `ThemeExtension` para tokens que nao cabem no `ThemeData` padrao
 - Nao hardcode design system em widgets compartilhados
+- Em superficies Fluent, prefira tokens e componentes do tema Fluent do app em
+  vez de adaptar APIs Material por conveniencia
+
+## Evolucao de Componentes Base
+
+- Ao surgir uma nova variante, tente primeiro estender o componente base por
+  configuracao, composicao ou estrategia local
+- Evite criar subclasses apenas para trocar icone, padding, cor, label ou partes
+  pequenas do layout
+- Se o componente base estiver acumulando muitos parametros desconexos, quebre-o
+  em componentes menores e coesos antes de recorrer a heranca
+- Prefira contratos pequenos e previsiveis para componentes compartilhados; isso
+  facilita manutencao, testes e substituicao futura
+
+## Texto e Localizacao no Widget
+
+- Use `AppLocalizations` para strings visiveis em widgets que ja participam do
+  fluxo localizado
+- Evite duplicar literals de UI entre `presentation/` e `shared/`
+- Se um widget compartilhado precisar de texto variavel, prefira receber a
+  string pronta ou um contrato simples em vez de acoplar regras de negocio
 
 ## Profiling
 
@@ -219,6 +258,9 @@ TextField(
 - [ ] `build()` esta legivel e sem aninhamento excessivo
 - [ ] Listas longas usam builders/slivers
 - [ ] Nao ha trabalho pesado dentro de `build()`
+- [ ] Rebuilds de `Provider` ficaram granulares e coerentes com a subarvore
+- [ ] Componentes compartilhados evoluiram por composicao antes de considerar
+      heranca
 - [ ] Custos de renderizacao caros (`saveLayer`, clipping, opacity, intrinsics)
       foram evitados ou justificados
 - [ ] Performance foi avaliada em `profile mode` quando a tarefa exigir isso

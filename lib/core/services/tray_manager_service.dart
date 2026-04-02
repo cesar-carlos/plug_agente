@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/window_timings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
@@ -56,10 +56,10 @@ class TrayManagerService with TrayListener implements ITrayService {
 
     try {
       await trayManager.setToolTip('Plug Database');
-      await Future<void>.delayed(AppConstants.trayInitDelay);
+      await Future<void>.delayed(WindowTimings.trayInitDelay);
 
       await _updateMenu();
-      await Future<void>.delayed(AppConstants.trayInitDelay);
+      await Future<void>.delayed(WindowTimings.trayInitDelay);
 
       _isInitialized = true;
       _enableInteractionsAfterWarmup();
@@ -78,7 +78,7 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   void _enableInteractionsAfterWarmup() {
     unawaited(
-      Future<void>.delayed(AppConstants.trayInteractionWarmupDelay, () {
+      Future<void>.delayed(WindowTimings.trayInteractionWarmupDelay, () {
         _interactionsEnabled = true;
       }),
     );
@@ -197,7 +197,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       return;
     }
     unawaited(
-      Future<void>.delayed(AppConstants.trayIconClickDelay, () {
+      Future<void>.delayed(WindowTimings.trayIconClickDelay, () {
         unawaited(
           _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
             _logger.e('Erro ao restaurar janela do tray', error: e);
@@ -255,7 +255,7 @@ class TrayManagerService with TrayListener implements ITrayService {
 
     try {
       await _updateMenu();
-      await Future<void>.delayed(AppConstants.trayContextMenuDelay);
+      await Future<void>.delayed(WindowTimings.trayContextMenuDelay);
       await trayManager.popUpContextMenu();
     } on Exception catch (e, stackTrace) {
       _logger.e(

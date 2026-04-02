@@ -59,6 +59,19 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 - Integration test: valida fronteiras reais e contratos externos
 - UI/component visual test: valida estados e interacoes visiveis
 
+### Quando usar cada tipo
+
+- Comece por **unit test** para regras puras, mapeadores, validators e failures
+- Use **component/service test** quando o comportamento envolver colaboracao
+  entre partes proximas, como repository + datasource ou use case + service
+- Use **integration test** para contratos com ODBC, Socket.IO, banco, HTTP e
+  outros recursos externos reais; confie nas variaveis de ambiente para controlar
+  execucao
+- Use **UI/component visual test** para validar estados visiveis, fluxos de
+  interacao e rendering esperado de widgets criticos
+- Prefira o tipo mais simples que valide o comportamento sem dependencias
+  desnecessarias; evite integration test para regra que um unit test cobre
+
 ## Cobertura
 
 - Priorize alta cobertura no dominio e nas fronteiras de erro

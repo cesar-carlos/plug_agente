@@ -32,14 +32,17 @@ Dart/Flutter, use `coding_style.mdc`, `null_safety.mdc`,
 - Nao criar `README.md`, changelog, guias ou arquivos `.md` sem solicitacao
   explicita
 - Nao adicionar documentacao extensa por padrao
+- Evite comentarios por padrao; prefira codigo claro e autoexplicativo
 - Nao comentar o obvio
 
 ### Quando comentar
 
 - Comente apenas quando o codigo sozinho nao explica o motivo da decisao
+- Antes de comentar, prefira renomear, extrair funcoes ou reorganizar o codigo
 - Use comentarios para tradeoffs, workarounds, restricoes externas ou riscos
 - Prefira explicar "por que" e "qual impacto existe", nao "o que o codigo faz"
 - Quando comentarios forem necessarios, escreva-os em ingles
+- Quando documentacao for realmente solicitada ou necessaria, escreva-a em ingles
 
 ```text
 Bom:
@@ -52,6 +55,7 @@ Evite:
 ## Codigo Autoexplicativo
 
 - Prefira clareza por nomenclatura e extracao de funcoes pequenas
+- O codigo deve ser claro e autoexplicativo sem depender de comentarios
 - Remova codigo morto, comentarios desatualizados e trechos comentados
 - Se um trecho exige explicacao longa, reestruture antes de comentar
 
@@ -72,6 +76,32 @@ Prefira:
 - uma abstracao nomeada ou constante compartilhada para essa politica
 ```
 
+## Refatoracao
+
+### Quando refatorar
+
+- Aplique a regra do escoteiro: ao tocar um arquivo, deixe-o um pouco melhor
+- Antes de adicionar feature, refatore a area se a estrutura atual atrapalhar a
+  mudanca
+- Pela regra de dois, extraia quando o mesmo padrao reaparecer com a mesma
+  intencao
+- Trate como sinais de refatoracao: funcao longa, responsabilidades misturadas,
+  parametros em excesso e condicionais aninhados
+
+### Como refatorar com seguranca
+
+- Prefira passos pequenos e equivalentes em comportamento
+- Nao misture limpeza estrutural com mudanca de regra no mesmo passo
+- Rode analyzer e testes existentes apos alteracoes estruturais relevantes
+- Se a area nao tiver cobertura suficiente, adicione testes minimos antes da
+  refatoracao quando isso reduzir risco real
+
+### O que evitar
+
+- Nao faca big bang refactor sem etapas revisaveis
+- Nao refatore por especulacao de um uso futuro
+- Nao misture renomeacao, formatacao e mudanca de comportamento no mesmo passo
+
 ## Constantes e Valores Literais
 
 - Nao use numeros, strings ou duracoes "magicas" quando representarem regra de
@@ -90,8 +120,11 @@ Prefira:
 
 ## Checklist
 
+- [ ] Refatoracao e mudanca de comportamento foram separadas quando necessario
 - [ ] O codigo esta claro sem depender de comentarios longos
+- [ ] Comentarios foram evitados quando uma melhoria de codigo resolveria
 - [ ] Nao foram criados docs/READMEs sem pedido explicito
 - [ ] Comentarios explicam motivo, nao a mecanica do codigo
+- [ ] Comentarios e documentacao necessarios foram escritos em ingles
 - [ ] Valores literais com significado foram nomeados
 - [ ] Padroes repetidos viraram abstracoes pequenas e reutilizaveis

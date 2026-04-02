@@ -21,6 +21,23 @@ arquitetura.
 - Prefira representar estados com enums, sealed types ou values dedicados quando
   isso for mais claro que `null`
 - Nao marque um campo como nullable apenas para adiar decisao de modelagem
+- Quando um campo nullable representa na verdade variantes com dados diferentes,
+  prefira `sealed class` para modelar essas variantes com seguranca de
+  exaustividade no `switch`
+
+```dart
+// Evite: nullable que esconde variantes distintas
+class QueryResult {
+  final List<Row>? rows;     // null = erro ou loading?
+  final String? errorMessage;
+}
+
+// Prefira: variantes explicitas e exaustivas
+sealed class QueryState {}
+class QueryLoading extends QueryState {}
+class QueryLoaded extends QueryState { final List<Row> rows; QueryLoaded(this.rows); }
+class QueryError extends QueryState { final String message; QueryError(this.message); }
+```
 
 ## Inicializacao
 
@@ -71,10 +88,13 @@ return Success(currentUser.id);
 - campos `late` que poderiam ser `final`
 - entidades de dominio carregando nulls tecnicos vindos de transporte
 - widgets ou services tratando o mesmo fallback nulo em varios lugares
+- multiplos campos nullable que sempre aparecem juntos ou mutuamente exclusivos;
+  prefira sealed class para modelar esses grupos de forma exaustiva
 
 ## Referencias Cruzadas
 
 - Estilo Dart e APIs: `coding_style.mdc`
+- Sealed classes e switch exaustivo: `coding_style.mdc` (secao Sealed Classes)
 - Mapeamento de failures e bordas do sistema: `project_specifics.mdc`
 
 ## Checklist

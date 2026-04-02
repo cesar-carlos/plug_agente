@@ -133,12 +133,13 @@ final List<String> activeIds = users
 
 ## Tooling
 
-- Em projetos Flutter, use `flutter_lints` como baseline de lint
-- Em projetos Dart sem Flutter, use pelo menos o conjunto `recommended`
+- Use o conjunto de lints definido no projeto; nao introduza outro baseline em
+  paralelo sem decisao explicita
+- Em novos projetos Flutter sem escolha definida, `flutter_lints` e um bom ponto
+  de partida; em projetos Dart puro, use pelo menos `recommended`
 - Rode `dart format` apos mudancas relevantes
 - Use `dart fix --apply` para correcoes seguras de lint/refactor
-- Ao concluir tarefas longas ou complexas que alterem codigo Dart, rode
-  `flutter analyze` antes de encerrar
+- Rode `flutter analyze` antes de encerrar tarefas que alterem codigo Dart
 - Corrija erros e avisos relevantes identificados pelo analyzer antes de fechar
   a tarefa
 - Mantenha imports e codigo sem lixo morto
@@ -156,6 +157,21 @@ switch (result) {
   case Failure():
     return 0;
 }
+```
+
+### Dot Shorthand
+
+- Prefira dot shorthand quando o tipo estiver obvio pelo contexto e isso reduzir
+  ruido visual
+- Use com mais cuidado quando a origem do simbolo puder ficar ambigua
+- Evite dot shorthand se ele dificultar a navegacao ou a leitura fora do contexto
+
+```dart
+return ThemeData(
+  colorScheme: .fromSeed(seedColor: Colors.blue),
+);
+
+alignment: .center;
 ```
 
 ### Tear-offs
@@ -197,6 +213,47 @@ final icon = switch (status) {
 };
 ```
 
+### Sealed Classes
+
+- Use `sealed class` para modelar variantes fixas, como estados de UI, eventos,
+  failures tipados e respostas de dominio
+- Prefira sealed classes a enums quando cada variante precisar carregar dados
+- Em `switch` sobre sealed types, evite `default`; deixe o compilador sinalizar
+  variantes faltantes
+
+```dart
+sealed class QueryState {}
+
+class QueryLoading extends QueryState {}
+
+class QueryLoaded extends QueryState {
+  QueryLoaded(this.rows);
+
+  final List<String> rows;
+}
+
+class QueryError extends QueryState {
+  QueryError(this.failure);
+
+  final AppFailure failure;
+}
+```
+
+### Extension Methods
+
+- Use extensions quando o comportamento fizer sentido semantico no tipo receptor
+- Prefira extensoes em `BuildContext` para helpers de tema, layout e acesso a
+  tokens
+- Evite colocar regra de negocio ou side effects em extensoes de tipos
+  primitivos
+- Se o receiver nao melhorar a leitura no ponto de uso, prefira funcao nomeada
+
+```dart
+extension AppThemeContext on BuildContext {
+  ColorScheme get colorScheme => Theme.of(this).colorScheme;
+}
+```
+
 ## JSON e Codegen
 
 - Prefira `json_serializable`/`json_annotation` quando o projeto usar models
@@ -205,11 +262,11 @@ final icon = switch (status) {
 - Reexecute `build_runner` depois de mudar modelos anotados ou qualquer codigo
   dirigido por geracao
 - Se o arquivo gerado ainda nao existir, erros como `Target of URI hasn't been
-  generated` sao esperados ate a primeira geracao
+generated` sao esperados ate a primeira geracao
 - Para geracao pontual, rode `dart run build_runner build
-  --delete-conflicting-outputs`
+--delete-conflicting-outputs`
 - Para desenvolvimento iterativo, prefira `dart run build_runner watch
-  --delete-conflicting-outputs`
+--delete-conflicting-outputs`
 - Nao edite manualmente codigo gerado por `build_runner`; a fonte de verdade e o
   arquivo de entrada anotado/configurado
 - Se a geracao ficar inconsistente, stale ou em conflito, faca um ciclo de
@@ -230,6 +287,8 @@ dart run build_runner watch --delete-conflicting-outputs
 - Capture a excecao mais especifica que voce consegue tratar
 - Preserve `error` e `stackTrace` ao traduzir falhas
 - Prefira fronteiras explicitas de erro nas camadas de arquitetura
+- Prefira converter excecoes para `Result` e failures nas bordas do sistema em
+  vez de espalhar `try/catch` por chamadas internas e UI
 - Nao use `print`; prefira `dart:developer` `log` ou o logger padrao do
   projeto
 
@@ -272,10 +331,12 @@ Future<User> loadUser(String id) async {
 - [ ] Imports estao ordenados e limpos
 - [ ] `const`/`final` foram usados corretamente
 - [ ] Logs usam ferramenta apropriada e preservam contexto
-- [ ] O baseline de lint do projeto esta adequado ao stack (`flutter_lints` ou
-  `recommended`)
-- [ ] Em tarefas longas ou complexas, `flutter analyze` foi executado
+- [ ] O conjunto de lints definido no projeto foi respeitado
+- [ ] `flutter analyze` foi executado quando a tarefa alterou codigo Dart
 - [ ] Quando a tarefa depende de codegen, `build_runner` foi executado ou
-  validado
+      validado
+- [ ] Dot shorthand foi usado apenas quando o contexto deixou o tipo obvio
 - [ ] Tear-offs foram usados apenas onde melhoram a leitura
 - [ ] Recursos modernos de Dart foram usados apenas quando melhoram a clareza
+- [ ] Sealed classes foram usadas quando variantes fixas modelam melhor o dominio
+- [ ] Extensions foram criadas apenas quando o receptor era semanticamente correto

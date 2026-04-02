@@ -16,6 +16,7 @@ em Dart/Flutter.
 - Prefira `package:checks` quando ele deixar a validacao mais expressiva e local
 - Use `expect` quando isso for suficiente ou quando a API do teste exigir
 - Mantenha as assertions alinhadas ao comportamento, nao ao detalhe acidental
+- Prefira testes idiomaticos e setup local quando isso reduzir ruido
 
 ## Widget Tests
 
@@ -24,12 +25,29 @@ em Dart/Flutter.
   injecao de dependencia
 - Valide estados de loading, empty, success e error quando o widget os expuser
 - Nao transforme widget test em snapshot grande e sem foco
+- Prefira helpers pequenos e reaproveitamento moderado antes de criar harnesses
+  pesados
 
 ## Async e Pumping
 
 - Use `pump()` e `pumpAndSettle()` conscientemente
 - Nao esconda problemas de sincronizacao com `pumpAndSettle()` indiscriminado
 - Em streams, animacoes e timers, deixe explicito o que esta sendo aguardado
+
+## Mocks e Fakes
+
+- Use `mocktail` como padrao para mocks neste projeto
+- Prefira fakes a mocks quando o contrato for simples e a implementacao minima
+  deixar o teste mais legivel
+- Use mocks apenas para dependencias externas ou colaboradoras relevantes ao
+  comportamento
+- Configure `registerFallbackValue` para tipos customizados antes de usar `any()`
+
+```dart
+class MockRepository extends Mock implements QueryRepository {}
+
+class FakeClock extends Fake implements Clock {}
+```
 
 ## Harness e Dependencias
 
@@ -48,5 +66,6 @@ em Dart/Flutter.
 
 - [ ] O tipo de teste Dart/Flutter escolhido e o menor necessario
 - [ ] O harness do teste contem apenas as dependencias visuais necessarias
+- [ ] Mocks usam `mocktail`; fakes foram preferidos quando simplificam o teste
 - [ ] Assertions usam `package:checks` ou `expect` de forma clara
 - [ ] Widget tests cobrem estados visiveis e interacoes relevantes

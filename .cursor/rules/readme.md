@@ -65,6 +65,17 @@ Essas regras devem ser adaptadas para cada repositorio:
 - testes Dart/Flutter: `testing_dart_flutter.mdc`
 - decisoes do repositorio: `project_specifics.mdc`
 
+## Foco Atual destas Rules
+
+Hoje este conjunto esta orientado a:
+
+- aplicacao Flutter desktop-first para Windows
+- Fluent UI como linguagem principal, com Material apenas em escopos isolados
+- arquitetura em camadas globais com `core`, `shared` e suporte a `l10n`
+- `Provider` para estado de apresentacao e `get_it` para DI
+- `result_dart` e failures tipadas nas fronteiras
+- protocolo Plug via Socket.IO, persistencia local e runtime desktop
+
 ## Reaproveitando em Outro Projeto
 
 ### Projeto de outra linguagem
@@ -91,6 +102,8 @@ Copie:
 ### Sempre adaptar
 
 - `project_specifics.mdc`
+- `clean_architecture.mdc` quando a arquitetura do repositorio nao seguir o
+  mesmo modelo de camadas
 
 Ao adaptar `project_specifics.mdc`, ajuste:
 
@@ -99,6 +112,10 @@ Ao adaptar `project_specifics.mdc`, ajuste:
 3. Dependencias obrigatorias
 4. Regras de erro, runtime e integracoes
 5. Contratos ou protocolos do projeto
+
+Nao presuma que `clean_architecture.mdc` e intercambiavel entre repositorios.
+Projetos com organizacao por feature, por camada global ou com fronteiras
+hibridas precisam refletir isso explicitamente na rule.
 
 ## Ajustando Globs
 
@@ -117,3 +134,7 @@ alwaysApply: true
 - Nao duplique regra em mais de um arquivo
 - Prefira referencia cruzada curta em vez de copiar texto
 - Mantenha `rules_index.mdc` sincronizado quando um arquivo mudar de escopo
+- Quando uma regra nova surgir, primeiro decida se ela e universal,
+  Dart/Flutter ou especifica do repositorio
+- Ao evoluir o projeto, prefira atualizar a rule existente dona do tema em vez
+  de criar sobreposicoes
