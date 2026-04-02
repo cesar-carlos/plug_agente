@@ -1,3 +1,24 @@
+/// Terminal status for rpc:complete when a stream ends without full success.
+///
+/// JSON-RPC 2.0 does not define stream lifecycle, so we extend `rpc:complete`
+/// with an optional `terminal_status` field to give the hub a deterministic
+/// close signal when chunks were already partially sent.
+enum StreamTerminalStatus {
+  /// Stream was cancelled due to backpressure overflow or producer abort.
+  aborted,
+
+  /// Stream was interrupted by an execution error (e.g. ODBC failure).
+  error;
+
+  String toJson() => name;
+
+  static StreamTerminalStatus fromJson(String value) =>
+      StreamTerminalStatus.values.firstWhere(
+        (s) => s.name == value,
+        orElse: () => StreamTerminalStatus.error,
+      );
+}
+
 /// Payload for rpc:chunk event.
 class RpcStreamChunk {
   const RpcStreamChunk({
@@ -43,12 +64,14 @@ class RpcStreamChunk {
 class RpcStreamComplete {
   const RpcStreamComplete({
     required this.streamId,
+    // JSON-RPC 2.0 allows string or number for `id`; dynamic preserves both.
     required this.requestId,
     required this.totalRows,
     this.affectedRows,
     this.executionId,
     this.startedAt,
     this.finishedAt,
+    this.terminalStatus,
   });
 
   factory RpcStreamComplete.fromJson(Map<String, dynamic> json) =>
@@ -60,6 +83,11 @@ class RpcStreamComplete {
         executionId: json['execution_id'] as String?,
         startedAt: json['started_at'] as String?,
         finishedAt: json['finished_at'] as String?,
+        terminalStatus: json['terminal_status'] != null
+            ? StreamTerminalStatus.fromJson(
+                json['terminal_status'] as String,
+              )
+            : null,
       );
 
   final String streamId;
@@ -70,6 +98,10 @@ class RpcStreamComplete {
   final String? startedAt;
   final String? finishedAt;
 
+  /// Present only when the stream ended without full success.
+  /// Absent on normal completion so hubs can treat null as success.
+  final StreamTerminalStatus? terminalStatus;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'stream_id': streamId,
     'request_id': requestId?.toString(),
@@ -78,6 +110,7 @@ class RpcStreamComplete {
     if (executionId != null) 'execution_id': executionId,
     if (startedAt != null) 'started_at': startedAt,
     if (finishedAt != null) 'finished_at': finishedAt,
+    if (terminalStatus != null) 'terminal_status': terminalStatus!.toJson(),
   };
 }
 

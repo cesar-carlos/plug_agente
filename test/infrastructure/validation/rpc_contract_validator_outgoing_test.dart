@@ -72,6 +72,64 @@ void main() {
     });
   });
 
+  group('RpcContractValidator validateStreamComplete terminal_status', () {
+    test('should accept rpc:complete without terminal_status', () {
+      final result = validator.validateStreamComplete(<String, dynamic>{
+        'stream_id': 's-1',
+        'request_id': 'r-1',
+        'total_rows': 10,
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should accept rpc:complete with terminal_status aborted', () {
+      final result = validator.validateStreamComplete(<String, dynamic>{
+        'stream_id': 's-1',
+        'request_id': 'r-1',
+        'total_rows': 3,
+        'terminal_status': 'aborted',
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should accept rpc:complete with terminal_status error', () {
+      final result = validator.validateStreamComplete(<String, dynamic>{
+        'stream_id': 's-1',
+        'request_id': 'r-1',
+        'total_rows': 0,
+        'terminal_status': 'error',
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should reject rpc:complete with unknown terminal_status value', () {
+      final result = validator.validateStreamComplete(<String, dynamic>{
+        'stream_id': 's-1',
+        'request_id': 'r-1',
+        'total_rows': 0,
+        'terminal_status': 'cancelled',
+      });
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()!;
+      expect(failure.toString(), contains('terminal_status'));
+    });
+
+    test('should reject rpc:complete with non-string terminal_status', () {
+      final result = validator.validateStreamComplete(<String, dynamic>{
+        'stream_id': 's-1',
+        'request_id': 'r-1',
+        'total_rows': 0,
+        'terminal_status': 1,
+      });
+
+      expect(result.isError(), isTrue);
+    });
+  });
+
   group('RpcContractValidator agent:register profile', () {
     test('should accept valid normalized profile payload', () {
       final result = validator.validateAgentRegister(<String, dynamic>{

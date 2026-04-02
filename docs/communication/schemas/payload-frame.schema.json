@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/payload-frame.v1.json",
+  "title": "PayloadFrame",
+  "description": "Transport envelope wrapping every Socket.IO app event payload. All agent and hub app events must carry their logical payload inside this frame.",
+  "type": "object",
+  "required": ["schemaVersion", "enc", "cmp", "contentType", "originalSize", "compressedSize", "payload"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Frame schema version (e.g. '1.0'). Receivers must reject unknown major versions.",
+      "examples": ["1.0"]
+    },
+    "enc": {
+      "type": "string",
+      "enum": ["json", "msgpack"],
+      "description": "Encoding of the logical payload before compression."
+    },
+    "cmp": {
+      "type": "string",
+      "enum": ["none", "gzip"],
+      "description": "Compression algorithm applied to the encoded payload. 'none' means no compression."
+    },
+    "contentType": {
+      "type": "string",
+      "description": "MIME type of the original (uncompressed, decoded) payload.",
+      "examples": ["application/json", "application/octet-stream"]
+    },
+    "originalSize": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size in bytes of the payload before compression (equals compressedSize when cmp='none')."
+    },
+    "compressedSize": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size in bytes of the payload after compression."
+    },
+    "payload": {
+      "description": "The encoded (and optionally compressed) payload. May be a base64 string, binary buffer, or structured JSON depending on transport and encoding."
+    },
+    "traceId": {
+      "type": "string",
+      "description": "Optional trace ID for distributed tracing correlation."
+    },
+    "requestId": {
+      "type": "string",
+      "description": "Optional request ID matching the JSON-RPC 'id' of the contained request or response."
+    },
+    "signature": {
+      "type": "object",
+      "description": "Optional HMAC transport-level signature for payload integrity verification.",
+      "required": ["alg", "value"],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "description": "Signing algorithm (e.g. 'hmac-sha256').",
+          "examples": ["hmac-sha256"]
+        },
+        "value": {
+          "type": "string",
+          "description": "Base64-encoded signature digest."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

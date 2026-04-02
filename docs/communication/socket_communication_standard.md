@@ -1418,7 +1418,7 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - [ ] Trata erro JSON-RPC em vez de assumir sempre `result`.
 - [ ] Homologa `sql.execute` com sucesso e com falha SQL.
 - [ ] Homologa `sql.executeBatch` com itens de retorno.
-- [ ] Valida fallback para protocolo legado quando v2 nao estiver disponivel.
+- [ ] Confirma que o cliente rejeita eventos sem `PayloadFrame` (o agente nao aceita JSON cru em eventos de app; nao ha fallback para protocolo legado).
 
 ### Erros e retry
 

@@ -7,14 +7,23 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   final MetricsCollector _metrics;
 
   @override
-  void recordSqlExecuteStreamingChunksResponse() =>
-      _metrics.recordRpcSqlExecuteStreamingChunksResponse();
+  void recordSqlExecuteStreamingChunksResponse() => _metrics.recordRpcSqlExecuteStreamingChunksResponse();
 
   @override
-  void recordSqlExecuteStreamingFromDbResponse() =>
-      _metrics.recordRpcSqlExecuteStreamingFromDbResponse();
+  void recordSqlExecuteStreamingFromDbResponse() => _metrics.recordRpcSqlExecuteStreamingFromDbResponse();
 
   @override
-  void recordSqlExecuteMaterializedResponse() =>
-      _metrics.recordRpcSqlExecuteMaterializedResponse();
+  void recordSqlExecuteMaterializedResponse() => _metrics.recordRpcSqlExecuteMaterializedResponse();
+
+  @override
+  void recordStreamTerminalCompleteEmitted() => _metrics.recordRpcStreamTerminalCompleteEmitted();
+
+  @override
+  void recordStreamTerminalCompleteFailed() => _metrics.recordRpcStreamTerminalCompleteFailed();
+
+  @override
+  void recordRpcResponseAckRetry() => _metrics.recordRpcResponseAckRetry();
+
+  @override
+  void recordRpcResponseAckFallbackWithoutAck() => _metrics.recordRpcResponseAckFallbackWithoutAck();
 }

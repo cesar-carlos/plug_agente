@@ -381,6 +381,13 @@ class RpcMethodDispatcher {
           }
 
           if (overflowed) {
+            await _emitTerminalComplete(
+              streamEmitter: streamEmitter,
+              streamId: streamId,
+              requestId: request.id,
+              totalRows: rows.length,
+              status: StreamTerminalStatus.aborted,
+            );
             return RpcResponse.error(
               id: request.id,
               error: RpcError(
@@ -546,8 +553,20 @@ class RpcMethodDispatcher {
       );
 
       if (streamResult.isError()) {
+        final failure = streamResult.exceptionOrNull()! as domain.Failure;
+        final isBackpressure =
+            failure.context['reason'] == 'backpressure_overflow';
+        await _emitTerminalComplete(
+          streamEmitter: streamEmitter,
+          streamId: streamId,
+          requestId: request.id,
+          totalRows: totalRows,
+          status: isBackpressure
+              ? StreamTerminalStatus.aborted
+              : StreamTerminalStatus.error,
+        );
         final rpcError = FailureToRpcErrorMapper.map(
-          streamResult.exceptionOrNull()! as domain.Failure,
+          failure,
           instance: request.id?.toString(),
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
@@ -1184,24 +1203,8 @@ class RpcMethodDispatcher {
     String agentId,
     String? clientToken,
   ) async {
-    if (request.params != null && request.params is! Map<String, dynamic>) {
-      return _invalidParams(
-        request,
-        'Method agent.getProfile expects params to be absent or an object',
-      );
-    }
-
-    final params = request.params as Map<String, dynamic>? ?? const {};
-    final extraKeys = params.keys.where(
-      (String key) =>
-          key != 'client_token' && key != 'clientToken' && key != 'auth',
-    );
-    if (extraKeys.isNotEmpty) {
-      return _invalidParams(
-        request,
-        'Method agent.getProfile only accepts client_token aliases in params',
-      );
-    }
+    // Params structure and allowed keys are validated upstream by
+    // RpcRequestSchemaValidator before dispatch reaches this method.
 
     final deadline = _featureFlags.enableSocketTimeoutByStage
         ? DateTime.now().add(_authorizationStageBudgetDuration)
@@ -1240,7 +1243,7 @@ class RpcMethodDispatcher {
 
     final repository = _configRepository;
     if (repository == null) {
-      return _invalidParams(
+      return _internalError(
         request,
         'Agent profile repository is not available',
       );
@@ -1337,6 +1340,27 @@ class RpcMethodDispatcher {
           extra: {
             'detail': detail,
           },
+        ),
+      ),
+    );
+  }
+
+  /// Returns an internal server error (-32603).
+  ///
+  /// Use for server-side conditions the client cannot fix, such as a missing
+  /// repository or an unexpected runtime state.
+  RpcResponse _internalError(RpcRequest request, String detail) {
+    const code = RpcErrorCode.internalError;
+    return RpcResponse.error(
+      id: request.id,
+      error: RpcError(
+        code: code,
+        message: RpcErrorCode.getMessage(code),
+        data: RpcErrorCode.buildErrorData(
+          code: code,
+          technicalMessage: detail,
+          correlationId: request.id?.toString(),
+          extra: {'detail': detail},
         ),
       ),
     );
@@ -1836,6 +1860,40 @@ class RpcMethodDispatcher {
       }
     }
     return true;
+  }
+
+  /// Emits `rpc:complete` with [status] so the hub can deterministically close
+  /// a stream that ended without full success.
+  ///
+  /// Swallows emit errors and records a failure counter so the caller can
+  /// return the RPC error response even when the terminal complete fails.
+  Future<void> _emitTerminalComplete({
+    required IRpcStreamEmitter streamEmitter,
+    required String streamId,
+    required dynamic requestId,
+    required int totalRows,
+    required StreamTerminalStatus status,
+  }) async {
+    try {
+      await streamEmitter.emitComplete(
+        RpcStreamComplete(
+          streamId: streamId,
+          requestId: requestId,
+          totalRows: totalRows,
+          terminalStatus: status,
+        ),
+      );
+      _dispatchMetrics?.recordStreamTerminalCompleteEmitted();
+    } on Object catch (error, stackTrace) {
+      _dispatchMetrics?.recordStreamTerminalCompleteFailed();
+      developer.log(
+        'Failed to emit terminal rpc:complete '
+        'stream_id=$streamId status=${status.name}',
+        name: 'rpc.dispatcher',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }
 

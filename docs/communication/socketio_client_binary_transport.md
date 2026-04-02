@@ -129,7 +129,7 @@ Ao receber qualquer evento de aplicacao:
 ### Implementacao de referencia (Plug Agente, Dart)
 
 - **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
-- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`dart:io` gzip** (zlib da VM), partilhadas com o pipeline e com o compressor de linhas.
+- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`package:archive`** (`GZipEncoder`/`GZipDecoder`), partilhadas com o pipeline e com o compressor de linhas. Para payloads acima de 32 KiB, `TransportPipeline.prepareSendAsync` delega a compressão a um isolate via `compute`.
 - **Segundo formato (nao e o frame):** respostas SQL podem usar `GzipCompressor` (`lib/infrastructure/compression/gzip_compressor.dart`): lista de maps com `compressed_data` (base64) e `is_compressed`; e independente do envelope `PayloadFrame` acima.
 
 ## Handshake e capabilities

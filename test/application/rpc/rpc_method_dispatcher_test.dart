@@ -2203,4 +2203,76 @@ void main() {
       },
     );
   });
+
+  group('agent.getProfile additional scenarios', () {
+    late MockFeatureFlags mockFeatureFlags;
+    late MockDatabaseGateway mockGateway;
+    late MockQueryNormalizerService mockNormalizer;
+    late MockAuthorizeSqlOperation mockAuthorize;
+    late MockStreamingDatabaseGateway mockStreamingGateway;
+    late RpcMethodDispatcher dispatcher;
+
+    setUp(() {
+      mockGateway = MockDatabaseGateway();
+      mockNormalizer = MockQueryNormalizerService();
+      mockStreamingGateway = MockStreamingDatabaseGateway();
+      mockAuthorize = MockAuthorizeSqlOperation();
+      mockFeatureFlags = MockFeatureFlags();
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(false);
+      when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketStreamingChunks,
+      ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableSocketStreamingFromDb,
+      ).thenReturn(false);
+      when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
+      when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+      );
+    });
+
+    test(
+      'should return internalError when configRepository is not injected',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'agent.getProfile',
+          id: 'req-no-repo',
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.internalError));
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(data['reason'], equals('internal_error'));
+      },
+    );
+
+    test(
+      'should return internalError (not invalidParams) when repository is null',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'agent.getProfile',
+          id: 'req-no-repo-2',
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.error!.code, isNot(equals(RpcErrorCode.invalidParams)));
+        expect(response.error!.code, equals(RpcErrorCode.internalError));
+      },
+    );
+  });
 }

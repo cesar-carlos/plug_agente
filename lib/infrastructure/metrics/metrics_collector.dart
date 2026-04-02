@@ -13,27 +13,22 @@ class MetricsCollector implements IMetricsCollector {
 
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
   static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
-  static const String _transactionRollbackFailureCounter =
-      'transaction_rollback_failure';
-  static const String _idempotencyFingerprintMismatchCounter =
-      'idempotency_fingerprint_mismatch';
-  static const String _multiResultPoolVacuousFallbackCounter =
-      'multi_result_pool_vacuous_fallback';
-  static const String _multiResultDirectStillVacuousCounter =
-      'multi_result_direct_still_vacuous';
-  static const String _transactionalBatchDirectPathCounter =
-      'transactional_batch_direct_path';
+  static const String _transactionRollbackFailureCounter = 'transaction_rollback_failure';
+  static const String _idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
+  static const String _multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
+  static const String _multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';
+  static const String _transactionalBatchDirectPathCounter = 'transactional_batch_direct_path';
   static const String _authDecisionCacheHitCounter = 'auth_decision_cache_hit';
-  static const String _authDecisionCacheMissCounter =
-      'auth_decision_cache_miss';
+  static const String _authDecisionCacheMissCounter = 'auth_decision_cache_miss';
   static const String _authPolicyCacheHitCounter = 'auth_policy_cache_hit';
   static const String _authPolicyCacheMissCounter = 'auth_policy_cache_miss';
-  static const String _rpcSqlExecuteStreamingChunksResponseCounter =
-      'rpc_sql_execute_streaming_chunks_response';
-  static const String _rpcSqlExecuteStreamingFromDbResponseCounter =
-      'rpc_sql_execute_streaming_from_db_response';
-  static const String _rpcSqlExecuteMaterializedResponseCounter =
-      'rpc_sql_execute_materialized_response';
+  static const String _rpcSqlExecuteStreamingChunksResponseCounter = 'rpc_sql_execute_streaming_chunks_response';
+  static const String _rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
+  static const String _rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
+  static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
+  static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
+  static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
+  static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
 
   static const int _maxMetrics = 10000;
 
@@ -49,37 +44,28 @@ class MetricsCollector implements IMetricsCollector {
 
   /// Numero de metricas coletadas.
   int get count => _metrics.length;
-  int get timeoutCancelSuccessCount =>
-      _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
-  int get timeoutCancelFailureCount =>
-      _eventCounters[_timeoutCancelFailureCounter] ?? 0;
-  int get transactionRollbackFailureCount =>
-      _eventCounters[_transactionRollbackFailureCounter] ?? 0;
-  int get idempotencyFingerprintMismatchCount =>
-      _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
-  int get multiResultPoolVacuousFallbackCount =>
-      _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
-  int get multiResultDirectStillVacuousCount =>
-      _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
-  int get transactionalBatchDirectPathCount =>
-      _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
-  int get authDecisionCacheHitCount =>
-      _eventCounters[_authDecisionCacheHitCounter] ?? 0;
-  int get authDecisionCacheMissCount =>
-      _eventCounters[_authDecisionCacheMissCounter] ?? 0;
-  int get authPolicyCacheHitCount =>
-      _eventCounters[_authPolicyCacheHitCounter] ?? 0;
-  int get authPolicyCacheMissCount =>
-      _eventCounters[_authPolicyCacheMissCounter] ?? 0;
+  int get timeoutCancelSuccessCount => _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
+  int get timeoutCancelFailureCount => _eventCounters[_timeoutCancelFailureCounter] ?? 0;
+  int get transactionRollbackFailureCount => _eventCounters[_transactionRollbackFailureCounter] ?? 0;
+  int get idempotencyFingerprintMismatchCount => _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
+  int get multiResultPoolVacuousFallbackCount => _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
+  int get multiResultDirectStillVacuousCount => _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
+  int get transactionalBatchDirectPathCount => _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
+  int get authDecisionCacheHitCount => _eventCounters[_authDecisionCacheHitCounter] ?? 0;
+  int get authDecisionCacheMissCount => _eventCounters[_authDecisionCacheMissCounter] ?? 0;
+  int get authPolicyCacheHitCount => _eventCounters[_authPolicyCacheHitCounter] ?? 0;
+  int get authPolicyCacheMissCount => _eventCounters[_authPolicyCacheMissCounter] ?? 0;
   int get rpcSqlExecuteStreamingChunksResponseCount =>
       _eventCounters[_rpcSqlExecuteStreamingChunksResponseCounter] ?? 0;
   int get rpcSqlExecuteStreamingFromDbResponseCount =>
       _eventCounters[_rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
-  int get rpcSqlExecuteMaterializedResponseCount =>
-      _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
+  int get rpcSqlExecuteMaterializedResponseCount => _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
+  int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
+  int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
+  int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
+  int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
 
-  Map<String, int> get eventCounters =>
-      UnmodifiableMapView<String, int>(_eventCounters);
+  Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
 
   /// Limpa todas as metricas.
   void clear() {
@@ -87,38 +73,27 @@ class MetricsCollector implements IMetricsCollector {
     _eventCounters.clear();
   }
 
-  void recordTimeoutCancelSuccess() =>
-      _incrementEventCounter(_timeoutCancelSuccessCounter);
+  void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
 
-  void recordTimeoutCancelFailure() =>
-      _incrementEventCounter(_timeoutCancelFailureCounter);
+  void recordTimeoutCancelFailure() => _incrementEventCounter(_timeoutCancelFailureCounter);
 
-  void recordTransactionRollbackFailure() =>
-      _incrementEventCounter(_transactionRollbackFailureCounter);
+  void recordTransactionRollbackFailure() => _incrementEventCounter(_transactionRollbackFailureCounter);
 
-  void recordIdempotencyFingerprintMismatch() =>
-      _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
+  void recordIdempotencyFingerprintMismatch() => _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
 
-  void recordMultiResultPoolVacuousFallback() =>
-      _incrementEventCounter(_multiResultPoolVacuousFallbackCounter);
+  void recordMultiResultPoolVacuousFallback() => _incrementEventCounter(_multiResultPoolVacuousFallbackCounter);
 
-  void recordMultiResultDirectStillVacuous() =>
-      _incrementEventCounter(_multiResultDirectStillVacuousCounter);
+  void recordMultiResultDirectStillVacuous() => _incrementEventCounter(_multiResultDirectStillVacuousCounter);
 
-  void recordTransactionalBatchDirectPath() =>
-      _incrementEventCounter(_transactionalBatchDirectPathCounter);
+  void recordTransactionalBatchDirectPath() => _incrementEventCounter(_transactionalBatchDirectPathCounter);
 
-  void recordAuthDecisionCacheHit() =>
-      _incrementEventCounter(_authDecisionCacheHitCounter);
+  void recordAuthDecisionCacheHit() => _incrementEventCounter(_authDecisionCacheHitCounter);
 
-  void recordAuthDecisionCacheMiss() =>
-      _incrementEventCounter(_authDecisionCacheMissCounter);
+  void recordAuthDecisionCacheMiss() => _incrementEventCounter(_authDecisionCacheMissCounter);
 
-  void recordAuthPolicyCacheHit() =>
-      _incrementEventCounter(_authPolicyCacheHitCounter);
+  void recordAuthPolicyCacheHit() => _incrementEventCounter(_authPolicyCacheHitCounter);
 
-  void recordAuthPolicyCacheMiss() =>
-      _incrementEventCounter(_authPolicyCacheMissCounter);
+  void recordAuthPolicyCacheMiss() => _incrementEventCounter(_authPolicyCacheMissCounter);
 
   void recordRpcSqlExecuteStreamingChunksResponse() =>
       _incrementEventCounter(_rpcSqlExecuteStreamingChunksResponseCounter);
@@ -126,8 +101,15 @@ class MetricsCollector implements IMetricsCollector {
   void recordRpcSqlExecuteStreamingFromDbResponse() =>
       _incrementEventCounter(_rpcSqlExecuteStreamingFromDbResponseCounter);
 
-  void recordRpcSqlExecuteMaterializedResponse() =>
-      _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
+  void recordRpcSqlExecuteMaterializedResponse() => _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
+
+  void recordRpcStreamTerminalCompleteEmitted() => _incrementEventCounter(_rpcStreamTerminalCompleteEmittedCounter);
+
+  void recordRpcStreamTerminalCompleteFailed() => _incrementEventCounter(_rpcStreamTerminalCompleteFailedCounter);
+
+  void recordRpcResponseAckRetry() => _incrementEventCounter(_rpcResponseAckRetryCounter);
+
+  void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({
@@ -167,9 +149,7 @@ class MetricsCollector implements IMetricsCollector {
 
   @override
   MetricsSummary getSummary({int limit = 100}) {
-    final recent = _metrics.length > limit
-        ? _metrics.sublist(_metrics.length - limit)
-        : _metrics;
+    final recent = _metrics.length > limit ? _metrics.sublist(_metrics.length - limit) : _metrics;
 
     return MetricsSummary.fromList(recent);
   }

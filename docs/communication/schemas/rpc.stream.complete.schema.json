@@ -37,6 +37,11 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO-8601 timestamp when execution finished"
+    },
+    "terminal_status": {
+      "type": "string",
+      "enum": ["aborted", "error"],
+      "description": "Present only when the stream ended without full success. 'aborted' for backpressure/producer cancellation; 'error' for execution failure. Absent on normal completion."
     }
   },
   "additionalProperties": false

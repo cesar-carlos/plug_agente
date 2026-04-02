@@ -187,6 +187,16 @@ class RpcContractValidator {
       return _invalid('Field "execution_id" must be a non-empty string');
     }
 
+    const allowedTerminalStatuses = {'aborted', 'error'};
+    final terminalStatus = data['terminal_status'];
+    if (terminalStatus != null &&
+        (terminalStatus is! String ||
+            !allowedTerminalStatuses.contains(terminalStatus))) {
+      return _invalid(
+        'Field "terminal_status" must be "aborted" or "error" when present',
+      );
+    }
+
     return const Success(unit);
   }
 
