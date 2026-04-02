@@ -9,8 +9,7 @@ class ConfigFormController {
   final TextEditingController authUsernameController = TextEditingController();
   final TextEditingController authPasswordController = TextEditingController();
   final TextEditingController driverNameController = TextEditingController();
-  final TextEditingController odbcDriverNameController =
-      TextEditingController();
+  final TextEditingController odbcDriverNameController = TextEditingController();
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController databaseNameController = TextEditingController();
@@ -23,8 +22,7 @@ class ConfigFormController {
   final TextEditingController celularController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController enderecoController = TextEditingController();
-  final TextEditingController numeroEnderecoController =
-      TextEditingController();
+  final TextEditingController numeroEnderecoController = TextEditingController();
   final TextEditingController bairroController = TextEditingController();
   final TextEditingController cepController = TextEditingController();
   final TextEditingController nomeMunicipioController = TextEditingController();
@@ -124,14 +122,10 @@ class ConfigFormController {
     configProvider.updateServerUrl(serverUrlController.text);
     configProvider.updateAgentId(agentIdController.text);
     configProvider.updateAuthUsername(
-      authUsernameController.text.trim().isEmpty
-          ? null
-          : authUsernameController.text.trim(),
+      authUsernameController.text.trim().isEmpty ? null : authUsernameController.text.trim(),
     );
     configProvider.updateAuthPassword(
-      authPasswordController.text.trim().isEmpty
-          ? null
-          : authPasswordController.text.trim(),
+      authPasswordController.text.trim().isEmpty ? null : authPasswordController.text.trim(),
     );
     configProvider.updateNome(nomeController.text);
     configProvider.updateNomeFantasia(nomeFantasiaController.text);

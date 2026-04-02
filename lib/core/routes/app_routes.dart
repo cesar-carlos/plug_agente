@@ -18,69 +18,6 @@ class AppRoutes {
   static const String paramTab = 'tab';
 }
 
-enum NavDestination {
-  dashboard,
-  playground,
-  databaseSettings,
-  websocketSettings,
-  config,
-  agentProfile,
-  ;
-
-  String get route {
-    switch (this) {
-      case NavDestination.dashboard:
-        return AppRoutes.dashboard;
-      case NavDestination.playground:
-        return AppRoutes.playground;
-      case NavDestination.config:
-        return AppRoutes.config;
-      case NavDestination.agentProfile:
-        return AppRoutes.agentProfile;
-      case NavDestination.databaseSettings:
-        return AppRoutes.databaseSettings;
-      case NavDestination.websocketSettings:
-        return AppRoutes.websocketSettings;
-    }
-  }
-
-  static NavDestination fromIndex(int index) {
-    switch (index) {
-      case 1:
-        return NavDestination.agentProfile;
-      case 2:
-        return NavDestination.playground;
-      case 3:
-        return NavDestination.databaseSettings;
-      case 4:
-        return NavDestination.websocketSettings;
-      case 5:
-        return NavDestination.config;
-      default:
-        return NavDestination.dashboard;
-    }
-  }
-
-  static NavDestination fromRoute(String route) {
-    if (route.startsWith(AppRoutes.databaseSettings)) {
-      return NavDestination.databaseSettings;
-    }
-    if (route.startsWith(AppRoutes.websocketSettings)) {
-      return NavDestination.websocketSettings;
-    }
-    if (route.startsWith(AppRoutes.config)) {
-      return NavDestination.config;
-    }
-    if (route.startsWith(AppRoutes.playground)) {
-      return NavDestination.playground;
-    }
-    if (route.startsWith(AppRoutes.agentProfile)) {
-      return NavDestination.agentProfile;
-    }
-    return NavDestination.dashboard;
-  }
-}
-
 class DashboardRoute extends GoRouteData {
   const DashboardRoute();
 

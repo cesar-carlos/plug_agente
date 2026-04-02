@@ -55,15 +55,12 @@ class _AppTextFieldState extends State<AppTextField> {
 
   String? get _effectiveHint => widget.hint ?? widget.fieldSpec?.hint;
 
-  TextInputType? get _effectiveKeyboardType =>
-      widget.keyboardType ?? widget.fieldSpec?.keyboardType;
+  TextInputType? get _effectiveKeyboardType => widget.keyboardType ?? widget.fieldSpec?.keyboardType;
 
-  String? Function(String?)? get _effectiveValidator =>
-      widget.validator ?? widget.fieldSpec?.validator;
+  String? Function(String?)? get _effectiveValidator => widget.validator ?? widget.fieldSpec?.validator;
 
   List<TextInputFormatter> get _effectiveFormatters {
-    final fromSpec =
-        widget.fieldSpec?.formatters ?? const <TextInputFormatter>[];
+    final fromSpec = widget.fieldSpec?.formatters ?? const <TextInputFormatter>[];
     final explicit = widget.inputFormatters;
     if (explicit == null || explicit.isEmpty) {
       return fromSpec;

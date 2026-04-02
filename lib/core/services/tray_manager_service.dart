@@ -199,11 +199,9 @@ class TrayManagerService with TrayListener implements ITrayService {
     unawaited(
       Future<void>.delayed(AppConstants.trayIconClickDelay, () {
         unawaited(
-          _restoreWindow()
-              .then((_) => _onMenuAction?.call(TrayMenuAction.show))
-              .catchError((Object e) {
-                _logger.e('Erro ao restaurar janela do tray', error: e);
-              }),
+          _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
+            _logger.e('Erro ao restaurar janela do tray', error: e);
+          }),
         );
       }),
     );
@@ -215,11 +213,9 @@ class TrayManagerService with TrayListener implements ITrayService {
       return;
     }
     unawaited(
-      _restoreWindow()
-          .then((_) => _onMenuAction?.call(TrayMenuAction.show))
-          .catchError((Object e) {
-            _logger.e('Erro ao restaurar janela do tray', error: e);
-          }),
+      _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
+        _logger.e('Erro ao restaurar janela do tray', error: e);
+      }),
     );
   }
 
@@ -275,11 +271,9 @@ class TrayManagerService with TrayListener implements ITrayService {
     switch (menuItem.key) {
       case 'show':
         unawaited(
-          _restoreWindow()
-              .then((_) => _onMenuAction?.call(TrayMenuAction.show))
-              .catchError((Object e) {
-                _logger.e('Erro ao restaurar janela do menu', error: e);
-              }),
+          _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
+            _logger.e('Erro ao restaurar janela do menu', error: e);
+          }),
         );
       case 'exit':
         _onMenuAction?.call(TrayMenuAction.exit);

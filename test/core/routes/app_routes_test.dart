@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
+import 'package:plug_agente/presentation/navigation/nav_destination.dart';
 
 void main() {
   group('NavDestination', () {
@@ -19,39 +20,22 @@ void main() {
       expect(NavDestination.agentProfile.route, equals(AppRoutes.agentProfile));
     });
 
-    test('should return correct destination from index 0', () {
-      expect(NavDestination.fromIndex(0), equals(NavDestination.dashboard));
-    });
-
-    test('should return correct destination from index 1', () {
-      expect(NavDestination.fromIndex(1), equals(NavDestination.agentProfile));
-    });
-
-    test('should return correct destination from index 2', () {
-      expect(NavDestination.fromIndex(2), equals(NavDestination.playground));
-    });
-
-    test('should return correct destination from index 3', () {
-      expect(
-        NavDestination.fromIndex(3),
-        equals(NavDestination.databaseSettings),
-      );
-    });
-
-    test('should return correct destination from index 4', () {
-      expect(
-        NavDestination.fromIndex(4),
-        equals(NavDestination.websocketSettings),
-      );
-    });
-
-    test('should return correct destination from index 5', () {
-      expect(NavDestination.fromIndex(5), equals(NavDestination.config));
+    test('should return each destination from its navOrder index', () {
+      for (var i = 0; i < NavDestination.navOrder.length; i++) {
+        expect(
+          NavDestination.fromIndex(i),
+          equals(NavDestination.navOrder[i]),
+          reason: 'index $i should map to ${NavDestination.navOrder[i]}',
+        );
+      }
     });
 
     test('should return dashboard for invalid index', () {
       expect(NavDestination.fromIndex(-1), equals(NavDestination.dashboard));
-      expect(NavDestination.fromIndex(6), equals(NavDestination.dashboard));
+      expect(
+        NavDestination.fromIndex(NavDestination.navOrder.length),
+        equals(NavDestination.dashboard),
+      );
       expect(NavDestination.fromIndex(999), equals(NavDestination.dashboard));
     });
 
@@ -103,11 +87,11 @@ void main() {
 
     test('should have correct index values', () {
       expect(NavDestination.dashboard.index, equals(0));
-      expect(NavDestination.playground.index, equals(1));
-      expect(NavDestination.databaseSettings.index, equals(2));
-      expect(NavDestination.websocketSettings.index, equals(3));
-      expect(NavDestination.config.index, equals(4));
-      expect(NavDestination.agentProfile.index, equals(5));
+      expect(NavDestination.agentProfile.index, equals(1));
+      expect(NavDestination.playground.index, equals(2));
+      expect(NavDestination.databaseSettings.index, equals(3));
+      expect(NavDestination.websocketSettings.index, equals(4));
+      expect(NavDestination.config.index, equals(5));
     });
   });
 

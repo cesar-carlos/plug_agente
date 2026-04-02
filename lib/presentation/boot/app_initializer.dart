@@ -103,9 +103,7 @@ class AppInitializer {
   String? _resolveInitialRoute(List<String> args) {
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink(args);
-    return initialLink != null
-        ? deepLinkService.deepLinkToRoute(initialLink)
-        : null;
+    return initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
   }
 
   Future<void> _initializeDesktopFeatures(

@@ -50,9 +50,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
         items: widget.items,
         onChanged: _handleChanged,
         isExpanded: true,
-        placeholder:
-            widget.placeholder ??
-            Text('${AppStrings.formDropdownSelectPrefix}${widget.label}'),
+        placeholder: widget.placeholder ?? Text('${AppStrings.formDropdownSelectPrefix}${widget.label}'),
       ),
     );
 

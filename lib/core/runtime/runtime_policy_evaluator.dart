@@ -16,8 +16,7 @@ class RuntimePolicyEvaluator {
       );
     }
 
-    if (versionInfo.isWindows8OrServer2012 ||
-        versionInfo.isWindows81OrServer2012R2) {
+    if (versionInfo.isWindows8OrServer2012 || versionInfo.isWindows81OrServer2012R2) {
       final serverMessage = versionInfo.isServer
           ? 'Windows Server 2012/2012 R2: recursos de desktop desabilitados'
           : 'Windows 8/8.1: recursos de desktop podem estar limitados';

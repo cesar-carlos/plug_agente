@@ -10,9 +10,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService
-    with WindowListener
-    implements IWindowManagerService {
+class WindowManagerService with WindowListener implements IWindowManagerService {
   factory WindowManagerService() => _instance;
   WindowManagerService._();
   static final WindowManagerService _instance = WindowManagerService._();
@@ -40,8 +38,7 @@ class WindowManagerService
     await windowManager.ensureInitialized();
 
     final defaultSize = size ?? const ui.Size(1280, 800);
-    final defaultMinimumSize =
-        minimumSize ?? WindowConstraints.getMainWindowMinSize();
+    final defaultMinimumSize = minimumSize ?? WindowConstraints.getMainWindowMinSize();
 
     final windowOptions = WindowOptions(
       size: defaultSize,
@@ -83,11 +80,7 @@ class WindowManagerService
     await windowManager.setSkipTaskbar(true);
     await windowManager.hide();
 
-    for (
-      var attempt = 1;
-      attempt <= AppConstants.windowStartupHideRetryCount;
-      attempt++
-    ) {
+    for (var attempt = 1; attempt <= AppConstants.windowStartupHideRetryCount; attempt++) {
       await Future<void>.delayed(AppConstants.windowStartupHideRetryDelay);
       final isVisible = await windowManager.isVisible();
 

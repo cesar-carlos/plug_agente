@@ -77,9 +77,7 @@ class ClientTokenRulesGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact =
-            constraints.hasBoundedWidth &&
-            constraints.maxWidth < _compactGridBreakpoint;
+        final isCompact = constraints.hasBoundedWidth && constraints.maxWidth < _compactGridBreakpoint;
 
         if (isCompact) {
           return Column(
