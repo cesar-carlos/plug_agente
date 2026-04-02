@@ -16,6 +16,7 @@ import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form_components.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
 
 class AgentProfilePage extends StatefulWidget {
@@ -393,7 +394,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                     ),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: AppLayout.maxFormWidth,
+                        maxWidth: AppLayout.maxWideFormWidth,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,69 +408,78 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                             ),
                             const SizedBox(height: AppSpacing.md),
                           ],
-                          AppCard(
+                          SettingsSectionBlock(
+                            title: AppStrings.agentProfileFormSectionTitle,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _AgentProfileSection(
-                                  title: AppStrings.agentProfileSectionIdentity,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      AppTextField(
-                                        label: AppStrings.agentProfileFieldName,
-                                        controller:
-                                            _formController.nomeController,
-                                        validator: (value) =>
-                                            _requiredValidator(
-                                              AppStrings.agentProfileFieldName,
-                                              value,
+                                AppCard(
+                                  child: _AgentProfileSection(
+                                    title:
+                                        AppStrings.agentProfileSectionIdentity,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _ResponsiveFieldRow(
+                                          children: [
+                                            AppTextField(
+                                              label: AppStrings
+                                                  .agentProfileFieldName,
+                                              controller: _formController
+                                                  .nomeController,
+                                              validator: (value) =>
+                                                  _requiredValidator(
+                                                    AppStrings
+                                                        .agentProfileFieldName,
+                                                    value,
+                                                  ),
                                             ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      AppTextField(
-                                        label: AppStrings
-                                            .agentProfileFieldTradeName,
-                                        controller: _formController
-                                            .nomeFantasiaController,
-                                        validator: (value) =>
-                                            _requiredValidator(
-                                              AppStrings
+                                            AppTextField(
+                                              label: AppStrings
                                                   .agentProfileFieldTradeName,
-                                              value,
+                                              controller: _formController
+                                                  .nomeFantasiaController,
+                                              validator: (value) =>
+                                                  _requiredValidator(
+                                                    AppStrings
+                                                        .agentProfileFieldTradeName,
+                                                    value,
+                                                  ),
                                             ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      _ResponsiveFieldActionRow(
-                                        field: AppTextField(
-                                          label: AppStrings
-                                              .agentProfileFieldDocument,
-                                          controller: _formController
-                                              .cnaeCnpjCpfController,
-                                          fieldSpec: AppFieldSpecs.document,
-                                          validator: (value) =>
-                                              _requiredWithSpec(
-                                                AppStrings
-                                                    .agentProfileFieldDocument,
-                                                AppFieldSpecs.document,
-                                                value,
-                                              ),
+                                          ],
                                         ),
-                                        action: AppButton(
-                                          label: AppStrings
-                                              .agentProfileActionLookupCnpj,
-                                          isPrimary: false,
-                                          isLoading: _isLookingUpCnpj,
-                                          onPressed: () {
-                                            unawaited(_lookupCnpj());
-                                          },
+                                        const SizedBox(height: AppSpacing.md),
+                                        _ResponsiveFieldActionRow(
+                                          field: AppTextField(
+                                            label: AppStrings
+                                                .agentProfileFieldDocument,
+                                            controller: _formController
+                                                .cnaeCnpjCpfController,
+                                            fieldSpec: AppFieldSpecs.document,
+                                            validator: (value) =>
+                                                _requiredWithSpec(
+                                                  AppStrings
+                                                      .agentProfileFieldDocument,
+                                                  AppFieldSpecs.document,
+                                                  value,
+                                                ),
+                                          ),
+                                          action: AppButton(
+                                            label: AppStrings
+                                                .agentProfileActionLookupCnpj,
+                                            isPrimary: false,
+                                            isLoading: _isLookingUpCnpj,
+                                            onPressed: () {
+                                              unawaited(_lookupCnpj());
+                                            },
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: AppSpacing.lg),
+                                const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
                                   title: AppStrings.agentProfileSectionContact,
                                   child: Column(
@@ -517,7 +527,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: AppSpacing.lg),
+                                const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
                                   title: AppStrings.agentProfileSectionAddress,
                                   child: Column(
@@ -626,7 +636,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: AppSpacing.lg),
+                                const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
                                   title: AppStrings.agentProfileSectionNotes,
                                   child: AppTextField(
@@ -707,7 +717,7 @@ class _AgentProfileSaveAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment: Alignment.centerRight,
+      alignment: Alignment.centerLeft,
       child: AppButton(
         label: AppStrings.agentProfileActionSave,
         isLoading: isLoading,
@@ -730,16 +740,34 @@ class _ResponsiveFieldActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        field,
-        const SizedBox(height: AppSpacing.md),
-        Align(
-          alignment: Alignment.centerRight,
-          child: action,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 640) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              field,
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: action,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              flex: 3,
+              child: field,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            action,
+          ],
+        );
+      },
     );
   }
 }

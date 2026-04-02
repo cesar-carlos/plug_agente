@@ -12,6 +12,7 @@ class AppLayout {
   static const double maxSettingsWidth = 1320;
   static const double maxDataWidth = 1440;
   static const double maxFormWidth = 640;
+  static const double maxWideFormWidth = 1120;
   static const double scrollbarPadding = 16;
 
   static EdgeInsets pagePadding(BuildContext context) {
