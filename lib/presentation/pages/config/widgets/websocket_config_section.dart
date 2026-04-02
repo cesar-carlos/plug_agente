@@ -132,6 +132,7 @@ class _ServerSection extends StatelessWidget {
               SettingsSectionBlock(
                 title: AppStrings.wsSectionConnection,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     AppTextField(
                       label: AppStrings.wsFieldServerUrl,
@@ -143,6 +144,7 @@ class _ServerSection extends StatelessWidget {
                       label: AppStrings.wsFieldAgentId,
                       controller: formController.agentIdController,
                       hint: AppStrings.wsHintAgentId,
+                      readOnly: true,
                     ),
                   ],
                 ),
@@ -151,6 +153,7 @@ class _ServerSection extends StatelessWidget {
               SettingsSectionBlock(
                 title: AppStrings.wsSectionOptionalAuth,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     AppTextField(
                       label: AppStrings.wsFieldUsername,

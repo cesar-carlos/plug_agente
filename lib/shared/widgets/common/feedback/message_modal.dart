@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 enum MessageType { info, success, warning, error, confirmation }
 
@@ -174,41 +175,31 @@ class MessageModal extends StatelessWidget {
 
     if (onCancel != null || type == MessageType.confirmation || cancelText != null) {
       actions.add(
-        Button(
+        AppButton(
+          label: cancelText ?? AppStrings.btnCancel,
+          isPrimary: false,
+          labelStyle: context.bodyText,
           onPressed: () {
             if (onCancel != null) {
               onCancel!();
             }
             Navigator.of(context).pop(false);
           },
-          child: Text(
-            cancelText ?? AppStrings.btnCancel,
-            style: context.bodyText,
-          ),
         ),
       );
     }
 
     actions.add(
-      FilledButton(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.all(feedbackColors.accent),
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-          ),
-        ),
+      AppButton(
+        label: confirmText ?? AppStrings.btnOk,
+        filledBackgroundColor: feedbackColors.accent,
+        labelStyle: context.bodyText.copyWith(fontWeight: FontWeight.w600),
         onPressed: () {
           if (onConfirm != null) {
             onConfirm!();
           }
           Navigator.of(context).pop(true);
         },
-        child: Text(
-          confirmText ?? AppStrings.btnOk,
-          style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
-        ),
       ),
     );
 

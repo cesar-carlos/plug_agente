@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
 
@@ -39,12 +40,11 @@ class WebSocketLogViewer extends StatelessWidget {
                             content: const Text(AppStrings.wsLogEnabled),
                           ),
                           const SizedBox(width: 16),
-                          Button(
+                          AppButton(
+                            label: AppStrings.wsLogClear,
+                            isPrimary: false,
+                            labelStyle: context.bodyText,
                             onPressed: logProvider.clearMessages,
-                            child: Text(
-                              AppStrings.wsLogClear,
-                              style: context.bodyText,
-                            ),
                           ),
                         ],
                       ),

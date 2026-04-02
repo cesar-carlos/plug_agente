@@ -111,7 +111,7 @@ class AppStrings {
   static const String wsFieldAgentId = 'ID do Agente';
   static const String wsFieldUsername = 'Usuário';
   static const String wsHintServerUrl = 'https://api.example.com';
-  static const String wsHintAgentId = 'UUID ou Nome Único';
+  static const String wsHintAgentId = 'Gerado automaticamente (somente leitura)';
   static const String wsHintUsername = 'Usuário para autenticação';
   static const String wsHintPassword = 'Senha para autenticação';
   static const String wsButtonAuthenticating = 'Autenticando...';

@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class GeneralConfigSection extends StatelessWidget {
@@ -177,21 +178,11 @@ class _StartupErrorMessage extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          FilledButton(
+          AppButton(
+            label: AppStrings.gsButtonOpenSettings,
+            filledBackgroundColor: feedbackColors.background,
+            filledForegroundColor: feedbackColors.accent,
             onPressed: onOpenSettings,
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.all(
-                feedbackColors.background,
-              ),
-              foregroundColor: WidgetStateProperty.all(feedbackColors.accent),
-              padding: WidgetStateProperty.all(
-                const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-              ),
-            ),
-            child: const Text(AppStrings.gsButtonOpenSettings),
           ),
         ],
       ),

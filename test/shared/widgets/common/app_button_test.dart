@@ -281,5 +281,103 @@ void main() {
         expect(button.onPressed, isNotNull);
       });
     });
+
+    group('tooltip', () {
+      testWidgets('should wrap with Tooltip when tooltip is non-empty', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(
+                label: 'Go',
+                tooltip: 'Runs the action',
+                onPressed: () {},
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byType(Tooltip), findsOneWidget);
+      });
+    });
+
+    group('semantics', () {
+      testWidgets('should expose loading label for screen readers when loading', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          const FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(
+                label: 'Save',
+                isLoading: true,
+              ),
+            ),
+          ),
+        );
+
+        expect(find.bySemanticsLabel('Save, loading'), findsOneWidget);
+      });
+
+      testWidgets('should use custom semanticsLabel when provided', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          const FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(
+                label: 'Save',
+                semanticsLabel: 'Save document',
+              ),
+            ),
+          ),
+        );
+
+        expect(find.bySemanticsLabel('Save document'), findsOneWidget);
+      });
+    });
+
+    group('destructive primary', () {
+      testWidgets('should render FilledButton when isDestructive is true', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          const FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(
+                label: 'Delete',
+                isDestructive: true,
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byType(FilledButton), findsOneWidget);
+      });
+    });
+
+    group('focus', () {
+      testWidgets('should wire focusNode to FilledButton', (tester) async {
+        final focusNode = FocusNode();
+
+        await tester.pumpWidget(
+          FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(
+                label: 'Focus me',
+                focusNode: focusNode,
+                onPressed: () {},
+              ),
+            ),
+          ),
+        );
+
+        final button = tester.widget<FilledButton>(find.byType(FilledButton));
+        expect(button.focusNode, focusNode);
+
+        focusNode.dispose();
+      });
+    });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 class ErrorWidget extends StatelessWidget {
   const ErrorWidget({
@@ -39,12 +40,9 @@ class ErrorWidget extends StatelessWidget {
           ),
           if (onRetry != null) ...[
             const SizedBox(height: AppSpacing.lg),
-            FilledButton(
+            AppButton(
+              label: AppStrings.btnRetry,
               onPressed: onRetry,
-              child: Text(
-                AppStrings.btnRetry,
-                style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
-              ),
             ),
           ],
         ],
