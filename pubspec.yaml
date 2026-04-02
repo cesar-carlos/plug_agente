@@ -33,6 +33,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
+  brasil_fields: ^1.19.0
 
   # Navegação e Rotas
   go_router: ^17.1.0

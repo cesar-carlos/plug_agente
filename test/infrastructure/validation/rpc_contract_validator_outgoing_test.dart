@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 
 void main() {
@@ -68,6 +69,60 @@ void main() {
 
       final result = validator.validateResponse(payload);
       expect(result.isSuccess(), isTrue);
+    });
+  });
+
+  group('RpcContractValidator agent:register profile', () {
+    test('should accept valid normalized profile payload', () {
+      final result = validator.validateAgentRegister(<String, dynamic>{
+        'agentId': 'a1',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'profile': <String, dynamic>{
+          'name': 'Empresa Exemplo',
+          'trade_name': 'Fantasia Exemplo',
+          'document': '12345678000195',
+          'document_type': 'cnpj',
+          'mobile': '11988887777',
+          'email': 'contato@exemplo.com',
+          'address': <String, dynamic>{
+            'street': 'Rua Central',
+            'number': '123',
+            'district': 'Centro',
+            'postal_code': '01001000',
+            'city': 'Sao Paulo',
+            'state': 'SP',
+          },
+        },
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should reject profile payload when city is missing', () {
+      final result = validator.validateAgentRegister(<String, dynamic>{
+        'agentId': 'a1',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'profile': <String, dynamic>{
+          'name': 'Empresa Exemplo',
+          'trade_name': 'Fantasia Exemplo',
+          'document': '12345678000195',
+          'document_type': 'cnpj',
+          'mobile': '11988887777',
+          'email': 'contato@exemplo.com',
+          'address': <String, dynamic>{
+            'street': 'Rua Central',
+            'number': '123',
+            'district': 'Centro',
+            'postal_code': '01001000',
+            'city': '',
+            'state': 'SP',
+          },
+        },
+      });
+
+      expect(result.isError(), isTrue);
     });
   });
 }

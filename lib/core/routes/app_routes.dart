@@ -7,6 +7,8 @@ class AppRoutes {
   static const String playground = '/playground';
   static const String config = '/config';
   static const String configEdit = '/config/:id';
+  static const String agentProfile = '/agent-profile';
+  static const String agentProfileEdit = '/agent-profile/:id';
   static const String databaseSettings = '/database-settings';
   static const String databaseSettingsEdit = '/database-settings/:id';
   static const String websocketSettings = '/websocket-settings';
@@ -14,61 +16,6 @@ class AppRoutes {
 
   static const String paramId = 'id';
   static const String paramTab = 'tab';
-}
-
-enum NavDestination {
-  dashboard,
-  playground,
-  databaseSettings,
-  websocketSettings,
-  config
-  ;
-
-  String get route {
-    switch (this) {
-      case NavDestination.dashboard:
-        return AppRoutes.dashboard;
-      case NavDestination.playground:
-        return AppRoutes.playground;
-      case NavDestination.config:
-        return AppRoutes.config;
-      case NavDestination.databaseSettings:
-        return AppRoutes.databaseSettings;
-      case NavDestination.websocketSettings:
-        return AppRoutes.websocketSettings;
-    }
-  }
-
-  static NavDestination fromIndex(int index) {
-    switch (index) {
-      case 1:
-        return NavDestination.playground;
-      case 2:
-        return NavDestination.databaseSettings;
-      case 3:
-        return NavDestination.websocketSettings;
-      case 4:
-        return NavDestination.config;
-      default:
-        return NavDestination.dashboard;
-    }
-  }
-
-  static NavDestination fromRoute(String route) {
-    if (route.startsWith(AppRoutes.databaseSettings)) {
-      return NavDestination.databaseSettings;
-    }
-    if (route.startsWith(AppRoutes.websocketSettings)) {
-      return NavDestination.websocketSettings;
-    }
-    if (route.startsWith(AppRoutes.config)) {
-      return NavDestination.config;
-    }
-    if (route.startsWith(AppRoutes.playground)) {
-      return NavDestination.playground;
-    }
-    return NavDestination.dashboard;
-  }
 }
 
 class DashboardRoute extends GoRouteData {

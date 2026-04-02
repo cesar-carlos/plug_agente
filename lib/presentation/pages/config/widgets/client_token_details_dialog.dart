@@ -88,9 +88,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
               label: AppStrings.ctLabelStatus,
-              value: token.isRevoked
-                  ? AppStrings.ctStatusRevoked
-                  : AppStrings.ctStatusActive,
+              value: token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(

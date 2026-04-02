@@ -159,8 +159,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
   Future<void> setString(String key, String value) => setValue(key, value);
 
   @override
-  Future<void> setStringList(String key, List<String> value) =>
-      setValue(key, List<String>.from(value));
+  Future<void> setStringList(String key, List<String> value) => setValue(key, List<String>.from(value));
 
   @override
   Future<void> setValue(String key, Object value) async {
@@ -294,8 +293,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     return rawKey;
   }
 
-  static bool _isSupportedValue(Object? value) =>
-      _normalizeValue(value) != null;
+  static bool _isSupportedValue(Object? value) => _normalizeValue(value) != null;
 
   static Object? _normalizeValue(Object? value) {
     if (value is bool || value is int || value is double || value is String) {
@@ -391,8 +389,7 @@ class InMemoryAppSettingsStore implements IAppSettingsStore {
   Future<void> setString(String key, String value) => setValue(key, value);
 
   @override
-  Future<void> setStringList(String key, List<String> value) =>
-      setValue(key, List<String>.from(value));
+  Future<void> setStringList(String key, List<String> value) => setValue(key, List<String>.from(value));
 
   @override
   Future<void> setValue(String key, Object value) async {

@@ -1,14 +1,16 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_labeled_field.dart';
+import 'package:plug_agente/shared/widgets/common/form/field_spec.dart';
 
-class AppTextField extends StatelessWidget {
+class AppTextField extends StatefulWidget {
   const AppTextField({
     required this.label,
     super.key,
+    this.fieldSpec,
     this.hint,
     this.controller,
-    this.initialValue,
     this.validator,
     this.onChanged,
     this.obscureText = false,
@@ -24,15 +26,16 @@ class AppTextField extends StatelessWidget {
     this.textInputAction,
     this.onSubmitted,
   });
+
   final String label;
+  final FieldSpec? fieldSpec;
   final String? hint;
   final TextEditingController? controller;
-  final String? initialValue;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
   final bool obscureText;
   final TextInputType? keyboardType;
-  final int? maxLines;
+  final int maxLines;
   final Widget? suffixIcon;
   final Widget? prefixIcon;
   final bool enabled;
@@ -43,11 +46,84 @@ class AppTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
 
-  Widget? _buildPrefixIcon() {
-    if (prefixIcon == null) return null;
+  @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
 
-    if (prefixIcon is Icon) {
-      final icon = prefixIcon! as Icon;
+class _AppTextFieldState extends State<AppTextField> {
+  bool _touched = false;
+
+  String? get _effectiveHint => widget.hint ?? widget.fieldSpec?.hint;
+
+  TextInputType? get _effectiveKeyboardType => widget.keyboardType ?? widget.fieldSpec?.keyboardType;
+
+  String? Function(String?)? get _effectiveValidator => widget.validator ?? widget.fieldSpec?.validator;
+
+  List<TextInputFormatter> get _effectiveFormatters {
+    final fromSpec = widget.fieldSpec?.formatters ?? const <TextInputFormatter>[];
+    final explicit = widget.inputFormatters;
+    if (explicit == null || explicit.isEmpty) {
+      return fromSpec;
+    }
+    if (fromSpec.isEmpty) {
+      return explicit;
+    }
+    return <TextInputFormatter>[...fromSpec, ...explicit];
+  }
+
+  String? get _errorText {
+    if (!_touched) {
+      return null;
+    }
+    final validate = _effectiveValidator;
+    if (validate == null) {
+      return null;
+    }
+    final text = widget.controller?.text ?? '';
+    return validate(text);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onControllerChanged);
+      widget.controller?.addListener(_onControllerChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (_touched && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleChanged(String value) {
+    setState(() {
+      _touched = true;
+    });
+    widget.onChanged?.call(value);
+  }
+
+  Widget? _buildPrefixIcon() {
+    if (widget.prefixIcon == null) {
+      return null;
+    }
+
+    if (widget.prefixIcon is Icon) {
+      final icon = widget.prefixIcon! as Icon;
       return Padding(
         padding: const EdgeInsets.only(left: AppSpacing.sm),
         child: Icon(icon.icon, size: 18, color: icon.color),
@@ -56,63 +132,34 @@ class AppTextField extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(left: AppSpacing.sm),
-      child: prefixIcon,
+      child: widget.prefixIcon,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    String? errorText;
-    if (validator != null &&
-        controller != null &&
-        controller!.text.isNotEmpty) {
-      errorText = validator!(controller!.text);
-    }
-
     final textBox = TextBox(
-      controller: controller,
-      placeholder: hint,
+      controller: widget.controller,
+      placeholder: _effectiveHint,
       style: context.bodyText,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      enabled: enabled,
-      readOnly: readOnly,
-      inputFormatters: inputFormatters,
-      onChanged: onChanged,
-      suffix: suffixIcon,
+      obscureText: widget.obscureText,
+      keyboardType: _effectiveKeyboardType,
+      maxLines: widget.maxLines,
+      enabled: widget.enabled,
+      readOnly: widget.readOnly,
+      inputFormatters: _effectiveFormatters,
+      onChanged: _handleChanged,
+      suffix: widget.suffixIcon,
       prefix: _buildPrefixIcon(),
-      focusNode: focusNode,
-      autofocus: autofocus,
-      textInputAction: textInputAction,
-      onSubmitted: onSubmitted,
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      textInputAction: widget.textInputAction,
+      onSubmitted: widget.onSubmitted,
     );
 
-    if (errorText != null) {
-      return InfoLabel(
-        label: label,
-        labelStyle: context.bodyStrong,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            textBox,
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              errorText,
-              style: context.bodyMuted.copyWith(
-                color: AppColors.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return InfoLabel(
-      label: label,
-      labelStyle: context.bodyStrong,
+    return AppLabeledField(
+      label: widget.label,
+      errorText: _errorText,
       child: textBox,
     );
   }

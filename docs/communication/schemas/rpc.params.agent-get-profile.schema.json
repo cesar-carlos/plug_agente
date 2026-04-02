@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-get-profile.v1.json",
+  "title": "agent.getProfile params",
+  "type": "object",
+  "properties": {
+    "client_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    }
+  },
+  "additionalProperties": false
+}

@@ -60,6 +60,7 @@ class RpcRequestSchemaValidator {
         limits.maxRows,
       ),
       'sql.cancel' => _validateSqlCancelParams(data['params']),
+      'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       _ => const Success(unit),
     };
   }
@@ -136,14 +137,12 @@ class RpcRequestSchemaValidator {
     }
 
     final traceParent = meta['traceparent'] as String?;
-    if (traceParent != null &&
-        !TraceContextValidator.isValidTraceParent(traceParent)) {
+    if (traceParent != null && !TraceContextValidator.isValidTraceParent(traceParent)) {
       return _invalidRequest('Field "meta.traceparent" must follow W3C format');
     }
 
     final traceState = meta['tracestate'] as String?;
-    if (traceState != null &&
-        !TraceContextValidator.isValidTraceState(traceState)) {
+    if (traceState != null && !TraceContextValidator.isValidTraceState(traceState)) {
       return _invalidRequest(
         'Field "meta.tracestate" must follow W3C semantics',
       );
@@ -199,8 +198,7 @@ class RpcRequestSchemaValidator {
     }
 
     final idempotencyKey = params['idempotency_key'];
-    if (idempotencyKey != null &&
-        (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
+    if (idempotencyKey != null && (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
       return _invalidParams(
         'Field "params.idempotency_key" must be a non-empty string',
       );
@@ -220,9 +218,7 @@ class RpcRequestSchemaValidator {
 
       if (options is Map<String, dynamic>) {
         final multiResult = options['multi_result'];
-        if (multiResult == true &&
-            parameters is Map<String, dynamic> &&
-            parameters.isNotEmpty) {
+        if (multiResult == true && parameters is Map<String, dynamic> && parameters.isNotEmpty) {
           return _invalidParams(
             'Field "params.options.multi_result" is not supported with '
             'named parameters',
@@ -313,8 +309,7 @@ class RpcRequestSchemaValidator {
         );
       }
       final executionOrder = command['execution_order'];
-      if (executionOrder != null &&
-          (executionOrder is! int || executionOrder < 0)) {
+      if (executionOrder != null && (executionOrder is! int || executionOrder < 0)) {
         return _invalidParams(
           'Field "params.commands[$i].execution_order" must be '
           'an integer >= 0',
@@ -328,8 +323,7 @@ class RpcRequestSchemaValidator {
     }
 
     final idempotencyKey = params['idempotency_key'];
-    if (idempotencyKey != null &&
-        (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
+    if (idempotencyKey != null && (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
       return _invalidParams(
         'Field "params.idempotency_key" must be a non-empty string',
       );
@@ -375,9 +369,7 @@ class RpcRequestSchemaValidator {
 
     final executionId = params['execution_id'];
     final requestId = params['request_id'];
-    if ((executionId == null ||
-            executionId is! String ||
-            executionId.isEmpty) &&
+    if ((executionId == null || executionId is! String || executionId.isEmpty) &&
         (requestId == null || requestId is! String || requestId.isEmpty)) {
       return _invalidParams(
         'At least one of params.execution_id or params.request_id is required',
@@ -392,6 +384,28 @@ class RpcRequestSchemaValidator {
     }
 
     return const Success(unit);
+  }
+
+  Result<void> _validateAgentGetProfileParams(dynamic params) {
+    if (params == null) {
+      return const Success(unit);
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object when present for method agent.getProfile',
+      );
+    }
+    const allowedKeys = {'client_token', 'clientToken', 'auth'};
+    final extraKeys = params.keys.where(
+      (String key) => !allowedKeys.contains(key),
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    return _validateTokenAliases(params);
   }
 
   Result<void> _validateTokenAliases(Map<String, dynamic> params) {
@@ -493,8 +507,7 @@ class RpcRequestSchemaValidator {
 
     final executionMode = options['execution_mode'];
     if (executionMode != null &&
-        (executionMode is! String ||
-            (executionMode != 'managed' && executionMode != 'preserve'))) {
+        (executionMode is! String || (executionMode != 'managed' && executionMode != 'preserve'))) {
       return _invalidParams(
         'Field "params.options.execution_mode" must be "managed" or "preserve"',
       );
@@ -505,15 +518,13 @@ class RpcRequestSchemaValidator {
         '"execution_mode" is "managed"',
       );
     }
-    if (preserveSql == true &&
-        (page != null || pageSize != null || cursor != null)) {
+    if (preserveSql == true && (page != null || pageSize != null || cursor != null)) {
       return _invalidParams(
         'Field "params.options.preserve_sql" cannot be combined with '
         'pagination options',
       );
     }
-    if (executionMode == 'preserve' &&
-        (page != null || pageSize != null || cursor != null)) {
+    if (executionMode == 'preserve' && (page != null || pageSize != null || cursor != null)) {
       return _invalidParams(
         'Field "params.options.execution_mode" cannot be combined with '
         'pagination options when set to "preserve"',
@@ -526,8 +537,7 @@ class RpcRequestSchemaValidator {
         'Field "params.options.multi_result" must be a boolean',
       );
     }
-    if (multiResult == true &&
-        (page != null || pageSize != null || cursor != null)) {
+    if (multiResult == true && (page != null || pageSize != null || cursor != null)) {
       return _invalidParams(
         'Field "params.options.multi_result" cannot be combined with '
         'pagination options',

@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -23,7 +24,25 @@ class RpcContractValidator {
       return _invalid('Field "capabilities" must be an object');
     }
 
+    final profile = data['profile'];
+    if (profile != null) {
+      final profileValidation = _validateAgentProfile(profile);
+      if (profileValidation.isError()) {
+        return profileValidation;
+      }
+    }
+
     return _validateCapabilities(capabilities);
+  }
+
+  Result<void> _validateAgentProfile(dynamic profile) {
+    final result = AgentProfile.fromRpcPayload(profile);
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      return _invalid(failure.message);
+    }
+
+    return const Success(unit);
   }
 
   Result<void> validateAgentCapabilitiesEnvelope(Map<String, dynamic> data) {
@@ -129,8 +148,7 @@ class RpcContractValidator {
 
     final columnMetadata = data['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> ||
-            columnMetadata.any((item) => item is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> || columnMetadata.any((item) => item is! Map<String, dynamic>))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -159,8 +177,7 @@ class RpcContractValidator {
 
     for (final key in ['started_at', 'finished_at']) {
       final value = data[key];
-      if (value != null &&
-          (value is! String || DateTime.tryParse(value) == null)) {
+      if (value != null && (value is! String || DateTime.tryParse(value) == null)) {
         return _invalid('Field "$key" must be ISO-8601 when provided');
       }
     }
@@ -176,9 +193,7 @@ class RpcContractValidator {
   Result<void> _validateCapabilities(Map<String, dynamic> data) {
     try {
       final capabilities = ProtocolCapabilities.fromJson(data);
-      if (capabilities.protocols.isEmpty ||
-          capabilities.encodings.isEmpty ||
-          capabilities.compressions.isEmpty) {
+      if (capabilities.protocols.isEmpty || capabilities.encodings.isEmpty || capabilities.compressions.isEmpty) {
         return _invalid(
           'Capabilities must declare protocols, encodings, and compressions',
         );
@@ -223,16 +238,13 @@ class RpcContractValidator {
     }
 
     final rows = result['rows'];
-    if (rows != null &&
-        (rows is! List<dynamic> ||
-            rows.any((row) => row is! Map<String, dynamic>))) {
+    if (rows != null && (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>))) {
       return _invalid('Field "rows" must be an array of objects');
     }
 
     final columnMetadata = result['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> ||
-            columnMetadata.any((item) => item is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> || columnMetadata.any((item) => item is! Map<String, dynamic>))) {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
@@ -243,8 +255,7 @@ class RpcContractValidator {
 
     for (final key in ['started_at', 'finished_at']) {
       final value = result[key];
-      if (value != null &&
-          (value is! String || DateTime.tryParse(value) == null)) {
+      if (value != null && (value is! String || DateTime.tryParse(value) == null)) {
         return _invalid('Field "$key" must be ISO-8601 when provided');
       }
     }
@@ -298,12 +309,9 @@ class RpcContractValidator {
         return const Success(unit);
       }
       final first = items.first;
-      final isBatchShape =
-          first is Map<String, dynamic> && first.containsKey('ok');
+      final isBatchShape = first is Map<String, dynamic> && first.containsKey('ok');
       for (final item in items) {
-        final validation = isBatchShape
-            ? _validateBatchCommandResultItem(item)
-            : _validateResponseItem(item);
+        final validation = isBatchShape ? _validateBatchCommandResultItem(item) : _validateResponseItem(item);
         if (validation.isError()) {
           return validation;
         }
@@ -337,9 +345,7 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows != null &&
-        (rows is! List<dynamic> ||
-            rows.any((row) => row is! Map<String, dynamic>))) {
+    if (rows != null && (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>))) {
       return _invalid('Field "items[].rows" must be an array of objects');
     }
 
@@ -352,8 +358,7 @@ class RpcContractValidator {
 
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> ||
-            columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> || columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
       return _invalid(
         'Field "items[].column_metadata" must be an array of objects',
       );
@@ -373,8 +378,7 @@ class RpcContractValidator {
     }
 
     final rows = item['rows'];
-    if (rows is! List<dynamic> ||
-        rows.any((row) => row is! Map<String, dynamic>)) {
+    if (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>)) {
       return _invalid('Field "result_sets[].rows" must be an array of objects');
     }
 
@@ -387,8 +391,7 @@ class RpcContractValidator {
 
     final columnMetadata = item['column_metadata'];
     if (columnMetadata != null &&
-        (columnMetadata is! List<dynamic> ||
-            columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+        (columnMetadata is! List<dynamic> || columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
       return _invalid(
         'Field "result_sets[].column_metadata" must be an array of objects',
       );
@@ -421,8 +424,7 @@ class RpcContractValidator {
     }
 
     final resultSetIndex = item['result_set_index'];
-    if (resultSetIndex != null &&
-        (resultSetIndex is! int || resultSetIndex < 0)) {
+    if (resultSetIndex != null && (resultSetIndex is! int || resultSetIndex < 0)) {
       return _invalid('Field "items[].result_set_index" must be >= 0');
     }
 
@@ -457,14 +459,12 @@ class RpcContractValidator {
     }
 
     final traceparent = meta['traceparent'] as String?;
-    if (traceparent != null &&
-        !TraceContextValidator.isValidTraceParent(traceparent)) {
+    if (traceparent != null && !TraceContextValidator.isValidTraceParent(traceparent)) {
       return _invalid('Field "meta.traceparent" must follow W3C format');
     }
 
     final tracestate = meta['tracestate'] as String?;
-    if (tracestate != null &&
-        !TraceContextValidator.isValidTraceState(tracestate)) {
+    if (tracestate != null && !TraceContextValidator.isValidTraceState(tracestate)) {
       return _invalid('Field "meta.tracestate" must follow W3C semantics');
     }
 

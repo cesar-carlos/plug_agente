@@ -1,7 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_labeled_field.dart';
 
-class AppDropdown<T> extends StatelessWidget {
+class AppDropdown<T> extends StatefulWidget {
   const AppDropdown({
     required this.label,
     required this.value,
@@ -11,6 +12,7 @@ class AppDropdown<T> extends StatelessWidget {
     this.validator,
     this.placeholder,
   });
+
   final String label;
   final T? value;
   final List<ComboBoxItem<T>> items;
@@ -19,44 +21,42 @@ class AppDropdown<T> extends StatelessWidget {
   final Widget? placeholder;
 
   @override
+  State<AppDropdown<T>> createState() => _AppDropdownState<T>();
+}
+
+class _AppDropdownState<T> extends State<AppDropdown<T>> {
+  bool _touched = false;
+
+  String? get _errorText {
+    if (!_touched) {
+      return null;
+    }
+    return widget.validator?.call(widget.value);
+  }
+
+  void _handleChanged(T? value) {
+    setState(() {
+      _touched = true;
+    });
+    widget.onChanged?.call(value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final errorText = validator?.call(value);
     final dropdown = SizedBox(
       width: double.infinity,
       child: ComboBox<T>(
-        value: value,
-        items: items,
-        onChanged: onChanged,
+        value: widget.value,
+        items: widget.items,
+        onChanged: _handleChanged,
         isExpanded: true,
-        placeholder: placeholder ?? Text('Selecione $label'),
+        placeholder: widget.placeholder ?? Text('${AppStrings.formDropdownSelectPrefix}${widget.label}'),
       ),
     );
 
-    if (errorText != null && errorText.isNotEmpty) {
-      return InfoLabel(
-        label: label,
-        labelStyle: context.bodyStrong,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dropdown,
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              errorText,
-              style: context.bodyMuted.copyWith(
-                color: AppColors.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return InfoLabel(
-      label: label,
-      labelStyle: context.bodyStrong,
+    return AppLabeledField(
+      label: widget.label,
+      errorText: _errorText,
       child: dropdown,
     );
   }

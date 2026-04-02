@@ -22,6 +22,7 @@ O padrao abaixo se aplica a todos os eventos de aplicacao:
 
 - `agent:register`
 - `agent:capabilities`
+- `agent:ready`
 - `agent:heartbeat`
 - `hub:heartbeat_ack`
 - `rpc:request`
@@ -60,7 +61,8 @@ Formato esperado:
 
 Regras:
 
-- `payload` contem bytes binarios.
+- `payload` contem bytes binarios; em serializacao JSON tambem pode aparecer
+  como string base64 equivalente.
 - `enc` descreve o formato antes da compressao. Valor padrao: `json`.
 - `cmp` descreve o algoritmo aplicado ao payload codificado.
 - `cmp` pode ser `gzip` ou `none`.
@@ -71,6 +73,14 @@ Regras:
 - `originalSize` deve refletir o tamanho antes da compressao.
 - `compressedSize` deve refletir o tamanho efetivamente transmitido.
 - `signature` e opcional, mas quando presente cobre o frame de transporte.
+
+### Descoberta do formato por mensagem (sem inferir modo do emissor)
+
+Cada frame informa explicitamente `enc` e `cmp`. O receptor **nao** deduz se o
+emissor estava em modo Automático, Sempre GZIP ou Desligado: ele apenas le os
+campos do frame e aplica decode/descompressao. No fio existem somente
+`cmp: gzip` ou `cmp: none`; o modo Automático do agente só decide qual dos dois
+usar naquele envio.
 
 Representacao de `payload` por plataforma:
 
@@ -111,14 +121,25 @@ Ao receber qualquer evento de aplicacao:
 - Rejeitar `cmp` nao suportado.
 - Aplicar limite de expansao para evitar zip bomb.
 - Nao assumir que toda mensagem vira `gzip`; suportar `cmp: none`.
-- Mapear falha de decode para `-32010`.
-- Mapear falha de compressao/descompressao para `-32011`.
-- Mapear excesso de payload para `-32009`.
+- Mapear falha de **decode** do conteudo ja descomprimido (ex.: JSON invalido apos `cmp: none` ou apos gunzip) para `-32010`.
+- Mapear falha de **compressao/descompressao GZIP** do blob em `payload` para `-32011`.
+- Mapear **excesso de payload** / limites negociados para `-32009`.
+- Quando o erro for de **encode JSON** do payload logico antes de montar o frame (payload invalido para serializar), mapear para `-32009` (`invalid payload`), nao confundir com `-32011`.
+
+### Implementacao de referencia (Plug Agente, Dart)
+
+- **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
+- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`dart:io` gzip** (zlib da VM), partilhadas com o pipeline e com o compressor de linhas.
+- **Segundo formato (nao e o frame):** respostas SQL podem usar `GzipCompressor` (`lib/infrastructure/compression/gzip_compressor.dart`): lista de maps com `compressed_data` (base64) e `is_compressed`; e independente do envelope `PayloadFrame` acima.
 
 ## Handshake e capabilities
 
 O handshake continua sendo um payload logico, mas o transporte fisico deve
 seguir o `PayloadFrame`.
+
+No perfil atual, `agent:register` pode incluir `profile` quando o cadastro do
+agente estiver completo. Clientes consumidores devem tratar esse bloco como
+opcional e ignorar quando ausente.
 
 Quando o cliente anunciar capacidades:
 
@@ -128,6 +149,12 @@ Quando o cliente anunciar capacidades:
   **automatico** de compressao: no fio continuam apenas `cmp: gzip` ou `cmp: none`.
 - `encodings` deve incluir `json`
 - `extensions.binaryPayload` deve ser `true`
+- `extensions.protocolReadyAck` pode ser `true`; nesse caso, depois de receber
+  `agent:capabilities`, o agente emite `agent:ready` para liberar hubs que usam
+  readiness explicito
+- `extensions.recommendedStreamPullWindowSize` e
+  `extensions.maxStreamPullWindowSize` podem anunciar hints para o hub ajustar
+  `rpc:stream.pull` quando houver backpressure
 
 Quando o cliente consumir capacidades do outro lado:
 
@@ -135,6 +162,26 @@ Quando o cliente consumir capacidades do outro lado:
   `compressions` (se o peer anunciar so `none`, nao exigir gzip outbound)
 - considerar a sessao apta ao modo obrigatorio apenas se
   `extensions.binaryPayload == true`
+- nao enviar `rpc:request` antes de receber `agent:capabilities`; o runtime
+  atual rejeita pedidos antecipados com `invalid_request` e
+  `reason: protocol_not_ready`
+- para hubs com readiness explicito, considerar a sessao plenamente pronta apos
+  `agent:capabilities` e o envio subsequente de `agent:ready`
+
+### Preferencia por pedido (`meta.outbound_compression`)
+
+Opcionalmente o hub pode enviar em cada JSON-RPC request `meta.outbound_compression`
+com `none`, `gzip` ou `auto`, alinhado a semantica do agente (mesmo significado
+que o modo configurado na UI). Isso altera apenas o `PayloadFrame` de **saida**
+(`rpc:response`, e `rpc:chunk` / `rpc:complete` ligados ao mesmo `id`). Sem o
+campo, aplica-se a politica padrao do agente. O limiar `compressionThreshold`
+e a negociacao (`compressions` no handshake) continuam a limitar o que e possivel
+no fio. Em batch JSON-RPC, todos os itens que **definirem**
+`meta.outbound_compression` devem usar o **mesmo** valor; valores diferentes no
+mesmo batch sao rejeitados. Itens **sem** o campo podem coexistir com itens que
+o definem desde que exista no maximo **um** valor distinto entre os que o
+definem (ex.: um item com `gzip` e os restantes sem `meta.outbound_compression`
+aplicam `gzip` ao `PayloadFrame` unico da resposta em batch).
 
 ## Assinatura e validacao logica
 
@@ -215,13 +262,20 @@ function encodeFrame(
   { requestId, traceId, compressionThreshold = 1024 },
 ) {
   const plainBytes = Buffer.from(JSON.stringify(message), "utf8");
-  const useCompression = plainBytes.length >= compressionThreshold;
-  const wireBytes = useCompression ? gzipSync(plainBytes) : plainBytes;
+  let cmp = "none";
+  let wireBytes = plainBytes;
+  if (plainBytes.length >= compressionThreshold) {
+    const gz = gzipSync(plainBytes);
+    if (gz.length < plainBytes.length) {
+      cmp = "gzip";
+      wireBytes = gz;
+    }
+  }
 
   return {
     schemaVersion: "1.0",
     enc: "json",
-    cmp: useCompression ? "gzip" : "none",
+    cmp,
     contentType: "application/json",
     originalSize: plainBytes.length,
     compressedSize: wireBytes.length,
@@ -242,6 +296,8 @@ function decodeFrame(frame) {
   return JSON.parse(plainBytes.toString("utf8"));
 }
 ```
+
+O exemplo acima segue o modo **automatico** do contrato: acima do limiar, `gzip` so quando o bloco comprimido e **menor** que o JSON UTF-8 bruto; caso contrario `cmp: none` (alinhado ao plug_agente Dart e ao hub `plug_server`).
 
 ## Exemplo em Dart
 
@@ -279,3 +335,9 @@ nao sao clientes compativeis com este contrato de transporte.
 
 Postman e ferramentas equivalentes, quando nao conseguem cumprir esse fluxo,
 nao devem ser usadas para homologacao do contrato Socket.IO.
+
+## Schema JSON (frame fisico)
+
+Validacao estrutural opcional do envelope:
+
+- `docs/communication/schemas/payload-frame.schema.json`

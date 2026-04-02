@@ -70,8 +70,7 @@ class GlobalStoragePathResolver {
     String appFolderName = defaultAppFolderName,
     List<String>? candidateDirectories,
   }) async {
-    final candidates =
-        candidateDirectories ?? _buildCandidateDirectories(appFolderName);
+    final candidates = candidateDirectories ?? _buildCandidateDirectories(appFolderName);
     final failures = <String>[];
 
     for (final candidate in candidates) {
@@ -86,8 +85,7 @@ class GlobalStoragePathResolver {
     }
 
     throw GlobalStorageAccessException(
-      message:
-          'Unable to access a global writable directory for application data.',
+      message: 'Unable to access a global writable directory for application data.',
       attempts: failures,
     );
   }
@@ -110,9 +108,7 @@ class GlobalStoragePathResolver {
       }
     }
 
-    final programData =
-        Platform.environment['ProgramData'] ??
-        Platform.environment['ALLUSERSPROFILE'];
+    final programData = Platform.environment['ProgramData'] ?? Platform.environment['ALLUSERSPROFILE'];
     addCandidate(
       programData == null ? null : p.join(programData, appFolderName),
     );
@@ -124,9 +120,7 @@ class GlobalStoragePathResolver {
 
     final publicRoot = Platform.environment['PUBLIC'];
     addCandidate(
-      publicRoot == null
-          ? null
-          : p.join(publicRoot, 'Documents', appFolderName),
+      publicRoot == null ? null : p.join(publicRoot, 'Documents', appFolderName),
     );
 
     addCandidate(p.join(r'C:\ProgramData', appFolderName));

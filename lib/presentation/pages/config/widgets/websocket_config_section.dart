@@ -170,8 +170,7 @@ class _ServerSection extends StatelessWidget {
                           ? AppStrings.wsButtonLogout
                           : AppStrings.wsButtonLogin,
                       isPrimary: false,
-                      isLoading:
-                          authProvider.status == AuthStatus.authenticating,
+                      isLoading: authProvider.status == AuthStatus.authenticating,
                       onPressed: onLoginOrLogout,
                     ),
                   ],
@@ -189,8 +188,7 @@ class _OutboundCompressionSection extends StatefulWidget {
   const _OutboundCompressionSection();
 
   @override
-  State<_OutboundCompressionSection> createState() =>
-      _OutboundCompressionSectionState();
+  State<_OutboundCompressionSection> createState() => _OutboundCompressionSectionState();
 }
 
 class _OutboundCompressionSectionState extends State<_OutboundCompressionSection> {
@@ -275,9 +273,7 @@ class _WebSocketActionButtons extends StatelessWidget {
           builder: (context, authProvider, _) {
             return SettingsActionRow(
               leading: AppButton(
-                label: connectionProvider.isConnected
-                    ? AppStrings.wsButtonDisconnect
-                    : AppStrings.wsButtonConnect,
+                label: connectionProvider.isConnected ? AppStrings.wsButtonDisconnect : AppStrings.wsButtonConnect,
                 onPressed: () => _handleConnectOrDisconnect(
                   context,
                   connectionProvider,

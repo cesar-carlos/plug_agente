@@ -8,8 +8,7 @@ extension ZardResultExtension<T extends Object> on ZardResult<T> {
       return Success(data!);
     }
 
-    final errorMsg =
-        error?.messages ?? error?.toString() ?? 'Validation failed';
+    final errorMsg = error?.messages ?? error?.toString() ?? 'Validation failed';
     return Failure(domain.ValidationFailure(errorMsg));
   }
 }
@@ -29,10 +28,7 @@ class ZardAdapter {
       return const Success(true);
     }
 
-    final errorMsg =
-        zardResult.error?.messages ??
-        zardResult.error?.toString() ??
-        'Validation failed';
+    final errorMsg = zardResult.error?.messages ?? zardResult.error?.toString() ?? 'Validation failed';
 
     return Failure(domain.ValidationFailure(errorMsg));
   }
@@ -42,10 +38,7 @@ class ZardAdapter {
       return Success(zardResult.data!);
     }
 
-    final errorMsg =
-        zardResult.error?.messages ??
-        zardResult.error?.toString() ??
-        'Validation failed';
+    final errorMsg = zardResult.error?.messages ?? zardResult.error?.toString() ?? 'Validation failed';
     return Failure(domain.ValidationFailure(errorMsg));
   }
 }

@@ -18,6 +18,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get navSettings => 'Configurações';
 
   @override
+  String get navAgentProfile => 'Perfil do agente';
+
+  @override
   String get titlePlayground => 'Playground Database';
 
   @override

@@ -10,9 +10,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService
-    with WindowListener
-    implements IWindowManagerService {
+class WindowManagerService with WindowListener implements IWindowManagerService {
   factory WindowManagerService() => _instance;
   WindowManagerService._();
   static final WindowManagerService _instance = WindowManagerService._();
@@ -40,8 +38,7 @@ class WindowManagerService
     await windowManager.ensureInitialized();
 
     final defaultSize = size ?? const ui.Size(1280, 800);
-    final defaultMinimumSize =
-        minimumSize ?? WindowConstraints.getMainWindowMinSize();
+    final defaultMinimumSize = minimumSize ?? WindowConstraints.getMainWindowMinSize();
 
     final windowOptions = WindowOptions(
       size: defaultSize,
@@ -55,8 +52,7 @@ class WindowManagerService
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       if (startMinimized) {
-        await windowManager.hide();
-        _logger.i('Aplicativo iniciado minimizado (oculto)');
+        await _ensureWindowHiddenAtStartup();
       } else {
         await windowManager.show();
         await windowManager.focus();
@@ -64,16 +60,7 @@ class WindowManagerService
     });
 
     if (startMinimized) {
-      await Future<void>.delayed(AppConstants.windowShowRestoreDelay);
-      final isVisible = await windowManager.isVisible();
-      if (isVisible) {
-        _logger.w(
-          'Janela ainda visível após hide(), tentando ocultar novamente...',
-        );
-        await windowManager.hide();
-        await windowManager.setSkipTaskbar(true);
-      }
-      _logger.i('Aplicativo iniciado minimizado - janela oculta');
+      await _ensureWindowHiddenAtStartup();
     } else {
       await windowManager.setSkipTaskbar(false);
     }
@@ -87,6 +74,40 @@ class WindowManagerService
     _logger.i(
       'WindowManager inicializado - Tamanho mínimo: ${defaultMinimumSize.width}x${defaultMinimumSize.height}',
     );
+  }
+
+  Future<void> _ensureWindowHiddenAtStartup() async {
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.hide();
+
+    for (var attempt = 1; attempt <= AppConstants.windowStartupHideRetryCount; attempt++) {
+      await Future<void>.delayed(AppConstants.windowStartupHideRetryDelay);
+      final isVisible = await windowManager.isVisible();
+
+      if (!isVisible) {
+        _logger.i('Aplicativo iniciado minimizado - janela oculta');
+        return;
+      }
+
+      _logger.w(
+        'Janela visível ao iniciar minimizado (tentativa $attempt), '
+        'forçando hide novamente...',
+      );
+      await windowManager.hide();
+      await windowManager.setSkipTaskbar(true);
+      final isMinimized = await windowManager.isMinimized();
+      if (!isMinimized) {
+        await windowManager.minimize();
+      }
+    }
+
+    final isStillVisible = await windowManager.isVisible();
+    if (isStillVisible) {
+      _logger.e(
+        'Falha ao ocultar janela na inicialização minimizada após '
+        '${AppConstants.windowStartupHideRetryCount} tentativas',
+      );
+    }
   }
 
   void setCallbacks({

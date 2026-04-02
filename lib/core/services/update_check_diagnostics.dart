@@ -40,8 +40,7 @@ class UpdateCheckDiagnostics {
       configuredFeedUrl: configuredFeedUrl ?? this.configuredFeedUrl,
       requestedFeedUrl: requestedFeedUrl ?? this.requestedFeedUrl,
       appcastProbeVersion: appcastProbeVersion ?? this.appcastProbeVersion,
-      appcastProbeItemCount:
-          appcastProbeItemCount ?? this.appcastProbeItemCount,
+      appcastProbeItemCount: appcastProbeItemCount ?? this.appcastProbeItemCount,
       updateAvailable: updateAvailable ?? this.updateAvailable,
       remoteVersion: remoteVersion ?? this.remoteVersion,
       remoteDisplayVersion: remoteDisplayVersion ?? this.remoteDisplayVersion,

@@ -18,6 +18,19 @@ class ConfigTable extends Table {
   TextColumn get databaseName => text()();
   TextColumn get host => text()();
   IntColumn get port => integer()();
+  TextColumn get nome => text().withDefault(const Constant(''))();
+  TextColumn get nomeFantasia => text().withDefault(const Constant(''))();
+  TextColumn get cnaeCnpjCpf => text().withDefault(const Constant(''))();
+  TextColumn get telefone => text().withDefault(const Constant(''))();
+  TextColumn get celular => text().withDefault(const Constant(''))();
+  TextColumn get email => text().withDefault(const Constant(''))();
+  TextColumn get endereco => text().withDefault(const Constant(''))();
+  TextColumn get numeroEndereco => text().withDefault(const Constant(''))();
+  TextColumn get bairro => text().withDefault(const Constant(''))();
+  TextColumn get cep => text().withDefault(const Constant(''))();
+  TextColumn get nomeMunicipio => text().withDefault(const Constant(''))();
+  TextColumn get ufMunicipio => text().withDefault(const Constant(''))();
+  TextColumn get observacao => text().withDefault(const Constant(''))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 

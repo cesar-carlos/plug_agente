@@ -17,6 +17,23 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
 
+typedef StartupWindowPreferences = ({
+  bool startMinimized,
+  bool minimizeToTray,
+  bool closeToTray,
+});
+
+@visibleForTesting
+StartupWindowPreferences resolveStartupWindowPreferences(
+  IAppSettingsStore settingsStore,
+) {
+  return (
+    startMinimized: settingsStore.getBool('settings.start_minimized') ?? false,
+    minimizeToTray: settingsStore.getBool('settings.minimize_to_tray') ?? true,
+    closeToTray: settingsStore.getBool('settings.close_to_tray') ?? true,
+  );
+}
+
 class AppInitializer {
   const AppInitializer({required this.runtimeProbe});
 
@@ -86,9 +103,7 @@ class AppInitializer {
   String? _resolveInitialRoute(List<String> args) {
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink(args);
-    return initialLink != null
-        ? deepLinkService.deepLinkToRoute(initialLink)
-        : null;
+    return initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
   }
 
   Future<void> _initializeDesktopFeatures(
@@ -155,19 +170,20 @@ class AppInitializer {
       const initialSize = Size(1200, 800);
 
       final prefs = getIt<IAppSettingsStore>();
-      final startMinimized = prefs.getBool('settings.start_minimized') ?? false;
+      final preferences = resolveStartupWindowPreferences(prefs);
 
       await windowManagerService.initialize(
         size: initialSize,
         minimumSize: minSize,
-        startMinimized: startMinimized,
+        startMinimized: preferences.startMinimized,
       );
 
       getIt.registerSingleton<WindowManagerService>(windowManagerService);
       getIt.registerSingleton<IWindowManagerService>(windowManagerService);
 
       developer.log(
-        'Window manager initialized (startMinimized: $startMinimized)',
+        'Window manager initialized '
+        '(startMinimized: ${preferences.startMinimized})',
         name: 'app_initializer',
         level: 800,
       );
@@ -203,16 +219,16 @@ class AppInitializer {
 
       if (windowManagerService != null) {
         final prefs = getIt<IAppSettingsStore>();
-        final minimizeToTray =
-            prefs.getBool('settings.minimize_to_tray') ?? true;
-        final closeToTray = prefs.getBool('settings.close_to_tray') ?? true;
+        final preferences = resolveStartupWindowPreferences(prefs);
 
         windowManagerService
-          ..setMinimizeToTray(value: minimizeToTray)
-          ..setCloseToTray(value: closeToTray);
+          ..setMinimizeToTray(value: preferences.minimizeToTray)
+          ..setCloseToTray(value: preferences.closeToTray);
 
         developer.log(
-          'Tray behaviors configured (minimize: $minimizeToTray, close: $closeToTray)',
+          'Tray behaviors configured '
+          '(minimize: ${preferences.minimizeToTray}, '
+          'close: ${preferences.closeToTray})',
           name: 'app_initializer',
           level: 800,
         );

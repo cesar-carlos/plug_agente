@@ -3,6 +3,7 @@
   "navDashboard": "Dashboard",
   "navPlayground": "Playground",
   "navSettings": "Configurações",
+  "navAgentProfile": "Perfil do agente",
   "titlePlayground": "Playground Database",
   "titleConfig": "Configurações - Plug Database",
   "modalTitleSuccess": "Sucesso",

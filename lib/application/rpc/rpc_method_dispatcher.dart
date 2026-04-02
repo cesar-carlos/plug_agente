@@ -7,11 +7,13 @@ import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
+import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
-import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
+import 'package:plug_agente/core/utils/split_sql_statements.dart'
+    show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -103,6 +105,7 @@ class RpcMethodDispatcher {
   static const _defaultAuthorizationStageBudget = Duration(seconds: 3);
   static const _defaultQueryStageBudget = Duration(seconds: 30);
   static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
+  static const _agentProfileAuthorizationSql = 'SELECT * FROM agent_profile';
   final ExecuteSqlBatch _executeSqlBatch;
   _ActiveStreamExecution? _activeStreamExecution;
 
@@ -133,6 +136,11 @@ class RpcMethodDispatcher {
         negotiatedExtensions: negotiatedExtensions,
       ),
       'sql.cancel' => await _handleSqlCancel(request),
+      'agent.getProfile' => await _handleAgentGetProfile(
+        request,
+        agentId,
+        clientToken,
+      ),
       _ => _methodNotFound(request),
     };
   }
@@ -205,7 +213,9 @@ class RpcMethodDispatcher {
     final requestParameters = paramReader.boundParams;
     final database = paramReader.database;
 
-    if (multiResultRequested && requestParameters != null && requestParameters.isNotEmpty) {
+    if (multiResultRequested &&
+        requestParameters != null &&
+        requestParameters.isNotEmpty) {
       return _invalidParams(
         request,
         'multi_result is not supported with named parameters',
@@ -232,7 +242,8 @@ class RpcMethodDispatcher {
       return idempotentEarly;
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -246,7 +257,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       final authDenied = await _authorizeSqlExecuteWithClientToken(
         request: request,
         sql: sql,
@@ -323,7 +336,8 @@ class RpcMethodDispatcher {
             : truncateSqlResultRows(normalized.data, maxRows);
         final wasTruncated =
             multiResultSetsTruncated ||
-            (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
+            (!normalized.resultSets.isNotEmpty &&
+                limitedRows.length != normalized.data.length);
         final useStreaming =
             _featureFlags.enableSocketStreamingChunks &&
             streamEmitter != null &&
@@ -338,8 +352,14 @@ class RpcMethodDispatcher {
           final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
           var overflowed = false;
 
-          for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
-            final chunkEnd = i + limits.streamingChunkSize > rows.length ? rows.length : i + limits.streamingChunkSize;
+          for (
+            var i = 0;
+            i < rows.length && !overflowed;
+            i += limits.streamingChunkSize
+          ) {
+            final chunkEnd = i + limits.streamingChunkSize > rows.length
+                ? rows.length
+                : i + limits.streamingChunkSize;
             final chunkRows = rows.sublist(i, chunkEnd);
             if (!await streamEmitter.emitChunk(
               RpcStreamChunk(
@@ -403,8 +423,10 @@ class RpcMethodDispatcher {
             'affected_rows': normalized.affectedRows,
             'returned_rows': rows.length,
             if (wasTruncated) 'truncated': true,
-            if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
-            if (normalized.pagination != null) 'pagination': _buildPaginationResult(normalized.pagination!),
+            if (normalized.columnMetadata != null)
+              'column_metadata': normalized.columnMetadata,
+            if (normalized.pagination != null)
+              'pagination': _buildPaginationResult(normalized.pagination!),
           };
 
           return RpcResponse.success(id: request.id, result: resultData);
@@ -499,7 +521,9 @@ class RpcMethodDispatcher {
         config.resolveConnectionString(),
         (chunk) async {
           if (columnMetadata == null && chunk.isNotEmpty) {
-            columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
+            columnMetadata = chunk.first.keys
+                .map((k) => <String, dynamic>{'name': k, 'type': 'string'})
+                .toList();
           }
           totalRows += chunk.length;
           if (!await streamEmitter.emitChunk(
@@ -554,7 +578,9 @@ class RpcMethodDispatcher {
           'rows': <Map<String, dynamic>>[],
           'row_count': 0,
           'affected_rows': totalRows,
-          ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
+          ...?(columnMetadata != null
+              ? {'column_metadata': columnMetadata}
+              : null),
         },
       );
       _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
@@ -579,7 +605,9 @@ class RpcMethodDispatcher {
 
     final params = request.params as Map<String, dynamic>;
     final commandsJson = params['commands'] as List<dynamic>?;
-    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_sqlBatchTotalBudgetDuration) : null;
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_sqlBatchTotalBudgetDuration)
+        : null;
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       final options = params['options'] as Map<String, dynamic>?;
       if (options?['page'] != null || options?['page_size'] != null) {
@@ -628,7 +656,9 @@ class RpcMethodDispatcher {
       }
 
       final executionOrderRaw = commandJson['execution_order'];
-      final executionOrder = executionOrderRaw != null ? jsonNonNegativeInt(executionOrderRaw) : null;
+      final executionOrder = executionOrderRaw != null
+          ? jsonNonNegativeInt(executionOrderRaw)
+          : null;
       if (executionOrderRaw != null && executionOrder == null) {
         return _invalidParams(
           request,
@@ -668,9 +698,12 @@ class RpcMethodDispatcher {
       return left.requestIndex.compareTo(right.requestIndex);
     });
 
-    final commands = commandPlans.map((plan) => plan.command).toList(growable: false);
+    final commands = commandPlans
+        .map((plan) => plan.command)
+        .toList(growable: false);
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -684,7 +717,9 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
       final authorizedSqlFingerprints = <String>{};
       for (final cmd in commands) {
         final authFingerprint = _authorizationFingerprint(cmd.sql);
@@ -731,10 +766,14 @@ class RpcMethodDispatcher {
 
     // Parse options
     final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
+    final options = optionsJson != null
+        ? SqlExecutionOptions.fromJson(optionsJson)
+        : const SqlExecutionOptions();
     final effectiveOptions = SqlExecutionOptions(
       timeoutMs: options.timeoutMs,
-      maxRows: options.maxRows < limits.maxRows ? options.maxRows : limits.maxRows,
+      maxRows: options.maxRows < limits.maxRows
+          ? options.maxRows
+          : limits.maxRows,
       transaction: options.transaction,
     );
 
@@ -818,7 +857,9 @@ class RpcMethodDispatcher {
     required String clientToken,
     required DateTime? deadline,
   }) async {
-    final statements = !multiResultRequested ? <String>[sql] : sqlStatementsForClientTokenAuthorization(sql);
+    final statements = !multiResultRequested
+        ? <String>[sql]
+        : sqlStatementsForClientTokenAuthorization(sql);
 
     final authorizedFingerprints = <String>{};
     for (final raw in statements) {
@@ -1095,7 +1136,8 @@ class RpcMethodDispatcher {
     final executionId = params['execution_id'] as String?;
     final requestId = params['request_id'] as String?;
 
-    if ((executionId == null || executionId.isEmpty) && (requestId == null || requestId.isEmpty)) {
+    if ((executionId == null || executionId.isEmpty) &&
+        (requestId == null || requestId.isEmpty)) {
       return _invalidParams(
         request,
         'At least one of execution_id or request_id is required',
@@ -1125,6 +1167,109 @@ class RpcMethodDispatcher {
           ...?(requestId != null ? {'request_id': requestId} : null),
         };
         return RpcResponse.success(id: request.id, result: resultData);
+      },
+      (failure) {
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure as domain.Failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
+  }
+
+  Future<RpcResponse> _handleAgentGetProfile(
+    RpcRequest request,
+    String agentId,
+    String? clientToken,
+  ) async {
+    if (request.params != null && request.params is! Map<String, dynamic>) {
+      return _invalidParams(
+        request,
+        'Method agent.getProfile expects params to be absent or an object',
+      );
+    }
+
+    final params = request.params as Map<String, dynamic>? ?? const {};
+    final extraKeys = params.keys.where(
+      (String key) =>
+          key != 'client_token' && key != 'clientToken' && key != 'auth',
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        request,
+        'Method agent.getProfile only accepts client_token aliases in params',
+      );
+    }
+
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_authorizationStageBudgetDuration)
+        : null;
+
+    if (_featureFlags.enableClientTokenAuthorization &&
+        (clientToken == null || clientToken.isEmpty)) {
+      final rpcError = FailureToRpcErrorMapper.map(
+        _buildMissingClientTokenFailure(),
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    if (_featureFlags.enableClientTokenAuthorization &&
+        clientToken != null &&
+        clientToken.isNotEmpty) {
+      final authResult = await _authorizeWithBudget(
+        token: clientToken,
+        sql: _agentProfileAuthorizationSql,
+        requestId: request.id?.toString(),
+        method: request.method,
+        deadline: deadline,
+      );
+      if (authResult.isError()) {
+        final failure = authResult.exceptionOrNull()! as domain.Failure;
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      }
+    }
+
+    final repository = _configRepository;
+    if (repository == null) {
+      return _invalidParams(
+        request,
+        'Agent profile repository is not available',
+      );
+    }
+
+    final result = await repository.getCurrentConfig();
+    return result.fold<RpcResponse>(
+      (config) {
+        final profileResult = AgentProfile.fromConfig(config);
+        if (profileResult.isError()) {
+          final failure = profileResult.exceptionOrNull()! as domain.Failure;
+          final rpcError = FailureToRpcErrorMapper.map(
+            failure,
+            instance: request.id?.toString(),
+            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          return RpcResponse.error(id: request.id, error: rpcError);
+        }
+
+        final profile = profileResult.getOrThrow();
+        final payload = <String, dynamic>{
+          'agent_id': agentId,
+          'profile': profile.toJson(),
+          'updated_at': config.updatedAt.toUtc().toIso8601String(),
+        };
+        return RpcResponse.success(
+          id: request.id,
+          result: payload,
+        );
       },
       (failure) {
         final rpcError = FailureToRpcErrorMapper.map(
@@ -1271,7 +1416,10 @@ class RpcMethodDispatcher {
   }
 
   String _authorizationFingerprint(String sql) {
-    return sql.trim().replaceAll(_authorizationSqlWhitespaceCollapse, ' ').toLowerCase();
+    return sql
+        .trim()
+        .replaceAll(_authorizationSqlWhitespaceCollapse, ' ')
+        .toLowerCase();
   }
 
   int _resolveMaxRows(Map<String, dynamic> params, int negotiatedMaxRows) {
@@ -1280,7 +1428,9 @@ class RpcMethodDispatcher {
     if (requestedMaxRows == null) {
       return negotiatedMaxRows;
     }
-    return requestedMaxRows < negotiatedMaxRows ? requestedMaxRows : negotiatedMaxRows;
+    return requestedMaxRows < negotiatedMaxRows
+        ? requestedMaxRows
+        : negotiatedMaxRows;
   }
 
   bool _resolveMultiResult(Map<String, dynamic> params) {
@@ -1304,7 +1454,9 @@ class RpcMethodDispatcher {
         errorMessage: 'execution_mode must be a string',
       );
     }
-    if (executionMode != null && executionMode != 'managed' && executionMode != 'preserve') {
+    if (executionMode != null &&
+        executionMode != 'managed' &&
+        executionMode != 'preserve') {
       return const _ResolvedSqlHandlingMode(
         errorMessage: 'execution_mode must be "managed" or "preserve"',
       );
@@ -1318,7 +1470,8 @@ class RpcMethodDispatcher {
     }
     if (preserveSql == true && executionMode == 'managed') {
       return const _ResolvedSqlHandlingMode(
-        errorMessage: 'preserve_sql cannot be true when execution_mode is "managed"',
+        errorMessage:
+            'preserve_sql cannot be true when execution_mode is "managed"',
       );
     }
 
@@ -1332,10 +1485,14 @@ class RpcMethodDispatcher {
     final resolvedMode = executionMode == 'preserve' || preserveSql == true
         ? SqlHandlingMode.preserve
         : SqlHandlingMode.managed;
-    final hasManagedPagination = options['page'] != null || options['page_size'] != null || options['cursor'] != null;
+    final hasManagedPagination =
+        options['page'] != null ||
+        options['page_size'] != null ||
+        options['cursor'] != null;
     if (resolvedMode == SqlHandlingMode.preserve && hasManagedPagination) {
       return const _ResolvedSqlHandlingMode(
-        errorMessage: 'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
+        errorMessage:
+            'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
       );
     }
 
@@ -1362,7 +1519,9 @@ class RpcMethodDispatcher {
       plan = paginationPlanResult.getOrNull();
     } else {
       final failure = paginationPlanResult.exceptionOrNull()! as domain.Failure;
-      final isMissingOrderBy = failure.message == 'Paginated queries must declare an explicit ORDER BY clause';
+      final isMissingOrderBy =
+          failure.message ==
+          'Paginated queries must declare an explicit ORDER BY clause';
       if (cursor != null || !isMissingOrderBy) {
         return _ResolvedPagination(errorMessage: failure.message);
       }
@@ -1372,7 +1531,8 @@ class RpcMethodDispatcher {
       final stablePlan = plan;
       if (stablePlan == null) {
         return const _ResolvedPagination(
-          errorMessage: 'Cursor pagination requires an explicit ORDER BY clause',
+          errorMessage:
+              'Cursor pagination requires an explicit ORDER BY clause',
         );
       }
       if (page != null || pageSize != null) {
@@ -1434,12 +1594,14 @@ class RpcMethodDispatcher {
 
     if (page == null || pageSize == null || page < 1 || pageSize < 1) {
       return const _ResolvedPagination(
-        errorMessage: 'page and page_size must be provided together and be >= 1',
+        errorMessage:
+            'page and page_size must be provided together and be >= 1',
       );
     }
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       return const _ResolvedPagination(
-        errorMessage: 'Negotiated protocol does not allow page-offset pagination',
+        errorMessage:
+            'Negotiated protocol does not allow page-offset pagination',
       );
     }
     if (pageSize > negotiatedMaxRows) {
@@ -1467,7 +1629,8 @@ class RpcMethodDispatcher {
       'returned_rows': pagination.returnedRows,
       'has_next_page': pagination.hasNextPage,
       'has_previous_page': pagination.hasPreviousPage,
-      if (pagination.currentCursor != null) 'current_cursor': pagination.currentCursor,
+      if (pagination.currentCursor != null)
+        'current_cursor': pagination.currentCursor,
       if (pagination.nextCursor != null) 'next_cursor': pagination.nextCursor,
     };
   }
@@ -1509,8 +1672,12 @@ class RpcMethodDispatcher {
       resultData['multi_result'] = true;
       resultData['result_set_count'] = response.resultSets.length;
       resultData['item_count'] = response.items.length;
-      resultData['result_sets'] = response.resultSets.map(_buildResultSetPayload).toList(growable: false);
-      resultData['items'] = response.items.map(_buildResponseItemPayload).toList(growable: false);
+      resultData['result_sets'] = response.resultSets
+          .map(_buildResultSetPayload)
+          .toList(growable: false);
+      resultData['items'] = response.items
+          .map(_buildResponseItemPayload)
+          .toList(growable: false);
     }
 
     return resultData;
@@ -1524,8 +1691,10 @@ class RpcMethodDispatcher {
       if (includeIndex) 'index': resultSet.index,
       'rows': resultSet.rows,
       'row_count': resultSet.rowCount,
-      if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
-      if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
+      if (resultSet.affectedRows != null)
+        'affected_rows': resultSet.affectedRows,
+      if (resultSet.columnMetadata != null)
+        'column_metadata': resultSet.columnMetadata,
     };
   }
 
@@ -1580,7 +1749,9 @@ class RpcMethodDispatcher {
           return item;
         })
         .toList(growable: false);
-    final primary = newSets.isNotEmpty ? newSets.first : const QueryResultSet(index: 0, rows: [], rowCount: 0);
+    final primary = newSets.isNotEmpty
+        ? newSets.first
+        : const QueryResultSet(index: 0, rows: [], rowCount: 0);
     return QueryResponse(
       id: response.id,
       requestId: response.requestId,
@@ -1616,8 +1787,10 @@ class RpcMethodDispatcher {
     required String? requestId,
     required _ActiveStreamExecution activeExecution,
   }) {
-    final executionMatches = executionId != null && executionId == activeExecution.executionId;
-    final requestMatches = requestId != null && requestId == activeExecution.requestId;
+    final executionMatches =
+        executionId != null && executionId == activeExecution.executionId;
+    final requestMatches =
+        requestId != null && requestId == activeExecution.requestId;
     return executionMatches || requestMatches;
   }
 

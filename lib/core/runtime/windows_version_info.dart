@@ -24,8 +24,7 @@ class WindowsVersionInfo {
   bool get isWindows81OrServer2012R2 => majorVersion == 6 && minorVersion == 3;
 
   /// Abaixo de Windows 8 / Server 2012.
-  bool get isBelowWindows8 =>
-      majorVersion < 6 || (majorVersion == 6 && minorVersion < 2);
+  bool get isBelowWindows8 => majorVersion < 6 || (majorVersion == 6 && minorVersion < 2);
 
   String get versionString => '$majorVersion.$minorVersion.$buildNumber';
 

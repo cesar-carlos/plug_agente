@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class NumericField extends StatelessWidget {
@@ -37,17 +38,17 @@ class NumericField extends StatelessWidget {
           validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
-              return '$label é obrigatório';
+              return AppStrings.formFieldRequired(label);
             }
             final number = int.tryParse(value);
             if (number == null) {
-              return 'Valor inválido';
+              return AppStrings.formNumericInvalidValue;
             }
             if (minValue != null && number < minValue!) {
-              return 'Valor mínimo: $minValue';
+              return AppStrings.formNumericMinValue(minValue!);
             }
             if (maxValue != null && number > maxValue!) {
-              return 'Valor máximo: $maxValue';
+              return AppStrings.formNumericMaxValue(maxValue!);
             }
             return null;
           },

@@ -35,6 +35,7 @@ import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -74,7 +75,9 @@ import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.d
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
@@ -260,6 +263,24 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
     ..registerLazySingleton<IAuthClient>(
       () => AuthClient(DioFactory.createDio()),
+    )
+    ..registerLazySingleton(
+      () => ViaCepClient(
+        DioFactory.createDio(
+          requestTimeout: const Duration(
+            seconds: AppConstants.publicApiTimeoutSeconds,
+          ),
+        ),
+      ),
+    )
+    ..registerLazySingleton(
+      () => OpenCnpjClient(
+        DioFactory.createDio(
+          requestTimeout: const Duration(
+            seconds: AppConstants.publicApiTimeoutSeconds,
+          ),
+        ),
+      ),
     )
     ..registerLazySingleton<IAuthorizationPolicyResolver>(
       () => AuthorizationPolicyResolver(

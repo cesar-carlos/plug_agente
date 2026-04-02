@@ -66,21 +66,21 @@ class DioFactory {
     }
   }
 
-  static Dio createDio({bool? acceptBadCertificates}) {
+  static Dio createDio({
+    bool? acceptBadCertificates,
+    Duration? requestTimeout,
+  }) {
     final shouldAccept =
         acceptBadCertificates ?? _shouldAcceptBadCertificates();
+    final timeout =
+        requestTimeout ??
+        const Duration(seconds: AppConstants.connectionTimeoutSeconds);
 
     final dio = Dio(
       BaseOptions(
-        connectTimeout: const Duration(
-          seconds: AppConstants.connectionTimeoutSeconds,
-        ),
-        receiveTimeout: const Duration(
-          seconds: AppConstants.connectionTimeoutSeconds,
-        ),
-        sendTimeout: const Duration(
-          seconds: AppConstants.connectionTimeoutSeconds,
-        ),
+        connectTimeout: timeout,
+        receiveTimeout: timeout,
+        sendTimeout: timeout,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',

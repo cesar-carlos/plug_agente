@@ -19,9 +19,7 @@ class SqlAnywhereConnectionString {
     required int port,
     String? password,
   }) {
-    final effectiveDriver = driverName.isNotEmpty
-        ? driverName
-        : OdbcDrivers.sqlAnywhere16;
+    final effectiveDriver = driverName.isNotEmpty ? driverName : OdbcDrivers.sqlAnywhere16;
     final pwd = password != null ? ';PWD=$password' : '';
     return 'DRIVER={$effectiveDriver};'
         'UID=$username$pwd;'

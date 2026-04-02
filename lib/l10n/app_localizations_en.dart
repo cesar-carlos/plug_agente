@@ -18,6 +18,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navSettings => 'Settings';
 
   @override
+  String get navAgentProfile => 'Agent Profile';
+
+  @override
   String get titlePlayground => 'Playground Database';
 
   @override

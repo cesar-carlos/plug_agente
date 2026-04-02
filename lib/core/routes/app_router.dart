@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
 import 'package:plug_agente/presentation/pages/dashboard_page.dart';
 import 'package:plug_agente/presentation/pages/database_settings_page.dart';
@@ -70,6 +71,21 @@ GoRouter createAppRouter({
                 return DatabaseSettingsPage(initialTab: tab);
               }
               return const ConfigPage();
+            },
+          ),
+          GoRoute(
+            path: '${AppRoutes.agentProfile}/:id',
+            name: 'agentProfileEdit',
+            builder: (context, state) {
+              final id = state.pathParameters[AppRoutes.paramId] ?? '';
+              return AgentProfilePage(configId: id);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.agentProfile,
+            name: 'agentProfile',
+            builder: (context, state) {
+              return const AgentProfilePage();
             },
           ),
           GoRoute(

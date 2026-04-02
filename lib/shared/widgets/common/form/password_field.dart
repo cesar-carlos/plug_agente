@@ -1,10 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class PasswordField extends StatefulWidget {
   const PasswordField({
     super.key,
-    this.label = 'Senha',
+    this.label = AppStrings.formFieldLabelPassword,
     this.hint,
     this.controller,
     this.validator,
@@ -30,13 +31,13 @@ class _PasswordFieldState extends State<PasswordField> {
     return AppTextField(
       controller: widget.controller,
       label: widget.label,
-      hint: widget.hint ?? 'Digite a senha',
+      hint: widget.hint ?? AppStrings.formPasswordDefaultHint,
       obscureText: _obscureText,
       validator:
           widget.validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
-              return '${widget.label} é obrigatória';
+              return AppStrings.formPasswordRequired(widget.label);
             }
             return null;
           },
