@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
@@ -18,19 +19,19 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.connected:
             icon = FluentIcons.check_mark;
             color = AppColors.success;
-            statusText = 'Connected';
+            statusText = AppStrings.connectionStatusConnected;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
             color = AppColors.warning;
-            statusText = 'Connecting...';
+            statusText = AppStrings.connectionStatusConnecting;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = AppColors.error;
-            statusText = 'Connection Error';
+            statusText = AppStrings.connectionStatusError;
           default:
             icon = FluentIcons.circle_pause;
             color = AppColors.disabled;
-            statusText = 'Disconnected';
+            statusText = AppStrings.connectionStatusDisconnected;
         }
 
         return Container(
@@ -53,8 +54,8 @@ class ConnectionStatusWidget extends StatelessWidget {
               const Spacer(),
               Text(
                 connectionProvider.isDbConnected
-                    ? 'DB: Connected'
-                    : 'DB: Disconnected',
+                    ? AppStrings.connectionStatusDatabaseConnected
+                    : AppStrings.connectionStatusDatabaseDisconnected,
                 style: context.bodyText.copyWith(
                   color: connectionProvider.isDbConnected
                       ? AppColors.success

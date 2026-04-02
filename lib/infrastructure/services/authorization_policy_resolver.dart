@@ -273,8 +273,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   }
 
   void _addToRevokedStoreIfNeeded(String token, domain.Failure failure) {
-    if (!_featureFlags.enableSocketRevokedTokenInSession ||
-        _revokedTokenStore == null) {
+    if (!_featureFlags.enableSocketRevokedTokenInSession || _revokedTokenStore == null) {
       return;
     }
     final reason = failure.context['reason'] as String?;
@@ -319,5 +318,4 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       );
     }
   }
-
 }

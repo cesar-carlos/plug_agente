@@ -131,20 +131,20 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   Future<void> _addAgentProfileColumnsIfMissing(Migrator m) async {
     final existing = await _readConfigTableColumnNames();
     final profileColumns = <GeneratedColumn<Object>>[
-          configTable.nome as GeneratedColumn<Object>,
-          configTable.nomeFantasia as GeneratedColumn<Object>,
-          configTable.cnaeCnpjCpf as GeneratedColumn<Object>,
-          configTable.telefone as GeneratedColumn<Object>,
-          configTable.celular as GeneratedColumn<Object>,
-          configTable.email as GeneratedColumn<Object>,
-          configTable.endereco as GeneratedColumn<Object>,
-          configTable.numeroEndereco as GeneratedColumn<Object>,
-          configTable.bairro as GeneratedColumn<Object>,
-          configTable.cep as GeneratedColumn<Object>,
-          configTable.nomeMunicipio as GeneratedColumn<Object>,
-          configTable.ufMunicipio as GeneratedColumn<Object>,
-          configTable.observacao as GeneratedColumn<Object>,
-        ];
+      configTable.nome as GeneratedColumn<Object>,
+      configTable.nomeFantasia as GeneratedColumn<Object>,
+      configTable.cnaeCnpjCpf as GeneratedColumn<Object>,
+      configTable.telefone as GeneratedColumn<Object>,
+      configTable.celular as GeneratedColumn<Object>,
+      configTable.email as GeneratedColumn<Object>,
+      configTable.endereco as GeneratedColumn<Object>,
+      configTable.numeroEndereco as GeneratedColumn<Object>,
+      configTable.bairro as GeneratedColumn<Object>,
+      configTable.cep as GeneratedColumn<Object>,
+      configTable.nomeMunicipio as GeneratedColumn<Object>,
+      configTable.ufMunicipio as GeneratedColumn<Object>,
+      configTable.observacao as GeneratedColumn<Object>,
+    ];
     for (final column in profileColumns) {
       final sqlName = column.name;
       if (existing.contains(sqlName)) {
@@ -217,8 +217,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   }
 
   @override
-  Future<void> deleteConfig(String id) =>
-      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 
   void _startWalMaintenance() {
     _walCheckpointTimer?.cancel();

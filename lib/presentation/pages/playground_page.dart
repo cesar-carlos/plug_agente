@@ -10,6 +10,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
+import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
 
@@ -46,7 +47,8 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
         _restoreSqlHandlingMode().catchError(
-          (Object e) => AppLogger.warning('Failed to restore SQL handling mode', e),
+          (Object e) =>
+              AppLogger.warning('Failed to restore SQL handling mode', e),
         ),
       );
     });
@@ -196,7 +198,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
 
     // Ctrl+Shift+C: Test connection
-    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (isControlPressed &&
+        isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC) {
       _handleTestConnection(configProvider, playgroundProvider);
       return KeyEventResult.handled;
     }
@@ -236,6 +240,40 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppStrings.playgroundDescription,
+                            style: context.bodyMuted,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          const Wrap(
+                            spacing: AppSpacing.md,
+                            runSpacing: AppSpacing.sm,
+                            children: [
+                              _PlaygroundShortcutChip(
+                                icon: FluentIcons.play,
+                                label: AppStrings.playgroundShortcutExecute,
+                              ),
+                              _PlaygroundShortcutChip(
+                                icon: FluentIcons.plug_connected,
+                                label:
+                                    AppStrings.playgroundShortcutTestConnection,
+                              ),
+                              _PlaygroundShortcutChip(
+                                icon: FluentIcons.clear,
+                                label: AppStrings.playgroundShortcutClear,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          const ConnectionStatusWidget(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
                     SqlEditor(
                       controller: _queryController,
                       onChanged: (value) {
@@ -243,67 +281,80 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       },
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    SqlActionBar(
-                      onExecute: () => _handleExecute(
-                        playgroundProvider,
-                        configProvider,
-                      ),
-                      onTestConnection: config != null
-                          ? () => _handleTestConnection(
-                              configProvider,
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SqlActionBar(
+                            onExecute: () => _handleExecute(
                               playgroundProvider,
-                            )
-                          : null,
-                      onClear: () => _handleClear(playgroundProvider),
-                      onCancel: () => playgroundProvider.cancelQuery(),
-                      isExecuting: playgroundProvider.isLoading,
-                      streamingModeEnabled: _streamingModeEnabled,
-                      onStreamingModeChanged: (value) {
-                        setState(() => _streamingModeEnabled = value);
-                        unawaited(
-                          _saveStreamingMode(value).catchError(
-                            (Object e) => AppLogger.warning(
-                              'Failed to save streaming mode',
-                              e,
+                              configProvider,
                             ),
+                            onTestConnection: config != null
+                                ? () => _handleTestConnection(
+                                    configProvider,
+                                    playgroundProvider,
+                                  )
+                                : null,
+                            onClear: () => _handleClear(playgroundProvider),
+                            onCancel: () => playgroundProvider.cancelQuery(),
+                            isExecuting: playgroundProvider.isLoading,
+                            streamingModeEnabled: _streamingModeEnabled,
+                            onStreamingModeChanged: (value) {
+                              setState(() => _streamingModeEnabled = value);
+                              unawaited(
+                                _saveStreamingMode(value).catchError(
+                                  (Object e) => AppLogger.warning(
+                                    'Failed to save streaming mode',
+                                    e,
+                                  ),
+                                ),
+                              );
+                            },
+                            sqlHandlingModePreserve:
+                                playgroundProvider.sqlHandlingMode ==
+                                SqlHandlingMode.preserve,
+                            onSqlHandlingModeChanged: (value) {
+                              playgroundProvider.setSqlHandlingMode(
+                                value
+                                    ? SqlHandlingMode.preserve
+                                    : SqlHandlingMode.managed,
+                              );
+                              if (value) {
+                                setState(() => _streamingModeEnabled = false);
+                                unawaited(
+                                  _saveStreamingMode(false).catchError(
+                                    (Object e) => AppLogger.warning(
+                                      'Failed to save streaming mode',
+                                      e,
+                                    ),
+                                  ),
+                                );
+                              }
+                              unawaited(
+                                _saveSqlHandlingMode(value).catchError(
+                                  (Object e) => AppLogger.warning(
+                                    'Failed to save SQL handling mode',
+                                    e,
+                                  ),
+                                ),
+                              );
+                            },
+                            useStreamingMode:
+                                config != null &&
+                                playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve,
                           ),
-                        );
-                      },
-                      sqlHandlingModePreserve: playgroundProvider.sqlHandlingMode == SqlHandlingMode.preserve,
-                      onSqlHandlingModeChanged: (value) {
-                        playgroundProvider.setSqlHandlingMode(
-                          value ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
-                        );
-                        if (value) {
-                          setState(() => _streamingModeEnabled = false);
-                          unawaited(
-                            _saveStreamingMode(false).catchError(
-                              (Object e) => AppLogger.warning(
-                                'Failed to save streaming mode',
-                                e,
-                              ),
+                          if (playgroundProvider.lastExecutionHint != null) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              playgroundProvider.lastExecutionHint!,
+                              style: context.bodyMuted,
                             ),
-                          );
-                        }
-                        unawaited(
-                          _saveSqlHandlingMode(value).catchError(
-                            (Object e) => AppLogger.warning(
-                              'Failed to save SQL handling mode',
-                              e,
-                            ),
-                          ),
-                        );
-                      },
-                      useStreamingMode:
-                          config != null && playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
-                    ),
-                    if (playgroundProvider.lastExecutionHint != null) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        playgroundProvider.lastExecutionHint!,
-                        style: context.bodyMuted,
+                          ],
+                        ],
                       ),
-                    ],
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: QueryResultsSection(
@@ -322,23 +373,30 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                         hasPreviousPage: playgroundProvider.hasPreviousPage,
                         showPagination:
                             playgroundProvider.hasPagination &&
-                            playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
+                            playgroundProvider.sqlHandlingMode !=
+                                SqlHandlingMode.preserve,
                         resultSetCount: playgroundProvider.resultSets.length,
-                        selectedResultSetIndex: playgroundProvider.selectedResultSetIndex,
+                        selectedResultSetIndex:
+                            playgroundProvider.selectedResultSetIndex,
                         onPreviousPage:
-                            playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
+                            playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve &&
                                 playgroundProvider.hasPreviousPage
                             ? () => playgroundProvider.goToPreviousPage()
                             : null,
                         onNextPage:
-                            playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
+                            playgroundProvider.sqlHandlingMode !=
+                                    SqlHandlingMode.preserve &&
                                 playgroundProvider.hasNextPage
                             ? () => playgroundProvider.goToNextPage()
                             : null,
-                        onResultSetChanged: playgroundProvider.hasMultipleResultSets
+                        onResultSetChanged:
+                            playgroundProvider.hasMultipleResultSets
                             ? playgroundProvider.setSelectedResultSetIndex
                             : null,
-                        onPageSizeChanged: playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve
+                        onPageSizeChanged:
+                            playgroundProvider.sqlHandlingMode !=
+                                SqlHandlingMode.preserve
                             ? (value) {
                                 unawaited(
                                   playgroundProvider
@@ -363,6 +421,40 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _PlaygroundShortcutChip extends StatelessWidget {
+  const _PlaygroundShortcutChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: theme.resources.subtleFillColorSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label, style: context.bodyMuted),
+        ],
       ),
     );
   }

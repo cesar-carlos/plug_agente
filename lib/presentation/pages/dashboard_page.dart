@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:provider/provider.dart';
 
 enum _MetricsPeriod { last1h, last24h, all }
@@ -97,7 +98,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ? now.subtract(const Duration(hours: 1))
         : now.subtract(const Duration(hours: 24));
 
-    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
+    final filtered = metrics
+        .where((metric) => metric.timestamp.isAfter(cutoff))
+        .toList();
 
     return MetricsSummary.fromList(filtered);
   }
@@ -155,17 +158,24 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                AppConstants.appName,
-                style: context.pageTitle,
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppConstants.appName,
+                      style: context.pageTitle,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      AppStrings.dashboardDescription,
+                      style: context.bodyMuted,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    const ConnectionStatusWidget(),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                AppStrings.dashboardDescription,
-                style: context.bodyMuted,
-              ),
-              const SizedBox(height: 32),
-              const ConnectionStatusWidget(),
               const SizedBox(height: AppSpacing.lg),
               _OdbcMetricsCard(
                 summary: _metricsSummary,
@@ -208,93 +218,90 @@ class _OdbcMetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    AppStrings.dashboardMetricsTitle,
-                    style: context.sectionTitle,
-                  ),
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  AppStrings.dashboardMetricsTitle,
+                  style: context.sectionTitle,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(
-                  width: 220,
-                  child: ComboBox<_MetricsPeriod>(
-                    value: selectedPeriod,
-                    onChanged: onPeriodChanged,
-                    isExpanded: true,
-                    placeholder: const Text(AppStrings.dashboardMetricsPeriod),
-                    items: const [
-                      ComboBoxItem(
-                        value: _MetricsPeriod.last1h,
-                        child: Text(AppStrings.dashboardMetricsPeriod1h),
-                      ),
-                      ComboBoxItem(
-                        value: _MetricsPeriod.last24h,
-                        child: Text(AppStrings.dashboardMetricsPeriod24h),
-                      ),
-                      ComboBoxItem(
-                        value: _MetricsPeriod.all,
-                        child: Text(AppStrings.dashboardMetricsPeriodAll),
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              SizedBox(
+                width: 220,
+                child: ComboBox<_MetricsPeriod>(
+                  value: selectedPeriod,
+                  onChanged: onPeriodChanged,
+                  isExpanded: true,
+                  placeholder: const Text(AppStrings.dashboardMetricsPeriod),
+                  items: const [
+                    ComboBoxItem(
+                      value: _MetricsPeriod.last1h,
+                      child: Text(AppStrings.dashboardMetricsPeriod1h),
+                    ),
+                    ComboBoxItem(
+                      value: _MetricsPeriod.last24h,
+                      child: Text(AppStrings.dashboardMetricsPeriod24h),
+                    ),
+                    ComboBoxItem(
+                      value: _MetricsPeriod.all,
+                      child: Text(AppStrings.dashboardMetricsPeriodAll),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.lg,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _MetricChip(
-                  icon: FluentIcons.document,
-                  label: AppStrings.dashboardMetricsQueries,
-                  value: summary.totalQueries.toString(),
-                ),
-                _MetricChip(
-                  icon: FluentIcons.check_mark,
-                  label: AppStrings.dashboardMetricsSuccess,
-                  value: summary.successfulQueries.toString(),
-                  valueColor: AppColors.success,
-                ),
-                _MetricChip(
-                  icon: FluentIcons.error_badge,
-                  label: AppStrings.dashboardMetricsErrors,
-                  value: summary.failedQueries.toString(),
-                  valueColor: summary.failedQueries > 0 ? AppColors.error : null,
-                ),
-                _MetricChip(
-                  icon: FluentIcons.completed_solid,
-                  label: AppStrings.dashboardMetricsSuccessRate,
-                  value: '${summary.successRate.toStringAsFixed(1)}%',
-                  valueColor: AppColors.success,
-                ),
-                _MetricChip(
-                  icon: FluentIcons.clock,
-                  label: AppStrings.dashboardMetricsAvgLatency,
-                  value: _formatDuration(summary.averageExecutionTime),
-                ),
-                _MetricChip(
-                  icon: FluentIcons.clock,
-                  label: AppStrings.dashboardMetricsMaxLatency,
-                  value: _formatDuration(summary.maxExecutionTime),
-                ),
-                _MetricChip(
-                  icon: FluentIcons.table,
-                  label: AppStrings.dashboardMetricsTotalRows,
-                  value: summary.totalRowsAffected.toString(),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _MetricChip(
+                icon: FluentIcons.document,
+                label: AppStrings.dashboardMetricsQueries,
+                value: summary.totalQueries.toString(),
+              ),
+              _MetricChip(
+                icon: FluentIcons.check_mark,
+                label: AppStrings.dashboardMetricsSuccess,
+                value: summary.successfulQueries.toString(),
+                valueColor: AppColors.success,
+              ),
+              _MetricChip(
+                icon: FluentIcons.error_badge,
+                label: AppStrings.dashboardMetricsErrors,
+                value: summary.failedQueries.toString(),
+                valueColor: summary.failedQueries > 0 ? AppColors.error : null,
+              ),
+              _MetricChip(
+                icon: FluentIcons.completed_solid,
+                label: AppStrings.dashboardMetricsSuccessRate,
+                value: '${summary.successRate.toStringAsFixed(1)}%',
+                valueColor: AppColors.success,
+              ),
+              _MetricChip(
+                icon: FluentIcons.clock,
+                label: AppStrings.dashboardMetricsAvgLatency,
+                value: _formatDuration(summary.averageExecutionTime),
+              ),
+              _MetricChip(
+                icon: FluentIcons.clock,
+                label: AppStrings.dashboardMetricsMaxLatency,
+                value: _formatDuration(summary.maxExecutionTime),
+              ),
+              _MetricChip(
+                icon: FluentIcons.table,
+                label: AppStrings.dashboardMetricsTotalRows,
+                value: summary.totalRowsAffected.toString(),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -189,9 +189,7 @@ class RpcContractValidator {
 
     const allowedTerminalStatuses = {'aborted', 'error'};
     final terminalStatus = data['terminal_status'];
-    if (terminalStatus != null &&
-        (terminalStatus is! String ||
-            !allowedTerminalStatuses.contains(terminalStatus))) {
+    if (terminalStatus != null && (terminalStatus is! String || !allowedTerminalStatuses.contains(terminalStatus))) {
       return _invalid(
         'Field "terminal_status" must be "aborted" or "error" when present',
       );

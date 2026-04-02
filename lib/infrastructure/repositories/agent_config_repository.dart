@@ -71,9 +71,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
     try {
       final configData = _mapEntityToData(config);
 
-      await _database
-          .into(_database.configTable)
-          .insertOnConflictUpdate(configData);
+      await _database.into(_database.configTable).insertOnConflictUpdate(configData);
 
       return Success(config);
     } on Exception catch (error) {

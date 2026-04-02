@@ -22,8 +22,7 @@ class ProtocolMetrics {
   final String direction;
   final int? errorCode;
 
-  double get compressionRatio =>
-      originalSize > 0 ? compressedSize / originalSize : 1.0;
+  double get compressionRatio => originalSize > 0 ? compressedSize / originalSize : 1.0;
 
   int get bytesSaved => originalSize - compressedSize;
 
@@ -48,8 +47,7 @@ class ProtocolMetricsCollector {
   ProtocolMetricsCollector();
 
   final List<ProtocolMetrics> _metrics = [];
-  final StreamController<ProtocolMetrics> _metricsController =
-      StreamController<ProtocolMetrics>.broadcast();
+  final StreamController<ProtocolMetrics> _metricsController = StreamController<ProtocolMetrics>.broadcast();
 
   Stream<ProtocolMetrics> get metricsStream => _metricsController.stream;
 
@@ -80,9 +78,7 @@ class ProtocolMetricsCollector {
     final now = DateTime.now();
     final cutoff = period != null ? now.subtract(period) : null;
 
-    final filtered = cutoff != null
-        ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList()
-        : _metrics;
+    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList() : _metrics;
 
     return ProtocolMetricsSummary.fromList(filtered);
   }
@@ -112,18 +108,15 @@ class ProtocolMetricsSummary {
     var errorCount = 0;
 
     for (final metric in metrics) {
-      protocolCounts[metric.protocol] =
-          (protocolCounts[metric.protocol] ?? 0) + 1;
-      compressionCounts[metric.compression] =
-          (compressionCounts[metric.compression] ?? 0) + 1;
+      protocolCounts[metric.protocol] = (protocolCounts[metric.protocol] ?? 0) + 1;
+      compressionCounts[metric.compression] = (compressionCounts[metric.compression] ?? 0) + 1;
 
       totalOriginal += metric.originalSize;
       totalCompressed += metric.compressedSize;
 
       if (metric.errorCode != null) {
         errorCount++;
-        errorCounts[metric.errorCode!] =
-            (errorCounts[metric.errorCode!] ?? 0) + 1;
+        errorCounts[metric.errorCode!] = (errorCounts[metric.errorCode!] ?? 0) + 1;
       }
     }
 
@@ -154,6 +147,5 @@ class ProtocolMetricsSummary {
 
   double get errorRate => totalMessages > 0 ? errorCount / totalMessages : 0.0;
 
-  double get compressionEfficiency =>
-      totalOriginalBytes > 0 ? totalBytesSaved / totalOriginalBytes : 0.0;
+  double get compressionEfficiency => totalOriginalBytes > 0 ? totalBytesSaved / totalOriginalBytes : 0.0;
 }

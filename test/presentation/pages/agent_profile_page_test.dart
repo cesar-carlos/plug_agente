@@ -48,8 +48,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(AppStrings.agentProfilePageTitle), findsOneWidget);
-      expect(find.text(AppStrings.agentProfileSectionIdentity), findsOneWidget);
+      expect(find.text(AppStrings.agentProfileSectionIdentity), findsWidgets);
+      expect(find.text(AppStrings.agentProfileSectionContact), findsOneWidget);
+      expect(find.text(AppStrings.agentProfileSectionAddress), findsWidgets);
       expect(find.text(AppStrings.agentProfileSectionNotes), findsOneWidget);
+      expect(find.text(AppStrings.agentProfileFieldName), findsOneWidget);
       expect(find.text(AppStrings.agentProfileActionSave), findsOneWidget);
     });
 

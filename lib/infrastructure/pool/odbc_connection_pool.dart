@@ -31,9 +31,7 @@ class OdbcConnectionPool implements IConnectionPool {
 
     return connectResult.fold(
       (Connection connection) {
-        _leasedIdsByConnectionString
-            .putIfAbsent(connectionString, () => <String>{})
-            .add(connection.id);
+        _leasedIdsByConnectionString.putIfAbsent(connectionString, () => <String>{}).add(connection.id);
         _leasedIds.add(connection.id);
         developer.log(
           'Acquired ODBC connection ${connection.id} (lease)',
