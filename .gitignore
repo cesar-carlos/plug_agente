@@ -3,7 +3,7 @@
 .env.*
 !.env.example
 
-# DSA private key (never commit; add to GitHub Secrets as DSA_PRIVATE_KEY)
+# Legacy private key file (do not commit)
 dsa_priv.pem
 
 # Miscellaneous

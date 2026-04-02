@@ -40,12 +40,16 @@ Resumo:
 4. Criar tag `v{versão}` e publicar release
 5. Workflow atualiza `appcast.xml`
 
+O repositório também valida no CI se `installer/setup.iss` e
+`lib/core/constants/app_version.g.dart` permanecem sincronizados com
+`pubspec.yaml`. Esse check falha cedo e não corrige a branch automaticamente.
+
 ## Auto-Update via GitHub
 
 - **Feed**: `appcast.xml` (formato Sparkle/WinSparkle)
 - **Hospedagem**: GitHub Raw ou GitHub Pages
 - **Workflow**: `.github/workflows/update-appcast.yml` atualiza o feed automaticamente em cada release publicado
-- **Assinatura**: todos os releases exigem `DSA_PRIVATE_KEY`
+- **Assinatura**: o fluxo atual não usa assinatura DSA no `appcast.xml`
 
 ## Scripts de Desenvolvimento (Python)
 

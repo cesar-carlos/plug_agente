@@ -70,8 +70,8 @@ O nome segue o padrão esperado pelo workflow **Update Appcast on Release** (`.g
    `v{versão}` e anexe o `.exe`.
 3. **Appcast**: o workflow atualiza `appcast.xml` automaticamente; clientes
    recebem update na próxima checagem (1h) ou via botão manual.
-4. **Assinatura DSA**: obrigatória em qualquer release. Consulte
-   [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
+4. **Appcast/update**: o workflow publica o `appcast.xml` sem assinatura DSA.
+   Consulte [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
 
 Antes de criar a tag, garanta que `setup.iss` e `app_version.g.dart` já foram
 commitados junto com a mudança de `pubspec.yaml`; o CI valida esse sincronismo

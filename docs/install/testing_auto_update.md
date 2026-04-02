@@ -57,7 +57,13 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 ### Workflow não executou
 
 - Release sem asset `PlugAgente-Setup-{versao}.exe` compatível com a tag.
-- Secret `DSA_PRIVATE_KEY` ausente (workflow falha por política de assinatura obrigatória em qualquer release).
+
+### Falha de validação de versão
+
+- `pubspec.yaml`, `installer/setup.iss` e `lib/core/constants/app_version.g.dart`
+  não estão sincronizados.
+- Rode `python installer/update_version.py`, revise o diff e commit as alterações
+  antes de criar a tag/release.
 
 ### Feed não configurado
 

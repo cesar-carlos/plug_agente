@@ -77,38 +77,11 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 3. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
 4. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
-### 4. Assinatura DSA (obrigatória para todos os releases)
+### Observação sobre assinatura
 
-O WinSparkle suporta verificação de assinatura DSA para garantir integridade dos updates.
-No workflow atual, qualquer release (inclusive pre-release) falha se a assinatura DSA não estiver configurada e gerada.
-
-1. **Gerar chaves** (uma vez):
-
-   ```bash
-   dart run auto_updater:generate_keys
-   ```
-
-   Isso cria `dsa_priv.pem` e `dsa_pub.pem`.
-
-2. **Adicionar chave pública ao app** – em `windows/runner/Runner.rc`:
-
-   ```
-   // WinSparkle
-   DSAPub DSAPEM "../../dsa_pub.pem"
-   ```
-
-3. **Configurar secret no GitHub** – em Settings → Secrets → Actions:
-   - Nome: `DSA_PRIVATE_KEY`
-   - Valor: conteúdo completo do arquivo `dsa_priv.pem`
-
-   O workflow valida se esse secret corresponde ao `dsa_pub.pem` versionado e
-   embutido em `windows/runner/Runner.rc`.
-
-4. **Backup da chave privada** – guarde `dsa_priv.pem` em local seguro. Sem ela, usuários não poderão atualizar.
-
-Com o secret configurado, o workflow `update-appcast` assina automaticamente
-cada release, valida o par de chaves e adiciona `sparkle:dsaSignature` ao
-appcast.
+O fluxo atual de update via GitHub está configurado sem assinatura DSA no
+`appcast.xml`. O workflow publica o feed com metadados da release e o cliente
+consome esse feed sem validar `sparkle:dsaSignature`.
 
 ### Estrutura do appcast.xml
 
