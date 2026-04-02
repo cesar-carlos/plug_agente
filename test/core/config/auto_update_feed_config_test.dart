@@ -48,6 +48,24 @@ void main() {
     });
   });
 
+  group('isOfficialAutoUpdateFeedUrl', () {
+    test('accepts official feed URL with cache-busting query', () {
+      expect(
+        isOfficialAutoUpdateFeedUrl(
+          '$officialAutoUpdateFeedUrl?cb=123',
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects non-official feed URL', () {
+      expect(
+        isOfficialAutoUpdateFeedUrl('https://example.com/appcast.xml'),
+        isFalse,
+      );
+    });
+  });
+
   group('resolveAutoUpdateCheckIntervalSeconds', () {
     test('returns default when not configured', () {
       final result = resolveAutoUpdateCheckIntervalSeconds(

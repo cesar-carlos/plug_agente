@@ -7,9 +7,18 @@ on:
 jobs:
   update-appcast:
     runs-on: windows-latest
+    env:
+      MAX_APPCAST_ITEMS: "10"
     defaults:
       run:
         shell: bash
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      full_version: ${{ steps.release.outputs.full_version }}
+      asset_url: ${{ steps.asset.outputs.url }}
+      asset_name: ${{ steps.asset.outputs.name }}
+      asset_size: ${{ steps.asset.outputs.size }}
     permissions:
       contents: write
 
@@ -152,6 +161,7 @@ jobs:
 
       - name: Update appcast.xml
         env:
+          MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           python3 << PYEOF
@@ -166,6 +176,7 @@ jobs:
           VERSION = FULL_VERSION if FULL_VERSION else VERSION_SHORT
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
+          MAX_APPCAST_ITEMS = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
           RELEASE_BODY = (os.environ.get("RELEASE_BODY") or "").strip()
 
           if not ASSET_URL or not ASSET_SIZE:
@@ -214,6 +225,7 @@ jobs:
           channel.insert(0, item)
 
           items = [c for c in channel if c.tag == "item"]
+          items = items[:MAX_APPCAST_ITEMS]
           title_el = channel.find("title")
           link_el = channel.find("link")
           desc_el = channel.find("description")
@@ -249,6 +261,7 @@ jobs:
       - name: Validate appcast.xml
         env:
           FULL_VERSION: ${{ steps.release.outputs.full_version }}
+          MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           VERSION_SHORT: ${{ steps.release.outputs.version }}
         run: |
           python3 << 'PYEOF'
@@ -257,6 +270,7 @@ jobs:
           import xml.etree.ElementTree as ET
 
           version = (os.environ.get("FULL_VERSION") or os.environ.get("VERSION_SHORT", "")).strip()
+          max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
           sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 
           tree = ET.parse("appcast.xml")
@@ -310,9 +324,17 @@ jobs:
               print(f"Error: invalid sparkle:os value: {os_name!r}")
               sys.exit(1)
 
+          item_count = len(channel.findall("item"))
+          if item_count < 1 or item_count > max_items:
+              print(
+                  f"Error: invalid item count in appcast.xml: {item_count} "
+                  f"(expected between 1 and {max_items})."
+              )
+              sys.exit(1)
+
           print(
               "appcast.xml validation passed "
-              f"(version={version})"
+              f"(version={version}, item_count={item_count})"
           )
           PYEOF
 
@@ -324,3 +346,114 @@ jobs:
           git add appcast.xml
           git diff --staged --quiet || git commit -m "Update appcast.xml for ${{ steps.release.outputs.tag }}"
           git push origin main
+
+  smoke-validate-appcast:
+    needs: update-appcast
+    runs-on: ubuntu-latest
+    env:
+      MAX_APPCAST_ITEMS: "10"
+      OFFICIAL_FEED_URL: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+    permissions:
+      contents: read
+    steps:
+      - name: Smoke validate published appcast feed
+        env:
+          ASSET_NAME: ${{ needs.update-appcast.outputs.asset_name }}
+          ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
+          ASSET_URL: ${{ needs.update-appcast.outputs.asset_url }}
+          FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+          import time
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          feed_url = os.environ["OFFICIAL_FEED_URL"].strip()
+          full_version = os.environ["FULL_VERSION"].strip()
+          asset_url = os.environ["ASSET_URL"].strip()
+          asset_name = os.environ["ASSET_NAME"].strip()
+          asset_size = os.environ["ASSET_SIZE"].strip()
+          release_body = (os.environ.get("RELEASE_BODY") or "").strip()
+          max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
+          sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+          expected_description = (
+              release_body[:2000]
+              if release_body
+              else f"Nova Versão {full_version} - Atualização automática via GitHub Release."
+          )
+          expected_title = f"Version {full_version}"
+
+          last_error = None
+          for attempt in range(1, 7):
+              request = urllib.request.Request(
+                  f"{feed_url}?cb={int(time.time())}",
+                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=15) as response:
+                      body = response.read()
+                  root = ET.fromstring(body)
+                  channel = root.find("channel")
+                  if channel is None:
+                      raise ValueError("missing <channel>")
+
+                  items = channel.findall("item")
+                  if not items:
+                      raise ValueError("missing <item>")
+                  if len(items) > max_items:
+                      raise ValueError(
+                          f"item count {len(items)} exceeds limit {max_items}"
+                      )
+
+                  latest_item = items[0]
+                  title = (latest_item.findtext("title") or "").strip()
+                  description = (latest_item.findtext("description") or "").strip()
+                  enclosure = latest_item.find("enclosure")
+                  if enclosure is None:
+                      raise ValueError("missing <enclosure> in latest item")
+
+                  version = (
+                      enclosure.get(f"{{{sparkle_ns}}}version")
+                      or enclosure.get("sparkle:version")
+                      or ""
+                  ).strip()
+                  latest_url = (enclosure.get("url") or "").strip()
+                  latest_size = (enclosure.get("length") or "").strip()
+
+                  if title != expected_title:
+                      raise ValueError(
+                          f"unexpected title {title!r}, expected {expected_title!r}"
+                      )
+                  if description != expected_description:
+                      raise ValueError("latest item description does not match release body")
+                  if version != full_version:
+                      raise ValueError(
+                          f"unexpected version {version!r}, expected {full_version!r}"
+                      )
+                  if latest_url != asset_url:
+                      raise ValueError("latest enclosure URL does not match release asset URL")
+                  if latest_size != asset_size:
+                      raise ValueError("latest enclosure length does not match release asset size")
+                  if asset_name not in latest_url:
+                      raise ValueError("latest enclosure URL does not include expected asset name")
+
+                  print(
+                      "Published appcast smoke validation passed "
+                      f"(version={version}, items={len(items)}, feed={feed_url})."
+                  )
+                  sys.exit(0)
+              except Exception as error:
+                  last_error = error
+                  if attempt < 6:
+                      print(
+                          f"Attempt {attempt}/6 failed while checking published appcast: {error}. "
+                          "Retrying in 5 seconds..."
+                      )
+                      time.sleep(5)
+
+          print(f"Error: published appcast smoke validation failed: {last_error}")
+          sys.exit(1)
+          PYEOF

@@ -14,6 +14,11 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 2. Release publicado com instalador `PlugAgente-Setup-*.exe`.
 3. Workflow `Update Appcast on Release` concluído com sucesso.
+4. Use o endpoint oficial do feed:
+
+   ```text
+   https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+   ```
 
 ## Teste rápido (manual sob demanda)
 
@@ -46,9 +51,9 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 - Feed:
   - `https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml`
-  - `https://cesar-carlos.github.io/plug_agente/appcast.xml` (se usar Pages)
 - Actions:
   - workflow de appcast executado no release publicado
+  - smoke check do feed publicado executado apos a atualizacao do `appcast.xml`
 - Logs:
   - `auto_update_orchestrator` no log da aplicação
 
@@ -73,3 +78,5 @@ Validação do fluxo automático no Windows com `auto_updater` + appcast GitHub.
 
 - Confirme upload do asset `.exe` no release.
 - Confirme nome esperado do instalador (`PlugAgente-Setup-*.exe`).
+- Confirme se o `appcast.xml` publicado manteve a release no topo e dentro do
+  limite de itens retidos pelo workflow.

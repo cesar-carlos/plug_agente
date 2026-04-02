@@ -1,3 +1,6 @@
+const String officialAutoUpdateFeedUrl =
+    'https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml';
+
 String resolveAutoUpdateFeedUrl({
   required Map<String, String> environment,
   String? fromDefine,
@@ -16,6 +19,17 @@ bool isSparkleFeedUrl(String url) {
   if (normalized.isEmpty) return false;
   final withoutQuery = normalized.split('?').first;
   return withoutQuery.endsWith('.xml');
+}
+
+bool isOfficialAutoUpdateFeedUrl(String url) {
+  final uri = Uri.tryParse(url.trim());
+  final officialUri = Uri.parse(officialAutoUpdateFeedUrl);
+  if (uri == null) return false;
+
+  return uri.scheme.toLowerCase() == officialUri.scheme.toLowerCase() &&
+      uri.host.toLowerCase() == officialUri.host.toLowerCase() &&
+      uri.port == officialUri.port &&
+      uri.path == officialUri.path;
 }
 
 const int _defaultCheckIntervalSeconds = 3600;

@@ -31,24 +31,25 @@ Comportamento atual da aplicação:
 
 ## Opção Recomendada: GitHub Releases + GitHub Raw
 
-O projeto está configurado para usar **GitHub Releases** para hospedar os executáveis e **GitHub Raw** (ou GitHub Pages) para hospedar o `appcast.xml`. O GitHub Actions atualiza o `appcast.xml` automaticamente quando um release é criado.
+O projeto está configurado para usar **GitHub Releases** para hospedar os
+executáveis e **GitHub Raw** como endpoint oficial do `appcast.xml`. O GitHub
+Actions atualiza o `appcast.xml` automaticamente quando um release é criado.
 
 ### Configuração Inicial (Uma vez)
 
-#### 1. Configurar GitHub Pages (opcional)
-
-1. Acesse: https://github.com/cesar-carlos/plug_agente/settings/pages
-2. Em "Source", selecione a branch `main`
-3. Em "Folder", selecione `/ (root)`
-4. A URL será: `https://cesar-carlos.github.io/plug_agente/appcast.xml`
-
-#### 2. Verificar Permissões do GitHub Actions
+#### 1. Verificar Permissões do GitHub Actions
 
 1. Acesse: https://github.com/cesar-carlos/plug_agente/settings/actions
 2. Em "Workflow permissions", selecione "Read and write permissions"
 3. Marque "Allow GitHub Actions to create and approve pull requests"
 
-#### 3. Configurar URL do feed (build/runtime)
+#### 2. Configurar URL do feed (build/runtime)
+
+**Endpoint oficial:**
+
+```text
+https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+```
 
 **Opção recomendada (release):** usar `--dart-define` no build:
 
@@ -64,24 +65,25 @@ flutter build windows --release --dart-define=AUTO_UPDATE_FEED_URL=https://raw.g
 AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 ```
 
-**Alternativa (GitHub Pages):**
-
-```env
-AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
-```
-
 ### Fluxo de Trabalho Automatizado
 
 1. **Gerar build Windows e instalador:** `python installer/build_installer.py`
 2. **Criar release no GitHub:** Consulte [release_guide.md](release_guide.md)
 3. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
-4. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
+4. **Smoke check de CI** valida o feed publicado contra os metadados reais da release
+5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
 ### Observação sobre assinatura
 
 O fluxo atual de update via GitHub está configurado sem assinatura DSA no
 `appcast.xml`. O workflow publica o feed com metadados da release e o cliente
 consome esse feed sem validar `sparkle:dsaSignature`.
+
+### Retenção do feed
+
+O workflow mantém apenas as versões mais recentes no `appcast.xml` para evitar
+crescimento indefinido do feed e reduzir ruído operacional durante inspeções e
+troubleshooting.
 
 ### Estrutura do appcast.xml
 

@@ -81,4 +81,4 @@ e não corrige mais a branch automaticamente.
 
 - [docs/install/readme.md](../docs/install/readme.md) - índice de instalação e release
 - [docs/install/release_guide.md](../docs/install/release_guide.md) - processo completo de release
-- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md) - feed, appcast e assinatura DSA
+- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md) - feed oficial, appcast e validações de CI

@@ -74,6 +74,16 @@ git push origin v1.0.0
 2. O workflow **"Update Appcast on Release"** executará automaticamente
 3. Aguarde conclusão (1-2 minutos)
 4. Confirme que o `appcast.xml` foi atualizado com o asset e a versão esperados
+5. Confirme que o smoke check do feed publicado concluiu com sucesso
+
+## Checklist Rápido Pós-Release
+
+1. Abra a URL oficial do feed:
+   `https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml`
+2. Verifique se a nova versão aparece no primeiro `<item>`
+3. Confirme que o `url` do `enclosure` aponta para o asset correto da release
+4. Em uma instalação anterior do app, clique em **Verificar atualizações**
+5. Valide a versão remota detectada e o comportamento esperado da atualização
 
 ## Fluxo manual/avançado
 

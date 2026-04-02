@@ -47,8 +47,8 @@ O repositório também valida no CI se `installer/setup.iss` e
 ## Auto-Update via GitHub
 
 - **Feed**: `appcast.xml` (formato Sparkle/WinSparkle)
-- **Hospedagem**: GitHub Raw ou GitHub Pages
-- **Workflow**: `.github/workflows/update-appcast.yml` atualiza o feed automaticamente em cada release publicado
+- **Endpoint oficial**: `https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml`
+- **Workflow**: `.github/workflows/update-appcast.yml` atualiza e valida o feed automaticamente em cada release publicado
 - **Assinatura**: o fluxo atual não usa assinatura DSA no `appcast.xml`
 
 ## Scripts de Desenvolvimento (Python)

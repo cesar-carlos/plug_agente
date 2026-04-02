@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -54,7 +55,7 @@ class _ConfigPageState extends State<ConfigPage> {
   String _getUpdateUnavailableMessage() {
     final capabilities = getIt<RuntimeCapabilities>();
     return capabilities.supportsAutoUpdate
-        ? AppStrings.gsAutoUpdateNotConfigured
+        ? '${AppStrings.gsAutoUpdateNotConfigured}\nFeed oficial esperado: $officialAutoUpdateFeedUrl'
         : AppStrings.gsAutoUpdateNotSupported;
   }
 
@@ -65,10 +66,18 @@ class _ConfigPageState extends State<ConfigPage> {
 
     final lines = <String>[
       'Detalhes tecnicos',
+      'Versao atual: $_appVersion',
       'Checado em: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
       'Feed configurado: ${diagnostics.configuredFeedUrl}',
       'Feed consultado: ${diagnostics.requestedFeedUrl}',
+      'Feed oficial: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? 'sim' : 'nao'}',
     ];
+
+    if (diagnostics.appcastProbeItemCount != null) {
+      lines.add(
+        'Itens no feed: ${diagnostics.appcastProbeItemCount}',
+      );
+    }
 
     if (diagnostics.remoteVersion != null &&
         diagnostics.remoteVersion!.isNotEmpty) {

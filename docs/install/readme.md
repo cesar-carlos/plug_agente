@@ -41,7 +41,7 @@ Saída esperada: `installer/dist/PlugAgente-Setup-{versão}.exe`.
 | ------------------------------------------------ | ---------------------------------------------------- |
 | [release_guide.md](release_guide.md)             | Checklist operacional para build, tag e publicação   |
 | [version_strategy.md](version_strategy.md)       | Fonte de verdade para versão e convenção de tags     |
-| [auto_update_setup.md](auto_update_setup.md)     | Configuração do feed, appcast e assinatura DSA       |
+| [auto_update_setup.md](auto_update_setup.md)     | Configuração do feed oficial, appcast e smoke checks |
 | [testing_auto_update.md](testing_auto_update.md) | Validação do fluxo automático e silencioso de update |
 
 ## Scripts úteis
