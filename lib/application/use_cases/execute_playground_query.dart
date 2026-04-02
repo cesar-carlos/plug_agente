@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -26,7 +27,9 @@ class ExecutePlaygroundQuery {
     final trimmedQuery = query.trim();
 
     if (trimmedQuery.isEmpty) {
-      return Failure(domain.ValidationFailure('A query não pode estar vazia'));
+      return Failure(
+        domain.ValidationFailure(AppStrings.queryValidationEmpty),
+      );
     }
 
     final validation = SqlValidator.validateSelectQuery(trimmedQuery);

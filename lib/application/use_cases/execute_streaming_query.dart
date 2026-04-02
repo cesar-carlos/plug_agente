@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -28,12 +29,16 @@ class ExecuteStreamingQuery {
     final trimmedQuery = query.trim();
 
     if (trimmedQuery.isEmpty) {
-      return Failure(domain.ValidationFailure('Query cannot be empty'));
+      return Failure(
+        domain.ValidationFailure(AppStrings.queryValidationEmpty),
+      );
     }
 
     if (connectionString.trim().isEmpty) {
       return Failure(
-        domain.ValidationFailure('Connection string cannot be empty'),
+        domain.ValidationFailure(
+          AppStrings.queryValidationConnectionStringEmpty,
+        ),
       );
     }
 

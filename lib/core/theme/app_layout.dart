@@ -9,6 +9,7 @@ class AppLayout {
   static const double wideBreakpoint = 1600;
 
   static const double maxContentWidth = 1440;
+  static const double maxPaneContentWidth = 1920;
   static const double maxSettingsWidth = 1320;
   static const double maxDataWidth = 1440;
   static const double maxFormWidth = 640;

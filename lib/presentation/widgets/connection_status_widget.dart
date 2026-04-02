@@ -5,7 +5,9 @@ import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 
 class ConnectionStatusWidget extends StatelessWidget {
-  const ConnectionStatusWidget({super.key});
+  const ConnectionStatusWidget({super.key, this.compact = false});
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -19,23 +21,35 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.connected:
             icon = FluentIcons.check_mark;
             color = AppColors.success;
-            statusText = AppStrings.connectionStatusConnected;
+            statusText = AppStrings.connectionStatusHubConnected;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
             color = AppColors.warning;
-            statusText = AppStrings.connectionStatusConnecting;
+            statusText = AppStrings.connectionStatusHubConnecting;
+          case ConnectionStatus.reconnecting:
+            icon = FluentIcons.sync;
+            color = AppColors.warning;
+            statusText = AppStrings.connectionStatusHubReconnecting;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = AppColors.error;
-            statusText = AppStrings.connectionStatusError;
-          default:
+            statusText = AppStrings.connectionStatusHubError;
+          case ConnectionStatus.disconnected:
             icon = FluentIcons.circle_pause;
             color = AppColors.disabled;
-            statusText = AppStrings.connectionStatusDisconnected;
+            statusText = AppStrings.connectionStatusHubDisconnected;
         }
 
         return Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: compact
+              ? const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                )
+              : const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
           decoration: BoxDecoration(
             color: FluentTheme.of(context).resources.subtleFillColorSecondary,
             borderRadius: BorderRadius.circular(AppRadius.md),
@@ -52,14 +66,22 @@ class ConnectionStatusWidget extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(
-                connectionProvider.isDbConnected
-                    ? AppStrings.connectionStatusDatabaseConnected
-                    : AppStrings.connectionStatusDatabaseDisconnected,
-                style: context.bodyText.copyWith(
-                  color: connectionProvider.isDbConnected
-                      ? AppColors.success
-                      : AppColors.disabled,
+              Tooltip(
+                message: AppStrings.connectionStatusDatabaseTooltip,
+                child: Semantics(
+                  label:
+                      '${connectionProvider.isDbConnected ? AppStrings.connectionStatusDatabaseConnected : AppStrings.connectionStatusDatabaseDisconnected}. '
+                      '${AppStrings.connectionStatusDatabaseTooltip}',
+                  child: Text(
+                    connectionProvider.isDbConnected
+                        ? AppStrings.connectionStatusDatabaseConnected
+                        : AppStrings.connectionStatusDatabaseDisconnected,
+                    style: context.bodyText.copyWith(
+                      color: connectionProvider.isDbConnected
+                          ? AppColors.success
+                          : AppColors.disabled,
+                    ),
+                  ),
                 ),
               ),
             ],

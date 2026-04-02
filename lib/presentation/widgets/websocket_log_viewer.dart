@@ -53,27 +53,47 @@ class WebSocketLogViewer extends StatelessWidget {
                     ],
                   ),
                   SizedBox(height: spacing),
-                  _AuthorizationSummaryCard(summary: authSummary),
-                  if (deprecationCount != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _DeprecationSummaryCard(count: deprecationCount),
-                  ],
-                  const SizedBox(height: AppSpacing.sm),
                   Expanded(
-                    child: logProvider.messages.isEmpty
-                        ? Center(
-                            child: Text(
-                              AppStrings.wsLogNoMessages,
-                              style: context.bodyMuted,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _AuthorizationSummaryCard(summary: authSummary),
+                                if (deprecationCount != null) ...[
+                                  const SizedBox(height: AppSpacing.sm),
+                                  _DeprecationSummaryCard(
+                                    count: deprecationCount,
+                                  ),
+                                ],
+                              ],
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: logProvider.messages.length,
-                            itemBuilder: (context, index) {
-                              final message = logProvider.messages[index];
-                              return _MessageItem(message: message);
-                            },
                           ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Expanded(
+                          flex: 2,
+                          child: logProvider.messages.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    AppStrings.wsLogNoMessages,
+                                    style: context.bodyMuted,
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: logProvider.messages.length,
+                                  itemBuilder: (context, index) {
+                                    final message = logProvider.messages[index];
+                                    return _MessageItem(message: message);
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );

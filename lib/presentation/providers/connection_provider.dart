@@ -99,6 +99,17 @@ class ConnectionProvider extends ChangeNotifier {
   ConnectionStatus get status => _status;
   String get error => _error;
   bool get isDbConnected => _isDbConnected;
+
+  /// Updates the DB status chip shown next to hub status when connectivity is
+  /// proven elsewhere (e.g. successful Playground query or test from Playground).
+  void setDbConnectionIndicator(bool connected) {
+    if (_isDbConnected == connected) {
+      return;
+    }
+    _isDbConnected = connected;
+    notifyListeners();
+  }
+
   bool get isConnected => _status == ConnectionStatus.connected;
   bool get isReconnecting => _isReconnecting;
   bool get isCheckingDriver => _isCheckingDriver;
@@ -159,21 +170,26 @@ class ConnectionProvider extends ChangeNotifier {
     AppLogger.info('Disconnected from hub');
   }
 
-  Future<Result<bool>> testDbConnection(String connectionString) async {
+  Future<Result<bool>> testDbConnection(
+    String connectionString, {
+    bool recordGlobalError = true,
+  }) async {
     final result = await _testDbConnectionUseCase(connectionString);
 
     result.fold(
-      (isConnected) {
-        _isDbConnected = isConnected;
+      (bool isConnected) {
+        setDbConnectionIndicator(isConnected);
         if (isConnected) {
           AppLogger.info('Database connection test successful');
         } else {
           AppLogger.warning('Database connection test failed');
         }
       },
-      (failure) {
-        _isDbConnected = false;
-        _error = failure.toDisplayMessage();
+      (Object failure) {
+        setDbConnectionIndicator(false);
+        if (recordGlobalError) {
+          _error = failure.toDisplayMessage();
+        }
         AppLogger.error(
           'Database connection test failed: ${failure.toDisplayMessage()}',
           failure.toTechnicalMessage(),

@@ -38,6 +38,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   void initState() {
     super.initState();
     _queryController = TextEditingController();
+    _queryController.addListener(_onQueryTextChanged);
     _focusNode = FocusNode();
     unawaited(
       _restoreStreamingMode().catchError(
@@ -104,8 +105,15 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     await prefs.setBool(_playgroundSqlHandlingModeKey, preserve);
   }
 
+  void _onQueryTextChanged() {
+    setState(() {});
+  }
+
+  bool _canExecutePlaygroundQuery() => _queryController.text.trim().isNotEmpty;
+
   @override
   void dispose() {
+    _queryController.removeListener(_onQueryTextChanged);
     _queryController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -193,6 +201,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     // F5 or Ctrl+Enter: Execute query
     if (event.logicalKey == LogicalKeyboardKey.f5 ||
         (isControlPressed && event.logicalKey == LogicalKeyboardKey.enter)) {
+      if (_queryController.text.trim().isEmpty) {
+        return KeyEventResult.handled;
+      }
       _handleExecute(playgroundProvider, configProvider);
       return KeyEventResult.handled;
     }
@@ -236,187 +247,191 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
             ),
             child: Padding(
               padding: AppLayout.pagePadding(context),
-              child: AppLayout.centeredContent(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.playgroundDescription,
-                            style: context.bodyMuted,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          const Wrap(
-                            spacing: AppSpacing.md,
-                            runSpacing: AppSpacing.sm,
-                            children: [
-                              _PlaygroundShortcutChip(
-                                icon: FluentIcons.play,
-                                label: AppStrings.playgroundShortcutExecute,
-                              ),
-                              _PlaygroundShortcutChip(
-                                icon: FluentIcons.plug_connected,
-                                label:
-                                    AppStrings.playgroundShortcutTestConnection,
-                              ),
-                              _PlaygroundShortcutChip(
-                                icon: FluentIcons.clear,
-                                label: AppStrings.playgroundShortcutClear,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          const ConnectionStatusWidget(),
-                        ],
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    SqlEditor(
-                      controller: _queryController,
-                      onChanged: (value) {
-                        playgroundProvider.setQuery(value);
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SqlActionBar(
-                            onExecute: () => _handleExecute(
-                              playgroundProvider,
-                              configProvider,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.playgroundDescription,
+                          style: context.bodyMuted,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        const Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            _PlaygroundShortcutChip(
+                              icon: FluentIcons.play,
+                              label: AppStrings.playgroundShortcutExecute,
                             ),
-                            onTestConnection: config != null
-                                ? () => _handleTestConnection(
-                                    configProvider,
-                                    playgroundProvider,
-                                  )
-                                : null,
-                            onClear: () => _handleClear(playgroundProvider),
-                            onCancel: () => playgroundProvider.cancelQuery(),
-                            isExecuting: playgroundProvider.isLoading,
-                            streamingModeEnabled: _streamingModeEnabled,
-                            onStreamingModeChanged: (value) {
-                              setState(() => _streamingModeEnabled = value);
+                            _PlaygroundShortcutChip(
+                              icon: FluentIcons.plug_connected,
+                              label:
+                                  AppStrings.playgroundShortcutTestConnection,
+                            ),
+                            _PlaygroundShortcutChip(
+                              icon: FluentIcons.clear,
+                              label: AppStrings.playgroundShortcutClear,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        const ConnectionStatusWidget(compact: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SqlEditor(
+                    controller: _queryController,
+                    onChanged: (value) {
+                      playgroundProvider.setQuery(value);
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SqlActionBar(
+                          onExecute: _canExecutePlaygroundQuery()
+                              ? () => _handleExecute(
+                                  playgroundProvider,
+                                  configProvider,
+                                )
+                              : null,
+                          onTestConnection: config != null
+                              ? () => _handleTestConnection(
+                                  configProvider,
+                                  playgroundProvider,
+                                )
+                              : null,
+                          onClear: () => _handleClear(playgroundProvider),
+                          onCancel: () => playgroundProvider.cancelQuery(),
+                          isExecuting: playgroundProvider.isLoading,
+                          streamingModeEnabled: _streamingModeEnabled,
+                          onStreamingModeChanged: (value) {
+                            setState(() => _streamingModeEnabled = value);
+                            unawaited(
+                              _saveStreamingMode(value).catchError(
+                                (Object e) => AppLogger.warning(
+                                  'Failed to save streaming mode',
+                                  e,
+                                ),
+                              ),
+                            );
+                          },
+                          sqlHandlingModePreserve:
+                              playgroundProvider.sqlHandlingMode ==
+                              SqlHandlingMode.preserve,
+                          onSqlHandlingModeChanged: (value) {
+                            playgroundProvider.setSqlHandlingMode(
+                              value
+                                  ? SqlHandlingMode.preserve
+                                  : SqlHandlingMode.managed,
+                            );
+                            if (value) {
+                              setState(() => _streamingModeEnabled = false);
                               unawaited(
-                                _saveStreamingMode(value).catchError(
+                                _saveStreamingMode(false).catchError(
                                   (Object e) => AppLogger.warning(
                                     'Failed to save streaming mode',
                                     e,
                                   ),
                                 ),
                               );
-                            },
-                            sqlHandlingModePreserve:
-                                playgroundProvider.sqlHandlingMode ==
-                                SqlHandlingMode.preserve,
-                            onSqlHandlingModeChanged: (value) {
-                              playgroundProvider.setSqlHandlingMode(
-                                value
-                                    ? SqlHandlingMode.preserve
-                                    : SqlHandlingMode.managed,
-                              );
-                              if (value) {
-                                setState(() => _streamingModeEnabled = false);
-                                unawaited(
-                                  _saveStreamingMode(false).catchError(
-                                    (Object e) => AppLogger.warning(
-                                      'Failed to save streaming mode',
-                                      e,
-                                    ),
-                                  ),
-                                );
-                              }
-                              unawaited(
-                                _saveSqlHandlingMode(value).catchError(
-                                  (Object e) => AppLogger.warning(
-                                    'Failed to save SQL handling mode',
-                                    e,
-                                  ),
+                            }
+                            unawaited(
+                              _saveSqlHandlingMode(value).catchError(
+                                (Object e) => AppLogger.warning(
+                                  'Failed to save SQL handling mode',
+                                  e,
                                 ),
-                              );
-                            },
-                            useStreamingMode:
-                                config != null &&
-                                playgroundProvider.sqlHandlingMode !=
-                                    SqlHandlingMode.preserve,
+                              ),
+                            );
+                          },
+                          useStreamingMode:
+                              config != null &&
+                              playgroundProvider.sqlHandlingMode !=
+                                  SqlHandlingMode.preserve,
+                        ),
+                        if (playgroundProvider.lastExecutionHint != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            playgroundProvider.lastExecutionHint!,
+                            style: context.bodyMuted,
                           ),
-                          if (playgroundProvider.lastExecutionHint != null) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              playgroundProvider.lastExecutionHint!,
-                              style: context.bodyMuted,
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    Expanded(
-                      child: QueryResultsSection(
-                        results: playgroundProvider.results,
-                        isLoading: playgroundProvider.isLoading,
-                        isStreaming: playgroundProvider.isStreaming,
-                        rowsProcessed: playgroundProvider.rowsProcessed,
-                        progress: playgroundProvider.progress,
-                        executionDuration: playgroundProvider.executionDuration,
-                        affectedRows: playgroundProvider.affectedRows,
-                        columnMetadata: playgroundProvider.columnMetadata,
-                        error: playgroundProvider.error,
-                        currentPage: playgroundProvider.currentPage,
-                        pageSize: playgroundProvider.pageSize,
-                        hasNextPage: playgroundProvider.hasNextPage,
-                        hasPreviousPage: playgroundProvider.hasPreviousPage,
-                        showPagination:
-                            playgroundProvider.hasPagination &&
-                            playgroundProvider.sqlHandlingMode !=
-                                SqlHandlingMode.preserve,
-                        resultSetCount: playgroundProvider.resultSets.length,
-                        selectedResultSetIndex:
-                            playgroundProvider.selectedResultSetIndex,
-                        onPreviousPage:
-                            playgroundProvider.sqlHandlingMode !=
-                                    SqlHandlingMode.preserve &&
-                                playgroundProvider.hasPreviousPage
-                            ? () => playgroundProvider.goToPreviousPage()
-                            : null,
-                        onNextPage:
-                            playgroundProvider.sqlHandlingMode !=
-                                    SqlHandlingMode.preserve &&
-                                playgroundProvider.hasNextPage
-                            ? () => playgroundProvider.goToNextPage()
-                            : null,
-                        onResultSetChanged:
-                            playgroundProvider.hasMultipleResultSets
-                            ? playgroundProvider.setSelectedResultSetIndex
-                            : null,
-                        onPageSizeChanged:
-                            playgroundProvider.sqlHandlingMode !=
-                                SqlHandlingMode.preserve
-                            ? (value) {
-                                unawaited(
-                                  playgroundProvider
-                                      .setPageSize(value)
-                                      .catchError(
-                                        (Object e) => AppLogger.warning(
-                                          'Failed to set page size',
-                                          e,
-                                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Expanded(
+                    child: QueryResultsSection(
+                      results: playgroundProvider.results,
+                      isLoading: playgroundProvider.isLoading,
+                      isStreaming: playgroundProvider.isStreaming,
+                      rowsProcessed: playgroundProvider.rowsProcessed,
+                      progress: playgroundProvider.progress,
+                      executionDuration: playgroundProvider.executionDuration,
+                      affectedRows: playgroundProvider.affectedRows,
+                      columnMetadata: playgroundProvider.columnMetadata,
+                      error: playgroundProvider.error,
+                      currentPage: playgroundProvider.currentPage,
+                      pageSize: playgroundProvider.pageSize,
+                      hasNextPage: playgroundProvider.hasNextPage,
+                      hasPreviousPage: playgroundProvider.hasPreviousPage,
+                      showPagination:
+                          playgroundProvider.hasPagination &&
+                          playgroundProvider.sqlHandlingMode !=
+                              SqlHandlingMode.preserve,
+                      resultSetCount: playgroundProvider.resultSets.length,
+                      selectedResultSetIndex:
+                          playgroundProvider.selectedResultSetIndex,
+                      onPreviousPage:
+                          playgroundProvider.sqlHandlingMode !=
+                                  SqlHandlingMode.preserve &&
+                              playgroundProvider.hasPreviousPage
+                          ? () => playgroundProvider.goToPreviousPage()
+                          : null,
+                      onNextPage:
+                          playgroundProvider.sqlHandlingMode !=
+                                  SqlHandlingMode.preserve &&
+                              playgroundProvider.hasNextPage
+                          ? () => playgroundProvider.goToNextPage()
+                          : null,
+                      onResultSetChanged:
+                          playgroundProvider.hasMultipleResultSets
+                          ? playgroundProvider.setSelectedResultSetIndex
+                          : null,
+                      onPageSizeChanged:
+                          playgroundProvider.sqlHandlingMode !=
+                              SqlHandlingMode.preserve
+                          ? (value) {
+                              unawaited(
+                                playgroundProvider
+                                    .setPageSize(value)
+                                    .catchError(
+                                      (Object e) => AppLogger.warning(
+                                        'Failed to set page size',
+                                        e,
                                       ),
-                                );
-                              }
-                            : null,
-                        onShowErrorDetails: playgroundProvider.error != null
-                            ? () => _showErrorModal(playgroundProvider.error!)
-                            : null,
-                      ),
+                                    ),
+                              );
+                            }
+                          : null,
+                      onShowErrorDetails: playgroundProvider.error != null
+                          ? () => _showErrorModal(playgroundProvider.error!)
+                          : null,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );

@@ -69,31 +69,46 @@ class SqlActionBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.lg),
         ],
-        if (isExecuting) ...[
-          FilledButton(
-            onPressed: onCancel,
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.all(
-                FluentTheme.of(
-                  context,
-                ).resources.systemFillColorCautionBackground,
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isExecuting) ...[
+                    FilledButton(
+                      onPressed: onCancel,
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.all(
+                          FluentTheme.of(
+                            context,
+                          ).resources.systemFillColorCautionBackground,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ProgressRing(strokeWidth: 2),
+                          SizedBox(width: AppSpacing.sm),
+                          Text(AppStrings.queryActionCancel),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    for (int index = 0; index < actions.length; index++) ...[
+                      if (index > 0) const SizedBox(width: AppSpacing.sm),
+                      _SqlActionButton(config: actions[index]),
+                    ],
+                  ],
+                ],
               ),
             ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ProgressRing(strokeWidth: 2),
-                SizedBox(width: AppSpacing.sm),
-                Text(AppStrings.queryActionCancel),
-              ],
-            ),
           ),
-        ] else ...[
-          for (int index = 0; index < actions.length; index++) ...[
-            if (index > 0) const SizedBox(width: AppSpacing.sm),
-            _SqlActionButton(config: actions[index]),
-          ],
-        ],
+        ),
       ],
     );
   }

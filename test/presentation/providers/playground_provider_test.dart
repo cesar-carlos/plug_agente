@@ -6,9 +6,11 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
-import 'package:result_dart/result_dart.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 class MockExecutePlaygroundQuery extends Mock
     implements ExecutePlaygroundQuery {}
@@ -28,6 +30,7 @@ void main() {
       registerFallbackValue(
         const QueryPaginationRequest(page: 1, pageSize: 50),
       );
+      registerFallbackValue(SqlHandlingMode.managed);
     });
 
     setUp(() {
@@ -36,10 +39,27 @@ void main() {
       mockExecuteStreamingQuery = MockExecuteStreamingQuery();
       provider = PlaygroundProvider(
         mockExecutePlaygroundQuery,
-        mockTestDbConnection,
+        (String cs) => mockTestDbConnection(cs),
         mockExecuteStreamingQuery,
       );
     });
+
+    test(
+      'should not invoke execute use case when query is empty',
+      () async {
+        provider.setQuery('   ');
+        await provider.executeQuery(resetPagination: true);
+        verifyNever(
+          () => mockExecutePlaygroundQuery(
+            any(),
+            pagination: any(named: 'pagination'),
+            sqlHandlingMode: any(named: 'sqlHandlingMode'),
+          ),
+        );
+        expect(provider.error, AppStrings.queryValidationEmpty);
+        expect(provider.isLoading, isFalse);
+      },
+    );
 
     test('should throttle notifyListeners during streaming chunks', () async {
       var listenerCalls = 0;
@@ -62,7 +82,7 @@ void main() {
         await onChunk([
           {'id': 3},
         ]);
-        return const Success(unit);
+        return const rd.Success(rd.unit);
       });
 
       await provider.executeQueryWithStreaming(
@@ -81,7 +101,7 @@ void main() {
       () async {
         final config = _buildConfig();
         when(() => mockTestDbConnection(any())).thenAnswer((_) async {
-          return const Success(true);
+          return const rd.Success(true);
         });
 
         await provider.testConnection(config);
@@ -103,7 +123,7 @@ void main() {
             pagination: any(named: 'pagination'),
           ),
         ).thenAnswer((_) async {
-          return Success(
+          return rd.Success(
             QueryResponse(
               id: 'resp-1',
               requestId: 'req-1',
@@ -146,7 +166,7 @@ void main() {
       ).thenAnswer((invocation) async {
         final pagination =
             invocation.namedArguments[#pagination] as QueryPaginationRequest;
-        return Success(
+        return rd.Success(
           QueryResponse(
             id: 'resp-${pagination.page}',
             requestId: 'req-${pagination.page}',
@@ -184,7 +204,7 @@ void main() {
           pagination: any(named: 'pagination'),
         ),
       ).thenAnswer((_) async {
-        return Success(
+        return rd.Success(
           QueryResponse(
             id: 'resp-1',
             requestId: 'req-1',
@@ -232,6 +252,73 @@ void main() {
       expect(provider.results.single['second_value'], 2);
       expect(provider.columnMetadata!.single['name'], 'second_value');
     });
+
+    test('should notify sync callback when query succeeds', () async {
+      final synced = <bool>[];
+      final p = PlaygroundProvider(
+        mockExecutePlaygroundQuery,
+        (String cs) => mockTestDbConnection(cs),
+        mockExecuteStreamingQuery,
+        syncDbConnectionIndicator: synced.add,
+      );
+      p.setQuery('SELECT 1');
+
+      when(
+        () => mockExecutePlaygroundQuery(
+          any(),
+          pagination: any(named: 'pagination'),
+        ),
+      ).thenAnswer(
+        (_) async => rd.Success(
+          QueryResponse(
+            id: 'resp-1',
+            requestId: 'req-1',
+            agentId: 'agent-1',
+            data: const [
+              {'x': 1},
+            ],
+            affectedRows: 1,
+            timestamp: DateTime.now(),
+          ),
+        ),
+      );
+
+      await p.executeQuery(resetPagination: true);
+
+      expect(synced, [true]);
+    });
+
+    test(
+      'should notify sync callback when query fails with connection failure',
+      () async {
+        final synced = <bool>[];
+        final p = PlaygroundProvider(
+          mockExecutePlaygroundQuery,
+          (String cs) => mockTestDbConnection(cs),
+          mockExecuteStreamingQuery,
+          syncDbConnectionIndicator: synced.add,
+        );
+        p.setQuery('SELECT 1');
+
+        when(
+          () => mockExecutePlaygroundQuery(
+            any(),
+            pagination: any(named: 'pagination'),
+          ),
+        ).thenAnswer(
+          (_) async => rd.Failure(
+            ConnectionFailure.withContext(
+              message: 'ODBC unreachable',
+              context: const {'operation': 'test'},
+            ),
+          ),
+        );
+
+        await p.executeQuery(resetPagination: true);
+
+        expect(synced, [false]);
+      },
+    );
   });
 }
 

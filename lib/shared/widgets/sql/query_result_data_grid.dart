@@ -2,10 +2,18 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
+import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
 /// Above this row count, sorting/filtering are disabled to avoid main-thread spikes.
 const int kQueryResultHeavyRowThreshold = 10000;
+
+/// Scales grid row heights with system text scaling (caps extra growth for density).
+double _scaledGridExtent(BuildContext context, double base) {
+  final scaler = MediaQuery.textScalerOf(context);
+  final factor = (scaler.scale(base) / base).clamp(1.0, 1.45);
+  return base * factor;
+}
 
 /// Result grid with cached [DataGridRow] rows and O(1) column metadata lookup.
 class QueryResultDataGrid extends StatefulWidget {
@@ -68,10 +76,20 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
     final columnKeys = widget.data.first.keys.toList();
     final columns = _generateColumns(context, columnKeys);
     final isHeavyDataset = widget.data.length > kQueryResultHeavyRowThreshold;
+    final rowHeight = _scaledGridExtent(
+      context,
+      SqlVisualIdentity.queryResultDataGridRowHeight,
+    );
+    final headerRowHeight = _scaledGridExtent(
+      context,
+      SqlVisualIdentity.queryResultDataGridHeaderRowHeight,
+    );
 
     return SfDataGrid(
       source: _dataSource,
       columns: columns,
+      rowHeight: rowHeight,
+      headerRowHeight: headerRowHeight,
       allowSorting: !isHeavyDataset,
       allowFiltering: !isHeavyDataset,
       gridLinesVisibility: GridLinesVisibility.both,
@@ -92,11 +110,14 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
         columnName: key,
         width: columnWidth,
         label: Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
+          padding: SqlVisualIdentity.queryResultDataGridHeaderPadding,
           alignment: Alignment.center,
           child: Text(
             metadata?['name'] as String? ?? key,
-            style: context.bodyStrong.copyWith(fontWeight: FontWeight.w700),
+            style: context.bodyStrong.copyWith(
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+            ),
           ),
         ),
       );
@@ -232,7 +253,7 @@ class _CachingQueryDataSource extends DataGridSource {
     return DataGridRowAdapter(
       cells: row.getCells().map((cell) {
         return Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
+          padding: SqlVisualIdentity.queryResultDataGridCellPadding,
           alignment: Alignment.centerLeft,
           child: Text(
             cell.value?.toString() ?? '',

@@ -7,6 +7,17 @@ import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.
 import 'package:plug_agente/shared/widgets/sql/query_result_data_grid.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
+BoxDecoration _queryResultsPanelDecoration(BuildContext context) {
+  final theme = FluentTheme.of(context);
+  return BoxDecoration(
+    color: theme.resources.cardBackgroundFillColorDefault,
+    border: Border.all(
+      color: theme.resources.controlStrokeColorDefault,
+    ),
+    borderRadius: SqlVisualIdentity.panelBorderRadius,
+  );
+}
+
 class QueryResultsSection extends StatelessWidget {
   const QueryResultsSection({
     required this.results,
@@ -57,21 +68,30 @@ class QueryResultsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading && !isStreaming) {
-      return const Center(child: ProgressRing());
+      return const SizedBox.expand(
+        child: Center(child: ProgressRing()),
+      );
     }
 
     if (error != null && error!.isNotEmpty) {
-      return _QueryErrorState(
-        error: error!,
-        onShowDetails: onShowErrorDetails,
+      return SizedBox.expand(
+        child: _QueryErrorState(
+          error: error!,
+          onShowDetails: onShowErrorDetails,
+        ),
       );
     }
 
     if (results.isEmpty && !isLoading) {
-      return const CenteredMessage(
-        title: AppStrings.queryNoResults,
-        message: AppStrings.queryNoResultsMessage,
-        icon: FluentIcons.table,
+      return SizedBox.expand(
+        child: DecoratedBox(
+          decoration: _queryResultsPanelDecoration(context),
+          child: const CenteredMessage(
+            title: AppStrings.queryNoResults,
+            message: AppStrings.queryNoResultsMessage,
+            icon: FluentIcons.table,
+          ),
+        ),
       );
     }
 
@@ -85,14 +105,7 @@ class QueryResultsSection extends StatelessWidget {
           ),
         Expanded(
           child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: FluentTheme.of(
-                  context,
-                ).resources.controlStrokeColorDefault,
-              ),
-              borderRadius: SqlVisualIdentity.panelBorderRadius,
-            ),
+            decoration: _queryResultsPanelDecoration(context),
             child: ClipRRect(
               borderRadius: SqlVisualIdentity.panelBorderRadius,
               child: QueryResultDataGrid(
@@ -418,37 +431,50 @@ class _QueryErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              FluentIcons.error_badge,
-              size: 64,
-              color: AppColors.error,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const padding = AppSpacing.lg;
+        final minContentHeight = constraints.hasBoundedHeight
+            ? (constraints.maxHeight - padding * 2).clamp(0.0, double.infinity)
+            : 0.0;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(padding),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minContentHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  FluentIcons.error_badge,
+                  size: 64,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  AppStrings.queryErrorTitle,
+                  style: context.sectionTitle.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                InlineFeedbackCard(
+                  severity: InfoBarSeverity.error,
+                  message: error,
+                ),
+                if (onShowDetails != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    label: AppStrings.queryErrorShowDetails,
+                    onPressed: onShowDetails,
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              AppStrings.queryErrorTitle,
-              style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            InlineFeedbackCard(
-              severity: InfoBarSeverity.error,
-              message: error,
-            ),
-            if (onShowDetails != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: AppStrings.queryErrorShowDetails,
-                onPressed: onShowDetails,
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

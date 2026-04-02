@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
-import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -14,16 +13,99 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
     this._executePlaygroundQuery,
-    this._testDbConnection,
-    this._executeStreamingQuery,
-  );
+    this._runDbConnectionTest,
+    this._executeStreamingQuery, {
+    void Function(bool connected)? syncDbConnectionIndicator,
+  }) : _syncDbConnectionIndicator = syncDbConnectionIndicator;
   final ExecutePlaygroundQuery _executePlaygroundQuery;
-  final TestDbConnection _testDbConnection;
+  final Future<rd.Result<bool>> Function(String connectionString)
+  _runDbConnectionTest;
   final ExecuteStreamingQuery _executeStreamingQuery;
+  final void Function(bool connected)? _syncDbConnectionIndicator;
+
+  void _notifyDbConnectionIndicator(bool connected) {
+    _syncDbConnectionIndicator?.call(connected);
+  }
+
+  static bool _failureIndicatesDbUnreachable(Object failure) {
+    return failure is ConnectionFailure || failure is DatabaseFailure;
+  }
+
+  void _logValidationExpected(String message) {
+    if (kDebugMode) {
+      AppLogger.info('Playground query validation: $message');
+    } else {
+      AppLogger.debug('Playground query validation: $message');
+    }
+  }
+
+  void _logExecuteQueryFailure(Object failure) {
+    if (failure is ValidationFailure) {
+      _logValidationExpected(failure.toDisplayMessage());
+      return;
+    }
+    AppLogger.error(
+      'Failed to execute query: ${failure.toDisplayMessage()}',
+      failure.toTechnicalMessage(),
+    );
+  }
+
+  void _logStreamingQueryFailure(Object failure) {
+    if (failure is ValidationFailure) {
+      _logValidationExpected(failure.toDisplayMessage());
+      return;
+    }
+    AppLogger.error(
+      'Streaming query failed: ${failure.toDisplayMessage()}',
+      failure.toTechnicalMessage(),
+    );
+  }
+
+  void _rejectEmptyQuery() {
+    _error = AppStrings.queryValidationEmpty;
+    _isLoading = false;
+    _hasExecutedQuery = true;
+    _paginationAvailable = false;
+    _results = [];
+    _resultSets = [];
+    _executionDuration = null;
+    _affectedRows = null;
+    _columnMetadata = null;
+    _selectedResultSetIndex = 0;
+    _hasNextPage = false;
+    _lastExecutionHint = null;
+    _logValidationExpected(AppStrings.queryValidationEmpty);
+    notifyListeners();
+  }
+
+  void _rejectStreamingValidation(String message) {
+    _error = message;
+    _isLoading = false;
+    _isStreaming = false;
+    _streamingStoppedByCap = false;
+    _streamingCapCancelRequested = false;
+    _hasExecutedQuery = true;
+    _paginationAvailable = false;
+    _rowsProcessed = 0;
+    _progress = 0;
+    _results = [];
+    _resultSets = [];
+    _executionDuration = null;
+    _affectedRows = null;
+    _columnMetadata = null;
+    _selectedResultSetIndex = 0;
+    _currentPage = 1;
+    _hasNextPage = false;
+    _lastExecutionHint = null;
+    _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _logValidationExpected(message);
+    notifyListeners();
+  }
 
   String _query = '';
   List<Map<String, dynamic>> _results = [];
@@ -67,14 +149,16 @@ class PlaygroundProvider extends ChangeNotifier {
   bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
   int? get affectedRows => _affectedRows;
-  List<Map<String, dynamic>>? get columnMetadata => selectedResultSet?.columnMetadata ?? _columnMetadata;
+  List<Map<String, dynamic>>? get columnMetadata =>
+      selectedResultSet?.columnMetadata ?? _columnMetadata;
   CancellationToken get cancellationToken => _cancellationToken;
   List<QueryResultSet> get resultSets => _resultSets;
   QueryResultSet? get selectedResultSet {
     if (_resultSets.isEmpty) {
       return null;
     }
-    if (_selectedResultSetIndex < 0 || _selectedResultSetIndex >= _resultSets.length) {
+    if (_selectedResultSetIndex < 0 ||
+        _selectedResultSetIndex >= _resultSets.length) {
       return _resultSets.first;
     }
     return _resultSets[_selectedResultSetIndex];
@@ -91,7 +175,11 @@ class PlaygroundProvider extends ChangeNotifier {
   int get pageSize => _pageSize;
   bool get hasNextPage => _hasNextPage;
   bool get hasPreviousPage => _currentPage > 1;
-  bool get hasPagination => _paginationAvailable && _hasExecutedQuery && !_isStreaming && _error == null;
+  bool get hasPagination =>
+      _paginationAvailable &&
+      _hasExecutedQuery &&
+      !_isStreaming &&
+      _error == null;
   List<int> get pageSizeOptions => _pageSizeOptions;
   SqlHandlingMode get sqlHandlingMode => _sqlHandlingMode;
   String? get lastExecutionHint => _lastExecutionHint;
@@ -122,6 +210,12 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _clearError();
     _lastExecutionHint = null;
+
+    if (_query.trim().isEmpty) {
+      _rejectEmptyQuery();
+      return;
+    }
+
     _isLoading = true;
     _hasExecutedQuery = true;
     _paginationAvailable = true;
@@ -162,18 +256,20 @@ class PlaygroundProvider extends ChangeNotifier {
             _selectedResultSetIndex = 0;
             _results = response.data;
             _affectedRows = response.affectedRows ?? 0;
-            _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
+            _columnMetadata =
+                selectedResultSet?.columnMetadata ?? response.columnMetadata;
             _syncPaginationState(response.pagination);
             _lastExecutionHint = _buildLastExecutionHint(response.pagination);
+            _notifyDbConnectionIndicator(true);
           }
           _executionDuration = stopwatch.elapsed;
         },
         (failure) {
           _error = failure.toDisplayMessage();
-          AppLogger.error(
-            'Failed to execute query: ${failure.toDisplayMessage()}',
-            failure.toTechnicalMessage(),
-          );
+          _logExecuteQueryFailure(failure);
+          if (_failureIndicatesDbUnreachable(failure)) {
+            _notifyDbConnectionIndicator(false);
+          }
           _columnMetadata = null;
           _resultSets = [];
           _executionDuration = stopwatch.elapsed;
@@ -185,7 +281,7 @@ class PlaygroundProvider extends ChangeNotifier {
     } on Exception catch (error, stackTrace) {
       stopwatch.stop();
       _isLoading = false;
-      final failure = error.toFailure(
+      final failure = ExceptionToFailureExtension(error).toFailure(
         message: 'Erro ao executar a consulta',
         context: {'operation': 'executeQuery'},
       );
@@ -212,7 +308,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
-    final result = await _testDbConnection(config.connectionString);
+    final result = await _runDbConnectionTest(config.connectionString);
 
     result.fold(
       (_) {
@@ -220,7 +316,7 @@ class PlaygroundProvider extends ChangeNotifier {
         _isConnectionStatusSuccess = true;
       },
       (failure) {
-        _error = failure.toDisplayMessage();
+        _error = failure.toDisplayMessageWithOdbcDetail();
         AppLogger.error(
           'Failed to test connection: ${failure.toDisplayMessage()}',
           failure.toTechnicalMessage(),
@@ -246,6 +342,18 @@ class PlaygroundProvider extends ChangeNotifier {
     _streamingStoppedByCap = false;
     _streamingCapCancelRequested = false;
     _cancellationToken.reset();
+
+    if (query.trim().isEmpty) {
+      _rejectStreamingValidation(AppStrings.queryValidationEmpty);
+      return;
+    }
+    if (connectionString.trim().isEmpty) {
+      _rejectStreamingValidation(
+        AppStrings.queryValidationConnectionStringEmpty,
+      );
+      return;
+    }
+
     _isLoading = true;
     _isStreaming = true;
     _hasExecutedQuery = true;
@@ -287,7 +395,8 @@ class PlaygroundProvider extends ChangeNotifier {
           }
           _rowsProcessed = _results.length;
           _affectedRows = _rowsProcessed;
-          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
+          _progress =
+              _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
           _notifyStreamingProgressIfNeeded();
           if (_results.length >= cap) {
             _requestStreamingStopAtRowCap(cap);
@@ -302,6 +411,7 @@ class PlaygroundProvider extends ChangeNotifier {
           if (!_streamingStoppedByCap) {
             _lastExecutionHint = _buildStreamingExecutionHint();
           }
+          _notifyDbConnectionIndicator(true);
         },
         (failure) {
           _error = failure.toDisplayMessage();
@@ -309,16 +419,16 @@ class PlaygroundProvider extends ChangeNotifier {
           if (!_streamingStoppedByCap) {
             _lastExecutionHint = null;
           }
-          AppLogger.error(
-            'Streaming query failed: ${failure.toDisplayMessage()}',
-            failure.toTechnicalMessage(),
-          );
+          _logStreamingQueryFailure(failure);
+          if (_failureIndicatesDbUnreachable(failure)) {
+            _notifyDbConnectionIndicator(false);
+          }
         },
       );
     } on Exception catch (error, stackTrace) {
       _isLoading = false;
       _isStreaming = false;
-      final failure = error.toFailure(
+      final failure = ExceptionToFailureExtension(error).toFailure(
         message: AppStrings.queryStreamingErrorPrefix,
         context: {'operation': 'executeQueryWithStreaming'},
       );
@@ -367,10 +477,11 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _streamingCapCancelRequested = true;
     _streamingStoppedByCap = true;
-    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint.replaceAll(
-      '{max}',
-      cap.toString(),
-    );
+    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint
+        .replaceAll(
+          '{max}',
+          cap.toString(),
+        );
     unawaited(
       _executeStreamingQuery.cancelActiveStream(
         reason: StreamingCancelReason.playgroundRowCap,
@@ -404,7 +515,8 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _notifyStreamingProgressIfNeeded() {
     final now = DateTime.now();
-    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
+    final shouldNotify =
+        now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
     if (!shouldNotify) {
       return;
     }
