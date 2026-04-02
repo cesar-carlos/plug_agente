@@ -195,7 +195,7 @@ void main() {
             database: any(named: 'database'),
           ),
         ).thenAnswer((_) async {
-          await Future<void>.delayed(const Duration(milliseconds: 2));
+          await Future<void>.delayed(const Duration(milliseconds: 150));
           return Success(
             QueryResponse(
               id: 'q',
@@ -216,7 +216,7 @@ void main() {
             const SqlCommand(sql: 'SELECT 1'),
             const SqlCommand(sql: 'SELECT 2'),
           ],
-          timeout: const Duration(milliseconds: 1),
+          timeout: const Duration(milliseconds: 100),
         );
 
         expect(out.isError(), isTrue);
