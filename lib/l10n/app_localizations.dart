@@ -116,6 +116,12 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get navSettings;
 
+  /// No description provided for @navAgentProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent Profile'**
+  String get navAgentProfile;
+
   /// No description provided for @titlePlayground.
   ///
   /// In en, this message translates to:

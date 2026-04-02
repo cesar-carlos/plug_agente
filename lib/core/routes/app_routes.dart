@@ -7,6 +7,8 @@ class AppRoutes {
   static const String playground = '/playground';
   static const String config = '/config';
   static const String configEdit = '/config/:id';
+  static const String agentProfile = '/agent-profile';
+  static const String agentProfileEdit = '/agent-profile/:id';
   static const String databaseSettings = '/database-settings';
   static const String databaseSettingsEdit = '/database-settings/:id';
   static const String websocketSettings = '/websocket-settings';
@@ -21,7 +23,8 @@ enum NavDestination {
   playground,
   databaseSettings,
   websocketSettings,
-  config
+  config,
+  agentProfile,
   ;
 
   String get route {
@@ -32,6 +35,8 @@ enum NavDestination {
         return AppRoutes.playground;
       case NavDestination.config:
         return AppRoutes.config;
+      case NavDestination.agentProfile:
+        return AppRoutes.agentProfile;
       case NavDestination.databaseSettings:
         return AppRoutes.databaseSettings;
       case NavDestination.websocketSettings:
@@ -42,12 +47,14 @@ enum NavDestination {
   static NavDestination fromIndex(int index) {
     switch (index) {
       case 1:
-        return NavDestination.playground;
+        return NavDestination.agentProfile;
       case 2:
-        return NavDestination.databaseSettings;
+        return NavDestination.playground;
       case 3:
-        return NavDestination.websocketSettings;
+        return NavDestination.databaseSettings;
       case 4:
+        return NavDestination.websocketSettings;
+      case 5:
         return NavDestination.config;
       default:
         return NavDestination.dashboard;
@@ -66,6 +73,9 @@ enum NavDestination {
     }
     if (route.startsWith(AppRoutes.playground)) {
       return NavDestination.playground;
+    }
+    if (route.startsWith(AppRoutes.agentProfile)) {
+      return NavDestination.agentProfile;
     }
     return NavDestination.dashboard;
   }

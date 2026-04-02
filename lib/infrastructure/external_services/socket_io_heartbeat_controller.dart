@@ -16,8 +16,7 @@ final class SocketIoHeartbeatController {
     Duration? ackTimeout,
     int? maxMissed,
   }) : _interval = interval ?? ConnectionConstants.socketHeartbeatInterval,
-       _ackTimeout =
-           ackTimeout ?? ConnectionConstants.socketHeartbeatAckTimeout,
+       _ackTimeout = ackTimeout ?? ConnectionConstants.socketHeartbeatAckTimeout,
        _maxMissed = maxMissed ?? ConnectionConstants.socketMaxMissedHeartbeats;
 
   final bool Function() isConnected;

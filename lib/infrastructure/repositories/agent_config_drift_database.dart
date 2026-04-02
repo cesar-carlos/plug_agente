@@ -112,19 +112,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         );
       }
       if (from < 10) {
-        await m.addColumn(configTable, configTable.nome);
-        await m.addColumn(configTable, configTable.nomeFantasia);
-        await m.addColumn(configTable, configTable.cnaeCnpjCpf);
-        await m.addColumn(configTable, configTable.telefone);
-        await m.addColumn(configTable, configTable.celular);
-        await m.addColumn(configTable, configTable.email);
-        await m.addColumn(configTable, configTable.endereco);
-        await m.addColumn(configTable, configTable.numeroEndereco);
-        await m.addColumn(configTable, configTable.bairro);
-        await m.addColumn(configTable, configTable.cep);
-        await m.addColumn(configTable, configTable.nomeMunicipio);
-        await m.addColumn(configTable, configTable.ufMunicipio);
-        await m.addColumn(configTable, configTable.observacao);
+        await _addAgentProfileColumnsIfMissing(m);
       }
       await _createClientTokenIndexes();
     },
@@ -136,6 +124,44 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       await customStatement('PRAGMA wal_autocheckpoint = 1000');
     },
   );
+
+  /// Adds profile columns only when missing. Handles databases where columns
+  /// were already applied (e.g. partial migration or out-of-sync user_version)
+  /// while the schema version is still below 10.
+  Future<void> _addAgentProfileColumnsIfMissing(Migrator m) async {
+    final existing = await _readConfigTableColumnNames();
+    final profileColumns = <GeneratedColumn<Object>>[
+          configTable.nome as GeneratedColumn<Object>,
+          configTable.nomeFantasia as GeneratedColumn<Object>,
+          configTable.cnaeCnpjCpf as GeneratedColumn<Object>,
+          configTable.telefone as GeneratedColumn<Object>,
+          configTable.celular as GeneratedColumn<Object>,
+          configTable.email as GeneratedColumn<Object>,
+          configTable.endereco as GeneratedColumn<Object>,
+          configTable.numeroEndereco as GeneratedColumn<Object>,
+          configTable.bairro as GeneratedColumn<Object>,
+          configTable.cep as GeneratedColumn<Object>,
+          configTable.nomeMunicipio as GeneratedColumn<Object>,
+          configTable.ufMunicipio as GeneratedColumn<Object>,
+          configTable.observacao as GeneratedColumn<Object>,
+        ];
+    for (final column in profileColumns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(configTable, column);
+      existing.add(sqlName);
+    }
+  }
+
+  Future<Set<String>> _readConfigTableColumnNames() async {
+    final rows = await customSelect(
+      'PRAGMA table_info("config_table")',
+      readsFrom: {configTable},
+    ).get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
 
   Future<void> _createClientTokenIndexes() async {
     await customStatement(

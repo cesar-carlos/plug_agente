@@ -18,6 +18,7 @@ class TrayManagerService with TrayListener implements ITrayService {
   final Logger _logger = Logger();
   void Function(TrayMenuAction)? _onMenuAction;
   bool _isInitialized = false;
+  bool _interactionsEnabled = false;
   String? _cachedIconPath;
 
   @override
@@ -61,6 +62,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       await Future<void>.delayed(AppConstants.trayInitDelay);
 
       _isInitialized = true;
+      _enableInteractionsAfterWarmup();
       _logger.i('TrayManager inicializado');
     } on Exception catch (e, stackTrace) {
       _logger.e(
@@ -70,7 +72,16 @@ class TrayManagerService with TrayListener implements ITrayService {
       );
       // Mesmo com erro, marcar como inicializado para evitar loops
       _isInitialized = true;
+      _enableInteractionsAfterWarmup();
     }
+  }
+
+  void _enableInteractionsAfterWarmup() {
+    unawaited(
+      Future<void>.delayed(AppConstants.trayInteractionWarmupDelay, () {
+        _interactionsEnabled = true;
+      }),
+    );
   }
 
   Future<String> _getTrayIconPath() async {
@@ -182,6 +193,9 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void onTrayIconMouseDown() {
+    if (!_interactionsEnabled) {
+      return;
+    }
     unawaited(
       Future<void>.delayed(AppConstants.trayIconClickDelay, () {
         unawaited(
@@ -197,6 +211,9 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void onTrayIconMouseUp() {
+    if (!_interactionsEnabled) {
+      return;
+    }
     unawaited(
       _restoreWindow()
           .then((_) => _onMenuAction?.call(TrayMenuAction.show))
@@ -217,6 +234,9 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void onTrayIconRightMouseDown() {
+    if (!_interactionsEnabled) {
+      return;
+    }
     unawaited(
       _showContextMenu().catchError((Object e, StackTrace? s) {
         _logger.e(

@@ -53,6 +53,11 @@ class _MainWindowState extends State<MainWindow> {
             body: const SizedBox.shrink(),
           ),
           PaneItem(
+            icon: const Icon(FluentIcons.contact),
+            title: const Text(AppStrings.navAgentProfile),
+            body: const SizedBox.shrink(),
+          ),
+          PaneItem(
             icon: const Icon(FluentIcons.table),
             title: const Text(AppStrings.navPlayground),
             body: const SizedBox.shrink(),

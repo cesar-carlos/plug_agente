@@ -16,6 +16,20 @@ class ConfigFormController {
   final TextEditingController databaseNameController = TextEditingController();
   final TextEditingController hostController = TextEditingController();
   final TextEditingController portController = TextEditingController();
+  final TextEditingController nomeController = TextEditingController();
+  final TextEditingController nomeFantasiaController = TextEditingController();
+  final TextEditingController cnaeCnpjCpfController = TextEditingController();
+  final TextEditingController telefoneController = TextEditingController();
+  final TextEditingController celularController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController enderecoController = TextEditingController();
+  final TextEditingController numeroEnderecoController =
+      TextEditingController();
+  final TextEditingController bairroController = TextEditingController();
+  final TextEditingController cepController = TextEditingController();
+  final TextEditingController nomeMunicipioController = TextEditingController();
+  final TextEditingController ufMunicipioController = TextEditingController();
+  final TextEditingController observacaoController = TextEditingController();
 
   bool _fieldsInitialized = false;
   bool get fieldsInitialized => _fieldsInitialized;
@@ -56,6 +70,45 @@ class ConfigFormController {
     if (portController.text.isEmpty) {
       portController.text = config.port.toString();
     }
+    if (nomeController.text.isEmpty) {
+      nomeController.text = config.nome;
+    }
+    if (nomeFantasiaController.text.isEmpty) {
+      nomeFantasiaController.text = config.nomeFantasia;
+    }
+    if (cnaeCnpjCpfController.text.isEmpty) {
+      cnaeCnpjCpfController.text = config.cnaeCnpjCpf;
+    }
+    if (telefoneController.text.isEmpty) {
+      telefoneController.text = config.telefone;
+    }
+    if (celularController.text.isEmpty) {
+      celularController.text = config.celular;
+    }
+    if (emailController.text.isEmpty) {
+      emailController.text = config.email;
+    }
+    if (enderecoController.text.isEmpty) {
+      enderecoController.text = config.endereco;
+    }
+    if (numeroEnderecoController.text.isEmpty) {
+      numeroEnderecoController.text = config.numeroEndereco;
+    }
+    if (bairroController.text.isEmpty) {
+      bairroController.text = config.bairro;
+    }
+    if (cepController.text.isEmpty) {
+      cepController.text = config.cep;
+    }
+    if (nomeMunicipioController.text.isEmpty) {
+      nomeMunicipioController.text = config.nomeMunicipio;
+    }
+    if (ufMunicipioController.text.isEmpty) {
+      ufMunicipioController.text = config.ufMunicipio;
+    }
+    if (observacaoController.text.isEmpty) {
+      observacaoController.text = config.observacao;
+    }
 
     _fieldsInitialized = true;
   }
@@ -80,6 +133,19 @@ class ConfigFormController {
           ? null
           : authPasswordController.text.trim(),
     );
+    configProvider.updateNome(nomeController.text);
+    configProvider.updateNomeFantasia(nomeFantasiaController.text);
+    configProvider.updateCnaeCnpjCpf(cnaeCnpjCpfController.text);
+    configProvider.updateTelefone(telefoneController.text);
+    configProvider.updateCelular(celularController.text);
+    configProvider.updateEmail(emailController.text);
+    configProvider.updateEndereco(enderecoController.text);
+    configProvider.updateNumeroEndereco(numeroEnderecoController.text);
+    configProvider.updateBairro(bairroController.text);
+    configProvider.updateCep(cepController.text);
+    configProvider.updateNomeMunicipio(nomeMunicipioController.text);
+    configProvider.updateUfMunicipio(ufMunicipioController.text);
+    configProvider.updateObservacao(observacaoController.text);
   }
 
   void dispose() {
@@ -94,5 +160,18 @@ class ConfigFormController {
     databaseNameController.dispose();
     hostController.dispose();
     portController.dispose();
+    nomeController.dispose();
+    nomeFantasiaController.dispose();
+    cnaeCnpjCpfController.dispose();
+    telefoneController.dispose();
+    celularController.dispose();
+    emailController.dispose();
+    enderecoController.dispose();
+    numeroEnderecoController.dispose();
+    bairroController.dispose();
+    cepController.dispose();
+    nomeMunicipioController.dispose();
+    ufMunicipioController.dispose();
+    observacaoController.dispose();
   }
 }

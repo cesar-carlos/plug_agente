@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
+import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -227,6 +228,96 @@ class ConfigProvider extends ChangeNotifier {
   void updatePort(int port) {
     _ensureConfigExists();
     _currentConfig = _currentConfig!.copyWith(port: port);
+    notifyListeners();
+  }
+
+  void updateNome(String nome) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(nome: nome.trim());
+    notifyListeners();
+  }
+
+  void updateNomeFantasia(String nomeFantasia) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(
+      nomeFantasia: nomeFantasia.trim(),
+    );
+    notifyListeners();
+  }
+
+  void updateCnaeCnpjCpf(String cnaeCnpjCpf) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(cnaeCnpjCpf: cnaeCnpjCpf.trim());
+    notifyListeners();
+  }
+
+  void updateTelefone(String telefone) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(telefone: telefone.trim());
+    notifyListeners();
+  }
+
+  void updateCelular(String celular) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(celular: celular.trim());
+    notifyListeners();
+  }
+
+  void updateEmail(String email) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(email: email.trim());
+    notifyListeners();
+  }
+
+  void updateEndereco(String endereco) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(endereco: endereco.trim());
+    notifyListeners();
+  }
+
+  void updateNumeroEndereco(String numeroEndereco) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(
+      numeroEndereco: numeroEndereco.trim(),
+    );
+    notifyListeners();
+  }
+
+  void updateBairro(String bairro) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(bairro: bairro.trim());
+    notifyListeners();
+  }
+
+  void updateCep(String cep) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(cep: cep.trim());
+    notifyListeners();
+  }
+
+  void updateNomeMunicipio(String nomeMunicipio) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(
+      nomeMunicipio: nomeMunicipio.trim(),
+    );
+    notifyListeners();
+  }
+
+  void updateUfMunicipio(String ufMunicipio) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(ufMunicipio: ufMunicipio.trim());
+    notifyListeners();
+  }
+
+  void updateObservacao(String observacao) {
+    _ensureConfigExists();
+    _currentConfig = _currentConfig!.copyWith(observacao: observacao.trim());
+    notifyListeners();
+  }
+
+  void updateAgentProfile(AgentProfile profile) {
+    _ensureConfigExists();
+    _currentConfig = profile.applyToConfig(_currentConfig!);
     notifyListeners();
   }
 
