@@ -211,6 +211,59 @@ jobs:
           echo "signature=${SIG}" >> $GITHUB_OUTPUT
           rm -f dsa_priv.pem setup.exe
 
+      - name: Validate DSA key pair
+        env:
+          DSA_PRIVATE_KEY: ${{ secrets.DSA_PRIVATE_KEY }}
+        run: |
+          python3 << 'PYEOF'
+          from pathlib import Path
+          import os
+          import sys
+
+          from cryptography.hazmat.primitives import serialization
+
+          private_key_pem = os.environ.get("DSA_PRIVATE_KEY", "").strip()
+          if not private_key_pem:
+              print("DSA key pair validation skipped: DSA_PRIVATE_KEY not configured.")
+              sys.exit(0)
+
+          public_key_path = Path("dsa_pub.pem")
+          if not public_key_path.exists():
+              print("Error: dsa_pub.pem not found in repository root.")
+              sys.exit(1)
+
+          try:
+              private_key = serialization.load_pem_private_key(
+                  private_key_pem.encode("utf-8"),
+                  password=None,
+              )
+              derived_public_pem = private_key.public_key().public_bytes(
+                  encoding=serialization.Encoding.PEM,
+                  format=serialization.PublicFormat.SubjectPublicKeyInfo,
+              )
+          except Exception as error:
+              print(f"Error: unable to derive public key from DSA_PRIVATE_KEY: {error}")
+              sys.exit(1)
+
+          committed_public_pem = public_key_path.read_bytes()
+
+          def normalize_pem(value: bytes) -> bytes:
+              return b"\n".join(
+                  line.strip()
+                  for line in value.replace(b"\r\n", b"\n").split(b"\n")
+                  if line.strip()
+              )
+
+          if normalize_pem(derived_public_pem) != normalize_pem(committed_public_pem):
+              print(
+                  "Error: DSA_PRIVATE_KEY does not match committed dsa_pub.pem. "
+                  "Update the GitHub secret or restore the matching public key."
+              )
+              sys.exit(1)
+
+          print("DSA key pair validation passed.")
+          PYEOF
+
       - name: Enforce signature policy
         id: signature_policy
         env:
@@ -259,7 +312,6 @@ jobs:
           from datetime import datetime, timezone
           import os
           import sys
-          import html
 
           TAG_NAME = "${{ steps.release.outputs.tag }}"
           VERSION_SHORT = "${{ steps.release.outputs.version }}"
@@ -302,7 +354,7 @@ jobs:
           ET.SubElement(item, "pubDate").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
           desc = ET.SubElement(item, "description")
           if RELEASE_BODY:
-              desc.text = html.escape(RELEASE_BODY[:2000])
+              desc.text = RELEASE_BODY[:2000]
           else:
               desc.text = f"Nova Versão {VERSION} - Atualização automática via GitHub Release."
 

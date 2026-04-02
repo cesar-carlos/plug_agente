@@ -19,7 +19,8 @@ Compatibilidade de sistema:
 - **Windows 8/8.1 e Windows Server 2012+**: suporte degradado (sem tray, notificações, auto-update)
 - **Abaixo de Windows 8 / Server 2012**: não suportado
 
-Consulte [requirements.md](requirements.md) para requisitos detalhados e checklist de homologação.
+Consulte [requirements.md](requirements.md) para requisitos detalhados,
+compatibilidade, validação pós-instalação e notas sobre ODBC/PATH.
 
 ---
 
@@ -83,7 +84,8 @@ Selecione as opções desejadas e clique em **"Avançar"**
 Se você utilizar o **Monitor de Portas** (PlugPortMon) para impressão:
 
 1. Execute o script `install_monitor.bat` como administrador (na pasta de instalação ou na raiz do projeto)
-2. Siga as instruções em [path_setup.md](path_setup.md) se necessário
+2. Se precisar usar ferramentas de linha de comando do banco, revise a seção
+   **PATH e ferramentas CLI (opcional)** em [requirements.md](requirements.md)
 3. Crie a impressora no Windows apontando para a porta `PlugPortMon`
 
 ---
@@ -137,6 +139,12 @@ desinstalar o aplicativo principal.
 1. Verifique se o Visual C++ Redistributables está instalado
 2. Verifique os logs em: `C:\ProgramData\PlugAgente\logs\`
 3. Tente executar como administrador
+
+### "Driver ODBC ou ferramenta do banco não foi encontrada"
+
+1. Confirme se o driver ODBC está instalado em **Fontes de Dados ODBC (64 bits)**
+2. Revise a seção **PATH e ferramentas CLI (opcional)** em [requirements.md](requirements.md)
+3. Reabra o terminal ou a sessão do Windows após alterar o PATH
 
 ---
 

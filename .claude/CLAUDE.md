@@ -4,18 +4,21 @@ This file is the entry point for Claude Code in this repository.
 
 ## Source of Truth
 
-The canonical coding rules for this project live in:
+Canonical rules live in `../.cursor/rules/`.
 
-- `../.cursor/rules/`
+1. **`../.cursor/rules/rules_index.mdc`** — authoritative index: it lists every
+   `.mdc` rule file by category and defines coordination between topics. Start
+   here.
+2. **`../.cursor/rules/readme.md`** — how the rule set is organized and reused
+   across projects.
 
-Start with:
-
-- `../.cursor/rules/rules_index.mdc`
-
-Use that index to route to the correct rule file instead of duplicating or
+Use the index to pick the right rule file instead of duplicating or
 reinterpreting rules from memory.
 
 ## Rule Categories
+
+The list below mirrors `../.cursor/rules/rules_index.mdc`. If this section and
+the index ever diverge, follow **`rules_index.mdc`**.
 
 ### Universal
 
@@ -54,4 +57,3 @@ Use these for repository-specific decisions:
 ## Notes
 
 - The correct folder is `../.cursor/rules`, not `../.cursor/roles`
-- `../.cursor/rules/readme.md` explains how the rule set is organized and reused

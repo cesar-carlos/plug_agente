@@ -1,44 +1,53 @@
 # Instalação - Plug Agente
 
-Índice da documentação de instalação, release e atualização automática.
+Índice canônico da documentação de instalação, empacotamento Windows e
+atualização automática.
 
-## Compatibilidade (resumo)
+## Compatibilidade
 
-- **Windows 10/11**: suporte completo (todos os recursos)
-- **Windows 8/8.1 e Windows Server 2012+**: suporte degradado (sem tray, notificações, auto-update)
+- **Windows 10/11**: suporte completo
+- **Windows 8/8.1 e Windows Server 2012+**: suporte degradado
 - **Abaixo de Windows 8 / Server 2012**: não suportado
 
-Detalhes e checklist em [requirements.md](requirements.md).
+Checklist e matriz detalhada em [requirements.md](requirements.md).
 
-## Documentos para operação
+## Fluxos mais comuns
 
-| Documento                                      | Quando usar                                                      |
-| ---------------------------------------------- | ---------------------------------------------------------------- |
-| [installation_guide.md](installation_guide.md) | Instalar/desinstalar no ambiente do cliente                      |
-| [requirements.md](requirements.md)             | Validar requisitos mínimos e matriz de compatibilidade           |
-| [path_setup.md](path_setup.md)                 | Ajustar PATH apenas se driver/ferramenta ODBC não for encontrada |
+### Instalar no cliente
 
-## Documentos para release/update
+1. Validar ambiente em [requirements.md](requirements.md)
+2. Executar os passos de [installation_guide.md](installation_guide.md)
+3. Usar [install_monitor.bat](../../install_monitor.bat) apenas se houver
+   necessidade de PlugPortMon
 
-| Documento                                        | Quando usar                                     |
-| ------------------------------------------------ | ----------------------------------------------- |
-| [release_guide.md](release_guide.md)             | Criar e publicar release com instalador         |
-| [version_strategy.md](version_strategy.md)       | Regras de versionamento e tags                  |
-| [auto_update_setup.md](auto_update_setup.md)     | Configurar feed/appcast e assinatura DSA        |
-| [testing_auto_update.md](testing_auto_update.md) | Validar fluxo automático e silencioso de update |
+### Gerar instalador para release
 
-## Scripts
+1. Revisar versionamento em [version_strategy.md](version_strategy.md)
+2. Executar `python installer/build_installer.py`
+3. Publicar conforme [release_guide.md](release_guide.md)
 
-| Script                                           | Uso                                                |
-| ------------------------------------------------ | -------------------------------------------------- |
-| [install_monitor.bat](../../install_monitor.bat) | Instalar PlugPortMon (executar como administrador) |
+Saída esperada: `installer/dist/PlugAgente-Setup-{versão}.exe`.
 
-## Build do instalador
+## Documentos operacionais
 
-```bash
-python installer/update_version.py
-flutter build windows --release
-python installer/build_installer.py
-```
+| Documento                                      | Quando usar                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------- |
+| [installation_guide.md](installation_guide.md) | Instalação, desinstalação e validação básica no Windows        |
+| [requirements.md](requirements.md)             | Pré-requisitos, compatibilidade e notas opcionais de ODBC/PATH |
 
-Saída: `installer/dist/PlugAgente-Setup-{versão}.exe`.
+## Documentos de release e update
+
+| Documento                                        | Quando usar                                          |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| [release_guide.md](release_guide.md)             | Checklist operacional para build, tag e publicação   |
+| [version_strategy.md](version_strategy.md)       | Fonte de verdade para versão e convenção de tags     |
+| [auto_update_setup.md](auto_update_setup.md)     | Configuração do feed, appcast e assinatura DSA       |
+| [testing_auto_update.md](testing_auto_update.md) | Validação do fluxo automático e silencioso de update |
+
+## Scripts úteis
+
+| Script                                           | Uso                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `python installer/build_installer.py`            | Fluxo recomendado: sincroniza versão, faz build Flutter e compila o Inno Setup |
+| `python installer/update_version.py`             | Fluxo manual/avançado para sincronizar versão sem gerar instalador             |
+| [install_monitor.bat](../../install_monitor.bat) | Instalar PlugPortMon como administrador                                        |

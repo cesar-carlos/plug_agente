@@ -72,11 +72,10 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 
 ### Fluxo de Trabalho Automatizado
 
-1. **Build do aplicativo:** `flutter build windows --release`
-2. **Criar instalador:** `python installer/build_installer.py`
-3. **Criar release no GitHub:** Consulte [release_guide.md](release_guide.md)
-4. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
-5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
+1. **Gerar build Windows e instalador:** `python installer/build_installer.py`
+2. **Criar release no GitHub:** Consulte [release_guide.md](release_guide.md)
+3. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
+4. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
 
 ### 4. Assinatura DSA (obrigatória para todos os releases)
 
@@ -102,9 +101,14 @@ No workflow atual, qualquer release (inclusive pre-release) falha se a assinatur
    - Nome: `DSA_PRIVATE_KEY`
    - Valor: conteúdo completo do arquivo `dsa_priv.pem`
 
+   O workflow valida se esse secret corresponde ao `dsa_pub.pem` versionado e
+   embutido em `windows/runner/Runner.rc`.
+
 4. **Backup da chave privada** – guarde `dsa_priv.pem` em local seguro. Sem ela, usuários não poderão atualizar.
 
-Com o secret configurado, o workflow `update-appcast` assina automaticamente cada release e adiciona `sparkle:dsaSignature` ao appcast.
+Com o secret configurado, o workflow `update-appcast` assina automaticamente
+cada release, valida o par de chaves e adiciona `sparkle:dsaSignature` ao
+appcast.
 
 ### Estrutura do appcast.xml
 

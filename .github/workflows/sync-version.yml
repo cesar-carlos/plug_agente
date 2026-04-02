@@ -1,16 +1,21 @@
-name: Sync Version on pubspec Change
+name: Validate Version Sync
 
 on:
   push:
     branches: [main]
     paths:
       - 'pubspec.yaml'
+      - 'installer/setup.iss'
+      - 'lib/core/constants/app_version.g.dart'
+  pull_request:
+    paths:
+      - 'pubspec.yaml'
+      - 'installer/setup.iss'
+      - 'lib/core/constants/app_version.g.dart'
 
 jobs:
-  sync-version:
+  validate-version-sync:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,23 +25,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Sync version
+      - name: Regenerate synced version files
         run: python installer/update_version.py
 
-      - name: Check for changes
-        id: changes
+      - name: Validate committed files are synchronized
         run: |
-          if git diff --quiet installer/setup.iss lib/core/constants/app_version.g.dart; then
-            echo "changed=false" >> $GITHUB_OUTPUT
+          if git diff --quiet -- installer/setup.iss lib/core/constants/app_version.g.dart; then
+            echo "Version files are synchronized."
           else
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Error: installer/setup.iss and/or lib/core/constants/app_version.g.dart are out of sync with pubspec.yaml."
+            echo "Run: python installer/update_version.py"
+            echo "Then commit the generated changes before merging or tagging a release."
+            git diff -- installer/setup.iss lib/core/constants/app_version.g.dart
+            exit 1
           fi
-
-      - name: Commit and push
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add installer/setup.iss lib/core/constants/app_version.g.dart
-          git commit -m "chore: sync version from pubspec.yaml"
-          git push origin main

@@ -60,6 +60,26 @@ O Plug Agente utiliza ODBC para conexão com bancos de dados. É necessário:
 - **Driver ODBC** do banco de dados que você pretende conectar (SQL Server, PostgreSQL, MySQL, etc.)
 - Drivers ODBC geralmente vêm com a instalação do próprio banco ou podem ser baixados separadamente
 
+### PATH e ferramentas CLI (opcional)
+
+Em geral, não é necessário configurar `PATH` para o Plug Agente funcionar.
+Faça esse ajuste apenas se:
+
+- o driver ODBC não for encontrado automaticamente;
+- você precisar usar ferramentas de linha de comando relacionadas ao banco
+  (ex.: `sqlcmd`).
+
+Para verificar drivers instalados:
+
+1. Abra **Ferramentas Administrativas** > **Fontes de Dados ODBC (64 bits)**
+2. Na aba **Drivers**, confirme se o driver do banco está listado
+
+Exemplo para SQL Server com `sqlcmd`:
+
+1. Instale o [SQL Server Command Line Utilities](https://go.microsoft.com/fwlink/?linkid=2230791)
+2. Adicione ao `PATH` do sistema um diretório como `C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn`
+3. Reabra o terminal após a alteração
+
 ### Rede (opcional)
 
 - **Socket.IO**: Conexão com servidor remoto (se configurado)

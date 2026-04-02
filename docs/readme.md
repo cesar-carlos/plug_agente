@@ -17,7 +17,6 @@ docs/
 |  |- readme.md
 |  |- installation_guide.md
 |  |- requirements.md
-|  |- path_setup.md
 |  |- release_guide.md
 |  |- auto_update_setup.md
 |  |- testing_auto_update.md

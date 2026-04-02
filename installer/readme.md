@@ -28,26 +28,28 @@ installer/
 python installer/build_installer.py
 ```
 
-Executa automaticamente: `update_version.py` → `flutter build windows --release` (com `--dart-define=AUTO_UPDATE_FEED_URL=...` quando disponível no `.env`) → compilação Inno Setup.
+Executa automaticamente: `update_version.py` → `flutter build windows --release`
+(com `--dart-define=AUTO_UPDATE_FEED_URL=...` quando disponível no `.env`) →
+compilação Inno Setup.
 
-### Passo a passo
+### Fluxo manual/depuração
 
 ```bash
-# 1. Sincronizar versão (pubspec.yaml → setup.iss)
+# 1. Sincronizar versão (pubspec.yaml → setup.iss + app_version.g.dart)
 python installer/update_version.py
 
 # 2. Build Flutter
 flutter build windows --release
 
-# 3. Compilar instalador
-python installer/build_installer.py
+# 3. Compilar instalador diretamente
+ISCC installer/setup.iss
 ```
 
 ## Scripts
 
 | Script | Descrição |
 |--------|-----------|
-| `update_version.py` | Lê `version` do `pubspec.yaml` e atualiza `setup.iss` |
+| `update_version.py` | Lê `version` do `pubspec.yaml` e atualiza `setup.iss` e `app_version.g.dart` |
 | `build_installer.py` | Orquestra: update_version → flutter build (com `--dart-define` do feed) → Inno Setup |
 
 ## Saída
@@ -62,10 +64,18 @@ O nome segue o padrão esperado pelo workflow **Update Appcast on Release** (`.g
 
 ## Integração com release e auto-update
 
-1. **Versão**: definida em `pubspec.yaml`; `update_version.py` propaga para `setup.iss`.
-2. **Release**: após criar o instalador, publique no GitHub com tag `v{versão}` e anexe o `.exe`.
-3. **Appcast**: o workflow atualiza `appcast.xml` automaticamente; clientes recebem update na próxima checagem (1h) ou via botão manual.
-4. **Assinatura DSA** (obrigatória em qualquer release): consulte [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
+1. **Versão**: definida em `pubspec.yaml`; `update_version.py` propaga para
+   `setup.iss` e `app_version.g.dart`.
+2. **Release**: após criar o instalador, publique no GitHub com tag
+   `v{versão}` e anexe o `.exe`.
+3. **Appcast**: o workflow atualiza `appcast.xml` automaticamente; clientes
+   recebem update na próxima checagem (1h) ou via botão manual.
+4. **Assinatura DSA**: obrigatória em qualquer release. Consulte
+   [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
+
+Antes de criar a tag, garanta que `setup.iss` e `app_version.g.dart` já foram
+commitados junto com a mudança de `pubspec.yaml`; o CI valida esse sincronismo
+e não corrige mais a branch automaticamente.
 
 ## Documentação relacionada
 
