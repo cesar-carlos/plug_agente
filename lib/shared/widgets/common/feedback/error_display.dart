@@ -94,22 +94,23 @@ class ErrorDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recoverable = _isRecoverable();
+    final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.1),
+        color: feedbackColors.background,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        border: Border.all(color: feedbackColors.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 FluentIcons.error_badge,
-                color: AppColors.error,
+                color: feedbackColors.accent,
                 size: 20,
               ),
               const SizedBox(width: AppSpacing.md),
@@ -117,7 +118,7 @@ class ErrorDisplay extends StatelessWidget {
                 child: Text(
                   _getTitle(),
                   style: context.bodyStrong.copyWith(
-                    color: AppColors.error,
+                    color: feedbackColors.accent,
                   ),
                 ),
               ),

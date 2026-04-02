@@ -446,10 +446,10 @@ class _QueryErrorState extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   FluentIcons.error_badge,
                   size: 64,
-                  color: AppColors.error,
+                  color: context.appColors.error,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(

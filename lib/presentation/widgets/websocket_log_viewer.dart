@@ -165,6 +165,7 @@ class _AuthorizationSummaryCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final colors = context.appColors;
     final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
     final missingPermissionRate =
         (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
@@ -194,17 +195,17 @@ class _AuthorizationSummaryCard extends StatelessWidget {
           _SummaryChip(
             label: AppStrings.wsLogAllowed,
             value: summary!.totalAuthorized.toString(),
-            valueColor: Colors.green,
+            valueColor: colors.success,
           ),
           _SummaryChip(
             label: AppStrings.wsLogDenied,
             value: summary!.totalDenied.toString(),
-            valueColor: summary!.totalDenied > 0 ? Colors.red : null,
+            valueColor: summary!.totalDenied > 0 ? colors.error : null,
           ),
           _SummaryChip(
             label: AppStrings.wsLogDenialRate,
             value: '$denialRate%',
-            valueColor: summary!.totalDenied > 0 ? Colors.red : null,
+            valueColor: summary!.totalDenied > 0 ? colors.error : null,
           ),
           _SummaryChip(
             label: AppStrings.wsLogP95Latency,
@@ -276,7 +277,7 @@ class _MessageItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final color = _resolveColor(theme, message.direction);
+    final color = _resolveColor(context, message.direction);
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -331,17 +332,18 @@ class _MessageItem extends StatelessWidget {
     );
   }
 
-  Color _resolveColor(FluentThemeData theme, String direction) {
+  Color _resolveColor(BuildContext context, String direction) {
+    final colors = context.appColors;
     if (direction == 'SENT') {
-      return theme.accentColor;
+      return colors.brand;
     }
     if (direction == 'AUTH') {
-      return Colors.orange;
+      return colors.warning;
     }
     if (direction == 'ERROR') {
-      return Colors.red;
+      return colors.error;
     }
 
-    return theme.brightness == Brightness.dark ? Colors.white : Colors.black;
+    return colors.textPrimary;
   }
 }

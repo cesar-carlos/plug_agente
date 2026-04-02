@@ -180,7 +180,7 @@ class _AppDataGridHeader extends StatelessWidget {
                   alignment: col.alignment,
                   child: Text(
                     col.label,
-                    style: theme.typography.bodyStrong,
+                    style: context.bodyStrong,
                   ),
                 ),
               ),

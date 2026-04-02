@@ -46,7 +46,8 @@ class _ClientTokenRuleOverlay extends StatefulWidget {
   final ClientTokenRuleDraft? initialRule;
 
   @override
-  State<_ClientTokenRuleOverlay> createState() => _ClientTokenRuleOverlayState();
+  State<_ClientTokenRuleOverlay> createState() =>
+      _ClientTokenRuleOverlayState();
 }
 
 class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
@@ -103,7 +104,9 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint ? _ruleDialogWidth : screenWidth * 0.9;
+    final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint
+        ? _ruleDialogWidth
+        : screenWidth * 0.9;
 
     return Center(
       child: ConstrainedBox(
@@ -120,8 +123,10 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _isEditing ? AppStrings.ctDialogEditRuleTitle : AppStrings.ctDialogAddRuleTitle,
-                style: theme.typography.subtitle,
+                _isEditing
+                    ? AppStrings.ctDialogEditRuleTitle
+                    : AppStrings.ctDialogAddRuleTitle,
+                style: context.sectionTitle,
               ),
               const SizedBox(height: AppSpacing.lg),
               Row(

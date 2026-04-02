@@ -17,7 +17,6 @@ class ConfigNavigationTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
     return Container(
       decoration: BoxDecoration(
         color: FluentTheme.of(context).cardColor,
@@ -32,7 +31,7 @@ class ConfigNavigationTabs extends StatelessWidget {
             isSelected: currentPage == 0,
             onTap: onGeneralTabTap,
           ),
-          _TabSeparator(color: theme.resources.controlStrokeColorDefault),
+          const _TabSeparator(),
           _TabButton(
             label: AppStrings.configTabWebSocket,
             icon: FluentIcons.plug_connected,
@@ -60,9 +59,13 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    final backgroundColor = isSelected ? AppColors.primary.withValues(alpha: 0.2) : Colors.transparent;
-    final textColor = isSelected ? AppColors.primary : theme.resources.textFillColorPrimary;
+    final colors = context.appColors;
+    final backgroundColor = isSelected
+        ? colors.selectedFill
+        : Colors.transparent;
+    final textColor = isSelected
+        ? colors.selectedForeground
+        : colors.textPrimary;
 
     return Expanded(
       child: GestureDetector(
@@ -87,7 +90,9 @@ class _TabButton extends StatelessWidget {
                   label,
                   style: context.bodyText.copyWith(
                     color: textColor,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -101,17 +106,16 @@ class _TabButton extends StatelessWidget {
 }
 
 class _TabSeparator extends StatelessWidget {
-  const _TabSeparator({required this.color});
-
-  final Color color;
+  const _TabSeparator();
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       width: 1,
       height: AppSpacing.md + 2,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs / 2),
-      color: color.withValues(alpha: 0.4),
+      color: colors.border.withValues(alpha: 0.4),
     );
   }
 }

@@ -697,7 +697,7 @@ class _AgentProfileSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: FluentTheme.of(context).typography.subtitle),
+        Text(title, style: context.sectionTitle),
         const SizedBox(height: AppSpacing.md),
         child,
       ],

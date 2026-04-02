@@ -4,7 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 /// Advanced diagnostics toggles (may log sensitive SQL). Requires dependency
@@ -13,7 +13,8 @@ class DiagnosticsConfigSection extends StatefulWidget {
   const DiagnosticsConfigSection({super.key});
 
   @override
-  State<DiagnosticsConfigSection> createState() => _DiagnosticsConfigSectionState();
+  State<DiagnosticsConfigSection> createState() =>
+      _DiagnosticsConfigSectionState();
 }
 
 class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
@@ -76,7 +77,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     AppStrings.diagnosticsOdbcPaginatedSqlLogDescription,
-                    style: FluentTheme.of(context).typography.caption,
+                    style: context.captionText,
                   ),
                 ],
               ),

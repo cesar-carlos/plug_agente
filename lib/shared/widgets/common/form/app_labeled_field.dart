@@ -17,6 +17,8 @@ class AppLabeledField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trimmed = errorText?.trim();
+    final colors = context.appColors;
+
     if (trimmed != null && trimmed.isNotEmpty) {
       return InfoLabel(
         label: label,
@@ -30,7 +32,7 @@ class AppLabeledField extends StatelessWidget {
             Text(
               trimmed,
               style: context.bodyMuted.copyWith(
-                color: AppColors.error,
+                color: colors.error,
                 fontSize: 12,
               ),
             ),

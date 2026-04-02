@@ -15,28 +15,27 @@ class ErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    final textColor = theme.typography.body?.color;
+    final colors = context.appColors;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(FluentIcons.error_badge, color: AppColors.error, size: 48),
+          Icon(FluentIcons.error_badge, color: colors.error, size: 48),
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
             textAlign: TextAlign.center,
             style: context.sectionTitle.copyWith(
-              color: AppColors.error,
+              color: colors.error,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: context.bodyText.copyWith(color: textColor),
+            style: context.bodyText,
           ),
           if (onRetry != null) ...[
             const SizedBox(height: AppSpacing.lg),

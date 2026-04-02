@@ -88,7 +88,9 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
               label: AppStrings.ctLabelStatus,
-              value: token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
+              value: token.isRevoked
+                  ? AppStrings.ctStatusRevoked
+                  : AppStrings.ctStatusActive,
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
@@ -103,14 +105,14 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               '${AppStrings.ctLabelPayload}:',
-              style: FluentTheme.of(context).typography.bodyStrong,
+              style: context.bodyStrong,
             ),
             const SizedBox(height: AppSpacing.xs),
             _CodeSurface(text: _buildPayloadLabel()),
             const SizedBox(height: AppSpacing.md),
             Text(
               '${AppStrings.ctLabelRules}:',
-              style: FluentTheme.of(context).typography.bodyStrong,
+              style: context.bodyStrong,
             ),
             const SizedBox(height: AppSpacing.xs),
             _RulesSurface(rules: token.rules),
@@ -147,7 +149,7 @@ class _DetailField extends StatelessWidget {
           width: 140,
           child: Text(
             '$label:',
-            style: FluentTheme.of(context).typography.bodyStrong,
+            style: context.bodyStrong,
           ),
         ),
         Expanded(
@@ -257,7 +259,7 @@ class _RuleTile extends StatelessWidget {
         children: [
           Text(
             '${rule.resource.resourceType.name}: ${rule.resource.name}',
-            style: FluentTheme.of(context).typography.bodyStrong,
+            style: context.bodyStrong,
           ),
           const SizedBox(height: AppSpacing.xs),
           Text('${AppStrings.ctRuleFieldEffect}: ${rule.effect.name}'),

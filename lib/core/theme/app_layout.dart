@@ -33,9 +33,16 @@ class AppLayout {
       );
     }
 
+    if (width >= compactBreakpoint) {
+      return const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      );
+    }
+
     return const EdgeInsets.symmetric(
-      horizontal: AppSpacing.sm,
-      vertical: AppSpacing.sm,
+      horizontal: AppSpacing.xs,
+      vertical: AppSpacing.xs,
     );
   }
 

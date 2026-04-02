@@ -13,6 +13,7 @@ class ConnectionStatusWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ConnectionProvider>(
       builder: (context, connectionProvider, child) {
+        final colors = context.appColors;
         IconData icon;
         Color color;
         String statusText;
@@ -20,23 +21,23 @@ class ConnectionStatusWidget extends StatelessWidget {
         switch (connectionProvider.status) {
           case ConnectionStatus.connected:
             icon = FluentIcons.check_mark;
-            color = AppColors.success;
+            color = colors.success;
             statusText = AppStrings.connectionStatusHubConnected;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
-            color = AppColors.warning;
+            color = colors.warning;
             statusText = AppStrings.connectionStatusHubConnecting;
           case ConnectionStatus.reconnecting:
             icon = FluentIcons.sync;
-            color = AppColors.warning;
+            color = colors.warning;
             statusText = AppStrings.connectionStatusHubReconnecting;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
-            color = AppColors.error;
+            color = colors.error;
             statusText = AppStrings.connectionStatusHubError;
           case ConnectionStatus.disconnected:
             icon = FluentIcons.circle_pause;
-            color = AppColors.disabled;
+            color = colors.disabled;
             statusText = AppStrings.connectionStatusHubDisconnected;
         }
 
@@ -78,8 +79,8 @@ class ConnectionStatusWidget extends StatelessWidget {
                         : AppStrings.connectionStatusDatabaseDisconnected,
                     style: context.bodyText.copyWith(
                       color: connectionProvider.isDbConnected
-                          ? AppColors.success
-                          : AppColors.disabled,
+                          ? colors.success
+                          : colors.disabled,
                     ),
                   ),
                 ),

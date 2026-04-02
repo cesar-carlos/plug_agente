@@ -20,9 +20,8 @@ class SqlVisualIdentity {
     horizontal: AppSpacing.sm,
     vertical: 2,
   );
-  static const EdgeInsets queryResultDataGridHeaderPadding =
-      EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      );
+  static const EdgeInsets queryResultDataGridHeaderPadding = EdgeInsets.symmetric(
+    horizontal: AppSpacing.sm,
+    vertical: AppSpacing.xs,
+  );
 }

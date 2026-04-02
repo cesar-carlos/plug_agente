@@ -104,31 +104,32 @@ class MessageModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color accentColor;
+    final colors = context.appColors;
+    AppFeedbackColors feedbackColors;
     IconData iconData;
 
     switch (type) {
       case MessageType.success:
-        accentColor = AppColors.success;
+        feedbackColors = colors.feedback(AppFeedbackTone.success);
         iconData = FluentIcons.completed_solid;
       case MessageType.warning:
-        accentColor = AppColors.warning;
+        feedbackColors = colors.feedback(AppFeedbackTone.warning);
         iconData = FluentIcons.warning;
       case MessageType.error:
-        accentColor = AppColors.error;
+        feedbackColors = colors.feedback(AppFeedbackTone.error);
         iconData = FluentIcons.error_badge;
       case MessageType.confirmation:
-        accentColor = AppColors.primary;
+        feedbackColors = colors.feedback(AppFeedbackTone.info);
         iconData = FluentIcons.help;
       case MessageType.info:
-        accentColor = AppColors.primary;
+        feedbackColors = colors.feedback(AppFeedbackTone.info);
         iconData = FluentIcons.info;
     }
 
     return ContentDialog(
       title: Row(
         children: [
-          Icon(iconData, color: accentColor, size: 24),
+          Icon(iconData, color: feedbackColors.accent, size: 24),
           if (title != null) ...[
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -161,11 +162,14 @@ class MessageModal extends StatelessWidget {
           ],
         ),
       ),
-      actions: _buildActions(context, accentColor),
+      actions: _buildActions(context, feedbackColors),
     );
   }
 
-  List<Widget> _buildActions(BuildContext context, Color accentColor) {
+  List<Widget> _buildActions(
+    BuildContext context,
+    AppFeedbackColors feedbackColors,
+  ) {
     final actions = <Widget>[];
 
     if (onCancel != null ||
@@ -190,7 +194,7 @@ class MessageModal extends StatelessWidget {
     actions.add(
       FilledButton(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.all(accentColor),
+          backgroundColor: WidgetStateProperty.all(feedbackColors.accent),
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),

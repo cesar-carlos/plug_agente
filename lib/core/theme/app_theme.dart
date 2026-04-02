@@ -11,30 +11,50 @@ class AppTheme {
       'darkest': Color(0xFF003D6B),
       'darker': Color(0xFF005A9E),
       'dark': Color(0xFF006FC3),
-      'normal': AppColors.primary,
+      'normal': AppColors.brand,
       'light': Color(0xFF268CDB),
       'lighter': Color(0xFF63B3ED),
       'lightest': Color(0xFF9ED5F5),
     },
   );
 
-  static String get fontFamily => GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
+  static String get fontFamily =>
+      GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
 
-  static FluentThemeData light() {
-    return _buildTheme(brightness: Brightness.light);
-  }
+  static final FluentThemeData _lightTheme = _buildTheme(
+    brightness: Brightness.light,
+  );
+  static final FluentThemeData _darkTheme = _buildTheme(
+    brightness: Brightness.dark,
+  );
 
-  static FluentThemeData dark() {
-    return _buildTheme(brightness: Brightness.dark);
-  }
+  static FluentThemeData light() => _lightTheme;
+
+  static FluentThemeData dark() => _darkTheme;
 
   static FluentThemeData _buildTheme({
     required Brightness brightness,
   }) {
+    final resources = brightness.isLight
+        ? const ResourceDictionary.light()
+        : const ResourceDictionary.dark();
+    final tokens = AppThemeColors.fromTheme(
+      brightness: brightness,
+      accentColor: accentColor,
+      resources: resources,
+      cardColor: resources.cardBackgroundFillColorDefault,
+    );
+
     return FluentThemeData(
       brightness: brightness,
       fontFamily: fontFamily,
       accentColor: accentColor,
+      resources: resources,
+      scaffoldBackgroundColor: resources.layerOnAcrylicFillColorDefault,
+      micaBackgroundColor: resources.solidBackgroundFillColorBase,
+      cardColor: resources.cardBackgroundFillColorDefault,
+      selectionColor: tokens.selectedForeground,
+      extensions: [tokens],
       typography: AppTypography.fromBrightness(
         brightness: brightness,
         fontFamily: fontFamily,

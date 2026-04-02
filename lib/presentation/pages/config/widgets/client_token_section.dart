@@ -35,7 +35,8 @@ import 'package:provider/provider.dart';
 const _tokenClientFilterKey = 'client_token_list_client_filter';
 const _tokenStatusFilterKey = 'client_token_list_status_filter';
 const _tokenSortFilterKey = 'client_token_list_sort_filter';
-const _tokenAutoRefreshAfterCreateKey = 'client_token_auto_refresh_after_create';
+const _tokenAutoRefreshAfterCreateKey =
+    'client_token_auto_refresh_after_create';
 const _createTokenDialogMaxWidth = 1120.0;
 const _createTokenDialogHorizontalMargin = 40.0;
 const _createTokenDialogHeightFactor = 0.84;
@@ -61,10 +62,12 @@ class _CreateTokenDialogShell extends StatefulWidget {
   final double dialogOuterMaxHeight;
   final FluentThemeData theme;
   final bool isEditingToken;
-  final Widget Function(BuildContext context, ClientTokenProvider provider) body;
+  final Widget Function(BuildContext context, ClientTokenProvider provider)
+  body;
 
   @override
-  State<_CreateTokenDialogShell> createState() => _CreateTokenDialogShellState();
+  State<_CreateTokenDialogShell> createState() =>
+      _CreateTokenDialogShellState();
 }
 
 class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
@@ -109,17 +112,22 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
               ),
               child: Semantics(
                 namesRoute: true,
-                label: widget.isEditingToken ? AppStrings.ctDialogEditTokenTitle : AppStrings.ctDialogCreateTokenTitle,
+                label: widget.isEditingToken
+                    ? AppStrings.ctDialogEditTokenTitle
+                    : AppStrings.ctDialogCreateTokenTitle,
                 child: Card(
                   padding: const EdgeInsets.all(AppSpacing.lg),
-                  backgroundColor: widget.theme.resources.solidBackgroundFillColorBase,
+                  backgroundColor:
+                      widget.theme.resources.solidBackgroundFillColorBase,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.isEditingToken ? AppStrings.ctDialogEditTokenTitle : AppStrings.ctDialogCreateTokenTitle,
-                        style: widget.theme.typography.subtitle,
+                        widget.isEditingToken
+                            ? AppStrings.ctDialogEditTokenTitle
+                            : AppStrings.ctDialogCreateTokenTitle,
+                        style: context.sectionTitle,
                       ),
                       if (widget.isEditingToken) ...[
                         const SizedBox(height: AppSpacing.sm),
@@ -127,9 +135,13 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(AppSpacing.sm),
                           decoration: BoxDecoration(
-                            color: widget.theme.resources.subtleFillColorSecondary,
+                            color:
+                                widget.theme.resources.subtleFillColorSecondary,
                             border: Border.all(
-                              color: widget.theme.resources.controlStrokeColorDefault,
+                              color: widget
+                                  .theme
+                                  .resources
+                                  .controlStrokeColorDefault,
                             ),
                             borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
@@ -172,7 +184,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   final TextEditingController _clientIdController = TextEditingController();
   final TextEditingController _agentIdController = TextEditingController();
   final TextEditingController _payloadController = TextEditingController();
-  final TextEditingController _listClientFilterController = TextEditingController();
+  final TextEditingController _listClientFilterController =
+      TextEditingController();
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
   Timer? _clientFilterDebounceTimer;
   final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
@@ -282,7 +295,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       _editingTokenVersion = baseToken?.version;
       _clientIdController.text = baseToken?.clientId ?? _generateClientId();
       _agentIdController.text = baseToken?.agentId ?? '';
-      _payloadController.text = baseToken?.payload.isEmpty ?? true ? '' : jsonEncode(baseToken!.payload);
+      _payloadController.text = baseToken?.payload.isEmpty ?? true
+          ? ''
+          : jsonEncode(baseToken!.payload);
       _rules
         ..clear()
         ..addAll(initialRules);
@@ -309,22 +324,29 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             builder: (dialogContext, revision, child) {
               final mediaQuery = MediaQuery.of(dialogContext);
               final availableHeight =
-                  (mediaQuery.size.height - mediaQuery.padding.vertical - mediaQuery.viewInsets.bottom).clamp(
-                    0.0,
-                    double.infinity,
-                  );
-              final availableWidth = mediaQuery.size.width - (_createTokenDialogHorizontalMargin * 2);
+                  (mediaQuery.size.height -
+                          mediaQuery.padding.vertical -
+                          mediaQuery.viewInsets.bottom)
+                      .clamp(
+                        0.0,
+                        double.infinity,
+                      );
+              final availableWidth =
+                  mediaQuery.size.width -
+                  (_createTokenDialogHorizontalMargin * 2);
               final dialogWidth = availableWidth.clamp(
                 420.0,
                 _createTokenDialogMaxWidth,
               );
-              final factorHeight = availableHeight * _createTokenDialogHeightFactor;
+              final factorHeight =
+                  availableHeight * _createTokenDialogHeightFactor;
               final minPreferredOuter = min(
                 _createTokenDialogMinPreferredOuterHeight,
                 availableHeight,
               );
               final dialogOuterMaxHeight = max(factorHeight, minPreferredOuter);
-              final isCompact = dialogWidth < _createTokenDialogCompactWidthBreakpoint;
+              final isCompact =
+                  dialogWidth < _createTokenDialogCompactWidthBreakpoint;
               final theme = FluentTheme.of(dialogContext);
 
               return ChangeNotifierProvider<ClientTokenProvider>.value(
@@ -369,7 +391,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                             onAddRule: _openAddRuleModal,
                             onEditRule: _openEditRuleModal,
                             onDeleteRule: _removeRule,
-                            onDismissCreatedToken: tokenProvider.clearLastCreatedToken,
+                            onDismissCreatedToken:
+                                tokenProvider.clearLastCreatedToken,
                             onFieldSubmitted: _handleSubmitToken,
                           ),
                         ),
@@ -390,21 +413,22 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             },
           );
         },
-        transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: curved.drive(
-                Tween(begin: _createTokenScaleStart, end: 1),
-              ),
-              child: child,
-            ),
-          );
-        },
+        transitionBuilder:
+            (dialogContext, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOut,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: ScaleTransition(
+                  scale: curved.drive(
+                    Tween(begin: _createTokenScaleStart, end: 1),
+                  ),
+                  child: child,
+                ),
+              );
+            },
       );
     } finally {
       _isCreateTokenDialogOpen = false;
@@ -436,7 +460,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     final request = ClientTokenCreateRequest(
       clientId: clientId,
-      agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
+      agentId: _agentIdController.text.trim().isEmpty
+          ? null
+          : _agentIdController.text.trim(),
       payload: payloadResult,
       allTables: _allTables,
       allViews: _allViews,
@@ -574,7 +600,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       final sortFilter = _sortFilterFromStorage(
         prefs.getString(_tokenSortFilterKey),
       );
-      final autoRefreshAfterCreate = prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
+      final autoRefreshAfterCreate =
+          prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
       if (!mounted) {
         return;
       }
@@ -820,14 +847,17 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     icon: FluentIcons.refresh,
                     isPrimary: false,
                     isLoading: provider.isLoading,
-                    onPressed: () => provider.loadTokens(query: _buildListQuery()),
+                    onPressed: () =>
+                        provider.loadTokens(query: _buildListQuery()),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     label: _autoRefreshAfterCreate
                         ? AppStrings.ctButtonAutoRefreshOn
                         : AppStrings.ctButtonAutoRefreshOff,
-                    icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
+                    icon: _autoRefreshAfterCreate
+                        ? FluentIcons.sync
+                        : FluentIcons.pause,
                     isPrimary: false,
                     onPressed: () {
                       setState(() {
@@ -869,7 +899,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               const SizedBox(height: AppSpacing.sm),
               if (listedTokens.isEmpty && !provider.isLoading)
                 Text(
-                  _hasActiveFilters() ? AppStrings.ctMsgNoTokenMatchFilter : AppStrings.ctMsgNoTokenFound,
+                  _hasActiveFilters()
+                      ? AppStrings.ctMsgNoTokenMatchFilter
+                      : AppStrings.ctMsgNoTokenFound,
                 ),
               if (listedTokens.isNotEmpty)
                 SizedBox(
@@ -940,7 +972,8 @@ class _TokenFormErrorAnnouncer extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_TokenFormErrorAnnouncer> createState() => _TokenFormErrorAnnouncerState();
+  State<_TokenFormErrorAnnouncer> createState() =>
+      _TokenFormErrorAnnouncerState();
 }
 
 class _TokenFormErrorAnnouncerState extends State<_TokenFormErrorAnnouncer> {
@@ -1453,7 +1486,9 @@ class _TokenSummaryGrid extends StatelessWidget {
         SelectableText(token.clientId),
         SelectableText(token.id),
         Text(
-          token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
+          token.isRevoked
+              ? AppStrings.ctStatusRevoked
+              : AppStrings.ctStatusActive,
         ),
         Text(_buildScopeLabel(token)),
         Text(
@@ -1497,7 +1532,9 @@ class _TokenRowActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final revokeTooltip = token.isRevoked ? AppStrings.ctButtonRevoked : AppStrings.ctButtonRevoke;
+    final revokeTooltip = token.isRevoked
+        ? AppStrings.ctButtonRevoked
+        : AppStrings.ctButtonRevoke;
 
     return Wrap(
       spacing: AppSpacing.xs,

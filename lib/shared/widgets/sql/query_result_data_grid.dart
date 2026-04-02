@@ -52,9 +52,7 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
     if (metaChanged) {
       _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
     }
-    final dataChanged =
-        !identical(oldWidget.data, widget.data) ||
-        oldWidget.data.length != widget.data.length;
+    final dataChanged = !identical(oldWidget.data, widget.data) || oldWidget.data.length != widget.data.length;
     if (dataChanged) {
       _dataSource.updateData(widget.data);
     }
@@ -228,9 +226,7 @@ class _CachingQueryDataSource extends DataGridSource {
       return [];
     }
     final structureKey = _computeStructureKey();
-    if (_rowsCache != null &&
-        _cachedLength == _data.length &&
-        _structureKey == structureKey) {
+    if (_rowsCache != null && _cachedLength == _data.length && _structureKey == structureKey) {
       return _rowsCache!;
     }
     final keys = _data.first.keys.toList();

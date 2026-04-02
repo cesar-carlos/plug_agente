@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 
 class SettingsSurface extends StatelessWidget {
   const SettingsSurface({
@@ -41,7 +41,7 @@ class SettingsSectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: FluentTheme.of(context).typography.subtitle,
+      style: context.sectionTitle,
     );
   }
 }
@@ -90,7 +90,7 @@ class SettingsToggleTile extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: FluentTheme.of(context).typography.bodyStrong,
+            style: context.bodyStrong,
           ),
         ),
         ToggleSwitch(checked: value, onChanged: onChanged),
@@ -111,12 +111,11 @@ class SettingsKeyValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final typography = FluentTheme.of(context).typography;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: typography.bodyStrong),
-        Text(value, style: typography.body),
+        Text(label, style: context.bodyStrong),
+        Text(value, style: context.bodyText),
       ],
     );
   }

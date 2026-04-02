@@ -218,6 +218,8 @@ class _OdbcMetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,19 +272,19 @@ class _OdbcMetricsCard extends StatelessWidget {
                 icon: FluentIcons.check_mark,
                 label: AppStrings.dashboardMetricsSuccess,
                 value: summary.successfulQueries.toString(),
-                valueColor: AppColors.success,
+                valueColor: colors.success,
               ),
               _MetricChip(
                 icon: FluentIcons.error_badge,
                 label: AppStrings.dashboardMetricsErrors,
                 value: summary.failedQueries.toString(),
-                valueColor: summary.failedQueries > 0 ? AppColors.error : null,
+                valueColor: summary.failedQueries > 0 ? colors.error : null,
               ),
               _MetricChip(
                 icon: FluentIcons.completed_solid,
                 label: AppStrings.dashboardMetricsSuccessRate,
                 value: '${summary.successRate.toStringAsFixed(1)}%',
-                valueColor: AppColors.success,
+                valueColor: colors.success,
               ),
               _MetricChip(
                 icon: FluentIcons.clock,

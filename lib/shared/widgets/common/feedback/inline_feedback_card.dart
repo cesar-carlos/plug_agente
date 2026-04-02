@@ -20,12 +20,12 @@ class InlineFeedbackCard extends StatelessWidget {
   final Widget? content;
   final VoidCallback? onDismiss;
 
-  Color _borderColor() {
+  AppFeedbackTone _tone() {
     return switch (severity) {
-      InfoBarSeverity.success => AppColors.success,
-      InfoBarSeverity.warning => AppColors.warning,
-      InfoBarSeverity.error => AppColors.error,
-      InfoBarSeverity.info => AppColors.primary,
+      InfoBarSeverity.success => AppFeedbackTone.success,
+      InfoBarSeverity.warning => AppFeedbackTone.warning,
+      InfoBarSeverity.error => AppFeedbackTone.error,
+      InfoBarSeverity.info => AppFeedbackTone.info,
     };
   }
 
@@ -40,15 +40,15 @@ class InlineFeedbackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = _borderColor();
+    final feedbackColors = context.appColors.feedback(_tone());
     final bodyStyle = context.bodyText;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.08),
-        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+        color: feedbackColors.background,
+        border: Border.all(color: feedbackColors.border),
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
@@ -60,7 +60,7 @@ class InlineFeedbackCard extends StatelessWidget {
               Icon(
                 _icon(),
                 size: 18,
-                color: accentColor,
+                color: feedbackColors.accent,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -71,7 +71,7 @@ class InlineFeedbackCard extends StatelessWidget {
                       Text(
                         title!,
                         style: context.bodyStrong.copyWith(
-                          color: accentColor,
+                          color: feedbackColors.accent,
                         ),
                       ),
                     if (message != null)
@@ -79,7 +79,7 @@ class InlineFeedbackCard extends StatelessWidget {
                         message!,
                         style: bodyStyle.copyWith(
                           color: severity == InfoBarSeverity.error
-                              ? accentColor
+                              ? feedbackColors.foreground
                               : null,
                         ),
                       ),

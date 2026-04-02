@@ -19,12 +19,11 @@ class ConfigListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    final textColor = theme.typography.body?.color;
+    final colors = context.appColors;
 
     return Container(
       decoration: BoxDecoration(
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
+        color: isSelected ? colors.selectedFill : null,
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       padding: const EdgeInsets.symmetric(
@@ -38,7 +37,9 @@ class ConfigListItem extends StatelessWidget {
             title,
             style: context.bodyStrong.copyWith(
               fontWeight: FontWeight.w600,
-              color: isSelected ? AppColors.primary : textColor,
+              color: isSelected
+                  ? colors.selectedForeground
+                  : colors.textPrimary,
             ),
           ),
           if (subtitle != null)
@@ -46,8 +47,8 @@ class ConfigListItem extends StatelessWidget {
               subtitle!,
               style: context.bodyMuted.copyWith(
                 color: isSelected
-                    ? AppColors.primary.withValues(alpha: 0.7)
-                    : textColor?.withValues(alpha: 0.7),
+                    ? colors.selectedForeground
+                    : colors.textSecondary,
               ),
             ),
           if (trailing != null)
@@ -55,8 +56,8 @@ class ConfigListItem extends StatelessWidget {
               trailing!,
               style: context.bodyMuted.copyWith(
                 color: isSelected
-                    ? AppColors.primary.withValues(alpha: 0.7)
-                    : textColor?.withValues(alpha: 0.7),
+                    ? colors.selectedForeground
+                    : colors.textSecondary,
               ),
             ),
         ],

@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class GeneralConfigSection extends StatelessWidget {
@@ -45,7 +45,6 @@ class GeneralConfigSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -104,7 +103,7 @@ class GeneralConfigSection extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${AppStrings.gsCheckUpdatesWithDate}\n$lastUpdateCheck',
-                      style: theme.typography.body,
+                      style: context.bodyText,
                     ),
                   ),
                   IconButton(
@@ -116,7 +115,7 @@ class GeneralConfigSection extends StatelessWidget {
             else
               Text(
                 AppStrings.gsAutoUpdateNotSupported,
-                style: theme.typography.caption,
+                style: context.captionText,
               ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
@@ -150,30 +149,30 @@ class _StartupErrorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
+    final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
+        color: feedbackColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(
-          color: Colors.red.withValues(alpha: 0.3),
+          color: feedbackColors.border,
         ),
       ),
       child: Row(
         children: [
           Icon(
             FluentIcons.error_badge,
-            color: Colors.red,
+            color: feedbackColors.accent,
             size: 16,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               error,
-              style: theme.typography.caption?.copyWith(
-                color: Colors.red,
+              style: context.captionText.copyWith(
+                color: feedbackColors.accent,
               ),
             ),
           ),
@@ -182,9 +181,9 @@ class _StartupErrorMessage extends StatelessWidget {
             onPressed: onOpenSettings,
             style: ButtonStyle(
               backgroundColor: WidgetStateProperty.all(
-                Colors.red.withValues(alpha: 0.1),
+                feedbackColors.background,
               ),
-              foregroundColor: WidgetStateProperty.all(Colors.red),
+              foregroundColor: WidgetStateProperty.all(feedbackColors.accent),
               padding: WidgetStateProperty.all(
                 const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,
