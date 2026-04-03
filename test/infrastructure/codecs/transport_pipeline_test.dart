@@ -3,6 +3,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 
 void main() {
@@ -251,6 +254,192 @@ void main() {
         final frame = result.getOrThrow();
         expect(frame.cmp, equals('none'));
         expect(pipeline.receiveProcess(frame).getOrThrow(), equals(huge));
+      },
+    );
+
+    test('prepareSend keeps cmp none when compression mode is none', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+        compressionThreshold: 1,
+      );
+      final data = {'message': 'Hello World! ' * 100};
+      final frame = pipeline.prepareSend(data).getOrThrow();
+      expect(frame.cmp, equals('none'));
+      expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
+    });
+
+    test('receiveProcess accepts List<int> payload bytes', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final data = {'x': 1};
+      final prepared = pipeline.prepareSend(data).getOrThrow();
+      final listPayload = (prepared.payload as Uint8List).toList();
+      final frame = PayloadFrame(
+        schemaVersion: prepared.schemaVersion,
+        enc: prepared.enc,
+        cmp: prepared.cmp,
+        contentType: prepared.contentType,
+        originalSize: prepared.originalSize,
+        compressedSize: prepared.compressedSize,
+        payload: listPayload,
+        traceId: prepared.traceId,
+        requestId: prepared.requestId,
+      );
+
+      expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
+    });
+
+    test('receiveProcess fails when payload is not binary', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
+      final frame = PayloadFrame(
+        schemaVersion: prepared.schemaVersion,
+        enc: prepared.enc,
+        cmp: prepared.cmp,
+        contentType: prepared.contentType,
+        originalSize: prepared.originalSize,
+        compressedSize: prepared.compressedSize,
+        payload: 'not-bytes',
+        traceId: prepared.traceId,
+        requestId: prepared.requestId,
+      );
+
+      expect(pipeline.receiveProcess(frame).isError(), isTrue);
+    });
+
+    test('receiveProcess fails when byte length does not match compressedSize', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
+      final bytes = prepared.payload as Uint8List;
+      final frame = PayloadFrame(
+        schemaVersion: prepared.schemaVersion,
+        enc: prepared.enc,
+        cmp: prepared.cmp,
+        contentType: prepared.contentType,
+        originalSize: prepared.originalSize,
+        compressedSize: bytes.length + 1,
+        payload: bytes,
+        traceId: prepared.traceId,
+        requestId: prepared.requestId,
+      );
+
+      expect(pipeline.receiveProcess(frame).isError(), isTrue);
+    });
+
+    test('receiveProcess rejects compressed payload above maxCompressedBytes', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
+      expect(
+        pipeline.receiveProcess(
+          prepared,
+          maxCompressedBytes: prepared.compressedSize - 1,
+        ).isError(),
+        isTrue,
+      );
+    });
+
+    test('receiveProcess rejects frame when originalSize exceeds maxOriginalBytes', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
+      expect(
+        pipeline.receiveProcess(
+          prepared,
+          maxOriginalBytes: prepared.originalSize - 1,
+        ).isError(),
+        isTrue,
+      );
+    });
+
+    test(
+      'receiveProcessAsync fails when gzip decompress throws in isolate path',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+        );
+        final invalidGzip = Uint8List(gzipIsolateThresholdBytes);
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'gzip',
+          contentType: const JsonPayloadCodec().contentType,
+          originalSize: 1,
+          compressedSize: invalidGzip.length,
+          payload: invalidGzip,
+          traceId: 'trace',
+        );
+
+        final result = await pipeline.receiveProcessAsync(frame);
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as CompressionFailure;
+        expect(failure.message, contains('decompress'));
+        expect(failure.context['operation'], 'decompress');
+      },
+    );
+
+    test(
+      'receiveProcessAsync fails when JSON decode throws in isolate path',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+        );
+        final notJsonUtf8 = utf8.encode(
+          '{${'x' * (jsonPayloadIsolateEncodeThresholdBytes + 64)}}',
+        );
+        final bytes = Uint8List.fromList(notJsonUtf8);
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'none',
+          contentType: const JsonPayloadCodec().contentType,
+          originalSize: bytes.length,
+          compressedSize: bytes.length,
+          payload: bytes,
+          traceId: 'trace',
+        );
+
+        final result = await pipeline.receiveProcessAsync(frame);
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as CompressionFailure;
+        expect(failure.message, contains('decode JSON'));
+        expect(failure.context['operation'], 'jsonDecode');
+      },
+    );
+
+    test(
+      'prepareSendAsync fails when JSON encode throws in isolate path',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+          compressionThreshold: 1 << 30,
+        );
+        final data = <String, dynamic>{
+          'blob': 'a' * 300000,
+          'bad': Object(),
+        };
+
+        final result = await pipeline.prepareSendAsync(data);
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as CompressionFailure;
+        expect(failure.message, contains('encode JSON'));
+        expect(failure.context['operation'], 'jsonEncode');
       },
     );
   });

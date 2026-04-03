@@ -163,6 +163,88 @@ void main() {
         expect(failure.context, containsPair('retry', 3));
         expect(failure.context, containsPair('timeout', 30));
       });
+
+      test('should omit operation in context when operation is null', () {
+        final exception = Exception('orphan');
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          additionalContext: {'k': 1},
+        );
+
+        expect(failure.context.containsKey('operation'), isFalse);
+        expect(failure.context, containsPair('k', 1));
+      });
+
+      test('should map generic ODBC error to DatabaseFailure', () {
+        final exception = Exception('ODBC driver returned error 08001');
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          operation: 'query',
+        );
+
+        expect(failure, isA<DatabaseFailure>());
+      });
+
+      test('should map ODBC connection errors to ConnectionFailure', () {
+        final exception = Exception('ODBC connection refused');
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          operation: 'connect',
+        );
+
+        expect(failure, isA<ConnectionFailure>());
+      });
+
+      test('should map ODBC query timeout to QueryExecutionFailure with timeout context', () {
+        final exception = Exception('ODBC database query timeout');
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          operation: 'execute',
+        );
+
+        expect(failure, isA<QueryExecutionFailure>());
+        expect(failure.context['timeout'], isTrue);
+        expect(failure.context['timeout_stage'], 'sql');
+      });
+
+      test('should map transport timeout to NetworkFailure with timeout context', () {
+        final exception = Exception('network timeout while reading');
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          operation: 'fetch',
+        );
+
+        expect(failure, isA<NetworkFailure>());
+        expect(failure.context['timeout'], isTrue);
+        expect(failure.context['timeout_stage'], 'transport');
+      });
+
+      test('should use default message when exception string is empty', () {
+        final exception = _EmptyStringException();
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+        );
+
+        expect(failure.message, 'An error occurred');
+      });
     });
 
     group('withContext', () {
@@ -198,6 +280,43 @@ void main() {
 
         expect(enrichedFailure.cause, equals(originalCause));
       });
+
+      test('should map unknown Failure subtype to ServerFailure when enriching', () {
+        final exception = NotFoundFailure.withContext(
+          message: 'missing',
+        );
+        final stackTrace = StackTrace.current;
+
+        final enrichedFailure = FailureConverter.withContext(
+          exception,
+          stackTrace,
+          message: 'wrapped',
+          context: {'layer': 'infra'},
+        );
+
+        expect(enrichedFailure, isA<ServerFailure>());
+        expect(enrichedFailure.message, 'wrapped');
+        expect(enrichedFailure.context['layer'], 'infra');
+      });
+
+      test('should enrich after convert when exception is not Failure', () {
+        final stackTrace = StackTrace.current;
+
+        final enrichedFailure = FailureConverter.withContext(
+          Exception('x'),
+          stackTrace,
+          message: 'outer',
+          context: {'n': 2},
+        );
+
+        expect(enrichedFailure.message, 'outer');
+        expect(enrichedFailure.context['n'], 2);
+      });
     });
   });
+}
+
+class _EmptyStringException implements Exception {
+  @override
+  String toString() => '';
 }
