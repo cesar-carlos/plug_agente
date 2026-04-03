@@ -323,45 +323,37 @@ Response (notification nao gera item):
 
 ### Definicao
 
-| Campo                       | Tipo                            | Obrigatorio    | Descricao                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --------------------------- | ------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api_version`               | string                          | sim (v2.1+)    | Versao do contrato (ex.: `"2.1"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `meta.trace_id`             | string                          | recomendado    | ID de rastreamento distribuido                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `meta.traceparent`          | string                          | recomendado    | W3C Trace Context principal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `meta.tracestate`           | string                          | opcional       | W3C Trace Context vendor-specific                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `meta.request_id`           | string                          | recomendado    | ID unico do request (correlacao)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `meta.agent_id`             | string                          | sim (response) | Identificador do agente                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `meta.timestamp`            | string (ISO-8601)               | sim            | Instante UTC do envio                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `meta.outbound_compression` | string (`none`, `gzip`, `auto`) | opcional       | Sobrescreve a politica local do agente para compressao **agente -> hub** no `PayloadFrame` deste pedido (e nos `rpc:chunk` / `rpc:complete` com o mesmo `id`). Se omitido, usa-se a configuracao do agente (`Desligado` / `Sempre GZIP` / `Automatico`). Continua a valer o limiar `compressionThreshold` e a negociacao: se a sessao so permitir `none`, o fio permanece `cmp: none` mesmo com hint `gzip`. Pode ser desativado no agente (`enablePerRequestOutboundCompression` / definicao em configuracao). |
+| Campo              | Tipo              | Obrigatorio    | Descricao                                                                                                                                                                                                 |
+| ------------------ | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api_version`      | string            | recomendado    | Versao do contrato (ex.: `"2.1"`). O runtime atual aceita requests sem esse campo como compatibilidade com v2.0 implicito e sempre o inclui nas responses quando `enableSocketApiVersionMeta` esta ativo. |
+| `meta.trace_id`    | string            | recomendado    | ID de rastreamento distribuido                                                                                                                                                                            |
+| `meta.traceparent` | string            | recomendado    | W3C Trace Context principal                                                                                                                                                                               |
+| `meta.tracestate`  | string            | opcional       | W3C Trace Context vendor-specific                                                                                                                                                                         |
+| `meta.request_id`  | string            | recomendado    | ID unico do request (correlacao)                                                                                                                                                                          |
+| `meta.agent_id`    | string            | sim (response) | Identificador do agente                                                                                                                                                                                   |
+| `meta.timestamp`   | string (ISO-8601) | sim (response) | Instante UTC do envio. Em requests, e recomendado para rastreabilidade, mas nao exigido pelo runtime atual.                                                                                               |
 
 ### Notificacoes (`id` ausente)
 
-- Pedidos **notification** (sem `id` no JSON-RPC) **nao** associam resposta nem correlacao por `id`; o agente **nao** aplica `meta.outbound_compression` a saidas desse pedido (o campo e ignorado para esse caso).
-- O mesmo se aplica quando o hub envia `meta.outbound_compression` mas o pedido nao tem `id` utilizavel para correlacionar `rpc:chunk` / `rpc:complete`.
+- Pedidos **notification** (sem `id` no JSON-RPC) **nao** associam resposta nem correlacao por `id`.
 
 ### Nota operacional (largura de banda)
 
-- Mesmo com hint `gzip`, payloads muito grandes ou politicas do hub podem impor `cmp: none` ou limites (`maxCompressedPayloadBytes`, etc.); o agente deve respeitar a negociacao e os limites da sessao. Planeje largura de banda e limites no hub para picos de trafego nao comprimido.
+- A compressao outbound continua sendo controlada pela politica local do agente
+  e pela negociacao de capacidades (`compressions`, `compressionThreshold`,
+  `maxCompressedPayloadBytes` e afins). Nao existe, no runtime atual, override
+  por request via `meta`.
 
 ### Politica de obrigatoriedade
 
 - Quando `enableSocketApiVersionMeta` esta ativo, `api_version` e `meta`
   sao **incluidos automaticamente** pelo agente em toda response.
-- Requests do hub **devem** incluir `api_version` e `meta` para rastreabilidade.
+- Requests do hub **devem** incluir `api_version` e `meta` para rastreabilidade
+  quando o integrador quiser aderir ao profile v2.1+ completo.
 - Se o hub envia request sem `api_version`, o agente aceita e trata como v2.0 implicito.
 - Responses sempre incluem `api_version` e `meta` quando a feature flag esta ativa.
 - `traceparent`/`tracestate` sao o formato recomendado para rastreamento
   distribuido; `trace_id` permanece como compatibilidade legada.
-
-### `meta.outbound_compression` (batch JSON-RPC)
-
-- A resposta de batch e um **unico** array logico dentro de um `PayloadFrame`;
-  por isso todos os itens do batch que definirem `meta.outbound_compression`
-  devem usar o **mesmo** valor; valores diferentes no mesmo batch geram
-  `invalid_request` antes do despacho.
-- Itens sem o campo podem misturar-se com itens que o definem apenas se o valor
-  for **unico** entre os que definem (ex.: um item com `gzip` e demais sem campo
-  aplicam `gzip` ao frame da resposta em batch).
 
 ### Exemplo completo (request + response)
 
@@ -1340,6 +1332,10 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 ## Limitacoes e observacoes do estado atual
 
 - O transporte ativo usa `PayloadFrame` binario como camada fisica padrao.
+- O payload logico dentro do frame continua sendo **JSON UTF-8**; o frame
+  binario reduz overhead de transporte e suporta bytes/signature, mas **nao**
+  significa que o runtime atual use MessagePack, Protobuf ou outro codec
+  binario real.
 - O runtime atual nao oferece fallback para payload logico JSON cru em eventos
   de aplicacao.
 - A compressao de **envio** (agente -> hub) segue o limiar negociado
@@ -1349,9 +1345,9 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   `cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
   permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
   devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
-  O hub pode sobrescrever a politica padrao do agente por pedido com
-  `meta.outbound_compression` (ver tabela `meta` e secao de batch); a
-  negociacao `compressions: none` na sessao continua a impedir GZIP outbound.
+- O runtime atual **nao** suporta sobrescrever essa politica por request via
+  `meta`; a negociacao `compressions: none` na sessao continua a impedir GZIP
+  outbound.
 - Nao existe metodo RPC generico de transferencia de arquivo no contrato atual;
   qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
   e, depois, transportado dentro do `PayloadFrame`.
@@ -1392,10 +1388,27 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - Tracer de mensagens Socket: com `enableSocketSummarizeLargePayloadLogs`
   (default **true**), payloads acima de ~8 KiB UTF-8 estimados sao substituidos
   por um resumo no callback (nao altera o fio).
-- Implementacao: serializacao/deserializacao JSON UTF-8 acima de ~256 KiB pode
+- Implementacao: serializacao/deserializacao JSON UTF-8 acima de ~384 KiB pode
   executar em isolate no envio (`prepareSendAsync`) e na recepcao
   (`receiveProcessAsync`). Fingerprint de idempotencia (quando a flag esta
   ativa) tambem pode ser calculado em isolate para `params` grandes.
+- Estrategia atual recomendada: manter **JSON + GZIP** como baseline do
+  transporte, usando o modo outbound `auto` quando o emissor quiser preservar a
+  opcao de cair para `cmp: none` caso o bloco comprimido nao compense. Avaliar
+  codec binario real so se benchmark do pipeline mostrar gargalo concreto que
+  nao seja resolvido por shape de payload ou por `gzip`.
+- Perfis operacionais recomendados para `outboundCompressionMode`:
+
+| Perfil            | Configuracao | Quando usar                                                                 | Trade-off principal                                        |
+| ----------------- | ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Baixa latencia    | `none`       | Fluxos sensiveis a p95/p99, payload pequeno/medio, ou payload incompressivel | Menor CPU e menor latencia, com maior consumo de banda     |
+| Balanceado (padrao) | `auto`     | Trafego misto em producao, com variacao de tamanho e compressibilidade      | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
+| Economia de banda | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel  | Reduz bytes no fio, com aumento de latencia/CPU            |
+
+- Parametros atuais recomendados (com base em benchmark):
+  - `compressionThreshold`: `1024`
+  - `gzipIsolateThresholdBytes`: `32 * 1024` (32 KiB)
+  - `jsonPayloadIsolateEncodeThresholdBytes`: `384 * 1024` (384 KiB)
 - OpenRPC publicado em `docs/communication/openrpc.json` para descoberta do
   profile RPC.
 - Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
@@ -1539,7 +1552,7 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `-32013`: janela de taxa (`RpcRequestGuard`) e limite de handlers concorrentes
   (`maxConcurrentRpcHandlers`, default 32).
 - Feature flags `enableSocketOutgoingContractValidation` e
-  `enableSocketSummarizeLargePayloadLogs`; isolate JSON ~256 KiB e fingerprint
+  `enableSocketSummarizeLargePayloadLogs`; isolate JSON ~384 KiB e fingerprint
   de idempotencia para cargas grandes.
 
 ## Schemas JSON (contrato)

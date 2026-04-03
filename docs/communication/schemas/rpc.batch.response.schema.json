@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.batch.response.v1.json",
   "title": "RPC Batch Response",
-  "description": "Array of RPC responses. Order matches request order. Notifications have no response.",
+  "description": "Array of RPC responses returned for a batch request. Notifications do not generate entries; when orderedBatchResponses is negotiated, runtime preserves request order for emitted responses.",
   "type": "array",
   "items": { "$ref": "./rpc.response.schema.json" }
 }

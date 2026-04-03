@@ -2,17 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.request.v1.json",
   "title": "RPC Request",
-  "description": "JSON-RPC 2.0 request with optional v2.1 extensions",
+  "description": "JSON-RPC 2.0 request used inside rpc:request PayloadFrame messages. api_version and meta are recommended for Plug profile v2.1+ callers, but remain optional at runtime for backward compatibility with implicit v2.0 requests.",
   "type": "object",
   "required": ["jsonrpc", "method"],
   "properties": {
     "jsonrpc": { "const": "2.0" },
     "method": { "type": "string" },
-    "id": { "type": ["string", "number", "null"] },
+    "id": {
+      "type": ["string", "number", "null"],
+      "description": "Request identifier. Omit or set to null only for notifications when negotiated compatibility allows it."
+    },
     "params": {},
-    "api_version": { "type": "string" },
+    "api_version": {
+      "type": "string",
+      "description": "Recommended contract version marker for Plug profile v2.1+. Requests without api_version are accepted as compatibility mode."
+    },
     "meta": {
       "type": "object",
+      "description": "Optional protocol metadata. Only the published fields below are part of the contract.",
       "properties": {
         "trace_id": { "type": "string" },
         "traceparent": { "type": "string" },
@@ -20,7 +27,8 @@
         "request_id": { "type": "string" },
         "agent_id": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

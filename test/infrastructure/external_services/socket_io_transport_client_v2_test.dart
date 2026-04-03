@@ -15,6 +15,7 @@ import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -75,6 +76,7 @@ void main() {
     late MockRpcMethodDispatcher mockDispatcher;
     late MockFeatureFlags mockFeatureFlags;
     late MockSocket mockSocket;
+    late ProtocolMetricsCollector metricsCollector;
     late SocketIOTransportClientV2 client;
     late Map<String, Function> handlers;
     late List<({String event, dynamic data})> emitted;
@@ -128,6 +130,7 @@ void main() {
       mockDispatcher = MockRpcMethodDispatcher();
       mockFeatureFlags = MockFeatureFlags();
       mockSocket = MockSocket();
+      metricsCollector = ProtocolMetricsCollector();
       handlers = <String, Function>{};
       emitted = <({String event, dynamic data})>[];
 
@@ -231,6 +234,7 @@ void main() {
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
+        protocolMetricsCollector: metricsCollector,
       );
     });
 
@@ -252,6 +256,99 @@ void main() {
       expect(
         (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
         isA<Map<String, dynamic>>(),
+      );
+    });
+
+    test('should emit agent:ready after capabilities when readiness ack is negotiated', () async {
+      when(
+        () => mockNegotiator.negotiate(
+          agentCapabilities: any(named: 'agentCapabilities'),
+          serverCapabilities: any(named: 'serverCapabilities'),
+          preferJsonRpcV2: any(named: 'preferJsonRpcV2'),
+        ),
+      ).thenReturn(
+        const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureAlgorithms: ['hmac-sha256'],
+          negotiatedExtensions: {
+            'binaryPayload': true,
+            'transportFrame': 'payload-frame/1.0',
+            'notificationNullIdCompatibility': true,
+            'protocolReadyAck': true,
+            'signatureRequired': false,
+            'signatureAlgorithms': ['hmac-sha256'],
+          },
+        ),
+      );
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitted.clear();
+
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': const ProtocolCapabilities(
+            protocols: ['jsonrpc-v2'],
+            encodings: ['json'],
+            compressions: ['gzip', 'none'],
+            extensions: {
+              'binaryPayload': true,
+              'transportFrame': 'payload-frame/1.0',
+              'notificationNullIdCompatibility': true,
+              'protocolReadyAck': true,
+              'signatureRequired': false,
+              'signatureAlgorithms': ['hmac-sha256'],
+            },
+          ).toJson(),
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final readyPayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'agent:ready').data,
+              )
+              as Map<String, dynamic>;
+      expect(readyPayload['agent_id'], 'agent-1');
+      expect(readyPayload['protocol'], 'jsonrpc-v2');
+      expect(readyPayload['timestamp'], isA<String>());
+    });
+
+    test('should record protocol metrics for framed send and receive paths', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(metricsCollector.metrics, isNotEmpty);
+      expect(
+        metricsCollector.metrics.any((metric) => metric.direction == 'send'),
+        isTrue,
+      );
+      expect(
+        metricsCollector.metrics.any((metric) => metric.direction == 'receive'),
+        isTrue,
+      );
+      expect(
+        metricsCollector.metrics.any((metric) => metric.eventName == 'agent:register'),
+        isTrue,
+      );
+      expect(
+        metricsCollector.metrics.any((metric) => metric.eventName == 'agent:capabilities'),
+        isTrue,
       );
     });
 

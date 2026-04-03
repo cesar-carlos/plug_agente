@@ -1,6 +1,6 @@
 /// Threshold (estimated UTF-8 JSON size) to offload encoding / hashing work to an
-/// isolate. Kept in sync with inbound JSON decode isolate threshold (256 KiB).
-const int jsonPayloadIsolateEncodeThresholdBytes = 256 * 1024;
+/// isolate. Kept in sync with inbound JSON decode isolate threshold (384 KiB).
+const int jsonPayloadIsolateEncodeThresholdBytes = 384 * 1024;
 
 /// Conservative estimate of serialized JSON UTF-8 size without building the
 /// full string. Used to choose isolate vs synchronous JSON work.

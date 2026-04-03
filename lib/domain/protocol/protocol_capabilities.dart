@@ -37,6 +37,7 @@ class ProtocolCapabilities {
       'batchSupport': true,
       'binaryPayload': binaryPayload,
       'compressionThreshold': compressionThreshold,
+      'protocolReadyAck': true,
       'maxInflationRatio': maxInflationRatio,
       'signatureRequired': signatureRequired,
       'signatureScope': 'transport-frame',

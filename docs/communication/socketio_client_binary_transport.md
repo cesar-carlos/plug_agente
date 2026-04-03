@@ -69,6 +69,9 @@ Regras:
 - Em payloads acima de `compressionThreshold`, o emissor pode usar `gzip` quando
   isso reduzir o tamanho; o agente Plug, no modo de compressao **automatico**,
   envia `cmp: none` quando o GZIP nao fica menor que o JSON UTF-8 bruto.
+- O `PayloadFrame` continua carregando bytes de **JSON UTF-8** como payload
+  logico; o runtime atual nao negocia MessagePack, Protobuf ou outro codec
+  binario real.
 - Em payloads pequenos (abaixo do limiar), `cmp: none` e aceito e esperado.
 - `originalSize` deve refletir o tamanho antes da compressao.
 - `compressedSize` deve refletir o tamanho efetivamente transmitido.
@@ -130,6 +133,9 @@ Ao receber qualquer evento de aplicacao:
 
 - **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
 - **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`package:archive`** (`GZipEncoder`/`GZipDecoder`), partilhadas com o pipeline e com o compressor de linhas. Para payloads acima de 32 KiB, `TransportPipeline.prepareSendAsync` delega a compressão a um isolate via `compute`.
+- **JSON em isolate:** o runtime atual so offloada encode/decode JSON quando o
+  tamanho UTF-8 estimado passa de ~384 KiB; abaixo disso, o caminho padrao
+  permanece no isolate principal.
 - **Segundo formato (nao e o frame):** respostas SQL podem usar `GzipCompressor` (`lib/infrastructure/compression/gzip_compressor.dart`): lista de maps com `compressed_data` (base64) e `is_compressed`; e independente do envelope `PayloadFrame` acima.
 
 ## Handshake e capabilities
@@ -168,20 +174,32 @@ Quando o cliente consumir capacidades do outro lado:
 - para hubs com readiness explicito, considerar a sessao plenamente pronta apos
   `agent:capabilities` e o envio subsequente de `agent:ready`
 
-### Preferencia por pedido (`meta.outbound_compression`)
+### Compressao outbound por request
 
-Opcionalmente o hub pode enviar em cada JSON-RPC request `meta.outbound_compression`
-com `none`, `gzip` ou `auto`, alinhado a semantica do agente (mesmo significado
-que o modo configurado na UI). Isso altera apenas o `PayloadFrame` de **saida**
-(`rpc:response`, e `rpc:chunk` / `rpc:complete` ligados ao mesmo `id`). Sem o
-campo, aplica-se a politica padrao do agente. O limiar `compressionThreshold`
-e a negociacao (`compressions` no handshake) continuam a limitar o que e possivel
-no fio. Em batch JSON-RPC, todos os itens que **definirem**
-`meta.outbound_compression` devem usar o **mesmo** valor; valores diferentes no
-mesmo batch sao rejeitados. Itens **sem** o campo podem coexistir com itens que
-o definem desde que exista no maximo **um** valor distinto entre os que o
-definem (ex.: um item com `gzip` e os restantes sem `meta.outbound_compression`
-aplicam `gzip` ao `PayloadFrame` unico da resposta em batch).
+O runtime atual **nao** suporta override por request via `meta`. A compressao
+do `PayloadFrame` de saida continua sendo determinada pela negociacao da sessao
+e pela configuracao local do agente (`none`, `gzip` ou `auto`).
+
+Perfis operacionais recomendados:
+
+| Perfil              | Configuracao | Quando usar                                                                 | Trade-off principal                                        |
+| ------------------- | ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Baixa latencia      | `none`       | Fluxos sensiveis a p95/p99, payload pequeno/medio, ou payload incompressivel | Menor CPU e menor latencia, com maior consumo de banda     |
+| Balanceado (padrao) | `auto`       | Trafego misto em producao, com variacao de tamanho e compressibilidade      | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
+| Economia de banda   | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel  | Reduz bytes no fio, com aumento de latencia/CPU            |
+
+Parametros atuais recomendados:
+
+- `compressionThreshold`: `1024`
+- `gzipIsolateThresholdBytes`: `32 * 1024` (32 KiB)
+- `jsonPayloadIsolateEncodeThresholdBytes`: `384 * 1024` (384 KiB)
+
+Para clientes, a regra pratica permanece:
+
+- tratar `cmp` por mensagem, sem inferir o modo local do emissor;
+- aceitar `cmp: gzip` e `cmp: none` em qualquer `rpc:response`, `rpc:chunk` ou
+  `rpc:complete`;
+- nao enviar campos extras em `meta` fora do conjunto publicado pelo schema.
 
 ## Assinatura e validacao logica
 

@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -59,6 +60,8 @@ class TransportPipeline {
     required this.compression,
     this.compressionThreshold = 1024,
     this.schemaVersion = '1.0',
+    this.protocol = 'jsonrpc-v2',
+    this.metricsCollector,
   });
 
   /// Selected encoding format.
@@ -74,7 +77,55 @@ class TransportPipeline {
   /// Schema version for the payload frame.
   final String schemaVersion;
 
+  /// Logical transport protocol associated with the current pipeline instance.
+  final String protocol;
+
+  /// Optional collector for transport telemetry.
+  final ProtocolMetricsCollector? metricsCollector;
+
   final _uuid = const Uuid();
+
+  void _recordMetric({
+    required String direction,
+    required String effectiveCompression,
+    required int originalSize,
+    required int compressedSize,
+    required int totalDurationUs,
+    String? eventName,
+    int? encodeDurationUs,
+    int? compressDurationUs,
+    int? decodeDurationUs,
+    int? decompressDurationUs,
+    bool usedJsonEncodeIsolate = false,
+    bool usedGzipCompressIsolate = false,
+    bool usedJsonDecodeIsolate = false,
+    bool usedGzipDecompressIsolate = false,
+  }) {
+    metricsCollector?.record(
+      ProtocolMetrics(
+        timestamp: DateTime.now().toUtc(),
+        protocol: protocol,
+        encoding: encoding,
+        compression: effectiveCompression,
+        requestedCompression: compression,
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        direction: direction,
+        eventName: eventName,
+        totalDurationUs: totalDurationUs,
+        encodeDurationUs: encodeDurationUs,
+        compressDurationUs: compressDurationUs,
+        decodeDurationUs: decodeDurationUs,
+        decompressDurationUs: decompressDurationUs,
+        usedIsolate:
+            usedJsonEncodeIsolate || usedGzipCompressIsolate || usedJsonDecodeIsolate || usedGzipDecompressIsolate,
+        usedJsonEncodeIsolate: usedJsonEncodeIsolate,
+        usedGzipCompressIsolate: usedGzipCompressIsolate,
+        usedJsonDecodeIsolate: usedJsonDecodeIsolate,
+        usedGzipDecompressIsolate: usedGzipDecompressIsolate,
+      ),
+    );
+  }
 
   /// Prepares a payload for sending.
   ///
@@ -83,8 +134,12 @@ class TransportPipeline {
     dynamic data, {
     String? traceId,
     String? requestId,
+    String? metricEventName,
   }) {
     try {
+      final totalStopwatch = Stopwatch()..start();
+      final encodeStopwatch = Stopwatch()..start();
+
       // 1. Encode
       final codec = PayloadCodecFactory.getCodec(encoding);
       final encodeResult = codec.encode(data);
@@ -94,6 +149,7 @@ class TransportPipeline {
       }
 
       final encodedBytes = encodeResult.getOrThrow();
+      encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
 
       // 2. Compress (if threshold met and mode requests gzip or auto)
@@ -106,8 +162,10 @@ class TransportPipeline {
       Uint8List finalBytes;
       String finalCompression;
       int compressedSize;
+      int? compressDurationUs;
 
       if (shouldCompress) {
+        final compressStopwatch = Stopwatch()..start();
         final gzipCodec = CompressionCodecFactory.getCodec('gzip');
         final compressResult = gzipCodec.compress(encodedBytes);
 
@@ -116,6 +174,8 @@ class TransportPipeline {
         }
 
         final compressedBytes = compressResult.getOrThrow();
+        compressStopwatch.stop();
+        compressDurationUs = compressStopwatch.elapsedMicroseconds;
         if (compression == 'auto' && compressedBytes.length >= originalSize) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
@@ -144,6 +204,17 @@ class TransportPipeline {
         requestId: requestId,
       );
 
+      totalStopwatch.stop();
+      _recordMetric(
+        direction: 'send',
+        eventName: metricEventName,
+        effectiveCompression: finalCompression,
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        totalDurationUs: totalStopwatch.elapsedMicroseconds,
+        encodeDurationUs: encodeStopwatch.elapsedMicroseconds,
+        compressDurationUs: compressDurationUs,
+      );
       return Success(frame);
     } on Exception catch (error) {
       return Failure(
@@ -166,15 +237,20 @@ class TransportPipeline {
     dynamic data, {
     String? traceId,
     String? requestId,
+    String? metricEventName,
   }) async {
     try {
+      final totalStopwatch = Stopwatch()..start();
       final codec = PayloadCodecFactory.getCodec(encoding);
+      final encodeStopwatch = Stopwatch()..start();
       late final Uint8List encodedBytes;
+      var usedJsonEncodeIsolate = false;
       if (encoding == 'json' &&
           jsonTreeLikelyExceedsByteBudget(
             data,
             jsonPayloadIsolateEncodeThresholdBytes,
           )) {
+        usedJsonEncodeIsolate = true;
         try {
           encodedBytes = await compute(jsonUtf8EncodePayloadInIsolate, data);
         } on Object catch (error) {
@@ -193,6 +269,7 @@ class TransportPipeline {
         }
         encodedBytes = encodeResult.getOrThrow();
       }
+      encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
       final shouldCompress = _shouldRunGzipCompression(
         compression,
@@ -203,11 +280,15 @@ class TransportPipeline {
       Uint8List finalBytes;
       String finalCompression;
       int compressedSize;
+      int? compressDurationUs;
+      var usedGzipCompressIsolate = false;
 
       if (shouldCompress) {
         final useIsolate = originalSize >= gzipIsolateThresholdBytes;
         final Uint8List compressedBytes;
+        final compressStopwatch = Stopwatch()..start();
         if (useIsolate) {
+          usedGzipCompressIsolate = true;
           compressedBytes = await compute(_compressGzipInIsolate, encodedBytes);
         } else {
           final gzipCodec = CompressionCodecFactory.getCodec('gzip');
@@ -217,6 +298,8 @@ class TransportPipeline {
           }
           compressedBytes = compressResult.getOrThrow();
         }
+        compressStopwatch.stop();
+        compressDurationUs = compressStopwatch.elapsedMicroseconds;
         if (compression == 'auto' && compressedBytes.length >= originalSize) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
@@ -244,6 +327,19 @@ class TransportPipeline {
         requestId: requestId,
       );
 
+      totalStopwatch.stop();
+      _recordMetric(
+        direction: 'send',
+        eventName: metricEventName,
+        effectiveCompression: finalCompression,
+        originalSize: originalSize,
+        compressedSize: compressedSize,
+        totalDurationUs: totalStopwatch.elapsedMicroseconds,
+        encodeDurationUs: encodeStopwatch.elapsedMicroseconds,
+        compressDurationUs: compressDurationUs,
+        usedJsonEncodeIsolate: usedJsonEncodeIsolate,
+        usedGzipCompressIsolate: usedGzipCompressIsolate,
+      );
       return Success(frame);
     } on Object catch (error) {
       return Failure(
@@ -268,8 +364,10 @@ class TransportPipeline {
     int? maxCompressedBytes,
     int? maxOriginalBytes,
     double maxInflationRatio = 30,
+    String? metricEventName,
   }) {
     try {
+      final totalStopwatch = Stopwatch()..start();
       // Validate frame encoding matches pipeline configuration
       if (frame.enc != encoding) {
         return Failure(
@@ -335,8 +433,10 @@ class TransportPipeline {
 
       // 1. Decompress (if needed)
       Uint8List decodableBytes;
+      int? decompressDurationUs;
 
       if (frame.cmp != 'none') {
+        final decompressStopwatch = Stopwatch()..start();
         final compressionCodec = CompressionCodecFactory.getCodec(frame.cmp);
         final decompressResult = compressionCodec.decompress(bytes);
 
@@ -345,6 +445,8 @@ class TransportPipeline {
         }
 
         decodableBytes = decompressResult.getOrThrow();
+        decompressStopwatch.stop();
+        decompressDurationUs = decompressStopwatch.elapsedMicroseconds;
       } else {
         decodableBytes = bytes;
       }
@@ -385,6 +487,7 @@ class TransportPipeline {
       }
 
       // 2. Decode
+      final decodeStopwatch = Stopwatch()..start();
       final codec = PayloadCodecFactory.getCodec(frame.enc);
       final decodeResult = codec.decode(decodableBytes);
 
@@ -393,6 +496,18 @@ class TransportPipeline {
       }
 
       final decoded = decodeResult.getOrThrow();
+      decodeStopwatch.stop();
+      totalStopwatch.stop();
+      _recordMetric(
+        direction: 'receive',
+        eventName: metricEventName,
+        effectiveCompression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        totalDurationUs: totalStopwatch.elapsedMicroseconds,
+        decodeDurationUs: decodeStopwatch.elapsedMicroseconds,
+        decompressDurationUs: decompressDurationUs,
+      );
       return Success(decoded as Object);
     } on Exception catch (error) {
       return Failure(
@@ -416,8 +531,10 @@ class TransportPipeline {
     int? maxCompressedBytes,
     int? maxOriginalBytes,
     double maxInflationRatio = 30,
+    String? metricEventName,
   }) async {
     try {
+      final totalStopwatch = Stopwatch()..start();
       if (frame.enc != encoding) {
         return Failure(
           domain.ValidationFailure.withContext(
@@ -480,9 +597,13 @@ class TransportPipeline {
       }
 
       Uint8List decodableBytes;
+      int? decompressDurationUs;
+      var usedGzipDecompressIsolate = false;
 
       if (frame.cmp != 'none') {
+        final decompressStopwatch = Stopwatch()..start();
         if (frame.cmp == 'gzip' && bytes.length >= gzipIsolateThresholdBytes) {
+          usedGzipDecompressIsolate = true;
           try {
             decodableBytes = await compute(_decompressGzipInIsolate, bytes);
           } on Object catch (error) {
@@ -504,6 +625,8 @@ class TransportPipeline {
 
           decodableBytes = decompressResult.getOrThrow();
         }
+        decompressStopwatch.stop();
+        decompressDurationUs = decompressStopwatch.elapsedMicroseconds;
       } else {
         decodableBytes = bytes;
       }
@@ -544,7 +667,10 @@ class TransportPipeline {
       }
 
       final Object decoded;
+      final decodeStopwatch = Stopwatch()..start();
+      var usedJsonDecodeIsolate = false;
       if (frame.enc == 'json' && decodableBytes.length >= jsonPayloadIsolateEncodeThresholdBytes) {
+        usedJsonDecodeIsolate = true;
         try {
           decoded = await compute(
             _jsonDecodeUtf8PayloadInIsolate,
@@ -570,6 +696,20 @@ class TransportPipeline {
         decoded = decodeResult.getOrThrow() as Object;
       }
 
+      decodeStopwatch.stop();
+      totalStopwatch.stop();
+      _recordMetric(
+        direction: 'receive',
+        eventName: metricEventName,
+        effectiveCompression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        totalDurationUs: totalStopwatch.elapsedMicroseconds,
+        decodeDurationUs: decodeStopwatch.elapsedMicroseconds,
+        decompressDurationUs: decompressDurationUs,
+        usedJsonDecodeIsolate: usedJsonDecodeIsolate,
+        usedGzipDecompressIsolate: usedGzipDecompressIsolate,
+      );
       return Success(decoded);
     } on Object catch (error) {
       return Failure(

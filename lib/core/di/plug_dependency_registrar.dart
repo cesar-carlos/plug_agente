@@ -234,6 +234,7 @@ void registerPlugDependencyGraph(
           rpcDispatcher: getIt<RpcMethodDispatcher>(),
           featureFlags: getIt<FeatureFlags>(),
           payloadSigner: payloadSigner,
+          protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
         );
       },
     )

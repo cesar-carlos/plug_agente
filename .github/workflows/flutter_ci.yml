@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
 
 concurrency:
   group: flutter-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -30,3 +33,30 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  transport-benchmark:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run transport benchmark test
+        run: |
+          mkdir -p benchmark-artifacts
+          flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --reporter expanded > benchmark-artifacts/transport-benchmark.txt
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: transport-benchmark
+          path: benchmark-artifacts/transport-benchmark.txt

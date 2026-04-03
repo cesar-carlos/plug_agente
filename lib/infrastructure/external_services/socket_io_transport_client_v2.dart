@@ -22,6 +22,7 @@ import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
@@ -37,17 +38,20 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required RpcMethodDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
     PayloadSigner? payloadSigner,
+    ProtocolMetricsCollector? protocolMetricsCollector,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
-       _payloadSigner = payloadSigner;
+       _payloadSigner = payloadSigner,
+       _protocolMetricsCollector = protocolMetricsCollector;
 
   final SocketDataSource _dataSource;
   final ProtocolNegotiator _negotiator;
   final RpcMethodDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
   final PayloadSigner? _payloadSigner;
+  final ProtocolMetricsCollector? _protocolMetricsCollector;
 
   io.Socket? _socket;
   String _agentId = '';
@@ -164,7 +168,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     dynamic id;
     try {
       if (rawData is Map<String, dynamic> && _looksLikePayloadFrame(rawData)) {
-        final payload = _decodeIncomingPayloadOrThrow(rawData);
+        final payload = _decodeIncomingPayloadOrThrow(
+          rawData,
+          sourceEvent: 'rpc:request',
+        );
         if (payload is Map<String, dynamic>) {
           id = payload['id'];
         }
@@ -246,6 +253,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       encoding: _currentProtocol.encoding,
       compression: pipelineCompression,
       compressionThreshold: threshold,
+      protocol: _currentProtocol.protocol,
+      metricsCollector: _protocolMetricsCollector,
     );
     _cachedSendPipeline = pipeline;
     _sendPipelineCacheKey = cacheKey;
@@ -268,6 +277,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       compression: frame.cmp,
       compressionThreshold: _currentProtocol.compressionThreshold,
       schemaVersion: frame.schemaVersion,
+      protocol: _currentProtocol.protocol,
+      metricsCollector: _protocolMetricsCollector,
     );
     _receivePipelineByKey[key] = pipeline;
     return pipeline;
@@ -288,7 +299,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   void _handleStreamPull(dynamic data) {
     try {
-      final payload = _decodeIncomingPayloadOrThrow(data);
+      final payload = _decodeIncomingPayloadOrThrow(
+        data,
+        sourceEvent: 'rpc:stream.pull',
+      );
       if (payload is! Map<String, dynamic>) {
         return;
       }
@@ -559,7 +573,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// Handles protocol capabilities negotiation.
   void _handleCapabilitiesNegotiation(dynamic data) {
     try {
-      final payload = _decodeIncomingPayloadOrThrow(data);
+      final payload = _decodeIncomingPayloadOrThrow(
+        data,
+        sourceEvent: 'agent:capabilities',
+      );
       if (payload is! Map<String, dynamic>) {
         throw StateError('agent:capabilities payload must be an object');
       }
@@ -602,6 +619,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
       );
 
+      if (_supportsProtocolReadyAck()) {
+        _emitAgentReady();
+      }
+
       _heartbeat.start();
     } on Object catch (error, stackTrace) {
       AppLogger.error(
@@ -629,7 +650,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       try {
-        payload = await _decodeIncomingPayloadOrThrowAsync(payload);
+        payload = await _decodeIncomingPayloadOrThrowAsync(
+          payload,
+          sourceEvent: 'rpc:request',
+        );
       } on domain.Failure catch (failure) {
         final mapped = _mapInboundTransportDecodeFailure(failure);
         await _sendSchemaValidationError(
@@ -1028,6 +1052,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       logicalPayload,
       traceId: _extractTraceId(logicalPayload),
       requestId: _extractRequestId(logicalPayload),
+      metricEventName: event,
     );
     if (prepareResult.isError()) {
       final failure = prepareResult.exceptionOrNull();
@@ -1065,7 +1090,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return frame.toJson();
   }
 
-  dynamic _decodeIncomingPayloadOrThrow(dynamic payload) {
+  dynamic _decodeIncomingPayloadOrThrow(
+    dynamic payload, {
+    String? sourceEvent,
+  }) {
     if (!_looksLikePayloadFrame(payload)) {
       throw domain.ValidationFailure.withContext(
         message: 'Application payload must be a PayloadFrame',
@@ -1103,6 +1131,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         maxCompressedBytes: _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
         maxOriginalBytes: _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
         maxInflationRatio: _currentProtocol.maxInflationRatio,
+        metricEventName: sourceEvent,
       );
       if (processed.isError()) {
         throw processed.exceptionOrNull()! as domain.Failure;
@@ -1119,7 +1148,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
-  Future<dynamic> _decodeIncomingPayloadOrThrowAsync(dynamic payload) async {
+  Future<dynamic> _decodeIncomingPayloadOrThrowAsync(
+    dynamic payload, {
+    String? sourceEvent,
+  }) async {
     if (!_looksLikePayloadFrame(payload)) {
       throw domain.ValidationFailure.withContext(
         message: 'Application payload must be a PayloadFrame',
@@ -1157,6 +1189,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         maxCompressedBytes: _currentProtocol.effectiveLimits.maxCompressedPayloadBytes,
         maxOriginalBytes: _currentProtocol.effectiveLimits.maxDecodedPayloadBytes,
         maxInflationRatio: _currentProtocol.maxInflationRatio,
+        metricEventName: sourceEvent,
       );
       if (processed.isError()) {
         throw processed.exceptionOrNull()! as domain.Failure;
@@ -1579,6 +1612,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _emitEvent('agent:heartbeat', payload);
   }
 
+  void _emitAgentReady() {
+    final payload = <String, dynamic>{
+      'agent_id': _agentId,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'protocol': _currentProtocol.protocol,
+    };
+    _emitEvent('agent:ready', payload);
+  }
+
   void _logHeartbeatEvent(String direction, String event, dynamic data) {
     final enriched = data is Map<String, dynamic>
         ? <String, dynamic>{...data, 'agent_id': _agentId}
@@ -1589,7 +1631,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   void _handleHeartbeatAck(dynamic data) {
     dynamic payload = data;
     try {
-      payload = _decodeIncomingPayloadOrThrow(data);
+      payload = _decodeIncomingPayloadOrThrow(
+        data,
+        sourceEvent: 'hub:heartbeat_ack',
+      );
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
         'Invalid hub:heartbeat_ack payload',
@@ -1669,6 +1714,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return extensionValue;
     }
     return true;
+  }
+
+  bool _supportsProtocolReadyAck() {
+    final extensionValue = _currentProtocol.negotiatedExtensions['protocolReadyAck'];
+    return extensionValue is bool && extensionValue;
   }
 
   Map<String, dynamic> _prepareResponseForSend(RpcResponse response) {

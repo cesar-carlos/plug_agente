@@ -117,6 +117,13 @@ class ProtocolNegotiator {
       negotiated['notificationNullIdCompatibility'] = true;
     }
 
+    final protocolReadyAck =
+        (agentExtensions['protocolReadyAck'] as bool? ?? false) &&
+        (serverExtensions['protocolReadyAck'] as bool? ?? false);
+    if (protocolReadyAck) {
+      negotiated['protocolReadyAck'] = true;
+    }
+
     final binaryPayload =
         (agentExtensions['binaryPayload'] as bool? ?? false) && (serverExtensions['binaryPayload'] as bool? ?? false);
     if (binaryPayload) {

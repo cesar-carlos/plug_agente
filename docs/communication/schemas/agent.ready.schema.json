@@ -1,55 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/agent.ready.v1.json",
-  "title": "agent:ready event payload",
-  "description": "Emitted by the hub to the agent after the handshake is complete and the agent is authorised to start processing RPC requests.",
+  "title": "agent:ready payload",
+  "description": "Optional readiness acknowledgement emitted by the agent after agent:capabilities negotiation when protocolReadyAck is negotiated.",
   "type": "object",
-  "required": ["agent_id", "protocol_version"],
+  "required": ["agent_id", "timestamp", "protocol"],
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "Canonical agent identifier confirmed by the hub."
-    },
-    "protocol_version": {
-      "type": "string",
-      "description": "Negotiated protocol version in use for this session (e.g. '2.6').",
-      "examples": ["2.6"]
-    },
-    "session_id": {
-      "type": "string",
-      "description": "Optional opaque session identifier assigned by the hub for this connection."
-    },
-    "transport_limits": {
-      "type": "object",
-      "description": "Negotiated transport limits for this session. Mirrors TransportLimits from agent:capabilities.",
-      "properties": {
-        "max_rows": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum rows per response."
-        },
-        "max_payload_bytes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum payload size in bytes."
-        },
-        "streaming_row_threshold": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Row count above which the agent switches to streaming."
-        },
-        "streaming_chunk_size": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Number of rows per streaming chunk."
-        }
-      },
-      "additionalProperties": true
+      "description": "Canonical agent identifier for the connected agent."
     },
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO-8601 UTC timestamp when the hub emitted this event."
+      "description": "ISO-8601 UTC timestamp when the agent emitted readiness."
+    },
+    "protocol": {
+      "type": "string",
+      "description": "Negotiated logical protocol in use for the session (for example, 'jsonrpc-v2').",
+      "examples": ["jsonrpc-v2"]
     }
   },
   "additionalProperties": false

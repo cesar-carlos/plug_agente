@@ -13,8 +13,8 @@
     },
     "enc": {
       "type": "string",
-      "enum": ["json", "msgpack"],
-      "description": "Encoding of the logical payload before compression."
+      "enum": ["json"],
+      "description": "Encoding of the logical payload before compression. The current runtime supports JSON UTF-8 only."
     },
     "cmp": {
       "type": "string",
@@ -50,7 +50,7 @@
     "signature": {
       "type": "object",
       "description": "Optional HMAC transport-level signature for payload integrity verification.",
-      "required": ["alg", "value"],
+      "required": ["alg", "value", "key_id"],
       "properties": {
         "alg": {
           "type": "string",
@@ -60,6 +60,10 @@
         "value": {
           "type": "string",
           "description": "Base64-encoded signature digest."
+        },
+        "key_id": {
+          "type": "string",
+          "description": "Identifier of the signing key used to produce the signature."
         }
       },
       "additionalProperties": false

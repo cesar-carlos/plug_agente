@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -269,6 +270,54 @@ void main() {
       expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
     });
 
+    test('prepareSend records transport metrics with requested and effective compression', () {
+      final collector = ProtocolMetricsCollector();
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'auto',
+        compressionThreshold: 10,
+        metricsCollector: collector,
+      );
+
+      final data = {'message': 'Hello World! ' * 100};
+      final frame = pipeline.prepareSend(data).getOrThrow();
+
+      expect(frame.cmp, equals('gzip'));
+      expect(collector.metrics, hasLength(1));
+      final metric = collector.metrics.single;
+      expect(metric.direction, equals('send'));
+      expect(metric.requestedCompression, equals('auto'));
+      expect(metric.compression, equals('gzip'));
+      expect(metric.originalSize, equals(frame.originalSize));
+      expect(metric.compressedSize, equals(frame.compressedSize));
+      expect(metric.totalDurationUs, isNotNull);
+      expect(metric.encodeDurationUs, isNotNull);
+      expect(metric.compressDurationUs, isNotNull);
+    });
+
+    test('receiveProcessAsync records isolate usage for large JSON decode', () async {
+      final collector = ProtocolMetricsCollector();
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+        metricsCollector: collector,
+      );
+      final hugePayload = <String, dynamic>{
+        'blob': 'z' * (jsonPayloadIsolateEncodeThresholdBytes + 4096),
+      };
+      final frame = pipeline.prepareSend(hugePayload).getOrThrow();
+
+      final result = await pipeline.receiveProcessAsync(frame);
+
+      expect(result.isSuccess(), isTrue);
+      expect(collector.metrics, hasLength(2));
+      final receiveMetric = collector.metrics.last;
+      expect(receiveMetric.direction, equals('receive'));
+      expect(receiveMetric.usedIsolate, isTrue);
+      expect(receiveMetric.usedJsonDecodeIsolate, isTrue);
+      expect(receiveMetric.decodeDurationUs, isNotNull);
+    });
+
     test('receiveProcess accepts List<int> payload bytes', () {
       final pipeline = TransportPipeline(
         encoding: 'json',
@@ -342,10 +391,12 @@ void main() {
       );
       final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
       expect(
-        pipeline.receiveProcess(
-          prepared,
-          maxCompressedBytes: prepared.compressedSize - 1,
-        ).isError(),
+        pipeline
+            .receiveProcess(
+              prepared,
+              maxCompressedBytes: prepared.compressedSize - 1,
+            )
+            .isError(),
         isTrue,
       );
     });
@@ -357,10 +408,12 @@ void main() {
       );
       final prepared = pipeline.prepareSend(<String, dynamic>{}).getOrThrow();
       expect(
-        pipeline.receiveProcess(
-          prepared,
-          maxOriginalBytes: prepared.originalSize - 1,
-        ).isError(),
+        pipeline
+            .receiveProcess(
+              prepared,
+              maxOriginalBytes: prepared.originalSize - 1,
+            )
+            .isError(),
         isTrue,
       );
     });
