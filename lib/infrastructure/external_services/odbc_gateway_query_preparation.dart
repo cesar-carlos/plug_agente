@@ -24,6 +24,7 @@ class OdbcPreparedQueryExecution {
 /// Keeps gateway thinner and allows direct unit tests of these rules.
 class OdbcGatewayQueryPreparation {
   OdbcGatewayQueryPreparation._();
+  static const int maxNamedParameterCount = 5;
 
   static domain.ValidationFailure? validatePaginationForDatabase(
     QueryRequest request,
@@ -113,6 +114,21 @@ class OdbcGatewayQueryPreparation {
       );
     }
     return null;
+  }
+
+  static domain.ValidationFailure? validateParameterCount(
+    OdbcPreparedQueryExecution preparedExecution,
+  ) {
+    final count = preparedExecution.parameters?.length ?? 0;
+    if (count <= maxNamedParameterCount) {
+      return null;
+    }
+
+    return domain.ValidationFailure(
+      'Query uses $count named parameters; '
+      'the current runtime supports up to $maxNamedParameterCount. '
+      'Split the query or use positional literals.',
+    );
   }
 
   static bool shouldUseMultiResultExecution(

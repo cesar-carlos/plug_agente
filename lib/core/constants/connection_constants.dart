@@ -13,6 +13,7 @@ class ConnectionConstants {
   static const int defaultMaxReconnectAttempts = 3;
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;
+  static const Duration defaultPoolAcquireTimeout = Duration(seconds: 30);
 
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;

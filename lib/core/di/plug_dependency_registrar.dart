@@ -82,6 +82,7 @@ import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_c
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
@@ -176,6 +177,9 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
+    ..registerLazySingleton(
+      () => OdbcNativeMetricsService(getIt<odbc.OdbcService>()),
+    )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
     ..registerLazySingleton<IRpcDispatchMetricsCollector>(
       () => RpcDispatchMetricsCollector(getIt<MetricsCollector>()),

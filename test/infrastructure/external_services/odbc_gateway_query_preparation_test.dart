@@ -160,5 +160,60 @@ void main() {
         expect(use, isTrue);
       });
     });
+
+    group('validateParameterCount', () {
+      test('should allow up to 5 named parameters', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT * FROM t WHERE a=@a AND b=@b AND c=@c AND d=@d AND e=@e',
+          parameters: {
+            'a': 1,
+            'b': 2,
+            'c': 3,
+            'd': 4,
+            'e': 5,
+          },
+        );
+
+        final failure = OdbcGatewayQueryPreparation.validateParameterCount(
+          prepared,
+        );
+
+        expect(failure, isNull);
+      });
+
+      test('should reject when named parameters exceed 5', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT * FROM t',
+          parameters: {
+            'a': 1,
+            'b': 2,
+            'c': 3,
+            'd': 4,
+            'e': 5,
+            'f': 6,
+          },
+        );
+
+        final failure = OdbcGatewayQueryPreparation.validateParameterCount(
+          prepared,
+        );
+
+        expect(failure, isNotNull);
+        expect(failure!.message, contains('supports up to 5'));
+      });
+
+      test('should allow empty parameters', () {
+        const prepared = OdbcPreparedQueryExecution(
+          sql: 'SELECT 1',
+          parameters: null,
+        );
+
+        final failure = OdbcGatewayQueryPreparation.validateParameterCount(
+          prepared,
+        );
+
+        expect(failure, isNull);
+      });
+    });
   });
 }

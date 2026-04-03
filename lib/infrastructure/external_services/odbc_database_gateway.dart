@@ -401,6 +401,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (queryValidation != null) {
       return Failure(queryValidation);
     }
+    final parameterValidation = OdbcGatewayQueryPreparation.validateParameterCount(
+      preparedExecution,
+    );
+    if (parameterValidation != null) {
+      return Failure(parameterValidation);
+    }
 
     OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
       featureFlags: _featureFlags,
