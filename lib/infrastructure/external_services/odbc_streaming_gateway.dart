@@ -10,6 +10,8 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -26,15 +28,22 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   StreamingCancelReason _cancelReason = StreamingCancelReason.user;
   bool _initialized = false;
   static const Duration _cancelDisconnectTimeout = Duration(seconds: 3);
+  final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
   @override
   bool get hasActiveStream => _activeConnectionId != null;
 
-  ConnectionOptions _buildStreamingConnectionOptions(int chunkSizeBytes) {
+  ConnectionOptions _buildStreamingConnectionOptions(
+    int chunkSizeBytes, {
+    int? hintedBufferBytes,
+  }) {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
     final maxResultBufferBytes = max(
       normalizedChunkSize,
-      OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
+      max(
+        hintedBufferBytes ?? 0,
+        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
+      ),
     );
     final initialResultBufferBytes = min(
       ConnectionConstants.defaultInitialResultBufferBytes,
@@ -107,9 +116,16 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     }
 
     // Conectar com opções otimizadas para streaming
+    final hintedBufferBytes = _adaptiveBufferCache.lookup(
+      connectionString: connectionString,
+      sql: query,
+    );
     final connResult = await _service.connect(
       connectionString,
-      options: _buildStreamingConnectionOptions(chunkSizeBytes),
+      options: _buildStreamingConnectionOptions(
+        chunkSizeBytes,
+        hintedBufferBytes: hintedBufferBytes,
+      ),
     );
 
     return connResult.fold(
@@ -181,6 +197,25 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
           return const Success(unit);
         } on Exception catch (e) {
+          if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
+            e.toString(),
+          )) {
+            _adaptiveBufferCache.rememberExpandedBuffer(
+              connectionString: connectionString,
+              sql: query,
+              currentBufferBytes:
+                  _buildStreamingConnectionOptions(
+                    chunkSizeBytes,
+                    hintedBufferBytes: hintedBufferBytes,
+                  ).maxResultBufferBytes ??
+                  (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(
+                        _settings,
+                      ) *
+                      1024 *
+                      1024),
+              errorMessage: e.toString(),
+            );
+          }
           final context = <String, dynamic>{
             'connectionId': connection.id,
           };

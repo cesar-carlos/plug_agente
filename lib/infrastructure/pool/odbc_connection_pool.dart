@@ -7,6 +7,7 @@ import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -21,12 +22,15 @@ class OdbcConnectionPool implements IConnectionPool {
     this._service,
     this._settings, {
     Duration? acquireTimeout,
+    MetricsCollector? metricsCollector,
   }) : _semaphore = PoolSemaphore(_settings.poolSize),
-       _acquireTimeout = acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout;
+       _acquireTimeout = acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
+       _metrics = metricsCollector;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final PoolSemaphore _semaphore;
   final Duration _acquireTimeout;
+  final MetricsCollector? _metrics;
 
   final Map<String, Set<String>> _leasedIdsByConnectionString = {};
   final Set<String> _leasedIds = {};
@@ -38,6 +42,7 @@ class OdbcConnectionPool implements IConnectionPool {
         timeout: _acquireTimeout,
       );
     } on TimeoutException catch (error) {
+      _metrics?.recordPoolAcquireTimeout();
       return Failure(
         OdbcFailureMapper.mapPoolError(
           StateError(

@@ -25,6 +25,18 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     return error.toString();
   }
 
+  String _poolConnectionString(String connectionString) {
+    if (_settings.nativePoolTestOnCheckout) {
+      return connectionString;
+    }
+
+    if (connectionString.toLowerCase().contains('pooltestoncheckout=')) {
+      return connectionString;
+    }
+
+    return '$connectionString;PoolTestOnCheckout=false';
+  }
+
   Future<Result<int>> _getOrCreatePool(String connectionString) async {
     final existingPoolId = _pools[connectionString];
     if (existingPoolId != null) {
@@ -55,6 +67,28 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     return result;
   }
 
+  Future<Result<Map<String, Object?>>> getDetailedState(
+    String connectionString,
+  ) async {
+    final poolId = _pools[connectionString];
+    if (poolId == null) {
+      return const Success(<String, Object?>{
+        'available': false,
+        'reason': 'pool_not_created',
+      });
+    }
+
+    final stateResult = await _service.poolGetStateDetailed(poolId);
+    return stateResult.fold(
+      (state) => Success(<String, Object?>{
+        'available': true,
+        'pool_id': poolId,
+        ...state,
+      }),
+      Failure.new,
+    );
+  }
+
   Future<Result<int>> _createPool(String connectionString) async {
     developer.log(
       'Creating native pool for connection',
@@ -63,7 +97,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     );
 
     final poolResult = await _service.poolCreate(
-      connectionString,
+      _poolConnectionString(connectionString),
       _settings.poolSize,
     );
 

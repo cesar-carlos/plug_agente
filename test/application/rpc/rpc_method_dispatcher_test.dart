@@ -21,6 +21,7 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -40,6 +41,8 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
+class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
+
 MockRpcStreamEmitter _stubRpcStreamEmitter() {
   final emitter = MockRpcStreamEmitter();
   when(() => emitter.emitChunk(any())).thenAnswer((_) async => true);
@@ -58,6 +61,7 @@ void main() {
     late MockDatabaseGateway mockGateway;
     late MockQueryNormalizerService mockNormalizer;
     late MockStreamingDatabaseGateway mockStreamingGateway;
+    late MockOdbcNativeMetricsService mockOdbcNativeMetricsService;
     late RpcMethodDispatcher dispatcher;
 
     setUpAll(() {
@@ -114,6 +118,7 @@ void main() {
       mockGateway = MockDatabaseGateway();
       mockNormalizer = MockQueryNormalizerService();
       mockStreamingGateway = MockStreamingDatabaseGateway();
+      mockOdbcNativeMetricsService = MockOdbcNativeMetricsService();
       mockAuthorize = MockAuthorizeSqlOperation();
       mockFeatureFlags = MockFeatureFlags();
       when(
@@ -128,6 +133,11 @@ void main() {
       ).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
+      when(() => mockOdbcNativeMetricsService.collectSnapshot()).thenAnswer(
+        (_) async => const Success(<String, dynamic>{
+          'engine': <String, dynamic>{'query_count': 2},
+        }),
+      );
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -136,6 +146,7 @@ void main() {
         authorizeSqlOperation: mockAuthorize,
         featureFlags: mockFeatureFlags,
         streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
       );
     });
 
@@ -230,6 +241,7 @@ void main() {
         featureFlags: mockFeatureFlags,
         configRepository: mockConfigRepo,
         streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
       );
 
       const request = RpcRequest(
@@ -251,6 +263,7 @@ void main() {
       final result = response.result as Map<String, dynamic>;
       final profile = result['profile'] as Map<String, dynamic>;
       final address = profile['address'] as Map<String, dynamic>;
+      final odbc = result['odbc'] as Map<String, dynamic>;
       check(result['agent_id']).equals('agent-1');
       check(profile['document']).equals('52998224725');
       check(profile['document_type']).equals('cpf');
@@ -259,6 +272,8 @@ void main() {
       check(profile['email']).equals('contato@exemplo.com');
       check(address['postal_code']).equals('01001000');
       check(address['state']).equals('SP');
+      check(odbc['available']).equals(true);
+      check((odbc['snapshot'] as Map<String, dynamic>)['engine']).isNotNull();
       verify(
         () => mockAuthorize(
           token: any(named: 'token'),
@@ -267,6 +282,7 @@ void main() {
           method: any(named: 'method'),
         ),
       ).called(1);
+      verify(() => mockOdbcNativeMetricsService.collectSnapshot()).called(1);
     });
 
     test('should return invalidParams when sql is missing', () async {

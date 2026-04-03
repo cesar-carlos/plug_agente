@@ -7,6 +7,7 @@ const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
 const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
 const _keyUseNativeOdbcPool = 'odbc_use_native_pool';
+const _keyNativePoolTestOnCheckout = 'odbc_native_pool_test_on_checkout';
 
 /// Implementacao de [IOdbcConnectionSettings] com store global de configuracoes.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
@@ -18,6 +19,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   int _maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
   bool _useNativeOdbcPool = false;
+  bool _nativePoolTestOnCheckout = true;
 
   @override
   int get poolSize => _poolSize;
@@ -35,6 +37,9 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   bool get useNativeOdbcPool => _useNativeOdbcPool;
 
   @override
+  bool get nativePoolTestOnCheckout => _nativePoolTestOnCheckout;
+
+  @override
   Future<void> load() async {
     _poolSize = _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
     _loginTimeoutSeconds = _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds;
@@ -42,6 +47,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
         _prefs.getInt(_keyMaxResultBufferMb) ?? (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
     _streamingChunkSizeKb = _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb;
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
+    _nativePoolTestOnCheckout = _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
   }
 
   @override
@@ -72,5 +78,11 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> setUseNativeOdbcPool(bool value) async {
     await _prefs.setBool(_keyUseNativeOdbcPool, value);
     _useNativeOdbcPool = value;
+  }
+
+  @override
+  Future<void> setNativePoolTestOnCheckout(bool value) async {
+    await _prefs.setBool(_keyNativePoolTestOnCheckout, value);
+    _nativePoolTestOnCheckout = value;
   }
 }

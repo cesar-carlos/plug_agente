@@ -348,6 +348,10 @@ class AppStrings {
       'configurado (mais estável). Ative apenas para testar desempenho ou '
       'quando o driver/pacote tratar buffers no pool nativo. '
       'Após alterar, reinicie o aplicativo para o modo valer de fato.';
+  static const String odbcFieldNativePoolCheckoutValidation = 'Validar conexão ao retirar do pool nativo';
+  static const String odbcTextNativePoolCheckoutValidationHelp =
+      'Ligado por padrão. Desative apenas para benchmark ou tuning avançado '
+      'quando quiser comparar o custo do checkout validation do driver.';
   static const String odbcSuccessPoolModeRestartAppend =
       ' Reinicie o aplicativo para aplicar a troca do modo de pool ODBC.';
   static const String odbcBlockTimeouts = 'Timeouts';

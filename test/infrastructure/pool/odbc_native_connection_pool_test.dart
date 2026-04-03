@@ -59,6 +59,35 @@ void main() {
       },
     );
 
+    test('should disable native checkout validation when configured', () async {
+      mockSettings.nativePoolTestOnCheckout = false;
+      when(
+        () => mockService.poolCreate(any(), any()),
+      ).thenAnswer((_) async => const Success(55));
+      when(
+        () => mockService.poolGetConnection(55),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-55',
+            connectionString: 'DSN=Bench',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+
+      final result = await pool.acquire('DSN=Bench');
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => mockService.poolCreate(
+          'DSN=Bench;PoolTestOnCheckout=false',
+          any(),
+        ),
+      ).called(1);
+    });
+
     test('should close created pools and clear internal state', () async {
       when(
         () => mockService.poolCreate(any(), any()),

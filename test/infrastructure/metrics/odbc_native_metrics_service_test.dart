@@ -1,23 +1,59 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockOdbcService extends Mock implements OdbcService {}
 
+class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
+
 void main() {
   group('OdbcNativeMetricsService', () {
     late MockOdbcService mockService;
+    late MockAgentConfigRepository mockConfigRepository;
     late OdbcNativeMetricsService service;
 
     setUp(() {
       mockService = MockOdbcService();
-      service = OdbcNativeMetricsService(mockService);
+      mockConfigRepository = MockAgentConfigRepository();
+      service = OdbcNativeMetricsService(
+        mockService,
+        configRepository: mockConfigRepository,
+      );
     });
 
     test('should return merged snapshot when native calls succeed', () async {
+      final config = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17',
+        connectionString: 'DSN=Test',
+        username: 'u',
+        databaseName: 'db',
+        host: 'localhost',
+        port: 1433,
+        nome: 'Empresa Exemplo',
+        nomeFantasia: 'Fantasia Exemplo',
+        cnaeCnpjCpf: '52998224725',
+        telefone: '1133334444',
+        celular: '11988887777',
+        email: 'contato@exemplo.com',
+        endereco: 'Rua Central',
+        numeroEndereco: '123',
+        bairro: 'Centro',
+        cep: '01001000',
+        nomeMunicipio: 'Sao Paulo',
+        ufMunicipio: 'SP',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      when(
+        mockConfigRepository.getCurrentConfig,
+      ).thenAnswer((_) async => Success(config));
       when(() => mockService.getMetrics()).thenAnswer(
         (_) async => const Success(
           OdbcMetrics(
@@ -39,9 +75,15 @@ void main() {
             totalPrepares: 8,
             totalExecutions: 80,
             memoryUsageBytes: 4096,
-            avgExecutionsPerStmt: 10.0,
+            avgExecutionsPerStmt: 10,
           ),
         ),
+      );
+      when(() => mockService.validateConnectionString('DSN=Test')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(() => mockService.getDriverCapabilities('DSN=Test')).thenAnswer(
+        (_) async => const Success(<String, Object?>{'supports_pooling': true}),
       );
 
       final result = await service.collectSnapshot();
@@ -50,12 +92,18 @@ void main() {
       final snapshot = result.getOrThrow();
       expect(snapshot['engine'], isA<Map<String, dynamic>>());
       expect(snapshot['prepared_statements'], isA<Map<String, dynamic>>());
+      expect(snapshot['connection'], isA<Map<String, dynamic>>());
+      expect(snapshot['driver_capabilities'], isA<Map<String, dynamic>>());
       final engine = snapshot['engine'] as Map<String, dynamic>;
       final prepared = snapshot['prepared_statements'] as Map<String, dynamic>;
+      final connection = snapshot['connection'] as Map<String, dynamic>;
+      final capabilities = snapshot['driver_capabilities'] as Map<String, dynamic>;
       expect(engine['query_count'], 10);
       expect(engine['avg_latency_millis'], 42);
       expect(prepared['cache_hits'], 20);
       expect(prepared['cache_hit_rate'], closeTo(80.0, 0.0001));
+      expect(connection['valid'], isTrue);
+      expect(capabilities['supports_pooling'], isTrue);
     });
 
     test('should return typed failure when getMetrics fails', () async {

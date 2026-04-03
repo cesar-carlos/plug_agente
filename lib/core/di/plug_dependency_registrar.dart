@@ -173,12 +173,18 @@ void registerPlugDependencyGraph(
       () => createOdbcConnectionPool(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
+        getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton(
-      () => OdbcNativeMetricsService(getIt<odbc.OdbcService>()),
+      () => OdbcNativeMetricsService(
+        getIt<odbc.OdbcService>(),
+        configRepository: getIt<IAgentConfigRepository>(),
+        connectionPool: getIt<IConnectionPool>(),
+        settings: getIt<IOdbcConnectionSettings>(),
+      ),
     )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
     ..registerLazySingleton<IRpcDispatchMetricsCollector>(
@@ -222,6 +228,7 @@ void registerPlugDependencyGraph(
         dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
         onIdempotencyFingerprintMismatch: getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
+        odbcNativeMetricsService: getIt<OdbcNativeMetricsService>(),
       ),
     )
     ..registerLazySingleton<ITransportClient>(

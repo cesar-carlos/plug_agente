@@ -30,6 +30,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -48,6 +49,7 @@ class RpcMethodDispatcher {
     IRpcDispatchMetricsCollector? dispatchMetrics,
     void Function()? onIdempotencyFingerprintMismatch,
     IStreamingDatabaseGateway? streamingGateway,
+    OdbcNativeMetricsService? odbcNativeMetricsService,
     TransportLimits defaultLimits = const TransportLimits(),
     Duration sqlExecuteTotalBudget = _defaultSqlExecuteTotalBudget,
     Duration sqlBatchTotalBudget = _defaultSqlBatchTotalBudget,
@@ -66,6 +68,7 @@ class RpcMethodDispatcher {
        _dispatchMetrics = dispatchMetrics,
        _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
        _streamingGateway = streamingGateway,
+       _odbcNativeMetricsService = odbcNativeMetricsService,
        _defaultLimits = defaultLimits,
        _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
        _sqlBatchTotalBudgetDuration = sqlBatchTotalBudget,
@@ -90,6 +93,7 @@ class RpcMethodDispatcher {
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final void Function()? _onIdempotencyFingerprintMismatch;
   final IStreamingDatabaseGateway? _streamingGateway;
+  final OdbcNativeMetricsService? _odbcNativeMetricsService;
   final TransportLimits _defaultLimits;
   final Duration _sqlExecuteTotalBudgetDuration;
   final Duration _sqlBatchTotalBudgetDuration;
@@ -1209,37 +1213,56 @@ class RpcMethodDispatcher {
     }
 
     final result = await repository.getCurrentConfig();
-    return result.fold<RpcResponse>(
-      (config) {
-        final profileResult = AgentProfile.fromConfig(config);
-        if (profileResult.isError()) {
-          final failure = profileResult.exceptionOrNull()! as domain.Failure;
-          final rpcError = FailureToRpcErrorMapper.map(
-            failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          );
-          return RpcResponse.error(id: request.id, error: rpcError);
-        }
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      final rpcError = FailureToRpcErrorMapper.map(
+        failure,
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
 
-        final profile = profileResult.getOrThrow();
-        final payload = <String, dynamic>{
-          'agent_id': agentId,
-          'profile': profile.toJson(),
-          'updated_at': config.updatedAt.toUtc().toIso8601String(),
-        };
-        return RpcResponse.success(
-          id: request.id,
-          result: payload,
-        );
+    final config = result.getOrThrow();
+    final profileResult = AgentProfile.fromConfig(config);
+    if (profileResult.isError()) {
+      final failure = profileResult.exceptionOrNull()! as domain.Failure;
+      final rpcError = FailureToRpcErrorMapper.map(
+        failure,
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    final profile = profileResult.getOrThrow();
+    final payload = <String, dynamic>{
+      'agent_id': agentId,
+      'profile': profile.toJson(),
+      'updated_at': config.updatedAt.toUtc().toIso8601String(),
+      if (_odbcNativeMetricsService != null) 'odbc': await _collectOdbcDiagnosticsPayload(),
+    };
+    return RpcResponse.success(
+      id: request.id,
+      result: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> _collectOdbcDiagnosticsPayload() async {
+    final metricsService = _odbcNativeMetricsService;
+    if (metricsService == null) {
+      return const <String, dynamic>{'available': false};
+    }
+
+    final snapshotResult = await metricsService.collectSnapshot();
+    return snapshotResult.fold(
+      (snapshot) => <String, dynamic>{
+        'available': true,
+        'snapshot': snapshot,
       },
-      (failure) {
-        final rpcError = FailureToRpcErrorMapper.map(
-          failure as domain.Failure,
-          instance: request.id?.toString(),
-          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-        );
-        return RpcResponse.error(id: request.id, error: rpcError);
+      (failure) => <String, dynamic>{
+        'available': false,
+        'error': failure.toString(),
       },
     );
   }

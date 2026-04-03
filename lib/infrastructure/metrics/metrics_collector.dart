@@ -29,6 +29,10 @@ class MetricsCollector implements IMetricsCollector {
   static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
   static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
+  static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';
+  static const String _connectTimeoutCounter = 'connect_timeout';
+  static const String _queryTimeoutCounter = 'query_timeout';
+  static const String _preparedStatementReuseCounter = 'prepared_statement_reuse';
 
   static const int _maxMetrics = 10000;
 
@@ -64,6 +68,10 @@ class MetricsCollector implements IMetricsCollector {
   int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
   int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
   int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
+  int get poolAcquireTimeoutCount => _eventCounters[_poolAcquireTimeoutCounter] ?? 0;
+  int get connectTimeoutCount => _eventCounters[_connectTimeoutCounter] ?? 0;
+  int get queryTimeoutCount => _eventCounters[_queryTimeoutCounter] ?? 0;
+  int get preparedStatementReuseCount => _eventCounters[_preparedStatementReuseCounter] ?? 0;
 
   Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
 
@@ -110,6 +118,14 @@ class MetricsCollector implements IMetricsCollector {
   void recordRpcResponseAckRetry() => _incrementEventCounter(_rpcResponseAckRetryCounter);
 
   void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
+
+  void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
+
+  void recordConnectTimeout() => _incrementEventCounter(_connectTimeoutCounter);
+
+  void recordQueryTimeout() => _incrementEventCounter(_queryTimeoutCounter);
+
+  void recordPreparedStatementReuse() => _incrementEventCounter(_preparedStatementReuseCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

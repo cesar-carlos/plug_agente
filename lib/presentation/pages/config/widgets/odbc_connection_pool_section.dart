@@ -29,6 +29,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   bool _isSaving = false;
   bool _useNativeOdbcPool = false;
   bool _useNativeOdbcPoolAtLoad = false;
+  bool _nativePoolTestOnCheckout = true;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
       _useNativeOdbcPool = settings.useNativeOdbcPool;
       _useNativeOdbcPoolAtLoad = settings.useNativeOdbcPool;
+      _nativePoolTestOnCheckout = settings.nativePoolTestOnCheckout;
       _isLoading = false;
     });
     final healthResult = await getIt<IConnectionPool>().healthCheckAll();
@@ -94,6 +96,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       await settings.setMaxResultBufferMb(maxResultBuffer);
       await settings.setStreamingChunkSizeKb(streamingChunkSize);
       await settings.setUseNativeOdbcPool(_useNativeOdbcPool);
+      await settings.setNativePoolTestOnCheckout(_nativePoolTestOnCheckout);
 
       final closeResult = await getIt<IConnectionPool>().closeAll();
       final settingsAppliedNow = closeResult.isSuccess();
@@ -122,6 +125,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   Future<void> _restoreDefaults() async {
     setState(() => _useNativeOdbcPool = false);
+    _nativePoolTestOnCheckout = true;
     _poolSizeController.text = ConnectionConstants.defaultPoolSize.toString();
     _loginTimeoutController.text = ConnectionConstants.defaultLoginTimeout.inSeconds.toString();
     _maxResultBufferController.text = (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024)).toString();
@@ -213,6 +217,21 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                       const SizedBox(height: 8),
                       Text(
                         AppStrings.odbcTextNativePoolHelp,
+                        style: context.captionText,
+                      ),
+                      const SizedBox(height: 16),
+                      SettingsToggleTile(
+                        label: AppStrings.odbcFieldNativePoolCheckoutValidation,
+                        value: _nativePoolTestOnCheckout,
+                        onChanged: !_useNativeOdbcPool || _isSaving
+                            ? null
+                            : (bool value) {
+                                setState(() => _nativePoolTestOnCheckout = value);
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.odbcTextNativePoolCheckoutValidationHelp,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 24),
