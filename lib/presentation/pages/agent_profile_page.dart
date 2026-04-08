@@ -2,16 +2,21 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form_components.dart';
@@ -24,12 +29,14 @@ class AgentProfilePage extends StatefulWidget {
     this.configId,
     this.openCnpjClient,
     this.viaCepClient,
+    this.pushAgentProfileToHub,
     super.key,
   });
 
   final String? configId;
   final OpenCnpjClient? openCnpjClient;
   final ViaCepClient? viaCepClient;
+  final PushAgentProfileToHub? pushAgentProfileToHub;
 
   @override
   State<AgentProfilePage> createState() => _AgentProfilePageState();
@@ -37,6 +44,9 @@ class AgentProfilePage extends StatefulWidget {
 
 class _AgentProfilePageState extends State<AgentProfilePage> {
   static final RegExp _nonDigitsPattern = RegExp('[^0-9]');
+
+  PushAgentProfileToHub get _pushToHub =>
+      widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
 
   late final ConfigFormController _formController;
   late final OpenCnpjClient _openCnpjClient;
@@ -207,11 +217,10 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       return;
     }
 
-    setState(() {
-      _isSaving = false;
-    });
-
     if (saveResult.isError()) {
+      setState(() {
+        _isSaving = false;
+      });
       await SettingsFeedback.showError(
         context: context,
         title: AppStrings.modalTitleErrorSaving,
@@ -220,10 +229,89 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       return;
     }
 
+    var hubSyncFailed = false;
+    String? hubSyncErrorMessage;
+    var hubSyncSucceeded = false;
+    final connectionProvider = context.read<ConnectionProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final savedConfig = configProvider.currentConfig;
+    final authHeaderToken = authProvider.currentToken?.token.trim();
+    final configStoredToken = savedConfig?.authToken?.trim();
+    final accessToken = (authHeaderToken != null && authHeaderToken.isNotEmpty)
+        ? authHeaderToken
+        : (configStoredToken ?? '');
+    if (connectionProvider.isConnected &&
+        accessToken.isNotEmpty &&
+        savedConfig != null &&
+        savedConfig.serverUrl.trim().isNotEmpty &&
+        savedConfig.agentId.trim().isNotEmpty) {
+      final pushResult = await _pushToHub(
+        serverUrl: savedConfig.serverUrl,
+        agentId: savedConfig.agentId,
+        accessToken: accessToken,
+        profile: profile,
+        expectedProfileVersion: savedConfig.hubProfileVersion,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (pushResult.isSuccess()) {
+        final synced = pushResult.getOrThrow();
+        hubSyncSucceeded = true;
+        final persistResult = await configProvider.persistHubProfileCatalogSync(
+          profileVersion: synced.profileVersion,
+          profileUpdatedAtIso: synced.profileUpdatedAt,
+        );
+        persistResult.fold(
+          (_) {},
+          (Object failure) {
+            AppLogger.warning(
+              'Hub profile synced but failed to persist catalog version locally: '
+              '${failure.toDisplayMessage()}',
+            );
+          },
+        );
+      } else {
+        hubSyncFailed = true;
+        hubSyncErrorMessage = pushResult.exceptionOrNull()!.toDisplayMessage();
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = false;
+    });
+
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (hubSyncFailed) {
+      final hubErrorDetail = hubSyncErrorMessage ?? '';
+      await SettingsFeedback.showError(
+        context: context,
+        title: l10n.agentProfileHubSavePartialTitle,
+        message: l10n.agentProfileHubSavePartialMessage(hubErrorDetail),
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     await SettingsFeedback.showSuccess(
       context: context,
-      title: AppStrings.modalTitleSuccess,
-      message: AppStrings.agentProfileSaveSuccess,
+      title: l10n.modalTitleSuccess,
+      message: hubSyncSucceeded ? l10n.agentProfileSaveSuccessSynced : l10n.agentProfileSaveSuccessLocal,
     );
   }
 

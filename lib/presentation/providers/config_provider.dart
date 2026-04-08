@@ -321,6 +321,27 @@ class ConfigProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persists hub catalog revision after a successful profile PATCH (CAS for next push).
+  Future<Result<void>> persistHubProfileCatalogSync({
+    required int profileVersion,
+    String? profileUpdatedAtIso,
+  }) async {
+    if (_currentConfig == null) {
+      return Failure(
+        domain_errors.ValidationFailure('Nenhuma configuração para salvar'),
+      );
+    }
+
+    _currentConfig = _currentConfig!.copyWith(
+      hubProfileVersion: profileVersion,
+      hubProfileUpdatedAt: profileUpdatedAtIso,
+      updatedAt: DateTime.now(),
+    );
+    notifyListeners();
+
+    return saveConfig();
+  }
+
   void togglePasswordVisibility() {
     _isPasswordVisible = !_isPasswordVisible;
     notifyListeners();

@@ -134,4 +134,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get odbcDetailPrefix => 'Detalhe ODBC';
+
+  @override
+  String get agentProfileSaveSuccessLocal => 'Perfil guardado neste computador.';
+
+  @override
+  String get agentProfileSaveSuccessSynced => 'Perfil guardado e sincronizado com o servidor.';
+
+  @override
+  String get agentProfileHubSavePartialTitle => 'Guardado localmente';
+
+  @override
+  String agentProfileHubSavePartialMessage(String errorDetail) {
+    return 'O perfil foi guardado neste computador, mas a atualização no servidor falhou. Os dados serão enviados na próxima ligação.\n\nDetalhe: $errorDetail';
+  }
 }

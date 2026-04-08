@@ -2,17 +2,27 @@ import 'package:dio/dio.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvider {}
+
+class MockConnectionProvider extends Mock with ChangeNotifier implements ConnectionProvider {}
+
+class MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider {}
+
+class MockPushAgentProfileToHub extends Mock implements PushAgentProfileToHub {}
 
 class FakeAgentProfile extends Fake implements AgentProfile {}
 
@@ -23,9 +33,15 @@ void main() {
 
   group('AgentProfilePage', () {
     late MockConfigProvider mockConfigProvider;
+    late MockConnectionProvider mockConnectionProvider;
+    late MockAuthProvider mockAuthProvider;
+    late MockPushAgentProfileToHub mockPushToHub;
 
     setUp(() {
       mockConfigProvider = MockConfigProvider();
+      mockConnectionProvider = MockConnectionProvider();
+      mockAuthProvider = MockAuthProvider();
+      mockPushToHub = MockPushAgentProfileToHub();
       when(() => mockConfigProvider.currentConfig).thenReturn(_sampleConfig);
       when(() => mockConfigProvider.isLoading).thenReturn(false);
       when(() => mockConfigProvider.error).thenReturn('');
@@ -38,11 +54,26 @@ void main() {
         () => mockConfigProvider.saveConfig(),
       ).thenAnswer((_) async => const Success(unit));
       when(() => mockConfigProvider.updateAgentProfile(any())).thenReturn(null);
+      when(
+        () => mockConfigProvider.persistHubProfileCatalogSync(
+          profileVersion: any(named: 'profileVersion'),
+          profileUpdatedAtIso: any(named: 'profileUpdatedAtIso'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+      when(() => mockConnectionProvider.isConnected).thenReturn(false);
+      when(() => mockAuthProvider.currentToken).thenReturn(null);
     });
 
     testWidgets('shows identity section when config is loaded', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1400, 1000));
-      await tester.pumpWidget(_buildWidget(mockConfigProvider));
+      await tester.pumpWidget(
+        _buildWidget(
+          mockConfigProvider,
+          mockConnectionProvider,
+          mockAuthProvider,
+          mockPushToHub,
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text(AppStrings.agentProfilePageTitle), findsOneWidget);
@@ -60,7 +91,14 @@ void main() {
 
     testWidgets('saves profile when tapping save button', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1400, 1000));
-      await tester.pumpWidget(_buildWidget(mockConfigProvider));
+      await tester.pumpWidget(
+        _buildWidget(
+          mockConfigProvider,
+          mockConnectionProvider,
+          mockAuthProvider,
+          mockPushToHub,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text(AppStrings.agentProfileActionSave));
@@ -74,13 +112,26 @@ void main() {
   });
 }
 
-Widget _buildWidget(ConfigProvider provider) {
+Widget _buildWidget(
+  ConfigProvider configProvider,
+  ConnectionProvider connectionProvider,
+  AuthProvider authProvider,
+  PushAgentProfileToHub pushToHub,
+) {
   return FluentApp(
-    home: ChangeNotifierProvider<ConfigProvider>.value(
-      value: provider,
+    locale: const Locale('pt'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
+        ChangeNotifierProvider<ConnectionProvider>.value(value: connectionProvider),
+        ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+      ],
       child: AgentProfilePage(
         openCnpjClient: OpenCnpjClient(Dio()),
         viaCepClient: ViaCepClient(Dio()),
+        pushAgentProfileToHub: pushToHub,
       ),
     ),
   );

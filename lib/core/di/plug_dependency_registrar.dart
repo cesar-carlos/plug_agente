@@ -24,6 +24,7 @@ import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
+import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
@@ -44,6 +45,7 @@ import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
@@ -69,6 +71,7 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
+import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_rest_client.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
@@ -270,6 +273,9 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IAuthClient>(
       () => AuthClient(DioFactory.createDio()),
     )
+    ..registerLazySingleton<IAgentHubProfileGateway>(
+      () => AgentHubProfileRestClient(DioFactory.createDio()),
+    )
     ..registerLazySingleton(
       () => ViaCepClient(
         DioFactory.createDio(
@@ -379,6 +385,12 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
       () => AutoUpdateOrchestrator(getIt<RuntimeCapabilities>()),
+    )
+    ..registerLazySingleton(
+      () => PushAgentProfileToHub(
+        getIt<IAgentHubProfileGateway>(),
+        getIt<Uuid>(),
+      ),
     )
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))

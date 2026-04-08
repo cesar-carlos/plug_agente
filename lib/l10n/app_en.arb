@@ -40,5 +40,16 @@
   "odbcServerUnreachable": "Could not connect to the database server. Check host, port, VPN and network availability.",
   "odbcConnectionTimeout": "The connection to the database took longer than expected. Confirm the server is accessible and try again.",
   "odbcConnectionFailed": "Could not establish connection to the database.",
-  "odbcDetailPrefix": "ODBC detail"
+  "odbcDetailPrefix": "ODBC detail",
+  "agentProfileSaveSuccessLocal": "Profile saved on this computer.",
+  "agentProfileSaveSuccessSynced": "Profile saved and synchronized with the server.",
+  "agentProfileHubSavePartialTitle": "Saved locally",
+  "agentProfileHubSavePartialMessage": "The profile was saved on this computer, but updating the server failed. Data will be sent on the next connection.\n\nDetail: {errorDetail}",
+  "@agentProfileHubSavePartialMessage": {
+    "placeholders": {
+      "errorDetail": {
+        "type": "String"
+      }
+    }
+  }
 }

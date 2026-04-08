@@ -34,7 +34,10 @@ void main() async {
         return;
       }
       final connectionString = dsn;
-      sql = OdbcE2eCoverageSql(detectOdbcE2eDialect(connectionString));
+      sql = OdbcE2eCoverageSql(
+        detectOdbcE2eDialect(connectionString),
+        tableName: 'plug_agente_e2e_cov_rpc',
+      );
       final opened = await OdbcE2eRpcHarness.open(
         connectionString,
         sql.dialect,
@@ -236,12 +239,12 @@ void main() async {
           }
           // Defense in depth if RPC still returns an empty envelope (e.g. older
           // gateway or edge case): same facts via two simple executes.
-          const pickOne = RpcRequest(
+          final pickOne = RpcRequest(
             jsonrpc: '2.0',
             method: 'sql.execute',
             id: 'e2e-fallback-row',
             params: <String, dynamic>{
-              'sql': 'SELECT id, code, amt FROM $odbcE2eCoverageTableName WHERE id = 1',
+              'sql': 'SELECT id, code, amt FROM ${sql.tableName} WHERE id = 1',
             },
           );
           final pickResp = await h.dispatcher.dispatch(pickOne, 'e2e-agent');
@@ -250,12 +253,12 @@ void main() async {
           expect(pickRows, isNotNull);
           expect(pickRows, isNotEmpty);
 
-          const pickCount = RpcRequest(
+          final pickCount = RpcRequest(
             jsonrpc: '2.0',
             method: 'sql.execute',
             id: 'e2e-fallback-count',
             params: <String, dynamic>{
-              'sql': 'SELECT COUNT(*) AS row_count FROM $odbcE2eCoverageTableName',
+              'sql': 'SELECT COUNT(*) AS row_count FROM ${sql.tableName}',
             },
           );
           final countFallbackResp = await h.dispatcher.dispatch(
@@ -364,12 +367,12 @@ void main() async {
         expect(deleteMap['failed_commands'], 0);
         expect(deleteMap['successful_commands'], 2);
 
-        const rowProbe = RpcRequest(
+        final rowProbe = RpcRequest(
           jsonrpc: '2.0',
           method: 'sql.execute',
           id: 'e2e-row-probe',
           params: <String, dynamic>{
-            'sql': 'SELECT * FROM $odbcE2eCoverageTableName WHERE id = 3',
+            'sql': 'SELECT * FROM ${sql.tableName} WHERE id = 3',
           },
         );
 

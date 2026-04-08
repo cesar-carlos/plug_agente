@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
@@ -78,14 +80,19 @@ GoRouter createAppRouter({
             name: 'agentProfileEdit',
             builder: (context, state) {
               final id = state.pathParameters[AppRoutes.paramId] ?? '';
-              return AgentProfilePage(configId: id);
+              return AgentProfilePage(
+                configId: id,
+                pushAgentProfileToHub: getIt<PushAgentProfileToHub>(),
+              );
             },
           ),
           GoRoute(
             path: AppRoutes.agentProfile,
             name: 'agentProfile',
             builder: (context, state) {
-              return const AgentProfilePage();
+              return AgentProfilePage(
+                pushAgentProfileToHub: getIt<PushAgentProfileToHub>(),
+              );
             },
           ),
           GoRoute(

@@ -29,8 +29,13 @@ class AppConstants {
 
   static const int httpStatusOk = 200;
   static const int httpStatusUnauthorized = 401;
+  static const int httpStatusForbidden = 403;
   static const int httpStatusNotFound = 404;
+  static const int httpStatusConflict = 409;
   static const int httpStatusTooManyRequests = 429;
+
+  /// Path template: replace `{agentId}` with the agent UUID.
+  static String agentHubProfilePath(String agentId) => '/api/v1/agents/$agentId/profile';
 
   static const int userAgentInitPollIntervalMs = 10;
   static const String notificationAppUserModelGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';

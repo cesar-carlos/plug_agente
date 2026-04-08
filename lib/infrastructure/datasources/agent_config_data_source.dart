@@ -30,6 +30,8 @@ class ConfigTable extends Table {
   TextColumn get nomeMunicipio => text().withDefault(const Constant(''))();
   TextColumn get ufMunicipio => text().withDefault(const Constant(''))();
   TextColumn get observacao => text().withDefault(const Constant(''))();
+  IntColumn get hubProfileVersion => integer().nullable()();
+  TextColumn get hubProfileUpdatedAt => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 

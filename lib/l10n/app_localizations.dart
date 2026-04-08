@@ -337,6 +337,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'ODBC detail'**
   String get odbcDetailPrefix;
+
+  /// No description provided for @agentProfileSaveSuccessLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile saved on this computer.'**
+  String get agentProfileSaveSuccessLocal;
+
+  /// No description provided for @agentProfileSaveSuccessSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile saved and synchronized with the server.'**
+  String get agentProfileSaveSuccessSynced;
+
+  /// No description provided for @agentProfileHubSavePartialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved locally'**
+  String get agentProfileHubSavePartialTitle;
+
+  /// No description provided for @agentProfileHubSavePartialMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile was saved on this computer, but updating the server failed. Data will be sent on the next connection.\n\nDetail: {errorDetail}'**
+  String agentProfileHubSavePartialMessage(String errorDetail);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

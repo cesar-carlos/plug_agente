@@ -167,6 +167,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
       nomeMunicipio: config.nomeMunicipio,
       ufMunicipio: config.ufMunicipio,
       observacao: config.observacao,
+      hubProfileVersion: config.hubProfileVersion,
+      hubProfileUpdatedAt: config.hubProfileUpdatedAt,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     );
@@ -202,6 +204,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
       nomeMunicipio: data.nomeMunicipio,
       ufMunicipio: data.ufMunicipio,
       observacao: data.observacao,
+      hubProfileVersion: data.hubProfileVersion,
+      hubProfileUpdatedAt: data.hubProfileUpdatedAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );

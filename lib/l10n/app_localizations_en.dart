@@ -133,4 +133,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get odbcDetailPrefix => 'ODBC detail';
+
+  @override
+  String get agentProfileSaveSuccessLocal => 'Profile saved on this computer.';
+
+  @override
+  String get agentProfileSaveSuccessSynced => 'Profile saved and synchronized with the server.';
+
+  @override
+  String get agentProfileHubSavePartialTitle => 'Saved locally';
+
+  @override
+  String agentProfileHubSavePartialMessage(String errorDetail) {
+    return 'The profile was saved on this computer, but updating the server failed. Data will be sent on the next connection.\n\nDetail: $errorDetail';
+  }
 }

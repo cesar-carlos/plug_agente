@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
@@ -13,11 +14,6 @@ import 'package:result_dart/result_dart.dart';
 class AuthClient implements IAuthClient {
   AuthClient(this._dio);
   final Dio _dio;
-
-  String _normalizeUrl(String baseUrl, String path) {
-    final normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-    return '$normalizedBase$path';
-  }
 
   @override
   Future<Result<AuthToken>> login(
@@ -53,7 +49,7 @@ class AuthClient implements IAuthClient {
       ];
 
       for (final attempt in endpointAttempts) {
-        final url = _normalizeUrl(serverUrl, attempt.path);
+        final url = joinServerUrlAndPath(serverUrl, attempt.path);
         if (kDebugMode) {
           developer.log(
             'AuthClient: Attempting login to $url',
@@ -159,7 +155,7 @@ class AuthClient implements IAuthClient {
       ];
 
       for (final endpoint in endpointAttempts) {
-        final url = _normalizeUrl(serverUrl, endpoint);
+        final url = joinServerUrlAndPath(serverUrl, endpoint);
         try {
           final response = await _dio.post<Map<String, dynamic>>(
             url,

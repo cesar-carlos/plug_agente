@@ -40,5 +40,16 @@
   "odbcServerUnreachable": "Não foi possível conectar ao servidor do banco. Verifique host, porta, VPN e disponibilidade da rede.",
   "odbcConnectionTimeout": "A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.",
   "odbcConnectionFailed": "Não foi possível estabelecer conexão com o banco de dados.",
-  "odbcDetailPrefix": "Detalhe ODBC"
+  "odbcDetailPrefix": "Detalhe ODBC",
+  "agentProfileSaveSuccessLocal": "Perfil guardado neste computador.",
+  "agentProfileSaveSuccessSynced": "Perfil guardado e sincronizado com o servidor.",
+  "agentProfileHubSavePartialTitle": "Guardado localmente",
+  "agentProfileHubSavePartialMessage": "O perfil foi guardado neste computador, mas a atualização no servidor falhou. Os dados serão enviados na próxima ligação.\n\nDetalhe: {errorDetail}",
+  "@agentProfileHubSavePartialMessage": {
+    "placeholders": {
+      "errorDetail": {
+        "type": "String"
+      }
+    }
+  }
 }

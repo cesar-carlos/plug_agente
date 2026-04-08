@@ -3,7 +3,8 @@
 part of 'agent_config_drift_database.dart';
 
 // ignore_for_file: type=lint
-class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, ConfigData> {
+class $ConfigTableTable extends ConfigTable
+    with TableInfo<$ConfigTableTable, ConfigData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -318,6 +319,28 @@ class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, Co
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _hubProfileVersionMeta = const VerificationMeta(
+    'hubProfileVersion',
+  );
+  @override
+  late final GeneratedColumn<int> hubProfileVersion = GeneratedColumn<int>(
+    'hub_profile_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hubProfileUpdatedAtMeta =
+      const VerificationMeta('hubProfileUpdatedAt');
+  @override
+  late final GeneratedColumn<String> hubProfileUpdatedAt =
+      GeneratedColumn<String>(
+        'hub_profile_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -370,6 +393,8 @@ class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, Co
     nomeMunicipio,
     ufMunicipio,
     observacao,
+    hubProfileVersion,
+    hubProfileUpdatedAt,
     createdAt,
     updatedAt,
   ];
@@ -597,6 +622,24 @@ class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, Co
         observacao.isAcceptableOrUnknown(data['observacao']!, _observacaoMeta),
       );
     }
+    if (data.containsKey('hub_profile_version')) {
+      context.handle(
+        _hubProfileVersionMeta,
+        hubProfileVersion.isAcceptableOrUnknown(
+          data['hub_profile_version']!,
+          _hubProfileVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hub_profile_updated_at')) {
+      context.handle(
+        _hubProfileUpdatedAtMeta,
+        hubProfileUpdatedAt.isAcceptableOrUnknown(
+          data['hub_profile_updated_at']!,
+          _hubProfileUpdatedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -734,6 +777,14 @@ class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, Co
         DriftSqlType.string,
         data['${effectivePrefix}observacao'],
       )!,
+      hubProfileVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hub_profile_version'],
+      ),
+      hubProfileUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hub_profile_updated_at'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -780,6 +831,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
   final String nomeMunicipio;
   final String ufMunicipio;
   final String observacao;
+  final int? hubProfileVersion;
+  final String? hubProfileUpdatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   const ConfigData({
@@ -811,6 +864,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     required this.nomeMunicipio,
     required this.ufMunicipio,
     required this.observacao,
+    this.hubProfileVersion,
+    this.hubProfileUpdatedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -855,6 +910,12 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     map['nome_municipio'] = Variable<String>(nomeMunicipio);
     map['uf_municipio'] = Variable<String>(ufMunicipio);
     map['observacao'] = Variable<String>(observacao);
+    if (!nullToAbsent || hubProfileVersion != null) {
+      map['hub_profile_version'] = Variable<int>(hubProfileVersion);
+    }
+    if (!nullToAbsent || hubProfileUpdatedAt != null) {
+      map['hub_profile_updated_at'] = Variable<String>(hubProfileUpdatedAt);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -865,15 +926,25 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       id: Value(id),
       serverUrl: Value(serverUrl),
       agentId: Value(agentId),
-      authToken: authToken == null && nullToAbsent ? const Value.absent() : Value(authToken),
-      refreshToken: refreshToken == null && nullToAbsent ? const Value.absent() : Value(refreshToken),
-      authUsername: authUsername == null && nullToAbsent ? const Value.absent() : Value(authUsername),
-      authPassword: authPassword == null && nullToAbsent ? const Value.absent() : Value(authPassword),
+      authToken: authToken == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authToken),
+      refreshToken: refreshToken == null && nullToAbsent
+          ? const Value.absent()
+          : Value(refreshToken),
+      authUsername: authUsername == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authUsername),
+      authPassword: authPassword == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authPassword),
       driverName: Value(driverName),
       odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
-      password: password == null && nullToAbsent ? const Value.absent() : Value(password),
+      password: password == null && nullToAbsent
+          ? const Value.absent()
+          : Value(password),
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
@@ -890,6 +961,12 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       nomeMunicipio: Value(nomeMunicipio),
       ufMunicipio: Value(ufMunicipio),
       observacao: Value(observacao),
+      hubProfileVersion: hubProfileVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hubProfileVersion),
+      hubProfileUpdatedAt: hubProfileUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hubProfileUpdatedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -929,6 +1006,10 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       nomeMunicipio: serializer.fromJson<String>(json['nomeMunicipio']),
       ufMunicipio: serializer.fromJson<String>(json['ufMunicipio']),
       observacao: serializer.fromJson<String>(json['observacao']),
+      hubProfileVersion: serializer.fromJson<int?>(json['hubProfileVersion']),
+      hubProfileUpdatedAt: serializer.fromJson<String?>(
+        json['hubProfileUpdatedAt'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -965,6 +1046,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       'nomeMunicipio': serializer.toJson<String>(nomeMunicipio),
       'ufMunicipio': serializer.toJson<String>(ufMunicipio),
       'observacao': serializer.toJson<String>(observacao),
+      'hubProfileVersion': serializer.toJson<int?>(hubProfileVersion),
+      'hubProfileUpdatedAt': serializer.toJson<String?>(hubProfileUpdatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -999,6 +1082,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     String? nomeMunicipio,
     String? ufMunicipio,
     String? observacao,
+    Value<int?> hubProfileVersion = const Value.absent(),
+    Value<String?> hubProfileUpdatedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => ConfigData(
@@ -1030,6 +1115,12 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
     ufMunicipio: ufMunicipio ?? this.ufMunicipio,
     observacao: observacao ?? this.observacao,
+    hubProfileVersion: hubProfileVersion.present
+        ? hubProfileVersion.value
+        : this.hubProfileVersion,
+    hubProfileUpdatedAt: hubProfileUpdatedAt.present
+        ? hubProfileUpdatedAt.value
+        : this.hubProfileUpdatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1039,30 +1130,62 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       serverUrl: data.serverUrl.present ? data.serverUrl.value : this.serverUrl,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
       authToken: data.authToken.present ? data.authToken.value : this.authToken,
-      refreshToken: data.refreshToken.present ? data.refreshToken.value : this.refreshToken,
-      authUsername: data.authUsername.present ? data.authUsername.value : this.authUsername,
-      authPassword: data.authPassword.present ? data.authPassword.value : this.authPassword,
-      driverName: data.driverName.present ? data.driverName.value : this.driverName,
-      odbcDriverName: data.odbcDriverName.present ? data.odbcDriverName.value : this.odbcDriverName,
-      connectionString: data.connectionString.present ? data.connectionString.value : this.connectionString,
+      refreshToken: data.refreshToken.present
+          ? data.refreshToken.value
+          : this.refreshToken,
+      authUsername: data.authUsername.present
+          ? data.authUsername.value
+          : this.authUsername,
+      authPassword: data.authPassword.present
+          ? data.authPassword.value
+          : this.authPassword,
+      driverName: data.driverName.present
+          ? data.driverName.value
+          : this.driverName,
+      odbcDriverName: data.odbcDriverName.present
+          ? data.odbcDriverName.value
+          : this.odbcDriverName,
+      connectionString: data.connectionString.present
+          ? data.connectionString.value
+          : this.connectionString,
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
-      databaseName: data.databaseName.present ? data.databaseName.value : this.databaseName,
+      databaseName: data.databaseName.present
+          ? data.databaseName.value
+          : this.databaseName,
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
       nome: data.nome.present ? data.nome.value : this.nome,
-      nomeFantasia: data.nomeFantasia.present ? data.nomeFantasia.value : this.nomeFantasia,
-      cnaeCnpjCpf: data.cnaeCnpjCpf.present ? data.cnaeCnpjCpf.value : this.cnaeCnpjCpf,
+      nomeFantasia: data.nomeFantasia.present
+          ? data.nomeFantasia.value
+          : this.nomeFantasia,
+      cnaeCnpjCpf: data.cnaeCnpjCpf.present
+          ? data.cnaeCnpjCpf.value
+          : this.cnaeCnpjCpf,
       telefone: data.telefone.present ? data.telefone.value : this.telefone,
       celular: data.celular.present ? data.celular.value : this.celular,
       email: data.email.present ? data.email.value : this.email,
       endereco: data.endereco.present ? data.endereco.value : this.endereco,
-      numeroEndereco: data.numeroEndereco.present ? data.numeroEndereco.value : this.numeroEndereco,
+      numeroEndereco: data.numeroEndereco.present
+          ? data.numeroEndereco.value
+          : this.numeroEndereco,
       bairro: data.bairro.present ? data.bairro.value : this.bairro,
       cep: data.cep.present ? data.cep.value : this.cep,
-      nomeMunicipio: data.nomeMunicipio.present ? data.nomeMunicipio.value : this.nomeMunicipio,
-      ufMunicipio: data.ufMunicipio.present ? data.ufMunicipio.value : this.ufMunicipio,
-      observacao: data.observacao.present ? data.observacao.value : this.observacao,
+      nomeMunicipio: data.nomeMunicipio.present
+          ? data.nomeMunicipio.value
+          : this.nomeMunicipio,
+      ufMunicipio: data.ufMunicipio.present
+          ? data.ufMunicipio.value
+          : this.ufMunicipio,
+      observacao: data.observacao.present
+          ? data.observacao.value
+          : this.observacao,
+      hubProfileVersion: data.hubProfileVersion.present
+          ? data.hubProfileVersion.value
+          : this.hubProfileVersion,
+      hubProfileUpdatedAt: data.hubProfileUpdatedAt.present
+          ? data.hubProfileUpdatedAt.value
+          : this.hubProfileUpdatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1099,6 +1222,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ..write('nomeMunicipio: $nomeMunicipio, ')
           ..write('ufMunicipio: $ufMunicipio, ')
           ..write('observacao: $observacao, ')
+          ..write('hubProfileVersion: $hubProfileVersion, ')
+          ..write('hubProfileUpdatedAt: $hubProfileUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1135,6 +1260,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     nomeMunicipio,
     ufMunicipio,
     observacao,
+    hubProfileVersion,
+    hubProfileUpdatedAt,
     createdAt,
     updatedAt,
   ]);
@@ -1170,6 +1297,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           other.nomeMunicipio == this.nomeMunicipio &&
           other.ufMunicipio == this.ufMunicipio &&
           other.observacao == this.observacao &&
+          other.hubProfileVersion == this.hubProfileVersion &&
+          other.hubProfileUpdatedAt == this.hubProfileUpdatedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1203,6 +1332,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
   final Value<String> nomeMunicipio;
   final Value<String> ufMunicipio;
   final Value<String> observacao;
+  final Value<int?> hubProfileVersion;
+  final Value<String?> hubProfileUpdatedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1235,6 +1366,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.nomeMunicipio = const Value.absent(),
     this.ufMunicipio = const Value.absent(),
     this.observacao = const Value.absent(),
+    this.hubProfileVersion = const Value.absent(),
+    this.hubProfileUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1268,6 +1401,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.nomeMunicipio = const Value.absent(),
     this.ufMunicipio = const Value.absent(),
     this.observacao = const Value.absent(),
+    this.hubProfileVersion = const Value.absent(),
+    this.hubProfileUpdatedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -1309,6 +1444,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Expression<String>? nomeMunicipio,
     Expression<String>? ufMunicipio,
     Expression<String>? observacao,
+    Expression<int>? hubProfileVersion,
+    Expression<String>? hubProfileUpdatedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -1342,6 +1479,9 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (nomeMunicipio != null) 'nome_municipio': nomeMunicipio,
       if (ufMunicipio != null) 'uf_municipio': ufMunicipio,
       if (observacao != null) 'observacao': observacao,
+      if (hubProfileVersion != null) 'hub_profile_version': hubProfileVersion,
+      if (hubProfileUpdatedAt != null)
+        'hub_profile_updated_at': hubProfileUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1377,6 +1517,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Value<String>? nomeMunicipio,
     Value<String>? ufMunicipio,
     Value<String>? observacao,
+    Value<int?>? hubProfileVersion,
+    Value<String?>? hubProfileUpdatedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -1410,6 +1552,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
       ufMunicipio: ufMunicipio ?? this.ufMunicipio,
       observacao: observacao ?? this.observacao,
+      hubProfileVersion: hubProfileVersion ?? this.hubProfileVersion,
+      hubProfileUpdatedAt: hubProfileUpdatedAt ?? this.hubProfileUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1503,6 +1647,14 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     if (observacao.present) {
       map['observacao'] = Variable<String>(observacao.value);
     }
+    if (hubProfileVersion.present) {
+      map['hub_profile_version'] = Variable<int>(hubProfileVersion.value);
+    }
+    if (hubProfileUpdatedAt.present) {
+      map['hub_profile_updated_at'] = Variable<String>(
+        hubProfileUpdatedAt.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1546,6 +1698,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
           ..write('nomeMunicipio: $nomeMunicipio, ')
           ..write('ufMunicipio: $ufMunicipio, ')
           ..write('observacao: $observacao, ')
+          ..write('hubProfileVersion: $hubProfileVersion, ')
+          ..write('hubProfileUpdatedAt: $hubProfileUpdatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1956,7 +2110,8 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
   }
 }
 
-class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCacheData> {
+class ClientTokenCacheData extends DataClass
+    implements Insertable<ClientTokenCacheData> {
   final String id;
   final String clientId;
   final bool isRevoked;
@@ -2022,10 +2177,16 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
       clientId: Value(clientId),
       isRevoked: Value(isRevoked),
       version: Value(version),
-      agentId: agentId == null && nullToAbsent ? const Value.absent() : Value(agentId),
-      tokenValue: tokenValue == null && nullToAbsent ? const Value.absent() : Value(tokenValue),
+      agentId: agentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(agentId),
+      tokenValue: tokenValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tokenValue),
       createdAt: Value(createdAt),
-      updatedAt: updatedAt == null && nullToAbsent ? const Value.absent() : Value(updatedAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
       payloadJson: Value(payloadJson),
       allTables: Value(allTables),
       allViews: Value(allViews),
@@ -2121,13 +2282,19 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
       isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
       version: data.version.present ? data.version.value : this.version,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
-      tokenValue: data.tokenValue.present ? data.tokenValue.value : this.tokenValue,
+      tokenValue: data.tokenValue.present
+          ? data.tokenValue.value
+          : this.tokenValue,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      payloadJson: data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
       allTables: data.allTables.present ? data.allTables.value : this.allTables,
       allViews: data.allViews.present ? data.allViews.value : this.allViews,
-      allPermissions: data.allPermissions.present ? data.allPermissions.value : this.allPermissions,
+      allPermissions: data.allPermissions.present
+          ? data.allPermissions.value
+          : this.allPermissions,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
       tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
@@ -2195,7 +2362,8 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
           other.tokenHash == this.tokenHash);
 }
 
-class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheData> {
+class ClientTokenCacheTableCompanion
+    extends UpdateCompanion<ClientTokenCacheData> {
   final Value<String> id;
   final Value<String> clientId;
   final Value<bool> isRevoked;
@@ -2409,9 +2577,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
-  late final $ClientTokenCacheTableTable clientTokenCacheTable = $ClientTokenCacheTableTable(this);
+  late final $ClientTokenCacheTableTable clientTokenCacheTable =
+      $ClientTokenCacheTableTable(this);
   @override
-  Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
+  Iterable<TableInfo<Table, Object?>> get allTables =>
+      allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     configTable,
@@ -2449,6 +2619,8 @@ typedef $$ConfigTableTableCreateCompanionBuilder =
       Value<String> nomeMunicipio,
       Value<String> ufMunicipio,
       Value<String> observacao,
+      Value<int?> hubProfileVersion,
+      Value<String?> hubProfileUpdatedAt,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -2483,12 +2655,15 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<String> nomeMunicipio,
       Value<String> ufMunicipio,
       Value<String> observacao,
+      Value<int?> hubProfileVersion,
+      Value<String?> hubProfileUpdatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
     });
 
-class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -2636,6 +2811,16 @@ class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTa
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get hubProfileVersion => $composableBuilder(
+    column: $table.hubProfileVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get hubProfileUpdatedAt => $composableBuilder(
+    column: $table.hubProfileUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -2647,7 +2832,8 @@ class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTa
   );
 }
 
-class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2795,6 +2981,16 @@ class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $Config
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get hubProfileVersion => $composableBuilder(
+    column: $table.hubProfileVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hubProfileUpdatedAt => $composableBuilder(
+    column: $table.hubProfileUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2806,7 +3002,8 @@ class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $Config
   );
 }
 
-class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2814,13 +3011,17 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get serverUrl => $composableBuilder(column: $table.serverUrl, builder: (column) => column);
+  GeneratedColumn<String> get serverUrl =>
+      $composableBuilder(column: $table.serverUrl, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId =>
+      $composableBuilder(column: $table.agentId, builder: (column) => column);
 
-  GeneratedColumn<String> get authToken => $composableBuilder(column: $table.authToken, builder: (column) => column);
+  GeneratedColumn<String> get authToken =>
+      $composableBuilder(column: $table.authToken, builder: (column) => column);
 
   GeneratedColumn<String> get refreshToken => $composableBuilder(
     column: $table.refreshToken,
@@ -2852,20 +3053,25 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get username => $composableBuilder(column: $table.username, builder: (column) => column);
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
 
-  GeneratedColumn<String> get password => $composableBuilder(column: $table.password, builder: (column) => column);
+  GeneratedColumn<String> get password =>
+      $composableBuilder(column: $table.password, builder: (column) => column);
 
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get host => $composableBuilder(column: $table.host, builder: (column) => column);
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
 
-  GeneratedColumn<int> get port => $composableBuilder(column: $table.port, builder: (column) => column);
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
 
-  GeneratedColumn<String> get nome => $composableBuilder(column: $table.nome, builder: (column) => column);
+  GeneratedColumn<String> get nome =>
+      $composableBuilder(column: $table.nome, builder: (column) => column);
 
   GeneratedColumn<String> get nomeFantasia => $composableBuilder(
     column: $table.nomeFantasia,
@@ -2877,22 +3083,28 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get telefone => $composableBuilder(column: $table.telefone, builder: (column) => column);
+  GeneratedColumn<String> get telefone =>
+      $composableBuilder(column: $table.telefone, builder: (column) => column);
 
-  GeneratedColumn<String> get celular => $composableBuilder(column: $table.celular, builder: (column) => column);
+  GeneratedColumn<String> get celular =>
+      $composableBuilder(column: $table.celular, builder: (column) => column);
 
-  GeneratedColumn<String> get email => $composableBuilder(column: $table.email, builder: (column) => column);
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
 
-  GeneratedColumn<String> get endereco => $composableBuilder(column: $table.endereco, builder: (column) => column);
+  GeneratedColumn<String> get endereco =>
+      $composableBuilder(column: $table.endereco, builder: (column) => column);
 
   GeneratedColumn<String> get numeroEndereco => $composableBuilder(
     column: $table.numeroEndereco,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get bairro => $composableBuilder(column: $table.bairro, builder: (column) => column);
+  GeneratedColumn<String> get bairro =>
+      $composableBuilder(column: $table.bairro, builder: (column) => column);
 
-  GeneratedColumn<String> get cep => $composableBuilder(column: $table.cep, builder: (column) => column);
+  GeneratedColumn<String> get cep =>
+      $composableBuilder(column: $table.cep, builder: (column) => column);
 
   GeneratedColumn<String> get nomeMunicipio => $composableBuilder(
     column: $table.nomeMunicipio,
@@ -2909,9 +3121,21 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<int> get hubProfileVersion => $composableBuilder(
+    column: $table.hubProfileVersion,
+    builder: (column) => column,
+  );
 
-  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<String> get hubProfileUpdatedAt => $composableBuilder(
+    column: $table.hubProfileUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$ConfigTableTableTableManager
@@ -2937,9 +3161,12 @@ class $$ConfigTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () => $$ConfigTableTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () => $$ConfigTableTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () => $$ConfigTableTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () =>
+              $$ConfigTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ConfigTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ConfigTableTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -2970,6 +3197,8 @@ class $$ConfigTableTableTableManager
                 Value<String> nomeMunicipio = const Value.absent(),
                 Value<String> ufMunicipio = const Value.absent(),
                 Value<String> observacao = const Value.absent(),
+                Value<int?> hubProfileVersion = const Value.absent(),
+                Value<String?> hubProfileUpdatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3002,6 +3231,8 @@ class $$ConfigTableTableTableManager
                 nomeMunicipio: nomeMunicipio,
                 ufMunicipio: ufMunicipio,
                 observacao: observacao,
+                hubProfileVersion: hubProfileVersion,
+                hubProfileUpdatedAt: hubProfileUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -3036,6 +3267,8 @@ class $$ConfigTableTableTableManager
                 Value<String> nomeMunicipio = const Value.absent(),
                 Value<String> ufMunicipio = const Value.absent(),
                 Value<String> observacao = const Value.absent(),
+                Value<int?> hubProfileVersion = const Value.absent(),
+                Value<String?> hubProfileUpdatedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -3068,11 +3301,15 @@ class $$ConfigTableTableTableManager
                 nomeMunicipio: nomeMunicipio,
                 ufMunicipio: ufMunicipio,
                 observacao: observacao,
+                hubProfileVersion: hubProfileVersion,
+                hubProfileUpdatedAt: hubProfileUpdatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3134,7 +3371,8 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3218,7 +3456,8 @@ class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase,
   );
 }
 
-class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3302,7 +3541,8 @@ class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabas
   );
 }
 
-class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -3310,44 +3550,56 @@ class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatab
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<bool> get isRevoked => $composableBuilder(column: $table.isRevoked, builder: (column) => column);
+  GeneratedColumn<bool> get isRevoked =>
+      $composableBuilder(column: $table.isRevoked, builder: (column) => column);
 
-  GeneratedColumn<int> get version => $composableBuilder(column: $table.version, builder: (column) => column);
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId =>
+      $composableBuilder(column: $table.agentId, builder: (column) => column);
 
   GeneratedColumn<String> get tokenValue => $composableBuilder(
     column: $table.tokenValue,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get payloadJson => $composableBuilder(
     column: $table.payloadJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get allTables => $composableBuilder(column: $table.allTables, builder: (column) => column);
+  GeneratedColumn<bool> get allTables =>
+      $composableBuilder(column: $table.allTables, builder: (column) => column);
 
-  GeneratedColumn<bool> get allViews => $composableBuilder(column: $table.allViews, builder: (column) => column);
+  GeneratedColumn<bool> get allViews =>
+      $composableBuilder(column: $table.allViews, builder: (column) => column);
 
   GeneratedColumn<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get rulesJson => $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+  GeneratedColumn<String> get rulesJson =>
+      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get syncedAt => $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get tokenHash => $composableBuilder(column: $table.tokenHash, builder: (column) => column);
+  GeneratedColumn<String> get tokenHash =>
+      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
 }
 
 class $$ClientTokenCacheTableTableTableManager
@@ -3363,7 +3615,11 @@ class $$ClientTokenCacheTableTableTableManager
           $$ClientTokenCacheTableTableUpdateCompanionBuilder,
           (
             ClientTokenCacheData,
-            BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
+            BaseReferences<
+              _$AppDatabase,
+              $ClientTokenCacheTableTable,
+              ClientTokenCacheData
+            >,
           ),
           ClientTokenCacheData,
           PrefetchHooks Function()
@@ -3375,18 +3631,21 @@ class $$ClientTokenCacheTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () => $$ClientTokenCacheTableTableFilterComposer(
-            $db: db,
-            $table: table,
-          ),
-          createOrderingComposer: () => $$ClientTokenCacheTableTableOrderingComposer(
-            $db: db,
-            $table: table,
-          ),
-          createComputedFieldComposer: () => $$ClientTokenCacheTableTableAnnotationComposer(
-            $db: db,
-            $table: table,
-          ),
+          createFilteringComposer: () =>
+              $$ClientTokenCacheTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ClientTokenCacheTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ClientTokenCacheTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -3459,7 +3718,9 @@ class $$ClientTokenCacheTableTableTableManager
                 tokenHash: tokenHash,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3477,7 +3738,11 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
       $$ClientTokenCacheTableTableUpdateCompanionBuilder,
       (
         ClientTokenCacheData,
-        BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
+        BaseReferences<
+          _$AppDatabase,
+          $ClientTokenCacheTableTable,
+          ClientTokenCacheData
+        >,
       ),
       ClientTokenCacheData,
       PrefetchHooks Function()
@@ -3486,7 +3751,8 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$ConfigTableTableTableManager get configTable => $$ConfigTableTableTableManager(_db, _db.configTable);
+  $$ConfigTableTableTableManager get configTable =>
+      $$ConfigTableTableTableManager(_db, _db.configTable);
   $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
       $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
 }

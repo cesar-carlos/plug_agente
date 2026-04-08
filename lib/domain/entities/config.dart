@@ -35,6 +35,8 @@ class Config {
     this.nomeMunicipio = '',
     this.ufMunicipio = '',
     this.observacao = '',
+    this.hubProfileVersion,
+    this.hubProfileUpdatedAt,
   });
   final String id;
   final String serverUrl;
@@ -64,6 +66,10 @@ class Config {
   final String nomeMunicipio;
   final String ufMunicipio;
   final String observacao;
+  /// Last known catalog `profileVersion` on the hub after a successful PATCH (optional CAS).
+  final int? hubProfileVersion;
+  /// ISO-8601 timestamp from hub `profileUpdatedAt` when last sync succeeded.
+  final String? hubProfileUpdatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -96,6 +102,8 @@ class Config {
     String? nomeMunicipio,
     String? ufMunicipio,
     String? observacao,
+    int? hubProfileVersion,
+    String? hubProfileUpdatedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -128,6 +136,8 @@ class Config {
       nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
       ufMunicipio: ufMunicipio ?? this.ufMunicipio,
       observacao: observacao ?? this.observacao,
+      hubProfileVersion: hubProfileVersion ?? this.hubProfileVersion,
+      hubProfileUpdatedAt: hubProfileUpdatedAt ?? this.hubProfileUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -42,7 +42,10 @@ void main() async {
       }
       harness = opened;
       dialect = localDialect;
-      sql = OdbcE2eCoverageSql(localDialect);
+      sql = OdbcE2eCoverageSql(
+        localDialect,
+        tableName: 'plug_agente_e2e_cov_lock',
+      );
 
       final drop = await opened.gateway.executeNonQuery(
         sql!.dropTableIfExists,

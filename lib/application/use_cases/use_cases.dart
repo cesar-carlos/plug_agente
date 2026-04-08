@@ -9,6 +9,7 @@ export 'execute_playground_query.dart';
 export 'list_client_tokens.dart';
 export 'load_agent_config.dart';
 export 'login_user.dart';
+export 'push_agent_profile_to_hub.dart';
 export 'refresh_auth_token.dart';
 export 'revoke_client_token.dart';
 export 'save_agent_config.dart';
