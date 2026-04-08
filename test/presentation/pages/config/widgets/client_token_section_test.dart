@@ -9,11 +9,11 @@ import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:provider/provider.dart';
@@ -30,7 +30,9 @@ class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 class MockDeleteClientToken extends Mock implements DeleteClientToken {}
 
 void main() {
-  setUpAll(() {
+  late AppLocalizations ptL10n;
+
+  setUpAll(() async {
     registerFallbackValue(const ClientTokenListQuery());
     registerFallbackValue(
       const ClientTokenCreateRequest(
@@ -41,6 +43,7 @@ void main() {
         rules: <ClientTokenRule>[],
       ),
     );
+    ptL10n = await AppLocalizations.delegate.load(const Locale('pt'));
   });
 
   group('ClientTokenSection', () {
@@ -76,22 +79,22 @@ void main() {
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(AppStrings.ctButtonNewToken));
+      await tester.tap(find.text(ptL10n.ctButtonNewToken));
       await tester.pumpAndSettle();
 
-      expect(find.text(AppStrings.ctNoRulesAdded), findsOneWidget);
+      expect(find.text(ptL10n.ctNoRulesAdded), findsOneWidget);
 
-      await tester.tap(find.text(AppStrings.ctButtonAddRule));
+      await tester.tap(find.text(ptL10n.ctButtonAddRule));
       await tester.pumpAndSettle();
 
-      expect(find.text(AppStrings.ctDialogSaveRule), findsOneWidget);
+      expect(find.text(ptL10n.ctDialogSaveRule), findsOneWidget);
 
       await tester.enterText(find.byType(TextBox).last, 'dbo.clientes');
-      await tester.tap(find.text(AppStrings.ctDialogSaveRule));
+      await tester.tap(find.text(ptL10n.ctDialogSaveRule));
       await tester.pumpAndSettle();
 
       expect(find.text('dbo.clientes'), findsOneWidget);
-      expect(find.text(AppStrings.ctNoRulesAdded), findsNothing);
+      expect(find.text(ptL10n.ctNoRulesAdded), findsNothing);
     });
 
     testWidgets('should remove existing rule row', (tester) async {
@@ -99,14 +102,14 @@ void main() {
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(AppStrings.ctButtonNewToken));
+      await tester.tap(find.text(ptL10n.ctButtonNewToken));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(AppStrings.ctButtonAddRule));
+      await tester.tap(find.text(ptL10n.ctButtonAddRule));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextBox).last, 'dbo.clientes');
-      await tester.tap(find.text(AppStrings.ctDialogSaveRule));
+      await tester.tap(find.text(ptL10n.ctDialogSaveRule));
       await tester.pumpAndSettle();
 
       final removeButtons = find.byIcon(FluentIcons.delete);
@@ -124,18 +127,18 @@ void main() {
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctButtonNewToken));
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
         final payloadField = find.byWidgetPredicate((widget) {
           return widget is TextBox && widget.maxLines == 4;
         });
         await tester.enterText(payloadField, '{invalid json');
-        await tester.ensureVisible(find.text(AppStrings.ctButtonCreateToken));
-        await tester.tap(find.text(AppStrings.ctButtonCreateToken));
+        await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
+        await tester.tap(find.text(ptL10n.ctButtonCreateToken));
         await tester.pumpAndSettle();
 
-        expect(find.text(AppStrings.ctErrorPayloadInvalidJson), findsOneWidget);
+        expect(find.text(ptL10n.ctErrorPayloadInvalidJson), findsOneWidget);
       },
     );
 
@@ -146,12 +149,12 @@ void main() {
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctButtonNewToken));
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
         expect(
-          find.text(AppStrings.ctDialogCreateTokenTitle),
+          find.text(ptL10n.ctDialogCreateTokenTitle),
           findsOneWidget,
         );
       },
@@ -182,7 +185,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
-        expect(find.text(AppStrings.ctDialogEditTokenTitle), findsOneWidget);
+        expect(find.text(ptL10n.ctDialogEditTokenTitle), findsOneWidget);
       },
     );
 
@@ -190,13 +193,13 @@ void main() {
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(AppStrings.ctButtonNewToken));
+      await tester.tap(find.text(ptL10n.ctButtonNewToken));
       await tester.pumpAndSettle();
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
 
-      expect(find.text(AppStrings.ctDialogCreateTokenTitle), findsNothing);
+      expect(find.text(ptL10n.ctDialogCreateTokenTitle), findsNothing);
     });
 
     testWidgets(
@@ -210,19 +213,19 @@ void main() {
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctButtonNewToken));
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctFlagAllPermissions));
+        await tester.tap(find.text(ptL10n.ctFlagAllPermissions));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctButtonCreateToken));
+        await tester.tap(find.text(ptL10n.ctButtonCreateToken));
         await tester.pump();
 
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pump();
 
-        expect(find.text(AppStrings.ctDialogCreateTokenTitle), findsOneWidget);
+        expect(find.text(ptL10n.ctDialogCreateTokenTitle), findsOneWidget);
 
         completer.complete(const Success('new-token'));
         await tester.pumpAndSettle();
@@ -239,14 +242,14 @@ void main() {
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctButtonNewToken));
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(AppStrings.ctFlagAllPermissions));
+        await tester.tap(find.text(ptL10n.ctFlagAllPermissions));
         await tester.pumpAndSettle();
 
         final agentField = find.byWidgetPredicate(
-          (Object? widget) => widget is TextBox && widget.placeholder == AppStrings.ctHintAgentId,
+          (Object? widget) => widget is TextBox && widget.placeholder == ptL10n.ctHintAgentId,
         );
         await tester.tap(agentField);
         await tester.pumpAndSettle();
@@ -262,6 +265,9 @@ void main() {
 
 Widget _buildWidget(ClientTokenProvider provider) {
   return FluentApp(
+    locale: const Locale('pt'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<ClientTokenProvider>.value(
       value: provider,
       child: const NavigationView(

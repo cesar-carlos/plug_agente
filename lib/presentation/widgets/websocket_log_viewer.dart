@@ -1,10 +1,10 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
@@ -15,6 +15,7 @@ class WebSocketLogViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<WebSocketLogProvider>(
       builder: (context, logProvider, child) {
         final authSummary = _getAuthSummary();
@@ -31,17 +32,17 @@ class WebSocketLogViewer extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(AppStrings.wsLogTitle, style: context.sectionTitle),
+                      Text(l10n.wsLogTitle, style: context.sectionTitle),
                       Row(
                         children: [
                           ToggleSwitch(
                             checked: logProvider.isEnabled,
                             onChanged: logProvider.setEnabled,
-                            content: const Text(AppStrings.wsLogEnabled),
+                            content: Text(l10n.wsLogEnabled),
                           ),
                           const SizedBox(width: 16),
                           AppButton(
-                            label: AppStrings.wsLogClear,
+                            label: l10n.wsLogClear,
                             isPrimary: false,
                             labelStyle: context.bodyText,
                             onPressed: logProvider.clearMessages,
@@ -61,10 +62,11 @@ class WebSocketLogViewer extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _AuthorizationSummaryCard(summary: authSummary),
+                                _AuthorizationSummaryCard(l10n: l10n, summary: authSummary),
                                 if (deprecationCount != null) ...[
                                   const SizedBox(height: AppSpacing.sm),
                                   _DeprecationSummaryCard(
+                                    l10n: l10n,
                                     count: deprecationCount,
                                   ),
                                 ],
@@ -78,7 +80,7 @@ class WebSocketLogViewer extends StatelessWidget {
                           child: logProvider.messages.isEmpty
                               ? Center(
                                   child: Text(
-                                    AppStrings.wsLogNoMessages,
+                                    l10n.wsLogNoMessages,
                                     style: context.bodyMuted,
                                   ),
                                 )
@@ -120,8 +122,12 @@ class WebSocketLogViewer extends StatelessWidget {
 }
 
 class _DeprecationSummaryCard extends StatelessWidget {
-  const _DeprecationSummaryCard({required this.count});
+  const _DeprecationSummaryCard({
+    required this.l10n,
+    required this.count,
+  });
 
+  final AppLocalizations l10n;
   final int count;
 
   @override
@@ -139,7 +145,7 @@ class _DeprecationSummaryCard extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            AppStrings.wsLogPreserveSqlDeprecatedUses,
+            l10n.wsLogPreserveSqlDeprecatedUses,
             style: context.bodyMuted,
           ),
           Text(
@@ -153,8 +159,12 @@ class _DeprecationSummaryCard extends StatelessWidget {
 }
 
 class _AuthorizationSummaryCard extends StatelessWidget {
-  const _AuthorizationSummaryCard({required this.summary});
+  const _AuthorizationSummaryCard({
+    required this.l10n,
+    required this.summary,
+  });
 
+  final AppLocalizations l10n;
   final AuthorizationMetricsSummary? summary;
 
   @override
@@ -184,30 +194,30 @@ class _AuthorizationSummaryCard extends StatelessWidget {
         runSpacing: AppSpacing.xs,
         children: [
           _SummaryChip(
-            label: AppStrings.wsLogAuthChecks,
+            label: l10n.wsLogAuthChecks,
             value: summary!.total.toString(),
           ),
           _SummaryChip(
-            label: AppStrings.wsLogAllowed,
+            label: l10n.wsLogAllowed,
             value: summary!.totalAuthorized.toString(),
             valueColor: colors.success,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogDenied,
+            label: l10n.wsLogDenied,
             value: summary!.totalDenied.toString(),
             valueColor: summary!.totalDenied > 0 ? colors.error : null,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogDenialRate,
+            label: l10n.wsLogDenialRate,
             value: '$denialRate%',
             valueColor: summary!.totalDenied > 0 ? colors.error : null,
           ),
           _SummaryChip(
-            label: AppStrings.wsLogP95Latency,
+            label: l10n.wsLogP95Latency,
             value: _formatLatency(summary!.overallP95LatencyMs),
           ),
           _SummaryChip(
-            label: AppStrings.wsLogP99Latency,
+            label: l10n.wsLogP99Latency,
             value: _formatLatency(summary!.overallP99LatencyMs),
           ),
           _SummaryChip(

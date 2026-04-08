@@ -86,6 +86,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return _TokenFormErrorAnnouncer(
       formError: formError,
       providerError: providerError,
@@ -105,9 +106,9 @@ class _CreateTokenDialogContent extends StatelessWidget {
             FocusTraversalOrder(
               order: const NumericFocusOrder(3),
               child: AppTextField(
-                label: AppStrings.ctFieldPayloadJsonOptional,
+                label: l10n.ctFieldPayloadJsonOptional,
                 controller: payloadController,
-                hint: AppStrings.ctHintPayloadJson,
+                hint: l10n.ctHintPayloadJson,
                 maxLines: 4,
                 textInputAction: TextInputAction.newline,
               ),
@@ -119,19 +120,19 @@ class _CreateTokenDialogContent extends StatelessWidget {
               children: [
                 _FlagCheckbox(
                   focusOrder: 4,
-                  label: AppStrings.ctFlagAllTables,
+                  label: l10n.ctFlagAllTables,
                   value: allTables,
                   onChanged: onToggleAllTables,
                 ),
                 _FlagCheckbox(
                   focusOrder: 5,
-                  label: AppStrings.ctFlagAllViews,
+                  label: l10n.ctFlagAllViews,
                   value: allViews,
                   onChanged: onToggleAllViews,
                 ),
                 _FlagCheckbox(
                   focusOrder: 6,
-                  label: AppStrings.ctFlagAllPermissions,
+                  label: l10n.ctFlagAllPermissions,
                   value: allPermissions,
                   onChanged: onToggleAllPermissions,
                 ),
@@ -140,15 +141,15 @@ class _CreateTokenDialogContent extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: SettingsSectionTitle(
-                    title: AppStrings.ctSectionRulesByResource,
+                    title: l10n.ctSectionRulesByResource,
                   ),
                 ),
                 FocusTraversalOrder(
                   order: const NumericFocusOrder(7),
                   child: AppButton(
-                    label: AppStrings.ctButtonAddRule,
+                    label: l10n.ctButtonAddRule,
                     isPrimary: false,
                     icon: FluentIcons.add,
                     onPressed: allPermissions ? null : onAddRule,
@@ -158,7 +159,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             if (rules.isEmpty)
-              const Text(AppStrings.ctNoRulesAdded)
+              Text(l10n.ctNoRulesAdded)
             else
               ClientTokenRulesGrid(
                 rules: rules,
@@ -193,13 +194,14 @@ class _CreateTokenDialogFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         FocusTraversalOrder(
           order: const NumericFocusOrder(200),
           child: AppButton(
-            label: AppStrings.btnCancel,
+            label: l10n.btnCancel,
             isPrimary: false,
             onPressed: isCreating ? null : onCancel,
           ),
@@ -243,15 +245,16 @@ class _TokenListFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
           flex: 3,
           child: AppTextField(
-            label: AppStrings.ctFilterClientId,
+            label: l10n.ctFilterClientId,
             controller: clientFilterController,
-            hint: AppStrings.ctHintClientId,
+            hint: l10n.ctHintClientId,
             onChanged: onClientFilterChanged,
           ),
         ),
@@ -259,7 +262,7 @@ class _TokenListFilters extends StatelessWidget {
         Expanded(
           flex: 2,
           child: AppDropdown<ClientTokenStatusFilter>(
-            label: AppStrings.ctFilterStatus,
+            label: l10n.ctFilterStatus,
             value: tokenStatusFilter,
             items: ClientTokenStatusFilter.values
                 .map(
@@ -280,7 +283,7 @@ class _TokenListFilters extends StatelessWidget {
         Expanded(
           flex: 2,
           child: AppDropdown<ClientTokenSortOption>(
-            label: AppStrings.ctFilterSort,
+            label: l10n.ctFilterSort,
             value: tokenSortOption,
             items: ClientTokenSortOption.values
                 .map(
@@ -299,7 +302,7 @@ class _TokenListFilters extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         AppButton(
-          label: AppStrings.ctButtonClearFilters,
+          label: l10n.ctButtonClearFilters,
           isPrimary: false,
           icon: FluentIcons.clear_filter,
           onPressed: onClearFilters,
@@ -326,12 +329,13 @@ class _TokenIdentityFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final Widget clientField = FocusTraversalOrder(
       order: const NumericFocusOrder(1),
       child: AppTextField(
-        label: AppStrings.ctFieldClientId,
+        label: l10n.ctFieldClientId,
         controller: clientIdController,
-        hint: AppStrings.ctHintClientId,
+        hint: l10n.ctHintClientId,
         readOnly: true,
         suffixIcon: _CopyValueButton(value: clientIdController.text),
       ),
@@ -340,9 +344,9 @@ class _TokenIdentityFields extends StatelessWidget {
     final Widget agentField = FocusTraversalOrder(
       order: const NumericFocusOrder(2),
       child: AppTextField(
-        label: AppStrings.ctFieldAgentIdOptional,
+        label: l10n.ctFieldAgentIdOptional,
         controller: agentIdController,
-        hint: AppStrings.ctHintAgentId,
+        hint: l10n.ctHintAgentId,
         focusNode: agentFocusNode,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => onAgentSubmitted(),
@@ -400,6 +404,7 @@ class _TokenFeedbackPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final feedbackWidgets = <Widget>[
       if (formError.isNotEmpty)
         InlineFeedbackCard(
@@ -414,7 +419,7 @@ class _TokenFeedbackPanel extends StatelessWidget {
       if (lastCreatedToken != null)
         InlineFeedbackCard(
           severity: InfoBarSeverity.success,
-          title: AppStrings.ctMsgTokenCreatedCopyNow,
+          title: l10n.ctMsgTokenCreatedCopyNow,
           content: SelectableText(lastCreatedToken!),
           onDismiss: onDismissCreatedToken,
         ),
@@ -466,18 +471,18 @@ class _FlagCheckbox extends StatelessWidget {
   }
 }
 
-const _tokenGridColumns = [
-  AppGridColumn(label: AppStrings.ctLabelClient, flex: 3),
-  AppGridColumn(label: AppStrings.ctLabelId, flex: 4),
-  AppGridColumn(label: AppStrings.ctLabelStatus, flex: 2),
-  AppGridColumn(label: AppStrings.ctLabelScope, flex: 2),
+List<AppGridColumn> _tokenGridColumns(AppLocalizations l10n) => [
+  AppGridColumn(label: l10n.ctLabelClient, flex: 3),
+  AppGridColumn(label: l10n.ctLabelId, flex: 4),
+  AppGridColumn(label: l10n.ctLabelStatus, flex: 2),
+  AppGridColumn(label: l10n.ctLabelScope, flex: 2),
   AppGridColumn(
-    label: AppStrings.ctLabelCreatedAt,
+    label: l10n.ctLabelCreatedAt,
     flex: 3,
     alignment: Alignment.center,
   ),
   AppGridColumn(
-    label: AppStrings.ctGridColumnActions,
+    label: l10n.ctGridColumnActions,
     flex: 4,
     alignment: Alignment.center,
   ),
@@ -506,32 +511,34 @@ class _TokenSummaryGrid extends StatelessWidget {
   final ValueChanged<ClientTokenSummary> onRevoke;
   final ValueChanged<ClientTokenSummary> onDelete;
 
-  String _buildScopeLabel(ClientTokenSummary token) {
-    if (token.allPermissions) return AppStrings.ctScopeAllPermissions;
+  String _buildScopeLabel(ClientTokenSummary token, AppLocalizations l10n) {
+    if (token.allPermissions) return l10n.ctScopeAllPermissions;
     final scopes = <String>[
-      if (token.allTables) AppStrings.ctScopeTables,
-      if (token.allViews) AppStrings.ctScopeViews,
+      if (token.allTables) l10n.ctScopeTables,
+      if (token.allViews) l10n.ctScopeViews,
     ];
-    return scopes.isEmpty ? AppStrings.ctScopeRestricted : scopes.join(', ');
+    return scopes.isEmpty ? l10n.ctScopeRestricted : scopes.join(', ');
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AppDataGridScrollable<ClientTokenSummary>(
-      columns: _tokenGridColumns,
+      columns: _tokenGridColumns(l10n),
       rows: tokens,
       scrollController: scrollController,
       rowCells: (token) => [
         SelectableText(token.clientId),
         SelectableText(token.id),
         Text(
-          token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
+          token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
         ),
-        Text(_buildScopeLabel(token)),
+        Text(_buildScopeLabel(token, l10n)),
         Text(
           DateFormat('dd/MM/yyyy HH:mm').format(token.createdAt.toLocal()),
         ),
         _TokenRowActions(
+          l10n: l10n,
           token: token,
           isRevoking: isRevokingToken(token.id),
           isDeleting: isDeletingToken(token.id),
@@ -548,6 +555,7 @@ class _TokenSummaryGrid extends StatelessWidget {
 
 class _TokenRowActions extends StatelessWidget {
   const _TokenRowActions({
+    required this.l10n,
     required this.token,
     required this.isRevoking,
     required this.isDeleting,
@@ -558,6 +566,7 @@ class _TokenRowActions extends StatelessWidget {
     this.onRevoke,
   });
 
+  final AppLocalizations l10n;
   final ClientTokenSummary token;
   final bool isRevoking;
   final bool isDeleting;
@@ -569,17 +578,17 @@ class _TokenRowActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final revokeTooltip = token.isRevoked ? AppStrings.ctButtonRevoked : AppStrings.ctButtonRevoke;
+    final revokeTooltip = token.isRevoked ? l10n.ctButtonRevoked : l10n.ctButtonRevoke;
 
     return Wrap(
       spacing: AppSpacing.xs,
       runSpacing: AppSpacing.xs,
       children: [
         Tooltip(
-          message: AppStrings.ctTooltipEditToken,
+          message: l10n.ctTooltipEditToken,
           child: Semantics(
             button: true,
-            label: AppStrings.ctButtonEdit,
+            label: l10n.ctButtonEdit,
             child: IconButton(
               icon: const Icon(FluentIcons.edit),
               onPressed: onEdit,
@@ -587,10 +596,10 @@ class _TokenRowActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: AppStrings.ctButtonViewDetails,
+          message: l10n.ctButtonViewDetails,
           child: Semantics(
             button: true,
-            label: AppStrings.ctButtonViewDetails,
+            label: l10n.ctButtonViewDetails,
             child: IconButton(
               icon: const Icon(FluentIcons.view),
               onPressed: onViewDetails,
@@ -598,10 +607,10 @@ class _TokenRowActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: AppStrings.ctTooltipCopyClientToken,
+          message: l10n.ctTooltipCopyClientToken,
           child: Semantics(
             button: true,
-            label: AppStrings.ctButtonCopyClientToken,
+            label: l10n.ctButtonCopyClientToken,
             child: IconButton(
               icon: const Icon(FluentIcons.copy),
               onPressed: onCopyClientToken,
@@ -632,10 +641,10 @@ class _TokenRowActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: AppStrings.ctButtonDelete,
+          message: l10n.ctButtonDelete,
           child: Semantics(
             button: true,
-            label: AppStrings.ctButtonDelete,
+            label: l10n.ctButtonDelete,
             child: isDeleting
                 ? const SizedBox(
                     width: 30,

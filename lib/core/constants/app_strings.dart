@@ -13,36 +13,6 @@ class AppStrings {
   static const String tabClientTokenAuthorization = 'Autorização de Token do Cliente';
   static const String tabWebSocketDiagnostics = 'Diagnóstico';
   static const String navSettings = 'Configurações';
-  static const String navDatabaseSettings = 'Banco de dados';
-  static const String navAgentProfile = 'Perfil do agente';
-
-  // Agent Profile
-  static const String agentProfilePageTitle = 'Perfil do agente';
-  static const String agentProfileLoading = 'Carregando perfil do agente...';
-  static const String agentProfileFormSectionTitle = 'Dados cadastrais';
-  static const String agentProfileSectionIdentity = 'Identificação';
-  static const String agentProfileSectionContact = 'Contato';
-  static const String agentProfileSectionAddress = 'Endereço';
-  static const String agentProfileSectionNotes = 'Observações';
-  static const String agentProfileFieldName = 'Nome';
-  static const String agentProfileFieldTradeName = 'Nome fantasia';
-  static const String agentProfileFieldDocument = 'CPF/CNPJ';
-  static const String agentProfileFieldPhone = 'Telefone';
-  static const String agentProfileFieldMobile = 'Celular';
-  static const String agentProfileFieldEmail = 'E-mail';
-  static const String agentProfileFieldStreet = 'Endereço';
-  static const String agentProfileFieldNumber = 'Número';
-  static const String agentProfileFieldDistrict = 'Bairro';
-  static const String agentProfileFieldPostalCode = 'CEP';
-  static const String agentProfileFieldCity = 'Município';
-  static const String agentProfileFieldState = 'UF';
-  static const String agentProfileFieldNotes = 'Observação';
-  static const String agentProfileActionLookupCnpj = 'Consultar CNPJ';
-  static const String agentProfileActionLookupCep = 'Consultar CEP';
-  static const String agentProfileActionSave = 'Salvar perfil';
-  static const String agentProfileLookupCnpjInvalid = 'Informe um CNPJ válido com 14 dígitos para consulta.';
-  static const String agentProfileLookupCepInvalid = 'Informe um CEP válido com 8 dígitos para consulta.';
-  static const String agentProfileSaveSuccess = 'Perfil do agente salvo com sucesso.';
 
   // Page Titles
   static const String titlePlayground = 'Playground Database';

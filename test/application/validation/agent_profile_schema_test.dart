@@ -1,6 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 
@@ -21,6 +22,7 @@ void main() {
         city: 'Sao Paulo',
         state: 'sp',
         notes: 'Observacao de teste',
+        validationMessages: AgentProfileValidationMessages.english,
       );
 
       check(result.isSuccess()).isTrue();
@@ -49,12 +51,13 @@ void main() {
         city: '',
         state: '',
         notes: '',
+        validationMessages: AgentProfileValidationMessages.english,
       );
 
       check(result.isError()).isTrue();
       final failure = result.exceptionOrNull()! as domain.ValidationFailure;
-      check(failure.message).contains('Municipio');
-      check(failure.message).contains('UF');
+      check(failure.message).contains('City');
+      check(failure.message).contains('State');
     });
 
     test('should produce correct toJson round-trip from Config', () {

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class PlaygroundProvider extends ChangeNotifier {
@@ -21,11 +22,31 @@ class PlaygroundProvider extends ChangeNotifier {
     this._runDbConnectionTest,
     this._executeStreamingQuery, {
     void Function(bool connected)? syncDbConnectionIndicator,
-  }) : _syncDbConnectionIndicator = syncDbConnectionIndicator;
+    PlaygroundUiStrings? uiStrings,
+  })  : _syncDbConnectionIndicator = syncDbConnectionIndicator,
+        _ui = uiStrings ?? PlaygroundUiStrings.english;
   final ExecutePlaygroundQuery _executePlaygroundQuery;
   final Future<rd.Result<bool>> Function(String connectionString) _runDbConnectionTest;
   final ExecuteStreamingQuery _executeStreamingQuery;
   final void Function(bool connected)? _syncDbConnectionIndicator;
+  PlaygroundUiStrings _ui;
+
+  void bindUiStrings(PlaygroundUiStrings strings) {
+    _ui = strings;
+  }
+
+  String _displayExecuteFailure(Object failure) {
+    if (failure is ValidationFailure) {
+      final m = failure.message;
+      if (m == QueryValidationMessages.queryCannotBeEmpty) {
+        return _ui.queryValidationEmpty;
+      }
+      if (m == QueryValidationMessages.connectionStringCannotBeEmpty) {
+        return _ui.queryValidationConnectionStringEmpty;
+      }
+    }
+    return failure.toDisplayMessage();
+  }
 
   void _notifyDbConnectionIndicator(bool connected) {
     _syncDbConnectionIndicator?.call(connected);
@@ -66,7 +87,7 @@ class PlaygroundProvider extends ChangeNotifier {
   }
 
   void _rejectEmptyQuery() {
-    _error = AppStrings.queryValidationEmpty;
+    _error = _ui.queryValidationEmpty;
     _isLoading = false;
     _hasExecutedQuery = true;
     _paginationAvailable = false;
@@ -78,7 +99,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _selectedResultSetIndex = 0;
     _hasNextPage = false;
     _lastExecutionHint = null;
-    _logValidationExpected(AppStrings.queryValidationEmpty);
+    _logValidationExpected(QueryValidationMessages.queryCannotBeEmpty);
     notifyListeners();
   }
 
@@ -257,7 +278,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _executionDuration = stopwatch.elapsed;
         },
         (failure) {
-          _error = failure.toDisplayMessage();
+          _error = _displayExecuteFailure(failure);
           _logExecuteQueryFailure(failure);
           if (_failureIndicatesDbUnreachable(failure)) {
             _notifyDbConnectionIndicator(false);
@@ -274,7 +295,7 @@ class PlaygroundProvider extends ChangeNotifier {
       stopwatch.stop();
       _isLoading = false;
       final failure = ExceptionToFailureExtension(error).toFailure(
-        message: 'Erro ao executar a consulta',
+        message: _ui.queryExecuteUnexpectedError,
         context: {'operation': 'executeQuery'},
       );
       _error = failure.toDisplayMessage();
@@ -296,7 +317,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   Future<void> testConnection(Config config) async {
     _clearError();
-    _connectionStatus = AppStrings.queryConnectionTesting;
+    _connectionStatus = _ui.queryConnectionTesting;
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
@@ -304,7 +325,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
     result.fold(
       (_) {
-        _connectionStatus = AppStrings.queryConnectionSuccess;
+        _connectionStatus = _ui.queryConnectionSuccess;
         _isConnectionStatusSuccess = true;
       },
       (failure) {
@@ -313,7 +334,7 @@ class PlaygroundProvider extends ChangeNotifier {
           'Failed to test connection: ${failure.toDisplayMessage()}',
           failure.toTechnicalMessage(),
         );
-        _connectionStatus = AppStrings.queryConnectionFailure;
+        _connectionStatus = _ui.queryConnectionFailure;
         _isConnectionStatusSuccess = false;
       },
     );
@@ -336,12 +357,12 @@ class PlaygroundProvider extends ChangeNotifier {
     _cancellationToken.reset();
 
     if (query.trim().isEmpty) {
-      _rejectStreamingValidation(AppStrings.queryValidationEmpty);
+      _rejectStreamingValidation(_ui.queryValidationEmpty);
       return;
     }
     if (connectionString.trim().isEmpty) {
       _rejectStreamingValidation(
-        AppStrings.queryValidationConnectionStringEmpty,
+        _ui.queryValidationConnectionStringEmpty,
       );
       return;
     }
@@ -405,7 +426,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _notifyDbConnectionIndicator(true);
         },
         (failure) {
-          _error = failure.toDisplayMessage();
+          _error = _displayExecuteFailure(failure);
           _isStreaming = false;
           if (!_streamingStoppedByCap) {
             _lastExecutionHint = null;
@@ -420,7 +441,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _isLoading = false;
       _isStreaming = false;
       final failure = ExceptionToFailureExtension(error).toFailure(
-        message: AppStrings.queryStreamingErrorPrefix,
+        message: _ui.queryStreamingErrorPrefix,
         context: {'operation': 'executeQueryWithStreaming'},
       );
       _error = failure.toDisplayMessage();
@@ -468,10 +489,7 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _streamingCapCancelRequested = true;
     _streamingStoppedByCap = true;
-    _lastExecutionHint = AppStrings.queryPlaygroundStreamingRowCapHint.replaceAll(
-      '{max}',
-      cap.toString(),
-    );
+    _lastExecutionHint = _ui.streamingRowCapHint(cap);
     unawaited(
       _executeStreamingQuery.cancelActiveStream(
         reason: StreamingCancelReason.playgroundRowCap,
@@ -498,7 +516,7 @@ class PlaygroundProvider extends ChangeNotifier {
       );
       _isLoading = false;
       _isStreaming = false;
-      _error = AppStrings.queryCancelledByUser;
+      _error = _ui.queryCancelledByUser;
       notifyListeners();
     }
   }
@@ -572,18 +590,18 @@ class PlaygroundProvider extends ChangeNotifier {
 
   String _buildLastExecutionHint(QueryPaginationInfo? pagination) {
     if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return AppStrings.queryPlaygroundHintLastRunPreserve;
+      return _ui.queryPlaygroundHintLastRunPreserve;
     }
     if (pagination != null) {
-      return AppStrings.queryPlaygroundHintLastRunManagedPagination;
+      return _ui.queryPlaygroundHintLastRunManagedPagination;
     }
-    return AppStrings.queryPlaygroundHintLastRunManaged;
+    return _ui.queryPlaygroundHintLastRunManaged;
   }
 
   String _buildStreamingExecutionHint() {
     if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return AppStrings.queryPlaygroundHintLastRunPreserve;
+      return _ui.queryPlaygroundHintLastRunPreserve;
     }
-    return AppStrings.queryPlaygroundHintLastRunStreaming;
+    return _ui.queryPlaygroundHintLastRunStreaming;
   }
 }

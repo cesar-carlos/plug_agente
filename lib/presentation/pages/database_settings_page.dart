@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
@@ -77,7 +77,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     }
   }
 
-  String? _getValidatedOdbcDriverName() {
+  String? _getValidatedOdbcDriverName(AppLocalizations l10n) {
     final odbcDriverName = _formController.odbcDriverNameController.text.trim();
     if (odbcDriverName.isNotEmpty) {
       return odbcDriverName;
@@ -85,13 +85,14 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
 
     SettingsFeedback.showError(
       context: context,
-      title: AppStrings.modalTitleError,
-      message: AppStrings.msgOdbcDriverNameRequired,
+      title: l10n.modalTitleError,
+      message: l10n.msgOdbcDriverNameRequired,
     );
     return null;
   }
 
   Future<bool> _ensureOdbcDriverInstalled({
+    required AppLocalizations l10n,
     required ConnectionProvider connectionProvider,
     required String odbcDriverName,
     required String Function(String) notFoundMessageBuilder,
@@ -108,7 +109,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
 
         await SettingsFeedback.showError(
           context: context,
-          title: AppStrings.modalTitleDriverNotFound,
+          title: l10n.modalTitleDriverNotFound,
           message: notFoundMessageBuilder(odbcDriverName),
         );
         return false;
@@ -116,7 +117,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       (failure) async {
         await SettingsFeedback.showError(
           context: context,
-          title: AppStrings.modalTitleErrorVerifyingDriver,
+          title: l10n.modalTitleErrorVerifyingDriver,
           message: failure.toDisplayMessage(),
         );
         return false;
@@ -124,20 +125,20 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     );
   }
 
-  void _showDatabaseConnectionResult(bool isConnected) {
+  void _showDatabaseConnectionResult(AppLocalizations l10n, bool isConnected) {
     if (isConnected) {
       SettingsFeedback.showSuccess(
         context: context,
-        title: AppStrings.modalTitleConnectionSuccessful,
-        message: AppStrings.msgDatabaseConnectionSuccessful,
+        title: l10n.modalTitleConnectionSuccessful,
+        message: l10n.msgDatabaseConnectionSuccessful,
       );
       return;
     }
 
     SettingsFeedback.showError(
       context: context,
-      title: AppStrings.modalTitleConnectionFailed,
-      message: AppStrings.msgConnectionCheckFailed,
+      title: l10n.modalTitleConnectionFailed,
+      message: l10n.msgConnectionCheckFailed,
     );
   }
 
@@ -149,13 +150,14 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
     final connectionProvider = context.read<ConnectionProvider>();
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navDatabaseSettings,
+          l10n.navDatabaseSettings,
           style: context.sectionTitle,
         ),
       ),
@@ -172,7 +174,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
             items: [
               SettingsTabItem(
                 icon: FluentIcons.database,
-                text: AppStrings.dbTabDatabase,
+                text: l10n.dbTabDatabase,
                 body: DatabaseConfigSection(
                   formController: _formController,
                   configProvider: configProvider,
@@ -196,15 +198,16 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                     });
                   },
                   onTestConnection: () async {
-                    final odbcDriverName = _getValidatedOdbcDriverName();
+                    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
                     if (odbcDriverName == null) {
                       return;
                     }
 
                     final isInstalled = await _ensureOdbcDriverInstalled(
+                      l10n: l10n,
                       connectionProvider: connectionProvider,
                       odbcDriverName: odbcDriverName,
-                      notFoundMessageBuilder: AppStrings.driverNotFoundForTest,
+                      notFoundMessageBuilder: l10n.odbcDriverNotFoundTest,
                     );
                     if (!isInstalled) {
                       return;
@@ -223,11 +226,11 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                     }
 
                     testResult.fold(
-                      _showDatabaseConnectionResult,
+                      (connected) => _showDatabaseConnectionResult(l10n, connected),
                       (failure) {
                         SettingsFeedback.showError(
                           context: context,
-                          title: AppStrings.modalTitleErrorTestingConnection,
+                          title: l10n.modalTitleErrorTestingConnection,
                           message: failure.toDisplayMessageWithOdbcDetailLocalized(
                             context,
                           ),
@@ -236,15 +239,16 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                     );
                   },
                   onSaveConfig: () async {
-                    final odbcDriverName = _getValidatedOdbcDriverName();
+                    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
                     if (odbcDriverName == null) {
                       return;
                     }
 
                     final isInstalled = await _ensureOdbcDriverInstalled(
+                      l10n: l10n,
                       connectionProvider: connectionProvider,
                       odbcDriverName: odbcDriverName,
-                      notFoundMessageBuilder: AppStrings.driverNotFoundForSave,
+                      notFoundMessageBuilder: l10n.odbcDriverNotFoundSave,
                     );
                     if (!isInstalled) {
                       return;
@@ -263,14 +267,14 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                       (_) {
                         SettingsFeedback.showSuccess(
                           context: context,
-                          title: AppStrings.modalTitleConfigSaved,
-                          message: AppStrings.msgConfigSavedSuccessfully,
+                          title: l10n.modalTitleConfigSaved,
+                          message: l10n.msgConfigSavedSuccessfully,
                         );
                       },
                       (failure) {
                         SettingsFeedback.showError(
                           context: context,
-                          title: AppStrings.modalTitleErrorSaving,
+                          title: l10n.modalTitleErrorSaving,
                           message: failure.toDisplayMessage(),
                         );
                       },
@@ -278,10 +282,10 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                   },
                 ),
               ),
-              const SettingsTabItem(
+              SettingsTabItem(
                 icon: FluentIcons.developer_tools,
-                text: AppStrings.dbTabAdvanced,
-                body: OdbcConnectionPoolSection(),
+                text: l10n.dbTabAdvanced,
+                body: const OdbcConnectionPoolSection(),
               ),
             ],
           ),

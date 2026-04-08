@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 enum MessageType { info, success, warning, error, confirmation }
@@ -171,12 +171,13 @@ class MessageModal extends StatelessWidget {
     BuildContext context,
     AppFeedbackColors feedbackColors,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final actions = <Widget>[];
 
     if (onCancel != null || type == MessageType.confirmation || cancelText != null) {
       actions.add(
         AppButton(
-          label: cancelText ?? AppStrings.btnCancel,
+          label: cancelText ?? l10n.btnCancel,
           isPrimary: false,
           labelStyle: context.bodyText,
           onPressed: () {
@@ -191,7 +192,7 @@ class MessageModal extends StatelessWidget {
 
     actions.add(
       AppButton(
-        label: confirmText ?? AppStrings.btnOk,
+        label: confirmText ?? l10n.btnOk,
         filledBackgroundColor: feedbackColors.accent,
         labelStyle: context.bodyText.copyWith(fontWeight: FontWeight.w600),
         onPressed: () {

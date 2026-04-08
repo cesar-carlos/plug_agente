@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -13,6 +12,7 @@ import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/mappers/agent_profile_validation_messages_l10n.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -45,8 +45,7 @@ class AgentProfilePage extends StatefulWidget {
 class _AgentProfilePageState extends State<AgentProfilePage> {
   static final RegExp _nonDigitsPattern = RegExp('[^0-9]');
 
-  PushAgentProfileToHub get _pushToHub =>
-      widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
+  PushAgentProfileToHub get _pushToHub => widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
 
   late final ConfigFormController _formController;
   late final OpenCnpjClient _openCnpjClient;
@@ -103,12 +102,16 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   }
 
   Future<void> _lookupCnpj() async {
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      return;
+    }
     final digits = _digitsOnly(_formController.cnaeCnpjCpfController.text);
     if (digits.length != 14) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
-        message: AppStrings.agentProfileLookupCnpjInvalid,
+        title: l10n.modalTitleError,
+        message: l10n.agentProfileLookupCnpjInvalid,
       );
       return;
     }
@@ -130,7 +133,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     if (result.isError()) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
+        title: l10n.modalTitleError,
         message: result.exceptionOrNull()!.toDisplayMessage(),
       );
       return;
@@ -140,12 +143,16 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   }
 
   Future<void> _lookupCep() async {
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      return;
+    }
     final digits = _digitsOnly(_formController.cepController.text);
     if (digits.length != 8) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
-        message: AppStrings.agentProfileLookupCepInvalid,
+        title: l10n.modalTitleError,
+        message: l10n.agentProfileLookupCepInvalid,
       );
       return;
     }
@@ -167,7 +174,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     if (result.isError()) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
+        title: l10n.modalTitleError,
         message: result.exceptionOrNull()!.toDisplayMessage(),
       );
       return;
@@ -177,6 +184,10 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   }
 
   Future<void> _saveProfile() async {
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      return;
+    }
     final result = AgentProfile.fromFormFields(
       name: _formController.nomeController.text,
       tradeName: _formController.nomeFantasiaController.text,
@@ -191,12 +202,13 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       city: _formController.nomeMunicipioController.text,
       state: _formController.ufMunicipioController.text,
       notes: _formController.observacaoController.text,
+      validationMessages: agentProfileValidationMessages(l10n),
     );
 
     if (result.isError()) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
+        title: l10n.modalTitleError,
         message: result.exceptionOrNull()!.toDisplayMessage(),
       );
       return;
@@ -223,7 +235,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       });
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleErrorSaving,
+        title: l10n.modalTitleErrorSaving,
         message: saveResult.exceptionOrNull()!.toDisplayMessage(),
       );
       return;
@@ -285,8 +297,12 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       _isSaving = false;
     });
 
-    final l10n = AppLocalizations.of(context);
-    if (l10n == null) {
+    if (!mounted) {
+      return;
+    }
+
+    final l10nSuccess = AppLocalizations.of(context);
+    if (l10nSuccess == null) {
       return;
     }
 
@@ -298,8 +314,8 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       final hubErrorDetail = hubSyncErrorMessage ?? '';
       await SettingsFeedback.showError(
         context: context,
-        title: l10n.agentProfileHubSavePartialTitle,
-        message: l10n.agentProfileHubSavePartialMessage(hubErrorDetail),
+        title: l10nSuccess.agentProfileHubSavePartialTitle,
+        message: l10nSuccess.agentProfileHubSavePartialMessage(hubErrorDetail),
       );
       return;
     }
@@ -310,8 +326,8 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
 
     await SettingsFeedback.showSuccess(
       context: context,
-      title: l10n.modalTitleSuccess,
-      message: hubSyncSucceeded ? l10n.agentProfileSaveSuccessSynced : l10n.agentProfileSaveSuccessLocal,
+      title: l10nSuccess.modalTitleSuccess,
+      message: hubSyncSucceeded ? l10nSuccess.agentProfileSaveSuccessSynced : l10nSuccess.agentProfileSaveSuccessLocal,
     );
   }
 
@@ -436,19 +452,20 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     return value.replaceAll(_nonDigitsPattern, '');
   }
 
-  String? _requiredValidator(String label, String? value) {
+  String? _requiredValidator(AppLocalizations l10n, String label, String? value) {
     if ((value?.trim() ?? '').isEmpty) {
-      return AppStrings.formFieldRequired(label);
+      return l10n.formFieldRequired(label);
     }
     return null;
   }
 
   String? _requiredWithSpec(
+    AppLocalizations l10n,
     String label,
     FieldSpec fieldSpec,
     String? value,
   ) {
-    final requiredError = _requiredValidator(label, value);
+    final requiredError = _requiredValidator(l10n, label, value);
     if (requiredError != null) {
       return requiredError;
     }
@@ -457,13 +474,14 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.watch<ConfigProvider>();
     final isInitialLoading = configProvider.isLoading && !_formController.fieldsInitialized;
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.agentProfilePageTitle,
+          l10n.navAgentProfile,
           style: context.sectionTitle,
         ),
       ),
@@ -471,7 +489,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
           child: isInitialLoading
-              ? const _AgentProfileLoading()
+              ? _AgentProfileLoading(message: l10n.agentProfileLoading)
               : SingleChildScrollView(
                   child: Padding(
                     padding: const EdgeInsets.only(
@@ -486,7 +504,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                         children: [
                           if (configProvider.error.isNotEmpty) ...[
                             InfoBar(
-                              title: const Text(AppStrings.modalTitleError),
+                              title: Text(l10n.modalTitleError),
                               content: Text(configProvider.error),
                               severity: InfoBarSeverity.error,
                               isLong: true,
@@ -494,31 +512,33 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                             const SizedBox(height: AppSpacing.md),
                           ],
                           SettingsSectionBlock(
-                            title: AppStrings.agentProfileFormSectionTitle,
+                            title: l10n.agentProfileFormSectionTitle,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 AppCard(
                                   child: _AgentProfileSection(
-                                    title: AppStrings.agentProfileSectionIdentity,
+                                    title: l10n.agentProfileSectionIdentity,
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         _ResponsiveFieldRow(
                                           children: [
                                             AppTextField(
-                                              label: AppStrings.agentProfileFieldName,
+                                              label: l10n.agentProfileFieldName,
                                               controller: _formController.nomeController,
                                               validator: (value) => _requiredValidator(
-                                                AppStrings.agentProfileFieldName,
+                                                l10n,
+                                                l10n.agentProfileFieldName,
                                                 value,
                                               ),
                                             ),
                                             AppTextField(
-                                              label: AppStrings.agentProfileFieldTradeName,
+                                              label: l10n.agentProfileFieldTradeName,
                                               controller: _formController.nomeFantasiaController,
                                               validator: (value) => _requiredValidator(
-                                                AppStrings.agentProfileFieldTradeName,
+                                                l10n,
+                                                l10n.agentProfileFieldTradeName,
                                                 value,
                                               ),
                                             ),
@@ -527,17 +547,18 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                         const SizedBox(height: AppSpacing.md),
                                         _ResponsiveFieldActionRow(
                                           field: AppTextField(
-                                            label: AppStrings.agentProfileFieldDocument,
+                                            label: l10n.agentProfileFieldDocument,
                                             controller: _formController.cnaeCnpjCpfController,
-                                            fieldSpec: AppFieldSpecs.document,
+                                            fieldSpec: AppFieldSpecs.document(l10n),
                                             validator: (value) => _requiredWithSpec(
-                                              AppStrings.agentProfileFieldDocument,
-                                              AppFieldSpecs.document,
+                                              l10n,
+                                              l10n.agentProfileFieldDocument,
+                                              AppFieldSpecs.document(l10n),
                                               value,
                                             ),
                                           ),
                                           action: AppButton(
-                                            label: AppStrings.agentProfileActionLookupCnpj,
+                                            label: l10n.agentProfileActionLookupCnpj,
                                             isPrimary: false,
                                             isLoading: _isLookingUpCnpj,
                                             onPressed: () {
@@ -551,24 +572,25 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 ),
                                 const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
-                                  title: AppStrings.agentProfileSectionContact,
+                                  title: l10n.agentProfileSectionContact,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       _ResponsiveFieldRow(
                                         children: [
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldPhone,
+                                            label: l10n.agentProfileFieldPhone,
                                             controller: _formController.telefoneController,
-                                            fieldSpec: AppFieldSpecs.phone,
+                                            fieldSpec: AppFieldSpecs.phone(l10n),
                                           ),
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldMobile,
+                                            label: l10n.agentProfileFieldMobile,
                                             controller: _formController.celularController,
-                                            fieldSpec: AppFieldSpecs.mobile,
+                                            fieldSpec: AppFieldSpecs.mobile(l10n),
                                             validator: (value) => _requiredWithSpec(
-                                              AppStrings.agentProfileFieldMobile,
-                                              AppFieldSpecs.mobile,
+                                              l10n,
+                                              l10n.agentProfileFieldMobile,
+                                              AppFieldSpecs.mobile(l10n),
                                               value,
                                             ),
                                           ),
@@ -576,12 +598,13 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                       ),
                                       const SizedBox(height: AppSpacing.md),
                                       AppTextField(
-                                        label: AppStrings.agentProfileFieldEmail,
+                                        label: l10n.agentProfileFieldEmail,
                                         controller: _formController.emailController,
-                                        fieldSpec: AppFieldSpecs.email,
+                                        fieldSpec: AppFieldSpecs.email(l10n),
                                         validator: (value) => _requiredWithSpec(
-                                          AppStrings.agentProfileFieldEmail,
-                                          AppFieldSpecs.email,
+                                          l10n,
+                                          l10n.agentProfileFieldEmail,
+                                          AppFieldSpecs.email(l10n),
                                           value,
                                         ),
                                       ),
@@ -590,23 +613,24 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 ),
                                 const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
-                                  title: AppStrings.agentProfileSectionAddress,
+                                  title: l10n.agentProfileSectionAddress,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       _ResponsiveFieldActionRow(
                                         field: AppTextField(
-                                          label: AppStrings.agentProfileFieldPostalCode,
+                                          label: l10n.agentProfileFieldPostalCode,
                                           controller: _formController.cepController,
-                                          fieldSpec: AppFieldSpecs.cep,
+                                          fieldSpec: AppFieldSpecs.cep(l10n),
                                           validator: (value) => _requiredWithSpec(
-                                            AppStrings.agentProfileFieldPostalCode,
-                                            AppFieldSpecs.cep,
+                                            l10n,
+                                            l10n.agentProfileFieldPostalCode,
+                                            AppFieldSpecs.cep(l10n),
                                             value,
                                           ),
                                         ),
                                         action: AppButton(
-                                          label: AppStrings.agentProfileActionLookupCep,
+                                          label: l10n.agentProfileActionLookupCep,
                                           isPrimary: false,
                                           isLoading: _isLookingUpCep,
                                           onPressed: () {
@@ -619,18 +643,20 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                         flexes: const [3, 1],
                                         children: [
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldStreet,
+                                            label: l10n.agentProfileFieldStreet,
                                             controller: _formController.enderecoController,
                                             validator: (value) => _requiredValidator(
-                                              AppStrings.agentProfileFieldStreet,
+                                              l10n,
+                                              l10n.agentProfileFieldStreet,
                                               value,
                                             ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldNumber,
+                                            label: l10n.agentProfileFieldNumber,
                                             controller: _formController.numeroEnderecoController,
                                             validator: (value) => _requiredValidator(
-                                              AppStrings.agentProfileFieldNumber,
+                                              l10n,
+                                              l10n.agentProfileFieldNumber,
                                               value,
                                             ),
                                           ),
@@ -641,28 +667,31 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                         flexes: const [2, 2, 1],
                                         children: [
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldDistrict,
+                                            label: l10n.agentProfileFieldDistrict,
                                             controller: _formController.bairroController,
                                             validator: (value) => _requiredValidator(
-                                              AppStrings.agentProfileFieldDistrict,
+                                              l10n,
+                                              l10n.agentProfileFieldDistrict,
                                               value,
                                             ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldCity,
+                                            label: l10n.agentProfileFieldCity,
                                             controller: _formController.nomeMunicipioController,
                                             validator: (value) => _requiredValidator(
-                                              AppStrings.agentProfileFieldCity,
+                                              l10n,
+                                              l10n.agentProfileFieldCity,
                                               value,
                                             ),
                                           ),
                                           AppTextField(
-                                            label: AppStrings.agentProfileFieldState,
+                                            label: l10n.agentProfileFieldState,
                                             controller: _formController.ufMunicipioController,
-                                            fieldSpec: AppFieldSpecs.state,
+                                            fieldSpec: AppFieldSpecs.state(l10n),
                                             validator: (value) => _requiredWithSpec(
-                                              AppStrings.agentProfileFieldState,
-                                              AppFieldSpecs.state,
+                                              l10n,
+                                              l10n.agentProfileFieldState,
+                                              AppFieldSpecs.state(l10n),
                                               value,
                                             ),
                                           ),
@@ -673,9 +702,9 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 ),
                                 const SizedBox(height: AppSpacing.md),
                                 _AgentProfileSection(
-                                  title: AppStrings.agentProfileSectionNotes,
+                                  title: l10n.agentProfileSectionNotes,
                                   child: AppTextField(
-                                    label: AppStrings.agentProfileFieldNotes,
+                                    label: l10n.agentProfileFieldNotes,
                                     controller: _formController.observacaoController,
                                     maxLines: 5,
                                   ),
@@ -683,6 +712,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                                 const SizedBox(height: AppSpacing.lg),
                                 _AgentProfileSaveAction(
                                   isLoading: _isSaving,
+                                  saveLabel: l10n.agentProfileActionSave,
                                   onPressed: _saveProfile,
                                 ),
                               ],
@@ -700,17 +730,19 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
 }
 
 class _AgentProfileLoading extends StatelessWidget {
-  const _AgentProfileLoading();
+  const _AgentProfileLoading({required this.message});
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ProgressRing(),
-          SizedBox(height: AppSpacing.md),
-          Text(AppStrings.agentProfileLoading),
+          const ProgressRing(),
+          const SizedBox(height: AppSpacing.md),
+          Text(message),
         ],
       ),
     );
@@ -742,10 +774,12 @@ class _AgentProfileSection extends StatelessWidget {
 class _AgentProfileSaveAction extends StatelessWidget {
   const _AgentProfileSaveAction({
     required this.isLoading,
+    required this.saveLabel,
     required this.onPressed,
   });
 
   final bool isLoading;
+  final String saveLabel;
   final Future<void> Function() onPressed;
 
   @override
@@ -753,7 +787,7 @@ class _AgentProfileSaveAction extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: AppButton(
-        label: AppStrings.agentProfileActionSave,
+        label: saveLabel,
         isLoading: isLoading,
         onPressed: () {
           unawaited(onPressed());

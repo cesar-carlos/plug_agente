@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +11,7 @@ class ConnectionStatusWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<ConnectionProvider>(
       builder: (context, connectionProvider, child) {
         final colors = context.appColors;
@@ -22,24 +23,28 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.connected:
             icon = FluentIcons.check_mark;
             color = colors.success;
-            statusText = AppStrings.connectionStatusHubConnected;
+            statusText = l10n.connectionStatusHubConnected;
           case ConnectionStatus.connecting:
             icon = FluentIcons.sync;
             color = colors.warning;
-            statusText = AppStrings.connectionStatusHubConnecting;
+            statusText = l10n.connectionStatusHubConnecting;
           case ConnectionStatus.reconnecting:
             icon = FluentIcons.sync;
             color = colors.warning;
-            statusText = AppStrings.connectionStatusHubReconnecting;
+            statusText = l10n.connectionStatusHubReconnecting;
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = colors.error;
-            statusText = AppStrings.connectionStatusHubError;
+            statusText = l10n.connectionStatusHubError;
           case ConnectionStatus.disconnected:
             icon = FluentIcons.circle_pause;
             color = colors.disabled;
-            statusText = AppStrings.connectionStatusHubDisconnected;
+            statusText = l10n.connectionStatusHubDisconnected;
         }
+
+        final dbShort = connectionProvider.isDbConnected
+            ? l10n.connectionStatusDatabaseConnected
+            : l10n.connectionStatusDatabaseDisconnected;
 
         return Container(
           padding: compact
@@ -68,15 +73,11 @@ class ConnectionStatusWidget extends StatelessWidget {
               ),
               const Spacer(),
               Tooltip(
-                message: AppStrings.connectionStatusDatabaseTooltip,
+                message: l10n.connectionStatusDatabaseTooltip,
                 child: Semantics(
-                  label:
-                      '${connectionProvider.isDbConnected ? AppStrings.connectionStatusDatabaseConnected : AppStrings.connectionStatusDatabaseDisconnected}. '
-                      '${AppStrings.connectionStatusDatabaseTooltip}',
+                  label: '$dbShort. ${l10n.connectionStatusDatabaseTooltip}',
                   child: Text(
-                    connectionProvider.isDbConnected
-                        ? AppStrings.connectionStatusDatabaseConnected
-                        : AppStrings.connectionStatusDatabaseDisconnected,
+                    dbShort,
                     style: context.bodyText.copyWith(
                       color: connectionProvider.isDbConnected ? colors.success : colors.disabled,
                     ),

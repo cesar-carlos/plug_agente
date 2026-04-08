@@ -1,8 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -36,6 +36,7 @@ class DatabaseConfigSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
@@ -45,7 +46,7 @@ class DatabaseConfigSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsSectionBlock(
-                title: AppStrings.dbSectionTitle,
+                title: l10n.dbSectionTitle,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -105,12 +106,13 @@ class _DriverSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppDropdown<String>(
-            label: AppStrings.dbFieldDatabaseDriver,
+            label: l10n.dbFieldDatabaseDriver,
             value: driverNameController.text,
             items: [
               ComboBoxItem(
@@ -135,7 +137,7 @@ class _DriverSection extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           AppTextField(
-            label: AppStrings.dbFieldOdbcDriverName,
+            label: l10n.dbFieldOdbcDriverName,
             controller: odbcDriverNameController,
             hint: OdbcDrivers.sqlServerNativeClient,
           ),
@@ -156,22 +158,23 @@ class _ConnectionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
           flex: 3,
           child: AppTextField(
-            label: AppStrings.dbFieldHost,
+            label: l10n.dbFieldHost,
             controller: hostController,
-            hint: AppStrings.dbHintHost,
+            hint: l10n.dbHintHost,
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: NumericField(
-            label: AppStrings.dbFieldPort,
+            label: l10n.dbFieldPort,
             controller: portController,
-            hint: AppStrings.dbHintPort,
+            hint: l10n.dbHintPort,
             minValue: 1,
             maxValue: 65535,
           ),
@@ -194,24 +197,25 @@ class _DatabaseCredentialsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppTextField(
-          label: AppStrings.dbFieldDatabaseName,
+          label: l10n.dbFieldDatabaseName,
           controller: databaseNameController,
-          hint: AppStrings.dbHintDatabaseName,
+          hint: l10n.dbHintDatabaseName,
         ),
         const SizedBox(height: 16),
         AppTextField(
-          label: AppStrings.dbFieldUsername,
+          label: l10n.dbFieldUsername,
           controller: usernameController,
-          hint: AppStrings.dbHintUsername,
+          hint: l10n.dbHintUsername,
         ),
         const SizedBox(height: 16),
         PasswordField(
           controller: passwordController,
-          hint: AppStrings.dbHintPassword,
+          hint: l10n.dbHintPassword,
         ),
       ],
     );
@@ -241,9 +245,10 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SettingsActionRow(
       leading: AppButton(
-        label: AppStrings.dbButtonTestConnection,
+        label: l10n.dbButtonTestConnection,
         isPrimary: false,
         isLoading: isCheckingDriver,
         onPressed: () {
@@ -256,7 +261,7 @@ class _ActionButtons extends StatelessWidget {
         },
       ),
       trailing: AppButton(
-        label: AppStrings.wsButtonSaveConfig,
+        label: l10n.wsButtonSaveConfig,
         isLoading: isLoading || isCheckingDriver,
         onPressed: () {
           if (driverNameController.text.isNotEmpty &&

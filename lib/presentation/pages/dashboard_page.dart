@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -10,6 +9,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
@@ -148,8 +148,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return ScaffoldPage(
-      header: const PageHeader(title: Text(AppStrings.navDashboard)),
+      header: PageHeader(title: Text(l10n.navDashboard)),
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
@@ -166,7 +167,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      AppStrings.dashboardDescription,
+                      l10n.dashboardDescription,
                       style: context.bodyMuted,
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -176,6 +177,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(height: AppSpacing.lg),
               _OdbcMetricsCard(
+                l10n: l10n,
                 summary: _metricsSummary,
                 selectedPeriod: _selectedPeriod,
                 onPeriodChanged: (period) {
@@ -206,10 +208,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
 class _OdbcMetricsCard extends StatelessWidget {
   const _OdbcMetricsCard({
+    required this.l10n,
     required this.summary,
     required this.selectedPeriod,
     required this.onPeriodChanged,
   });
+  final AppLocalizations l10n;
   final MetricsSummary summary;
   final _MetricsPeriod selectedPeriod;
   final ValueChanged<_MetricsPeriod?> onPeriodChanged;
@@ -226,7 +230,7 @@ class _OdbcMetricsCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  AppStrings.dashboardMetricsTitle,
+                  l10n.dashboardMetricsTitle,
                   style: context.sectionTitle,
                 ),
               ),
@@ -237,19 +241,19 @@ class _OdbcMetricsCard extends StatelessWidget {
                   value: selectedPeriod,
                   onChanged: onPeriodChanged,
                   isExpanded: true,
-                  placeholder: const Text(AppStrings.dashboardMetricsPeriod),
-                  items: const [
+                  placeholder: Text(l10n.dashboardMetricsPeriod),
+                  items: [
                     ComboBoxItem(
                       value: _MetricsPeriod.last1h,
-                      child: Text(AppStrings.dashboardMetricsPeriod1h),
+                      child: Text(l10n.dashboardMetricsPeriod1h),
                     ),
                     ComboBoxItem(
                       value: _MetricsPeriod.last24h,
-                      child: Text(AppStrings.dashboardMetricsPeriod24h),
+                      child: Text(l10n.dashboardMetricsPeriod24h),
                     ),
                     ComboBoxItem(
                       value: _MetricsPeriod.all,
-                      child: Text(AppStrings.dashboardMetricsPeriodAll),
+                      child: Text(l10n.dashboardMetricsPeriodAll),
                     ),
                   ],
                 ),
@@ -263,40 +267,40 @@ class _OdbcMetricsCard extends StatelessWidget {
             children: [
               _MetricChip(
                 icon: FluentIcons.document,
-                label: AppStrings.dashboardMetricsQueries,
+                label: l10n.dashboardMetricsQueries,
                 value: summary.totalQueries.toString(),
               ),
               _MetricChip(
                 icon: FluentIcons.check_mark,
-                label: AppStrings.dashboardMetricsSuccess,
+                label: l10n.dashboardMetricsSuccess,
                 value: summary.successfulQueries.toString(),
                 valueColor: colors.success,
               ),
               _MetricChip(
                 icon: FluentIcons.error_badge,
-                label: AppStrings.dashboardMetricsErrors,
+                label: l10n.dashboardMetricsErrors,
                 value: summary.failedQueries.toString(),
                 valueColor: summary.failedQueries > 0 ? colors.error : null,
               ),
               _MetricChip(
                 icon: FluentIcons.completed_solid,
-                label: AppStrings.dashboardMetricsSuccessRate,
+                label: l10n.dashboardMetricsSuccessRate,
                 value: '${summary.successRate.toStringAsFixed(1)}%',
                 valueColor: colors.success,
               ),
               _MetricChip(
                 icon: FluentIcons.clock,
-                label: AppStrings.dashboardMetricsAvgLatency,
+                label: l10n.dashboardMetricsAvgLatency,
                 value: _formatDuration(summary.averageExecutionTime),
               ),
               _MetricChip(
                 icon: FluentIcons.clock,
-                label: AppStrings.dashboardMetricsMaxLatency,
+                label: l10n.dashboardMetricsMaxLatency,
                 value: _formatDuration(summary.maxExecutionTime),
               ),
               _MetricChip(
                 icon: FluentIcons.table,
-                label: AppStrings.dashboardMetricsTotalRows,
+                label: l10n.dashboardMetricsTotalRows,
                 value: summary.totalRowsAffected.toString(),
               ),
             ],

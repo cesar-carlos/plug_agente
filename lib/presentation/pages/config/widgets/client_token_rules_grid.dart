@@ -1,8 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/layout_components.dart';
 
 class ClientTokenRuleDraft {
@@ -24,11 +24,11 @@ class ClientTokenRuleDraft {
 
   bool get hasAnyPermission => canRead || canUpdate || canDelete;
 
-  String get permissionsLabel {
+  String permissionsLabel(AppLocalizations l10n) {
     final labels = <String>[];
-    if (canRead) labels.add(AppStrings.ctPermissionRead);
-    if (canUpdate) labels.add(AppStrings.ctPermissionUpdate);
-    if (canDelete) labels.add(AppStrings.ctPermissionDelete);
+    if (canRead) labels.add(l10n.ctPermissionRead);
+    if (canUpdate) labels.add(l10n.ctPermissionUpdate);
+    if (canDelete) labels.add(l10n.ctPermissionDelete);
     return labels.join(', ');
   }
 
@@ -51,13 +51,13 @@ class ClientTokenRuleDraft {
   }
 }
 
-const _columns = [
-  AppGridColumn(label: AppStrings.ctGridColumnType, flex: 2),
-  AppGridColumn(label: AppStrings.ctGridColumnResource, flex: 4),
-  AppGridColumn(label: AppStrings.ctGridColumnEffect, flex: 2),
-  AppGridColumn(label: AppStrings.ctGridColumnPermissions, flex: 4),
-  AppGridColumn(label: AppStrings.ctGridColumnActions, flex: 2),
-];
+List<AppGridColumn> _gridColumns(AppLocalizations l10n) => [
+      AppGridColumn(label: l10n.ctGridColumnType, flex: 2),
+      AppGridColumn(label: l10n.ctGridColumnResource, flex: 4),
+      AppGridColumn(label: l10n.ctGridColumnEffect, flex: 2),
+      AppGridColumn(label: l10n.ctGridColumnPermissions, flex: 4),
+      AppGridColumn(label: l10n.ctGridColumnActions, flex: 2),
+    ];
 
 const _compactGridBreakpoint = 900.0;
 
@@ -75,6 +75,7 @@ class ClientTokenRulesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.hasBoundedWidth && constraints.maxWidth < _compactGridBreakpoint;
@@ -88,6 +89,7 @@ class ClientTokenRulesGrid extends StatelessWidget {
                   bottom: index == rules.length - 1 ? 0 : AppSpacing.sm,
                 ),
                 child: _CompactRuleCard(
+                  l10n: l10n,
                   rule: rules[index],
                   onEdit: () => onEdit(index),
                   onDelete: () => onDelete(index),
@@ -98,14 +100,15 @@ class ClientTokenRulesGrid extends StatelessWidget {
         }
 
         return AppDataGrid<ClientTokenRuleDraft>(
-          columns: _columns,
+          columns: _gridColumns(l10n),
           rows: rules,
           rowCells: (rule) => [
             Text(rule.resourceType.name),
             SelectableText(rule.resource),
             Text(rule.effect.name),
-            Text(rule.permissionsLabel),
+            Text(rule.permissionsLabel(l10n)),
             _RuleActions(
+              l10n: l10n,
               onEdit: () => onEdit(rules.indexOf(rule)),
               onDelete: () => onDelete(rules.indexOf(rule)),
             ),
@@ -117,8 +120,9 @@ class ClientTokenRulesGrid extends StatelessWidget {
 }
 
 class _RuleActions extends StatelessWidget {
-  const _RuleActions({required this.onEdit, required this.onDelete});
+  const _RuleActions({required this.l10n, required this.onEdit, required this.onDelete});
 
+  final AppLocalizations l10n;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -128,10 +132,10 @@ class _RuleActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Tooltip(
-          message: AppStrings.ctTooltipEditRule,
+          message: l10n.ctTooltipEditRule,
           child: Semantics(
             button: true,
-            label: AppStrings.ctTooltipEditRule,
+            label: l10n.ctTooltipEditRule,
             child: IconButton(
               icon: const Icon(FluentIcons.edit),
               onPressed: onEdit,
@@ -139,10 +143,10 @@ class _RuleActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: AppStrings.ctTooltipDeleteRule,
+          message: l10n.ctTooltipDeleteRule,
           child: Semantics(
             button: true,
-            label: AppStrings.ctTooltipDeleteRule,
+            label: l10n.ctTooltipDeleteRule,
             child: IconButton(
               icon: const Icon(FluentIcons.delete),
               onPressed: onDelete,
@@ -156,11 +160,13 @@ class _RuleActions extends StatelessWidget {
 
 class _CompactRuleCard extends StatelessWidget {
   const _CompactRuleCard({
+    required this.l10n,
     required this.rule,
     required this.onEdit,
     required this.onDelete,
   });
 
+  final AppLocalizations l10n;
   final ClientTokenRuleDraft rule;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -180,33 +186,33 @@ class _CompactRuleCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CompactValueRow(
-            label: AppStrings.ctGridColumnType,
+            label: l10n.ctGridColumnType,
             value: rule.resourceType.name,
           ),
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(
-            label: AppStrings.ctGridColumnResource,
+            label: l10n.ctGridColumnResource,
             value: rule.resource,
             isSelectable: true,
           ),
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(
-            label: AppStrings.ctGridColumnEffect,
+            label: l10n.ctGridColumnEffect,
             value: rule.effect.name,
           ),
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(
-            label: AppStrings.ctGridColumnPermissions,
-            value: rule.permissionsLabel,
+            label: l10n.ctGridColumnPermissions,
+            value: rule.permissionsLabel(l10n),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Tooltip(
-                message: AppStrings.ctTooltipEditRule,
+                message: l10n.ctTooltipEditRule,
                 child: Semantics(
                   button: true,
-                  label: AppStrings.ctTooltipEditRule,
+                  label: l10n.ctTooltipEditRule,
                   child: IconButton(
                     icon: const Icon(FluentIcons.edit),
                     onPressed: onEdit,
@@ -214,10 +220,10 @@ class _CompactRuleCard extends StatelessWidget {
                 ),
               ),
               Tooltip(
-                message: AppStrings.ctTooltipDeleteRule,
+                message: l10n.ctTooltipDeleteRule,
                 child: Semantics(
                   button: true,
-                  label: AppStrings.ctTooltipDeleteRule,
+                  label: l10n.ctTooltipDeleteRule,
                   child: IconButton(
                     icon: const Icon(FluentIcons.delete),
                     onPressed: onDelete,

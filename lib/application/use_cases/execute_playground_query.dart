@@ -1,5 +1,5 @@
+import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -28,7 +28,7 @@ class ExecutePlaygroundQuery {
 
     if (trimmedQuery.isEmpty) {
       return Failure(
-        domain.ValidationFailure(AppStrings.queryValidationEmpty),
+        domain.ValidationFailure(QueryValidationMessages.queryCannotBeEmpty),
       );
     }
 

@@ -1,61 +1,59 @@
 import 'package:flutter/services.dart';
 
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/form/brazilian_field_formatters.dart';
 import 'package:plug_agente/shared/widgets/common/form/field_spec.dart';
 
-/// Pre-built FieldSpec values for common Brazilian and generic field types.
+/// Pre-built [FieldSpec] values for common Brazilian and generic field types.
 ///
 /// Validators only enforce format/length for inline feedback; use
 /// InputValidators and schemas on save for full domain rules.
 abstract final class AppFieldSpecs {
   AppFieldSpecs._();
 
-  // ignore: prefer_const_constructors — validator tear-offs are not const.
-  static final FieldSpec email = FieldSpec(
+  static FieldSpec email(AppLocalizations l) => FieldSpec(
     keyboardType: TextInputType.emailAddress,
-    validator: _validateEmail,
+    validator: (String? value) => _validateEmail(value, l),
   );
 
-  // ignore: prefer_const_constructors — validator tear-offs are not const.
-  static final FieldSpec url = FieldSpec(
+  static FieldSpec url(AppLocalizations l) => FieldSpec(
     keyboardType: TextInputType.url,
-    validator: _validateHttpUrl,
+    validator: (String? value) => _validateHttpUrl(value, l),
   );
 
-  static final FieldSpec cep = FieldSpec(
+  static FieldSpec cep(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.postalCode,
     keyboardType: TextInputType.number,
-    hint: AppStrings.formHintCep,
-    validator: _validateCep,
+    hint: l.formHintCep,
+    validator: (String? value) => _validateCep(value, l),
   );
 
-  static final FieldSpec phone = FieldSpec(
+  static FieldSpec phone(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.phone,
     keyboardType: TextInputType.phone,
-    hint: AppStrings.formHintPhone,
-    validator: _validatePhone,
+    hint: l.formHintPhone,
+    validator: (String? value) => _validatePhone(value, l),
   );
 
-  static final FieldSpec mobile = FieldSpec(
+  static FieldSpec mobile(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.phone,
     keyboardType: TextInputType.phone,
-    hint: AppStrings.formHintMobile,
-    validator: _validateMobile,
+    hint: l.formHintMobile,
+    validator: (String? value) => _validateMobile(value, l),
   );
 
-  static final FieldSpec document = FieldSpec(
+  static FieldSpec document(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.document,
     keyboardType: TextInputType.number,
-    hint: AppStrings.formHintDocument,
-    validator: _validateDocument,
+    hint: l.formHintDocument,
+    validator: (String? value) => _validateDocument(value, l),
   );
 
-  static final FieldSpec state = FieldSpec(
+  static FieldSpec state(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.state,
     keyboardType: TextInputType.text,
-    hint: AppStrings.formHintState,
-    validator: _validateState,
+    hint: l.formHintState,
+    validator: (String? value) => _validateState(value, l),
   );
 
   static final RegExp _emailPattern = RegExp(
@@ -69,83 +67,83 @@ abstract final class AppFieldSpecs {
     return value.replaceAll(RegExp('[^0-9]'), '');
   }
 
-  static String? _validateEmail(String? value) {
+  static String? _validateEmail(String? value, AppLocalizations l) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) {
       return null;
     }
     if (!_emailPattern.hasMatch(trimmed)) {
-      return AppStrings.formValidationEmailInvalid;
+      return l.formValidationEmailInvalid;
     }
     return null;
   }
 
-  static String? _validateHttpUrl(String? value) {
+  static String? _validateHttpUrl(String? value, AppLocalizations l) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) {
       return null;
     }
     final lower = trimmed.toLowerCase();
     if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
-      return AppStrings.formValidationUrlHttpHttps;
+      return l.formValidationUrlHttpHttps;
     }
     return null;
   }
 
-  static String? _validateCep(String? value) {
+  static String? _validateCep(String? value, AppLocalizations l) {
     final digits = _digitsOnly(value);
     if (digits.isEmpty) {
       return null;
     }
     if (digits.length != 8) {
-      return AppStrings.formValidationCepDigits;
+      return l.formValidationCepDigits;
     }
     return null;
   }
 
-  static String? _validatePhone(String? value) {
+  static String? _validatePhone(String? value, AppLocalizations l) {
     final digits = _digitsOnly(value);
     if (digits.isEmpty) {
       return null;
     }
     if (digits.length != 10) {
-      return AppStrings.formValidationPhoneDigits;
+      return l.formValidationPhoneDigits;
     }
     return null;
   }
 
-  static String? _validateMobile(String? value) {
+  static String? _validateMobile(String? value, AppLocalizations l) {
     final digits = _digitsOnly(value);
     if (digits.isEmpty) {
       return null;
     }
     if (digits.length != 11) {
-      return AppStrings.formValidationMobileDigits;
+      return l.formValidationMobileDigits;
     }
     if (digits.length > 2 && digits[2] != '9') {
-      return AppStrings.formValidationMobileNineAfterDdd;
+      return l.formValidationMobileNineAfterDdd;
     }
     return null;
   }
 
-  static String? _validateDocument(String? value) {
+  static String? _validateDocument(String? value, AppLocalizations l) {
     final digits = _digitsOnly(value);
     if (digits.isEmpty) {
       return null;
     }
     if (digits.length != 11 && digits.length != 14) {
-      return AppStrings.formValidationDocumentDigits;
+      return l.formValidationDocumentDigits;
     }
     return null;
   }
 
-  static String? _validateState(String? value) {
+  static String? _validateState(String? value, AppLocalizations l) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) {
       return null;
     }
     if (!RegExp(r'^[A-Za-z]{2}$').hasMatch(trimmed)) {
-      return AppStrings.formValidationStateLetters;
+      return l.formValidationStateLetters;
     }
     return null;
   }

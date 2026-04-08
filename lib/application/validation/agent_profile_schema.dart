@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:plug_agente/application/validation/zard_adapter.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:result_dart/result_dart.dart';
@@ -76,64 +77,58 @@ class AgentProfile {
   static final RegExp _nonDigitsPattern = RegExp('[^0-9]');
   static final RegExp _statePattern = RegExp(r'^[A-Z]{2}$');
 
-  static final Schema<Map<String, dynamic>> _addressSchema = z.interface(
-    <String, Schema<dynamic>>{
-      'street': _requiredText(
-        label: 'Endereco',
-        maxLength: 100,
-      ),
-      'number': _requiredText(
-        label: 'Numero do endereco',
-        maxLength: 15,
-      ),
-      'district': _requiredText(
-        label: 'Bairro',
-        maxLength: 60,
-      ),
-      'postal_code': _postalCodeSchema(),
-      'city': _requiredText(
-        label: 'Municipio',
-        maxLength: 60,
-      ),
-      'state': z.string().trim().toUpperCase().refine(
-        _statePattern.hasMatch,
-        message: 'UF deve conter exatamente 2 letras.',
-      ),
-    },
-  ).strict();
+  static Schema<Map<String, dynamic>>? _englishProfileSchema;
 
-  static final Schema<Map<String, dynamic>> _schema = z
-      .interface(<String, Schema<dynamic>>{
-        'name': _requiredText(
-          label: 'Nome',
-          maxLength: 100,
-        ),
-        'trade_name': _requiredText(
-          label: 'Nome fantasia',
-          maxLength: 100,
-        ),
-        'document': _documentSchema(),
-        'document_type': z.$enum(
-          const <String>['cpf', 'cnpj'],
-          message: 'Tipo de documento deve ser cpf ou cnpj.',
-        ),
-        'phone?': _phoneSchema(),
-        'mobile': _mobileSchema(),
-        'email': z.string().trim().toLowerCase().email(
-          pattern: z.regexes.email,
-          message: 'E-mail invalido.',
-        ),
-        'address': _addressSchema,
-        'notes?': z.string().trim().max(
-          2000,
-          message: 'Observacao deve ter no maximo 2000 caracteres.',
-        ),
-      })
-      .strict()
-      .refine(
-        (Map<String, dynamic> value) => value['document_type'] == _resolveDocumentType(value['document'] as String),
-        message: 'Tipo de documento nao corresponde ao CPF/CNPJ informado.',
-      );
+  static Schema<Map<String, dynamic>> _profileSchemaFor(AgentProfileValidationMessages messages) {
+    if (identical(messages, AgentProfileValidationMessages.english)) {
+      return _englishProfileSchema ??= _buildProfileSchema(messages);
+    }
+    return _buildProfileSchema(messages);
+  }
+
+  static Schema<Map<String, dynamic>> _buildProfileSchema(AgentProfileValidationMessages m) {
+    final addressSchema = z
+        .interface(<String, Schema<dynamic>>{
+          'street': _requiredText(m, m.labelStreet, 100),
+          'number': _requiredText(m, m.labelAddressNumber, 15),
+          'district': _requiredText(m, m.labelDistrict, 60),
+          'postal_code': _postalCodeSchema(m),
+          'city': _requiredText(m, m.labelCity, 60),
+          'state': z.string().trim().toUpperCase().refine(
+            _statePattern.hasMatch,
+            message: m.stateInvalid,
+          ),
+        })
+        .strict();
+
+    return z
+        .interface(<String, Schema<dynamic>>{
+          'name': _requiredText(m, m.labelName, 100),
+          'trade_name': _requiredText(m, m.labelTradeName, 100),
+          'document': _documentSchema(m),
+          'document_type': z.$enum(
+            const <String>['cpf', 'cnpj'],
+            message: m.documentTypeEnum,
+          ),
+          'phone?': _phoneSchema(m),
+          'mobile': _mobileSchema(m),
+          'email': z.string().trim().toLowerCase().email(
+            pattern: z.regexes.email,
+            message: m.emailInvalid,
+          ),
+          'address': addressSchema,
+          'notes?': z.string().trim().max(
+            2000,
+            message: m.notesMaxLength(2000),
+          ),
+        })
+        .strict()
+        .refine(
+          (Map<String, dynamic> value) =>
+              value['document_type'] == _resolveDocumentType(value['document'] as String),
+          message: m.documentTypeMismatch,
+        );
+  }
 
   final String name;
   final String tradeName;
@@ -159,54 +154,69 @@ class AgentProfile {
     required String city,
     required String state,
     required String notes,
+    required AgentProfileValidationMessages validationMessages,
   }) {
     final normalizedDocument = _digitsOnly(document);
 
-    return _parseProfile(<String, dynamic>{
-      'name': name,
-      'trade_name': tradeName,
-      'document': document,
-      'document_type': _resolveDocumentType(normalizedDocument),
-      if (phone.trim().isNotEmpty) 'phone': phone,
-      'mobile': mobile,
-      'email': email,
-      'address': <String, dynamic>{
-        'street': street,
-        'number': number,
-        'district': district,
-        'postal_code': postalCode,
-        'city': city,
-        'state': state,
+    return _parseProfile(
+      <String, dynamic>{
+        'name': name,
+        'trade_name': tradeName,
+        'document': document,
+        'document_type': _resolveDocumentType(normalizedDocument),
+        if (phone.trim().isNotEmpty) 'phone': phone,
+        'mobile': mobile,
+        'email': email,
+        'address': <String, dynamic>{
+          'street': street,
+          'number': number,
+          'district': district,
+          'postal_code': postalCode,
+          'city': city,
+          'state': state,
+        },
+        if (notes.trim().isNotEmpty) 'notes': notes,
       },
-      if (notes.trim().isNotEmpty) 'notes': notes,
-    });
+      validationMessages,
+    );
   }
 
-  static Result<AgentProfile> fromConfig(Config config) {
+  static Result<AgentProfile> fromConfig(
+    Config config, {
+    AgentProfileValidationMessages? validationMessages,
+  }) {
+    final m = validationMessages ?? AgentProfileValidationMessages.english;
     final normalizedDocument = _digitsOnly(config.cnaeCnpjCpf);
 
-    return _parseProfile(<String, dynamic>{
-      'name': config.nome,
-      'trade_name': config.nomeFantasia,
-      'document': normalizedDocument,
-      'document_type': _resolveDocumentType(normalizedDocument),
-      if (config.telefone.trim().isNotEmpty) 'phone': config.telefone,
-      'mobile': config.celular,
-      'email': config.email,
-      'address': <String, dynamic>{
-        'street': config.endereco,
-        'number': config.numeroEndereco,
-        'district': config.bairro,
-        'postal_code': config.cep,
-        'city': config.nomeMunicipio,
-        'state': config.ufMunicipio,
+    return _parseProfile(
+      <String, dynamic>{
+        'name': config.nome,
+        'trade_name': config.nomeFantasia,
+        'document': normalizedDocument,
+        'document_type': _resolveDocumentType(normalizedDocument),
+        if (config.telefone.trim().isNotEmpty) 'phone': config.telefone,
+        'mobile': config.celular,
+        'email': config.email,
+        'address': <String, dynamic>{
+          'street': config.endereco,
+          'number': config.numeroEndereco,
+          'district': config.bairro,
+          'postal_code': config.cep,
+          'city': config.nomeMunicipio,
+          'state': config.ufMunicipio,
+        },
+        if (config.observacao.trim().isNotEmpty) 'notes': config.observacao,
       },
-      if (config.observacao.trim().isNotEmpty) 'notes': config.observacao,
-    });
+      m,
+    );
   }
 
-  static Result<AgentProfile> fromRpcPayload(dynamic payload) {
-    return _parseProfile(payload);
+  static Result<AgentProfile> fromRpcPayload(
+    dynamic payload, {
+    AgentProfileValidationMessages? validationMessages,
+  }) {
+    final m = validationMessages ?? AgentProfileValidationMessages.english;
+    return _parseProfile(payload, m);
   }
 
   Config applyToConfig(Config config) {
@@ -241,32 +251,33 @@ class AgentProfile {
     };
   }
 
-  static Schema<String> _requiredText({
-    required String label,
-    required int maxLength,
-  }) {
+  static Schema<String> _requiredText(
+    AgentProfileValidationMessages m,
+    String label,
+    int maxLength,
+  ) {
     return z
         .string()
         .trim()
-        .min(1, message: '$label e obrigatorio.')
+        .min(1, message: m.requiredField(label))
         .max(
           maxLength,
-          message: '$label deve ter no maximo $maxLength caracteres.',
+          message: m.maxLengthField(label, maxLength),
         );
   }
 
-  static Schema<String> _documentSchema() {
+  static Schema<String> _documentSchema(AgentProfileValidationMessages m) {
     return z
         .string()
         .trim()
         .refine(
           _isValidCpfOrCnpj,
-          message: 'CNPJ/CPF invalido.',
+          message: m.documentInvalid,
         )
         .transformTyped(_digitsOnly);
   }
 
-  static Schema<String> _postalCodeSchema() {
+  static Schema<String> _postalCodeSchema(AgentProfileValidationMessages m) {
     return z
         .string()
         .trim()
@@ -275,12 +286,12 @@ class AgentProfile {
             final digits = _digitsOnly(value);
             return digits.length == 8 && _digitsOnlyPattern.hasMatch(digits);
           },
-          message: 'CEP invalido. Informe 8 digitos.',
+          message: m.postalCodeInvalid,
         )
         .transformTyped(_digitsOnly);
   }
 
-  static Schema<String> _phoneSchema() {
+  static Schema<String> _phoneSchema(AgentProfileValidationMessages m) {
     return z
         .string()
         .trim()
@@ -289,12 +300,12 @@ class AgentProfile {
             final digits = _digitsOnly(value);
             return digits.length == 10 && _digitsOnlyPattern.hasMatch(digits);
           },
-          message: 'Telefone invalido.',
+          message: m.phoneInvalid,
         )
         .transformTyped(_digitsOnly);
   }
 
-  static Schema<String> _mobileSchema() {
+  static Schema<String> _mobileSchema(AgentProfileValidationMessages m) {
     return z
         .string()
         .trim()
@@ -305,7 +316,7 @@ class AgentProfile {
             final startsWithNine = digits.length == 11 && digits.length > 2 && digits[2] == '9';
             return hasValidLength && startsWithNine;
           },
-          message: 'Celular invalido.',
+          message: m.mobileInvalid,
         )
         .transformTyped(_digitsOnly);
   }
@@ -314,8 +325,12 @@ class AgentProfile {
     return value.replaceAll(_nonDigitsPattern, '');
   }
 
-  static Result<AgentProfile> _parseProfile(dynamic payload) {
-    final result = _schema.parseSafe(_normalizePayload(payload));
+  static Result<AgentProfile> _parseProfile(
+    dynamic payload,
+    AgentProfileValidationMessages messages,
+  ) {
+    final schema = _profileSchemaFor(messages);
+    final result = schema.parseSafe(_normalizePayload(payload));
     if (result.isError()) {
       return Failure(result.exceptionOrNull()!);
     }

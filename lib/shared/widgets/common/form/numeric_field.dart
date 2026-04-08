@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class NumericField extends StatelessWidget {
@@ -28,6 +28,7 @@ class NumericField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AppTextField(
       controller: controller,
       label: label,
@@ -38,17 +39,17 @@ class NumericField extends StatelessWidget {
           validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
-              return AppStrings.formFieldRequired(label);
+              return l10n.formFieldRequired(label);
             }
             final number = int.tryParse(value);
             if (number == null) {
-              return AppStrings.formNumericInvalidValue;
+              return l10n.formNumericInvalidValue;
             }
             if (minValue != null && number < minValue!) {
-              return AppStrings.formNumericMinValue(minValue!);
+              return l10n.formNumericMinValue(minValue!);
             }
             if (maxValue != null && number > maxValue!) {
-              return AppStrings.formNumericMaxValue(maxValue!);
+              return l10n.formNumericMaxValue(maxValue!);
             }
             return null;
           },

@@ -2,7 +2,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -10,6 +9,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
@@ -27,7 +27,7 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  String _lastUpdateCheck = AppStrings.configLastUpdateNever;
+  String _lastUpdateCheck = '';
   String _appVersion = AppConstants.appVersion;
 
   @override
@@ -52,50 +52,53 @@ class _ConfigPageState extends State<ConfigPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
-  String _getUpdateUnavailableMessage() {
+  String _getUpdateUnavailableMessage(AppLocalizations l10n) {
     final capabilities = getIt<RuntimeCapabilities>();
     return capabilities.supportsAutoUpdate
-        ? '${AppStrings.gsAutoUpdateNotConfigured}\nFeed oficial esperado: $officialAutoUpdateFeedUrl'
-        : AppStrings.gsAutoUpdateNotSupported;
+        ? '${l10n.configAutoUpdateNotConfigured}\n${l10n.configAutoUpdateOfficialFeedExpected(officialAutoUpdateFeedUrl)}'
+        : l10n.configAutoUpdateNotSupported;
   }
 
-  String _formatTechnicalDetails(UpdateCheckDiagnostics? diagnostics) {
+  String _formatTechnicalDetails(
+    AppLocalizations l10n,
+    UpdateCheckDiagnostics? diagnostics,
+  ) {
     if (diagnostics == null) {
-      return 'Sem dados tecnicos para a verificacao atual.';
+      return l10n.configUpdateTechnicalNoData;
     }
 
     final lines = <String>[
-      'Detalhes tecnicos',
-      'Versao atual: $_appVersion',
-      'Checado em: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
-      'Feed configurado: ${diagnostics.configuredFeedUrl}',
-      'Feed consultado: ${diagnostics.requestedFeedUrl}',
-      'Feed oficial: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? 'sim' : 'nao'}',
+      l10n.configUpdateTechnicalTitle,
+      '${l10n.configUpdateTechnicalCurrentVersion}: $_appVersion',
+      '${l10n.configUpdateTechnicalCheckedAt}: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
+      '${l10n.configUpdateTechnicalConfiguredFeed}: ${diagnostics.configuredFeedUrl}',
+      '${l10n.configUpdateTechnicalRequestedFeed}: ${diagnostics.requestedFeedUrl}',
+      '${l10n.configUpdateTechnicalOfficialFeed}: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
     ];
 
     if (diagnostics.appcastProbeItemCount != null) {
       lines.add(
-        'Itens no feed: ${diagnostics.appcastProbeItemCount}',
+        '${l10n.configUpdateTechnicalFeedItemCount}: ${diagnostics.appcastProbeItemCount}',
       );
     }
 
     if (diagnostics.remoteVersion != null && diagnostics.remoteVersion!.isNotEmpty) {
       lines.add(
-        'Versao remota: ${diagnostics.remoteVersion}',
+        '${l10n.configUpdateTechnicalRemoteVersion}: ${diagnostics.remoteVersion}',
       );
     } else if (diagnostics.appcastProbeVersion != null && diagnostics.appcastProbeVersion!.isNotEmpty) {
       lines.add(
-        'Versao remota: ${diagnostics.appcastProbeVersion}',
+        '${l10n.configUpdateTechnicalRemoteVersion}: ${diagnostics.appcastProbeVersion}',
       );
     }
 
     if (diagnostics.errorMessage != null && diagnostics.errorMessage!.isNotEmpty) {
       lines.add(
-        'Erro do updater: ${diagnostics.errorMessage}',
+        '${l10n.configUpdateTechnicalUpdaterError}: ${diagnostics.errorMessage}',
       );
     } else if (diagnostics.probeErrorMessage != null && diagnostics.probeErrorMessage!.isNotEmpty) {
       lines.add(
-        'Erro ao ler appcast: ${diagnostics.probeErrorMessage}',
+        '${l10n.configUpdateTechnicalAppcastError}: ${diagnostics.probeErrorMessage}',
       );
     }
 
@@ -103,18 +106,19 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _checkUpdates() async {
+    final l10n = AppLocalizations.of(context)!;
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
       SettingsFeedback.showError(
         context: context,
-        title: AppStrings.gsSectionUpdates,
-        message: _getUpdateUnavailableMessage(),
+        title: l10n.gsSectionUpdates,
+        message: _getUpdateUnavailableMessage(l10n),
       );
       return;
     }
 
     setState(() {
-      _lastUpdateCheck = AppStrings.configUpdatesChecking;
+      _lastUpdateCheck = l10n.configUpdatesChecking;
     });
 
     final result = await orchestrator.checkManual();
@@ -125,30 +129,32 @@ class _ConfigPageState extends State<ConfigPage> {
 
     final checkedAt = _formatLastUpdateCheck(DateTime.now());
     setState(() {
-      _lastUpdateCheck = '${AppStrings.configLastUpdatePrefix}$checkedAt';
+      _lastUpdateCheck = '${l10n.configLastUpdatePrefix}$checkedAt';
     });
 
     result.fold(
       (isUpdateAvailable) {
         final message = isUpdateAvailable
-            ? AppStrings.configUpdatesAvailable
-            : '${AppStrings.configUpdatesNotAvailable}\nSe voce acabou de publicar uma nova versao, aguarde ate 5 minutos e tente novamente.';
+            ? l10n.configUpdatesAvailable
+            : '${l10n.configUpdatesNotAvailable}\n${l10n.configUpdatesNotAvailableHint}';
         final technicalDetails = _formatTechnicalDetails(
+          l10n,
           orchestrator.lastManualDiagnostics,
         );
         return SettingsFeedback.showInfo(
           context: context,
-          title: AppStrings.gsSectionUpdates,
+          title: l10n.gsSectionUpdates,
           message: '$message\n\n$technicalDetails',
         );
       },
       (failure) {
         final technicalDetails = _formatTechnicalDetails(
+          l10n,
           orchestrator.lastManualDiagnostics,
         );
         return SettingsFeedback.showError(
           context: context,
-          title: AppStrings.gsSectionUpdates,
+          title: l10n.gsSectionUpdates,
           message: '${failure.toDisplayMessage()}\n\n$technicalDetails',
         );
       },
@@ -157,6 +163,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final themeProvider = context.watch<ThemeProvider>();
     final systemSettingsProvider = context.watch<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
@@ -166,7 +173,7 @@ class _ConfigPageState extends State<ConfigPage> {
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navSettings,
+          l10n.navSettings,
           style: context.sectionTitle,
         ),
       ),
@@ -246,6 +253,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SettingsTabView(
       currentIndex: _selectedTabIndex,
       onChanged: (int index) {
@@ -258,7 +266,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
       items: <SettingsTabItem>[
         SettingsTabItem(
           icon: FluentIcons.settings,
-          text: AppStrings.configTabGeneral,
+          text: l10n.configTabGeneral,
           body: GeneralConfigSection(
             appVersion: widget.appVersion,
             isDarkThemeEnabled: widget.isDarkThemeEnabled,

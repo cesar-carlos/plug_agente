@@ -1,6 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:plug_agente/application/mappers/agent_profile_hub_patch_mapper.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -20,6 +21,7 @@ void main() {
         city: 'Tangará da Serra',
         state: 'mt',
         notes: 'Note',
+        validationMessages: AgentProfileValidationMessages.english,
       );
       final profile = profileResult.getOrThrow();
 
@@ -55,6 +57,7 @@ void main() {
         city: 'Tangará da Serra',
         state: 'mt',
         notes: '',
+        validationMessages: AgentProfileValidationMessages.english,
       );
       final profile = profileResult.getOrThrow();
 
@@ -79,6 +82,7 @@ void main() {
         city: 'Tangará da Serra',
         state: 'mt',
         notes: '',
+        validationMessages: AgentProfileValidationMessages.english,
       );
       final profile = profileResult.getOrThrow();
 

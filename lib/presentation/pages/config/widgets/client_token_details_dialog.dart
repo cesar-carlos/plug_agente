@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 Future<void> showClientTokenDetailsDialog({
@@ -24,21 +24,21 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
 
   final ClientTokenSummary token;
 
-  String _buildScopeLabel() {
+  String _buildScopeLabel(AppLocalizations l10n) {
     if (token.allPermissions) {
-      return AppStrings.ctScopeAllPermissions;
+      return l10n.ctScopeAllPermissions;
     }
     final scopes = <String>[];
     if (token.allTables) {
-      scopes.add(AppStrings.ctScopeTables);
+      scopes.add(l10n.ctScopeTables);
     }
     if (token.allViews) {
-      scopes.add(AppStrings.ctScopeViews);
+      scopes.add(l10n.ctScopeViews);
     }
     if (scopes.isEmpty) {
-      return AppStrings.ctScopeRestricted;
+      return l10n.ctScopeRestricted;
     }
-    return '${AppStrings.ctScopeRestricted} (${scopes.join(', ')})';
+    return '${l10n.ctScopeRestricted} (${scopes.join(', ')})';
   }
 
   String _buildPayloadLabel() {
@@ -51,6 +51,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final dialogWidth = screenWidth > 980 ? 820.0 : screenWidth * 0.92;
 
@@ -59,7 +60,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
         minWidth: dialogWidth,
         maxWidth: dialogWidth,
       ),
-      title: const Text(AppStrings.ctDialogTokenDetailsTitle),
+      title: Text(l10n.ctDialogTokenDetailsTitle),
       content: SizedBox(
         width: dialogWidth,
         child: Column(
@@ -67,59 +68,59 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _DetailField(
-              label: AppStrings.ctLabelClient,
+              label: l10n.ctLabelClient,
               value: token.clientId,
               selectable: true,
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
-              label: AppStrings.ctLabelId,
+              label: l10n.ctLabelId,
               value: token.id,
               selectable: true,
             ),
             if (token.agentId != null && token.agentId!.trim().isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               _DetailField(
-                label: AppStrings.ctLabelAgent,
+                label: l10n.ctLabelAgent,
                 value: token.agentId!,
                 selectable: true,
               ),
             ],
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
-              label: AppStrings.ctLabelStatus,
-              value: token.isRevoked ? AppStrings.ctStatusRevoked : AppStrings.ctStatusActive,
+              label: l10n.ctLabelStatus,
+              value: token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
-              label: AppStrings.ctLabelScope,
-              value: _buildScopeLabel(),
+              label: l10n.ctLabelScope,
+              value: _buildScopeLabel(l10n),
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailField(
-              label: AppStrings.ctLabelCreatedAt,
+              label: l10n.ctLabelCreatedAt,
               value: token.createdAt.toLocal().toIso8601String(),
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              '${AppStrings.ctLabelPayload}:',
+              '${l10n.ctLabelPayload}:',
               style: context.bodyStrong,
             ),
             const SizedBox(height: AppSpacing.xs),
             _CodeSurface(text: _buildPayloadLabel()),
             const SizedBox(height: AppSpacing.md),
             Text(
-              '${AppStrings.ctLabelRules}:',
+              '${l10n.ctLabelRules}:',
               style: context.bodyStrong,
             ),
             const SizedBox(height: AppSpacing.xs),
-            _RulesSurface(rules: token.rules),
+            _RulesSurface(l10n: l10n, rules: token.rules),
           ],
         ),
       ),
       actions: [
         AppButton(
-          label: AppStrings.btnOk,
+          label: l10n.btnOk,
           onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
         ),
       ],
@@ -181,23 +182,24 @@ class _CodeSurface extends StatelessWidget {
 }
 
 class _RulesSurface extends StatelessWidget {
-  const _RulesSurface({required this.rules});
+  const _RulesSurface({required this.l10n, required this.rules});
 
+  final AppLocalizations l10n;
   final List<ClientTokenRule> rules;
 
   String _buildPermissionsLabel(ClientPermissionSet permissions) {
     final labels = <String>[];
     if (permissions.canRead) {
-      labels.add(AppStrings.ctPermissionRead);
+      labels.add(l10n.ctPermissionRead);
     }
     if (permissions.canUpdate) {
-      labels.add(AppStrings.ctPermissionUpdate);
+      labels.add(l10n.ctPermissionUpdate);
     }
     if (permissions.canDelete) {
-      labels.add(AppStrings.ctPermissionDelete);
+      labels.add(l10n.ctPermissionDelete);
     }
     if (labels.isEmpty) {
-      return AppStrings.ctRuleNoPermission;
+      return l10n.ctRuleNoPermission;
     }
     return labels.join(', ');
   }
@@ -205,7 +207,7 @@ class _RulesSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rules.isEmpty) {
-      return const Text(AppStrings.ctScopeNotInformed);
+      return Text(l10n.ctScopeNotInformed);
     }
 
     return Container(
@@ -220,6 +222,7 @@ class _RulesSurface extends StatelessWidget {
         children: List<Widget>.generate(
           rules.length,
           (index) => _RuleTile(
+            l10n: l10n,
             rule: rules[index],
             permissionsLabel: _buildPermissionsLabel(rules[index].permissions),
             isLast: index == rules.length - 1,
@@ -232,11 +235,13 @@ class _RulesSurface extends StatelessWidget {
 
 class _RuleTile extends StatelessWidget {
   const _RuleTile({
+    required this.l10n,
     required this.rule,
     required this.permissionsLabel,
     required this.isLast,
   });
 
+  final AppLocalizations l10n;
   final ClientTokenRule rule;
   final String permissionsLabel;
   final bool isLast;
@@ -260,9 +265,9 @@ class _RuleTile extends StatelessWidget {
             style: context.bodyStrong,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('${AppStrings.ctRuleFieldEffect}: ${rule.effect.name}'),
+          Text('${l10n.ctRuleFieldEffectColon} ${rule.effect.name}'),
           const SizedBox(height: AppSpacing.xs),
-          Text('${AppStrings.ctGridColumnPermissions}: $permissionsLabel'),
+          Text('${l10n.ctGridColumnPermissions}: $permissionsLabel'),
         ],
       ),
     );

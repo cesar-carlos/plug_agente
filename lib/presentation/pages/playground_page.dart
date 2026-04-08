@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
@@ -108,6 +109,13 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     setState(() {});
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final l10n = AppLocalizations.of(context)!;
+    context.read<PlaygroundProvider>().bindUiStrings(PlaygroundUiStrings.fromL10n(l10n));
+  }
+
   bool _canExecutePlaygroundQuery() => _queryController.text.trim().isNotEmpty;
 
   @override
@@ -120,10 +128,11 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
 
   void _showErrorModal(String error) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     final navigatorContext = Navigator.of(context, rootNavigator: true).context;
     MessageModal.show<void>(
       context: navigatorContext,
-      title: AppStrings.queryErrorTitle,
+      title: l10n.queryErrorTitle,
       message: error,
       type: MessageType.error,
     );
@@ -131,10 +140,11 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
 
   void _showConnectionStatusModal(String status, bool isSuccess) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     final navigatorContext = Navigator.of(context, rootNavigator: true).context;
     MessageModal.show<void>(
       context: navigatorContext,
-      title: AppStrings.queryConnectionStatusTitle,
+      title: l10n.queryConnectionStatusTitle,
       message: status,
       type: isSuccess ? MessageType.success : MessageType.error,
     );
@@ -224,10 +234,11 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.titlePlayground,
+          l10n.titlePlayground,
           style: context.sectionTitle,
         ),
       ),
@@ -256,25 +267,25 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          AppStrings.playgroundDescription,
+                          l10n.playgroundDescription,
                           style: context.bodyMuted,
                         ),
                         const SizedBox(height: AppSpacing.sm),
-                        const Wrap(
+                        Wrap(
                           spacing: AppSpacing.sm,
                           runSpacing: AppSpacing.xs,
                           children: [
                             _PlaygroundShortcutChip(
                               icon: FluentIcons.play,
-                              label: AppStrings.playgroundShortcutExecute,
+                              label: l10n.playgroundShortcutExecute,
                             ),
                             _PlaygroundShortcutChip(
                               icon: FluentIcons.plug_connected,
-                              label: AppStrings.playgroundShortcutTestConnection,
+                              label: l10n.playgroundShortcutTestConnection,
                             ),
                             _PlaygroundShortcutChip(
                               icon: FluentIcons.clear,
-                              label: AppStrings.playgroundShortcutClear,
+                              label: l10n.playgroundShortcutClear,
                             ),
                           ],
                         ),

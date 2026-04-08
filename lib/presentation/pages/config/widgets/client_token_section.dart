@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -19,6 +18,7 @@ import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_details_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
@@ -262,8 +262,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                         _CreateTokenDialogFooter(
                           isCreating: tokenProvider.isCreating,
                           submitLabel: isEditingToken
-                              ? AppStrings.ctButtonSaveTokenChanges
-                              : AppStrings.ctButtonCreateToken,
+                              ? AppLocalizations.of(dialogContext)!.ctButtonSaveTokenChanges
+                              : AppLocalizations.of(dialogContext)!.ctButtonCreateToken,
                           onCancel: () => Navigator.of(dialogContext).pop(),
                           onSubmit: _handleSubmitToken,
                         ),
@@ -314,7 +314,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     final rules = _buildRules();
     if (!_allPermissions && rules.isEmpty) {
-      _formError = AppStrings.ctErrorRuleOrAllPermissionsRequired;
+      _formError = AppLocalizations.of(context)!.ctErrorRuleOrAllPermissionsRequired;
       _notifyCreateTokenDialogChanged();
       return;
     }
@@ -375,8 +375,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       return payload;
     }
     _formError = switch (error) {
-      ClientTokenPayloadParseError.invalidJson => AppStrings.ctErrorPayloadInvalidJson,
-      ClientTokenPayloadParseError.notAnObject => AppStrings.ctErrorPayloadMustBeJsonObject,
+      ClientTokenPayloadParseError.invalidJson => AppLocalizations.of(context)!.ctErrorPayloadInvalidJson,
+      ClientTokenPayloadParseError.notAnObject => AppLocalizations.of(context)!.ctErrorPayloadMustBeJsonObject,
     };
     _notifyCreateTokenDialogChanged();
     return null;
@@ -412,19 +412,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   String _statusFilterLabel(ClientTokenStatusFilter value) {
+    final l10n = AppLocalizations.of(context)!;
     return switch (value) {
-      ClientTokenStatusFilter.all => AppStrings.ctFilterStatusAll,
-      ClientTokenStatusFilter.active => AppStrings.ctFilterStatusActive,
-      ClientTokenStatusFilter.revoked => AppStrings.ctFilterStatusRevoked,
+      ClientTokenStatusFilter.all => l10n.ctFilterStatusAll,
+      ClientTokenStatusFilter.active => l10n.ctFilterStatusActive,
+      ClientTokenStatusFilter.revoked => l10n.ctFilterStatusRevoked,
     };
   }
 
   String _sortFilterLabel(ClientTokenSortOption value) {
+    final l10n = AppLocalizations.of(context)!;
     return switch (value) {
-      ClientTokenSortOption.newest => AppStrings.ctSortNewest,
-      ClientTokenSortOption.oldest => AppStrings.ctSortOldest,
-      ClientTokenSortOption.clientAsc => AppStrings.ctSortClientAsc,
-      ClientTokenSortOption.clientDesc => AppStrings.ctSortClientDesc,
+      ClientTokenSortOption.newest => l10n.ctSortNewest,
+      ClientTokenSortOption.oldest => l10n.ctSortOldest,
+      ClientTokenSortOption.clientAsc => l10n.ctSortClientAsc,
+      ClientTokenSortOption.clientDesc => l10n.ctSortClientDesc,
     };
   }
 
@@ -573,11 +575,12 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     ClientTokenProvider provider,
     ClientTokenSummary token,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await SettingsFeedback.showConfirmation(
       context: context,
-      title: AppStrings.ctConfirmRevokeTitle,
-      message: AppStrings.ctConfirmRevokeMessage,
-      confirmText: AppStrings.ctButtonRevoke,
+      title: l10n.ctConfirmRevokeTitle,
+      message: l10n.ctConfirmRevokeMessage,
+      confirmText: l10n.ctButtonRevoke,
     );
     if (!mounted || !confirmed) {
       return;
@@ -587,7 +590,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (provider.error.isNotEmpty) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
+        title: l10n.modalTitleError,
         message: provider.error,
         onConfirm: () => provider.clearError(),
       );
@@ -599,11 +602,12 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     ClientTokenProvider provider,
     ClientTokenSummary token,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await SettingsFeedback.showConfirmation(
       context: context,
-      title: AppStrings.ctConfirmDeleteTitle,
-      message: AppStrings.ctConfirmDeleteMessage,
-      confirmText: AppStrings.ctButtonDelete,
+      title: l10n.ctConfirmDeleteTitle,
+      message: l10n.ctConfirmDeleteMessage,
+      confirmText: l10n.ctButtonDelete,
     );
     if (!mounted || !confirmed) {
       return;
@@ -613,7 +617,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (provider.error.isNotEmpty) {
       await SettingsFeedback.showError(
         context: context,
-        title: AppStrings.modalTitleError,
+        title: l10n.modalTitleError,
         message: provider.error,
         onConfirm: () => provider.clearError(),
       );
@@ -660,6 +664,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   Widget build(BuildContext context) {
     return Consumer<ClientTokenProvider>(
       builder: (context, provider, _) {
+        final l10n = AppLocalizations.of(context)!;
         final listedTokens = provider.tokens;
         return AppCard(
           child: Column(
@@ -667,13 +672,13 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: SettingsSectionTitle(
-                      title: AppStrings.ctSectionTitle,
+                      title: l10n.ctSectionTitle,
                     ),
                   ),
                   AppButton(
-                    label: AppStrings.ctButtonNewToken,
+                    label: l10n.ctButtonNewToken,
                     isPrimary: false,
                     icon: FluentIcons.add,
                     onPressed: _openCreateTokenModal,
@@ -683,7 +688,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               if (provider.error.isNotEmpty) ...[
                 InlineFeedbackCard(
                   severity: InfoBarSeverity.error,
-                  title: AppStrings.modalTitleError,
+                  title: l10n.modalTitleError,
                   message: provider.error,
                   onDismiss: provider.clearError,
                 ),
@@ -693,7 +698,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               Row(
                 children: [
                   AppButton(
-                    label: AppStrings.ctButtonRefreshList,
+                    label: l10n.ctButtonRefreshList,
                     icon: FluentIcons.refresh,
                     isPrimary: false,
                     isLoading: provider.isLoading,
@@ -702,8 +707,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     label: _autoRefreshAfterCreate
-                        ? AppStrings.ctButtonAutoRefreshOn
-                        : AppStrings.ctButtonAutoRefreshOff,
+                        ? l10n.ctButtonAutoRefreshOn
+                        : l10n.ctButtonAutoRefreshOff,
                     icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
                     isPrimary: false,
                     onPressed: () {
@@ -716,8 +721,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              const SettingsSectionTitle(
-                title: AppStrings.ctSectionRegisteredTokens,
+              SettingsSectionTitle(
+                title: l10n.ctSectionRegisteredTokens,
               ),
               const SizedBox(height: AppSpacing.sm),
               _TokenListFilters(
@@ -746,7 +751,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               const SizedBox(height: AppSpacing.sm),
               if (listedTokens.isEmpty && !provider.isLoading)
                 Text(
-                  _hasActiveFilters() ? AppStrings.ctMsgNoTokenMatchFilter : AppStrings.ctMsgNoTokenFound,
+                  _hasActiveFilters() ? l10n.ctMsgNoTokenMatchFilter : l10n.ctMsgNoTokenFound,
                 ),
               if (listedTokens.isNotEmpty)
                 SizedBox(
@@ -765,9 +770,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                       if (tokenValue == null || tokenValue.trim().isEmpty) {
                         displayInfoBar(
                           context,
-                          builder: (context, close) => const InfoBar(
+                          builder: (context, close) => InfoBar(
                             title: Text(
-                              AppStrings.ctInfoClientTokenUnavailable,
+                              l10n.ctInfoClientTokenUnavailable,
                             ),
                             severity: InfoBarSeverity.warning,
                           ),
@@ -782,8 +787,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                       );
                       displayInfoBar(
                         context,
-                        builder: (context, close) => const InfoBar(
-                          title: Text(AppStrings.ctInfoClientTokenCopied),
+                        builder: (context, close) => InfoBar(
+                          title: Text(l10n.ctInfoClientTokenCopied),
                           severity: InfoBarSeverity.success,
                         ),
                       );

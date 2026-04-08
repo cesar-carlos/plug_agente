@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/common.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 
@@ -20,6 +20,7 @@ class SqlEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: SqlVisualIdentity.editorPanelPadding,
       decoration: BoxDecoration(
@@ -30,8 +31,8 @@ class SqlEditor extends StatelessWidget {
         borderRadius: SqlVisualIdentity.panelBorderRadius,
       ),
       child: AppTextField(
-        label: AppStrings.querySqlLabel,
-        hint: AppStrings.querySqlHint,
+        label: l10n.querySqlLabel,
+        hint: l10n.querySqlHint,
         controller: controller,
         onChanged: onChanged,
         validator: validator,

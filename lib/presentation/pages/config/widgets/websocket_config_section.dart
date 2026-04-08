@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -67,6 +67,7 @@ class WebSocketConfigSection extends StatelessWidget {
   }
 
   void _handleLoginOrLogout(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     if (authProvider.isAuthenticated) {
@@ -78,8 +79,8 @@ class WebSocketConfigSection extends StatelessWidget {
       if (serverUrl.isEmpty) {
         SettingsFeedback.showError(
           context: context,
-          title: AppStrings.modalTitleError,
-          message: AppStrings.msgServerUrlRequired,
+          title: l10n.modalTitleError,
+          message: l10n.msgServerUrlRequired,
         );
         return;
       }
@@ -87,8 +88,8 @@ class WebSocketConfigSection extends StatelessWidget {
       if (agentId.isEmpty) {
         SettingsFeedback.showError(
           context: context,
-          title: AppStrings.modalTitleError,
-          message: AppStrings.msgAgentIdRequired,
+          title: l10n.modalTitleError,
+          message: l10n.msgAgentIdRequired,
         );
         return;
       }
@@ -104,8 +105,8 @@ class WebSocketConfigSection extends StatelessWidget {
       } else {
         SettingsFeedback.showError(
           context: context,
-          title: AppStrings.modalTitleError,
-          message: AppStrings.msgAuthCredentialsRequired,
+          title: l10n.modalTitleError,
+          message: l10n.msgAuthCredentialsRequired,
         );
       }
     }
@@ -123,6 +124,7 @@ class _ServerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<AuthProvider>(
       builder: (context, authProvider, _) {
         return AppCard(
@@ -130,20 +132,20 @@ class _ServerSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsSectionBlock(
-                title: AppStrings.wsSectionConnection,
+                title: l10n.wsSectionConnection,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     AppTextField(
-                      label: AppStrings.wsFieldServerUrl,
+                      label: l10n.wsFieldServerUrl,
                       controller: formController.serverUrlController,
-                      hint: AppStrings.wsHintServerUrl,
+                      hint: l10n.wsHintServerUrl,
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
-                      label: AppStrings.wsFieldAgentId,
+                      label: l10n.wsFieldAgentId,
                       controller: formController.agentIdController,
-                      hint: AppStrings.wsHintAgentId,
+                      hint: l10n.wsHintAgentId,
                       readOnly: true,
                     ),
                   ],
@@ -151,27 +153,27 @@ class _ServerSection extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               SettingsSectionBlock(
-                title: AppStrings.wsSectionOptionalAuth,
+                title: l10n.wsSectionOptionalAuth,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     AppTextField(
-                      label: AppStrings.wsFieldUsername,
+                      label: l10n.wsFieldUsername,
                       controller: formController.authUsernameController,
-                      hint: AppStrings.wsHintUsername,
+                      hint: l10n.wsHintUsername,
                     ),
                     const SizedBox(height: 16),
                     PasswordField(
                       controller: formController.authPasswordController,
-                      hint: AppStrings.wsHintPassword,
+                      hint: l10n.wsHintPassword,
                     ),
                     const SizedBox(height: 16),
                     AppButton(
                       label: authProvider.status == AuthStatus.authenticating
-                          ? AppStrings.wsButtonAuthenticating
+                          ? l10n.wsButtonAuthenticating
                           : authProvider.isAuthenticated
-                          ? AppStrings.wsButtonLogout
-                          : AppStrings.wsButtonLogin,
+                          ? l10n.wsButtonLogout
+                          : l10n.wsButtonLogin,
                       isPrimary: false,
                       isLoading: authProvider.status == AuthStatus.authenticating,
                       onPressed: onLoginOrLogout,
@@ -216,27 +218,28 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AppCard(
       child: SettingsSectionBlock(
-        title: AppStrings.wsSectionOutboundCompression,
+        title: l10n.wsSectionOutboundCompression,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AppDropdown<OutboundCompressionMode>(
-              label: AppStrings.wsFieldOutboundCompressionMode,
+              label: l10n.wsFieldOutboundCompressionMode,
               value: _mode,
-              items: const [
+              items: [
                 ComboBoxItem<OutboundCompressionMode>(
                   value: OutboundCompressionMode.none,
-                  child: Text(AppStrings.wsOutboundCompressionOff),
+                  child: Text(l10n.wsOutboundCompressionOff),
                 ),
                 ComboBoxItem<OutboundCompressionMode>(
                   value: OutboundCompressionMode.gzip,
-                  child: Text(AppStrings.wsOutboundCompressionGzip),
+                  child: Text(l10n.wsOutboundCompressionGzip),
                 ),
                 ComboBoxItem<OutboundCompressionMode>(
                   value: OutboundCompressionMode.auto,
-                  child: Text(AppStrings.wsOutboundCompressionAuto),
+                  child: Text(l10n.wsOutboundCompressionAuto),
                 ),
               ],
               onChanged: (OutboundCompressionMode? value) {
@@ -247,7 +250,7 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              AppStrings.wsOutboundCompressionDescription,
+              l10n.wsOutboundCompressionDescription,
               style: context.captionText,
             ),
           ],
@@ -270,13 +273,14 @@ class _WebSocketActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<ConnectionProvider>(
       builder: (context, connectionProvider, _) {
         return Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
             return SettingsActionRow(
               leading: AppButton(
-                label: connectionProvider.isConnected ? AppStrings.wsButtonDisconnect : AppStrings.wsButtonConnect,
+                label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
                 onPressed: () => _handleConnectOrDisconnect(
                   context,
                   connectionProvider,
@@ -284,7 +288,7 @@ class _WebSocketActionButtons extends StatelessWidget {
                 ),
               ),
               trailing: AppButton(
-                label: AppStrings.wsButtonSaveConfig,
+                label: l10n.wsButtonSaveConfig,
                 isLoading: configProvider.isLoading,
                 onPressed: onSaveConfig,
               ),

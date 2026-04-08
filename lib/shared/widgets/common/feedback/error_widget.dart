@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 class ErrorWidget extends StatelessWidget {
@@ -16,6 +16,7 @@ class ErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final colors = context.appColors;
 
     return Container(
@@ -41,7 +42,7 @@ class ErrorWidget extends StatelessWidget {
           if (onRetry != null) ...[
             const SizedBox(height: AppSpacing.lg),
             AppButton(
-              label: AppStrings.btnRetry,
+              label: l10n.btnRetry,
               onPressed: onRetry,
             ),
           ],

@@ -45,6 +45,7 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isCreating = context.select<ClientTokenProvider, bool>(
       (ClientTokenProvider p) => p.isCreating,
     );
@@ -73,7 +74,7 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
               ),
               child: Semantics(
                 namesRoute: true,
-                label: widget.isEditingToken ? AppStrings.ctDialogEditTokenTitle : AppStrings.ctDialogCreateTokenTitle,
+                label: widget.isEditingToken ? l10n.ctDialogEditTokenTitle : l10n.ctDialogCreateTokenTitle,
                 child: Card(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   backgroundColor: widget.theme.resources.solidBackgroundFillColorBase,
@@ -82,7 +83,7 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.isEditingToken ? AppStrings.ctDialogEditTokenTitle : AppStrings.ctDialogCreateTokenTitle,
+                        widget.isEditingToken ? l10n.ctDialogEditTokenTitle : l10n.ctDialogCreateTokenTitle,
                         style: context.sectionTitle,
                       ),
                       if (widget.isEditingToken) ...[
@@ -97,7 +98,7 @@ class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
                             ),
                             borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
-                          child: const Text(AppStrings.ctEditUpdatesTokenHint),
+                          child: Text(l10n.ctEditUpdatesTokenHint),
                         ),
                       ],
                       const SizedBox(height: AppSpacing.lg),

@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
 class BootstrapFailureApp extends StatelessWidget {
@@ -20,6 +21,9 @@ class BootstrapFailureApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return FluentApp(
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('pt'),
       home: _BootstrapFailurePage(
         error: error,
         stackTrace: stackTrace,

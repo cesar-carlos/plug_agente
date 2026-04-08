@@ -1,11 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
@@ -65,25 +65,29 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   }
 
   Future<void> _saveSettings() async {
+    if (!mounted) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
     final poolSize = int.tryParse(_poolSizeController.text);
     final loginTimeout = int.tryParse(_loginTimeoutController.text);
     final maxResultBuffer = int.tryParse(_maxResultBufferController.text);
     final streamingChunkSize = int.tryParse(_streamingChunkSizeController.text);
 
     if (poolSize == null || poolSize < 1 || poolSize > 20) {
-      _showError(AppStrings.odbcErrorPoolRange);
+      _showError(l10n.odbcErrorPoolRange);
       return;
     }
     if (loginTimeout == null || loginTimeout < 1 || loginTimeout > 120) {
-      _showError(AppStrings.odbcErrorLoginTimeoutRange);
+      _showError(l10n.odbcErrorLoginTimeoutRange);
       return;
     }
     if (maxResultBuffer == null || maxResultBuffer < 8 || maxResultBuffer > 128) {
-      _showError(AppStrings.odbcErrorBufferRange);
+      _showError(l10n.odbcErrorBufferRange);
       return;
     }
     if (streamingChunkSize == null || streamingChunkSize < 64 || streamingChunkSize > 8192) {
-      _showError(AppStrings.odbcErrorChunkRange);
+      _showError(l10n.odbcErrorChunkRange);
       return;
     }
 
@@ -115,7 +119,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
         error,
         stackTrace,
       );
-      _showError(AppStrings.odbcErrorSaveFailed);
+      if (mounted) {
+        _showError(AppLocalizations.of(context)!.odbcErrorSaveFailed);
+      }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -136,9 +142,10 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
   void _showError(String message) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     SettingsFeedback.showError(
       context: context,
-      title: AppStrings.modalTitleError,
+      title: l10n.modalTitleError,
       message: message,
     );
   }
@@ -148,12 +155,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     required bool poolModeChanged,
   }) {
     if (!mounted) return;
-    final base = settingsAppliedNow ? AppStrings.odbcSuccessAppliedNow : AppStrings.odbcSuccessAppliedGradually;
-    final message = poolModeChanged ? '$base${AppStrings.odbcSuccessPoolModeRestartAppend}' : base;
+    final l10n = AppLocalizations.of(context)!;
+    final base = settingsAppliedNow ? l10n.odbcSuccessAppliedNow : l10n.odbcSuccessAppliedGradually;
+    final message = poolModeChanged ? '$base${l10n.odbcSuccessPoolModeRestartAppend}' : base;
 
     SettingsFeedback.showSuccess(
       context: context,
-      title: AppStrings.odbcModalTitleSaved,
+      title: l10n.odbcModalTitleSaved,
       message: message,
     );
   }
@@ -173,6 +181,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       return const Center(child: ProgressRing());
     }
 
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
@@ -182,31 +191,31 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsSectionBlock(
-                title: AppStrings.odbcSectionTitle,
+                title: l10n.odbcSectionTitle,
                 child: AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        AppStrings.odbcBlockPool,
+                        l10n.odbcBlockPool,
                         style: context.bodyStrong,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcBlockPoolDescription,
+                        l10n.odbcBlockPoolDescription,
                         style: context.bodyText,
                       ),
                       const SizedBox(height: 16),
                       NumericField(
-                        label: AppStrings.odbcFieldPoolSize,
+                        label: l10n.odbcFieldPoolSize,
                         controller: _poolSizeController,
-                        hint: AppStrings.odbcHintPoolSize,
+                        hint: l10n.odbcHintPoolSize,
                         minValue: 1,
                         maxValue: 20,
                       ),
                       const SizedBox(height: 16),
                       SettingsToggleTile(
-                        label: AppStrings.odbcFieldNativePool,
+                        label: l10n.odbcFieldNativePool,
                         value: _useNativeOdbcPool,
                         onChanged: _isSaving
                             ? null
@@ -216,12 +225,12 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcTextNativePoolHelp,
+                        l10n.odbcTextNativePoolHelp,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 16),
                       SettingsToggleTile(
-                        label: AppStrings.odbcFieldNativePoolCheckoutValidation,
+                        label: l10n.odbcFieldNativePoolCheckoutValidation,
                         value: _nativePoolTestOnCheckout,
                         onChanged: !_useNativeOdbcPool || _isSaving
                             ? null
@@ -231,78 +240,78 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcTextNativePoolCheckoutValidationHelp,
+                        l10n.odbcTextNativePoolCheckoutValidationHelp,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        AppStrings.odbcBlockTimeouts,
+                        l10n.odbcBlockTimeouts,
                         style: context.bodyStrong,
                       ),
                       const SizedBox(height: 8),
                       NumericField(
-                        label: AppStrings.odbcFieldLoginTimeout,
+                        label: l10n.odbcFieldLoginTimeout,
                         controller: _loginTimeoutController,
-                        hint: AppStrings.odbcHintLoginTimeout,
+                        hint: l10n.odbcHintLoginTimeout,
                         minValue: 1,
                         maxValue: 120,
                       ),
                       const SizedBox(height: 16),
                       NumericField(
-                        label: AppStrings.odbcFieldResultBuffer,
+                        label: l10n.odbcFieldResultBuffer,
                         controller: _maxResultBufferController,
-                        hint: AppStrings.odbcHintResultBuffer,
+                        hint: l10n.odbcHintResultBuffer,
                         minValue: 8,
                         maxValue: 128,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcTextResultBufferHelp,
+                        l10n.odbcTextResultBufferHelp,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        AppStrings.odbcBlockStreaming,
+                        l10n.odbcBlockStreaming,
                         style: context.bodyStrong,
                       ),
                       const SizedBox(height: 8),
                       NumericField(
-                        label: AppStrings.odbcFieldChunkSize,
+                        label: l10n.odbcFieldChunkSize,
                         controller: _streamingChunkSizeController,
-                        hint: AppStrings.odbcHintChunkSize,
+                        hint: l10n.odbcHintChunkSize,
                         minValue: 64,
                         maxValue: 8192,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcTextStreamingHelp,
+                        l10n.odbcTextStreamingHelp,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.odbcTextQuickRecommendation,
+                        l10n.odbcTextQuickRecommendation,
                         style: context.captionStrong,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        AppStrings.odbcTextQuickRecommendationItems,
+                        l10n.odbcTextQuickRecommendationItems,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        AppStrings.odbcTextChunkWarning,
+                        l10n.odbcTextChunkWarning,
                         style: context.captionText,
                       ),
                       const SizedBox(height: 24),
                       SettingsActionRow(
                         spacing: 12,
                         leading: AppButton(
-                          label: AppStrings.odbcButtonRestoreDefault,
+                          label: l10n.odbcButtonRestoreDefault,
                           isPrimary: false,
                           onPressed: _isSaving ? null : _restoreDefaults,
                         ),
                         trailing: AppButton(
-                          label: AppStrings.odbcButtonSaveAdvanced,
+                          label: l10n.odbcButtonSaveAdvanced,
                           isLoading: _isSaving,
                           onPressed: _saveSettings,
                         ),

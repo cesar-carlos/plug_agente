@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
@@ -46,25 +46,27 @@ class GeneralConfigSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SettingsSectionTitle(title: AppStrings.gsSectionAppearance),
+            SettingsSectionTitle(title: l10n.gsSectionAppearance),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: AppStrings.gsToggleDarkTheme,
+              label: l10n.gsToggleDarkTheme,
               value: isDarkThemeEnabled,
               onChanged: onDarkThemeChanged,
             ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: AppStrings.gsSectionSystem),
+            SettingsSectionTitle(title: l10n.gsSectionSystem),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: AppStrings.gsToggleStartWithWindows,
+              label: l10n.gsToggleStartWithWindows,
               value: startWithWindows,
               onChanged: startupSupported ? onStartWithWindowsChanged : null,
             ),
@@ -77,33 +79,33 @@ class GeneralConfigSection extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: AppStrings.gsToggleStartMinimized,
+              label: l10n.gsToggleStartMinimized,
               value: startMinimized,
               onChanged: onStartMinimizedChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: AppStrings.gsToggleMinimizeToTray,
+              label: l10n.gsToggleMinimizeToTray,
               value: minimizeToTray,
               onChanged: onMinimizeToTrayChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
-              label: AppStrings.gsToggleCloseToTray,
+              label: l10n.gsToggleCloseToTray,
               value: closeToTray,
               onChanged: onCloseToTrayChanged,
             ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: AppStrings.gsSectionUpdates),
+            SettingsSectionTitle(title: l10n.gsSectionUpdates),
             const SizedBox(height: AppSpacing.md),
             if (supportsAutoUpdate)
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      '${AppStrings.gsCheckUpdatesWithDate}\n$lastUpdateCheck',
+                      '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
                       style: context.bodyText,
                     ),
                   ),
@@ -115,22 +117,22 @@ class GeneralConfigSection extends StatelessWidget {
               )
             else
               Text(
-                AppStrings.gsAutoUpdateNotSupported,
+                l10n.configAutoUpdateNotSupported,
                 style: context.captionText,
               ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
-            const SettingsSectionTitle(title: AppStrings.gsSectionAbout),
+            SettingsSectionTitle(title: l10n.gsSectionAbout),
             const SizedBox(height: AppSpacing.md),
             SettingsKeyValue(
-              label: AppStrings.gsLabelVersion,
+              label: l10n.gsLabelVersion,
               value: appVersion,
             ),
             const SizedBox(height: AppSpacing.md),
-            const SettingsKeyValue(
-              label: AppStrings.gsLabelLicense,
-              value: AppStrings.gsLicenseMit,
+            SettingsKeyValue(
+              label: l10n.gsLabelLicense,
+              value: l10n.gsLicenseMit,
             ),
           ],
         ),
@@ -150,6 +152,7 @@ class _StartupErrorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
 
     return Container(
@@ -179,7 +182,7 @@ class _StartupErrorMessage extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           AppButton(
-            label: AppStrings.gsButtonOpenSettings,
+            label: l10n.gsButtonOpenSettings,
             filledBackgroundColor: feedbackColors.background,
             filledForegroundColor: feedbackColors.accent,
             onPressed: onOpenSettings,

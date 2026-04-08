@@ -2,6 +2,7 @@ import 'package:checks/checks.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:plug_agente/domain/entities/agent_hub_profile_push_result.dart';
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
 import 'package:result_dart/result_dart.dart';
@@ -38,6 +39,7 @@ void main() {
       city: 'Tangará da Serra',
       state: 'mt',
       notes: '',
+      validationMessages: AgentProfileValidationMessages.english,
     ).getOrThrow();
 
     when(

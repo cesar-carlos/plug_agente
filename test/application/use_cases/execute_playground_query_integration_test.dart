@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
+import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -62,7 +63,10 @@ void main() {
         (success) => fail('Should have failed'),
         (failure) {
           expect(failure, isA<domain.ValidationFailure>());
-          expect(failure.toString(), contains('não pode estar vazia'));
+          expect(
+            failure.toString(),
+            contains(QueryValidationMessages.queryCannotBeEmpty),
+          );
         },
       );
     });

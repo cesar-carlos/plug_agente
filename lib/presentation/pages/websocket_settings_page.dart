@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/diagnostics_config_section.dart';
@@ -139,16 +139,18 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   void _showSuccessModal() {
+    final l10n = AppLocalizations.of(context)!;
     _showSuccessMessage(
-      title: AppStrings.modalTitleSuccess,
-      message: AppStrings.msgAuthenticatedSuccessfully,
+      title: l10n.modalTitleSuccess,
+      message: l10n.msgAuthenticatedSuccessfully,
     );
   }
 
   void _showConnectionSuccessModal() {
+    final l10n = AppLocalizations.of(context)!;
     _showSuccessMessage(
-      title: AppStrings.modalTitleConnectionEstablished,
-      message: AppStrings.msgWebSocketConnectedSuccessfully,
+      title: l10n.modalTitleConnectionEstablished,
+      message: l10n.msgWebSocketConnectedSuccessfully,
     );
   }
 
@@ -177,8 +179,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   void _showConnectionErrorModal(String error) {
+    final l10n = AppLocalizations.of(context)!;
     _showErrorWithClear(
-      title: AppStrings.modalTitleConnectionError,
+      title: l10n.modalTitleConnectionError,
       message: error,
       onClear: () {
         context.read<ConnectionProvider>().clearError();
@@ -187,8 +190,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   void _showConfigErrorModal(String error) {
+    final l10n = AppLocalizations.of(context)!;
     _showErrorWithClear(
-      title: AppStrings.modalTitleConfigError,
+      title: l10n.modalTitleConfigError,
       message: error,
       onClear: () {
         context.read<ConfigProvider>().clearError();
@@ -197,8 +201,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   void _showErrorModal(String error) {
+    final l10n = AppLocalizations.of(context)!;
     _showErrorWithClear(
-      title: AppStrings.modalTitleAuthError,
+      title: l10n.modalTitleAuthError,
       message: error,
       onClear: () {
         context.read<AuthProvider>().clearError();
@@ -241,12 +246,13 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
-          AppStrings.navWebSocketSettings,
+          l10n.navWebSocketSettings,
           style: context.sectionTitle,
         ),
       ),
@@ -280,58 +286,10 @@ class _WebSocketSettingsTabbedContent extends StatefulWidget {
 
 class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbedContent> {
   int _selectedTabIndex = 0;
-  late List<SettingsTabItem> _tabItems;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabItems = _buildTabItems();
-  }
-
-  @override
-  void didUpdateWidget(covariant _WebSocketSettingsTabbedContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.formController != widget.formController || oldWidget.configProvider != widget.configProvider) {
-      _tabItems = _buildTabItems();
-    }
-  }
-
-  List<SettingsTabItem> _buildTabItems() {
-    return <SettingsTabItem>[
-      SettingsTabItem(
-        icon: FluentIcons.plug_connected,
-        text: AppStrings.tabWebSocketConnection,
-        body: ListenableBuilder(
-          listenable: widget.configProvider,
-          builder: (BuildContext context, Widget? _) {
-            return WebSocketConfigSection(
-              formController: widget.formController,
-              configProvider: widget.configProvider,
-              onSaveConfig: () {
-                widget.formController.updateAllFieldsToProvider(
-                  widget.configProvider,
-                );
-                widget.configProvider.saveConfig();
-              },
-            );
-          },
-        ),
-      ),
-      const SettingsTabItem(
-        icon: FluentIcons.permissions,
-        text: AppStrings.tabClientTokenAuthorization,
-        body: _ClientTokenTabContent(),
-      ),
-      const SettingsTabItem(
-        icon: FluentIcons.info,
-        text: AppStrings.tabWebSocketDiagnostics,
-        body: DiagnosticsConfigSection(),
-      ),
-    ];
-  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SettingsTabView(
       currentIndex: _selectedTabIndex,
       onChanged: (int index) {
@@ -340,7 +298,37 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
         }
         setState(() => _selectedTabIndex = index);
       },
-      items: _tabItems,
+      items: <SettingsTabItem>[
+        SettingsTabItem(
+          icon: FluentIcons.plug_connected,
+          text: l10n.tabWebSocketConnection,
+          body: ListenableBuilder(
+            listenable: widget.configProvider,
+            builder: (BuildContext context, Widget? _) {
+              return WebSocketConfigSection(
+                formController: widget.formController,
+                configProvider: widget.configProvider,
+                onSaveConfig: () {
+                  widget.formController.updateAllFieldsToProvider(
+                    widget.configProvider,
+                  );
+                  widget.configProvider.saveConfig();
+                },
+              );
+            },
+          ),
+        ),
+        SettingsTabItem(
+          icon: FluentIcons.permissions,
+          text: l10n.tabClientTokenAuthorization,
+          body: const _ClientTokenTabContent(),
+        ),
+        SettingsTabItem(
+          icon: FluentIcons.info,
+          text: l10n.tabWebSocketDiagnostics,
+          body: const DiagnosticsConfigSection(),
+        ),
+      ],
     );
   }
 }

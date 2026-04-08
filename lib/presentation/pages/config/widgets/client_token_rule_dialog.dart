@@ -1,9 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
@@ -79,13 +79,14 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   }
 
   void _handleSave() {
+    final l10n = AppLocalizations.of(context)!;
     final resource = _resourceController.text.trim();
     if (resource.isEmpty) {
-      setState(() => _formError = AppStrings.ctErrorRuleResourceRequired);
+      setState(() => _formError = l10n.ctErrorRuleResourceRequired);
       return;
     }
     if (!(_canRead || _canUpdate || _canDelete)) {
-      setState(() => _formError = AppStrings.ctErrorRulePermissionRequired);
+      setState(() => _formError = l10n.ctErrorRulePermissionRequired);
       return;
     }
     final draft = ClientTokenRuleDraft(
@@ -101,6 +102,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = FluentTheme.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final dialogWidth = screenWidth > _ruleDialogCompactBreakpoint ? _ruleDialogWidth : screenWidth * 0.9;
@@ -120,7 +122,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _isEditing ? AppStrings.ctDialogEditRuleTitle : AppStrings.ctDialogAddRuleTitle,
+                _isEditing ? l10n.ctDialogEditRuleTitle : l10n.ctDialogAddRuleTitle,
                 style: context.sectionTitle,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -128,7 +130,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
                 children: [
                   Expanded(
                     child: AppDropdown<DatabaseResourceType>(
-                      label: AppStrings.ctRuleFieldType,
+                      label: l10n.ctRuleFieldType,
                       value: _resourceType,
                       items: DatabaseResourceType.values
                           .where(
@@ -151,7 +153,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppDropdown<ClientTokenRuleEffect>(
-                      label: AppStrings.ctRuleFieldEffect,
+                      label: l10n.ctRuleFieldEffect,
                       value: _effect,
                       items: ClientTokenRuleEffect.values
                           .map(
@@ -172,9 +174,9 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
-                label: AppStrings.ctRuleFieldResource,
+                label: l10n.ctRuleFieldResource,
                 controller: _resourceController,
-                hint: AppStrings.ctRuleHintResource,
+                hint: l10n.ctRuleHintResource,
               ),
               const SizedBox(height: AppSpacing.md),
               Wrap(
@@ -182,17 +184,17 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
                 runSpacing: AppSpacing.sm,
                 children: [
                   _PermissionToggle(
-                    label: AppStrings.ctPermissionRead,
+                    label: l10n.ctPermissionRead,
                     value: _canRead,
                     onChanged: (v) => setState(() => _canRead = v),
                   ),
                   _PermissionToggle(
-                    label: AppStrings.ctPermissionUpdate,
+                    label: l10n.ctPermissionUpdate,
                     value: _canUpdate,
                     onChanged: (v) => setState(() => _canUpdate = v),
                   ),
                   _PermissionToggle(
-                    label: AppStrings.ctPermissionDelete,
+                    label: l10n.ctPermissionDelete,
                     value: _canDelete,
                     onChanged: (v) => setState(() => _canDelete = v),
                   ),
@@ -210,13 +212,13 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   AppButton(
-                    label: AppStrings.btnCancel,
+                    label: l10n.btnCancel,
                     isPrimary: false,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   AppButton(
-                    label: AppStrings.ctDialogSaveRule,
+                    label: l10n.ctDialogSaveRule,
                     onPressed: _handleSave,
                   ),
                 ],

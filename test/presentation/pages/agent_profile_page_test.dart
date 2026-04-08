@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
@@ -27,8 +26,11 @@ class MockPushAgentProfileToHub extends Mock implements PushAgentProfileToHub {}
 class FakeAgentProfile extends Fake implements AgentProfile {}
 
 void main() {
-  setUpAll(() {
+  late AppLocalizations ptL10n;
+
+  setUpAll(() async {
     registerFallbackValue(FakeAgentProfile());
+    ptL10n = await AppLocalizations.delegate.load(const Locale('pt'));
   });
 
   group('AgentProfilePage', () {
@@ -76,17 +78,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(AppStrings.agentProfilePageTitle), findsOneWidget);
+      expect(find.text(ptL10n.navAgentProfile), findsOneWidget);
       expect(
-        find.text(AppStrings.agentProfileFormSectionTitle),
+        find.text(ptL10n.agentProfileFormSectionTitle),
         findsOneWidget,
       );
-      expect(find.text(AppStrings.agentProfileSectionIdentity), findsWidgets);
-      expect(find.text(AppStrings.agentProfileSectionContact), findsOneWidget);
-      expect(find.text(AppStrings.agentProfileSectionAddress), findsWidgets);
-      expect(find.text(AppStrings.agentProfileSectionNotes), findsOneWidget);
-      expect(find.text(AppStrings.agentProfileFieldName), findsOneWidget);
-      expect(find.text(AppStrings.agentProfileActionSave), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileSectionIdentity), findsWidgets);
+      expect(find.text(ptL10n.agentProfileSectionContact), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileSectionAddress), findsWidgets);
+      expect(find.text(ptL10n.agentProfileSectionNotes), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileFieldName), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileActionSave), findsOneWidget);
     });
 
     testWidgets('saves profile when tapping save button', (tester) async {
@@ -101,8 +103,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text(AppStrings.agentProfileActionSave));
-      await tester.tap(find.text(AppStrings.agentProfileActionSave));
+      await tester.ensureVisible(find.text(ptL10n.agentProfileActionSave));
+      await tester.tap(find.text(ptL10n.agentProfileActionSave));
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
 

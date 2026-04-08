@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 /// Advanced diagnostics toggles (may log sensitive SQL). Requires dependency
@@ -43,6 +43,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scrollbar(
       controller: _scrollController,
       child: SingleChildScrollView(
@@ -55,19 +56,19 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SettingsSectionTitle(
-                    title: AppStrings.diagnosticsSectionTitle,
+                  SettingsSectionTitle(
+                    title: l10n.diagnosticsSectionTitle,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  const InfoBar(
-                    title: Text(AppStrings.diagnosticsWarningTitle),
-                    content: Text(AppStrings.diagnosticsWarningBody),
+                  InfoBar(
+                    title: Text(l10n.diagnosticsWarningTitle),
+                    content: Text(l10n.diagnosticsWarningBody),
                     severity: InfoBarSeverity.warning,
                     isLong: true,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   SettingsToggleTile(
-                    label: AppStrings.diagnosticsOdbcPaginatedSqlLogLabel,
+                    label: l10n.diagnosticsOdbcPaginatedSqlLogLabel,
                     value: _odbcPaginatedSqlLog,
                     onChanged: (bool value) {
                       unawaited(_setOdbcPaginatedSqlLog(value));
@@ -75,7 +76,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    AppStrings.diagnosticsOdbcPaginatedSqlLogDescription,
+                    l10n.diagnosticsOdbcPaginatedSqlLogDescription,
                     style: context.captionText,
                   ),
                 ],

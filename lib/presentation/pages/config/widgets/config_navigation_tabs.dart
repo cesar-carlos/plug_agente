@@ -1,7 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class ConfigNavigationTabs extends StatelessWidget {
   const ConfigNavigationTabs({
@@ -17,6 +16,7 @@ class ConfigNavigationTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: FluentTheme.of(context).cardColor,
@@ -26,14 +26,14 @@ class ConfigNavigationTabs extends StatelessWidget {
       child: Row(
         children: [
           _TabButton(
-            label: AppStrings.configTabGeneral,
+            label: l10n.configTabGeneral,
             icon: FluentIcons.settings,
             isSelected: currentPage == 0,
             onTap: onGeneralTabTap,
           ),
           const _TabSeparator(),
           _TabButton(
-            label: AppStrings.configTabWebSocket,
+            label: l10n.configTabWebSocket,
             icon: FluentIcons.plug_connected,
             isSelected: currentPage == 1,
             onTap: onWebSocketTabTap,

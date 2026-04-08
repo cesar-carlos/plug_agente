@@ -3,12 +3,12 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -55,7 +55,7 @@ void main() {
             sqlHandlingMode: any(named: 'sqlHandlingMode'),
           ),
         );
-        expect(provider.error, AppStrings.queryValidationEmpty);
+        expect(provider.error, PlaygroundUiStrings.english.queryValidationEmpty);
         expect(provider.isLoading, isFalse);
       },
     );
@@ -103,7 +103,7 @@ void main() {
 
         await provider.testConnection(config);
 
-        expect(provider.connectionStatus, AppStrings.queryConnectionSuccess);
+        expect(provider.connectionStatus, PlaygroundUiStrings.english.queryConnectionSuccess);
         expect(provider.isConnectionStatusSuccess, isTrue);
         expect(provider.error, isNull);
       },

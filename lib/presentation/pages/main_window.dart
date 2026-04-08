@@ -1,8 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/navigation/nav_destination.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +31,7 @@ class _MainWindowState extends State<MainWindow> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final selectedDestination = _getCurrentDestination(context);
     final runtimeMode = context.watch<RuntimeModeProvider>();
 
@@ -49,7 +50,7 @@ class _MainWindowState extends State<MainWindow> {
         items: NavDestination.navOrder.map((dest) {
           return PaneItem(
                 icon: Icon(dest.icon),
-                title: Text(dest.title),
+                title: Text(dest.localizedTitle(l10n)),
                 body: const SizedBox.shrink(),
               )
               as NavigationPaneItem;
@@ -73,14 +74,15 @@ class _MainWindowState extends State<MainWindow> {
 
   Widget _buildDegradedModeBanner(BuildContext context) {
     final runtimeMode = context.watch<RuntimeModeProvider>();
+    final l10n = AppLocalizations.of(context)!;
 
     return InfoBar(
-      title: const Text(AppStrings.mainDegradedModeTitle),
+      title: Text(l10n.mainDegradedModeTitle),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(AppStrings.mainDegradedModeDescription),
+          Text(l10n.mainDegradedModeDescription),
           const SizedBox(height: AppSpacing.sm),
           ...runtimeMode.degradationReasons.map(
             (reason) => Padding(

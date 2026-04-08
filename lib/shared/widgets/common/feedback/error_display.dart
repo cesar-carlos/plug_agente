@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
@@ -23,6 +23,7 @@ class ErrorDisplay extends StatelessWidget {
     String? title,
     VoidCallback? onRetry,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final display = ErrorDisplay(
       error: error,
       title: title,
@@ -31,11 +32,11 @@ class ErrorDisplay extends StatelessWidget {
 
     return MessageModal.show(
       context: context,
-      title: display._getTitle(),
+      title: display._getTitle(l10n),
       message: display._getMessage(),
       type: MessageType.error,
       onConfirm: onRetry,
-      confirmText: onRetry != null ? AppStrings.btnRetry : null,
+      confirmText: onRetry != null ? l10n.btnRetry : null,
     );
   }
 
@@ -51,34 +52,34 @@ class ErrorDisplay extends StatelessWidget {
     );
   }
 
-  String _getTitle() {
+  String _getTitle(AppLocalizations l10n) {
     if (title != null) return title!;
 
     if (error is Failure) {
       final failure = error as Failure;
       switch (failure.code) {
         case 'VALIDATION_ERROR':
-          return AppStrings.errorTitleValidation;
+          return l10n.errorTitleValidation;
         case 'CONFIG_ERROR':
-          return AppStrings.modalTitleConfigError;
+          return l10n.modalTitleConfigError;
         case 'CONNECTION_ERROR':
-          return AppStrings.modalTitleConnectionError;
+          return l10n.modalTitleConnectionError;
         case 'NETWORK_ERROR':
-          return AppStrings.errorTitleNetwork;
+          return l10n.errorTitleNetwork;
         case 'DATABASE_ERROR':
-          return AppStrings.errorTitleDatabase;
+          return l10n.errorTitleDatabase;
         case 'QUERY_ERROR':
-          return AppStrings.queryErrorTitle;
+          return l10n.queryErrorTitle;
         case 'SERVER_ERROR':
-          return AppStrings.errorTitleServer;
+          return l10n.errorTitleServer;
         case 'NOT_FOUND':
-          return AppStrings.errorTitleNotFound;
+          return l10n.errorTitleNotFound;
         default:
-          return AppStrings.modalTitleError;
+          return l10n.modalTitleError;
       }
     }
 
-    return AppStrings.modalTitleError;
+    return l10n.modalTitleError;
   }
 
   String _getMessage() {
@@ -94,6 +95,7 @@ class ErrorDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final recoverable = _isRecoverable();
     final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
 
@@ -117,7 +119,7 @@ class ErrorDisplay extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
-                  _getTitle(),
+                  _getTitle(l10n),
                   style: context.bodyStrong.copyWith(
                     color: feedbackColors.accent,
                   ),
@@ -133,7 +135,7 @@ class ErrorDisplay extends StatelessWidget {
           if (recoverable && onRetry != null) ...[
             const SizedBox(height: AppSpacing.md),
             AppButton(
-              label: AppStrings.btnRetry,
+              label: l10n.btnRetry,
               onPressed: onRetry,
             ),
           ],

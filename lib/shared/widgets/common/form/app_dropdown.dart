@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_labeled_field.dart';
 
 class AppDropdown<T> extends StatefulWidget {
@@ -43,6 +43,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final dropdown = SizedBox(
       width: double.infinity,
       child: ComboBox<T>(
@@ -50,7 +51,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
         items: widget.items,
         onChanged: _handleChanged,
         isExpanded: true,
-        placeholder: widget.placeholder ?? Text('${AppStrings.formDropdownSelectPrefix}${widget.label}'),
+        placeholder: widget.placeholder ?? Text('${l10n.formDropdownSelectPrefix}${widget.label}'),
       ),
     );
 

@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
@@ -63,10 +63,11 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (widget.data.isEmpty) {
-      return const CenteredMessage(
-        title: AppStrings.queryNoResults,
-        message: AppStrings.queryNoResultsMessage,
+      return CenteredMessage(
+        title: l10n.queryNoResults,
+        message: l10n.queryNoResultsMessage,
         icon: FluentIcons.table,
       );
     }

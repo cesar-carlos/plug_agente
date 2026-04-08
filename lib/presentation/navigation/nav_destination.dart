@@ -1,37 +1,19 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 enum NavDestination {
-  dashboard(
-    AppRoutes.dashboard,
-    FluentIcons.view_dashboard,
-    AppStrings.navDashboard,
-  ),
-  agentProfile(
-    AppRoutes.agentProfile,
-    FluentIcons.contact,
-    AppStrings.navAgentProfile,
-  ),
-  playground(AppRoutes.playground, FluentIcons.table, AppStrings.navPlayground),
-  databaseSettings(
-    AppRoutes.databaseSettings,
-    FluentIcons.database,
-    AppStrings.navDatabaseSettings,
-  ),
-  websocketSettings(
-    AppRoutes.websocketSettings,
-    FluentIcons.plug_connected,
-    AppStrings.navWebSocketSettings,
-  ),
-  config(AppRoutes.config, FluentIcons.settings, AppStrings.navSettings)
-  ;
+  dashboard(AppRoutes.dashboard, FluentIcons.view_dashboard),
+  agentProfile(AppRoutes.agentProfile, FluentIcons.contact),
+  playground(AppRoutes.playground, FluentIcons.table),
+  databaseSettings(AppRoutes.databaseSettings, FluentIcons.database),
+  websocketSettings(AppRoutes.websocketSettings, FluentIcons.plug_connected),
+  config(AppRoutes.config, FluentIcons.settings);
 
-  const NavDestination(this.route, this.icon, this.title);
+  const NavDestination(this.route, this.icon);
 
   final String route;
   final IconData icon;
-  final String title;
 
   static const List<NavDestination> navOrder = [
     dashboard,
@@ -64,5 +46,24 @@ enum NavDestination {
       return NavDestination.agentProfile;
     }
     return NavDestination.dashboard;
+  }
+}
+
+extension NavDestinationLocalization on NavDestination {
+  String localizedTitle(AppLocalizations l10n) {
+    switch (this) {
+      case NavDestination.dashboard:
+        return l10n.navDashboard;
+      case NavDestination.agentProfile:
+        return l10n.navAgentProfile;
+      case NavDestination.playground:
+        return l10n.navPlayground;
+      case NavDestination.databaseSettings:
+        return l10n.navDatabaseSettings;
+      case NavDestination.websocketSettings:
+        return l10n.navWebSocketSettings;
+      case NavDestination.config:
+        return l10n.navSettings;
+    }
   }
 }

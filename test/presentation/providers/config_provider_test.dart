@@ -4,6 +4,7 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -76,6 +77,7 @@ void main() {
           city: 'Sao Paulo',
           state: 'SP',
           notes: 'Perfil de teste',
+          validationMessages: AgentProfileValidationMessages.english,
         );
         expect(profileResult.isSuccess(), isTrue);
 
