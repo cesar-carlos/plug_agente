@@ -126,6 +126,22 @@ class OdbcFailureMapper {
       );
     }
 
+    if (_isConnectionExceptionDuringExecute(sqlState, detail)) {
+      return QueryExecutionFailure.withContext(
+        message: detail,
+        cause: error,
+        context: {
+          ...baseContext,
+          'connectionFailed': true,
+          'retryable': _isRetryableConnection(sqlState),
+          'reason': 'connection_lost_during_query',
+          'user_message':
+              'A sessao com o banco de dados foi interrompida durante a consulta. '
+              'Verifique rede, servidor e tente novamente.',
+        },
+      );
+    }
+
     if (_isTransientQueryFailure(sqlState, detail)) {
       return QueryExecutionFailure.withContext(
         message: detail,
@@ -327,6 +343,21 @@ class OdbcFailureMapper {
         normalized.contains('connection refused') ||
         normalized.contains('server unavailable') ||
         normalized.contains('unknown host');
+  }
+
+  /// SQLSTATE class 08 (connection exception) or equivalent message during execute.
+  static bool _isConnectionExceptionDuringExecute(String? sqlState, String detail) {
+    if (sqlState != null && sqlState.startsWith('08')) {
+      return true;
+    }
+    final normalized = detail.toLowerCase();
+    return normalized.contains('communication link failure') ||
+        normalized.contains('connection was terminated') ||
+        normalized.contains('connection is no longer usable') ||
+        normalized.contains('connection may have been terminated') ||
+        (normalized.contains('tcp provider') && normalized.contains('error')) ||
+        normalized.contains('broken pipe') ||
+        normalized.contains('connection reset');
   }
 
   static bool _isSyntaxOrValidationError(String? sqlState, String detail) {

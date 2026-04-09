@@ -23,8 +23,8 @@ class PlaygroundProvider extends ChangeNotifier {
     this._executeStreamingQuery, {
     void Function(bool connected)? syncDbConnectionIndicator,
     PlaygroundUiStrings? uiStrings,
-  })  : _syncDbConnectionIndicator = syncDbConnectionIndicator,
-        _ui = uiStrings ?? PlaygroundUiStrings.english;
+  }) : _syncDbConnectionIndicator = syncDbConnectionIndicator,
+       _ui = uiStrings ?? PlaygroundUiStrings.english;
   final ExecutePlaygroundQuery _executePlaygroundQuery;
   final Future<rd.Result<bool>> Function(String connectionString) _runDbConnectionTest;
   final ExecuteStreamingQuery _executeStreamingQuery;
@@ -53,7 +53,13 @@ class PlaygroundProvider extends ChangeNotifier {
   }
 
   static bool _failureIndicatesDbUnreachable(Object failure) {
-    return failure is ConnectionFailure || failure is DatabaseFailure;
+    if (failure is ConnectionFailure || failure is DatabaseFailure) {
+      return true;
+    }
+    if (failure is QueryExecutionFailure && failure.context['connectionFailed'] == true) {
+      return true;
+    }
+    return false;
   }
 
   void _logValidationExpected(String message) {

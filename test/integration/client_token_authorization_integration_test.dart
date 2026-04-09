@@ -211,7 +211,8 @@ void main() {
       check(response.isError).isTrue();
       check(response.error?.code).equals(RpcErrorCode.unauthorized);
       final data = response.error!.data as Map<String, dynamic>;
-      check(data['reason']).equals('missing_permission');
+      check(data['reason']).equals('unauthorized');
+      check(data['odbc_reason']).equals('missing_permission');
       check(authMetrics.getSummary().totalAuthorized).equals(0);
       check(authMetrics.getSummary().totalDenied).equals(1);
     });
@@ -267,7 +268,8 @@ void main() {
 
       check(response.isError).isTrue();
       final data = response.error!.data as Map<String, dynamic>;
-      check(data['reason']).equals('token_revoked');
+      check(data['reason']).equals('unauthorized');
+      check(data['odbc_reason']).equals('token_revoked');
     });
 
     test('should skip auth when feature flag is disabled', () async {
@@ -360,7 +362,8 @@ void main() {
         check(response.isError).isTrue();
         check(response.error?.code).equals(RpcErrorCode.unauthorized);
         final data = response.error!.data as Map<String, dynamic>;
-        check(data['reason']).equals('token_not_found');
+        check(data['reason']).equals('unauthorized');
+        check(data['odbc_reason']).equals('token_not_found');
         verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));

@@ -131,6 +131,25 @@ void main() {
       expect(failure.context['retryable'], isTrue);
     });
 
+    test(
+      'maps SQLSTATE 08xxx during execute to connectionFailed query failure',
+      () {
+        final failure = OdbcFailureMapper.mapQueryError(
+          const QueryError(
+            message: 'Communication link failure',
+            sqlState: '08S01',
+            nativeCode: 10054,
+          ),
+          operation: 'execute_query',
+        );
+
+        expect(failure, isA<QueryExecutionFailure>());
+        expect(failure.context['connectionFailed'], isTrue);
+        expect(failure.context['reason'], 'connection_lost_during_query');
+        expect(failure.context['odbc_sql_state'], '08S01');
+      },
+    );
+
     test('maps cancelled streaming to explicit cancelled reason', () {
       final failure = OdbcFailureMapper.mapStreamingError(
         StateError('stream_cancelled'),

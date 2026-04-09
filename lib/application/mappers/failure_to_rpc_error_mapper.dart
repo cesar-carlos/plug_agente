@@ -3,6 +3,11 @@ import 'package:plug_agente/domain/protocol/rpc_error.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
 /// Maps domain Failures to RPC errors.
+///
+/// Connection issues from the database driver typically use [ConnectionFailure]
+/// (connect/pool). Session loss during SQL execution may use [QueryExecutionFailure]
+/// with `connectionFailed: true`. Prefer [DatabaseFailure] only where repositories
+/// already emit that type.
 class FailureToRpcErrorMapper {
   /// Converts a Failure to an RpcError with Problem Details data.
   ///
@@ -15,7 +20,12 @@ class FailureToRpcErrorMapper {
   }) {
     final code = _getErrorCode(failure, useTimeoutByStage);
     final message = RpcErrorCode.getMessage(code);
-    final data = _buildErrorData(failure, code, instance, useTimeoutByStage);
+    final data = _buildErrorData(
+      failure,
+      code,
+      instance,
+      useTimeoutByStage,
+    );
 
     return RpcError(
       code: code,
@@ -46,6 +56,9 @@ class FailureToRpcErrorMapper {
               ) ??
               false)) {
         return RpcErrorCode.transactionFailed;
+      }
+      if (failure.context['connectionFailed'] == true) {
+        return RpcErrorCode.databaseConnectionFailed;
       }
       if (failure.context['timeout'] == true) {
         return RpcErrorCode.queryTimeout;
@@ -93,7 +106,10 @@ class FailureToRpcErrorMapper {
     }
 
     if (failure is ConnectionFailure) {
-      return RpcErrorCode.networkError;
+      if (failure.context['poolExhausted'] == true) {
+        return RpcErrorCode.connectionPoolExhausted;
+      }
+      return RpcErrorCode.databaseConnectionFailed;
     }
 
     if (failure is CompressionFailure) {
@@ -123,21 +139,27 @@ class FailureToRpcErrorMapper {
   ) {
     final correlationId = instance ?? RpcErrorCode.createCorrelationId();
     final safeContext = _sanitizeContext(failure.context);
+    final contextForExtra = Map<String, dynamic>.from(safeContext);
+    final rawContextReason = contextForExtra.remove('reason');
+    final odbcReason = _stringifyOptionalReason(rawContextReason);
     final timeoutReason = _getTimeoutReasonOverride(
       failure,
       code,
       useTimeoutByStage,
     );
+    final resolvedReason = timeoutReason ?? RpcErrorCode.getReason(code);
+    final odbcReasonForPayload = _odbcReasonIfDistinct(odbcReason, resolvedReason);
     final extra = <String, dynamic>{
-      'type': _getTypeUri(failure),
+      'type': _getTypeUri(failure, code),
       'title': RpcErrorCode.getMessage(code),
       'status': RpcErrorCode.getStatus(code),
       'detail': failure.message,
       ...(instance != null ? {'instance': instance} : {}),
-      'recoverable': failure.isRecoverable,
+      'recoverable': RpcErrorCode.isRecoverable(code),
       'failure_code': failure.code,
-      ...safeContext,
-      ...?(timeoutReason != null ? {'reason': timeoutReason} : null),
+      ...contextForExtra,
+      if (odbcReasonForPayload case final String r) 'odbc_reason': r,
+      'reason': resolvedReason,
     };
 
     return RpcErrorCode.buildErrorData(
@@ -145,25 +167,90 @@ class FailureToRpcErrorMapper {
       technicalMessage: failure.message,
       correlationId: correlationId,
       timestamp: failure.timestamp,
-      retryable: failure.isTransient,
+      retryable: RpcErrorCode.isTransient(code),
       extra: extra,
     );
   }
 
-  static String _getTypeUri(Failure failure) {
+  static String? _stringifyOptionalReason(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw is String) {
+      final trimmed = raw.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    final text = raw.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  /// Omits domain sub-reason when it matches the canonical [resolvedReason].
+  static String? _odbcReasonIfDistinct(String? odbcReason, String resolvedReason) {
+    if (odbcReason == null) {
+      return null;
+    }
+    return odbcReason == resolvedReason ? null : odbcReason;
+  }
+
+  static String _getTypeUri(Failure failure, int code) {
     const baseUri = 'https://plugdb.dev/problems';
 
-    if (failure is ValidationFailure) return '$baseUri/validation-error';
+    return switch (code) {
+      RpcErrorCode.parseError ||
+      RpcErrorCode.invalidRequest ||
+      RpcErrorCode.invalidParams ||
+      RpcErrorCode.sqlValidationFailed => '$baseUri/validation-error',
+      RpcErrorCode.methodNotFound => '$baseUri/not-found',
+      RpcErrorCode.authenticationFailed || RpcErrorCode.unauthorized => '$baseUri/configuration-error',
+      RpcErrorCode.timeout || RpcErrorCode.networkError => '$baseUri/network-error',
+      RpcErrorCode.invalidPayload ||
+      RpcErrorCode.rateLimited ||
+      RpcErrorCode.replayDetected => '$baseUri/internal-error',
+      RpcErrorCode.decodingFailed || RpcErrorCode.compressionFailed => '$baseUri/compression-error',
+      RpcErrorCode.sqlExecutionFailed ||
+      RpcErrorCode.transactionFailed ||
+      RpcErrorCode.resultTooLarge ||
+      RpcErrorCode.queryTimeout => '$baseUri/query-execution-error',
+      RpcErrorCode.connectionPoolExhausted ||
+      RpcErrorCode.databaseConnectionFailed ||
+      RpcErrorCode.invalidDatabaseConfig ||
+      RpcErrorCode.executionNotFound ||
+      RpcErrorCode.executionCancelled => '$baseUri/database-error',
+      RpcErrorCode.internalError => '$baseUri/server-error',
+      _ => _getTypeUriFallback(failure),
+    };
+  }
+
+  static String _getTypeUriFallback(Failure failure) {
+    const baseUri = 'https://plugdb.dev/problems';
+
+    if (failure is ValidationFailure) {
+      return '$baseUri/validation-error';
+    }
     if (failure is QueryExecutionFailure) {
       return '$baseUri/query-execution-error';
     }
-    if (failure is DatabaseFailure) return '$baseUri/database-error';
-    if (failure is NetworkFailure) return '$baseUri/network-error';
-    if (failure is ConfigurationFailure) return '$baseUri/configuration-error';
-    if (failure is ConnectionFailure) return '$baseUri/connection-error';
-    if (failure is CompressionFailure) return '$baseUri/compression-error';
-    if (failure is ServerFailure) return '$baseUri/server-error';
-    if (failure is NotFoundFailure) return '$baseUri/not-found';
+    if (failure is DatabaseFailure) {
+      return '$baseUri/database-error';
+    }
+    if (failure is NetworkFailure) {
+      return '$baseUri/network-error';
+    }
+    if (failure is ConfigurationFailure) {
+      return '$baseUri/configuration-error';
+    }
+    if (failure is ConnectionFailure) {
+      return '$baseUri/database-error';
+    }
+    if (failure is CompressionFailure) {
+      return '$baseUri/compression-error';
+    }
+    if (failure is ServerFailure) {
+      return '$baseUri/server-error';
+    }
+    if (failure is NotFoundFailure) {
+      return '$baseUri/not-found';
+    }
 
     return '$baseUri/internal-error';
   }

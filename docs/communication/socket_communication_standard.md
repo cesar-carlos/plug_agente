@@ -965,6 +965,9 @@ Regras:
 - `reason` deve ser estavel e orientado a automacao.
 - `message` pode variar menos, mas `reason` e o identificador principal.
 - `user_message` pode ser localizado; `reason` nao.
+- O campo opcional `odbc_reason` em `error.data` guarda um sub-motivo de dominio quando ele difere do `reason` canônico do código RPC (ex.: motivos ODBC como `connection_timeout`, `server_unreachable`, ou motivos de autorização como `missing_permission`, `token_revoked`). O identificador principal para automação continua sendo `reason`.
+- Para falhas ODBC de conexao ou pool (`-32104`, `-32106`), o agente define `reason` no valor canônico da tabela acima (`connection_pool_exhausted`, `database_connection_failed`).
+- Se a sessao cair durante a execucao SQL (ex.: SQLSTATE classe `08` / link de comunicacao), o erro pode ser classificado como `database_connection_failed` (`-32106`) com sub-motivo `connection_lost_during_query` em `odbc_reason` quando aplicavel.
 
 ## Politica de erro para UI e logs
 

@@ -355,6 +355,44 @@ void main() {
       expect(result['row_count'], equals(1));
     });
 
+    test(
+      'should return databaseConnectionFailed when gateway returns ConnectionFailure',
+      () async {
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-db-down',
+          params: {
+            'sql': 'SELECT 1',
+          },
+        );
+
+        when(
+          () => mockGateway.executeQuery(any()),
+        ).thenAnswer(
+          (_) async => Failure(
+            domain.ConnectionFailure.withContext(
+              message: 'Falha ao conectar no banco de dados',
+              context: const {
+                'connectionFailed': true,
+                'reason': 'database_connection_failed',
+              },
+            ),
+          ),
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.databaseConnectionFailed));
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(data['reason'], equals('database_connection_failed'));
+        expect(data.containsKey('odbc_reason'), isFalse);
+        expect(data['category'], equals('database'));
+        expect(data['retryable'], isTrue);
+      },
+    );
+
     test('should return multi-result payload for sql.execute', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -1522,7 +1560,8 @@ void main() {
         expect(response.isError, isTrue);
         expect(response.error!.code, equals(RpcErrorCode.unauthorized));
         final data = response.error!.data as Map<String, dynamic>;
-        expect(data['reason'], equals('missing_permission'));
+        expect(data['reason'], equals('unauthorized'));
+        expect(data['odbc_reason'], equals('missing_permission'));
         expect(data['category'], equals('auth'));
         expect(data['client_id'], equals('client-acme'));
         verifyNever(() => mockGateway.executeQuery(any()));
@@ -1697,7 +1736,8 @@ void main() {
       expect(response.isError, isTrue);
       expect(response.error!.code, equals(RpcErrorCode.unauthorized));
       final data = response.error!.data as Map<String, dynamic>;
-      expect(data['reason'], equals('authorization_timeout'));
+      expect(data['reason'], equals('unauthorized'));
+      expect(data['odbc_reason'], equals('authorization_timeout'));
       verifyNever(() => mockGateway.executeQuery(any()));
     });
 
