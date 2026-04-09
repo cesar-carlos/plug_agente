@@ -52,6 +52,8 @@ class WebSocketConfigSection extends StatelessWidget {
               const SizedBox(height: 24),
               const _OutboundCompressionSection(),
               const SizedBox(height: 24),
+              const _ClientTokenPolicyIntrospectionSection(),
+              const SizedBox(height: 24),
               _WebSocketActionButtons(
                 formController: formController,
                 configProvider: configProvider,
@@ -185,6 +187,57 @@ class _ServerSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ClientTokenPolicyIntrospectionSection extends StatefulWidget {
+  const _ClientTokenPolicyIntrospectionSection();
+
+  @override
+  State<_ClientTokenPolicyIntrospectionSection> createState() => _ClientTokenPolicyIntrospectionSectionState();
+}
+
+class _ClientTokenPolicyIntrospectionSectionState extends State<_ClientTokenPolicyIntrospectionSection> {
+  late final FeatureFlags _flags = getIt<FeatureFlags>();
+  late bool _introspectionEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _introspectionEnabled = _flags.enableClientTokenPolicyIntrospection;
+  }
+
+  Future<void> _onChanged(bool enabled) async {
+    setState(() => _introspectionEnabled = enabled);
+    await _flags.setEnableClientTokenPolicyIntrospection(enabled);
+    if (mounted) {
+      setState(() => _introspectionEnabled = _flags.enableClientTokenPolicyIntrospection);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AppCard(
+      child: SettingsSectionBlock(
+        title: l10n.wsSectionClientTokenPolicy,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ToggleSwitch(
+              checked: _introspectionEnabled,
+              onChanged: (bool value) => unawaited(_onChanged(value)),
+              content: Text(l10n.wsFieldClientTokenPolicyIntrospection),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              l10n.wsClientTokenPolicyIntrospectionDescription,
+              style: context.captionText,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

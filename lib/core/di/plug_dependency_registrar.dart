@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
@@ -21,6 +22,7 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
@@ -37,6 +39,7 @@ import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -124,6 +127,18 @@ void registerPlugDependencyGraph(
     return parsed;
   }
 
+  int readNonNegativeIntEnv(String key, int fallback) {
+    final raw = dotenv.env[key]?.trim();
+    if (raw == null || raw.isEmpty) {
+      return fallback;
+    }
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 0) {
+      return fallback;
+    }
+    return parsed;
+  }
+
   getIt
     ..registerLazySingleton<odbc.OdbcService>(
       () => odbcWorkerLocator.asyncService,
@@ -193,6 +208,18 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IRpcDispatchMetricsCollector>(
       () => RpcDispatchMetricsCollector(getIt<MetricsCollector>()),
     )
+    ..registerLazySingleton(
+      () => ClientTokenGetPolicyRateLimiter(
+        maxCallsPerMinute: readNonNegativeIntEnv(
+          'CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE',
+          ConnectionConstants.clientTokenGetPolicyDefaultMaxPerMinute,
+        ),
+        maxScopeEntries: readNonNegativeIntEnv(
+          'CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS',
+          ConnectionConstants.clientTokenGetPolicyDefaultMaxScopeKeys,
+        ),
+      ),
+    )
     ..registerLazySingleton<IAuthorizationCacheMetrics>(
       () => AuthorizationCacheMetricsCollector(getIt<MetricsCollector>()),
     )
@@ -223,6 +250,8 @@ void registerPlugDependencyGraph(
         normalizerService: getIt<QueryNormalizerService>(),
         uuid: getIt<Uuid>(),
         authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
+        getClientTokenPolicy: getIt<GetClientTokenPolicy>(),
+        getPolicyRateLimiter: getIt<ClientTokenGetPolicyRateLimiter>(),
         featureFlags: getIt<FeatureFlags>(),
         configRepository: getIt<IAgentConfigRepository>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
@@ -304,6 +333,9 @@ void registerPlugDependencyGraph(
         policyCache: getIt<IClientTokenPolicyCache>(),
         cacheMetrics: getIt<IAuthorizationCacheMetrics>(),
       ),
+    )
+    ..registerLazySingleton(
+      () => GetClientTokenPolicy(getIt<IAuthorizationPolicyResolver>()),
     )
     ..registerLazySingleton<JwtJwksVerifier>(
       () => JwtJwksVerifier(() async {

@@ -42,6 +42,14 @@ class ConnectionConstants {
   /// Max in-flight `rpc:request` handlers per socket connection (backpressure).
   static const int maxConcurrentRpcHandlers = 32;
 
+  /// Default max successful `client_token.getPolicy` calls per minute per agent+credential scope.
+  /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (`0` = unlimited).
+  static const int clientTokenGetPolicyDefaultMaxPerMinute = 120;
+
+  /// Max distinct agent+credential scopes tracked by the getPolicy rate limiter at once.
+  /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS` (`0` = no cap on distinct keys).
+  static const int clientTokenGetPolicyDefaultMaxScopeKeys = 8192;
+
   /// UTF-8 JSON size above which message tracing replaces the raw payload with a
   /// summary (when `FeatureFlags.enableSocketSummarizeLargePayloadLogs` is on).
   static const int socketLogPayloadSummaryThresholdBytes = 8192;

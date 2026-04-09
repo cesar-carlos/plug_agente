@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.client-token-get-policy.v1.json",
+  "title": "client_token.getPolicy result",
+  "type": "object",
+  "required": [
+    "client_id",
+    "payload",
+    "all_tables",
+    "all_views",
+    "all_permissions",
+    "is_revoked",
+    "rules"
+  ],
+  "properties": {
+    "client_id": { "type": "string" },
+    "agent_id": { "type": "string" },
+    "token_id": {
+      "type": "string",
+      "description": "Opaque token record id when resolved from local store, or JWT jti when present"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Token creation time (local store) or JWT iat when present"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update of token record in local store when applicable"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Free-form metadata; values under secret-like keys may be replaced with [REDACTED] on the wire",
+      "additionalProperties": true
+    },
+    "all_tables": { "type": "boolean" },
+    "all_views": { "type": "boolean" },
+    "all_permissions": { "type": "boolean" },
+    "is_revoked": { "type": "boolean" },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "resource_type",
+          "resource",
+          "effect",
+          "read",
+          "update",
+          "delete"
+        ],
+        "properties": {
+          "resource_type": {
+            "type": "string",
+            "enum": ["table", "view", "unknown"]
+          },
+          "resource": { "type": "string" },
+          "effect": {
+            "type": "string",
+            "enum": ["allow", "deny"]
+          },
+          "read": { "type": "boolean" },
+          "update": { "type": "boolean" },
+          "delete": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

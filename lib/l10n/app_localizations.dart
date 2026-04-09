@@ -1436,6 +1436,24 @@ abstract class AppLocalizations {
   /// **'Automatic: above the negotiated limit, the agent compresses with GZIP only if the result is smaller than JSON in UTF-8 (saves CPU and traffic on low-compressibility data).'**
   String get wsOutboundCompressionDescription;
 
+  /// No description provided for @wsSectionClientTokenPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Client token policy (RPC)'**
+  String get wsSectionClientTokenPolicy;
+
+  /// No description provided for @wsFieldClientTokenPolicyIntrospection.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow client_token.getPolicy introspection'**
+  String get wsFieldClientTokenPolicyIntrospection;
+
+  /// No description provided for @wsClientTokenPolicyIntrospectionDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.'**
+  String get wsClientTokenPolicyIntrospectionDescription;
+
   /// No description provided for @dbSectionTitle.
   ///
   /// In en, this message translates to:

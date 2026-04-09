@@ -1,11 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -38,6 +41,12 @@ class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
 
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
+
+class MockGetClientTokenPolicy extends Mock implements GetClientTokenPolicy {}
+
+final ClientTokenGetPolicyRateLimiter _transportTestNoopGetPolicyRateLimiter = ClientTokenGetPolicyRateLimiter(
+  maxCallsPerMinute: 0,
+);
 
 void main() {
   setUpAll(() {
@@ -193,6 +202,9 @@ void main() {
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
       ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+      ).thenReturn(true);
       when(
         () => mockFeatureFlags.enableSocketIdempotency,
       ).thenReturn(false);
@@ -874,6 +886,18 @@ void main() {
           final mockGateway = MockDatabaseGateway();
           final mockNormalizer = MockQueryNormalizerService();
           final mockAuthorize = MockAuthorizeSqlOperation();
+          final mockGetClientTokenPolicy = MockGetClientTokenPolicy();
+          when(() => mockGetClientTokenPolicy.call(any())).thenAnswer(
+            (_) async => const Success(
+              ClientTokenPolicy(
+                clientId: 'test-client',
+                allTables: false,
+                allViews: false,
+                allPermissions: false,
+                rules: [],
+              ),
+            ),
+          );
 
           final queryResponse = QueryResponse(
             id: 'exec-1',
@@ -896,6 +920,8 @@ void main() {
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
+            getClientTokenPolicy: mockGetClientTokenPolicy,
+            getPolicyRateLimiter: _transportTestNoopGetPolicyRateLimiter,
             featureFlags: mockFeatureFlags,
           );
 

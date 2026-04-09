@@ -13,6 +13,7 @@ class FeatureFlags {
   static const _keyOutboundCompressionMode = 'feature_outbound_compression_mode';
   static const _keyCompressionThreshold = 'feature_compression_threshold';
   static const _keyEnableClientTokenAuthorization = 'feature_enable_client_token_authorization';
+  static const _keyEnableClientTokenPolicyIntrospection = 'feature_enable_client_token_policy_introspection';
   static const _keyEnableSocketApiVersionMeta = 'feature_enable_socket_api_version_meta';
   static const _keyEnableSocketNotificationsContract = 'feature_enable_socket_notifications_contract';
   static const _keyEnableSocketBatchStrictValidation = 'feature_enable_socket_batch_strict_validation';
@@ -94,6 +95,14 @@ class FeatureFlags {
 
   Future<void> setEnableClientTokenAuthorization(bool value) async {
     await _prefs.setBool(_keyEnableClientTokenAuthorization, value);
+  }
+
+  /// When false, `client_token.getPolicy` is rejected even if SQL auth is enabled.
+  bool get enableClientTokenPolicyIntrospection =>
+      _prefs.getBool(_keyEnableClientTokenPolicyIntrospection) ?? true;
+
+  Future<void> setEnableClientTokenPolicyIntrospection(bool value) async {
+    await _prefs.setBool(_keyEnableClientTokenPolicyIntrospection, value);
   }
 
   /// Whether to include api_version and meta in RPC v2 requests/responses.
@@ -239,6 +248,7 @@ class FeatureFlags {
     await setOutboundCompressionMode(OutboundCompressionMode.gzip);
     await setCompressionThreshold(1024);
     await setEnableClientTokenAuthorization(true);
+    await setEnableClientTokenPolicyIntrospection(true);
     await setEnableSocketApiVersionMeta(true);
     await setEnableSocketNotificationsContract(true);
     await setEnableSocketBatchStrictValidation(true);

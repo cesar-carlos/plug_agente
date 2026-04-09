@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/sensitive_map_redactor.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -271,25 +272,7 @@ class FailureToRpcErrorMapper {
     };
   }
 
-  static bool _isSensitiveKey(String key) {
-    final lower = key.toLowerCase();
-    const sensitive = {
-      'password',
-      'token',
-      'secret',
-      'apikey',
-      'api_key',
-      'accesstoken',
-      'access_token',
-      'refreshtoken',
-      'refresh_token',
-      'connectionstring',
-      'connection_string',
-      'authorization',
-    };
-    if (sensitive.contains(lower)) return true;
-    return sensitive.any(lower.contains);
-  }
+  static bool _isSensitiveKey(String key) => SensitiveMapRedactor.isSensitiveKey(key);
 
   static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
     return Map.fromEntries(

@@ -2,18 +2,22 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -41,6 +45,8 @@ class RpcMethodDispatcher {
     required QueryNormalizerService normalizerService,
     required Uuid uuid,
     required AuthorizeSqlOperation authorizeSqlOperation,
+    required GetClientTokenPolicy getClientTokenPolicy,
+    required ClientTokenGetPolicyRateLimiter getPolicyRateLimiter,
     required FeatureFlags featureFlags,
     IAgentConfigRepository? configRepository,
     IIdempotencyStore? idempotencyStore,
@@ -60,6 +66,8 @@ class RpcMethodDispatcher {
        _normalizerService = normalizerService,
        _uuid = uuid,
        _authorizeSqlOperation = authorizeSqlOperation,
+       _getClientTokenPolicy = getClientTokenPolicy,
+       _getPolicyRateLimiter = getPolicyRateLimiter,
        _featureFlags = featureFlags,
        _configRepository = configRepository,
        _idempotencyStore = idempotencyStore,
@@ -85,6 +93,8 @@ class RpcMethodDispatcher {
   final QueryNormalizerService _normalizerService;
   final Uuid _uuid;
   final AuthorizeSqlOperation _authorizeSqlOperation;
+  final GetClientTokenPolicy _getClientTokenPolicy;
+  final ClientTokenGetPolicyRateLimiter _getPolicyRateLimiter;
   final FeatureFlags _featureFlags;
   final IAgentConfigRepository? _configRepository;
   final IIdempotencyStore? _idempotencyStore;
@@ -140,6 +150,11 @@ class RpcMethodDispatcher {
       ),
       'sql.cancel' => await _handleSqlCancel(request),
       'agent.getProfile' => await _handleAgentGetProfile(
+        request,
+        agentId,
+        clientToken,
+      ),
+      'client_token.getPolicy' => await _handleClientTokenGetPolicy(
         request,
         agentId,
         clientToken,
@@ -1248,6 +1263,112 @@ class RpcMethodDispatcher {
     );
   }
 
+  Future<RpcResponse> _handleClientTokenGetPolicy(
+    RpcRequest request,
+    String agentId,
+    String? clientToken,
+  ) async {
+    if (!_featureFlags.enableClientTokenAuthorization) {
+      return _invalidParams(
+        request,
+        'client_token.getPolicy requires enableClientTokenAuthorization',
+        rpcReason: 'client_token_authorization_disabled',
+      );
+    }
+
+    if (!_featureFlags.enableClientTokenPolicyIntrospection) {
+      return _invalidParams(
+        request,
+        'client_token.getPolicy requires enableClientTokenPolicyIntrospection',
+        rpcReason: 'client_token_introspection_disabled',
+      );
+    }
+
+    if (clientToken == null || clientToken.isEmpty) {
+      final rpcError = FailureToRpcErrorMapper.map(
+        _buildMissingClientTokenFailure(),
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    final scopeKey = '$agentId:${hashClientCredentialToken(clientToken)}';
+    if (!_getPolicyRateLimiter.tryAcquire(scopeKey)) {
+      _dispatchMetrics?.recordClientTokenGetPolicyRateLimited();
+      return _clientTokenGetPolicyRateLimited(request);
+    }
+
+    final policyResult = await _getClientTokenPolicy.call(clientToken);
+    return policyResult.fold(
+      (ClientTokenPolicy policy) {
+        _dispatchMetrics?.recordClientTokenGetPolicySuccess();
+        return RpcResponse.success(
+          id: request.id,
+          result: policy.toRpcResultJson(),
+        );
+      },
+      (Object failure) {
+        final domainFailure = failure is domain.Failure
+            ? failure
+            : domain.ServerFailure.withContext(
+                message: 'Unexpected error while resolving client token policy',
+                context: {'unexpected_type': failure.runtimeType.toString()},
+              );
+        _dispatchMetrics?.recordClientTokenGetPolicyFailure(domainFailure);
+        if (failure is! domain.Failure) {
+          developer.log(
+            'client_token.getPolicy unexpected failure type',
+            name: 'rpc_method_dispatcher',
+            level: 500,
+            error: failure is Exception ? failure : null,
+          );
+        }
+        final rpcError = FailureToRpcErrorMapper.map(
+          domainFailure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
+  }
+
+  RpcResponse _clientTokenGetPolicyRateLimited(RpcRequest request) {
+    const code = RpcErrorCode.rateLimited;
+    final window = _clientTokenGetPolicyRateLimitWindowFields();
+    return RpcResponse.error(
+      id: request.id,
+      error: RpcError(
+        code: code,
+        message: RpcErrorCode.getMessage(code),
+        data: RpcErrorCode.buildErrorData(
+          code: code,
+          technicalMessage: 'client_token.getPolicy rate limit exceeded for this agent and credential',
+          correlationId: request.id?.toString(),
+          reason: 'client_token_get_policy_rate_limited',
+          extra: {
+            'method': request.method,
+            'retry_after_ms': window['retry_after_ms'],
+            'reset_at': window['reset_at'],
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Next UTC minute boundary for the fixed window used by the getPolicy rate limiter.
+  Map<String, dynamic> _clientTokenGetPolicyRateLimitWindowFields() {
+    final ms = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final windowEndMs = ((ms ~/ 60000) + 1) * 60000;
+    final retryAfterMs = windowEndMs - ms;
+    final resetAt = DateTime.fromMillisecondsSinceEpoch(windowEndMs, isUtc: true).toIso8601String();
+    return <String, dynamic>{
+      'retry_after_ms': retryAfterMs,
+      'reset_at': resetAt,
+    };
+  }
+
   Future<Map<String, dynamic>> _collectOdbcDiagnosticsPayload() async {
     final metricsService = _odbcNativeMetricsService;
     if (metricsService == null) {
@@ -1308,7 +1429,12 @@ class RpcMethodDispatcher {
   }
 
   /// Returns an invalid params error.
-  RpcResponse _invalidParams(RpcRequest request, String detail) {
+  RpcResponse _invalidParams(
+    RpcRequest request,
+    String detail, {
+    String? rpcReason,
+    Map<String, dynamic> extraFields = const <String, dynamic>{},
+  }) {
     const code = RpcErrorCode.invalidParams;
     return RpcResponse.error(
       id: request.id,
@@ -1319,8 +1445,11 @@ class RpcMethodDispatcher {
           code: code,
           technicalMessage: detail,
           correlationId: request.id?.toString(),
-          extra: {
+          reason: rpcReason ?? RpcErrorCode.getReason(code),
+          extra: <String, dynamic>{
             'detail': detail,
+            'method': request.method,
+            ...extraFields,
           },
         ),
       ),

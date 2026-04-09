@@ -711,6 +711,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'Automático: acima do limite negociado, o agente comprime com GZIP apenas se o resultado for menor que o JSON em UTF-8 (evita CPU e tráfego em dados pouco compressíveis).';
 
   @override
+  String get wsSectionClientTokenPolicy => 'Política de client token (RPC)';
+
+  @override
+  String get wsFieldClientTokenPolicyIntrospection => 'Permitir introspecção client_token.getPolicy';
+
+  @override
+  String get wsClientTokenPolicyIntrospectionDescription =>
+      'Desligado: o hub não pode chamar client_token.getPolicy para ler metadados de permissões; a autorização SQL com client_token não é afetada.';
+
+  @override
   String get dbSectionTitle => 'Configuração do banco de dados';
 
   @override

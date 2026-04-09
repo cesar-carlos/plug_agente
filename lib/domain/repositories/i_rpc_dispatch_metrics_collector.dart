@@ -1,3 +1,5 @@
+import 'package:plug_agente/domain/errors/failures.dart';
+
 /// Optional counters for RPC `sql.execute` result paths (observability).
 abstract class IRpcDispatchMetricsCollector {
   void recordSqlExecuteStreamingChunksResponse();
@@ -18,4 +20,10 @@ abstract class IRpcDispatchMetricsCollector {
   /// Incremented when an `rpc:response` is sent without waiting for ACK
   /// because the ACK mechanism is unavailable or timed out.
   void recordRpcResponseAckFallbackWithoutAck();
+
+  void recordClientTokenGetPolicySuccess();
+
+  void recordClientTokenGetPolicyFailure(Failure failure);
+
+  void recordClientTokenGetPolicyRateLimited();
 }

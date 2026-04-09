@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -32,6 +34,10 @@ class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPoli
 class MockClientTokenLocalDataSource extends Mock implements ClientTokenLocalDataSource {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
+
+final ClientTokenGetPolicyRateLimiter _integrationNoopGetPolicyRateLimiter = ClientTokenGetPolicyRateLimiter(
+  maxCallsPerMinute: 0,
+);
 
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
 
@@ -121,6 +127,9 @@ void main() {
     when(
       () => mockFeatureFlags.enableClientTokenAuthorization,
     ).thenReturn(true);
+    when(
+      () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+    ).thenReturn(true);
     when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(false);
     when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
     when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
@@ -138,12 +147,15 @@ void main() {
       classifier,
       tokenValidation,
     );
+    final getClientTokenPolicy = GetClientTokenPolicy(mockResolver);
 
     dispatcher = RpcMethodDispatcher(
       databaseGateway: mockGateway,
       normalizerService: mockNormalizer,
       uuid: const Uuid(),
       authorizeSqlOperation: authorizeSqlOperation,
+      getClientTokenPolicy: getClientTokenPolicy,
+      getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
       featureFlags: mockFeatureFlags,
       authMetrics: authMetrics,
     );
@@ -328,11 +340,14 @@ void main() {
           SqlOperationClassifier(),
           ClientTokenValidationService(resolver),
         );
+        final getClientTokenPolicy = GetClientTokenPolicy(resolver);
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
+          getClientTokenPolicy: getClientTokenPolicy,
+          getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           authMetrics: authMetrics,
         );
@@ -413,11 +428,14 @@ void main() {
           SqlOperationClassifier(),
           ClientTokenValidationService(resolver),
         );
+        final getClientTokenPolicy = GetClientTokenPolicy(resolver);
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
+          getClientTokenPolicy: getClientTokenPolicy,
+          getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           authMetrics: authMetrics,
         );
@@ -460,6 +478,66 @@ void main() {
         verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
         verify(() => mockGateway.executeQuery(any())).called(1);
+      },
+    );
+
+    test(
+      'should return token_id and issued_at on client_token.getPolicy via local resolver',
+      () async {
+        const tokenId = 'policy-introspect-1';
+        const tokenHash = 'hash-policy-introspect-1';
+        final localSummary = ClientTokenSummary(
+          id: tokenId,
+          clientId: 'local-client',
+          createdAt: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          isRevoked: false,
+          allTables: true,
+          allViews: false,
+          allPermissions: false,
+          rules: const [],
+        );
+        when(
+          () => mockLocalDataSource.hashTokenForLookup(any()),
+        ).thenReturn(tokenHash);
+        when(
+          () => mockLocalDataSource.getTokenByHash(tokenHash),
+        ).thenAnswer((_) async => localSummary);
+
+        final resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          localDataSource: mockLocalDataSource,
+        );
+        final authorizeSqlOperation = AuthorizeSqlOperation(
+          SqlOperationClassifier(),
+          ClientTokenValidationService(resolver),
+        );
+        final getClientTokenPolicy = GetClientTokenPolicy(resolver);
+        final dispatcherWithLocalResolver = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: authorizeSqlOperation,
+          getClientTokenPolicy: getClientTokenPolicy,
+          getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          authMetrics: authMetrics,
+        );
+
+        final response = await dispatcherWithLocalResolver.dispatch(
+          const RpcRequest(
+            jsonrpc: '2.0',
+            method: 'client_token.getPolicy',
+            id: 'req-get-policy',
+            params: {'client_token': 'opaque'},
+          ),
+          'agent-1',
+          clientToken: 'opaque',
+        );
+
+        check(response.isError).isFalse();
+        final result = response.result as Map<String, dynamic>;
+        check(result['token_id']).equals(tokenId);
+        check(result['issued_at']).equals('2024-01-02T03:04:05.000Z');
       },
     );
   });

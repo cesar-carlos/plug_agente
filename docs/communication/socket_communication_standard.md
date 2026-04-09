@@ -17,6 +17,7 @@ binario esta documentado em
   - `sql.executeBatch`
   - `sql.cancel` (feature flag `enableSocketCancelMethod`)
   - `agent.getProfile`
+  - `client_token.getPolicy`
   - `rpc.discover`
 - Catalogo padronizado de erros RPC
 - Negociacao de capacidades
@@ -29,6 +30,7 @@ binario esta documentado em
 | Metodo `sql.execute`                                                 | implemented                                                                                                                |
 | Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
+| Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
 | Transporte binario em `PayloadFrame`                                 | implemented (default com `enableBinaryPayload`)                                                                            |
@@ -869,6 +871,51 @@ Execucoes via `sql.execute` (nao-streaming) nao sao cancelaveis por este metodo.
 - **Erro esperado:** quando nao houver configuracao carregada, o metodo retorna
   erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
 
+## Metodo `client_token.getPolicy`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
+- **Objetivo:** retornar a **politica de autorizacao** ja resolvida para o token
+  apresentado (mesmo pipeline que valida `sql.execute`: store local por hash,
+  cache, JWT/JWKS quando aplicavel, revogacao em sessao). Serve para introspecao
+  no hub (permissao por recurso, flags `all_tables` / `all_views` /
+  `all_permissions`, regras `allow`/`deny`, `payload` livre), sem executar SQL.
+- **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`),
+  com as mesmas regras de schema que `agent.getProfile`. Quando
+  `enableClientTokenAuthorization` esta **desligado**, o metodo responde com erro
+  de parametros (`-32602`) com `reason` `client_token_authorization_disabled`.
+  Quando `enableClientTokenPolicyIntrospection` esta **desligado** (default
+  **true**), responde `-32602` com `reason` `client_token_introspection_disabled`.
+- **Rate limit:** por escopo `agent_id` + hash do credential (mesmo minuto UTC);
+  limite configuravel por env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (default
+  **120**; **0** = sem limite). Para limitar crescimento do mapa interno com
+  muitos tokens distintos no mesmo minuto, use `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`
+  (default **8192**; **0** = sem teto por quantidade de escopos). Excesso de
+  chamadas retorna `-32013` com `reason` `client_token_get_policy_rate_limited`
+  e, em `error.data`, `retry_after_ms` (milissegundos ate o proximo minuto UTC)
+  e `reset_at` (ISO 8601 do fim da janela).
+- **Result:** objeto alinhado a `ClientTokenPolicy` (`client_id`, `agent_id`
+  opcional, `payload` com chaves sensiveis redigidas como `[REDACTED]`,
+  `all_tables`, `all_views`, `all_permissions`,
+  `is_revoked`, `rules` com `resource_type`, `resource`, `effect`, `read`,
+  `update`, `delete`). Campos opcionais quando disponiveis: `token_id` (id do
+  registro local ou `jti` do JWT), `issued_at`, `updated_at` (ISO 8601). **Nao**
+  inclui o segredo do token nem `token_value`.
+- **Diferenca vs `agent.getProfile`:** este metodo descreve **permissao do
+  token**; `agent.getProfile` descreve **cadastro do agente** em configuracao
+  local.
+- **Diferenca vs `sql.execute`:** nao executa consulta no banco; apenas resolve e
+  devolve politica.
+- **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao encontrado
+  que o fluxo de autorizacao SQL, mapeados via `FailureToRpcErrorMapper`
+  (por exemplo `-32001` autenticacao, `-32002` autorizacao com `reason` em
+  `error.data`).
+- **Transporte:** com auth e introspecao ativos, o cliente de transporte aplica a mesma
+  heuristica de log/refresh de token que para `sql.*` (ex.: `token_revoked` ou
+  falha de autenticacao pode solicitar refresh da credencial).
+- **Observabilidade:** contadores `rpc_client_token_get_policy_*` no
+  `MetricsCollector` (sucesso, falha de resolucao agregada, falhas por tipo de
+  `Failure`, rate limit).
+
 ## Metodo `rpc.discover`
 
 - **Onde roda:** tratado no transporte (`SocketIOTransportClientV2`) **antes** do
@@ -1165,15 +1212,17 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 ### Versionamento
 
-| Versao | Descricao                                                      | Status |
-| ------ | -------------------------------------------------------------- | ------ |
-| `2.0`  | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros)       | stable |
-| `2.1`  | Extensoes: api_version, meta, client_token auth, notifications | stable |
-| `2.2`  | Hardening de limites negociados e assinatura de payload        | stable |
-| `2.3`  | Profile formal, OpenRPC, observabilidade e cursor opaco        | stable |
-| `2.4`  | Cursor keyset, output validation e `rpc.discover`              | stable |
-| `2.5`  | execution_mode preserve, alias legado e metadata de handling   | stable |
-| `2.6`  | Cadastro do agente no handshake e metodo `agent.getProfile`    | stable |
+| Versao | Descricao                                                                                                             | Status |
+| ------ | --------------------------------------------------------------------------------------------------------------------- | ------ |
+| `2.0`  | JSON-RPC 2.0 base (sql.execute, sql.executeBatch, erros)                                                              | stable |
+| `2.1`  | Extensoes: api_version, meta, client_token auth, notifications                                                        | stable |
+| `2.2`  | Hardening de limites negociados e assinatura de payload                                                               | stable |
+| `2.3`  | Profile formal, OpenRPC, observabilidade e cursor opaco                                                               | stable |
+| `2.4`  | Cursor keyset, output validation e `rpc.discover`                                                                     | stable |
+| `2.5`  | execution_mode preserve, alias legado e metadata de handling                                                          | stable |
+| `2.6`  | Cadastro do agente no handshake e metodo `agent.getProfile`                                                           | stable |
+| `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
+| `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
 
 ### Regras de versionamento
 
@@ -1402,11 +1451,11 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   nao seja resolvido por shape de payload ou por `gzip`.
 - Perfis operacionais recomendados para `outboundCompressionMode`:
 
-| Perfil            | Configuracao | Quando usar                                                                 | Trade-off principal                                        |
-| ----------------- | ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Baixa latencia    | `none`       | Fluxos sensiveis a p95/p99, payload pequeno/medio, ou payload incompressivel | Menor CPU e menor latencia, com maior consumo de banda     |
-| Balanceado (padrao) | `auto`     | Trafego misto em producao, com variacao de tamanho e compressibilidade      | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
-| Economia de banda | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel  | Reduz bytes no fio, com aumento de latencia/CPU            |
+| Perfil              | Configuracao | Quando usar                                                                  | Trade-off principal                                        |
+| ------------------- | ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Baixa latencia      | `none`       | Fluxos sensiveis a p95/p99, payload pequeno/medio, ou payload incompressivel | Menor CPU e menor latencia, com maior consumo de banda     |
+| Balanceado (padrao) | `auto`       | Trafego misto em producao, com variacao de tamanho e compressibilidade       | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
+| Economia de banda   | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel   | Reduz bytes no fio, com aumento de latencia/CPU            |
 
 - Parametros atuais recomendados (com base em benchmark):
   - `compressionThreshold`: `1024`
@@ -1450,6 +1499,7 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - [ ] Envia `client_token` em `params` para toda request quando auth ativo.
 - [ ] Trata `-32001` (missing/invalid token) e `-32002` (unauthorized).
 - [ ] Valida que token revogado retorna `-32002` com `reason: token_revoked`.
+- [ ] Homologa `client_token.getPolicy` com auth ativo (policy coerente com token).
 
 ### Contrato v2.1
 
@@ -1538,6 +1588,27 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
   `extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
   hub ajustar `rpc:stream.pull`.
 
+### `v2.7` (introspecao de client token policy)
+
+- Metodo RPC `client_token.getPolicy` para retornar a politica resolvida
+  (`ClientTokenPolicy`) do token apresentado, sem executar SQL.
+- Schemas JSON dedicados em `docs/communication/schemas/` para params e result.
+- OpenRPC `info.version` alinhado a `2.7.0` e entrada do metodo em `methods`.
+
+### `v2.8` (getPolicy endurecimento e metadata)
+
+- Flag `enableClientTokenPolicyIntrospection` (default true) para desligar o
+  metodo sem desativar autorizacao SQL.
+- Resultado com `token_id` / `issued_at` / `updated_at` quando aplicavel; `payload`
+  com redacao de chaves sensiveis na resposta RPC.
+- Rate limit por agente+credential (`CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE`,
+  default 120) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
+  default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
+- Redacao de `payload` com allowlist para chaves operacionais (`token_scope`, etc.).
+- Metricas de dispatch para sucesso, falha agregada, falha por tipo de `Failure`, e rate limit.
+- Toggle de introspecao em configuracao desktop (WebSocket / politica de client token).
+- OpenRPC `info.version` `2.8.0`.
+
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
@@ -1578,12 +1649,14 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
 
 ### Result por metodo
 
 - `docs/communication/schemas/rpc.result.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`
 
 ### Streaming
 

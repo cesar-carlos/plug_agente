@@ -1,12 +1,16 @@
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
@@ -24,6 +28,8 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
+
+class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
 /// Live ODBC + real [OdbcDatabaseGateway] + [RpcMethodDispatcher] for RPC E2E.
 class OdbcE2eRpcHarness {
@@ -110,17 +116,34 @@ class OdbcE2eRpcHarness {
 
     final featureFlags = MockFeatureFlags();
     when(() => featureFlags.enableClientTokenAuthorization).thenReturn(false);
+    when(() => featureFlags.enableClientTokenPolicyIntrospection).thenReturn(true);
     when(() => featureFlags.enableSocketIdempotency).thenReturn(false);
     when(() => featureFlags.enableSocketTimeoutByStage).thenReturn(false);
     when(() => featureFlags.enableSocketCancelMethod).thenReturn(false);
     when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(false);
     when(() => featureFlags.enableSocketStreamingChunks).thenReturn(false);
 
+    final policyResolver = MockAuthorizationPolicyResolver();
+    when(() => policyResolver.resolvePolicy(any())).thenAnswer(
+      (_) async => const Success(
+        ClientTokenPolicy(
+          clientId: 'e2e',
+          allTables: true,
+          allViews: true,
+          allPermissions: true,
+          rules: [],
+        ),
+      ),
+    );
+    final getClientTokenPolicy = GetClientTokenPolicy(policyResolver);
+
     final dispatcher = RpcMethodDispatcher(
       databaseGateway: gateway,
       normalizerService: normalizer,
       uuid: const Uuid(),
       authorizeSqlOperation: authorize,
+      getClientTokenPolicy: getClientTokenPolicy,
+      getPolicyRateLimiter: ClientTokenGetPolicyRateLimiter(maxCallsPerMinute: 0),
       featureFlags: featureFlags,
     );
 

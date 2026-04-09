@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -31,6 +34,8 @@ class MockQueryNormalizerService extends Mock implements QueryNormalizerService 
 
 class MockAuthorizeSqlOperation extends Mock implements AuthorizeSqlOperation {}
 
+class MockGetClientTokenPolicy extends Mock implements GetClientTokenPolicy {}
+
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class MockIdempotencyStore extends Mock implements IIdempotencyStore {}
@@ -51,6 +56,10 @@ MockRpcStreamEmitter _stubRpcStreamEmitter() {
 }
 
 Map<String, dynamic> _userAt(int i) => {'id': i, 'name': 'user$i'};
+
+final ClientTokenGetPolicyRateLimiter _testDisabledGetPolicyRateLimiter = ClientTokenGetPolicyRateLimiter(
+  maxCallsPerMinute: 0,
+);
 
 void main() {
   setUpAll(() {
@@ -112,6 +121,7 @@ void main() {
     });
 
     late MockAuthorizeSqlOperation mockAuthorize;
+    late MockGetClientTokenPolicy mockGetClientTokenPolicy;
     late MockFeatureFlags mockFeatureFlags;
 
     setUp(() {
@@ -120,10 +130,25 @@ void main() {
       mockStreamingGateway = MockStreamingDatabaseGateway();
       mockOdbcNativeMetricsService = MockOdbcNativeMetricsService();
       mockAuthorize = MockAuthorizeSqlOperation();
+      mockGetClientTokenPolicy = MockGetClientTokenPolicy();
+      when(() => mockGetClientTokenPolicy.call(any())).thenAnswer(
+        (_) async => const Success(
+          ClientTokenPolicy(
+            clientId: 'test-client',
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: [],
+          ),
+        ),
+      );
       mockFeatureFlags = MockFeatureFlags();
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
       ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+      ).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(false);
       when(
         () => mockFeatureFlags.enableSocketStreamingChunks,
@@ -144,6 +169,8 @@ void main() {
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
         featureFlags: mockFeatureFlags,
         streamingGateway: mockStreamingGateway,
         odbcNativeMetricsService: mockOdbcNativeMetricsService,
@@ -189,6 +216,179 @@ void main() {
         );
       },
     );
+
+    test(
+      'should return invalidParams when client_token.getPolicy and auth is disabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(false);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'client_token.getPolicy',
+          id: 'req-policy-off',
+          params: {'client_token': 't'},
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          clientToken: 't',
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.invalidParams));
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(data['reason'], equals('client_token_authorization_disabled'));
+      },
+    );
+
+    test(
+      'should return invalidParams when client_token.getPolicy and introspection is disabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+        ).thenReturn(false);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'client_token.getPolicy',
+          id: 'req-intro-off',
+          params: {'client_token': 't'},
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          clientToken: 't',
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, equals(RpcErrorCode.invalidParams));
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(data['reason'], equals('client_token_introspection_disabled'));
+      },
+    );
+
+    test(
+      'should require client token for client_token.getPolicy when auth is enabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'client_token.getPolicy',
+          id: 'req-policy-auth',
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(
+          response.error!.code,
+          equals(RpcErrorCode.authenticationFailed),
+        );
+      },
+    );
+
+    test('should return policy json for client_token.getPolicy when auth is enabled', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(() => mockGetClientTokenPolicy.call(any())).thenAnswer(
+        (_) async => const Success(
+          ClientTokenPolicy(
+            clientId: 'hub-client',
+            allTables: true,
+            allViews: false,
+            allPermissions: false,
+            rules: [],
+            agentId: 'agent-x',
+            payload: {'env': 'prod', 'api_token': 'secret'},
+          ),
+        ),
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'client_token.getPolicy',
+        id: 'req-policy-ok',
+        params: {'client_token': 'opaque'},
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'opaque',
+      );
+
+      expect(response.isSuccess, isTrue);
+      final result = response.result as Map<String, dynamic>;
+      expect(result['client_id'], equals('hub-client'));
+      expect(result['agent_id'], equals('agent-x'));
+      expect(result['all_tables'], isTrue);
+      final payload = result['payload'] as Map<String, dynamic>;
+      expect(payload['env'], equals('prod'));
+      expect(payload['api_token'], equals('[REDACTED]'));
+    });
+
+    test('should rate limit client_token.getPolicy per agent and credential', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+      ).thenReturn(true);
+
+      final limitedDispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: ClientTokenGetPolicyRateLimiter(maxCallsPerMinute: 1),
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'client_token.getPolicy',
+        id: 'rl-1',
+        params: {'client_token': 'same'},
+      );
+
+      final first = await limitedDispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'same',
+      );
+      expect(first.isSuccess, isTrue);
+
+      final second = await limitedDispatcher.dispatch(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: 'client_token.getPolicy',
+          id: 'rl-2',
+          params: {'client_token': 'same'},
+        ),
+        'agent-1',
+        clientToken: 'same',
+      );
+      expect(second.isError, isTrue);
+      expect(second.error!.code, equals(RpcErrorCode.rateLimited));
+      final data = second.error!.data as Map<String, dynamic>;
+      expect(data['retry_after_ms'], isA<int>());
+      expect(data['retry_after_ms'], greaterThan(0));
+      expect(data['reset_at'], isA<String>());
+    });
 
     test('should return normalized profile for agent.getProfile', () async {
       when(
@@ -238,6 +438,8 @@ void main() {
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
         featureFlags: mockFeatureFlags,
         configRepository: mockConfigRepo,
         streamingGateway: mockStreamingGateway,
@@ -968,6 +1170,8 @@ void main() {
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           configRepository: mockConfigRepo,
           streamingGateway: mockStreamingGateway,
@@ -1033,6 +1237,8 @@ void main() {
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           configRepository: mockConfigRepo,
           streamingGateway: mockStreamingGateway,
@@ -1711,6 +1917,8 @@ void main() {
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
         featureFlags: mockFeatureFlags,
         streamingGateway: mockStreamingGateway,
         sqlExecuteTotalBudget: const Duration(milliseconds: 80),
@@ -1773,6 +1981,8 @@ void main() {
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           idempotencyStore: mockStore,
           streamingGateway: mockStreamingGateway,
@@ -1839,6 +2049,8 @@ void main() {
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           idempotencyStore: mockStore,
           onIdempotencyFingerprintMismatch: () => mismatchCount++,
@@ -1885,6 +2097,8 @@ void main() {
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
         featureFlags: mockFeatureFlags,
         idempotencyStore: mockStore,
         streamingGateway: mockStreamingGateway,
@@ -2080,6 +2294,8 @@ void main() {
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
+            getClientTokenPolicy: mockGetClientTokenPolicy,
+            getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
             featureFlags: mockFeatureFlags,
             configRepository: mockConfigRepo,
             streamingGateway: mockStreamingGateway,
@@ -2168,6 +2384,8 @@ void main() {
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
+            getClientTokenPolicy: mockGetClientTokenPolicy,
+            getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
             featureFlags: mockFeatureFlags,
             configRepository: mockConfigRepo,
             streamingGateway: mockStreamingGateway,
@@ -2246,6 +2464,7 @@ void main() {
     late MockDatabaseGateway mockGateway;
     late MockQueryNormalizerService mockNormalizer;
     late MockAuthorizeSqlOperation mockAuthorize;
+    late MockGetClientTokenPolicy mockGetClientTokenPolicy;
     late MockStreamingDatabaseGateway mockStreamingGateway;
     late RpcMethodDispatcher dispatcher;
 
@@ -2254,10 +2473,25 @@ void main() {
       mockNormalizer = MockQueryNormalizerService();
       mockStreamingGateway = MockStreamingDatabaseGateway();
       mockAuthorize = MockAuthorizeSqlOperation();
+      mockGetClientTokenPolicy = MockGetClientTokenPolicy();
+      when(() => mockGetClientTokenPolicy.call(any())).thenAnswer(
+        (_) async => const Success(
+          ClientTokenPolicy(
+            clientId: 'test-client',
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: [],
+          ),
+        ),
+      );
       mockFeatureFlags = MockFeatureFlags();
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
       ).thenReturn(false);
+      when(
+        () => mockFeatureFlags.enableClientTokenPolicyIntrospection,
+      ).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(false);
       when(
         () => mockFeatureFlags.enableSocketStreamingChunks,
@@ -2273,6 +2507,8 @@ void main() {
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
         featureFlags: mockFeatureFlags,
         streamingGateway: mockStreamingGateway,
       );

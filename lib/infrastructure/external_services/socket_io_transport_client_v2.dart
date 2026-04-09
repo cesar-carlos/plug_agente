@@ -1536,7 +1536,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return;
     }
 
-    if (!request.method.startsWith('sql.')) {
+    final isAuthRelevantMethod =
+        request.method.startsWith('sql.') ||
+        (request.method == 'client_token.getPolicy' && _featureFlags.enableClientTokenPolicyIntrospection);
+    if (!isAuthRelevantMethod) {
       return;
     }
 

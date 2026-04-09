@@ -10,13 +10,16 @@ Estado implementado atual:
 
 ## Itens planejados (pendentes)
 
+
 | Item                                                    | Status  | Fase alvo |
 | ------------------------------------------------------- | ------- | --------- |
 | Testes de integracao end-to-end para limites negociados | planned | Fase 6    |
 | Rotacao automatica de chaves de assinatura              | planned | Fase 6    |
 | Monitoramento/alertas de payload signing failures       | planned | Fase 6    |
 
+
 ## Itens concluidos (removidos do backlog)
+
 
 | Item                                                              | Concluido em |
 | ----------------------------------------------------------------- | ------------ |
@@ -33,6 +36,7 @@ Estado implementado atual:
 | Feature flags estaveis promovidas para mandatory                  | v2.2         |
 | Transporte binario em `PayloadFrame` para eventos de aplicacao    | v2.4         |
 | Compressao GZIP na borda de transporte com fallback por threshold | v2.4         |
+
 
 ## Fase 5 - Hardening residual (concluida)
 
@@ -59,8 +63,9 @@ Objetivo:
 
 ## Checklist de prontidao para cada item pendente
 
-- [ ] Contrato/documentacao atualizado.
-- [ ] Testes unitarios adicionados.
-- [ ] Testes de integracao executados.
-- [ ] Feature flag criada (quando aplicavel) e validada.
-- [ ] Metricas e logs de observabilidade adicionados.
+- Contrato/documentacao atualizado.
+- Testes unitarios adicionados.
+- Testes de integracao executados.
+- Feature flag criada (quando aplicavel) e validada.
+- Metricas e logs de observabilidade adicionados.
+

@@ -30,6 +30,8 @@ comando.
 
 ## Proximos itens (quando priorizado)
 
+- Homologacao E2E hub-agente para `client_token.getPolicy` (rate limit, `retry_after_ms` / `reset_at`).
+- Teste de carga do limitador com muitos escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`).
 - Homologacao do guia de cliente para encode/compress/decode/decompress.
 - Testes de integracao end-to-end para limites negociados e assinatura.
 - Rotacao automatica de chaves de assinatura sem downtime.

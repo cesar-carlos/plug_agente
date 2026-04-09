@@ -178,6 +178,9 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         agentId: summary.agentId,
         payload: summary.payload,
         isRevoked: summary.isRevoked,
+        tokenId: summary.id.isEmpty ? null : summary.id,
+        issuedAt: summary.createdAt,
+        tokenUpdatedAt: summary.updatedAt,
       ),
     );
   }
@@ -243,8 +246,23 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     Map<String, dynamic> payload,
   ) {
     final policyJson = payload['policy'] as Map<String, dynamic>? ?? payload;
-    final policy = ClientTokenPolicy.fromJson(policyJson);
-    if (policy.clientId.trim().isEmpty) {
+    final base = ClientTokenPolicy.fromJson(policyJson);
+    final jwtTokenId = payload['jti'] as String?;
+    final jwtIssuedAt = _jwtSecondsToUtc(payload['iat']);
+    final merged = ClientTokenPolicy(
+      clientId: base.clientId,
+      agentId: base.agentId,
+      payload: base.payload,
+      allTables: base.allTables,
+      allViews: base.allViews,
+      allPermissions: base.allPermissions,
+      isRevoked: base.isRevoked,
+      rules: base.rules,
+      tokenId: base.tokenId ?? jwtTokenId,
+      issuedAt: base.issuedAt ?? jwtIssuedAt,
+      tokenUpdatedAt: base.tokenUpdatedAt,
+    );
+    if (merged.clientId.trim().isEmpty) {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Invalid policy payload: client_id is required',
@@ -256,20 +274,30 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       );
     }
 
-    if (payload['revoked'] == true || policy.isRevoked) {
+    if (payload['revoked'] == true || merged.isRevoked) {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Token revoked',
           context: {
             'authorization': true,
             'reason': 'token_revoked',
-            'client_id': policy.clientId,
+            'client_id': merged.clientId,
           },
         ),
       );
     }
 
-    return Success(policy);
+    return Success(merged);
+  }
+
+  DateTime? _jwtSecondsToUtc(Object? raw) {
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw * 1000, isUtc: true);
+    }
+    if (raw is num) {
+      return DateTime.fromMillisecondsSinceEpoch(raw.toInt() * 1000, isUtc: true);
+    }
+    return null;
   }
 
   void _addToRevokedStoreIfNeeded(String token, domain.Failure failure) {

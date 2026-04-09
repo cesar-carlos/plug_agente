@@ -182,11 +182,11 @@ e pela configuracao local do agente (`none`, `gzip` ou `auto`).
 
 Perfis operacionais recomendados:
 
-| Perfil              | Configuracao | Quando usar                                                                 | Trade-off principal                                        |
-| ------------------- | ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Perfil              | Configuracao | Quando usar                                                                  | Trade-off principal                                        |
+| ------------------- | ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Baixa latencia      | `none`       | Fluxos sensiveis a p95/p99, payload pequeno/medio, ou payload incompressivel | Menor CPU e menor latencia, com maior consumo de banda     |
-| Balanceado (padrao) | `auto`       | Trafego misto em producao, com variacao de tamanho e compressibilidade      | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
-| Economia de banda   | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel  | Reduz bytes no fio, com aumento de latencia/CPU            |
+| Balanceado (padrao) | `auto`       | Trafego misto em producao, com variacao de tamanho e compressibilidade       | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
+| Economia de banda   | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel   | Reduz bytes no fio, com aumento de latencia/CPU            |
 
 Parametros atuais recomendados:
 

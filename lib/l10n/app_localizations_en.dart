@@ -708,6 +708,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatic: above the negotiated limit, the agent compresses with GZIP only if the result is smaller than JSON in UTF-8 (saves CPU and traffic on low-compressibility data).';
 
   @override
+  String get wsSectionClientTokenPolicy => 'Client token policy (RPC)';
+
+  @override
+  String get wsFieldClientTokenPolicyIntrospection => 'Allow client_token.getPolicy introspection';
+
+  @override
+  String get wsClientTokenPolicyIntrospectionDescription =>
+      'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.';
+
+  @override
   String get dbSectionTitle => 'Database configuration';
 
   @override

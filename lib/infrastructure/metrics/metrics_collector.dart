@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/query_metrics.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 
 /// Servico para coletar e gerenciar metricas de performance.
@@ -29,6 +30,20 @@ class MetricsCollector implements IMetricsCollector {
   static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
   static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
+  static const String _rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
+  static const String _rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
+  static const String _rpcClientTokenGetPolicyFailureValidationCounter = 'rpc_client_token_get_policy_failure_validation';
+  static const String _rpcClientTokenGetPolicyFailureNetworkCounter = 'rpc_client_token_get_policy_failure_network';
+  static const String _rpcClientTokenGetPolicyFailureServerCounter = 'rpc_client_token_get_policy_failure_server';
+  static const String _rpcClientTokenGetPolicyFailureNotFoundCounter = 'rpc_client_token_get_policy_failure_not_found';
+  static const String _rpcClientTokenGetPolicyFailureConnectionCounter = 'rpc_client_token_get_policy_failure_connection';
+  static const String _rpcClientTokenGetPolicyFailureDatabaseCounter = 'rpc_client_token_get_policy_failure_database';
+  static const String _rpcClientTokenGetPolicyFailureConfigurationCounter = 'rpc_client_token_get_policy_failure_configuration';
+  static const String _rpcClientTokenGetPolicyFailureQueryCounter = 'rpc_client_token_get_policy_failure_query';
+  static const String _rpcClientTokenGetPolicyFailureCompressionCounter = 'rpc_client_token_get_policy_failure_compression';
+  static const String _rpcClientTokenGetPolicyFailureNotificationCounter = 'rpc_client_token_get_policy_failure_notification';
+  static const String _rpcClientTokenGetPolicyFailureOtherCounter = 'rpc_client_token_get_policy_failure_other';
+  static const String _rpcClientTokenGetPolicyRateLimitedCounter = 'rpc_client_token_get_policy_rate_limited';
   static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';
   static const String _connectTimeoutCounter = 'connect_timeout';
   static const String _queryTimeoutCounter = 'query_timeout';
@@ -68,6 +83,9 @@ class MetricsCollector implements IMetricsCollector {
   int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
   int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
   int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
+  int get rpcClientTokenGetPolicySuccessCount => _eventCounters[_rpcClientTokenGetPolicySuccessCounter] ?? 0;
+  int get rpcClientTokenGetPolicyFailureCount => _eventCounters[_rpcClientTokenGetPolicyFailureCounter] ?? 0;
+  int get rpcClientTokenGetPolicyRateLimitedCount => _eventCounters[_rpcClientTokenGetPolicyRateLimitedCounter] ?? 0;
   int get poolAcquireTimeoutCount => _eventCounters[_poolAcquireTimeoutCounter] ?? 0;
   int get connectTimeoutCount => _eventCounters[_connectTimeoutCounter] ?? 0;
   int get queryTimeoutCount => _eventCounters[_queryTimeoutCounter] ?? 0;
@@ -118,6 +136,28 @@ class MetricsCollector implements IMetricsCollector {
   void recordRpcResponseAckRetry() => _incrementEventCounter(_rpcResponseAckRetryCounter);
 
   void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
+
+  void recordClientTokenGetPolicySuccess() => _incrementEventCounter(_rpcClientTokenGetPolicySuccessCounter);
+
+  void recordClientTokenGetPolicyFailure(Failure failure) {
+    _incrementEventCounter(_rpcClientTokenGetPolicyFailureCounter);
+    final kind = switch (failure) {
+      ValidationFailure _ => _rpcClientTokenGetPolicyFailureValidationCounter,
+      NetworkFailure _ => _rpcClientTokenGetPolicyFailureNetworkCounter,
+      ServerFailure _ => _rpcClientTokenGetPolicyFailureServerCounter,
+      NotFoundFailure _ => _rpcClientTokenGetPolicyFailureNotFoundCounter,
+      ConnectionFailure _ => _rpcClientTokenGetPolicyFailureConnectionCounter,
+      DatabaseFailure _ => _rpcClientTokenGetPolicyFailureDatabaseCounter,
+      ConfigurationFailure _ => _rpcClientTokenGetPolicyFailureConfigurationCounter,
+      QueryExecutionFailure _ => _rpcClientTokenGetPolicyFailureQueryCounter,
+      CompressionFailure _ => _rpcClientTokenGetPolicyFailureCompressionCounter,
+      NotificationFailure _ => _rpcClientTokenGetPolicyFailureNotificationCounter,
+      Failure _ => _rpcClientTokenGetPolicyFailureOtherCounter,
+    };
+    _incrementEventCounter(kind);
+  }
+
+  void recordClientTokenGetPolicyRateLimited() => _incrementEventCounter(_rpcClientTokenGetPolicyRateLimitedCounter);
 
   void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
 

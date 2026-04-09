@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/sensitive_map_redactor.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -12,6 +13,9 @@ class ClientTokenPolicy {
     this.agentId,
     this.payload = const <String, dynamic>{},
     this.isRevoked = false,
+    this.tokenId,
+    this.issuedAt,
+    this.tokenUpdatedAt,
   });
 
   factory ClientTokenPolicy.fromJson(Map<String, dynamic> json) {
@@ -27,6 +31,9 @@ class ClientTokenPolicy {
       allPermissions: json['all_permissions'] as bool? ?? false,
       isRevoked: json['is_revoked'] as bool? ?? false,
       rules: parsedRules,
+      tokenId: json['token_id'] as String?,
+      issuedAt: _parseDateTimeOrNull(json['issued_at']),
+      tokenUpdatedAt: _parseDateTimeOrNull(json['updated_at']),
     );
   }
 
@@ -38,6 +45,9 @@ class ClientTokenPolicy {
   final bool allPermissions;
   final List<ClientTokenRule> rules;
   final bool isRevoked;
+  final String? tokenId;
+  final DateTime? issuedAt;
+  final DateTime? tokenUpdatedAt;
 
   bool isAllowed({
     required SqlOperation operation,
@@ -87,6 +97,36 @@ class ClientTokenPolicy {
       'all_permissions': allPermissions,
       'is_revoked': isRevoked,
       'rules': rules.map((rule) => rule.toJson()).toList(),
+      if (tokenId != null) 'token_id': tokenId,
+      if (issuedAt != null) 'issued_at': issuedAt!.toUtc().toIso8601String(),
+      if (tokenUpdatedAt != null) 'updated_at': tokenUpdatedAt!.toUtc().toIso8601String(),
     };
+  }
+
+  /// RPC result map for client_token.getPolicy: metadata plus payload redacted for common secret-like keys.
+  Map<String, dynamic> toRpcResultJson() {
+    return <String, dynamic>{
+      'client_id': clientId,
+      if (agentId != null) 'agent_id': agentId,
+      'payload': SensitiveMapRedactor.redactForRpc(payload),
+      'all_tables': allTables,
+      'all_views': allViews,
+      'all_permissions': allPermissions,
+      'is_revoked': isRevoked,
+      'rules': rules.map((rule) => rule.toJson()).toList(),
+      if (tokenId != null) 'token_id': tokenId,
+      if (issuedAt != null) 'issued_at': issuedAt!.toUtc().toIso8601String(),
+      if (tokenUpdatedAt != null) 'updated_at': tokenUpdatedAt!.toUtc().toIso8601String(),
+    };
+  }
+
+  static DateTime? _parseDateTimeOrNull(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    return null;
   }
 }
