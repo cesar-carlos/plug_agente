@@ -4,7 +4,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.2.5"
+#define MyAppVersion "1.2.6"
 #define MyAppPublisher "com.se7esistemas"
 #define MyAppURL "https://github.com/cesar-carlos/plug_agente"
 #define MyAppExeName "plug_agente.exe"
