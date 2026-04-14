@@ -87,19 +87,17 @@ class AgentProfile {
   }
 
   static Schema<Map<String, dynamic>> _buildProfileSchema(AgentProfileValidationMessages m) {
-    final addressSchema = z
-        .interface(<String, Schema<dynamic>>{
-          'street': _requiredText(m, m.labelStreet, 100),
-          'number': _requiredText(m, m.labelAddressNumber, 15),
-          'district': _requiredText(m, m.labelDistrict, 60),
-          'postal_code': _postalCodeSchema(m),
-          'city': _requiredText(m, m.labelCity, 60),
-          'state': z.string().trim().toUpperCase().refine(
-            _statePattern.hasMatch,
-            message: m.stateInvalid,
-          ),
-        })
-        .strict();
+    final addressSchema = z.interface(<String, Schema<dynamic>>{
+      'street': _requiredText(m, m.labelStreet, 100),
+      'number': _requiredText(m, m.labelAddressNumber, 15),
+      'district': _requiredText(m, m.labelDistrict, 60),
+      'postal_code': _postalCodeSchema(m),
+      'city': _requiredText(m, m.labelCity, 60),
+      'state': z.string().trim().toUpperCase().refine(
+        _statePattern.hasMatch,
+        message: m.stateInvalid,
+      ),
+    }).strict();
 
     return z
         .interface(<String, Schema<dynamic>>{
@@ -124,8 +122,7 @@ class AgentProfile {
         })
         .strict()
         .refine(
-          (Map<String, dynamic> value) =>
-              value['document_type'] == _resolveDocumentType(value['document'] as String),
+          (Map<String, dynamic> value) => value['document_type'] == _resolveDocumentType(value['document'] as String),
           message: m.documentTypeMismatch,
         );
   }

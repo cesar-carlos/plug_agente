@@ -19,6 +19,7 @@ import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
+import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -90,6 +91,7 @@ class AppRoot extends StatelessWidget {
             getIt<ConnectToHub>(),
             getIt<TestDbConnection>(),
             getIt<CheckOdbcDriver>(),
+            hubResilience: getIt<HubResilienceConfig>(),
           ),
         ),
         ChangeNotifierProvider(

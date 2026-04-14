@@ -1,16 +1,20 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/reconnect_delay_calculator.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -31,18 +35,24 @@ class ConnectionProvider extends ChangeNotifier {
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
     ITransportClient? transportClient,
+    HubResilienceConfig? hubResilience,
     Duration initialReconnectDelay = _defaultInitialReconnectDelay,
     Duration maxReconnectDelay = _defaultMaxReconnectDelay,
     int tokenRefreshIntervalAttempts = _defaultTokenRefreshIntervalAttempts,
     int maxReconnectAttempts = _defaultMaxReconnectAttempts,
+    Duration? hubPersistentRetryInterval,
+    int? hubPersistentRetryMaxFailedTicks,
     Random? random,
   }) : _authProvider = authProvider,
        _configProvider = configProvider,
        _transportClientOverride = transportClient,
+       _hubResilience = hubResilience,
        _initialReconnectDelay = initialReconnectDelay,
        _maxReconnectDelay = maxReconnectDelay,
        _tokenRefreshIntervalAttempts = tokenRefreshIntervalAttempts,
        _maxReconnectAttempts = maxReconnectAttempts,
+       _hubPersistentRetryIntervalOverride = hubPersistentRetryInterval,
+       _hubPersistentRetryMaxFailedTicksOverride = hubPersistentRetryMaxFailedTicks,
        _random = random {
     if (_tokenRefreshIntervalAttempts < 1) {
       throw ArgumentError.value(
@@ -65,6 +75,7 @@ class ConnectionProvider extends ChangeNotifier {
   AuthProvider? _authProvider;
   ConfigProvider? _configProvider;
   final ITransportClient? _transportClientOverride;
+  final HubResilienceConfig? _hubResilience;
 
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
@@ -83,18 +94,34 @@ class ConnectionProvider extends ChangeNotifier {
   String? _lastServerUrl;
   String? _lastAgentId;
   String? _lastAuthToken;
+  Timer? _hubPersistentRetryTimer;
+  int _persistentRetryTickCount = 0;
+  int _persistentFailureCount = 0;
+  bool _persistentRetryInFlight = false;
 
   static const Duration _defaultInitialReconnectDelay = Duration(
     seconds: AppConstants.reconnectIntervalSeconds,
   );
   static const Duration _defaultMaxReconnectDelay = Duration(seconds: 60);
   static const int _defaultTokenRefreshIntervalAttempts = 4;
-  static const int _defaultMaxReconnectAttempts = AppConstants.maxReconnectAttempts;
+  static const int _defaultMaxReconnectAttempts = ConnectionConstants.defaultHubRecoveryBurstMaxAttempts;
   final Duration _initialReconnectDelay;
   final Duration _maxReconnectDelay;
   final int _tokenRefreshIntervalAttempts;
   final int _maxReconnectAttempts;
+  final Duration? _hubPersistentRetryIntervalOverride;
+  final int? _hubPersistentRetryMaxFailedTicksOverride;
   final Random? _random;
+
+  Duration get _effectiveHubPersistentRetryInterval =>
+      _hubPersistentRetryIntervalOverride ??
+      _hubResilience?.persistentRetryInterval ??
+      ConnectionConstants.hubPersistentRetryInterval;
+
+  int get _effectiveHubPersistentRetryMaxFailedTicks =>
+      _hubPersistentRetryMaxFailedTicksOverride ??
+      _hubResilience?.maxFailedTicks ??
+      ConnectionConstants.hubPersistentRetryMaxFailedTicks;
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -111,7 +138,10 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   bool get isConnected => _status == ConnectionStatus.connected;
-  bool get isReconnecting => _isReconnecting;
+
+  /// True while an internal recovery handler runs, or when the hub link is in a
+  /// reconnecting state (including Socket.IO lifecycle).
+  bool get isReconnecting => _isReconnecting || _status == ConnectionStatus.reconnecting;
   bool get isCheckingDriver => _isCheckingDriver;
 
   Future<void> connect(
@@ -119,6 +149,8 @@ class ConnectionProvider extends ChangeNotifier {
     String agentId, {
     String? authToken,
   }) async {
+    _cancelPersistentRetryTimer();
+    _persistentFailureCount = 0;
     _isDisconnectRequested = false;
     _lastServerUrl = serverUrl;
     _lastAgentId = agentId;
@@ -133,6 +165,7 @@ class ConnectionProvider extends ChangeNotifier {
     final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     transportClient.setOnTokenExpired(_handleTokenExpired);
     transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
+    transportClient.setOnHubLifecycle(_handleHubLifecycle);
 
     final result = await _connectToHubUseCase(
       serverUrl,
@@ -142,6 +175,7 @@ class ConnectionProvider extends ChangeNotifier {
 
     result.fold(
       (_) {
+        _cancelPersistentRetryTimer();
         _status = ConnectionStatus.connected;
         _error = '';
         AppLogger.info('Connected to hub successfully');
@@ -161,6 +195,7 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
+    _cancelPersistentRetryTimer();
     final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
@@ -317,9 +352,13 @@ class ConnectionProvider extends ChangeNotifier {
           return;
         }
         if (!connected) {
-          _status = ConnectionStatus.error;
-          _error = 'Failed to recover connection after retries';
-          AppLogger.error('Connection recovery failed after retries');
+          if (_isDisconnectRequested) {
+            return;
+          }
+          _status = ConnectionStatus.reconnecting;
+          _error = '';
+          AppLogger.warning('Connection burst recovery exhausted; starting persistent hub retry');
+          _startPersistentRetry();
         }
       }
     } on Exception catch (error, stackTrace) {
@@ -384,6 +423,7 @@ class ConnectionProvider extends ChangeNotifier {
     String serverUrl,
     String agentId, {
     String? authToken,
+    bool recordErrorMessage = true,
   }) async {
     final result = await _connectToHubUseCase(
       serverUrl,
@@ -393,6 +433,8 @@ class ConnectionProvider extends ChangeNotifier {
 
     return result.fold(
       (_) {
+        _cancelPersistentRetryTimer();
+        _persistentFailureCount = 0;
         _status = ConnectionStatus.connected;
         _error = '';
         _lastServerUrl = serverUrl;
@@ -405,7 +447,7 @@ class ConnectionProvider extends ChangeNotifier {
       },
       (failure) {
         _status = ConnectionStatus.reconnecting;
-        _error = failure.toDisplayMessage();
+        _error = recordErrorMessage ? failure.toDisplayMessage() : '';
         AppLogger.warning(
           'Reconnection attempt failed: ${failure.toDisplayMessage()}',
           failure.toTechnicalMessage(),
@@ -413,6 +455,107 @@ class ConnectionProvider extends ChangeNotifier {
         return false;
       },
     );
+  }
+
+  void _handleHubLifecycle(HubLifecycleNotification notification) {
+    if (_isDisconnectRequested) {
+      return;
+    }
+    switch (notification) {
+      case HubTransportDisconnected():
+        if (_status == ConnectionStatus.disconnected) {
+          return;
+        }
+        _status = ConnectionStatus.reconnecting;
+        _error = '';
+        notifyListeners();
+      case HubTransportReconnectAttempt(:final attemptNumber):
+        AppLogger.info(
+          'resilience: hub_socket_reconnect_attempt attempt=$attemptNumber '
+          'status=${_status.name}',
+        );
+        if (_status == ConnectionStatus.connected) {
+          _status = ConnectionStatus.reconnecting;
+          _error = '';
+          notifyListeners();
+        }
+      case HubTransportAutoReconnectSucceeded():
+        _cancelPersistentRetryTimer();
+        _status = ConnectionStatus.connected;
+        _error = '';
+        notifyListeners();
+    }
+  }
+
+  void _cancelPersistentRetryTimer() {
+    _hubPersistentRetryTimer?.cancel();
+    _hubPersistentRetryTimer = null;
+  }
+
+  void _startPersistentRetry() {
+    _cancelPersistentRetryTimer();
+    _persistentRetryTickCount = 0;
+    _persistentFailureCount = 0;
+    unawaited(_persistentRetryTick());
+    _hubPersistentRetryTimer = Timer.periodic(_effectiveHubPersistentRetryInterval, (_) {
+      unawaited(_persistentRetryTick());
+    });
+  }
+
+  Future<void> _persistentRetryTick() async {
+    if (_persistentRetryInFlight) {
+      return;
+    }
+    _persistentRetryInFlight = true;
+    try {
+      if (_isDisconnectRequested) {
+        _cancelPersistentRetryTimer();
+        return;
+      }
+      final context = _resolveConnectionContext();
+      if (context == null) {
+        AppLogger.warning('persistent hub retry skipped: missing server URL or agent ID');
+        _cancelPersistentRetryTimer();
+        return;
+      }
+      _persistentRetryTickCount++;
+      if (_persistentRetryTickCount % _tokenRefreshIntervalAttempts == 0) {
+        await _tryRefreshToken(context.serverUrl);
+      }
+      final authToken = _resolveAuthTokenForReconnect();
+      final ok = await _attemptReconnect(
+        context.serverUrl,
+        context.agentId,
+        authToken: authToken,
+        recordErrorMessage: false,
+      );
+      if (ok || _isDisconnectRequested) {
+        return;
+      }
+      if (_effectiveHubPersistentRetryMaxFailedTicks > 0) {
+        _persistentFailureCount++;
+        AppLogger.info(
+          'resilience: hub_persistent_retry_failure '
+          'count=$_persistentFailureCount '
+          'max=$_effectiveHubPersistentRetryMaxFailedTicks '
+          'agent_id=${context.agentId}',
+        );
+        if (_persistentFailureCount >= _effectiveHubPersistentRetryMaxFailedTicks) {
+          _cancelPersistentRetryTimer();
+          _status = ConnectionStatus.error;
+          _error = ConnectionConstants.hubPersistentRetryExhaustedMessage;
+          notifyListeners();
+        }
+      }
+    } finally {
+      _persistentRetryInFlight = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelPersistentRetryTimer();
+    super.dispose();
   }
 
   Future<String?> _tryRefreshToken(String serverUrl) async {

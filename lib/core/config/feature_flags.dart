@@ -32,6 +32,8 @@ class FeatureFlags {
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
   static const _keyEnableOdbcPaginatedSqlDebugLog = 'feature_enable_odbc_paginated_sql_debug_log';
+  static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
+  static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
 
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload => _prefs.getBool(_keyEnableBinaryPayload) ?? true;
@@ -98,8 +100,7 @@ class FeatureFlags {
   }
 
   /// When false, `client_token.getPolicy` is rejected even if SQL auth is enabled.
-  bool get enableClientTokenPolicyIntrospection =>
-      _prefs.getBool(_keyEnableClientTokenPolicyIntrospection) ?? true;
+  bool get enableClientTokenPolicyIntrospection => _prefs.getBool(_keyEnableClientTokenPolicyIntrospection) ?? true;
 
   Future<void> setEnableClientTokenPolicyIntrospection(bool value) async {
     await _prefs.setBool(_keyEnableClientTokenPolicyIntrospection, value);
@@ -242,6 +243,45 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableOdbcPaginatedSqlDebugLog, value);
   }
 
+  /// When set, overrides the default max failed ticks and env
+  /// (`HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS`). `0` = unlimited retries.
+  int? get hubPersistentRetryMaxFailedTicksOverride {
+    if (!_prefs.containsKey(_keyHubPersistentRetryMaxFailedTicks)) {
+      return null;
+    }
+    return _prefs.getInt(_keyHubPersistentRetryMaxFailedTicks) ?? 0;
+  }
+
+  Future<void> setHubPersistentRetryMaxFailedTicksOverride(int? value) async {
+    if (value == null) {
+      await _prefs.remove(_keyHubPersistentRetryMaxFailedTicks);
+    } else {
+      await _prefs.setInt(_keyHubPersistentRetryMaxFailedTicks, value);
+    }
+  }
+
+  /// When set, overrides the default persistent retry interval and env
+  /// (`HUB_PERSISTENT_RETRY_INTERVAL_SECONDS`). Clamped between 5 and 86400 seconds.
+  int? get hubPersistentRetryIntervalSecondsOverride {
+    if (!_prefs.containsKey(_keyHubPersistentRetryIntervalSeconds)) {
+      return null;
+    }
+    return _prefs.getInt(_keyHubPersistentRetryIntervalSeconds);
+  }
+
+  Future<void> setHubPersistentRetryIntervalSecondsOverride(int? value) async {
+    if (value == null) {
+      await _prefs.remove(_keyHubPersistentRetryIntervalSeconds);
+    } else {
+      await _prefs.setInt(_keyHubPersistentRetryIntervalSeconds, value);
+    }
+  }
+
+  Future<void> resetHubResilienceOverrides() async {
+    await _prefs.remove(_keyHubPersistentRetryMaxFailedTicks);
+    await _prefs.remove(_keyHubPersistentRetryIntervalSeconds);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
@@ -267,5 +307,6 @@ class FeatureFlags {
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
+    await resetHubResilienceOverrides();
   }
 }

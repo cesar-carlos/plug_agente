@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
@@ -162,6 +163,9 @@ Future<void> setupDependencies({
 
   final featureFlags = FeatureFlags(appSettings);
   getIt.registerSingleton<FeatureFlags>(featureFlags);
+
+  final hubResilienceConfig = HubResilienceConfig(featureFlags);
+  getIt.registerSingleton<HubResilienceConfig>(hubResilienceConfig);
 
   registerPlugDependencyGraph(getIt, odbcWorkerLocator: _odbcLocator);
   registerPlugCapabilityServices(getIt, capabilities);

@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -20,6 +21,7 @@ class MockConfigProvider extends Mock implements ConfigProvider {}
 class FakeTransportClient implements ITransportClient {
   void Function()? onTokenExpired;
   void Function()? onReconnectionNeeded;
+  void Function(HubLifecycleNotification)? onHubLifecycle;
 
   @override
   Future<Result<void>> connect(
@@ -55,9 +57,21 @@ class FakeTransportClient implements ITransportClient {
     onReconnectionNeeded = callback;
   }
 
+  @override
+  void setOnHubLifecycle(void Function(HubLifecycleNotification notification)? callback) {
+    onHubLifecycle = callback;
+  }
+
   void triggerReconnectionNeeded() => onReconnectionNeeded?.call();
   // ignore: unreachable_from_main - used by tests that verify token expiry flow
   void triggerTokenExpired() => onTokenExpired?.call();
+
+  void triggerHubDisconnected() => onHubLifecycle?.call(const HubTransportDisconnected());
+
+  void triggerHubAutoReconnectSucceeded() => onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
+
+  void triggerHubReconnectAttempt({int? attemptNumber}) =>
+      onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: attemptNumber));
 }
 
 Future<void> waitForStatus(
@@ -134,7 +148,7 @@ void main() {
       ).called(greaterThanOrEqualTo(4));
     });
 
-    test('should fail recovery when all retries exhausted', () async {
+    test('should start persistent retry when burst recovery is exhausted', () async {
       var connectCallCount = 0;
       when(
         () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
@@ -156,6 +170,7 @@ void main() {
         transportClient: fakeTransport,
         initialReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectDelay: const Duration(milliseconds: 20),
+        hubPersistentRetryInterval: const Duration(milliseconds: 30),
       );
 
       await provider.connect('https://hub.test', 'agent-1');
@@ -163,9 +178,112 @@ void main() {
 
       fakeTransport.triggerReconnectionNeeded();
 
+      await waitForStatus(provider, ConnectionStatus.reconnecting);
+      expect(provider.error, isEmpty);
+
+      // Allow burst (backoff ~100ms per attempt) plus several persistent retry ticks.
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+
+      verify(
+        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).called(greaterThan(5));
+
+      await provider.disconnect();
+    });
+
+    test('should reflect hub lifecycle disconnect and auto-reconnect in status', () async {
+      when(
+        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+
+      when(() => mockConfigProvider.currentConfig).thenReturn(null);
+
+      final provider = ConnectionProvider(
+        mockConnectToHub,
+        mockTestDb,
+        mockCheckDriver,
+        configProvider: mockConfigProvider,
+        transportClient: fakeTransport,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1');
+      expect(provider.status, ConnectionStatus.connected);
+
+      fakeTransport.triggerHubDisconnected();
+      expect(provider.status, ConnectionStatus.reconnecting);
+
+      fakeTransport.triggerHubAutoReconnectSucceeded();
+      expect(provider.status, ConnectionStatus.connected);
+
+      await provider.disconnect();
+    });
+
+    test('should enter error state after persistent retry failure cap', () async {
+      var connectCallCount = 0;
+      when(
+        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async {
+        connectCallCount++;
+        if (connectCallCount == 1) {
+          return const Success(unit);
+        }
+        return Failure(Exception('Reconnect always fails'));
+      });
+
+      when(() => mockConfigProvider.currentConfig).thenReturn(null);
+
+      final provider = ConnectionProvider(
+        mockConnectToHub,
+        mockTestDb,
+        mockCheckDriver,
+        configProvider: mockConfigProvider,
+        transportClient: fakeTransport,
+        initialReconnectDelay: const Duration(milliseconds: 10),
+        maxReconnectDelay: const Duration(milliseconds: 20),
+        hubPersistentRetryInterval: const Duration(milliseconds: 50),
+        hubPersistentRetryMaxFailedTicks: 4,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1');
+      expect(provider.status, ConnectionStatus.connected);
+
+      fakeTransport.triggerReconnectionNeeded();
+
+      await waitForStatus(provider, ConnectionStatus.reconnecting);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+
       await waitForStatus(provider, ConnectionStatus.error);
-      expect(provider.status, ConnectionStatus.error);
-      expect(provider.error, contains('Failed to recover'));
+      expect(provider.error, isNotEmpty);
+
+      await provider.disconnect();
+    });
+
+    test('should log reconnect attempt without forcing duplicate reconnecting when already reconnecting', () async {
+      when(
+        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+
+      when(() => mockConfigProvider.currentConfig).thenReturn(null);
+
+      final provider = ConnectionProvider(
+        mockConnectToHub,
+        mockTestDb,
+        mockCheckDriver,
+        configProvider: mockConfigProvider,
+        transportClient: fakeTransport,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerHubDisconnected();
+      expect(provider.status, ConnectionStatus.reconnecting);
+
+      fakeTransport.triggerHubReconnectAttempt(attemptNumber: 2);
+      expect(provider.status, ConnectionStatus.reconnecting);
+
+      fakeTransport.triggerHubAutoReconnectSucceeded();
+      expect(provider.status, ConnectionStatus.connected);
+
+      await provider.disconnect();
     });
   });
 }

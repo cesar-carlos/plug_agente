@@ -17,6 +17,7 @@ import 'package:plug_agente/domain/protocol/delivery_guarantee.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -64,6 +65,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   void Function(String direction, String event, dynamic data)? _onMessage;
   void Function()? _onTokenExpired;
   void Function()? _onReconnectionNeeded;
+  void Function(HubLifecycleNotification)? _onHubLifecycle;
   bool _isTokenRefreshRequested = false;
   late final SocketIoHeartbeatController _heartbeat = SocketIoHeartbeatController(
     isConnected: () => _socket?.connected ?? false,
@@ -81,6 +83,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Map<String, dynamic>? _cachedOpenRpcDocument;
   Future<Map<String, dynamic>>? _openRpcDocumentLoadFuture;
   bool _hasReceivedCapabilities = false;
+  bool _awaitingPostReconnectCapabilities = false;
   Timer? _capabilitiesTimeoutTimer;
   int _capabilitiesReRegisterCount = 0;
   int _activeRpcHandlers = 0;
@@ -100,6 +103,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
   @override
   void setOnReconnectionNeeded(void Function()? callback) {
     _onReconnectionNeeded = callback;
+  }
+
+  @override
+  void setOnHubLifecycle(void Function(HubLifecycleNotification notification)? callback) {
+    _onHubLifecycle = callback;
   }
 
   void _logMessage(String direction, String event, dynamic data) {
@@ -436,8 +444,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _logMessage('RECEIVED', 'reconnect', null);
         _heartbeat.resetTransientState();
         _capabilitiesReRegisterCount = 0;
+        _awaitingPostReconnectCapabilities = true;
         await _sendAgentRegister();
         _startCapabilitiesTimeoutTimer();
+      });
+
+      _socket!.on('reconnect_attempt', (dynamic data) {
+        _logMessage('RECEIVED', 'reconnect_attempt', data);
+        final n = data is int ? data : (data is num ? data.toInt() : int.tryParse('$data'));
+        _onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: n));
       });
 
       _socket!.on('reconnect_failed', (_) {
@@ -457,10 +472,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _handleSocketError(error);
       });
 
-      _socket!.on('disconnect', (reason) {
+      _socket!.on('disconnect', (dynamic reason) {
         _logMessage('RECEIVED', 'disconnect', reason);
         _heartbeat.stop();
         unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
+        final asString = reason is String ? reason : reason?.toString();
+        _onHubLifecycle?.call(HubTransportDisconnected(reason: asString));
       });
 
       // Protocol negotiation response
@@ -624,7 +641,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
 
       _heartbeat.start();
+
+      if (_awaitingPostReconnectCapabilities) {
+        _awaitingPostReconnectCapabilities = false;
+        _onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
+      }
     } on Object catch (error, stackTrace) {
+      _awaitingPostReconnectCapabilities = false;
       AppLogger.error(
         'Failed to negotiate mandatory transport contract',
         error,
@@ -1376,6 +1399,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   @override
   Future<Result<void>> disconnect() async {
     try {
+      _onHubLifecycle = null;
       _heartbeat.stop();
       _closeSocket();
       _isTokenRefreshRequested = false;
@@ -1392,6 +1416,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _closeSocket() {
+    _awaitingPostReconnectCapabilities = false;
     _capabilitiesTimeoutTimer?.cancel();
     _capabilitiesTimeoutTimer = null;
     _capabilitiesReRegisterCount = 0;

@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract class ITransportClient {
@@ -17,4 +18,8 @@ abstract class ITransportClient {
   );
   void setOnTokenExpired(void Function()? callback);
   void setOnReconnectionNeeded(void Function()? callback);
+
+  /// Reports hub transport lifecycle after the initial connect Future settles.
+  /// Pass null to clear the callback.
+  void setOnHubLifecycle(void Function(HubLifecycleNotification notification)? callback);
 }

@@ -1274,6 +1274,72 @@ abstract class AppLocalizations {
   /// **'When enabled, the agent logs the final SQL after managed-pagination rewrite (developer log).'**
   String get diagnosticsOdbcPaginatedSqlLogDescription;
 
+  /// No description provided for @diagnosticsHubReconnectSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub reconnect (offline recovery)'**
+  String get diagnosticsHubReconnectSectionTitle;
+
+  /// No description provided for @diagnosticsHubReconnectMaxTicksLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Max failed reconnect ticks before giving up'**
+  String get diagnosticsHubReconnectMaxTicksLabel;
+
+  /// No description provided for @diagnosticsHubReconnectMaxTicksHint.
+  ///
+  /// In en, this message translates to:
+  /// **'0 keeps retrying indefinitely. Lower values stop sooner with an error.'**
+  String get diagnosticsHubReconnectMaxTicksHint;
+
+  /// No description provided for @diagnosticsHubReconnectIntervalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds between reconnect attempts (after burst)'**
+  String get diagnosticsHubReconnectIntervalLabel;
+
+  /// No description provided for @diagnosticsHubReconnectIntervalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed range: 5–86400. Interval changes apply the next time persistent retry starts.'**
+  String get diagnosticsHubReconnectIntervalHint;
+
+  /// No description provided for @diagnosticsHubReconnectEnvHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.'**
+  String get diagnosticsHubReconnectEnvHint;
+
+  /// No description provided for @diagnosticsHubReconnectApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply hub retry settings'**
+  String get diagnosticsHubReconnectApply;
+
+  /// No description provided for @diagnosticsHubReconnectReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use defaults'**
+  String get diagnosticsHubReconnectReset;
+
+  /// No description provided for @diagnosticsHubReconnectSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub reconnect tuning was saved.'**
+  String get diagnosticsHubReconnectSavedMessage;
+
+  /// No description provided for @diagnosticsHubReconnectInvalidMaxTicks.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a non-negative whole number.'**
+  String get diagnosticsHubReconnectInvalidMaxTicks;
+
+  /// No description provided for @diagnosticsHubReconnectInvalidInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number between 5 and 86400.'**
+  String get diagnosticsHubReconnectInvalidInterval;
+
   /// No description provided for @msgServerUrlRequired.
   ///
   /// In en, this message translates to:
@@ -2341,6 +2407,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hub: Disconnected'**
   String get connectionStatusHubDisconnected;
+
+  /// No description provided for @msgHubPersistentRetryExhausted.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the hub after many attempts. Check the server URL, network, and sign-in, then tap Connect.'**
+  String get msgHubPersistentRetryExhausted;
 
   /// No description provided for @connectionStatusDatabaseConnected.
   ///

@@ -32,16 +32,21 @@ class MetricsCollector implements IMetricsCollector {
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
   static const String _rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
   static const String _rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
-  static const String _rpcClientTokenGetPolicyFailureValidationCounter = 'rpc_client_token_get_policy_failure_validation';
+  static const String _rpcClientTokenGetPolicyFailureValidationCounter =
+      'rpc_client_token_get_policy_failure_validation';
   static const String _rpcClientTokenGetPolicyFailureNetworkCounter = 'rpc_client_token_get_policy_failure_network';
   static const String _rpcClientTokenGetPolicyFailureServerCounter = 'rpc_client_token_get_policy_failure_server';
   static const String _rpcClientTokenGetPolicyFailureNotFoundCounter = 'rpc_client_token_get_policy_failure_not_found';
-  static const String _rpcClientTokenGetPolicyFailureConnectionCounter = 'rpc_client_token_get_policy_failure_connection';
+  static const String _rpcClientTokenGetPolicyFailureConnectionCounter =
+      'rpc_client_token_get_policy_failure_connection';
   static const String _rpcClientTokenGetPolicyFailureDatabaseCounter = 'rpc_client_token_get_policy_failure_database';
-  static const String _rpcClientTokenGetPolicyFailureConfigurationCounter = 'rpc_client_token_get_policy_failure_configuration';
+  static const String _rpcClientTokenGetPolicyFailureConfigurationCounter =
+      'rpc_client_token_get_policy_failure_configuration';
   static const String _rpcClientTokenGetPolicyFailureQueryCounter = 'rpc_client_token_get_policy_failure_query';
-  static const String _rpcClientTokenGetPolicyFailureCompressionCounter = 'rpc_client_token_get_policy_failure_compression';
-  static const String _rpcClientTokenGetPolicyFailureNotificationCounter = 'rpc_client_token_get_policy_failure_notification';
+  static const String _rpcClientTokenGetPolicyFailureCompressionCounter =
+      'rpc_client_token_get_policy_failure_compression';
+  static const String _rpcClientTokenGetPolicyFailureNotificationCounter =
+      'rpc_client_token_get_policy_failure_notification';
   static const String _rpcClientTokenGetPolicyFailureOtherCounter = 'rpc_client_token_get_policy_failure_other';
   static const String _rpcClientTokenGetPolicyRateLimitedCounter = 'rpc_client_token_get_policy_rate_limited';
   static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';

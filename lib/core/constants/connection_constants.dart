@@ -8,9 +8,25 @@ class ConnectionConstants {
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
 
-  /// App-level reconnect attempts (ConnectionProvider). Distinct from
+  /// App-level burst reconnect attempts (ConnectionProvider) after
+  /// [socketReconnectionAttempts] is exhausted. Distinct from
   /// [socketReconnectionAttempts] which is the Socket.IO client internal limit.
-  static const int defaultMaxReconnectAttempts = 3;
+  static const int defaultHubRecoveryBurstMaxAttempts = 3;
+
+  /// Interval between automatic hub reconnect attempts after the burst is exhausted.
+  static const Duration hubPersistentRetryInterval = Duration(seconds: 45);
+
+  /// Max failed persistent reconnect ticks before giving up (`0` = unlimited).
+  static const int hubPersistentRetryMaxFailedTicks = 120;
+
+  /// User-facing message when [hubPersistentRetryMaxFailedTicks] is exceeded (English;
+  /// mirror in ARB for localized surfaces).
+  static const String hubPersistentRetryExhaustedMessage =
+      'Could not reach the hub after many attempts. Check the server URL, network, and '
+      'sign-in, then tap Connect.';
+
+  /// Legacy name; same as [defaultHubRecoveryBurstMaxAttempts] (ODBC pool options).
+  static const int defaultMaxReconnectAttempts = defaultHubRecoveryBurstMaxAttempts;
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;
   static const Duration defaultPoolAcquireTimeout = Duration(seconds: 30);

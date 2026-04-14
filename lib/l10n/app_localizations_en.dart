@@ -626,6 +626,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, the agent logs the final SQL after managed-pagination rewrite (developer log).';
 
   @override
+  String get diagnosticsHubReconnectSectionTitle => 'Hub reconnect (offline recovery)';
+
+  @override
+  String get diagnosticsHubReconnectMaxTicksLabel => 'Max failed reconnect ticks before giving up';
+
+  @override
+  String get diagnosticsHubReconnectMaxTicksHint =>
+      '0 keeps retrying indefinitely. Lower values stop sooner with an error.';
+
+  @override
+  String get diagnosticsHubReconnectIntervalLabel => 'Seconds between reconnect attempts (after burst)';
+
+  @override
+  String get diagnosticsHubReconnectIntervalHint =>
+      'Allowed range: 5–86400. Interval changes apply the next time persistent retry starts.';
+
+  @override
+  String get diagnosticsHubReconnectEnvHint =>
+      'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.';
+
+  @override
+  String get diagnosticsHubReconnectApply => 'Apply hub retry settings';
+
+  @override
+  String get diagnosticsHubReconnectReset => 'Use defaults';
+
+  @override
+  String get diagnosticsHubReconnectSavedMessage => 'Hub reconnect tuning was saved.';
+
+  @override
+  String get diagnosticsHubReconnectInvalidMaxTicks => 'Enter a non-negative whole number.';
+
+  @override
+  String get diagnosticsHubReconnectInvalidInterval => 'Enter a whole number between 5 and 86400.';
+
+  @override
   String get msgServerUrlRequired => 'Server URL is required';
 
   @override
@@ -1168,6 +1204,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectionStatusHubDisconnected => 'Hub: Disconnected';
+
+  @override
+  String get msgHubPersistentRetryExhausted =>
+      'Could not reach the hub after many attempts. Check the server URL, network, and sign-in, then tap Connect.';
 
   @override
   String get connectionStatusDatabaseConnected => 'DB: Connected';

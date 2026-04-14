@@ -52,12 +52,12 @@ class ClientTokenRuleDraft {
 }
 
 List<AppGridColumn> _gridColumns(AppLocalizations l10n) => [
-      AppGridColumn(label: l10n.ctGridColumnType, flex: 2),
-      AppGridColumn(label: l10n.ctGridColumnResource, flex: 4),
-      AppGridColumn(label: l10n.ctGridColumnEffect, flex: 2),
-      AppGridColumn(label: l10n.ctGridColumnPermissions, flex: 4),
-      AppGridColumn(label: l10n.ctGridColumnActions, flex: 2),
-    ];
+  AppGridColumn(label: l10n.ctGridColumnType, flex: 2),
+  AppGridColumn(label: l10n.ctGridColumnResource, flex: 4),
+  AppGridColumn(label: l10n.ctGridColumnEffect, flex: 2),
+  AppGridColumn(label: l10n.ctGridColumnPermissions, flex: 4),
+  AppGridColumn(label: l10n.ctGridColumnActions, flex: 2),
+];
 
 const _compactGridBreakpoint = 900.0;
 

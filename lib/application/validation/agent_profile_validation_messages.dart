@@ -71,8 +71,7 @@ class AgentProfileValidationMessages {
     labelEmail: 'Email',
     labelNotes: 'Note',
     requiredField: (String fieldLabel) => '$fieldLabel is required.',
-    maxLengthField: (String fieldLabel, int maxLength) =>
-        '$fieldLabel must be at most $maxLength characters.',
+    maxLengthField: (String fieldLabel, int maxLength) => '$fieldLabel must be at most $maxLength characters.',
     notesMaxLength: (int max) => 'Note must be at most $max characters.',
     documentInvalid: 'Invalid CPF/CNPJ.',
     postalCodeInvalid: 'Invalid postal code. Enter 8 digits.',

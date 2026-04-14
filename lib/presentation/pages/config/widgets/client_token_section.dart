@@ -706,9 +706,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
-                    label: _autoRefreshAfterCreate
-                        ? l10n.ctButtonAutoRefreshOn
-                        : l10n.ctButtonAutoRefreshOff,
+                    label: _autoRefreshAfterCreate ? l10n.ctButtonAutoRefreshOn : l10n.ctButtonAutoRefreshOff,
                     icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
                     isPrimary: false,
                     onPressed: () {

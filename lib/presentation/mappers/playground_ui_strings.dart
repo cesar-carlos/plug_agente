@@ -61,14 +61,11 @@ class PlaygroundUiStrings {
     queryCancelledByUser: 'Query cancelled by user',
     queryStreamingErrorPrefix: 'Streaming error',
     queryExecuteUnexpectedError: 'Failed to execute the query',
-    queryPlaygroundHintLastRunPreserve:
-        'Last run: SQL preserved (no pagination rewrite by the agent).',
+    queryPlaygroundHintLastRunPreserve: 'Last run: SQL preserved (no pagination rewrite by the agent).',
     queryPlaygroundHintLastRunManagedPagination:
         'Last run: managed pagination — SQL may have been rewritten for your database dialect.',
-    queryPlaygroundHintLastRunManaged:
-        'Last run: managed mode — agent limits and adjustments may apply to the SQL.',
-    queryPlaygroundHintLastRunStreaming:
-        'Last run: streaming mode — results received as a continuous stream.',
+    queryPlaygroundHintLastRunManaged: 'Last run: managed mode — agent limits and adjustments may apply to the SQL.',
+    queryPlaygroundHintLastRunStreaming: 'Last run: streaming mode — results received as a continuous stream.',
     streamingRowCapHint: (int max) =>
         'Display limited to $max rows in streaming (memory). The server query was stopped when this limit was reached.',
   );

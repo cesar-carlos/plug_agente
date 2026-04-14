@@ -32,8 +32,7 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordClientTokenGetPolicySuccess() => _metrics.recordClientTokenGetPolicySuccess();
 
   @override
-  void recordClientTokenGetPolicyFailure(Failure failure) =>
-      _metrics.recordClientTokenGetPolicyFailure(failure);
+  void recordClientTokenGetPolicyFailure(Failure failure) => _metrics.recordClientTokenGetPolicyFailure(failure);
 
   @override
   void recordClientTokenGetPolicyRateLimited() => _metrics.recordClientTokenGetPolicyRateLimited();

@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -46,6 +47,11 @@ class ConnectionStatusWidget extends StatelessWidget {
             ? l10n.connectionStatusDatabaseConnected
             : l10n.connectionStatusDatabaseDisconnected;
 
+        final hubErrorTooltip = switch (connectionProvider.status) {
+          ConnectionStatus.error => _hubErrorTooltip(connectionProvider, l10n),
+          _ => null,
+        };
+
         return Container(
           padding: compact
               ? const EdgeInsets.symmetric(
@@ -64,11 +70,14 @@ class ConnectionStatusWidget extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 16),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                statusText,
-                style: context.bodyText.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
+              Tooltip(
+                message: hubErrorTooltip ?? statusText,
+                child: Text(
+                  statusText,
+                  style: context.bodyText.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -89,5 +98,19 @@ class ConnectionStatusWidget extends StatelessWidget {
         );
       },
     );
+  }
+
+  static String _hubErrorTooltip(
+    ConnectionProvider connectionProvider,
+    AppLocalizations l10n,
+  ) {
+    final raw = connectionProvider.error.trim();
+    if (raw.isEmpty) {
+      return l10n.connectionStatusHubError;
+    }
+    if (raw == ConnectionConstants.hubPersistentRetryExhaustedMessage) {
+      return l10n.msgHubPersistentRetryExhausted;
+    }
+    return raw;
   }
 }

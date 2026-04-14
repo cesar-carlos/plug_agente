@@ -66,8 +66,10 @@ class Config {
   final String nomeMunicipio;
   final String ufMunicipio;
   final String observacao;
+
   /// Last known catalog `profileVersion` on the hub after a successful PATCH (optional CAS).
   final int? hubProfileVersion;
+
   /// ISO-8601 timestamp from hub `profileUpdatedAt` when last sync succeeded.
   final String? hubProfileUpdatedAt;
   final DateTime createdAt;

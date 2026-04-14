@@ -629,6 +629,42 @@ class AppLocalizationsPt extends AppLocalizations {
       'Quando ativado, o agente registra a SQL final após reescrita de paginação gerenciada (developer log).';
 
   @override
+  String get diagnosticsHubReconnectSectionTitle => 'Reconexão com o hub (recuperação offline)';
+
+  @override
+  String get diagnosticsHubReconnectMaxTicksLabel => 'Máximo de tentativas falhas antes de desistir';
+
+  @override
+  String get diagnosticsHubReconnectMaxTicksHint =>
+      '0 mantém tentativas indefinidamente. Valores menores param antes com erro.';
+
+  @override
+  String get diagnosticsHubReconnectIntervalLabel => 'Segundos entre tentativas (após o burst)';
+
+  @override
+  String get diagnosticsHubReconnectIntervalHint =>
+      'Intervalo permitido: 5–86400. Mudanças no intervalo valem na próxima vez que a retentativa persistente iniciar.';
+
+  @override
+  String get diagnosticsHubReconnectEnvHint =>
+      'Se você limpar as preferências (Usar padrões), os valores ainda podem vir de HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS e HUB_PERSISTENT_RETRY_INTERVAL_SECONDS no arquivo de ambiente e, em seguida, dos padrões internos.';
+
+  @override
+  String get diagnosticsHubReconnectApply => 'Aplicar ajustes de reconexão';
+
+  @override
+  String get diagnosticsHubReconnectReset => 'Usar padrões';
+
+  @override
+  String get diagnosticsHubReconnectSavedMessage => 'Ajustes de reconexão com o hub foram salvos.';
+
+  @override
+  String get diagnosticsHubReconnectInvalidMaxTicks => 'Digite um número inteiro não negativo.';
+
+  @override
+  String get diagnosticsHubReconnectInvalidInterval => 'Digite um número inteiro entre 5 e 86400.';
+
+  @override
   String get msgServerUrlRequired => 'URL do servidor é obrigatória';
 
   @override
@@ -1173,6 +1209,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get connectionStatusHubDisconnected => 'Hub: Desconectado';
+
+  @override
+  String get msgHubPersistentRetryExhausted =>
+      'Não foi possível alcançar o hub após várias tentativas. Verifique a URL do servidor, a rede e o login e toque em Conectar.';
 
   @override
   String get connectionStatusDatabaseConnected => 'BD: Conectado';

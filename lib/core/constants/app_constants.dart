@@ -1,4 +1,5 @@
 import 'package:plug_agente/core/constants/app_version.g.dart' as app_version;
+import 'package:plug_agente/core/constants/connection_constants.dart';
 
 class AppConstants {
   static const String appName = 'Plug Database';
@@ -11,7 +12,9 @@ class AppConstants {
   static const int publicApiTimeoutSeconds = 15;
   static const int queryTimeoutSeconds = 60;
   static const int reconnectIntervalSeconds = 5;
-  static const int maxReconnectAttempts = 3;
+
+  /// Hub burst recovery attempts (same value as [ConnectionConstants.defaultHubRecoveryBurstMaxAttempts]).
+  static const int maxReconnectAttempts = ConnectionConstants.defaultHubRecoveryBurstMaxAttempts;
 
   static const String databaseConfigFileName = 'database_config.json';
   static const String agentConfigFileName = 'agent_config.json';

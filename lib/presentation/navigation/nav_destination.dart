@@ -8,7 +8,8 @@ enum NavDestination {
   playground(AppRoutes.playground, FluentIcons.table),
   databaseSettings(AppRoutes.databaseSettings, FluentIcons.database),
   websocketSettings(AppRoutes.websocketSettings, FluentIcons.plug_connected),
-  config(AppRoutes.config, FluentIcons.settings);
+  config(AppRoutes.config, FluentIcons.settings)
+  ;
 
   const NavDestination(this.route, this.icon);
 

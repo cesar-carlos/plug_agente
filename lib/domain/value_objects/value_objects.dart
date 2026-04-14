@@ -4,3 +4,4 @@ export 'client_permission_set.dart';
 export 'connection_string.dart';
 export 'database_driver.dart';
 export 'database_resource.dart';
+export 'hub_lifecycle_notification.dart';
