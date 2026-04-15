@@ -6,8 +6,8 @@
   <description>Atualizações do Plug Agente</description>
   <item>
    <title>Version 1.2.6+1</title>
-   <pubDate>Tue, 14 Apr 2026 19:58:26 +0000</pubDate>
-   <description>Nova Versão 1.2.6+1 - Atualização automática via GitHub Release.</description>
+   <pubDate>Wed, 15 Apr 2026 18:11:44 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.2.6...v1.2.6</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.2.6/PlugAgente-Setup-1.2.6.exe" sparkle:version="1.2.6+1" sparkle:os="windows" length="36354058" type="application/octet-stream" />
   </item>
   <item>
