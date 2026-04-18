@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-1",
+  "result": {
+    "execution_id": "exec-abc",
+    "started_at": "2026-04-18T12:00:00Z",
+    "finished_at": "2026-04-18T12:00:01Z",
+    "rows": [{ "n": 1 }],
+    "row_count": 1
+  }
+}

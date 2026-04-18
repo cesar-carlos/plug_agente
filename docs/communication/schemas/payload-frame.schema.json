@@ -23,8 +23,8 @@
     },
     "contentType": {
       "type": "string",
-      "description": "MIME type of the original (uncompressed, decoded) payload.",
-      "examples": ["application/json", "application/octet-stream"]
+      "description": "MIME type of the original (uncompressed, decoded) payload. Always 'application/json' under the current contract; the 'enc' enum is restricted to 'json'.",
+      "examples": ["application/json"]
     },
     "originalSize": {
       "type": "integer",

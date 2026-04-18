@@ -21,14 +21,22 @@ enum StreamTerminalStatus {
 
 /// Payload for rpc:chunk event.
 class RpcStreamChunk {
-  const RpcStreamChunk({
+  /// Streams must always carry a [requestId]. Notifications (id null) cannot
+  /// trigger streams, so an orphan chunk is a programmer bug — the constructor
+  /// asserts in dev/test builds and `toJson` validates the wire contract
+  /// (the schema requires a string `request_id`).
+  // The assert documents the invariant: requestId must not be null. Tightening
+  // the parameter to a non-nullable type is impractical because JSON-RPC `id`
+  // is `String | int | null` and we keep `dynamic` for fromJson compatibility.
+  RpcStreamChunk({
     required this.streamId,
+    // ignore: tighten_type_of_initializing_formals
     required this.requestId,
     required this.chunkIndex,
     required this.rows,
     this.totalChunks,
     this.columnMetadata,
-  });
+  }) : assert(requestId != null, 'RpcStreamChunk.requestId must not be null');
 
   factory RpcStreamChunk.fromJson(Map<String, dynamic> json) => RpcStreamChunk(
     streamId: json['stream_id'] as String,
@@ -46,21 +54,31 @@ class RpcStreamChunk {
   final int? totalChunks;
   final List<Map<String, dynamic>>? columnMetadata;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'stream_id': streamId,
-    'request_id': requestId?.toString(),
-    'chunk_index': chunkIndex,
-    'rows': rows,
-    if (totalChunks != null) 'total_chunks': totalChunks,
-    if (columnMetadata != null) 'column_metadata': columnMetadata,
-  };
+  Map<String, dynamic> toJson() {
+    if (requestId == null) {
+      throw StateError(
+        'RpcStreamChunk.toJson requires a non-null requestId; orphan chunks are a bug.',
+      );
+    }
+    return <String, dynamic>{
+      'stream_id': streamId,
+      'request_id': requestId.toString(),
+      'chunk_index': chunkIndex,
+      'rows': rows,
+      if (totalChunks != null) 'total_chunks': totalChunks,
+      if (columnMetadata != null) 'column_metadata': columnMetadata,
+    };
+  }
 }
 
 /// Payload for rpc:complete event.
 class RpcStreamComplete {
-  const RpcStreamComplete({
+  /// Mirror of [RpcStreamChunk.requestId]: streams require a [requestId];
+  /// orphan completes are a programmer bug.
+  RpcStreamComplete({
     required this.streamId,
     // JSON-RPC 2.0 allows string or number for `id`; dynamic preserves both.
+    // ignore: tighten_type_of_initializing_formals
     required this.requestId,
     required this.totalRows,
     this.affectedRows,
@@ -68,7 +86,7 @@ class RpcStreamComplete {
     this.startedAt,
     this.finishedAt,
     this.terminalStatus,
-  });
+  }) : assert(requestId != null, 'RpcStreamComplete.requestId must not be null');
 
   factory RpcStreamComplete.fromJson(Map<String, dynamic> json) => RpcStreamComplete(
     streamId: json['stream_id'] as String,
@@ -97,16 +115,23 @@ class RpcStreamComplete {
   /// Absent on normal completion so hubs can treat null as success.
   final StreamTerminalStatus? terminalStatus;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'stream_id': streamId,
-    'request_id': requestId?.toString(),
-    'total_rows': totalRows,
-    if (affectedRows != null) 'affected_rows': affectedRows,
-    if (executionId != null) 'execution_id': executionId,
-    if (startedAt != null) 'started_at': startedAt,
-    if (finishedAt != null) 'finished_at': finishedAt,
-    if (terminalStatus != null) 'terminal_status': terminalStatus!.toJson(),
-  };
+  Map<String, dynamic> toJson() {
+    if (requestId == null) {
+      throw StateError(
+        'RpcStreamComplete.toJson requires a non-null requestId; orphan completes are a bug.',
+      );
+    }
+    return <String, dynamic>{
+      'stream_id': streamId,
+      'request_id': requestId.toString(),
+      'total_rows': totalRows,
+      if (affectedRows != null) 'affected_rows': affectedRows,
+      if (executionId != null) 'execution_id': executionId,
+      if (startedAt != null) 'started_at': startedAt,
+      if (finishedAt != null) 'finished_at': finishedAt,
+      if (terminalStatus != null) 'terminal_status': terminalStatus!.toJson(),
+    };
+  }
 }
 
 /// Payload for rpc:stream.pull (client requests more chunks).

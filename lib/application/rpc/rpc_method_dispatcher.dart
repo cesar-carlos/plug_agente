@@ -405,7 +405,7 @@ class RpcMethodDispatcher {
                       'Streaming buffer overflowed: hub not consuming fast enough; '
                       'stream cancelled to avoid data loss.',
                   correlationId: request.id?.toString(),
-                  extra: {'reason': 'backpressure_overflow'},
+                  subreason: 'backpressure_overflow',
                 ),
               ),
             );

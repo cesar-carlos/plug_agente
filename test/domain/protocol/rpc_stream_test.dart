@@ -1,10 +1,10 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/protocol/rpc_stream.dart';
 
 void main() {
   group('RpcStreamChunk', () {
     test('should serialize and deserialize', () {
-      const chunk = RpcStreamChunk(
+      final chunk = RpcStreamChunk(
         streamId: 's-1',
         requestId: 'req-1',
         chunkIndex: 0,
@@ -31,7 +31,7 @@ void main() {
 
   group('RpcStreamComplete', () {
     test('should serialize and deserialize', () {
-      const complete = RpcStreamComplete(
+      final complete = RpcStreamComplete(
         streamId: 's-1',
         requestId: 'req-1',
         totalRows: 1000,

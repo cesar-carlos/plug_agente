@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "method": "sql.execute",
+  "id": "req-1",
+  "params": {
+    "sql": "SELECT 1",
+    "client_token": "abc-123"
+  }
+}

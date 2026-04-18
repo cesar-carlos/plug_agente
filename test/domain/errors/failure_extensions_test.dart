@@ -112,5 +112,25 @@ void main() {
         expect(failure.context, containsPair('operation', 'executeQuery'));
       },
     );
+
+    test('Failure.toString redacts sensitive context keys', () {
+      final failure = DatabaseFailure.withContext(
+        message: 'Failed to connect',
+        context: {
+          'operation': 'connect',
+          'password': 'super-secret-pwd',
+          'access_token': 'eyJh-jwt-token-here',
+          'connection_string': 'DSN=foo;UID=bar;PWD=baz',
+        },
+      );
+
+      final text = failure.toString();
+      expect(text, contains('Failed to connect'));
+      expect(text, contains('operation: connect'));
+      expect(text, isNot(contains('super-secret-pwd')));
+      expect(text, isNot(contains('eyJh-jwt-token-here')));
+      expect(text, isNot(contains('DSN=foo;UID=bar;PWD=baz')));
+      expect(text, contains('[REDACTED]'));
+    });
   });
 }

@@ -1,0 +1,21 @@
+{
+  "agentId": "agent-test-1",
+  "timestamp": "2026-04-18T12:00:00Z",
+  "capabilities": {
+    "protocols": ["jsonrpc-v2"],
+    "encodings": ["json"],
+    "compressions": ["gzip", "none"],
+    "extensions": {
+      "binaryPayload": true,
+      "transportFrame": "payload-frame/1.0",
+      "protocolReadyAck": true,
+      "compressionThreshold": 4096
+    },
+    "limits": {
+      "max_payload_bytes": 10485760,
+      "max_rows": 50000,
+      "max_batch_size": 32,
+      "max_concurrent_streams": 16
+    }
+  }
+}

@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.batch.request.v1.json",
   "title": "RPC Batch Request",
-  "description": "Array of RPC requests sent inside a single logical batch. The schema enforces size limits; runtime strict validation additionally rejects duplicate non-notification IDs.",
+  "description": "Array of RPC requests sent inside a single logical batch. The static schema only enforces a coarse hard ceiling; the actual per-connection limit is the negotiated `max_batch_size` from the capabilities envelope (default 32, may be lower). Runtime strict validation additionally rejects duplicate non-notification IDs.",
   "type": "array",
   "items": { "$ref": "./rpc.request.schema.json" },
   "minItems": 1,
-  "maxItems": 32
+  "maxItems": 256
 }

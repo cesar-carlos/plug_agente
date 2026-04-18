@@ -103,7 +103,12 @@ class ConnectionProvider extends ChangeNotifier {
     seconds: AppConstants.reconnectIntervalSeconds,
   );
   static const Duration _defaultMaxReconnectDelay = Duration(seconds: 60);
-  static const int _defaultTokenRefreshIntervalAttempts = 4;
+
+  /// Burst-mode token refresh cadence: trigger a refresh after every Nth
+  /// failed reconnect attempt. MUST be `<= _defaultMaxReconnectAttempts` so the
+  /// refresh actually fires inside the burst window (otherwise the periodic
+  /// check `attempt % N == 0` becomes dead code).
+  static const int _defaultTokenRefreshIntervalAttempts = 2;
   static const int _defaultMaxReconnectAttempts = ConnectionConstants.defaultHubRecoveryBurstMaxAttempts;
   final Duration _initialReconnectDelay;
   final Duration _maxReconnectDelay;
@@ -304,6 +309,17 @@ class ConnectionProvider extends ChangeNotifier {
           );
           if (connected) {
             AppLogger.info('Reconnected with refreshed token successfully');
+          } else if (!_isDisconnectRequested) {
+            AppLogger.warning(
+              'Single reconnect with refreshed token failed; escalating to recovery burst',
+            );
+            final recovered = await _recoverConnection(context);
+            if (!recovered && !_isDisconnectRequested) {
+              AppLogger.warning(
+                'Recovery burst exhausted after token refresh; starting persistent retry',
+              );
+              _startPersistentRetry();
+            }
           }
         }
       }

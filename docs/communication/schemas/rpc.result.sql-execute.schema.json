@@ -25,6 +25,8 @@
     },
     "rows": {
       "type": "array",
+      "maxItems": 100000,
+      "description": "Static hard ceiling. Effective per-request limit is `effective_max_rows` (negotiated).",
       "items": {
         "type": "object",
         "additionalProperties": true
@@ -39,6 +41,7 @@
     "item_count": { "type": "integer", "minimum": 0 },
     "column_metadata": {
       "type": "array",
+      "maxItems": 1024,
       "items": {
         "type": "object",
         "additionalProperties": true
@@ -46,6 +49,7 @@
     },
     "result_sets": {
       "type": "array",
+      "maxItems": 32,
       "items": {
         "type": "object",
         "required": ["index", "rows", "row_count"],
@@ -53,6 +57,7 @@
           "index": { "type": "integer", "minimum": 0 },
           "rows": {
             "type": "array",
+            "maxItems": 100000,
             "items": {
               "type": "object",
               "additionalProperties": true
@@ -62,6 +67,7 @@
           "affected_rows": { "type": "integer", "minimum": 0 },
           "column_metadata": {
             "type": "array",
+            "maxItems": 1024,
             "items": {
               "type": "object",
               "additionalProperties": true
@@ -73,6 +79,7 @@
     },
     "items": {
       "type": "array",
+      "maxItems": 64,
       "items": {
         "type": "object",
         "required": ["type", "index"],
@@ -85,6 +92,7 @@
           "result_set_index": { "type": "integer", "minimum": 0 },
           "rows": {
             "type": "array",
+            "maxItems": 100000,
             "items": {
               "type": "object",
               "additionalProperties": true
@@ -94,6 +102,7 @@
           "affected_rows": { "type": "integer", "minimum": 0 },
           "column_metadata": {
             "type": "array",
+            "maxItems": 1024,
             "items": {
               "type": "object",
               "additionalProperties": true

@@ -1,0 +1,6 @@
+{
+  "stream_id": "stream-1",
+  "request_id": "req-stream-1",
+  "chunk_index": 0,
+  "rows": [{ "id": 1 }, { "id": 2 }]
+}

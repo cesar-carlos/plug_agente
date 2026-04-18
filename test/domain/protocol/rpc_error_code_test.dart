@@ -64,5 +64,25 @@ void main() {
         expect(data['category'], equals('auth'));
       },
     );
+
+    test('preserves canonical reason and exposes subreason separately', () {
+      final data = RpcErrorCode.buildErrorData(
+        code: RpcErrorCode.resultTooLarge,
+        technicalMessage: 'Backpressure overflow',
+        subreason: 'backpressure_overflow',
+      );
+
+      expect(data['reason'], equals('result_too_large'));
+      expect(data['subreason'], equals('backpressure_overflow'));
+    });
+
+    test('omits subreason key when not provided', () {
+      final data = RpcErrorCode.buildErrorData(
+        code: RpcErrorCode.invalidParams,
+        technicalMessage: 'bad params',
+      );
+
+      expect(data.containsKey('subreason'), isFalse);
+    });
   });
 }

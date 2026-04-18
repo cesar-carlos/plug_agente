@@ -1,3 +1,5 @@
+import 'package:plug_agente/domain/protocol/rpc_error_user_message_localizer.dart';
+
 /// JSON-RPC 2.0 Error Codes.
 ///
 /// Defines standard and application-specific error codes for the protocol.
@@ -205,6 +207,9 @@ abstract class RpcErrorCode {
       invalidDatabaseConfig ||
       executionNotFound ||
       executionCancelled => categoryDatabase,
+      // Explicit arm for internalError so the catch-all `_` is reserved for
+      // codes that genuinely have no mapping yet (forward-compat).
+      internalError => categoryInternal,
       _ => categoryInternal,
     };
   }
@@ -240,27 +245,34 @@ abstract class RpcErrorCode {
     };
   }
 
-  /// Returns a user-facing localized message for [`code`].
+  /// Pluggable localizer slot. Presentation layer may install an
+  /// AppLocalizations-backed implementation at boot time. Defaults to PT-BR.
+  static RpcErrorUserMessageLocalizer userMessageLocalizer =
+      const DefaultPtRpcErrorUserMessageLocalizer();
+
+  /// Returns a user-facing localized message for [`code`]. Routes through
+  /// [userMessageLocalizer] so callers can swap the locale globally.
   static String getUserMessage(int code) {
+    final l = userMessageLocalizer;
     return switch (code) {
-      parseError || invalidRequest || invalidParams => 'Requisicao invalida. Revise os dados enviados.',
-      methodNotFound => 'Metodo nao suportado por esta versao do agente.',
-      authenticationFailed => 'Falha de autenticacao. Gere um novo token e tente novamente.',
-      unauthorized => 'Voce nao tem permissao para executar esta operacao.',
-      timeout || queryTimeout => 'A operacao excedeu o tempo limite. Tente novamente.',
-      invalidPayload || decodingFailed || compressionFailed => 'Falha ao processar os dados da requisicao.',
-      networkError => 'Conexao com o hub foi perdida. Tente novamente.',
-      rateLimited => 'Muitas requisicoes em pouco tempo. Aguarde e tente novamente.',
-      replayDetected => 'Requisicao duplicada detectada. Gere um novo ID e tente novamente.',
-      sqlValidationFailed => 'Comando SQL invalido. Revise a consulta enviada.',
-      sqlExecutionFailed || transactionFailed => 'Falha ao executar o comando SQL.',
-      connectionPoolExhausted => 'Limite de conexoes atingido. Aguarde e tente novamente.',
-      resultTooLarge => 'Resultado muito grande. Aplique filtros e tente novamente.',
-      databaseConnectionFailed => 'Nao foi possivel conectar ao banco de dados.',
-      invalidDatabaseConfig => 'Configuracao do banco invalida. Revise os dados de conexao.',
-      executionNotFound => 'Execucao nao encontrada. Pode ter sido finalizada ou nunca iniciada.',
-      executionCancelled => 'Execucao cancelada pelo usuario.',
-      _ => 'Falha interna no processamento da requisicao.',
+      parseError || invalidRequest || invalidParams => l.invalidRequest(),
+      methodNotFound => l.methodNotFound(),
+      authenticationFailed => l.authenticationFailed(),
+      unauthorized => l.unauthorized(),
+      timeout || queryTimeout => l.timeout(),
+      invalidPayload || decodingFailed || compressionFailed => l.invalidPayload(),
+      networkError => l.networkError(),
+      rateLimited => l.rateLimited(),
+      replayDetected => l.replayDetected(),
+      sqlValidationFailed => l.sqlValidationFailed(),
+      sqlExecutionFailed || transactionFailed => l.sqlExecutionFailed(),
+      connectionPoolExhausted => l.connectionPoolExhausted(),
+      resultTooLarge => l.resultTooLarge(),
+      databaseConnectionFailed => l.databaseConnectionFailed(),
+      invalidDatabaseConfig => l.invalidDatabaseConfig(),
+      executionNotFound => l.executionNotFound(),
+      executionCancelled => l.executionCancelled(),
+      _ => l.internalError(),
     };
   }
 
@@ -271,6 +283,15 @@ abstract class RpcErrorCode {
   }
 
   /// Builds standardized error data payload.
+  ///
+  /// `subreason` is preserved separately from the canonical `reason`. Use it to
+  /// communicate a more specific cause without overriding the wire-stable
+  /// `reason` field that automation pipelines key on. Example: `code` is
+  /// [resultTooLarge] (canonical reason `result_too_large`) but the underlying
+  /// trigger was `backpressure_overflow` — pass that as `subreason`.
+  ///
+  /// Note: keys present in [extra] are merged last and DO override anything
+  /// computed above them. Avoid putting `reason` in `extra`; prefer `subreason`.
   static Map<String, dynamic> buildErrorData({
     required int code,
     required String technicalMessage,
@@ -279,6 +300,7 @@ abstract class RpcErrorCode {
     bool? retryable,
     String? category,
     String? reason,
+    String? subreason,
     String? userMessage,
     Map<String, dynamic> extra = const {},
   }) {
@@ -291,6 +313,8 @@ abstract class RpcErrorCode {
 
     return <String, dynamic>{
       'reason': resolvedReason,
+      // ignore: use_null_aware_elements - older Dart compatibility
+      if (subreason != null) 'subreason': subreason,
       'category': resolvedCategory,
       'retryable': resolvedRetryable,
       'user_message': resolvedUserMessage,

@@ -133,6 +133,19 @@ void main() {
       return frame.toJson();
     }
 
+    /// Drives `agent:capabilities` so subsequent `rpc:request` events are not
+    /// rejected by the protocol_not_ready guard. Assumes `connect` was already
+    /// emitted by the test.
+    Future<void> negotiateProtocol({Map<String, dynamic>? capabilities}) async {
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': capabilities ?? ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+    }
+
     setUp(() {
       mockDataSource = MockSocketDataSource();
       mockNegotiator = MockProtocolNegotiator();
@@ -389,6 +402,7 @@ void main() {
         final connectFuture = client.connect('https://hub.test', 'agent-1');
         emitEvent('connect');
         await connectFuture;
+        await negotiateProtocol();
         emitted.clear();
 
         emitEvent(
@@ -575,6 +589,7 @@ void main() {
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
       await connectFuture;
+      await negotiateProtocol();
       emitted.clear();
 
       emitEvent(
@@ -697,6 +712,7 @@ void main() {
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
       await connectFuture;
+      await negotiateProtocol();
       emitted.clear();
 
       emitEvent('rpc:request', <String, dynamic>{
@@ -749,6 +765,7 @@ void main() {
           final connectFuture = client.connect('https://hub.test', 'agent-1');
           emitEvent('connect');
           await connectFuture;
+          await negotiateProtocol();
           emitted.clear();
 
           emitEvent(
@@ -828,6 +845,7 @@ void main() {
           final connectFuture = client.connect('https://hub.test', 'agent-1');
           emitEvent('connect');
           await connectFuture;
+          await negotiateProtocol();
           emitted.clear();
 
           emitEvent(
@@ -938,6 +956,7 @@ void main() {
           );
           emitEvent('connect');
           await connectFuture;
+          await negotiateProtocol();
           emitted.clear();
 
           emitEvent(

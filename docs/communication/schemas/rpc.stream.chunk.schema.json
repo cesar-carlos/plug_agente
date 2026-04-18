@@ -21,8 +21,9 @@
     },
     "rows": {
       "type": "array",
+      "maxItems": 100000,
       "items": { "type": "object" },
-      "description": "Array of row objects in this chunk"
+      "description": "Array of row objects in this chunk. Static hard ceiling; effective per-chunk size is the negotiated `streamingChunkSize`."
     },
     "total_chunks": {
       "type": "integer",
@@ -31,6 +32,7 @@
     },
     "column_metadata": {
       "type": "array",
+      "maxItems": 1024,
       "items": { "type": "object" },
       "description": "Column metadata (sent on first chunk only)"
     }

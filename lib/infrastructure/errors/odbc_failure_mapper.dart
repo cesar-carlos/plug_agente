@@ -1,5 +1,6 @@
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
 class OdbcFailureMapper {
   OdbcFailureMapper._();
@@ -234,7 +235,8 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'query_cancelled',
+          'reason': 'execution_cancelled',
+          'rpc_error_code': RpcErrorCode.executionCancelled,
           'user_message': 'A consulta em streaming foi cancelada.',
         },
       );

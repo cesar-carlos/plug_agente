@@ -674,6 +674,63 @@ class AppLocalizationsPt extends AppLocalizations {
   String get msgAuthCredentialsRequired => 'Usuário e senha são obrigatórios';
 
   @override
+  String get msgLoginRequiredBeforeConnect => 'Faça login antes de conectar ao hub';
+
+  @override
+  String get msgRpcInvalidRequest => 'Requisição inválida. Revise os dados enviados.';
+
+  @override
+  String get msgRpcMethodNotFound => 'Método não suportado por esta versão do agente.';
+
+  @override
+  String get msgRpcAuthenticationFailed => 'Falha de autenticação. Gere um novo token e tente novamente.';
+
+  @override
+  String get msgRpcUnauthorized => 'Você não tem permissão para executar esta operação.';
+
+  @override
+  String get msgRpcTimeout => 'A operação excedeu o tempo limite. Tente novamente.';
+
+  @override
+  String get msgRpcInvalidPayload => 'Falha ao processar os dados da requisição.';
+
+  @override
+  String get msgRpcNetworkError => 'Conexão com o hub foi perdida. Tente novamente.';
+
+  @override
+  String get msgRpcRateLimited => 'Muitas requisições em pouco tempo. Aguarde e tente novamente.';
+
+  @override
+  String get msgRpcReplayDetected => 'Requisição duplicada detectada. Gere um novo ID e tente novamente.';
+
+  @override
+  String get msgRpcSqlValidationFailed => 'Comando SQL inválido. Revise a consulta enviada.';
+
+  @override
+  String get msgRpcSqlExecutionFailed => 'Falha ao executar o comando SQL.';
+
+  @override
+  String get msgRpcConnectionPoolExhausted => 'Limite de conexões atingido. Aguarde e tente novamente.';
+
+  @override
+  String get msgRpcResultTooLarge => 'Resultado muito grande. Aplique filtros e tente novamente.';
+
+  @override
+  String get msgRpcDatabaseConnectionFailed => 'Não foi possível conectar ao banco de dados.';
+
+  @override
+  String get msgRpcInvalidDatabaseConfig => 'Configuração do banco inválida. Revise os dados de conexão.';
+
+  @override
+  String get msgRpcExecutionNotFound => 'Execução não encontrada. Pode ter sido finalizada ou nunca iniciada.';
+
+  @override
+  String get msgRpcExecutionCancelled => 'Execução cancelada pelo usuário.';
+
+  @override
+  String get msgRpcInternalError => 'Falha interna no processamento da requisição.';
+
+  @override
   String get tabWebSocketConnection => 'Conexão WebSocket';
 
   @override

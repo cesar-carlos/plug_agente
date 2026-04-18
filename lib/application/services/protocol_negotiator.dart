@@ -193,7 +193,37 @@ class ProtocolNegotiator {
       negotiated['plugProfile'] = plugProfile;
     }
 
+    // Backpressure window hints: pick the minimum of agent and server values so
+    // both sides agree on a safe upper bound. Recommended is also clamped by
+    // the negotiated max so the recommended value never exceeds the cap.
+    final maxStreamPullWindowSize = _negotiateMinPositiveInt(
+      agentExtensions['maxStreamPullWindowSize'],
+      serverExtensions['maxStreamPullWindowSize'],
+    );
+    if (maxStreamPullWindowSize != null) {
+      negotiated['maxStreamPullWindowSize'] = maxStreamPullWindowSize;
+    }
+    final recommendedRaw = _negotiateMinPositiveInt(
+      agentExtensions['recommendedStreamPullWindowSize'],
+      serverExtensions['recommendedStreamPullWindowSize'],
+    );
+    if (recommendedRaw != null) {
+      final clamped = maxStreamPullWindowSize != null && recommendedRaw > maxStreamPullWindowSize
+          ? maxStreamPullWindowSize
+          : recommendedRaw;
+      negotiated['recommendedStreamPullWindowSize'] = clamped;
+    }
+
     return negotiated;
+  }
+
+  int? _negotiateMinPositiveInt(dynamic agentValue, dynamic serverValue) {
+    final agentInt = agentValue is int && agentValue > 0 ? agentValue : null;
+    final serverInt = serverValue is int && serverValue > 0 ? serverValue : null;
+    if (agentInt == null && serverInt == null) return null;
+    if (agentInt == null) return serverInt;
+    if (serverInt == null) return agentInt;
+    return agentInt < serverInt ? agentInt : serverInt;
   }
 
   int _negotiateCompressionThreshold(

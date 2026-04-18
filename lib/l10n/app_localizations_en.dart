@@ -671,6 +671,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgAuthCredentialsRequired => 'Username and password are required';
 
   @override
+  String get msgLoginRequiredBeforeConnect => 'Sign in before connecting to the hub';
+
+  @override
+  String get msgRpcInvalidRequest => 'Invalid request. Review the data sent.';
+
+  @override
+  String get msgRpcMethodNotFound => 'Method not supported by this version of the agent.';
+
+  @override
+  String get msgRpcAuthenticationFailed => 'Authentication failed. Get a new token and try again.';
+
+  @override
+  String get msgRpcUnauthorized => 'You do not have permission to execute this operation.';
+
+  @override
+  String get msgRpcTimeout => 'The operation exceeded the time limit. Try again.';
+
+  @override
+  String get msgRpcInvalidPayload => 'Failed to process the request data.';
+
+  @override
+  String get msgRpcNetworkError => 'Connection to the hub was lost. Try again.';
+
+  @override
+  String get msgRpcRateLimited => 'Too many requests in a short time. Wait and try again.';
+
+  @override
+  String get msgRpcReplayDetected => 'Duplicate request detected. Generate a new ID and try again.';
+
+  @override
+  String get msgRpcSqlValidationFailed => 'Invalid SQL command. Review the query sent.';
+
+  @override
+  String get msgRpcSqlExecutionFailed => 'Failed to execute the SQL command.';
+
+  @override
+  String get msgRpcConnectionPoolExhausted => 'Connection limit reached. Wait and try again.';
+
+  @override
+  String get msgRpcResultTooLarge => 'Result too large. Apply filters and try again.';
+
+  @override
+  String get msgRpcDatabaseConnectionFailed => 'Could not connect to the database.';
+
+  @override
+  String get msgRpcInvalidDatabaseConfig => 'Invalid database configuration. Review the connection settings.';
+
+  @override
+  String get msgRpcExecutionNotFound => 'Execution not found. It may have finished or never started.';
+
+  @override
+  String get msgRpcExecutionCancelled => 'Execution cancelled by the user.';
+
+  @override
+  String get msgRpcInternalError => 'Internal failure processing the request.';
+
+  @override
   String get tabWebSocketConnection => 'WebSocket connection';
 
   @override

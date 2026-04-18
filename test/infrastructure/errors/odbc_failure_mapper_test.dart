@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 
 void main() {
@@ -150,7 +151,7 @@ void main() {
       },
     );
 
-    test('maps cancelled streaming to explicit cancelled reason', () {
+    test('maps cancelled streaming to executionCancelled rpc code', () {
       final failure = OdbcFailureMapper.mapStreamingError(
         StateError('stream_cancelled'),
         operation: 'executeQueryStream',
@@ -158,7 +159,11 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'query_cancelled');
+      expect(failure.context['reason'], 'execution_cancelled');
+      expect(
+        failure.context['rpc_error_code'],
+        RpcErrorCode.executionCancelled,
+      );
       expect(
         failure.context['user_message'],
         'A consulta em streaming foi cancelada.',

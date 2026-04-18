@@ -1358,6 +1358,120 @@ abstract class AppLocalizations {
   /// **'Username and password are required'**
   String get msgAuthCredentialsRequired;
 
+  /// No description provided for @msgLoginRequiredBeforeConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in before connecting to the hub'**
+  String get msgLoginRequiredBeforeConnect;
+
+  /// No description provided for @msgRpcInvalidRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid request. Review the data sent.'**
+  String get msgRpcInvalidRequest;
+
+  /// No description provided for @msgRpcMethodNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Method not supported by this version of the agent.'**
+  String get msgRpcMethodNotFound;
+
+  /// No description provided for @msgRpcAuthenticationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed. Get a new token and try again.'**
+  String get msgRpcAuthenticationFailed;
+
+  /// No description provided for @msgRpcUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to execute this operation.'**
+  String get msgRpcUnauthorized;
+
+  /// No description provided for @msgRpcTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'The operation exceeded the time limit. Try again.'**
+  String get msgRpcTimeout;
+
+  /// No description provided for @msgRpcInvalidPayload.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to process the request data.'**
+  String get msgRpcInvalidPayload;
+
+  /// No description provided for @msgRpcNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection to the hub was lost. Try again.'**
+  String get msgRpcNetworkError;
+
+  /// No description provided for @msgRpcRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests in a short time. Wait and try again.'**
+  String get msgRpcRateLimited;
+
+  /// No description provided for @msgRpcReplayDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate request detected. Generate a new ID and try again.'**
+  String get msgRpcReplayDetected;
+
+  /// No description provided for @msgRpcSqlValidationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid SQL command. Review the query sent.'**
+  String get msgRpcSqlValidationFailed;
+
+  /// No description provided for @msgRpcSqlExecutionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to execute the SQL command.'**
+  String get msgRpcSqlExecutionFailed;
+
+  /// No description provided for @msgRpcConnectionPoolExhausted.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection limit reached. Wait and try again.'**
+  String get msgRpcConnectionPoolExhausted;
+
+  /// No description provided for @msgRpcResultTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Result too large. Apply filters and try again.'**
+  String get msgRpcResultTooLarge;
+
+  /// No description provided for @msgRpcDatabaseConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect to the database.'**
+  String get msgRpcDatabaseConnectionFailed;
+
+  /// No description provided for @msgRpcInvalidDatabaseConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid database configuration. Review the connection settings.'**
+  String get msgRpcInvalidDatabaseConfig;
+
+  /// No description provided for @msgRpcExecutionNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution not found. It may have finished or never started.'**
+  String get msgRpcExecutionNotFound;
+
+  /// No description provided for @msgRpcExecutionCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution cancelled by the user.'**
+  String get msgRpcExecutionCancelled;
+
+  /// No description provided for @msgRpcInternalError.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal failure processing the request.'**
+  String get msgRpcInternalError;
+
   /// No description provided for @tabWebSocketConnection.
   ///
   /// In en, this message translates to:

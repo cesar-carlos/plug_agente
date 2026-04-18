@@ -19,6 +19,14 @@ class ConnectToHub {
       return Failure(domain.ValidationFailure('Agent ID cannot be empty'));
     }
 
+    if (authToken == null || authToken.trim().isEmpty) {
+      return Failure(
+        domain.ConfigurationFailure(
+          'Authentication token required to connect to the hub',
+        ),
+      );
+    }
+
     return _service.connect(serverUrl, agentId, authToken: authToken);
   }
 }

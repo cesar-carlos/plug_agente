@@ -118,8 +118,9 @@ handshake.
 
 | Evento               | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
 | -------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent:register`     | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile? }>`          | `agent:capabilities`                                                                                                                                       |
-| `agent:capabilities` | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
+| `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile? }>`          | `agent:capabilities` ou `agent:register_error`                                                                                                             |
+| `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
+| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. `code/reason` `transient_failure` ou `rate_limited` agendam novo registro; demais valores forçam reconexao.                 |
 | `agent:ready`        | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
 | `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
 | `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
@@ -129,8 +130,10 @@ handshake.
 | `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
-de um tempo limite (ex.: 8 s) apos `agent:register`, o agente reenvia `agent:register`
-ate N vezes (ex.: 2). Apos esgotar as tentativas, o agente força reconexao.
+de `capabilitiesTimeoutMs` (default 8 s) apos `agent:register`, o agente reenvia
+`agent:register` em ate `capabilitiesMaxReRegisterAttempts` ciclos extras
+(default 2). O total e: 1 registro inicial + 2 re-registros = 3 emissoes maximas
+de `agent:register` por handshake antes de o agente forçar reconexao.
 
 **Readiness:** O hub nao deve enviar `rpc:request` antes de o agente ter recebido
 `agent:capabilities`. O agente so considera o protocolo pronto apos a negociacao
@@ -202,7 +205,8 @@ Fluxo atual para resultados grandes:
 5. **Overflow de buffer**: se a fila de chunks atingir o limite (`maxBackpressureChunkQueueSize`)
    e o hub nao enviar `rpc:stream.pull` a tempo, o agente **nao descarta** chunks silenciosamente.
    Em vez disso, cancela o stream e retorna erro RPC `resultTooLarge` (`-32105`) com
-   `reason: backpressure_overflow`. O hub deve consumir mais rapido ou aumentar `window_size`.
+   `reason: result_too_large` (canonico) e `subreason: backpressure_overflow` (refinamento da causa).
+   O hub deve consumir mais rapido ou aumentar `window_size`.
 
 Quando `enableSocketBackpressure` esta ativo, o agente tambem anuncia em
 `capabilities.extensions`:

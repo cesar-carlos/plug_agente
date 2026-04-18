@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 
 /// Protocol capabilities for negotiation between client and server.
@@ -28,10 +29,18 @@ class ProtocolCapabilities {
   factory ProtocolCapabilities.defaultCapabilities({
     bool binaryPayload = true,
     List<String> compressions = const ['gzip', 'none'],
-    int compressionThreshold = 1024,
-    double maxInflationRatio = 20,
+    // Default raised from 1024 to 4096 bytes: gzip frequently INCREASES size
+    // for payloads under ~4 KiB due to header overhead. Threshold trades
+    // bandwidth for CPU; tune via metrics if you observe regressions.
+    int compressionThreshold = 4096,
+    // Default lowered from 20x to 10x: realistic gzip ratios for JSON RPC
+    // payloads rarely exceed 10x. Tighter bound is a stronger zip-bomb defense
+    // without rejecting legitimate compressible payloads.
+    double maxInflationRatio = 10,
     bool signatureRequired = false,
     List<String> signatureAlgorithms = const ['hmac-sha256'],
+    int? recommendedStreamPullWindowSize,
+    int? maxStreamPullWindowSize,
   }) {
     final extensions = <String, dynamic>{
       'batchSupport': true,
@@ -49,6 +58,12 @@ class ProtocolCapabilities {
       'paginationModes': ['page-offset', 'cursor-keyset'],
       'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
       'errorFormat': 'structured-error-data',
+      // Backpressure window hints communicate the agent's preferred and maximum
+      // pull window sizes to the hub. The hub may pick a value <= max and
+      // SHOULD start with `recommended`. See socket_communication_standard.md.
+      'recommendedStreamPullWindowSize': recommendedStreamPullWindowSize ?? 1,
+      'maxStreamPullWindowSize':
+          maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
     };
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';
@@ -164,7 +179,11 @@ class TransportLimits {
   static const int defaultMaxDecodedPayloadBytes = defaultMaxPayloadBytes;
   static const int defaultMaxRows = 50000;
   static const int defaultMaxBatchSize = 32;
-  static const int defaultMaxConcurrentStreams = 1;
+  /// Default upper bound for concurrent backpressure stream emitters at the
+  /// protocol layer. The transport-level cap
+  /// [`ConnectionConstants.maxConcurrentRpcStreams`] is the absolute hard
+  /// ceiling and overrides any negotiated value above it.
+  static const int defaultMaxConcurrentStreams = 16;
   static const int defaultStreamingChunkSize = 500;
   static const int defaultStreamingRowThreshold = 500;
 

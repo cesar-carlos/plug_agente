@@ -9,7 +9,28 @@
     "profile": {
       "$ref": "./agent.profile.schema.json"
     },
-    "updated_at": { "type": "string", "format": "date-time" }
+    "updated_at": { "type": "string", "format": "date-time" },
+    "odbc": {
+      "type": "object",
+      "description": "Optional ODBC diagnostics snapshot, attached when the agent runs on a host with ODBC native metrics collection enabled. Absent when the metrics service is not configured.",
+      "required": ["available"],
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "Whether the metrics snapshot was collected successfully. When false, 'error' may carry the reason."
+        },
+        "snapshot": {
+          "type": "object",
+          "description": "Raw metrics snapshot. Shape depends on the underlying ODBC driver and is intentionally open for forward compatibility.",
+          "additionalProperties": true
+        },
+        "error": {
+          "type": "string",
+          "description": "Present only when 'available' is false; describes why the snapshot could not be produced."
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

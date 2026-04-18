@@ -125,7 +125,12 @@ class FailureToRpcErrorMapper {
     }
 
     if (failure is NotFoundFailure) {
-      return RpcErrorCode.methodNotFound;
+      // NotFoundFailure represents a missing **resource** (HTTP 404, missing
+      // config row, etc.) — NOT a missing JSON-RPC method. JSON-RPC reserves
+      // -32601 strictly for "method does not exist". Map resource-not-found to
+      // internalError with a structured `reason: 'resource_not_found'` so
+      // automation does not confuse it with a typo in `request.method`.
+      return RpcErrorCode.internalError;
     }
 
     return RpcErrorCode.internalError;
@@ -148,7 +153,8 @@ class FailureToRpcErrorMapper {
       code,
       useTimeoutByStage,
     );
-    final resolvedReason = timeoutReason ?? RpcErrorCode.getReason(code);
+    final customReason = _getCustomReasonOverride(failure, code);
+    final resolvedReason = timeoutReason ?? customReason ?? RpcErrorCode.getReason(code);
     final odbcReasonForPayload = _odbcReasonIfDistinct(odbcReason, resolvedReason);
     final extra = <String, dynamic>{
       'type': _getTypeUri(failure, code),
@@ -270,6 +276,17 @@ class FailureToRpcErrorMapper {
       'ack' => 'ack_timeout',
       _ => null,
     };
+  }
+
+  /// Per-failure-type reason overrides that win over the canonical reason
+  /// derived from the RPC code. Use this for cases where the same RPC code
+  /// (e.g. `internalError`) needs different `reason` strings depending on the
+  /// originating failure type so automation pipelines can distinguish them.
+  static String? _getCustomReasonOverride(Failure failure, int code) {
+    if (failure is NotFoundFailure && code == RpcErrorCode.internalError) {
+      return 'resource_not_found';
+    }
+    return null;
   }
 
   static bool _isSensitiveKey(String key) => SensitiveMapRedactor.isSensitiveKey(key);

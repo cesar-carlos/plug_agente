@@ -1,44 +1,34 @@
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
-import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Coordinates transport-level connection requests against the active
+/// [ITransportClient] and exposes database connectivity probes.
+///
+/// Connect retries intentionally live in two upper layers only:
+///   1. The Socket.IO client itself (transport-level reconnect).
+///   2. `ConnectionProvider._recoverConnection` (burst + persistent retry).
+///
+/// Wrapping `connect` here in a generic `IRetryManager` would multiply attempts
+/// (3x retry-manager * 3x burst = up to 9x) and delay user feedback by ~30s on
+/// the first failed attempt, so this layer just delegates.
 class ConnectionService {
   ConnectionService(
     this._transportClientGetter,
     this._databaseGateway,
-    this._retryManager,
   );
   final ITransportClient Function() _transportClientGetter;
   final IDatabaseGateway _databaseGateway;
-  final IRetryManager _retryManager;
-
-  static const int _connectMaxAttempts = 3;
-  static const int _connectInitialDelayMs = 500;
 
   Future<Result<void>> connect(
     String serverUrl,
     String agentId, {
     String? authToken,
-  }) async {
-    final result = await _retryManager.execute<Object>(
-      () async {
-        final r = await _transportClientGetter().connect(
-          serverUrl,
-          agentId,
-          authToken: authToken,
-        );
-        return r.fold(
-          (_) => const Success(unit),
-          Failure.new,
-        );
-      },
-      maxAttempts: _connectMaxAttempts,
-      initialDelayMs: _connectInitialDelayMs,
-    );
-    return result.fold(
-      (_) => const Success(unit),
-      Failure.new,
+  }) {
+    return _transportClientGetter().connect(
+      serverUrl,
+      agentId,
+      authToken: authToken,
     );
   }
 

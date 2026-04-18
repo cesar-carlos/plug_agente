@@ -351,5 +351,21 @@ void main() {
         expect(data.containsKey('odbc_reason'), isFalse);
       },
     );
+
+    test(
+      'NotFoundFailure maps to internalError with reason resource_not_found',
+      () {
+        // JSON-RPC reserves -32601 for "method does not exist". A missing
+        // resource (HTTP 404, missing config row) must NOT be confused with
+        // a typo in `request.method` — use internalError + resource_not_found.
+        final failure = NotFoundFailure('Configuração não encontrada');
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
+
+        expect(rpcError.code, equals(RpcErrorCode.internalError));
+        expect(data['reason'], equals('resource_not_found'));
+      },
+    );
   });
 }

@@ -359,19 +359,28 @@ class _WebSocketActionButtons extends StatelessWidget {
   ) {
     if (connectionProvider.isConnected) {
       connectionProvider.disconnect();
-    } else {
-      final serverUrl = normalizeServerUrl(
-        formController.serverUrlController.text,
-      );
-      final agentId = formController.agentIdController.text.trim();
-      final authToken = authProvider.currentToken?.token;
-
-      if (serverUrl.isNotEmpty && agentId.isNotEmpty) {
-        configProvider.updateServerUrl(serverUrl);
-        configProvider.updateAgentId(agentId);
-        connectionProvider.connect(serverUrl, agentId, authToken: authToken);
-      }
+      return;
     }
+    final l10n = AppLocalizations.of(context)!;
+    final serverUrl = normalizeServerUrl(
+      formController.serverUrlController.text,
+    );
+    final agentId = formController.agentIdController.text.trim();
+    if (serverUrl.isEmpty || agentId.isEmpty) {
+      return;
+    }
+    final authToken = authProvider.currentToken?.token.trim();
+    if (!authProvider.isAuthenticated || authToken == null || authToken.isEmpty) {
+      SettingsFeedback.showError(
+        context: context,
+        title: l10n.modalTitleError,
+        message: l10n.msgLoginRequiredBeforeConnect,
+      );
+      return;
+    }
+    configProvider.updateServerUrl(serverUrl);
+    configProvider.updateAgentId(agentId);
+    connectionProvider.connect(serverUrl, agentId, authToken: authToken);
   }
 }
 

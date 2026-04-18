@@ -1,4 +1,4 @@
-import 'package:checks/checks.dart';
+﻿import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
@@ -25,7 +25,7 @@ void main() {
       final emitter = createEmitter();
 
       await emitter.emitChunk(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 0,
@@ -46,7 +46,7 @@ void main() {
         final emitter = createEmitter();
 
         await emitter.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: 0,
@@ -56,7 +56,7 @@ void main() {
           ),
         );
         await emitter.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: 1,
@@ -66,7 +66,7 @@ void main() {
           ),
         );
         await emitter.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: 2,
@@ -93,7 +93,7 @@ void main() {
       final emitter = createEmitter();
 
       await emitter.emitChunk(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 0,
@@ -103,7 +103,7 @@ void main() {
         ),
       );
       await emitter.emitChunk(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 1,
@@ -113,7 +113,7 @@ void main() {
         ),
       );
       await emitter.emitComplete(
-        const RpcStreamComplete(
+        RpcStreamComplete(
           streamId: 's-1',
           requestId: 'req-1',
           totalRows: 2,
@@ -144,7 +144,7 @@ void main() {
         );
 
         await emitter.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: 0,
@@ -157,7 +157,7 @@ void main() {
         check(unregisteredId).equals('');
 
         await emitter.emitComplete(
-          const RpcStreamComplete(
+          RpcStreamComplete(
             streamId: 's-1',
             requestId: 'req-1',
             totalRows: 1,
@@ -181,7 +181,7 @@ void main() {
           maxQueueSize: maxSize,
         );
         await emitterWithSmallLimit.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: 0,
@@ -205,7 +205,7 @@ void main() {
           check(accepted).isTrue();
         }
         final overflowed = await emitterWithSmallLimit.emitChunk(
-          const RpcStreamChunk(
+          RpcStreamChunk(
             streamId: 's-1',
             requestId: 'req-1',
             chunkIndex: maxSize + 1,
@@ -223,7 +223,7 @@ void main() {
       final emitter = createEmitter();
 
       await emitter.emitChunk(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 0,
@@ -233,7 +233,7 @@ void main() {
         ),
       );
       await emitter.emitChunk(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 1,

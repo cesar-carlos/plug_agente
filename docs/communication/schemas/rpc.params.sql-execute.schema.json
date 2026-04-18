@@ -9,7 +9,8 @@
     "sql": {
       "type": "string",
       "minLength": 1,
-      "description": "SQL statement to execute (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH)"
+      "maxLength": 1048576,
+      "description": "SQL statement to execute (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH). Hard ceiling 1 MiB; the negotiated transport payload limit may be lower."
     },
     "params": {
       "type": "object",

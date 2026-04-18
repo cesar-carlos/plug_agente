@@ -9,8 +9,8 @@
     "commands": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 32,
-      "description": "Array of SQL commands to execute sequentially",
+      "maxItems": 256,
+      "description": "Array of SQL commands to execute sequentially. The static schema enforces only a coarse hard ceiling; the per-connection limit is the negotiated `max_batch_size` (default 32, may be lower).",
       "items": {
         "type": "object",
         "required": ["sql"],
@@ -18,7 +18,8 @@
           "sql": {
             "type": "string",
             "minLength": 1,
-            "description": "SQL statement to execute"
+            "maxLength": 1048576,
+            "description": "SQL statement to execute. Hard ceiling 1 MiB per command."
           },
           "params": {
             "type": "object",

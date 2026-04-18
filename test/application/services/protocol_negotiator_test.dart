@@ -66,8 +66,8 @@ void main() {
       );
 
       expect(config.compression, equals('gzip'));
-      expect(config.compressionThreshold, equals(1024));
-      expect(config.maxInflationRatio, equals(20));
+      expect(config.compressionThreshold, equals(4096));
+      expect(config.maxInflationRatio, equals(10));
       expect(config.negotiatedExtensions['binaryPayload'], isTrue);
       expect(
         config.negotiatedExtensions['transportFrame'],

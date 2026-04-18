@@ -1,5 +1,7 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/core/utils/log_sanitizer.dart';
+
 abstract class Failure implements Exception {
   Failure(this.message, String defaultCode)
     : _code = defaultCode,
@@ -37,7 +39,10 @@ abstract class Failure implements Exception {
     }
 
     if (context.isNotEmpty) {
-      buffer.write('\nContext: $context');
+      // Redact sensitive context entries (tokens, passwords, secrets) before
+      // serialising. The redactor is conservative: it leaves non-sensitive
+      // diagnostic fields intact so failure traces remain useful.
+      buffer.write('\nContext: ${LogSanitizer.sanitizeMap(context)}');
     }
 
     return buffer.toString();

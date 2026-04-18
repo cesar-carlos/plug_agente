@@ -58,6 +58,21 @@ class ConnectionConstants {
   /// Max in-flight `rpc:request` handlers per socket connection (backpressure).
   static const int maxConcurrentRpcHandlers = 32;
 
+  /// Max simultaneously registered RPC streaming emitters per socket connection.
+  /// Each emitter holds buffered chunks awaiting `rpc:stream.pull` from the hub;
+  /// the cap protects memory if streams never receive a final pull/complete.
+  static const int maxConcurrentRpcStreams = 64;
+
+  /// Idle timeout for an RPC streaming emitter. If the hub does not call
+  /// `rpc:stream.pull` within this window after the last activity, the emitter
+  /// is unregistered defensively to avoid leaks across long-lived sockets.
+  static const Duration rpcStreamEmitterMaxIdle = Duration(seconds: 300);
+
+  /// Max distinct receive-pipeline entries cached per socket connection.
+  /// Each entry is keyed by `(encoding, compression, schemaVersion, threshold)`.
+  /// LRU eviction; raise this if `pipeline_cache_eviction` metrics show churn.
+  static const int receivePipelineCacheMaxEntries = 16;
+
   /// Default max successful `client_token.getPolicy` calls per minute per agent+credential scope.
   /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (`0` = unlimited).
   static const int clientTokenGetPolicyDefaultMaxPerMinute = 120;

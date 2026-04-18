@@ -95,15 +95,15 @@ void main() {
         RpcResponse.success(id: 'test', result: <String, dynamic>{}),
       );
       registerFallbackValue(
-        const RpcStreamChunk(
+        RpcStreamChunk(
           streamId: 's-1',
           requestId: 'req-1',
           chunkIndex: 0,
-          rows: [],
+          rows: const [],
         ),
       );
       registerFallbackValue(
-        const RpcStreamComplete(
+        RpcStreamComplete(
           streamId: 's-1',
           requestId: 'req-1',
           totalRows: 0,
