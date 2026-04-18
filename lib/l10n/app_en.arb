@@ -251,6 +251,19 @@
   "gsLabelLicense": "License",
   "gsLicenseMit": "MIT License",
   "gsButtonOpenSettings": "Open settings",
+  "gsErrorStartupToggleFailed": "Failed to change startup configuration",
+  "gsErrorStartupServiceUnavailable": "Startup configuration is not available in this environment",
+  "gsErrorStartupOpenSystemSettingsFailed": "Failed to open system settings",
+  "gsErrorWithDetail": "{message}: {detail}",
+  "@gsErrorWithDetail": {
+    "description": "Combines the translated error message with an optional technical detail.",
+    "placeholders": {
+      "message": {"type": "String"},
+      "detail": {"type": "String"}
+    }
+  },
+  "gsStartupEnabledSuccess": "App will start with Windows",
+  "gsStartupDisabledSuccess": "App will not start with Windows anymore",
   "diagnosticsSectionTitle": "Advanced diagnostics",
   "diagnosticsWarningTitle": "Sensitive data in logs",
   "diagnosticsWarningBody": "The options below may log SQL or technical details in the application logs. Use only for debugging and disable in production when handling personal data or secrets.",

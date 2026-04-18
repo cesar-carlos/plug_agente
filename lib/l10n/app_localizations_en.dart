@@ -609,6 +609,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsButtonOpenSettings => 'Open settings';
 
   @override
+  String get gsErrorStartupToggleFailed => 'Failed to change startup configuration';
+
+  @override
+  String get gsErrorStartupServiceUnavailable => 'Startup configuration is not available in this environment';
+
+  @override
+  String get gsErrorStartupOpenSystemSettingsFailed => 'Failed to open system settings';
+
+  @override
+  String gsErrorWithDetail(String message, String detail) {
+    return '$message: $detail';
+  }
+
+  @override
+  String get gsStartupEnabledSuccess => 'App will start with Windows';
+
+  @override
+  String get gsStartupDisabledSuccess => 'App will not start with Windows anymore';
+
+  @override
   String get diagnosticsSectionTitle => 'Advanced diagnostics';
 
   @override

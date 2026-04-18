@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
@@ -23,6 +24,7 @@ class GeneralConfigSection extends StatelessWidget {
     this.startupSupported = true,
     this.startupError,
     this.supportsAutoUpdate = true,
+    this.isCheckingUpdates = false,
     super.key,
   });
 
@@ -41,8 +43,9 @@ class GeneralConfigSection extends StatelessWidget {
   final VoidCallback onOpenStartupSettings;
   final String appVersion;
   final bool startupSupported;
-  final String? startupError;
+  final SystemSettingsErrorState? startupError;
   final bool supportsAutoUpdate;
+  final bool isCheckingUpdates;
 
   @override
   Widget build(BuildContext context) {
@@ -109,10 +112,19 @@ class GeneralConfigSection extends StatelessWidget {
                       style: context.bodyText,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(FluentIcons.refresh),
-                    onPressed: onCheckUpdates,
-                  ),
+                  if (isCheckingUpdates)
+                    const SizedBox(
+                      key: ValueKey('updates_progress_ring'),
+                      width: 20,
+                      height: 20,
+                      child: ProgressRing(strokeWidth: 2),
+                    )
+                  else
+                    IconButton(
+                      key: const ValueKey('updates_refresh_button'),
+                      icon: const Icon(FluentIcons.refresh),
+                      onPressed: onCheckUpdates,
+                    ),
                 ],
               )
             else
@@ -147,13 +159,14 @@ class _StartupErrorMessage extends StatelessWidget {
     required this.onOpenSettings,
   });
 
-  final String error;
+  final SystemSettingsErrorState error;
   final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
+    final translated = _translate(l10n, error);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -174,7 +187,7 @@ class _StartupErrorMessage extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              error,
+              translated,
               style: context.captionText.copyWith(
                 color: feedbackColors.accent,
               ),
@@ -191,4 +204,17 @@ class _StartupErrorMessage extends StatelessWidget {
       ),
     );
   }
+}
+
+String _translate(AppLocalizations l10n, SystemSettingsErrorState error) {
+  final base = switch (error.code) {
+    SystemSettingsErrorCode.startupToggleFailed => l10n.gsErrorStartupToggleFailed,
+    SystemSettingsErrorCode.startupServiceUnavailable => l10n.gsErrorStartupServiceUnavailable,
+    SystemSettingsErrorCode.startupOpenSystemSettingsFailed => l10n.gsErrorStartupOpenSystemSettingsFailed,
+  };
+  final detail = error.detail;
+  if (detail == null || detail.trim().isEmpty) {
+    return base;
+  }
+  return l10n.gsErrorWithDetail(base, detail);
 }

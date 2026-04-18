@@ -1244,6 +1244,42 @@ abstract class AppLocalizations {
   /// **'Open settings'**
   String get gsButtonOpenSettings;
 
+  /// No description provided for @gsErrorStartupToggleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to change startup configuration'**
+  String get gsErrorStartupToggleFailed;
+
+  /// No description provided for @gsErrorStartupServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup configuration is not available in this environment'**
+  String get gsErrorStartupServiceUnavailable;
+
+  /// No description provided for @gsErrorStartupOpenSystemSettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to open system settings'**
+  String get gsErrorStartupOpenSystemSettingsFailed;
+
+  /// Combines the translated error message with an optional technical detail.
+  ///
+  /// In en, this message translates to:
+  /// **'{message}: {detail}'**
+  String gsErrorWithDetail(String message, String detail);
+
+  /// No description provided for @gsStartupEnabledSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'App will start with Windows'**
+  String get gsStartupEnabledSuccess;
+
+  /// No description provided for @gsStartupDisabledSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'App will not start with Windows anymore'**
+  String get gsStartupDisabledSuccess;
+
   /// No description provided for @diagnosticsSectionTitle.
   ///
   /// In en, this message translates to:

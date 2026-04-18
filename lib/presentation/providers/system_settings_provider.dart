@@ -5,6 +5,14 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/presentation/providers/system_settings_error.dart';
+
+/// Resultado emitido após uma alteração de inicialização automática. Permite
+/// que a UI apresente feedback de sucesso de forma desacoplada do provider.
+enum StartupChangeOutcome {
+  enabled,
+  disabled,
+}
 
 class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsProvider(
@@ -38,8 +46,11 @@ class SystemSettingsProvider extends ChangeNotifier {
   late bool _minimizeToTray;
   late bool _closeToTray;
 
-  String? _lastError;
-  String? get lastError => _lastError;
+  SystemSettingsErrorState? _lastError;
+
+  /// Erro estruturado da última operação. A UI deve traduzir [SystemSettingsErrorState.code]
+  /// via ARB e, opcionalmente, anexar [SystemSettingsErrorState.detail] como contexto técnico.
+  SystemSettingsErrorState? get lastError => _lastError;
 
   void clearError() {
     if (_lastError != null) {
@@ -83,9 +94,15 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
 
-  Future<void> setStartWithWindows(bool value) async {
+  /// Atualiza o flag de inicialização com o Windows.
+  ///
+  /// Retorna [StartupChangeOutcome.enabled] ou [StartupChangeOutcome.disabled]
+  /// quando a alteração foi aplicada (inclusive no SO, se o serviço estiver
+  /// disponível). Retorna `null` quando nada mudou (no-op) ou quando houve
+  /// falha — neste caso [lastError] é populado.
+  Future<StartupChangeOutcome?> setStartWithWindows(bool value) async {
     if (_startWithWindows == value) {
-      return;
+      return null;
     }
 
     clearError();
@@ -110,9 +127,10 @@ class SystemSettingsProvider extends ChangeNotifier {
             level: 900,
           );
 
-          _lastError = failure is StartupServiceFailure
-              ? failure.message
-              : 'Falha ao alterar configuração de inicialização';
+          _lastError = SystemSettingsErrorState(
+            code: SystemSettingsErrorCode.startupToggleFailed,
+            detail: failure is StartupServiceFailure ? failure.message : null,
+          );
           notifyListeners();
 
           return false;
@@ -120,19 +138,22 @@ class SystemSettingsProvider extends ChangeNotifier {
       );
 
       if (!success) {
-        return;
+        return null;
       }
     }
 
     _startWithWindows = value;
     notifyListeners();
     await _prefs.setBool(_startWithWindowsKey, value);
+    return value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled;
   }
 
   Future<void> openStartupSettings() async {
     final startupService = _startupService;
     if (startupService == null) {
-      _lastError = 'Configurações de inicialização não disponíveis neste ambiente';
+      _lastError = const SystemSettingsErrorState(
+        code: SystemSettingsErrorCode.startupServiceUnavailable,
+      );
       notifyListeners();
       return;
     }
@@ -147,7 +168,10 @@ class SystemSettingsProvider extends ChangeNotifier {
         );
       },
       (failure) {
-        _lastError = failure is StartupServiceFailure ? failure.message : 'Falha ao abrir configurações do sistema';
+        _lastError = SystemSettingsErrorState(
+          code: SystemSettingsErrorCode.startupOpenSystemSettingsFailed,
+          detail: failure is StartupServiceFailure ? failure.message : null,
+        );
         notifyListeners();
       },
     );

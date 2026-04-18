@@ -251,6 +251,19 @@
   "gsLabelLicense": "Licença",
   "gsLicenseMit": "MIT License",
   "gsButtonOpenSettings": "Abrir configurações",
+  "gsErrorStartupToggleFailed": "Falha ao alterar configuração de inicialização",
+  "gsErrorStartupServiceUnavailable": "Configurações de inicialização não disponíveis neste ambiente",
+  "gsErrorStartupOpenSystemSettingsFailed": "Falha ao abrir configurações do sistema",
+  "gsErrorWithDetail": "{message}: {detail}",
+  "@gsErrorWithDetail": {
+    "description": "Combina a mensagem traduzida do erro com um detalhe técnico opcional.",
+    "placeholders": {
+      "message": {"type": "String"},
+      "detail": {"type": "String"}
+    }
+  },
+  "gsStartupEnabledSuccess": "Inicialização com o Windows ativada",
+  "gsStartupDisabledSuccess": "Inicialização com o Windows desativada",
   "diagnosticsSectionTitle": "Diagnóstico avançado",
   "diagnosticsWarningTitle": "Dados sensíveis nos logs",
   "diagnosticsWarningBody": "As opções abaixo podem gravar SQL ou detalhes técnicos nos logs do aplicativo. Use apenas para depuração e desative em produção quando houver dados pessoais ou segredos.",

@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -12,6 +11,7 @@ import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
+import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
@@ -28,20 +28,13 @@ class ConfigPage extends StatefulWidget {
 
 class _ConfigPageState extends State<ConfigPage> {
   String _lastUpdateCheck = '';
-  String _appVersion = AppConstants.appVersion;
+  bool _isCheckingUpdates = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadAppVersion();
-  }
-
-  Future<void> _loadAppVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    if (mounted) {
-      setState(() => _appVersion = info.version);
-    }
-  }
+  /// `AppConstants.appVersion` é mantido em sincronia com `pubspec.yaml` pelo
+  /// script `installer/update_version.py`. Usamos a constante diretamente para
+  /// evitar a piscada que ocorria entre o fallback síncrono e o resultado
+  /// assíncrono do `package_info_plus`.
+  String get _appVersion => AppConstants.appVersion;
 
   String _formatLastUpdateCheck(DateTime dateTime) {
     final day = dateTime.day.toString().padLeft(2, '0');
@@ -106,6 +99,9 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _checkUpdates() async {
+    if (_isCheckingUpdates) {
+      return;
+    }
     final l10n = AppLocalizations.of(context)!;
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
@@ -119,6 +115,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
     setState(() {
       _lastUpdateCheck = l10n.configUpdatesChecking;
+      _isCheckingUpdates = true;
     });
 
     final result = await orchestrator.checkManual();
@@ -130,6 +127,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final checkedAt = _formatLastUpdateCheck(DateTime.now());
     setState(() {
       _lastUpdateCheck = '${l10n.configLastUpdatePrefix}$checkedAt';
+      _isCheckingUpdates = false;
     });
 
     result.fold(
@@ -161,6 +159,28 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
+  Future<void> _onStartWithWindowsChanged(
+    SystemSettingsProvider provider,
+    bool value,
+  ) async {
+    final outcome = await provider.setStartWithWindows(value);
+    if (!mounted || outcome == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final message = outcome == StartupChangeOutcome.enabled
+        ? l10n.gsStartupEnabledSuccess
+        : l10n.gsStartupDisabledSuccess;
+    displayInfoBar(
+      context,
+      builder: (context, close) => InfoBar(
+        title: Text(message),
+        severity: InfoBarSeverity.success,
+        onClose: close,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -188,11 +208,15 @@ class _ConfigPageState extends State<ConfigPage> {
             minimizeToTray: systemSettingsProvider.minimizeToTray,
             closeToTray: systemSettingsProvider.closeToTray,
             lastUpdateCheck: _lastUpdateCheck,
+            isCheckingUpdates: _isCheckingUpdates,
             startupSupported: startupSupported,
             startupError: systemSettingsProvider.lastError,
             supportsAutoUpdate: supportsAutoUpdate,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
-            onStartWithWindowsChanged: systemSettingsProvider.setStartWithWindows,
+            onStartWithWindowsChanged: (bool value) => _onStartWithWindowsChanged(
+              systemSettingsProvider,
+              value,
+            ),
             onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
@@ -214,6 +238,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.minimizeToTray,
     required this.closeToTray,
     required this.lastUpdateCheck,
+    required this.isCheckingUpdates,
     required this.startupSupported,
     required this.startupError,
     required this.supportsAutoUpdate,
@@ -233,8 +258,9 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool minimizeToTray;
   final bool closeToTray;
   final String lastUpdateCheck;
+  final bool isCheckingUpdates;
   final bool startupSupported;
-  final String? startupError;
+  final SystemSettingsErrorState? startupError;
   final bool supportsAutoUpdate;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
@@ -275,6 +301,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             minimizeToTray: widget.minimizeToTray,
             closeToTray: widget.closeToTray,
             lastUpdateCheck: widget.lastUpdateCheck,
+            isCheckingUpdates: widget.isCheckingUpdates,
             startupSupported: widget.startupSupported,
             startupError: widget.startupError,
             supportsAutoUpdate: widget.supportsAutoUpdate,

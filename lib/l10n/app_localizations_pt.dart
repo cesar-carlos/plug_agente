@@ -612,6 +612,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsButtonOpenSettings => 'Abrir configurações';
 
   @override
+  String get gsErrorStartupToggleFailed => 'Falha ao alterar configuração de inicialização';
+
+  @override
+  String get gsErrorStartupServiceUnavailable => 'Configurações de inicialização não disponíveis neste ambiente';
+
+  @override
+  String get gsErrorStartupOpenSystemSettingsFailed => 'Falha ao abrir configurações do sistema';
+
+  @override
+  String gsErrorWithDetail(String message, String detail) {
+    return '$message: $detail';
+  }
+
+  @override
+  String get gsStartupEnabledSuccess => 'Inicialização com o Windows ativada';
+
+  @override
+  String get gsStartupDisabledSuccess => 'Inicialização com o Windows desativada';
+
+  @override
   String get diagnosticsSectionTitle => 'Diagnóstico avançado';
 
   @override

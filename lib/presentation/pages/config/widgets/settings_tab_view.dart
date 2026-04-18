@@ -17,6 +17,9 @@ class SettingsTabItem {
 /// Padrão visual de abas em telas de configurações: Fluent `TabView` (faixa
 /// nativa + corpo com page view). Use este widget para manter identidade
 /// consistente com o restante do app (ex.: configurações da base de dados).
+///
+/// Quando há apenas um item, a faixa de abas é omitida e o corpo é renderizado
+/// diretamente para evitar UI confusa (uma aba sozinha não traz informação).
 class SettingsTabView extends StatelessWidget {
   const SettingsTabView({
     required this.currentIndex,
@@ -31,6 +34,15 @@ class SettingsTabView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.length <= 1) {
+      if (items.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return KeyedSubtree(
+        key: const ValueKey('settings_tab_view_single'),
+        child: items.first.body,
+      );
+    }
     return TabView(
       currentIndex: currentIndex,
       onChanged: onChanged,

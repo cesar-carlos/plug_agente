@@ -5,6 +5,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -66,8 +67,9 @@ void main() {
           startupService: mockStartupService,
         );
 
-        await provider.setStartWithWindows(true);
+        final outcome = await provider.setStartWithWindows(true);
 
+        check(outcome).equals(StartupChangeOutcome.enabled);
         check(provider.startWithWindows).equals(true);
         check(prefs.getBool('settings.start_with_windows')).equals(true);
         verify(() => mockStartupService.enable()).called(1);
@@ -85,11 +87,25 @@ void main() {
         startupService: mockStartupService,
       );
 
-      await provider.setStartWithWindows(false);
+      final outcome = await provider.setStartWithWindows(false);
 
+      check(outcome).equals(StartupChangeOutcome.disabled);
       check(provider.startWithWindows).equals(false);
       check(prefs.getBool('settings.start_with_windows')).equals(false);
       verify(() => mockStartupService.disable()).called(1);
+    });
+
+    test('should return null outcome when value is unchanged', () async {
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      final outcome = await provider.setStartWithWindows(false);
+
+      check(outcome).isNull();
+      verifyNever(() => mockStartupService.enable());
+      verifyNever(() => mockStartupService.disable());
     });
 
     test('should not update settings when startup service fails', () async {
@@ -106,8 +122,9 @@ void main() {
         startupService: mockStartupService,
       );
 
-      await provider.setStartWithWindows(true);
+      final outcome = await provider.setStartWithWindows(true);
 
+      check(outcome).isNull();
       check(provider.startWithWindows).equals(false);
       check(prefs.getBool('settings.start_with_windows')).isNull();
     });
@@ -206,7 +223,7 @@ void main() {
       },
     );
 
-    test('should set error message when startup enable fails', () async {
+    test('should set typed error when startup enable fails', () async {
       when(() => mockStartupService.enable()).thenAnswer(
         (_) async => const Failure(
           StartupServiceFailure(
@@ -223,11 +240,29 @@ void main() {
       await provider.setStartWithWindows(true);
 
       check(provider.lastError).isNotNull();
-      check(provider.lastError!).contains('Registry access denied');
+      check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
+      check(provider.lastError!.detail!).equals('Registry access denied');
       check(provider.startWithWindows).equals(false);
     });
 
-    test('should clear error message when clearError is called', () async {
+    test('should expose detail=null when failure is not StartupServiceFailure', () async {
+      when(() => mockStartupService.enable()).thenAnswer(
+        (_) async => Failure(Exception('generic')),
+      );
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.setStartWithWindows(true);
+
+      check(provider.lastError).isNotNull();
+      check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
+      check(provider.lastError!.detail).isNull();
+    });
+
+    test('should clear error when clearError is called', () async {
       when(() => mockStartupService.enable()).thenAnswer(
         (_) async => const Failure(
           StartupServiceFailure(message: 'Test error'),
@@ -244,6 +279,34 @@ void main() {
 
       provider.clearError();
       check(provider.lastError).isNull();
+    });
+
+    test('should set startupServiceUnavailable when service is null', () async {
+      final provider = SystemSettingsProvider(prefs);
+
+      await provider.openStartupSettings();
+
+      check(provider.lastError).isNotNull();
+      check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupServiceUnavailable);
+    });
+
+    test('should set startupOpenSystemSettingsFailed when openSystemSettings fails', () async {
+      when(() => mockStartupService.openSystemSettings()).thenAnswer(
+        (_) async => const Failure(
+          StartupServiceFailure(message: 'Cannot launch shell'),
+        ),
+      );
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.openStartupSettings();
+
+      check(provider.lastError).isNotNull();
+      check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupOpenSystemSettingsFailed);
+      check(provider.lastError!.detail!).equals('Cannot launch shell');
     });
 
     test(
