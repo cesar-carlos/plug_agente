@@ -1197,6 +1197,10 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 - `enableClientTokenAuthorization`: default **true**. Quando ativo, token vazio ou ausente retorna `-32001` (authentication failed) ou `-32002` (unauthorized).
 
+### Resposta em caso de negacao de autorizacao
+
+- Em `error.data` (codigo `-32002` / `unauthorized`), alem de `resource` (primeiro recurso negado, compatibilidade), o agente envia `denied_resources`: lista ordenada de nomes normalizados de tabelas/views sem permissao para a operacao naquela instrucao SQL. O campo `user_message` descreve a operacao e cita os recursos para facilitar pedidos de liberacao.
+
 ## Observabilidade de autorizacao (implementado)
 
 - Coleta de metricas de autorizacao em memoria (allow/deny, por operacao, recurso e motivo).

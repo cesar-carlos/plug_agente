@@ -264,9 +264,12 @@ void main() {
           data['type'],
           equals('https://plugdb.dev/problems/database-error'),
         );
-        expect(data['user_message'], equals(
-          'O agente esta sem conexoes livres no momento.',
-        ));
+        expect(
+          data['user_message'],
+          equals(
+            'O agente esta sem conexoes livres no momento.',
+          ),
+        );
       },
     );
 
@@ -278,8 +281,7 @@ void main() {
           context: {
             'connectionFailed': true,
             'reason': 'server_unreachable',
-            'user_message':
-                'Nao foi possivel conectar ao servidor do banco. Verifique host, porta, VPN.',
+            'user_message': 'Nao foi possivel conectar ao servidor do banco. Verifique host, porta, VPN.',
           },
         );
 
@@ -365,6 +367,35 @@ void main() {
 
         expect(rpcError.code, equals(RpcErrorCode.internalError));
         expect(data['reason'], equals('resource_not_found'));
+      },
+    );
+
+    test(
+      'should pass denied_resources list through for ConfigurationFailure authorization',
+      () {
+        final failure = ConfigurationFailure.withContext(
+          message: 'Authorization denied for read on a, b',
+          context: {
+            'authorization': true,
+            'reason': 'missing_permission',
+            'operation': 'read',
+            'resource': 'a',
+            'denied_resources': <String>['a', 'b'],
+            'user_message': 'Acesso negado nos recursos: a, b',
+          },
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
+
+        expect(rpcError.code, equals(RpcErrorCode.unauthorized));
+        final denied = data['denied_resources'];
+        expect(denied, isA<List<dynamic>>());
+        expect(
+          (denied as List<dynamic>).map((e) => e as String).toList(),
+          equals(<String>['a', 'b']),
+        );
+        expect(data['user_message'], equals('Acesso negado nos recursos: a, b'));
       },
     );
   });

@@ -46,9 +46,9 @@ class AuthorizationDecisionLogger {
       return;
     }
 
-    final isAuthRelevantMethod = request.method.startsWith('sql.') ||
-        (request.method == 'client_token.getPolicy' &&
-            _featureFlags.enableClientTokenPolicyIntrospection);
+    final isAuthRelevantMethod =
+        request.method.startsWith('sql.') ||
+        (request.method == 'client_token.getPolicy' && _featureFlags.enableClientTokenPolicyIntrospection);
     if (!isAuthRelevantMethod) {
       return;
     }
@@ -92,6 +92,7 @@ class AuthorizationDecisionLogger {
         'client_id': errorData['client_id'],
         'operation': errorData['operation'],
         'resource': errorData['resource'],
+        'denied_resources': errorData['denied_resources'],
       });
       payload.removeWhere((key, value) => value == null);
     }

@@ -77,9 +77,71 @@ void main() {
         (failure) {
           final authFailure = failure as ConfigurationFailure;
           expect(authFailure.context['reason'], equals('missing_permission'));
+          expect(
+            authFailure.context['denied_resources'],
+            equals(<String>['dbo.users']),
+          );
+          expect(authFailure.context['resource'], equals('dbo.users'));
+          final um = authFailure.context['user_message'] as String?;
+          expect(um, isNotNull);
+          expect(um, contains('dbo.users'));
         },
       );
     });
+
+    test(
+      'should list all denied resources when multiple tables lack permission',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildNoAccessPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as ConfigurationFailure;
+            final denied = f.context['denied_resources'] as List<dynamic>?;
+            expect(denied, isNotNull);
+            expect(denied!.map((e) => e as String).toList(), hasLength(2));
+            final names = denied.map((e) => e as String).toList()..sort();
+            expect(names, equals(['dbo.orders', 'dbo.users']));
+          },
+        );
+      },
+    );
+
+    test(
+      'should list only resources denied in a join when one table is allowed',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id',
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as ConfigurationFailure;
+            expect(
+              f.context['denied_resources'],
+              equals(<String>['dbo.orders']),
+            );
+            expect(f.context['resource'], equals('dbo.orders'));
+          },
+        );
+      },
+    );
 
     test('should reuse cached decision and avoid resolver call', () async {
       when(
@@ -208,5 +270,15 @@ ClientTokenPolicy _buildReadOnlyPolicy() {
         effect: ClientTokenRuleEffect.allow,
       ),
     ],
+  );
+}
+
+ClientTokenPolicy _buildNoAccessPolicy() {
+  return const ClientTokenPolicy(
+    clientId: 'client-acme',
+    allTables: false,
+    allViews: false,
+    allPermissions: false,
+    rules: <ClientTokenRule>[],
   );
 }

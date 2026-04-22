@@ -1,11 +1,14 @@
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:result_dart/result_dart.dart';
+
+const int _kMaxResourceNamesInTechnicalMessage = 20;
 
 class AuthorizeSqlOperation {
   AuthorizeSqlOperation(
@@ -34,7 +37,8 @@ class AuthorizeSqlOperation {
     return classificationResult.fold(
       (classification) async {
         final tokenHash = hashClientCredentialToken(token);
-        final decisionKeys = classification.resources
+        final resources = classification.resources;
+        final decisionKeys = resources
             .map(
               (resource) => _decisionCacheKey(
                 tokenHash: tokenHash,
@@ -44,31 +48,72 @@ class AuthorizeSqlOperation {
             )
             .toList(growable: false);
 
-        final phase = _resolveDecisionCachePhase(
-          keys: decisionKeys,
-          operation: classification.operation.name,
-          resources: classification.resources.map((r) => r.normalizedName),
-        );
+        final cache = _decisionCache;
+        final missIndices = <int>[];
+        final deniedNames = <String>{};
+        final reasonByDeniedName = <String, String>{};
+        String? clientIdFromCache;
 
-        if (phase.fastFailure != null) {
-          return Failure(phase.fastFailure!);
-        }
-        if (phase.allSatisfiedByCache) {
-          return const Success(unit);
+        for (var i = 0; i < resources.length; i++) {
+          final name = resources[i].normalizedName;
+          if (cache == null) {
+            missIndices.add(i);
+            continue;
+          }
+          final entry = cache.get(decisionKeys[i]);
+          _cacheMetrics?.recordDecisionCacheLookup(hit: entry != null);
+          if (entry == null) {
+            missIndices.add(i);
+            continue;
+          }
+          if (entry.allowed) {
+            continue;
+          }
+          deniedNames.add(name);
+          if (clientIdFromCache == null && entry.clientId != null && entry.clientId!.isNotEmpty) {
+            clientIdFromCache = entry.clientId;
+          }
+          _recordReasonForName(
+            reasonByDeniedName: reasonByDeniedName,
+            name: name,
+            reason: entry.reason ?? 'missing_permission',
+          );
         }
 
-        final pendingIndices = phase.pendingIndices!;
+        if (missIndices.isEmpty) {
+          if (deniedNames.isEmpty) {
+            return const Success(unit);
+          }
+          return Failure(
+            _buildAuthorizationFailure(
+              classification: classification,
+              policy: null,
+              deniedNames: deniedNames,
+              reasonByDeniedName: reasonByDeniedName,
+              clientIdFromCache: clientIdFromCache,
+            ),
+          );
+        }
 
         final policyResult = await _tokenValidationService.validate(token);
         return policyResult.fold(
-          (policy) async {
-            for (final i in pendingIndices) {
-              final resource = classification.resources[i];
+          (policy) {
+            for (final i in missIndices) {
+              final resource = resources[i];
               final allowed = policy.isAllowed(
                 operation: classification.operation,
                 resource: resource,
               );
-              if (!allowed) {
+              if (allowed) {
+                _cacheDecision(
+                  key: decisionKeys[i],
+                  allowed: true,
+                  clientId: policy.clientId,
+                  requestId: requestId,
+                  method: method,
+                );
+              } else {
+                final name = resource.normalizedName;
                 final reason = policy.isRevoked ? 'token_revoked' : 'missing_permission';
                 _cacheDecision(
                   key: decisionKeys[i],
@@ -78,41 +123,30 @@ class AuthorizeSqlOperation {
                   requestId: requestId,
                   method: method,
                 );
-                final userMessage = policy.isRevoked
-                    ? 'Token revogado. Gere um novo token para continuar.'
-                    : 'Seu cliente nao possui permissao para '
-                          '${_operationLabel(classification.operation)} '
-                          'neste recurso.';
-                return Failure(
-                  domain.ConfigurationFailure.withContext(
-                    message:
-                        'Authorization denied for '
-                        '${classification.operation.name} '
-                        'on ${resource.normalizedName}',
-                    context: {
-                      'authorization': true,
-                      'reason': reason,
-                      'client_id': policy.clientId,
-                      'operation': classification.operation.name,
-                      'resource': resource.normalizedName,
-                      'user_message': userMessage,
-                    },
-                  ),
+                deniedNames.add(name);
+                _recordReasonForName(
+                  reasonByDeniedName: reasonByDeniedName,
+                  name: name,
+                  reason: reason,
                 );
               }
-              _cacheDecision(
-                key: decisionKeys[i],
-                allowed: true,
-                clientId: policy.clientId,
-                requestId: requestId,
-                method: method,
-              );
             }
-            return const Success(unit);
+            if (deniedNames.isEmpty) {
+              return const Success(unit);
+            }
+            return Failure(
+              _buildAuthorizationFailure(
+                classification: classification,
+                policy: policy,
+                deniedNames: deniedNames,
+                reasonByDeniedName: reasonByDeniedName,
+                clientIdFromCache: clientIdFromCache,
+              ),
+            );
           },
           (failure) {
             final error = failure as domain.Failure;
-            for (final i in pendingIndices) {
+            for (final i in missIndices) {
               _cacheDecision(
                 key: decisionKeys[i],
                 allowed: false,
@@ -143,49 +177,107 @@ class AuthorizeSqlOperation {
     );
   }
 
-  _DecisionCachePhase _resolveDecisionCachePhase({
-    required List<String> keys,
-    required String operation,
-    required Iterable<String> resources,
+  void _recordReasonForName({
+    required Map<String, String> reasonByDeniedName,
+    required String name,
+    required String reason,
   }) {
-    final cache = _decisionCache;
-    if (cache == null || keys.isEmpty) {
-      return _DecisionCachePhase.needsCheck(
-        List<int>.generate(keys.length, (i) => i),
-      );
+    final existing = reasonByDeniedName[name];
+    if (existing == 'token_revoked' || reason == 'token_revoked') {
+      reasonByDeniedName[name] = 'token_revoked';
+      return;
     }
+    if (existing == null) {
+      reasonByDeniedName[name] = reason;
+    }
+  }
 
-    final resourceList = resources.toList(growable: false);
-    final pending = <int>[];
+  domain.ConfigurationFailure _buildAuthorizationFailure({
+    required SqlOperationClassification classification,
+    required ClientTokenPolicy? policy,
+    required Set<String> deniedNames,
+    required Map<String, String> reasonByDeniedName,
+    String? clientIdFromCache,
+  }) {
+    final sorted = deniedNames.toList()..sort();
+    final topReason = _resolveTopLevelReason(
+      reasonByDeniedName: reasonByDeniedName,
+      policy: policy,
+    );
+    final clientId = _resolveClientId(
+      policy: policy,
+      clientIdFromCache: clientIdFromCache,
+    );
+    final opName = classification.operation.name;
+    final resourceList = _formatNameListForMessage(sorted);
+    final userMessage = topReason == 'token_revoked'
+        ? 'Token revogado. Gere um novo token para continuar. '
+              'Recursos na consulta: $resourceList.'
+        : 'Acesso negado para ${_operationLabel(classification.operation)} '
+              'nos recursos: $resourceList.';
 
-    for (var i = 0; i < keys.length; i++) {
-      final entry = cache.get(keys[i]);
-      _cacheMetrics?.recordDecisionCacheLookup(hit: entry != null);
-      if (entry == null) {
-        pending.add(i);
-        continue;
+    return domain.ConfigurationFailure.withContext(
+      message: _formatTechnicalMessage(
+        operation: opName,
+        resourceNames: sorted,
+      ),
+      context: {
+        'authorization': true,
+        'reason': topReason,
+        'client_id': ?clientId,
+        'operation': opName,
+        'resource': sorted.first,
+        'denied_resources': sorted,
+        'user_message': userMessage,
+      },
+    );
+  }
+
+  String _resolveTopLevelReason({
+    required Map<String, String> reasonByDeniedName,
+    required ClientTokenPolicy? policy,
+  }) {
+    if (policy != null && policy.isRevoked) {
+      return 'token_revoked';
+    }
+    for (final r in reasonByDeniedName.values) {
+      if (r == 'token_revoked') {
+        return 'token_revoked';
       }
-      if (!entry.allowed) {
-        final resource = resourceList[i];
-        return _DecisionCachePhase.denied(
-          domain.ConfigurationFailure.withContext(
-            message: 'Authorization denied for $operation on $resource',
-            context: {
-              'authorization': true,
-              'reason': entry.reason ?? 'missing_permission',
-              if (entry.clientId != null) 'client_id': entry.clientId,
-              'operation': operation,
-              'resource': resource,
-            },
-          ),
-        );
-      }
     }
+    return 'missing_permission';
+  }
 
-    if (pending.isEmpty) {
-      return _DecisionCachePhase.allCachedAllowed();
+  String? _resolveClientId({
+    required ClientTokenPolicy? policy,
+    String? clientIdFromCache,
+  }) {
+    if (policy != null && policy.clientId.isNotEmpty) {
+      return policy.clientId;
     }
-    return _DecisionCachePhase.needsCheck(pending);
+    if (clientIdFromCache != null && clientIdFromCache.isNotEmpty) {
+      return clientIdFromCache;
+    }
+    return null;
+  }
+
+  String _formatNameListForMessage(List<String> sorted) {
+    return sorted.map((e) => e).join(', ');
+  }
+
+  String _formatTechnicalMessage({
+    required String operation,
+    required List<String> resourceNames,
+  }) {
+    if (resourceNames.isEmpty) {
+      return 'Authorization denied for $operation';
+    }
+    if (resourceNames.length <= _kMaxResourceNamesInTechnicalMessage) {
+      return 'Authorization denied for $operation on ${resourceNames.join(', ')}';
+    }
+    final head = resourceNames.take(_kMaxResourceNamesInTechnicalMessage).join(', ');
+    final rest = resourceNames.length - _kMaxResourceNamesInTechnicalMessage;
+    return 'Authorization denied for $operation on $head (+$rest more)';
   }
 
   void _cacheDecision({
@@ -228,23 +320,4 @@ class AuthorizeSqlOperation {
       SqlOperation.delete => 'excluir',
     };
   }
-}
-
-class _DecisionCachePhase {
-  _DecisionCachePhase._({
-    this.fastFailure,
-    this.allSatisfiedByCache = false,
-    this.pendingIndices,
-  });
-
-  factory _DecisionCachePhase.denied(domain.ConfigurationFailure failure) =>
-      _DecisionCachePhase._(fastFailure: failure);
-
-  factory _DecisionCachePhase.allCachedAllowed() => _DecisionCachePhase._(allSatisfiedByCache: true);
-
-  factory _DecisionCachePhase.needsCheck(List<int> indices) => _DecisionCachePhase._(pendingIndices: indices);
-
-  final domain.ConfigurationFailure? fastFailure;
-  final bool allSatisfiedByCache;
-  final List<int>? pendingIndices;
 }

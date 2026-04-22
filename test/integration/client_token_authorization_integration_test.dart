@@ -225,6 +225,11 @@ void main() {
       final data = response.error!.data as Map<String, dynamic>;
       check(data['reason']).equals('unauthorized');
       check(data['odbc_reason']).equals('missing_permission');
+      final denied = data['denied_resources'] as List<dynamic>?;
+      check(denied).isNotNull();
+      check(denied!.length).equals(1);
+      check((denied[0] as String)).equals('dbo.other_table');
+      check(data['resource']).equals('dbo.other_table');
       check(authMetrics.getSummary().totalAuthorized).equals(0);
       check(authMetrics.getSummary().totalDenied).equals(1);
     });
@@ -282,6 +287,10 @@ void main() {
       final data = response.error!.data as Map<String, dynamic>;
       check(data['reason']).equals('unauthorized');
       check(data['odbc_reason']).equals('token_revoked');
+      final dr = data['denied_resources'] as List<dynamic>?;
+      check(dr).isNotNull();
+      check(dr!.length).equals(1);
+      check((dr[0] as String)).equals('dbo.users');
     });
 
     test('should skip auth when feature flag is disabled', () async {

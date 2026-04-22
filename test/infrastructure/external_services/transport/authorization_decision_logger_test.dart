@@ -29,10 +29,10 @@ void main() {
   });
 
   RpcRequest sqlRequest({String id = 'req-1'}) => RpcRequest(
-        jsonrpc: '2.0',
-        method: 'sql.execute',
-        id: id,
-      );
+    jsonrpc: '2.0',
+    method: 'sql.execute',
+    id: id,
+  );
 
   group('log - happy paths', () {
     test('logs authorization.allowed for successful sql.* response', () {
@@ -123,7 +123,11 @@ void main() {
 
       logger.resetSessionState();
 
-      logger.log(request: sqlRequest(id: 'req-2'), response: errorResponse, clientToken: 'tok');
+      logger.log(
+        request: sqlRequest(id: 'req-2'),
+        response: errorResponse,
+        clientToken: 'tok',
+      );
       expect(refreshCalls, 2);
     });
   });
@@ -161,6 +165,31 @@ void main() {
       logger.log(request: sqlRequest(), response: response, clientToken: 'tok');
 
       expect(refreshCalls, 0);
+    });
+
+    test('includes denied_resources in authorization.denied payload when present', () {
+      final response = RpcResponse.error(
+        id: 'req-1',
+        error: const RpcError(
+          code: RpcErrorCode.unauthorized,
+          message: 'Unauthorized',
+          data: {
+            'reason': 'unauthorized',
+            'resource': 'dbo.t1',
+            'denied_resources': <String>['dbo.t1', 'dbo.t2'],
+          },
+        ),
+      );
+
+      logger.log(request: sqlRequest(), response: response, clientToken: 'tok');
+
+      final denied = logs.singleWhere((l) => l.event == 'authorization.denied');
+      final data = denied.data as Map<String, dynamic>;
+      expect(
+        (data['denied_resources'] as List<dynamic>).map((e) => e as String).toList(),
+        equals(<String>['dbo.t1', 'dbo.t2']),
+      );
+      expect(data['resource'], equals('dbo.t1'));
     });
   });
 }
