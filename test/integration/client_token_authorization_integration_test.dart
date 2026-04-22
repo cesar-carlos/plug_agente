@@ -228,7 +228,7 @@ void main() {
       final denied = data['denied_resources'] as List<dynamic>?;
       check(denied).isNotNull();
       check(denied!.length).equals(1);
-      check((denied[0] as String)).equals('dbo.other_table');
+      check(denied[0] as String).equals('dbo.other_table');
       check(data['resource']).equals('dbo.other_table');
       check(authMetrics.getSummary().totalAuthorized).equals(0);
       check(authMetrics.getSummary().totalDenied).equals(1);
@@ -290,7 +290,7 @@ void main() {
       final dr = data['denied_resources'] as List<dynamic>?;
       check(dr).isNotNull();
       check(dr!.length).equals(1);
-      check((dr[0] as String)).equals('dbo.users');
+      check(dr[0] as String).equals('dbo.users');
     });
 
     test('should skip auth when feature flag is disabled', () async {
