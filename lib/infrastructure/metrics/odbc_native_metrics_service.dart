@@ -55,6 +55,7 @@ class OdbcNativeMetricsService {
     final nativePoolSnapshot = await _collectNativePoolSnapshot(
       resolvedConnectionString,
     );
+    final appPoolSnapshot = await _collectAppPoolSnapshot();
 
     return Success(<String, dynamic>{
       'engine': <String, dynamic>{
@@ -79,6 +80,7 @@ class OdbcNativeMetricsService {
       },
       'connection': validationSnapshot,
       'driver_capabilities': capabilitiesSnapshot,
+      'app_pool': appPoolSnapshot,
       'native_pool': nativePoolSnapshot,
     });
   }
@@ -159,6 +161,25 @@ class OdbcNativeMetricsService {
     final stateResult = await pool.getDetailedState(connectionString);
     return stateResult.fold(
       (state) => <String, dynamic>{...state},
+      (error) => <String, dynamic>{
+        'available': false,
+        'error': error.toString(),
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _collectAppPoolSnapshot() async {
+    final pool = _connectionPool;
+    if (pool == null) {
+      return const <String, dynamic>{'available': false};
+    }
+
+    final activeResult = await pool.getActiveCount();
+    return activeResult.fold(
+      (active) => <String, dynamic>{
+        'available': true,
+        'active_connections': active,
+      },
       (error) => <String, dynamic>{
         'available': false,
         'error': error.toString(),

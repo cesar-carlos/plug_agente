@@ -4,12 +4,15 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockOdbcService extends Mock implements OdbcService {}
 
 class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
+
+class MockConnectionPool extends Mock implements IConnectionPool {}
 
 void main() {
   group('OdbcNativeMetricsService', () {
@@ -94,6 +97,7 @@ void main() {
       expect(snapshot['prepared_statements'], isA<Map<String, dynamic>>());
       expect(snapshot['connection'], isA<Map<String, dynamic>>());
       expect(snapshot['driver_capabilities'], isA<Map<String, dynamic>>());
+      expect(snapshot['app_pool'], isA<Map<String, dynamic>>());
       final engine = snapshot['engine'] as Map<String, dynamic>;
       final prepared = snapshot['prepared_statements'] as Map<String, dynamic>;
       final connection = snapshot['connection'] as Map<String, dynamic>;
@@ -104,6 +108,48 @@ void main() {
       expect(prepared['cache_hit_rate'], closeTo(80.0, 0.0001));
       expect(connection['valid'], isTrue);
       expect(capabilities['supports_pooling'], isTrue);
+    });
+
+    test('should include app pool active connection count when pool is provided', () async {
+      final pool = MockConnectionPool();
+      service = OdbcNativeMetricsService(
+        mockService,
+        connectionPool: pool,
+      );
+      when(() => mockService.getMetrics()).thenAnswer(
+        (_) async => const Success(
+          OdbcMetrics(
+            queryCount: 1,
+            errorCount: 0,
+            uptimeSecs: 10,
+            totalLatencyMillis: 5,
+            avgLatencyMillis: 5,
+          ),
+        ),
+      );
+      when(() => mockService.getPreparedStatementsMetrics()).thenAnswer(
+        (_) async => const Success(
+          PreparedStatementMetrics(
+            cacheSize: 0,
+            cacheMaxSize: 16,
+            cacheHits: 0,
+            cacheMisses: 0,
+            totalPrepares: 0,
+            totalExecutions: 0,
+            memoryUsageBytes: 0,
+            avgExecutionsPerStmt: 0,
+          ),
+        ),
+      );
+      when(pool.getActiveCount).thenAnswer((_) async => const Success(3));
+
+      final result = await service.collectSnapshot();
+
+      expect(result.isSuccess(), isTrue);
+      final snapshot = result.getOrThrow();
+      final appPool = snapshot['app_pool'] as Map<String, dynamic>;
+      expect(appPool['available'], isTrue);
+      expect(appPool['active_connections'], 3);
     });
 
     test('should return typed failure when getMetrics fails', () async {

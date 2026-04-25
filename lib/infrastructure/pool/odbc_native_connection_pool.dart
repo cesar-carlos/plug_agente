@@ -5,15 +5,21 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Pool ODBC usando pool nativo do `odbc_fast` (conexões do pool não recebem
 /// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
 /// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
 class OdbcNativeConnectionPool implements IConnectionPool {
-  OdbcNativeConnectionPool(this._service, this._settings);
+  OdbcNativeConnectionPool(
+    this._service,
+    this._settings, {
+    MetricsCollector? metricsCollector,
+  }) : _metrics = metricsCollector;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final MetricsCollector? _metrics;
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
@@ -35,6 +41,14 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     }
 
     return '$connectionString;PoolTestOnCheckout=false';
+  }
+
+  PoolOptions get _poolOptions {
+    return const PoolOptions(
+      idleTimeout: ConnectionConstants.defaultNativePoolIdleTimeout,
+      maxLifetime: ConnectionConstants.defaultNativePoolMaxLifetime,
+      connectionTimeout: ConnectionConstants.defaultNativePoolConnectionTimeout,
+    );
   }
 
   Future<Result<int>> _getOrCreatePool(String connectionString) async {
@@ -99,6 +113,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     final poolResult = await _service.poolCreate(
       _poolConnectionString(connectionString),
       _settings.poolSize,
+      options: _poolOptions,
     );
 
     return poolResult.fold(
@@ -159,10 +174,31 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     return result.fold(
       (_) => const Success(unit),
       (error) => Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: 'pool_release',
-        ),
+        () {
+          _metrics?.recordPoolReleaseFailure();
+          return OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_release',
+          );
+        }(),
+      ),
+    );
+  }
+
+  @override
+  Future<Result<void>> discard(String connectionId) async {
+    final result = await _service.disconnect(connectionId);
+
+    return result.fold(
+      (_) => const Success(unit),
+      (error) => Failure(
+        () {
+          _metrics?.recordPoolReleaseFailure();
+          return OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_discard',
+          );
+        }(),
       ),
     );
   }
@@ -206,6 +242,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     if (poolId == null) {
       return const Success(unit);
     }
+    _metrics?.recordPoolRecycle();
 
     developer.log(
       'Recycling pool for connection',
@@ -217,10 +254,13 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     return closeResult.fold(
       (_) => const Success(unit),
       (error) => Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: 'pool_recycle',
-        ),
+        () {
+          _metrics?.recordPoolRecycleFailure();
+          return OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_recycle',
+          );
+        }(),
       ),
     );
   }
@@ -231,12 +271,17 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     for (final poolId in _pools.values) {
       final stateResult = await _service.poolGetState(poolId);
-      stateResult.fold(
-        (state) {
-          totalActive += state.size - state.idle;
-        },
-        (_) {},
-      );
+      if (stateResult.isError()) {
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
+            stateResult.exceptionOrNull()!,
+            operation: 'pool_get_active_count',
+          ),
+        );
+      }
+
+      final state = stateResult.getOrThrow();
+      totalActive += state.size - state.idle;
     }
 
     return Success(totalActive);

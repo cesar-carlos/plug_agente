@@ -47,6 +47,12 @@ void main() {
         metrics,
         mockSettings,
       );
+      when(() => mockConnectionPool.discard(any())).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConnectionPool.getActiveCount()).thenAnswer((_) async {
+        return const Success(1);
+      });
     });
 
     test(
@@ -134,7 +140,7 @@ void main() {
           () => mockService.connect(any(), options: any(named: 'options')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
-        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
@@ -1349,9 +1355,14 @@ void main() {
             ),
           );
         });
-        when(() => mockService.beginTransaction(ownedId)).thenAnswer((
-          _,
-        ) async {
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
           return const Success(1);
         });
         when(
@@ -1382,13 +1393,24 @@ void main() {
         final result = await gateway.executeBatch(
           config.agentId,
           const [SqlCommand(sql: 'SELECT 1')],
-          options: const SqlExecutionOptions(transaction: true),
+          options: const SqlExecutionOptions(
+            transaction: true,
+            timeoutMs: 1200,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
         verifyNever(() => mockConnectionPool.acquire(any()));
         verify(
           () => mockService.connect(any(), options: any(named: 'options')),
+        ).called(1);
+        verify(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: SavepointDialect.auto,
+            accessMode: TransactionAccessMode.readWrite,
+            lockTimeout: const Duration(milliseconds: 1200),
+          ),
         ).called(1);
         verify(() => mockService.disconnect(ownedId)).called(1);
         expect(metrics.transactionalBatchDirectPathCount, 1);
@@ -1421,7 +1443,14 @@ void main() {
             ),
           );
         });
-        when(() => mockService.beginTransaction(ownedId)).thenAnswer((_) async {
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
           return const Success(1);
         });
         when(
@@ -1501,6 +1530,69 @@ void main() {
     );
 
     test(
+      'should rollback transactional batch when execution throws unexpectedly',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const ownedId = 'owned-throw-1';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(99);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: ownedId,
+          ),
+        ).thenThrow(StateError('driver panic'));
+        when(() => mockService.rollbackTransaction(ownedId, 99)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'SELECT 1')],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        expect(failure, isA<domain.QueryExecutionFailure>());
+        verify(() => mockService.rollbackTransaction(ownedId, 99)).called(1);
+        verify(() => mockService.disconnect(ownedId)).called(1);
+        expect(metrics.transactionRollbackAttemptCount, 1);
+      },
+    );
+
+    test(
       'should return timeout failure and release pooled connection after best-effort cancel',
       () async {
         const pooledConnectionId = 'pool-timeout-1';
@@ -1556,9 +1648,8 @@ void main() {
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
-        verify(() => mockService.disconnect(pooledConnectionId)).called(1);
-        verify(() => mockConnectionPool.recycle(connectionString)).called(1);
-        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verifyNever(() => mockConnectionPool.recycle(connectionString));
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
       },
     );
 
@@ -1596,14 +1687,11 @@ void main() {
             QueryResult(columns: ['id'], rows: [], rowCount: 0),
           );
         });
-        when(() => mockService.disconnect(pooledConnectionId)).thenAnswer((_) async {
-          return Failure(Exception('disconnect failed'));
-        });
         when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
-          return const Success(unit);
+        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+          return Failure(Exception('discard failed'));
         });
 
         final result = await gateway.executeQuery(
@@ -1617,10 +1705,10 @@ void main() {
         final queryFailure = failure! as domain.QueryExecutionFailure;
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
-        expect(metrics.timeoutCancelFailureCount, 1);
-        verify(() => mockService.disconnect(pooledConnectionId)).called(1);
-        verify(() => mockConnectionPool.recycle(connectionString)).called(1);
-        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        expect(metrics.timeoutCancelSuccessCount, 1);
+        expect(metrics.poolReleaseFailureCount, 1);
+        verifyNever(() => mockConnectionPool.recycle(connectionString));
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
       },
     );
 

@@ -91,6 +91,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
@@ -197,6 +198,13 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton(
+      () => DirectOdbcConnectionLimiter(
+        maxConcurrent: getIt<IOdbcConnectionSettings>().poolSize,
+        acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
+        metricsCollector: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => OdbcNativeMetricsService(
         getIt<odbc.OdbcService>(),
         configRepository: getIt<IAgentConfigRepository>(),
@@ -290,12 +298,15 @@ void registerPlugDependencyGraph(
         getIt<MetricsCollector>(),
         getIt<IOdbcConnectionSettings>(),
         featureFlags: getIt<FeatureFlags>(),
+        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
       ),
     )
     ..registerLazySingleton<IStreamingDatabaseGateway>(
       () => OdbcStreamingGateway(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
+        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        metricsCollector: getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)

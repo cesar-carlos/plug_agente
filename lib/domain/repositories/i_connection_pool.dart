@@ -5,8 +5,17 @@ abstract class IConnectionPool {
   /// Adquire uma conexão do pool ou cria uma nova se necessário.
   Future<Result<String>> acquire(String connectionString);
 
-  /// Libera uma conexão de volta para o pool (não desconecta).
+  /// Libera uma conexão.
+  ///
+  /// A implementação nativa devolve o handle ao pool; a implementação por lease
+  /// encerra a conexão física antes de liberar a vaga local.
   Future<Result<void>> release(String connectionId);
+
+  /// Descarta uma conexão que não deve voltar ao pool.
+  ///
+  /// Use quando timeout, cancelamento ou erro de handle deixa a conexão em
+  /// estado incerto. Implementações devem liberar qualquer vaga local associada.
+  Future<Result<void>> discard(String connectionId);
 
   /// Fecha todas as conexões do pool.
   Future<Result<void>> closeAll();

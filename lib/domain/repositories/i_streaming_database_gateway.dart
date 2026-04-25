@@ -21,12 +21,15 @@ abstract class IStreamingDatabaseGateway {
     Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     int fetchSize,
     int chunkSizeBytes,
+    String? executionId,
+    Duration? queryTimeout,
   });
 
   /// Cancela o streaming ativo no runtime ODBC.
   ///
   /// Deve interromper a operação em andamento e liberar recursos.
   Future<Result<void>> cancelActiveStream({
+    String? executionId,
     StreamingCancelReason reason = StreamingCancelReason.user,
   });
 }

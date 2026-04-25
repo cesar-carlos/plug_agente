@@ -107,7 +107,7 @@ dependencies:
 
   # HTTP Client
   dio: ^5.4.0
-  odbc_fast: ^1.2.1
+  odbc_fast: ^3.5.4
   google_fonts: ^8.0.2
 
 dev_dependencies:

@@ -25,6 +25,16 @@ class OdbcConnectionOptionsBuilder {
 
   /// Options for pooled / standard query execution (matches gateway defaults).
   static ConnectionOptions forQueryExecution(IOdbcConnectionSettings settings) {
+    return forQueryExecutionWithTimeout(
+      settings,
+      queryTimeout: ConnectionConstants.defaultQueryTimeout,
+    );
+  }
+
+  static ConnectionOptions forQueryExecutionWithTimeout(
+    IOdbcConnectionSettings settings, {
+    required Duration queryTimeout,
+  }) {
     final mb = clampedMaxResultBufferMb(settings);
     final maxBytes = mb * 1024 * 1024;
     final initialBytes = min(
@@ -33,7 +43,7 @@ class OdbcConnectionOptionsBuilder {
     );
     return ConnectionOptions(
       loginTimeout: Duration(seconds: settings.loginTimeoutSeconds),
-      queryTimeout: ConnectionConstants.defaultQueryTimeout,
+      queryTimeout: queryTimeout,
       maxResultBufferBytes: maxBytes,
       initialResultBufferBytes: initialBytes,
       autoReconnectOnConnectionLost: true,

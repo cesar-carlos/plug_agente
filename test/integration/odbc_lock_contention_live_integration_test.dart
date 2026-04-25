@@ -136,6 +136,9 @@ void main() async {
           );
           final healthyResult = await h.gateway.executeQuery(healthyQuery);
           expect(healthyResult.isSuccess(), isTrue, reason: '$healthyResult');
+          final activeAfterContention = await h.connectionPool.getActiveCount();
+          expect(activeAfterContention.isSuccess(), isTrue, reason: '$activeAfterContention');
+          expect(activeAfterContention.getOrThrow(), 0);
         } finally {
           await service.rollbackTransaction(holderConn.id, txId);
           await service.disconnect(holderConn.id);
@@ -163,6 +166,9 @@ void main() async {
         for (final result in results) {
           expect(result.isSuccess(), isTrue, reason: '$result');
         }
+        final activeAfterParallel = await h.connectionPool.getActiveCount();
+        expect(activeAfterParallel.isSuccess(), isTrue, reason: '$activeAfterParallel');
+        expect(activeAfterParallel.getOrThrow(), 0);
       },
       skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
     );

@@ -1,4 +1,4 @@
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 
 import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';

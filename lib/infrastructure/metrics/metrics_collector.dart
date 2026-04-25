@@ -15,10 +15,16 @@ class MetricsCollector implements IMetricsCollector {
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
   static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
   static const String _transactionRollbackFailureCounter = 'transaction_rollback_failure';
+  static const String _transactionRollbackAttemptCounter = 'transaction_rollback_attempt';
   static const String _idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
   static const String _multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
   static const String _multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';
   static const String _transactionalBatchDirectPathCounter = 'transactional_batch_direct_path';
+  static const String _directConnectionFallbackCounter = 'direct_connection_fallback';
+  static const String _directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
+  static const String _poolReleaseFailureCounter = 'pool_release_failure';
+  static const String _poolRecycleCounter = 'pool_recycle';
+  static const String _poolRecycleFailureCounter = 'pool_recycle_failure';
   static const String _authDecisionCacheHitCounter = 'auth_decision_cache_hit';
   static const String _authDecisionCacheMissCounter = 'auth_decision_cache_miss';
   static const String _authPolicyCacheHitCounter = 'auth_policy_cache_hit';
@@ -53,12 +59,18 @@ class MetricsCollector implements IMetricsCollector {
   static const String _connectTimeoutCounter = 'connect_timeout';
   static const String _queryTimeoutCounter = 'query_timeout';
   static const String _preparedStatementReuseCounter = 'prepared_statement_reuse';
+  static const String _streamCancelRequestCounter = 'stream_cancel_request';
+  static const String _streamCancelBackpressureCounter = 'stream_cancel_backpressure';
+  static const String _streamCancelDisconnectFailureCounter = 'stream_cancel_disconnect_failure';
+  static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
 
   static const int _maxMetrics = 10000;
 
   final List<QueryMetrics> _metrics = [];
   final _metricsController = StreamController<QueryMetrics>.broadcast();
   final Map<String, int> _eventCounters = <String, int>{};
+  int _activeDirectConnections = 0;
+  int _maxActiveDirectConnections = 0;
 
   @override
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
@@ -71,10 +83,18 @@ class MetricsCollector implements IMetricsCollector {
   int get timeoutCancelSuccessCount => _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
   int get timeoutCancelFailureCount => _eventCounters[_timeoutCancelFailureCounter] ?? 0;
   int get transactionRollbackFailureCount => _eventCounters[_transactionRollbackFailureCounter] ?? 0;
+  int get transactionRollbackAttemptCount => _eventCounters[_transactionRollbackAttemptCounter] ?? 0;
   int get idempotencyFingerprintMismatchCount => _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
   int get multiResultPoolVacuousFallbackCount => _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
   int get multiResultDirectStillVacuousCount => _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
   int get transactionalBatchDirectPathCount => _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
+  int get directConnectionFallbackCount => _eventCounters[_directConnectionFallbackCounter] ?? 0;
+  int get directConnectionAcquireTimeoutCount => _eventCounters[_directConnectionAcquireTimeoutCounter] ?? 0;
+  int get activeDirectConnections => _activeDirectConnections;
+  int get maxActiveDirectConnections => _maxActiveDirectConnections;
+  int get poolReleaseFailureCount => _eventCounters[_poolReleaseFailureCounter] ?? 0;
+  int get poolRecycleCount => _eventCounters[_poolRecycleCounter] ?? 0;
+  int get poolRecycleFailureCount => _eventCounters[_poolRecycleFailureCounter] ?? 0;
   int get authDecisionCacheHitCount => _eventCounters[_authDecisionCacheHitCounter] ?? 0;
   int get authDecisionCacheMissCount => _eventCounters[_authDecisionCacheMissCounter] ?? 0;
   int get authPolicyCacheHitCount => _eventCounters[_authPolicyCacheHitCounter] ?? 0;
@@ -95,6 +115,10 @@ class MetricsCollector implements IMetricsCollector {
   int get connectTimeoutCount => _eventCounters[_connectTimeoutCounter] ?? 0;
   int get queryTimeoutCount => _eventCounters[_queryTimeoutCounter] ?? 0;
   int get preparedStatementReuseCount => _eventCounters[_preparedStatementReuseCounter] ?? 0;
+  int get streamCancelRequestCount => _eventCounters[_streamCancelRequestCounter] ?? 0;
+  int get streamCancelBackpressureCount => _eventCounters[_streamCancelBackpressureCounter] ?? 0;
+  int get streamCancelDisconnectFailureCount => _eventCounters[_streamCancelDisconnectFailureCounter] ?? 0;
+  int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
 
   Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
 
@@ -102,11 +126,15 @@ class MetricsCollector implements IMetricsCollector {
   void clear() {
     _metrics.clear();
     _eventCounters.clear();
+    _activeDirectConnections = 0;
+    _maxActiveDirectConnections = 0;
   }
 
   void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
 
   void recordTimeoutCancelFailure() => _incrementEventCounter(_timeoutCancelFailureCounter);
+
+  void recordTransactionRollbackAttempt() => _incrementEventCounter(_transactionRollbackAttemptCounter);
 
   void recordTransactionRollbackFailure() => _incrementEventCounter(_transactionRollbackFailureCounter);
 
@@ -117,6 +145,29 @@ class MetricsCollector implements IMetricsCollector {
   void recordMultiResultDirectStillVacuous() => _incrementEventCounter(_multiResultDirectStillVacuousCounter);
 
   void recordTransactionalBatchDirectPath() => _incrementEventCounter(_transactionalBatchDirectPathCounter);
+
+  void recordDirectConnectionFallback() => _incrementEventCounter(_directConnectionFallbackCounter);
+
+  void recordDirectConnectionAcquireTimeout() => _incrementEventCounter(_directConnectionAcquireTimeoutCounter);
+
+  void recordDirectConnectionOpened() {
+    _activeDirectConnections++;
+    if (_activeDirectConnections > _maxActiveDirectConnections) {
+      _maxActiveDirectConnections = _activeDirectConnections;
+    }
+  }
+
+  void recordDirectConnectionClosed() {
+    if (_activeDirectConnections > 0) {
+      _activeDirectConnections--;
+    }
+  }
+
+  void recordPoolReleaseFailure() => _incrementEventCounter(_poolReleaseFailureCounter);
+
+  void recordPoolRecycle() => _incrementEventCounter(_poolRecycleCounter);
+
+  void recordPoolRecycleFailure() => _incrementEventCounter(_poolRecycleFailureCounter);
 
   void recordAuthDecisionCacheHit() => _incrementEventCounter(_authDecisionCacheHitCounter);
 
@@ -171,6 +222,14 @@ class MetricsCollector implements IMetricsCollector {
   void recordQueryTimeout() => _incrementEventCounter(_queryTimeoutCounter);
 
   void recordPreparedStatementReuse() => _incrementEventCounter(_preparedStatementReuseCounter);
+
+  void recordStreamCancelRequest() => _incrementEventCounter(_streamCancelRequestCounter);
+
+  void recordStreamCancelBackpressure() => _incrementEventCounter(_streamCancelBackpressureCounter);
+
+  void recordStreamCancelDisconnectFailure() => _incrementEventCounter(_streamCancelDisconnectFailureCounter);
+
+  void recordStreamCancelDisconnectTimeout() => _incrementEventCounter(_streamCancelDisconnectTimeoutCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

@@ -86,15 +86,34 @@ class OdbcConnectionPool implements IConnectionPool {
   @override
   Future<Result<void>> release(String connectionId) async {
     final hadLease = _removeLeaseTracking(connectionId);
+    final disconnectResult = await _service.disconnect(connectionId);
     if (hadLease) {
       _semaphore.release();
     }
 
-    final disconnectResult = await _service.disconnect(connectionId);
     return disconnectResult.fold(
       (_) => const Success(unit),
-      (_) => const Success(unit),
+      (error) {
+        _metrics?.recordPoolReleaseFailure();
+        developer.log(
+          'Failed to disconnect leased ODBC connection $connectionId',
+          name: 'connection_pool',
+          level: 900,
+          error: error,
+        );
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
+            error,
+            operation: 'pool_release',
+          ),
+        );
+      },
     );
+  }
+
+  @override
+  Future<Result<void>> discard(String connectionId) async {
+    return release(connectionId);
   }
 
   @override

@@ -163,6 +163,23 @@ void main() {
           'engine': <String, dynamic>{'query_count': 2},
         }),
       );
+      when(
+        () => mockStreamingGateway.executeQueryStream(
+          any(),
+          any(),
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSizeBytes: any(named: 'chunkSizeBytes'),
+          executionId: any(named: 'executionId'),
+          queryTimeout: any(named: 'queryTimeout'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockStreamingGateway.cancelActiveStream(
+          executionId: any(named: 'executionId'),
+          reason: any(named: 'reason'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -1152,6 +1169,8 @@ void main() {
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -1291,6 +1310,8 @@ void main() {
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
           ),
         );
         verify(() => mockGateway.executeQuery(any())).called(1);
@@ -2257,6 +2278,7 @@ void main() {
           when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
           when(
             () => mockStreamingGateway.cancelActiveStream(
+              executionId: any(named: 'executionId'),
               reason: any(named: 'reason'),
             ),
           ).thenAnswer((_) async => const Success(unit));
@@ -2286,6 +2308,8 @@ void main() {
               any(),
               fetchSize: any(named: 'fetchSize'),
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
+              executionId: any(named: 'executionId'),
+              queryTimeout: any(named: 'queryTimeout'),
             ),
           ).thenAnswer((_) => completer.future);
 
@@ -2330,7 +2354,11 @@ void main() {
           final result = response.result as Map<String, dynamic>;
           expect(result['cancelled'], isTrue);
           expect(result['request_id'], equals('req-1'));
-          verify(() => mockStreamingGateway.cancelActiveStream()).called(1);
+          verify(
+            () => mockStreamingGateway.cancelActiveStream(
+              executionId: any(named: 'executionId'),
+            ),
+          ).called(1);
 
           completer.complete(const Success(unit));
           await dispatchFuture;
@@ -2376,6 +2404,8 @@ void main() {
               any(),
               fetchSize: any(named: 'fetchSize'),
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
+              executionId: any(named: 'executionId'),
+              queryTimeout: any(named: 'queryTimeout'),
             ),
           ).thenAnswer((_) => completer.future);
 

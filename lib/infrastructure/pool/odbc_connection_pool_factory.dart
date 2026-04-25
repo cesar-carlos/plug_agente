@@ -16,7 +16,11 @@ IConnectionPool createOdbcConnectionPool(
   MetricsCollector metricsCollector,
 ) {
   if (settings.useNativeOdbcPool) {
-    return OdbcNativeConnectionPool(service, settings);
+    return OdbcNativeConnectionPool(
+      service,
+      settings,
+      metricsCollector: metricsCollector,
+    );
   }
   return OdbcConnectionPool(
     service,

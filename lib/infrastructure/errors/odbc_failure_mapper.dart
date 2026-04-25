@@ -14,6 +14,20 @@ class OdbcFailureMapper {
     final sqlState = _extractSqlState(error);
     final baseContext = _buildBaseContext(error, operation, context);
 
+    if (error is WorkerCrashedError) {
+      return ConnectionFailure.withContext(
+        message: 'Worker ODBC foi interrompido',
+        cause: error,
+        context: {
+          ...baseContext,
+          'connectionFailed': true,
+          'retryable': true,
+          'reason': 'odbc_worker_crashed',
+          'user_message': 'A conexão ODBC foi interrompida internamente. Tente executar a operação novamente.',
+        },
+      );
+    }
+
     if (_isDriverMissing(sqlState, detail)) {
       return ConfigurationFailure.withContext(
         message: 'Driver ODBC nao encontrado ou nao configurado',
@@ -98,6 +112,71 @@ class OdbcFailureMapper {
     final detail = _extractDetail(error);
     final sqlState = _extractSqlState(error);
     final baseContext = _buildBaseContext(error, operation, context);
+
+    if (error is CancelledError) {
+      return QueryExecutionFailure.withContext(
+        message: 'Execucao SQL cancelada',
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': 'execution_cancelled',
+          'rpc_error_code': RpcErrorCode.executionCancelled,
+          'user_message': 'A consulta foi cancelada antes de concluir.',
+        },
+      );
+    }
+
+    if (error is MalformedPayloadError) {
+      return QueryExecutionFailure.withContext(
+        message: 'Resposta ODBC invalida',
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': 'odbc_malformed_payload',
+          'user_message': 'O banco retornou uma resposta que nao pode ser interpretada pelo agente.',
+        },
+      );
+    }
+
+    if (error is RollbackFailedError) {
+      return QueryExecutionFailure.withContext(
+        message: 'Falha ao desfazer transacao',
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': 'transaction_rollback_failed',
+          'retryable': error.category == ErrorCategory.transient,
+          'user_message': 'A transacao falhou e o banco nao confirmou o rollback.',
+        },
+      );
+    }
+
+    if (error is ResourceLimitReachedError) {
+      return QueryExecutionFailure.withContext(
+        message: detail,
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': 'odbc_resource_limit',
+          'retryable': true,
+          'user_message': 'O limite de recursos ODBC foi atingido. Tente novamente em instantes.',
+        },
+      );
+    }
+
+    if (error is WorkerCrashedError) {
+      return QueryExecutionFailure.withContext(
+        message: detail,
+        cause: error,
+        context: {
+          ...baseContext,
+          'connectionFailed': true,
+          'retryable': true,
+          'reason': 'odbc_worker_crashed',
+          'user_message': 'O worker ODBC foi interrompido durante a consulta. Tente novamente.',
+        },
+      );
+    }
 
     if (_isBufferTooSmall(detail)) {
       return QueryExecutionFailure.withContext(
@@ -203,7 +282,7 @@ class OdbcFailureMapper {
   }) {
     final detail = _extractDetail(error);
     final baseContext = _buildBaseContext(error, operation, context);
-    final isExhausted = _isPoolExhausted(detail);
+    final isExhausted = error is ResourceLimitReachedError || _isPoolExhausted(detail);
 
     return ConnectionFailure.withContext(
       message: isExhausted ? 'Pool de conexoes ODBC esgotado' : 'Falha ao obter conexao do pool ODBC',
@@ -274,6 +353,7 @@ class OdbcFailureMapper {
   ) {
     final sqlState = _extractSqlState(error);
     final nativeCode = error is OdbcError ? error.nativeCode : null;
+    final category = error is OdbcError ? error.category.name : null;
 
     return {
       ...?(operation != null ? {'operation': operation} : null),
@@ -281,6 +361,7 @@ class OdbcFailureMapper {
       'odbc_message': _extractDetail(error),
       ...?(sqlState != null ? {'odbc_sql_state': sqlState} : null),
       ...?(nativeCode != null ? {'odbc_native_code': nativeCode} : null),
+      ...?(category != null ? {'odbc_error_category': category} : null),
       ...context,
     };
   }

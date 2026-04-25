@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -17,12 +18,18 @@ void main() {
   group('OdbcConnectionPool (lease)', () {
     late MockOdbcService mockService;
     late MockOdbcConnectionSettings mockSettings;
+    late MetricsCollector metrics;
     late OdbcConnectionPool pool;
 
     setUp(() {
       mockService = MockOdbcService();
       mockSettings = MockOdbcConnectionSettings();
-      pool = OdbcConnectionPool(mockService, mockSettings);
+      metrics = MetricsCollector()..clear();
+      pool = OdbcConnectionPool(
+        mockService,
+        mockSettings,
+        metricsCollector: metrics,
+      );
     });
 
     test('should connect for each acquire with options', () async {
@@ -215,7 +222,7 @@ void main() {
       ).called(1);
     });
 
-    test('release should succeed even when disconnect fails', () async {
+    test('release should surface disconnect failure and free local lease', () async {
       when(
         () => mockService.connect(
           any(),
@@ -239,7 +246,8 @@ void main() {
       expect(acquired.isSuccess(), isTrue);
 
       final released = await pool.release('lease-1');
-      expect(released.isSuccess(), isTrue);
+      expect(released.isError(), isTrue);
+      expect(metrics.poolReleaseFailureCount, 1);
 
       final activeAfter = await pool.getActiveCount();
       expect(activeAfter.getOrNull(), 0);

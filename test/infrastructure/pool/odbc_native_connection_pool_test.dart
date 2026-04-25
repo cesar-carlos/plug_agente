@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -9,15 +11,25 @@ import '../../helpers/mock_odbc_connection_settings.dart';
 class MockOdbcService extends Mock implements OdbcService {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const PoolOptions());
+  });
+
   group('OdbcNativeConnectionPool', () {
     late MockOdbcService mockService;
     late MockOdbcConnectionSettings mockSettings;
+    late MetricsCollector metrics;
     late OdbcNativeConnectionPool pool;
 
     setUp(() {
       mockService = MockOdbcService();
       mockSettings = MockOdbcConnectionSettings();
-      pool = OdbcNativeConnectionPool(mockService, mockSettings);
+      metrics = MetricsCollector()..clear();
+      pool = OdbcNativeConnectionPool(
+        mockService,
+        mockSettings,
+        metricsCollector: metrics,
+      );
     });
 
     test(
@@ -27,7 +39,11 @@ void main() {
         var connectionCounter = 0;
 
         when(
-          () => mockService.poolCreate(any(), any()),
+          () => mockService.poolCreate(
+            any(),
+            any(),
+            options: any(named: 'options'),
+          ),
         ).thenAnswer((_) async {
           createdPools++;
           await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -54,7 +70,13 @@ void main() {
 
         expect(results.every((r) => r.isSuccess()), isTrue);
         expect(createdPools, 1);
-        verify(() => mockService.poolCreate('DSN=Test', any())).called(1);
+        verify(
+          () => mockService.poolCreate(
+            'DSN=Test',
+            any(),
+            options: any(named: 'options'),
+          ),
+        ).called(1);
         verify(() => mockService.poolGetConnection(77)).called(12);
       },
     );
@@ -62,7 +84,11 @@ void main() {
     test('should disable native checkout validation when configured', () async {
       mockSettings.nativePoolTestOnCheckout = false;
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(55));
       when(
         () => mockService.poolGetConnection(55),
@@ -84,13 +110,56 @@ void main() {
         () => mockService.poolCreate(
           'DSN=Bench;PoolTestOnCheckout=false',
           any(),
+          options: any(named: 'options'),
         ),
       ).called(1);
     });
 
+    test('should create native pool with eviction and connection timeouts', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(81));
+      when(
+        () => mockService.poolGetConnection(81),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-options',
+            connectionString: 'DSN=Options',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+
+      final result = await pool.acquire('DSN=Options');
+
+      expect(result.isSuccess(), isTrue);
+      final capturedOptions =
+          verify(
+                () => mockService.poolCreate(
+                  'DSN=Options',
+                  any(),
+                  options: captureAny(named: 'options'),
+                ),
+              ).captured.single
+              as PoolOptions;
+      expect(capturedOptions.idleTimeout, ConnectionConstants.defaultNativePoolIdleTimeout);
+      expect(capturedOptions.maxLifetime, ConnectionConstants.defaultNativePoolMaxLifetime);
+      expect(capturedOptions.connectionTimeout, ConnectionConstants.defaultNativePoolConnectionTimeout);
+    });
+
     test('should close created pools and clear internal state', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(3));
       when(
         () => mockService.poolGetConnection(3),
@@ -119,7 +188,11 @@ void main() {
 
     test('should return failure when poolCreate fails', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'pool_create_failed'),
@@ -129,13 +202,23 @@ void main() {
       final result = await pool.acquire('DSN=Bad');
 
       expect(result.isError(), isTrue);
-      verify(() => mockService.poolCreate('DSN=Bad', any())).called(1);
+      verify(
+        () => mockService.poolCreate(
+          'DSN=Bad',
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNever(() => mockService.poolGetConnection(any()));
     });
 
     test('should return failure when poolGetConnection fails', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(9));
       when(
         () => mockService.poolGetConnection(9),
@@ -163,6 +246,7 @@ void main() {
       final result = await pool.release('cid');
 
       expect(result.isError(), isTrue);
+      expect(metrics.poolReleaseFailureCount, 1);
       verify(() => mockService.poolReleaseConnection('cid')).called(1);
     });
 
@@ -174,7 +258,11 @@ void main() {
 
     test('recycle maps poolClose failure', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(5));
       when(
         () => mockService.poolGetConnection(5),
@@ -200,12 +288,18 @@ void main() {
       final result = await pool.recycle('DSN=Recycle');
 
       expect(result.isError(), isTrue);
+      expect(metrics.poolRecycleCount, 1);
+      expect(metrics.poolRecycleFailureCount, 1);
       verify(() => mockService.poolClose(5)).called(1);
     });
 
     test('closeAll aggregates poolClose errors', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(11));
       when(
         () => mockService.poolGetConnection(11),
@@ -235,7 +329,11 @@ void main() {
 
     test('getActiveCount sums active connections from pool state', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(21));
       when(
         () => mockService.poolGetConnection(21),
@@ -262,9 +360,43 @@ void main() {
       expect(count.getOrThrow(), 6);
     });
 
+    test('getActiveCount returns failure when pool state cannot be read', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(22));
+      when(
+        () => mockService.poolGetConnection(22),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'c22',
+            connectionString: 'DSN=StateError',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolGetState(22)).thenAnswer(
+        (_) async => const Failure(ConnectionError(message: 'state failed')),
+      );
+
+      await pool.acquire('DSN=StateError');
+      final count = await pool.getActiveCount();
+
+      expect(count.isError(), isTrue);
+    });
+
     test('healthCheckAll fails when pool reports unhealthy', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(31));
       when(
         () => mockService.poolGetConnection(31),
@@ -290,7 +422,11 @@ void main() {
 
     test('healthCheckAll fails when healthCheck returns error', () async {
       when(
-        () => mockService.poolCreate(any(), any()),
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
       ).thenAnswer((_) async => const Success(41));
       when(
         () => mockService.poolGetConnection(41),

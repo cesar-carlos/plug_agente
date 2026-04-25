@@ -43,7 +43,12 @@ class OdbcAdaptiveBufferCache {
   }
 
   static String _cacheKey(String connectionString, String sql) {
-    final normalizedSql = sql.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normalizedSql = sql
+        .replaceAll(RegExp("'(?:''|[^'])*'"), '?')
+        .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), '?')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
     return '$connectionString::$normalizedSql';
   }
 }

@@ -4,6 +4,7 @@ class ConnectionConstants {
 
   static const Duration defaultLoginTimeout = Duration(seconds: 30);
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
+  static const Duration defaultStreamingQueryTimeout = Duration(minutes: 5);
   static const int defaultMaxResultBufferBytes = 32 * 1024 * 1024;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
@@ -30,6 +31,9 @@ class ConnectionConstants {
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
   static const int defaultPoolSize = 4;
   static const Duration defaultPoolAcquireTimeout = Duration(seconds: 30);
+  static const Duration defaultNativePoolIdleTimeout = Duration(minutes: 5);
+  static const Duration defaultNativePoolMaxLifetime = Duration(hours: 1);
+  static const Duration defaultNativePoolConnectionTimeout = defaultPoolAcquireTimeout;
 
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;

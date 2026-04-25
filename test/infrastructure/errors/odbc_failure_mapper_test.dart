@@ -88,6 +88,17 @@ void main() {
       expect(failure.context['reason'], 'pool_exhausted');
     });
 
+    test('maps structured resource limit errors to pool exhaustion', () {
+      final failure = OdbcFailureMapper.mapPoolError(
+        const ResourceLimitReachedError(message: 'pool exhausted'),
+        operation: 'pool_acquire',
+      );
+
+      expect(failure, isA<ConnectionFailure>());
+      expect(failure.context['poolExhausted'], isTrue);
+      expect(failure.context['odbc_error_category'], ErrorCategory.transient.name);
+    });
+
     test('maps syntax issues from SQLSTATE to validation failure', () {
       final failure = OdbcFailureMapper.mapQueryError(
         const QueryError(
@@ -130,6 +141,41 @@ void main() {
       expect(failure, isA<QueryExecutionFailure>());
       expect(failure.context['reason'], 'transient_query_failure');
       expect(failure.context['retryable'], isTrue);
+    });
+
+    test('maps structured cancellation to executionCancelled rpc code', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        const CancelledError(),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], 'execution_cancelled');
+      expect(failure.context['rpc_error_code'], RpcErrorCode.executionCancelled);
+      expect(failure.context['odbc_error_category'], ErrorCategory.fatal.name);
+    });
+
+    test('maps worker crash to retryable query connection failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        const WorkerCrashedError(message: 'worker disconnected'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], 'odbc_worker_crashed');
+      expect(failure.context['connectionFailed'], isTrue);
+      expect(failure.context['retryable'], isTrue);
+    });
+
+    test('maps malformed payload to protocol query failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        const MalformedPayloadError(message: 'truncated payload'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], 'odbc_malformed_payload');
+      expect(failure.context['odbc_error_category'], ErrorCategory.validation.name);
     });
 
     test(

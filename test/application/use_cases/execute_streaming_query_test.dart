@@ -66,6 +66,8 @@ void main() {
           any(),
           fetchSize: any(named: 'fetchSize'),
           chunkSizeBytes: any(named: 'chunkSizeBytes'),
+          executionId: any(named: 'executionId'),
+          queryTimeout: any(named: 'queryTimeout'),
         ),
       ).thenAnswer((_) async => const Success(unit));
 
@@ -83,6 +85,8 @@ void main() {
           any(),
           fetchSize: 1000,
           chunkSizeBytes: 2048 * 1024,
+          executionId: any(named: 'executionId'),
+          queryTimeout: any(named: 'queryTimeout'),
         ),
       ).called(1);
     });
@@ -90,6 +94,7 @@ void main() {
     test('should delegate cancel request to gateway', () async {
       when(
         () => mockGateway.cancelActiveStream(
+          executionId: any(named: 'executionId'),
           reason: any(named: 'reason'),
         ),
       ).thenAnswer((_) async => const Success(unit));
@@ -97,7 +102,11 @@ void main() {
       final result = await useCase.cancelActiveStream();
 
       expect(result.isSuccess(), isTrue);
-      verify(() => mockGateway.cancelActiveStream()).called(1);
+      verify(
+        () => mockGateway.cancelActiveStream(
+          executionId: any(named: 'executionId'),
+        ),
+      ).called(1);
     });
   });
 }

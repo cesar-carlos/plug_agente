@@ -544,14 +544,15 @@ class RpcMethodDispatcher {
               columnMetadata: columnMetadata,
             ),
           )) {
-            unawaited(
-              gateway.cancelActiveStream(
-                reason: StreamingCancelReason.backpressureOverflow,
-              ),
+            await gateway.cancelActiveStream(
+              executionId: executionId,
+              reason: StreamingCancelReason.backpressureOverflow,
             );
           }
         },
         fetchSize: limits.streamingChunkSize,
+        executionId: executionId,
+        queryTimeout: _sqlExecuteTotalBudgetDuration,
       );
 
       if (streamResult.isError()) {
@@ -1157,7 +1158,9 @@ class RpcMethodDispatcher {
       return _executionNotFound(request);
     }
 
-    final cancelResult = await gateway.cancelActiveStream();
+    final cancelResult = await gateway.cancelActiveStream(
+      executionId: activeExecution.executionId,
+    );
 
     return cancelResult.fold(
       (_) {

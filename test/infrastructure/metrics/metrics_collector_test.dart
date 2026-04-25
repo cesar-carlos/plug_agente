@@ -307,6 +307,10 @@ void main() {
         collector.recordTimeoutCancelFailure();
         collector.recordTransactionRollbackFailure();
         collector.recordIdempotencyFingerprintMismatch();
+        collector.recordStreamCancelRequest();
+        collector.recordStreamCancelBackpressure();
+        collector.recordStreamCancelDisconnectFailure();
+        collector.recordStreamCancelDisconnectTimeout();
 
         collector.clear();
 
@@ -319,6 +323,10 @@ void main() {
         expect(collector.rpcSqlExecuteStreamingChunksResponseCount, 0);
         expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 0);
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 0);
+        expect(collector.streamCancelRequestCount, 0);
+        expect(collector.streamCancelBackpressureCount, 0);
+        expect(collector.streamCancelDisconnectFailureCount, 0);
+        expect(collector.streamCancelDisconnectTimeoutCount, 0);
       });
     });
 
@@ -330,6 +338,19 @@ void main() {
 
         expect(collector.timeoutCancelSuccessCount, 2);
         expect(collector.timeoutCancelFailureCount, 1);
+      });
+
+      test('should increment streaming cancellation counters', () {
+        collector.recordStreamCancelRequest();
+        collector.recordStreamCancelRequest();
+        collector.recordStreamCancelBackpressure();
+        collector.recordStreamCancelDisconnectFailure();
+        collector.recordStreamCancelDisconnectTimeout();
+
+        expect(collector.streamCancelRequestCount, 2);
+        expect(collector.streamCancelBackpressureCount, 1);
+        expect(collector.streamCancelDisconnectFailureCount, 1);
+        expect(collector.streamCancelDisconnectTimeoutCount, 1);
       });
 
       test('should increment rollback and idempotency mismatch counters', () {

@@ -25,6 +25,8 @@ class ExecuteStreamingQuery {
     String connectionString,
     Future<void> Function(List<Map<String, dynamic>>) onChunk, {
     int fetchSize = 1000,
+    String? executionId,
+    Duration? queryTimeout,
   }) async {
     final trimmedQuery = query.trim();
 
@@ -54,12 +56,18 @@ class ExecuteStreamingQuery {
       onChunk,
       fetchSize: fetchSize,
       chunkSizeBytes: _settings.streamingChunkSizeKb * 1024,
+      executionId: executionId,
+      queryTimeout: queryTimeout,
     );
   }
 
   Future<Result<void>> cancelActiveStream({
+    String? executionId,
     StreamingCancelReason reason = StreamingCancelReason.user,
   }) {
-    return _gateway.cancelActiveStream(reason: reason);
+    return _gateway.cancelActiveStream(
+      executionId: executionId,
+      reason: reason,
+    );
   }
 }
