@@ -51,17 +51,14 @@ class TransportPipelineCache {
     final hasCaps = _hasReceivedCapabilities();
     final negotiatedCmp = hasCaps ? protocol.compression : 'gzip';
     final String pipelineCompression;
-    if (_featureFlags.outboundCompressionMode == OutboundCompressionMode.none ||
-        negotiatedCmp == 'none') {
+    if (_featureFlags.outboundCompressionMode == OutboundCompressionMode.none || negotiatedCmp == 'none') {
       pipelineCompression = 'none';
     } else if (_featureFlags.outboundCompressionMode == OutboundCompressionMode.auto) {
       pipelineCompression = 'auto';
     } else {
       pipelineCompression = 'gzip';
     }
-    final threshold = hasCaps
-        ? protocol.compressionThreshold
-        : _featureFlags.compressionThreshold;
+    final threshold = hasCaps ? protocol.compressionThreshold : _featureFlags.compressionThreshold;
     final cacheKey = '${protocol.encoding}|$pipelineCompression|$threshold|$hasCaps';
     final cached = _cachedSendPipeline;
     if (cached != null && _sendPipelineCacheKey == cacheKey) {

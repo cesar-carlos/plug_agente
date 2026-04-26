@@ -153,4 +153,10 @@ SELECT COUNT(*) AS row_count FROM $tableName;
 
   /// Single-row probe for batch SELECT coverage (same shape for SA / SQL Server / PostgreSQL).
   String selectIdCodeAmtById(int id) => 'SELECT id, code, amt FROM $tableName WHERE id = $id';
+
+  /// Touches every row (DML perf / load).
+  String get updateAllRowsBumpAmt => 'UPDATE $tableName SET amt = amt + 0.0001';
+
+  /// Removes all rows (DML perf / load).
+  String get deleteAllRows => 'DELETE FROM $tableName';
 }

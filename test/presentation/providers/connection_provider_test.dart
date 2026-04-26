@@ -27,8 +27,7 @@ class _FakeTransport implements ITransportClient {
   void Function(HubLifecycleNotification)? onHubLifecycle;
 
   @override
-  Future<Result<void>> connect(String url, String agentId, {String? authToken}) async =>
-      throw UnimplementedError();
+  Future<Result<void>> connect(String url, String agentId, {String? authToken}) async => throw UnimplementedError();
 
   @override
   Future<Result<void>> disconnect() async => const Success(unit);
@@ -52,8 +51,7 @@ class _FakeTransport implements ITransportClient {
   void setOnReconnectionNeeded(void Function()? callback) => onReconnectionNeeded = callback;
 
   @override
-  void setOnHubLifecycle(void Function(HubLifecycleNotification)? callback) =>
-      onHubLifecycle = callback;
+  void setOnHubLifecycle(void Function(HubLifecycleNotification)? callback) => onHubLifecycle = callback;
 }
 
 Future<void> _waitForStatus(

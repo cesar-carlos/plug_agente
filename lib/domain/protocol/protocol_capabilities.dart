@@ -62,8 +62,7 @@ class ProtocolCapabilities {
       // pull window sizes to the hub. The hub may pick a value <= max and
       // SHOULD start with `recommended`. See socket_communication_standard.md.
       'recommendedStreamPullWindowSize': recommendedStreamPullWindowSize ?? 1,
-      'maxStreamPullWindowSize':
-          maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
+      'maxStreamPullWindowSize': maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
     };
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';
@@ -179,6 +178,7 @@ class TransportLimits {
   static const int defaultMaxDecodedPayloadBytes = defaultMaxPayloadBytes;
   static const int defaultMaxRows = 50000;
   static const int defaultMaxBatchSize = 32;
+
   /// Default upper bound for concurrent backpressure stream emitters at the
   /// protocol layer. The transport-level cap
   /// [`ConnectionConstants.maxConcurrentRpcStreams`] is the absolute hard

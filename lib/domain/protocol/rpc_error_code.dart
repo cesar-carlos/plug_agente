@@ -247,8 +247,7 @@ abstract class RpcErrorCode {
 
   /// Pluggable localizer slot. Presentation layer may install an
   /// AppLocalizations-backed implementation at boot time. Defaults to PT-BR.
-  static RpcErrorUserMessageLocalizer userMessageLocalizer =
-      const DefaultPtRpcErrorUserMessageLocalizer();
+  static RpcErrorUserMessageLocalizer userMessageLocalizer = const DefaultPtRpcErrorUserMessageLocalizer();
 
   /// Returns a user-facing localized message for [`code`]. Routes through
   /// [userMessageLocalizer] so callers can swap the locale globally.

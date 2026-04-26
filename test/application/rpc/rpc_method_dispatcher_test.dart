@@ -1408,7 +1408,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse1));
       when(() => mockNormalizer.normalize(any())).thenAnswer(
         (invocation) => invocation.positionalArguments[0] as QueryResponse,
@@ -1525,7 +1529,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
           (invocation) => invocation.positionalArguments[0] as QueryResponse,
@@ -1567,7 +1575,11 @@ void main() {
 
         var callCount = 0;
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((invocation) async {
           callCount++;
           final query = invocation.positionalArguments[0] as QueryRequest;
@@ -1591,7 +1603,11 @@ void main() {
 
         check(response.isSuccess).isTrue();
         final captured = verify(
-          () => mockGateway.executeQuery(captureAny()),
+          () => mockGateway.executeQuery(
+            captureAny(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).captured.cast<QueryRequest>();
         check(
           captured.map((query) => query.query).join('|'),
@@ -1626,7 +1642,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((invocation) async {
           final query = invocation.positionalArguments[0] as QueryRequest;
           return Success(
@@ -1649,7 +1669,11 @@ void main() {
 
         check(response.isSuccess).isTrue();
         final captured = verify(
-          () => mockGateway.executeQuery(captureAny()),
+          () => mockGateway.executeQuery(
+            captureAny(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).captured.cast<QueryRequest>();
         check(captured.map((query) => query.query).join('|')).equals(
           [
@@ -1679,7 +1703,13 @@ void main() {
 
         check(response.isError).isTrue();
         check(response.error!.code).equals(RpcErrorCode.invalidParams);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 

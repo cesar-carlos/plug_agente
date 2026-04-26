@@ -419,34 +419,38 @@ class RpcInboundHandler {
         );
         switch (validation) {
           case RpcBatchDuplicateIds(:final duplicateIds):
-            await _emitRpcResponse(RpcResponse.error(
-              id: null,
-              error: RpcError(
-                code: RpcErrorCode.invalidRequest,
-                message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                data: RpcErrorCode.buildErrorData(
+            await _emitRpcResponse(
+              RpcResponse.error(
+                id: null,
+                error: RpcError(
                   code: RpcErrorCode.invalidRequest,
-                  technicalMessage: 'Batch contains duplicate request IDs: $duplicateIds',
-                  reason: 'batch_duplicate_ids',
-                  extra: {'duplicate_ids': duplicateIds},
+                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                  data: RpcErrorCode.buildErrorData(
+                    code: RpcErrorCode.invalidRequest,
+                    technicalMessage: 'Batch contains duplicate request IDs: $duplicateIds',
+                    reason: 'batch_duplicate_ids',
+                    extra: {'duplicate_ids': duplicateIds},
+                  ),
                 ),
               ),
-            ));
+            );
             return;
           case RpcBatchExceedsLimit(:final size, :final limit):
-            await _emitRpcResponse(RpcResponse.error(
-              id: null,
-              error: RpcError(
-                code: RpcErrorCode.invalidRequest,
-                message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                data: RpcErrorCode.buildErrorData(
+            await _emitRpcResponse(
+              RpcResponse.error(
+                id: null,
+                error: RpcError(
                   code: RpcErrorCode.invalidRequest,
-                  technicalMessage: 'Batch exceeds limit: $size > $limit',
-                  reason: 'batch_exceeds_limit',
-                  extra: {'size': size, 'limit': limit},
+                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                  data: RpcErrorCode.buildErrorData(
+                    code: RpcErrorCode.invalidRequest,
+                    technicalMessage: 'Batch exceeds limit: $size > $limit',
+                    reason: 'batch_exceeds_limit',
+                    extra: {'size': size, 'limit': limit},
+                  ),
                 ),
               ),
-            ));
+            );
             return;
           case RpcBatchValid():
             break;
@@ -609,8 +613,7 @@ class RpcInboundHandler {
   }
 
   ({int code, String? reason}) _mapInboundTransportDecodeFailure(domain.Failure failure) {
-    if (failure is domain.ValidationFailure &&
-        failure.context['transport_signature_invalid'] == true) {
+    if (failure is domain.ValidationFailure && failure.context['transport_signature_invalid'] == true) {
       return (
         code: RpcErrorCode.authenticationFailed,
         reason: RpcErrorCode.reasonInvalidSignature,
@@ -631,9 +634,7 @@ class RpcInboundHandler {
 
   String? _extractClientTokenFromRpcParams(dynamic params) {
     if (params is! Map<String, dynamic>) return null;
-    final raw = params['client_token'] as String? ??
-        params['auth'] as String? ??
-        params['clientToken'] as String?;
+    final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
   }
 

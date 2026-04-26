@@ -13,7 +13,7 @@ void main() async {
 
   final dsn = E2EEnv.odbcConnectionStringAny;
   final dsnValid = dsn != null && dsn.trim().isNotEmpty;
-  final runLockContention = E2EEnv.get('ODBC_RUN_LOCK_CONTENTION_TESTS') == 'true';
+  final runLockContention = E2EEnv.odbcRunLockContentionTests;
   final skipUnlessDsn = !dsnValid
       ? 'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env'
       : false;

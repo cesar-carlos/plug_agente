@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -21,14 +21,14 @@ void main() {
   late int reconnectCalls;
 
   ProtocolConfig binaryProtocol() => const ProtocolConfig(
-        protocol: 'jsonrpc-v2',
-        encoding: 'json',
-        compression: 'gzip',
-        negotiatedExtensions: {
-          'binaryPayload': true,
-          'transportFrame': 'payload-frame/1.0',
-        },
-      );
+    protocol: 'jsonrpc-v2',
+    encoding: 'json',
+    compression: 'gzip',
+    negotiatedExtensions: {
+      'binaryPayload': true,
+      'transportFrame': 'payload-frame/1.0',
+    },
+  );
 
   setUp(() {
     featureFlags = _MockFeatureFlags();
@@ -115,11 +115,13 @@ void main() {
           agentCapabilities: any(named: 'agentCapabilities'),
           serverCapabilities: any(named: 'serverCapabilities'),
         ),
-      ).thenReturn(const ProtocolConfig(
-        protocol: 'jsonrpc-v2',
-        encoding: 'json',
-        compression: 'none',
-      ));
+      ).thenReturn(
+        const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+        ),
+      );
 
       final neg = buildNegotiator();
       final outcome = neg.handleEnvelope({

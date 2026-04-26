@@ -51,7 +51,8 @@ void main() {
         expect(
           result.isSuccess(),
           isTrue,
-          reason: 'Fixture $fixtureName failed schema $schemaId. '
+          reason:
+              'Fixture $fixtureName failed schema $schemaId. '
               'Errors: ${result.exceptionOrNull()}',
         );
       });

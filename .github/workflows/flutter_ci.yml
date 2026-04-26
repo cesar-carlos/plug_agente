@@ -60,3 +60,26 @@ jobs:
         with:
           name: transport-benchmark
           path: benchmark-artifacts/transport-benchmark.txt
+
+  live-hub-e2e:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Hub Socket.IO live E2E
+        env:
+          RUN_LIVE_HUB_TESTS: true
+          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
+          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
+        run: flutter test test/integration/hub_socket_live_e2e_test.dart

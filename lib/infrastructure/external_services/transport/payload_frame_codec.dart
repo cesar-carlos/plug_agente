@@ -51,8 +51,7 @@ class PayloadFrameCodec {
   /// Whether outgoing transport frames must carry an HMAC signature.
   bool get shouldSignTransportFrames =>
       _payloadSigner != null &&
-      (_localSignatureRequired() ||
-          (_hasReceivedCapabilities() && _protocolProvider().signatureRequired));
+      (_localSignatureRequired() || (_hasReceivedCapabilities() && _protocolProvider().signatureRequired));
 
   /// Frames [logicalPayload] for transport. Returns the wire `Map<String,dynamic>`
   /// (frame JSON) on success or `null` if the payload exceeds the negotiated
@@ -115,13 +114,15 @@ class PayloadFrameCodec {
     try {
       final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
       _validateFrameAgainstLocalCapabilities(frame);
-      final processed = _pipelineCache.receive(frame).receiveProcess(
-        frame,
-        maxCompressedBytes: protocol.effectiveLimits.maxCompressedPayloadBytes,
-        maxOriginalBytes: protocol.effectiveLimits.maxDecodedPayloadBytes,
-        maxInflationRatio: protocol.maxInflationRatio,
-        metricEventName: sourceEvent,
-      );
+      final processed = _pipelineCache
+          .receive(frame)
+          .receiveProcess(
+            frame,
+            maxCompressedBytes: protocol.effectiveLimits.maxCompressedPayloadBytes,
+            maxOriginalBytes: protocol.effectiveLimits.maxDecodedPayloadBytes,
+            maxInflationRatio: protocol.maxInflationRatio,
+            metricEventName: sourceEvent,
+          );
       if (processed.isError()) {
         throw processed.exceptionOrNull()! as domain.Failure;
       }
@@ -148,13 +149,15 @@ class PayloadFrameCodec {
     try {
       final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
       _validateFrameAgainstLocalCapabilities(frame);
-      final processed = await _pipelineCache.receive(frame).receiveProcessAsync(
-        frame,
-        maxCompressedBytes: protocol.effectiveLimits.maxCompressedPayloadBytes,
-        maxOriginalBytes: protocol.effectiveLimits.maxDecodedPayloadBytes,
-        maxInflationRatio: protocol.maxInflationRatio,
-        metricEventName: sourceEvent,
-      );
+      final processed = await _pipelineCache
+          .receive(frame)
+          .receiveProcessAsync(
+            frame,
+            maxCompressedBytes: protocol.effectiveLimits.maxCompressedPayloadBytes,
+            maxOriginalBytes: protocol.effectiveLimits.maxDecodedPayloadBytes,
+            maxInflationRatio: protocol.maxInflationRatio,
+            metricEventName: sourceEvent,
+          );
       if (processed.isError()) {
         throw processed.exceptionOrNull()! as domain.Failure;
       }

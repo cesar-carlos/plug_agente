@@ -7,7 +7,9 @@ import '../helpers/odbc_e2e_row_assertions.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
 
 /// E2E: `sql.execute` (multi-result) and `sql.executeBatch` (SELECT/DML) against
-/// a real database from `E2EEnv.odbcConnectionString` (`ODBC_TEST_DSN` / `ODBC_DSN`).
+/// a real database from `E2EEnv.odbcE2eRpcConnectionString` (optional
+/// `ODBC_E2E_RPC_DSN`, else same order as any ODBC DSN: SQL Anywhere →
+/// SQL Server → PostgreSQL).
 ///
 /// DDL uses the gateway `executeNonQuery` because the RPC SQL validator does not
 /// allow CREATE/DROP.
@@ -17,11 +19,11 @@ import '../helpers/odbc_e2e_rpc_harness.dart';
 void main() async {
   await E2EEnv.load();
 
-  final dsn = E2EEnv.odbcConnectionString;
+  final dsn = E2EEnv.odbcE2eRpcConnectionString;
   final dsnValid = dsn != null && dsn.trim().isNotEmpty;
   final skipUnlessDsn = !dsnValid
-      ? 'Defina ODBC_TEST_DSN ou ODBC_DSN no .env (este teste não usa '
-            'fallback para SQL Server/PostgreSQL).'
+      ? 'Defina ODBC_E2E_RPC_DSN ou pelo menos um de ODBC_TEST_DSN / ODBC_DSN, '
+            'ODBC_TEST_DSN_SQL_SERVER, ODBC_TEST_DSN_POSTGRESQL no .env.'
       : false;
 
   group('ODBC RPC execute / executeBatch coverage (E2E)', () {

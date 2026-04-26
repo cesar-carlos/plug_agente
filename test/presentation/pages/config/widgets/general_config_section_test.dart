@@ -102,12 +102,12 @@ void main() {
 
   group('GeneralConfigSection - startup support', () {
     Finder findToggleFor(String label) => find.descendant(
-          of: find.ancestor(
-            of: find.text(label),
-            matching: find.byType(Row),
-          ),
-          matching: find.byType(ToggleSwitch),
-        );
+      of: find.ancestor(
+        of: find.text(label),
+        matching: find.byType(Row),
+      ),
+      matching: find.byType(ToggleSwitch),
+    );
 
     testWidgets(
       'startWithWindows toggle is disabled when startupSupported is false',

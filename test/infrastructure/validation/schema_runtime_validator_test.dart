@@ -2,8 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
-Future<({TransportSchemaLoader loader, JsonSchemaContractValidator validator})>
-_buildValidator() async {
+Future<({TransportSchemaLoader loader, JsonSchemaContractValidator validator})> _buildValidator() async {
   final loader = TransportSchemaLoader();
   await loader.loadAll();
   return (loader: loader, validator: JsonSchemaContractValidator(loader: loader));

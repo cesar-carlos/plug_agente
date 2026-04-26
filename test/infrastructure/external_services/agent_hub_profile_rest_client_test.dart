@@ -201,13 +201,15 @@ void main() {
       idempotencyKey: 'test-idem-key',
     );
 
-    final captured = verify(
-      () => dio.patch<Map<String, dynamic>>(
-        any(),
-        data: any(named: 'data'),
-        options: captureAny(named: 'options'),
-      ),
-    ).captured.single as Options;
+    final captured =
+        verify(
+              () => dio.patch<Map<String, dynamic>>(
+                any(),
+                data: any(named: 'data'),
+                options: captureAny(named: 'options'),
+              ),
+            ).captured.single
+            as Options;
 
     check(captured.headers?['Idempotency-Key']).equals('test-idem-key');
   });

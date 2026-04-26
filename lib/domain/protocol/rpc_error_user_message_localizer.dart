@@ -37,8 +37,7 @@ class DefaultPtRpcErrorUserMessageLocalizer implements RpcErrorUserMessageLocali
   String methodNotFound() => 'Método não suportado por esta versão do agente.';
 
   @override
-  String authenticationFailed() =>
-      'Falha de autenticação. Gere um novo token e tente novamente.';
+  String authenticationFailed() => 'Falha de autenticação. Gere um novo token e tente novamente.';
 
   @override
   String unauthorized() => 'Você não tem permissão para executar esta operação.';

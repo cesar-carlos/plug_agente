@@ -133,10 +133,7 @@ class CapabilitiesNegotiator {
     if (code == null && reason == null) return false;
     final lc = (code ?? '').toLowerCase();
     final lr = (reason ?? '').toLowerCase();
-    return lc == 'transient_failure' ||
-        lr == 'transient_failure' ||
-        lc == 'rate_limited' ||
-        lr == 'rate_limited';
+    return lc == 'transient_failure' || lr == 'transient_failure' || lc == 'rate_limited' || lr == 'rate_limited';
   }
 
   /// Sends the `agent:register` frame followed by the timeout watchdog.
@@ -276,8 +273,7 @@ class CapabilitiesNegotiator {
 
     final agentRequiresSignature = agentCapabilities.extensions['signatureRequired'] as bool? ?? false;
     final serverRequiresSignature = serverCapabilities.extensions['signatureRequired'] as bool? ?? false;
-    if ((agentRequiresSignature || serverRequiresSignature) &&
-        negotiatedProtocol.signatureAlgorithms.isEmpty) {
+    if ((agentRequiresSignature || serverRequiresSignature) && negotiatedProtocol.signatureAlgorithms.isEmpty) {
       throw StateError(
         'Negotiated protocol requires signature but no shared algorithm was found',
       );

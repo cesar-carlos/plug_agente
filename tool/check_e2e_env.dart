@@ -59,6 +59,10 @@ void main() {
   final odbcDsn = get('ODBC_TEST_DSN') ?? get('ODBC_DSN');
   final odbcSqlServer = get('ODBC_TEST_DSN_SQL_SERVER') ?? get('ODBC_DSN_SQL_SERVER');
   final odbcPostgresql = get('ODBC_TEST_DSN_POSTGRESQL') ?? get('ODBC_DSN_POSTGRESQL');
+  final odbcE2eRpcExplicit = get('ODBC_E2E_RPC_DSN');
+  final odbcE2eRpc = (odbcE2eRpcExplicit != null && odbcE2eRpcExplicit.trim().isNotEmpty)
+      ? odbcE2eRpcExplicit.trim()
+      : (odbcDsn ?? odbcSqlServer ?? odbcPostgresql);
   final odbcSmoke = get('ODBC_INTEGRATION_SMOKE_QUERY');
   final odbcLong =
       get('ODBC_INTEGRATION_LONG_QUERY') ??
@@ -67,6 +71,12 @@ void main() {
       get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL');
   final e2eRequireMulti = get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
   final e2eTxBatch = get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
+  final runLockContention = get('ODBC_RUN_LOCK_CONTENTION_TESTS') == 'true';
+  final runLiveHub = get('RUN_LIVE_HUB_TESTS') == 'true';
+  final e2eHubUrl = get('E2E_HUB_URL');
+  final e2eHubToken = get('E2E_HUB_TOKEN');
+  final hubUrlOk = e2eHubUrl != null && e2eHubUrl.trim().isNotEmpty;
+  final hubTokenOk = e2eHubToken != null && e2eHubToken.trim().isNotEmpty;
 
   print('=== Variáveis E2E / Live Integration Tests ===\n');
 
@@ -102,6 +112,48 @@ void main() {
   } else {
     print('  -> odbc_streaming_live_integration_test: será executado');
   }
+  if (odbcE2eRpcExplicit != null && odbcE2eRpcExplicit.trim().isNotEmpty) {
+    print('ODBC_E2E_RPC_DSN: OK (override do E2E RPC)');
+  } else {
+    print('ODBC_E2E_RPC_DSN: (vazio — usa fallback Anywhere → SQL Server → PostgreSQL)');
+  }
+  if (odbcE2eRpc == null || odbcE2eRpc.trim().isEmpty) {
+    print('  -> odbc_rpc_execute_coverage_live_e2e_test: testes serão ignorados (sem DSN RPC)');
+  } else {
+    print('  -> odbc_rpc_execute_coverage_live_e2e_test: será executado');
+  }
+
+  final dmlPerf = get('ODBC_E2E_DML_PERF_TESTS') == 'true';
+  final dmlRows = get('ODBC_E2E_DML_PERF_ROW_COUNT');
+  print('');
+  print(
+    'ODBC_E2E_DML_PERF_TESTS: ${dmlPerf ? "true (insert/update/delete em lote)" : "não definido ou false"}',
+  );
+  print(
+    'ODBC_E2E_DML_PERF_ROW_COUNT: ${dmlRows ?? "100 (default se ativar)"}',
+  );
+  if (dmlPerf && odbcE2eRpc != null && odbcE2eRpc.trim().isNotEmpty) {
+    print('  -> odbc_dml_perf_live_e2e_test: será executado');
+  } else {
+    print(
+      '  -> odbc_dml_perf_live_e2e_test: ignorado (defina ODBC_E2E_DML_PERF_TESTS=true e um DSN RPC)',
+    );
+  }
+
+  final dmlBulk = get('ODBC_E2E_DML_BULK_TESTS') == 'true';
+  final dmlBulkRows = get('ODBC_E2E_DML_BULK_ROW_COUNT');
+  final dmlBulkChunk = get('ODBC_E2E_DML_BULK_CHUNK_SIZE');
+  print('');
+  print('ODBC_E2E_DML_BULK_TESTS: ${dmlBulk ? "true (carga 10k–200k rows)" : "não definido ou false"}');
+  print('ODBC_E2E_DML_BULK_ROW_COUNT: ${dmlBulkRows ?? "50000 (default se ativar)"}');
+  print('ODBC_E2E_DML_BULK_CHUNK_SIZE: ${dmlBulkChunk ?? "1000 (default se ativar)"}');
+  if (dmlBulk && odbcE2eRpc != null && odbcE2eRpc.trim().isNotEmpty) {
+    print('  -> odbc_dml_bulk_load_live_e2e_test: será executado (pode demorar muitos minutos)');
+  } else {
+    print(
+      '  -> odbc_dml_bulk_load_live_e2e_test: ignorado (defina ODBC_E2E_DML_BULK_TESTS=true e DSN)',
+    );
+  }
 
   print('');
   print('ODBC_INTEGRATION_SMOKE_QUERY: ${odbcSmoke ?? "SELECT 1 (default)"}');
@@ -125,6 +177,34 @@ void main() {
     print(
       '  -> odbc_rpc_execute_coverage: 3º teste (batch transacional) será '
       'ignorado (defina ODBC_E2E_TRANSACTIONAL_BATCH=true para ativar).',
+    );
+  }
+
+  print('');
+  print(
+    'ODBC_RUN_LOCK_CONTENTION_TESTS: ${runLockContention ? "true (concorrência/locks real)" : "não definido ou false"}',
+  );
+  if (runLockContention && anyOdbcValid) {
+    print('  -> odbc_lock_contention_live_integration_test: será executado');
+  } else if (!runLockContention) {
+    print(
+      '  -> odbc_lock_contention_live_integration_test: ignorado '
+      '(defina ODBC_RUN_LOCK_CONTENTION_TESTS=true e um DSN)',
+    );
+  } else {
+    print('  -> odbc_lock_contention_live_integration_test: ignorado (sem DSN)');
+  }
+
+  print('');
+  print('RUN_LIVE_HUB_TESTS: ${runLiveHub ? "OK (true)" : "não definido ou false"}');
+  print('E2E_HUB_URL: ${hubUrlOk ? "OK" : "não definido"}');
+  print('E2E_HUB_TOKEN: ${hubTokenOk ? "OK" : "não definido"}');
+  if (runLiveHub && hubUrlOk && hubTokenOk) {
+    print('  -> hub_socket_live_e2e_test: será executado');
+  } else {
+    print(
+      '  -> hub_socket_live_e2e_test: ignorado (defina RUN_LIVE_HUB_TESTS=true, '
+      'E2E_HUB_URL e E2E_HUB_TOKEN)',
     );
   }
 
