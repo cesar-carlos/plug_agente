@@ -57,15 +57,19 @@ class SqlValidator {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
       return Failure(
-        domain.ValidationFailure('SQL cannot be empty'),
+        _sqlValidationFailure(
+          message: 'SQL cannot be empty',
+          userMessage: 'A consulta SQL está vazia. Informe um comando SQL para continuar.',
+        ),
       );
     }
 
     final normalized = trimmed.toLowerCase();
     if (!allowMultipleStatements && sqlHasMultipleTopLevelStatements(trimmed)) {
       return Failure(
-        domain.ValidationFailure(
-          'Multiple SQL statements are not supported',
+        _sqlValidationFailure(
+          message: 'Multiple SQL statements are not supported',
+          userMessage: 'A consulta contém múltiplos comandos. Envie apenas um comando SQL por requisição.',
         ),
       );
     }
@@ -73,8 +77,9 @@ class SqlValidator {
     final startsWithAllowed = _allowedPrefixes.any(normalized.startsWith);
     if (!startsWithAllowed) {
       return Failure(
-        domain.ValidationFailure(
-          'Unsupported SQL operation. Allowed: SELECT, WITH, UPDATE, INSERT, MERGE, DELETE',
+        _sqlValidationFailure(
+          message: 'Unsupported SQL operation. Allowed: SELECT, WITH, UPDATE, INSERT, MERGE, DELETE',
+          userMessage: 'Operação SQL não suportada. Use apenas SELECT, WITH, UPDATE, INSERT, MERGE ou DELETE.',
         ),
       );
     }
@@ -93,8 +98,10 @@ class SqlValidator {
 
   static domain.ValidationFailure? _checkDangerousPatterns(String query) {
     if (sqlContainsTopLevelDangerousPatterns(query)) {
-      return domain.ValidationFailure(
-        'Query contains potentially dangerous patterns',
+      return _sqlValidationFailure(
+        message: 'Query contains potentially dangerous patterns',
+        userMessage:
+            'A consulta foi bloqueada por conter padrões potencialmente perigosos. Revise o comando e tente novamente.',
       );
     }
     return null;
@@ -105,16 +112,19 @@ class SqlValidator {
 
     if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('WITH')) {
       return Failure(
-        domain.ValidationFailure(
-          'Apenas consultas SELECT/WITH são permitidas no playground',
+        _sqlValidationFailure(
+          message: 'Apenas consultas SELECT/WITH são permitidas no playground',
+          userMessage: 'Esta operação aceita apenas consultas SELECT ou WITH.',
         ),
       );
     }
 
     if (sqlContainsTopLevelDangerousPatterns(query)) {
       return Failure(
-        domain.ValidationFailure(
-          'Query contém padrões potencialmente perigosos',
+        _sqlValidationFailure(
+          message: 'Query contém padrões potencialmente perigosos',
+          userMessage:
+              'A consulta foi bloqueada por conter padrões potencialmente perigosos. Revise o comando e tente novamente.',
         ),
       );
     }
@@ -126,8 +136,9 @@ class SqlValidator {
     final selectValidation = validateSelectQuery(query);
     if (selectValidation.isError()) {
       return Failure(
-        domain.ValidationFailure(
-          'Pagination is supported only for SELECT/WITH queries',
+        _sqlValidationFailure(
+          message: 'Pagination is supported only for SELECT/WITH queries',
+          userMessage: 'A paginação só pode ser usada com consultas SELECT ou WITH.',
         ),
       );
     }
@@ -136,8 +147,9 @@ class SqlValidator {
     final orderByIndex = _findTopLevelOrderBy(normalizedQuery);
     if (orderByIndex < 0) {
       return Failure(
-        domain.ValidationFailure(
-          'Paginated queries must declare an explicit ORDER BY clause',
+        _sqlValidationFailure(
+          message: 'Paginated queries must declare an explicit ORDER BY clause',
+          userMessage: 'Para usar paginação, a consulta precisa declarar ORDER BY explícito.',
         ),
       );
     }
@@ -147,8 +159,10 @@ class SqlValidator {
         _containsTopLevelKeyword(orderByClause, 'fetch') ||
         _containsTopLevelKeyword(orderByClause, 'limit')) {
       return Failure(
-        domain.ValidationFailure(
-          'Paginated queries cannot declare LIMIT/OFFSET/FETCH directly',
+        _sqlValidationFailure(
+          message: 'Paginated queries cannot declare LIMIT/OFFSET/FETCH directly',
+          userMessage:
+              'A consulta paginada não pode usar LIMIT, OFFSET ou FETCH diretamente. Deixe a paginação para o options.page/page_size ou cursor.',
         ),
       );
     }
@@ -158,8 +172,9 @@ class SqlValidator {
     ).map(_parseOrderTerm).toList();
     if (orderTerms.any((term) => term == null)) {
       return Failure(
-        domain.ValidationFailure(
-          'Pagination requires ORDER BY with simple column names or aliases',
+        _sqlValidationFailure(
+          message: 'Pagination requires ORDER BY with simple column names or aliases',
+          userMessage: 'A paginação exige ORDER BY com nomes de coluna ou aliases simples.',
         ),
       );
     }
@@ -386,5 +401,19 @@ class SqlValidator {
 
   static String _normalizeForFingerprint(String query) {
     return query.replaceAll(_normalizeFingerprintWhitespace, ' ').trim().toLowerCase();
+  }
+
+  static domain.ValidationFailure _sqlValidationFailure({
+    required String message,
+    required String userMessage,
+  }) {
+    return domain.ValidationFailure.withContext(
+      message: message,
+      context: <String, dynamic>{
+        'operation': 'sql_validation',
+        'reason': 'sql_validation_failed',
+        'user_message': userMessage,
+      },
+    );
   }
 }

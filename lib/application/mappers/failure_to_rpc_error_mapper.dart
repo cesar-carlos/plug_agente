@@ -50,6 +50,9 @@ class FailureToRpcErrorMapper {
     }
 
     if (failure is QueryExecutionFailure) {
+      if (_isPermissionDeniedFailure(failure.context)) {
+        return RpcErrorCode.unauthorized;
+      }
       if (failure.context['reason'] == 'transaction_failed' ||
           failure.context['operation'] == 'transaction' ||
           ((failure.context['operation'] as String?)?.startsWith(
@@ -290,6 +293,15 @@ class FailureToRpcErrorMapper {
   }
 
   static bool _isSensitiveKey(String key) => SensitiveMapRedactor.isSensitiveKey(key);
+
+  static bool _isPermissionDeniedFailure(Map<String, dynamic> context) {
+    final reason = context['reason']?.toString();
+    if (reason == 'sql_permission_denied' || reason == 'missing_permission') {
+      return true;
+    }
+    final sqlState = context['odbc_sql_state']?.toString().toUpperCase();
+    return sqlState == '42501';
+  }
 
   static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
     return Map.fromEntries(

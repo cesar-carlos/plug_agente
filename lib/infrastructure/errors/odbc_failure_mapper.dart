@@ -5,6 +5,20 @@ import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 class OdbcFailureMapper {
   OdbcFailureMapper._();
 
+  static const int _kMaxDeniedResourcesInUserMessage = 5;
+  static final RegExp _sqlServerPermissionObjectPattern = RegExp(
+    r"permission\s+was\s+denied\s+on\s+(?:the\s+)?object\s+'([^']+)'(?:,\s*database\s*'[^']+')?(?:,\s*schema\s*'([^']+)')?",
+    caseSensitive: false,
+  );
+  static final RegExp _postgresPermissionPattern = RegExp(
+    r'permission\s+denied\s+for\s+(?:table|relation|view|sequence)\s+"?([a-z0-9_$.]+)"?',
+    caseSensitive: false,
+  );
+  static final RegExp _quotedResourcePattern = RegExp(
+    "(?:table|object|relation|view)\\s+['\\\"]([^'\\\"]+)['\\\"]",
+    caseSensitive: false,
+  );
+
   static Failure mapConnectionError(
     Object error, {
     String? operation,
@@ -238,13 +252,23 @@ class OdbcFailureMapper {
     }
 
     if (_isPermissionDenied(sqlState, detail)) {
+      final deniedResources = _extractDeniedResourcesFromPermissionMessage(detail);
+      final deniedResourcesForMessage = _formatDeniedResourcesForUserMessage(
+        deniedResources,
+      );
+      final userMessage = deniedResourcesForMessage == null
+          ? 'A consulta foi recusada por falta de permissao no banco de dados.'
+          : 'A consulta foi recusada por falta de permissao no banco de dados para os recursos: '
+                '$deniedResourcesForMessage.';
       return QueryExecutionFailure.withContext(
         message: detail,
         cause: error,
         context: {
           ...baseContext,
           'reason': 'sql_permission_denied',
-          'user_message': 'A consulta foi recusada por falta de permissao no banco de dados.',
+          'user_message': userMessage,
+          if (deniedResources.isNotEmpty) 'resource': deniedResources.first,
+          if (deniedResources.isNotEmpty) 'denied_resources': deniedResources,
         },
       );
     }
@@ -501,5 +525,68 @@ class OdbcFailureMapper {
 
   static bool _isRetryableConnection(String? sqlState) {
     return sqlState != null && sqlState.startsWith('08');
+  }
+
+  static List<String> _extractDeniedResourcesFromPermissionMessage(String detail) {
+    final resources = <String>{};
+    for (final match in _sqlServerPermissionObjectPattern.allMatches(detail)) {
+      final objectName = _normalizeResourceName(match.group(1));
+      final schemaName = _normalizeResourceName(match.group(2));
+      if (objectName == null) {
+        continue;
+      }
+      if (schemaName != null && !objectName.contains('.')) {
+        resources.add('$schemaName.$objectName');
+      } else {
+        resources.add(objectName);
+      }
+    }
+    for (final match in _postgresPermissionPattern.allMatches(detail)) {
+      final resourceName = _normalizeResourceName(match.group(1));
+      if (resourceName != null) {
+        resources.add(resourceName);
+      }
+    }
+    for (final match in _quotedResourcePattern.allMatches(detail)) {
+      final resourceName = _normalizeResourceName(match.group(1));
+      if (resourceName != null) {
+        resources.add(resourceName);
+      }
+    }
+
+    final resourcesWithoutUnqualifiedDuplicates = resources.where((resource) {
+      if (resource.contains('.')) {
+        return true;
+      }
+      final qualifiedEquivalentExists = resources.any(
+        (candidate) => candidate.contains('.') && candidate.endsWith('.$resource'),
+      );
+      return !qualifiedEquivalentExists;
+    }).toList();
+    final sorted = resourcesWithoutUnqualifiedDuplicates..sort();
+    return sorted;
+  }
+
+  static String? _normalizeResourceName(String? raw) {
+    if (raw == null) {
+      return null;
+    }
+    final normalized = raw.trim().replaceAll('"', '').replaceAll('[', '').replaceAll(']', '');
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  static String? _formatDeniedResourcesForUserMessage(List<String> resources) {
+    if (resources.isEmpty) {
+      return null;
+    }
+    if (resources.length <= _kMaxDeniedResourcesInUserMessage) {
+      return resources.join(', ');
+    }
+    final shown = resources.take(_kMaxDeniedResourcesInUserMessage).join(', ');
+    final hiddenCount = resources.length - _kMaxDeniedResourcesInUserMessage;
+    return '$shown (+$hiddenCount mais)';
   }
 }

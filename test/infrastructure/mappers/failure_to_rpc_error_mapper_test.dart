@@ -398,5 +398,31 @@ void main() {
         expect(data['user_message'], equals('Acesso negado nos recursos: a, b'));
       },
     );
+
+    test(
+      'should map sql_permission_denied query failure to unauthorized preserving denied resources',
+      () {
+        final failure = QueryExecutionFailure.withContext(
+          message: "The SELECT permission was denied on the object 'Orders'.",
+          context: {
+            'reason': 'sql_permission_denied',
+            'odbc_sql_state': '42501',
+            'resource': 'dbo.Orders',
+            'denied_resources': <String>['dbo.Orders'],
+            'user_message': 'Acesso negado para os recursos: dbo.Orders.',
+          },
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
+
+        expect(rpcError.code, equals(RpcErrorCode.unauthorized));
+        expect(data['reason'], equals('unauthorized'));
+        expect(data['odbc_reason'], equals('sql_permission_denied'));
+        expect(data['resource'], equals('dbo.Orders'));
+        expect(data['denied_resources'], equals(<String>['dbo.Orders']));
+        expect(data['user_message'], equals('Acesso negado para os recursos: dbo.Orders.'));
+      },
+    );
   });
 }

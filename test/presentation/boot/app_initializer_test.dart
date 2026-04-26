@@ -27,5 +27,19 @@ void main() {
       check(preferences.minimizeToTray).isFalse();
       check(preferences.closeToTray).isFalse();
     });
+
+    test('should disable start minimized when tray restore is unavailable', () async {
+      final prefs = InMemoryAppSettingsStore();
+      await prefs.setBool('settings.start_minimized', true);
+
+      final preferences = resolveStartupWindowPreferences(
+        prefs,
+        canStartMinimized: false,
+      );
+
+      check(preferences.startMinimized).isFalse();
+      check(preferences.minimizeToTray).isTrue();
+      check(preferences.closeToTray).isTrue();
+    });
   });
 }

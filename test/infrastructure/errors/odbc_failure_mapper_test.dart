@@ -126,6 +126,26 @@ void main() {
 
       expect(failure, isA<QueryExecutionFailure>());
       expect(failure.context['reason'], 'sql_permission_denied');
+      expect(failure.context.containsKey('denied_resources'), isFalse);
+    });
+
+    test('extracts denied table from SQL Server permission message', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        const QueryError(
+          message: "The SELECT permission was denied on the object 'Orders', database 'erp', schema 'dbo'.",
+          sqlState: '42501',
+        ),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], 'sql_permission_denied');
+      expect(failure.context['resource'], 'dbo.Orders');
+      expect(failure.context['denied_resources'], ['dbo.Orders']);
+      expect(
+        (failure.context['user_message'] as String?)?.contains('dbo.Orders'),
+        isTrue,
+      );
     });
 
     test('maps transient query errors from SQLSTATE to retryable failure', () {

@@ -25,10 +25,11 @@ typedef StartupWindowPreferences = ({
 
 @visibleForTesting
 StartupWindowPreferences resolveStartupWindowPreferences(
-  IAppSettingsStore settingsStore,
-) {
+  IAppSettingsStore settingsStore, {
+  bool canStartMinimized = true,
+}) {
   return (
-    startMinimized: settingsStore.getBool('settings.start_minimized') ?? false,
+    startMinimized: canStartMinimized && (settingsStore.getBool('settings.start_minimized') ?? false),
     minimizeToTray: settingsStore.getBool('settings.minimize_to_tray') ?? true,
     closeToTray: settingsStore.getBool('settings.close_to_tray') ?? true,
   );
@@ -112,7 +113,7 @@ class AppInitializer {
     WindowManagerService? windowManagerService;
 
     if (capabilities.supportsWindowManager) {
-      windowManagerService = await _initializeWindowManager();
+      windowManagerService = await _initializeWindowManager(capabilities);
     }
 
     if (capabilities.supportsTray) {
@@ -163,14 +164,19 @@ class AppInitializer {
     }
   }
 
-  Future<WindowManagerService?> _initializeWindowManager() async {
+  Future<WindowManagerService?> _initializeWindowManager(
+    RuntimeCapabilities capabilities,
+  ) async {
     try {
       final windowManagerService = WindowManagerService();
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
       final prefs = getIt<IAppSettingsStore>();
-      final preferences = resolveStartupWindowPreferences(prefs);
+      final preferences = resolveStartupWindowPreferences(
+        prefs,
+        canStartMinimized: capabilities.supportsTray,
+      );
 
       await windowManagerService.initialize(
         size: initialSize,
@@ -252,15 +258,27 @@ class AppInitializer {
 
   Future<void> _initializeNotifications() async {
     try {
-      await getIt<INotificationService>().initialize();
-      developer.log(
-        'Notification service initialized',
-        name: 'app_initializer',
-        level: 800,
+      final result = await getIt<INotificationService>().initialize();
+      result.fold(
+        (_) {
+          developer.log(
+            'Notification service initialized',
+            name: 'app_initializer',
+            level: 800,
+          );
+        },
+        (failure) {
+          developer.log(
+            'Failed to initialize notification service (continuing without)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
       );
     } on Exception catch (e, stackTrace) {
       developer.log(
-        'Failed to initialize notification service',
+        'Failed to initialize notification service (continuing without)',
         name: 'app_initializer',
         level: 900,
         error: e,

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 
 void main() {
   group('SqlValidator', () {
@@ -182,6 +183,15 @@ void main() {
           'SELECT 1; DROP TABLE x',
         );
         expect(r.isError(), isTrue);
+        r.fold(
+          (_) => fail('Should have failed'),
+          (failure) {
+            final f = failure as ValidationFailure;
+            expect(f.context['operation'], equals('sql_validation'));
+            expect(f.context['reason'], equals('sql_validation_failed'));
+            expect((f.context['user_message'] as String?)?.isNotEmpty, isTrue);
+          },
+        );
       });
 
       test('should accept semicolon inside string literal', () {
@@ -204,6 +214,14 @@ void main() {
       test('should reject DROP', () {
         final r = SqlValidator.validateSqlForExecution('DROP TABLE users');
         expect(r.isError(), isTrue);
+        r.fold(
+          (_) => fail('Should have failed'),
+          (failure) {
+            final f = failure as ValidationFailure;
+            expect(f.context['operation'], equals('sql_validation'));
+            expect((f.context['user_message'] as String?)?.isNotEmpty, isTrue);
+          },
+        );
       });
     });
 
