@@ -68,14 +68,17 @@ end;
 
 function IsVCRedistInstalled(): Boolean;
 var
-  Installed: Integer;
+  Installed: Cardinal;
 begin
-  Result := RegQueryDWordValue(
+  if RegQueryDWordValue(
     HKLM64,
     'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
     'Installed',
     Installed
-  ) and (Installed = 1);
+  ) then
+    Result := Installed = 1
+  else
+    Result := False;
 end;
 
 function InitializeSetup(): Boolean;

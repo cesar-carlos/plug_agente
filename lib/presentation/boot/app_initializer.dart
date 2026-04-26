@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -146,7 +147,7 @@ class AppInitializer {
       final orchestrator = getIt<IAutoUpdateOrchestrator>();
       await orchestrator.initialize();
       if (orchestrator.isAvailable) {
-        await orchestrator.checkInBackground();
+        unawaited(orchestrator.checkInBackground());
         developer.log(
           'Auto-update initialized and initial background check triggered',
           name: 'app_initializer',

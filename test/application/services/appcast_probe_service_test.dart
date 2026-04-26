@@ -61,5 +61,37 @@ void main() {
       expect(result.latestVersion, isNull);
       expect(result.errorMessage, contains('HTTP 404'));
     });
+
+    test('reads single quoted uppercase appcast attributes', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+
+      server.listen((request) async {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType('application', 'rss+xml', charset: 'utf-8')
+          ..write('''
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <ITEM>
+      <enclosure sparkle:version='2.0.0+9' />
+    </ITEM>
+  </channel>
+</rss>''');
+        await request.response.close();
+      });
+
+      const service = AppcastProbeService();
+      final result = await service.probeLatest(
+        feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
+      );
+
+      expect(result.errorMessage, isNull);
+      expect(result.latestVersion, '2.0.0+9');
+      expect(result.itemCount, 1);
+    });
   });
 }

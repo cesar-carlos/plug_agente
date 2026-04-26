@@ -48,12 +48,15 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     this._capabilities, {
     IAutoUpdaterGateway updaterGateway = const AutoUpdaterGateway(),
     IAppcastProbeService appcastProbeService = const AppcastProbeService(),
+    Duration manualCheckTimeout = _defaultManualCheckTimeout,
   }) : _updaterGateway = updaterGateway,
-       _appcastProbeService = appcastProbeService;
+       _appcastProbeService = appcastProbeService,
+       _manualCheckTimeout = manualCheckTimeout;
 
   final RuntimeCapabilities _capabilities;
   final IAutoUpdaterGateway _updaterGateway;
   final IAppcastProbeService _appcastProbeService;
+  final Duration _manualCheckTimeout;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
@@ -165,7 +168,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
-  static const Duration _manualCheckTimeout = Duration(seconds: 60);
+  static const Duration _defaultManualCheckTimeout = Duration(seconds: 60);
 
   @override
   Future<Result<bool>> checkManual() async {
@@ -236,15 +239,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       return await _manualCheckCompleter!.future.timeout(
         _manualCheckTimeout,
         onTimeout: () {
-          _completeManualCheck(
-            Failure<bool, Exception>(
-              domain.ServerFailure.withContext(
-                message: 'Update check timed out',
-                context: {'operation': 'checkManual'},
-              ),
+          final failure = Failure<bool, Exception>(
+            domain.ServerFailure.withContext(
+              message: 'Update check timed out',
+              context: {'operation': 'checkManual'},
             ),
           );
-          return _manualCheckCompleter!.future;
+          _completeManualCheck(failure);
+          return failure;
         },
       );
     } on Exception catch (e) {
@@ -258,6 +260,19 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       _completeManualCheck(failure);
       return failure;
     } finally {
+      if (_isInitialized) {
+        try {
+          await _updaterGateway.setFeedURL(feedUrl);
+        } on Exception catch (e, s) {
+          developer.log(
+            'Failed to restore configured feed URL after manual update check',
+            name: 'auto_update_orchestrator',
+            level: 900,
+            error: e,
+            stackTrace: s,
+          );
+        }
+      }
       _lastManualDiagnostics = _activeManualDiagnostics;
       _activeManualDiagnostics = null;
       _isManualCheck = false;

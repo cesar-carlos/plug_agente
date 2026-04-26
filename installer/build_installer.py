@@ -90,17 +90,17 @@ def resolve_auto_update_feed_url() -> Optional[str]:
 
 
 def main() -> None:
-    print("1. Executando update_version.py...")
+    print("1. Executando update_version.py...", flush=True)
     run([sys.executable, str(INSTALLER_DIR / "update_version.py")])
 
-    print("\n2. Build Flutter (windows --release)...")
+    print("\n2. Build Flutter (windows --release)...", flush=True)
     flutter_cmd = ["flutter", "build", "windows", "--release"]
     feed_url = resolve_auto_update_feed_url()
     if feed_url:
         flutter_cmd.append(f"--dart-define=AUTO_UPDATE_FEED_URL={feed_url}")
-        print(f"   AUTO_UPDATE_FEED_URL injetado via --dart-define: {feed_url}")
+        print(f"   AUTO_UPDATE_FEED_URL injetado via --dart-define: {feed_url}", flush=True)
     else:
-        print("   Aviso: AUTO_UPDATE_FEED_URL não encontrado no .env")
+        print("   Aviso: AUTO_UPDATE_FEED_URL não encontrado no .env", flush=True)
     run(flutter_cmd)
 
     if not BUILD_DIR.exists():
@@ -109,12 +109,12 @@ def main() -> None:
     if not (BUILD_DIR / "plug_agente.exe").exists():
         raise SystemExit("Erro: plug_agente.exe não encontrado no build")
 
-    print("\n3. Compilando instalador Inno Setup...")
+    print("\n3. Compilando instalador Inno Setup...", flush=True)
     iscc = find_iscc()
     run([iscc, str(SETUP_ISS)], cwd=INSTALLER_DIR)
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"\nInstalador gerado em: {DIST_DIR}")
+    print(f"\nInstalador gerado em: {DIST_DIR}", flush=True)
 
 
 if __name__ == "__main__":

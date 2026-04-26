@@ -149,9 +149,10 @@ void main() {
           (_) => fail('Expected success'),
         );
         expect(fakeGateway.lastInBackground, isFalse);
-        expect(fakeGateway.feedUrls.length, 2);
-        expect(fakeGateway.feedUrls.last, contains('cb='));
-        expect(fakeProbe.lastProbeUrl, equals(fakeGateway.feedUrls.last));
+        expect(fakeGateway.feedUrls.length, 3);
+        expect(fakeGateway.feedUrls[1], contains('cb='));
+        expect(fakeGateway.feedUrls.last, 'https://example.com/appcast.xml');
+        expect(fakeProbe.lastProbeUrl, equals(fakeGateway.feedUrls[1]));
         expect(orchestrator.lastManualDiagnostics?.updateAvailable, isTrue);
         expect(
           orchestrator.lastManualDiagnostics?.appcastProbeVersion,
@@ -189,6 +190,33 @@ void main() {
         expect(
           orchestrator.lastManualDiagnostics?.appcastProbeVersion,
           '1.0.13+14',
+        );
+      });
+
+      test('returns Failure when updater listener does not complete before timeout', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final fakeProbe = FakeAppcastProbeService();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: fakeProbe,
+          manualCheckTimeout: const Duration(milliseconds: 10),
+        );
+
+        final result = await orchestrator.checkManual();
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as domain.Failure;
+            expect(f.message, contains('timed out'));
+          },
+        );
+        expect(fakeGateway.feedUrls.last, 'https://example.com/appcast.xml');
+        expect(
+          orchestrator.lastManualDiagnostics?.errorMessage,
+          contains('timed out'),
         );
       });
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 class AppcastProbeResult {
@@ -24,8 +25,15 @@ abstract interface class IAppcastProbeService {
 class AppcastProbeService implements IAppcastProbeService {
   const AppcastProbeService();
 
-  static final RegExp _versionRegex = RegExp('sparkle:version="([^"]+)"');
-  static final RegExp _itemRegex = RegExp(r'<item(\s|>)');
+  static const int _maxAppcastBytes = 1024 * 1024;
+  static final RegExp _versionRegex = RegExp(
+    r'''sparkle:version\s*=\s*["']([^"']+)["']''',
+    caseSensitive: false,
+  );
+  static final RegExp _itemRegex = RegExp(
+    r'<item(?:\s|>)',
+    caseSensitive: false,
+  );
 
   @override
   Future<AppcastProbeResult> probeLatest({
@@ -52,7 +60,7 @@ class AppcastProbeService implements IAppcastProbeService {
       );
 
       final response = await request.close().timeout(timeout);
-      final body = await response.transform(const SystemEncoding().decoder).join();
+      final bytes = await response.expand((chunk) => chunk).take(_maxAppcastBytes + 1).toList();
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return AppcastProbeResult(
@@ -61,6 +69,14 @@ class AppcastProbeService implements IAppcastProbeService {
         );
       }
 
+      if (bytes.length > _maxAppcastBytes) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          errorMessage: 'Appcast response exceeded $_maxAppcastBytes bytes',
+        );
+      }
+
+      final body = utf8.decode(bytes, allowMalformed: true);
       final latestVersion = _versionRegex.firstMatch(body)?.group(1);
       final itemCount = _itemRegex.allMatches(body).length;
 
