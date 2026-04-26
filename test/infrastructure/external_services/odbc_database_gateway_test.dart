@@ -53,6 +53,62 @@ void main() {
       when(() => mockConnectionPool.getActiveCount()).thenAnswer((_) async {
         return const Success(1);
       });
+      when(
+        () => mockService.prepare(
+          any(),
+          any(),
+          timeoutMs: any(named: 'timeoutMs'),
+        ),
+      ).thenAnswer((_) async => const Success(9001));
+      when(
+        () => mockService.prepareNamed(
+          any(),
+          any(),
+          timeoutMs: any(named: 'timeoutMs'),
+        ),
+      ).thenAnswer((_) async => const Success(9002));
+      when(
+        () => mockService.executePrepared(
+          any(),
+          any(),
+          any(),
+          any(),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(
+        () => mockService.executePreparedNamed(
+          any(),
+          any(),
+          any(),
+          any(),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockService.closeStatement(any(), any())).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockService.cancelStatement(any(), any())).thenAnswer((_) async {
+        return const Success(unit);
+      });
     });
 
     test(
@@ -1530,6 +1586,107 @@ void main() {
     );
 
     test(
+      'should cancel prepared statement when transactional batch item times out',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const ownedId = 'owned-prepared-timeout-1';
+        const stmtId = 78;
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(1);
+        });
+        when(
+          () => mockService.prepareNamed(
+            ownedId,
+            'SELECT * FROM users WHERE id = :id',
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        ).thenAnswer((_) async => const Success(stmtId));
+        when(
+          () => mockService.executePreparedNamed(
+            ownedId,
+            stmtId,
+            any(),
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.cancelStatement(ownedId, stmtId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.rollbackTransaction(ownedId, 1)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.closeStatement(ownedId, stmtId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(
+              sql: 'SELECT * FROM users WHERE id = :id',
+              params: {'id': 1},
+            ),
+            SqlCommand(
+              sql: 'SELECT * FROM users WHERE id = :id',
+              params: {'id': 2},
+            ),
+          ],
+          options: const SqlExecutionOptions(
+            transaction: true,
+            timeoutMs: 20,
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        verify(() => mockService.cancelStatement(ownedId, stmtId)).called(1);
+        verify(() => mockService.rollbackTransaction(ownedId, 1)).called(1);
+        verify(() => mockService.closeStatement(ownedId, stmtId)).called(1);
+        expect(metrics.timeoutCancelSuccessCount, 1);
+      },
+    );
+
+    test(
       'should rollback transactional batch when execution throws unexpectedly',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -1616,9 +1773,11 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executePrepared(
+            pooledConnectionId,
             any(),
-            connectionId: pooledConnectionId,
+            any(),
+            any(),
           ),
         ).thenAnswer((_) async {
           await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -1649,7 +1808,8 @@ void main() {
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verifyNever(() => mockConnectionPool.discard(pooledConnectionId));
+        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
       },
     );
 
@@ -1677,15 +1837,20 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQuery(
+          () => mockService.executePrepared(
+            pooledConnectionId,
             any(),
-            connectionId: pooledConnectionId,
+            any(),
+            any(),
           ),
         ).thenAnswer((_) async {
           await Future<void>.delayed(const Duration(milliseconds: 80));
           return const Success(
             QueryResult(columns: ['id'], rows: [], rowCount: 0),
           );
+        });
+        when(() => mockService.cancelStatement(pooledConnectionId, any())).thenAnswer((_) async {
+          return Failure(Exception('cancel failed'));
         });
         when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
           return const Success(unit);
@@ -1705,7 +1870,7 @@ void main() {
         final queryFailure = failure! as domain.QueryExecutionFailure;
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
-        expect(metrics.timeoutCancelSuccessCount, 1);
+        expect(metrics.timeoutCancelFailureCount, 1);
         expect(metrics.poolReleaseFailureCount, 1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
         verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);

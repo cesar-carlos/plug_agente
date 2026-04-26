@@ -336,9 +336,22 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           );
         },
       );
-    } on TimeoutException {
+    } on TimeoutException catch (error) {
       _metrics?.recordStreamCancelDisconnectTimeout();
-      return const Success(unit);
+      return Failure(
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'cancel_streaming_disconnect',
+          context: {
+            'reason': 'stream_cancel_disconnect_timeout',
+            'executionId': stream.executionId,
+            'timeout_ms': _cancelDisconnectTimeout.inMilliseconds,
+            'user_message':
+                'A consulta foi marcada para cancelamento, mas a desconexão '
+                'do streaming não foi confirmada dentro do tempo esperado.',
+          },
+        ),
+      );
     } finally {
       stream.lease.release();
     }

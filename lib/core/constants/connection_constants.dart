@@ -4,6 +4,7 @@ class ConnectionConstants {
 
   static const Duration defaultLoginTimeout = Duration(seconds: 30);
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
+  static const Duration defaultTransactionalBatchTimeout = Duration(seconds: 60);
   static const Duration defaultStreamingQueryTimeout = Duration(minutes: 5);
   static const int defaultMaxResultBufferBytes = 32 * 1024 * 1024;
   static const int defaultInitialResultBufferBytes = 256 * 1024;

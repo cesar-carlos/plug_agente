@@ -310,6 +310,58 @@ void main() {
       },
     );
 
+    test('should return failure when cancel disconnect times out', () async {
+      final controller = StreamController<Result<QueryResult>>();
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-cancel-timeout',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-cancel-timeout', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-cancel-timeout'),
+      ).thenAnswer((_) => Completer<Result<void>>().future);
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {},
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      final cancelResult = await gateway.cancelActiveStream();
+      controller.add(
+        const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      );
+      await controller.close();
+      final executionResult = await execution;
+
+      expect(cancelResult.isError(), isTrue);
+      expect(executionResult.isError(), isTrue);
+      expect(metrics.streamCancelDisconnectTimeoutCount, 1);
+    });
+
     test('should keep structured ODBC error for streaming failures', () async {
       final controller = StreamController<Result<QueryResult>>();
 

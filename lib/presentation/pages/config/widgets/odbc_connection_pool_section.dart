@@ -102,8 +102,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       await settings.setUseNativeOdbcPool(_useNativeOdbcPool);
       await settings.setNativePoolTestOnCheckout(_nativePoolTestOnCheckout);
 
-      final closeResult = await getIt<IConnectionPool>().closeAll();
-      final settingsAppliedNow = closeResult.isSuccess();
+      final settingsAppliedNow = await reloadOdbcRuntimeDependencies();
 
       if (!mounted) return;
       _showSuccess(

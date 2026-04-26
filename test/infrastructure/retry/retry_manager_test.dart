@@ -170,6 +170,43 @@ void main() {
         expect(isTransient, isFalse);
       });
 
+      test('should not identify retryable query execution failure as transient', () {
+        // Arrange
+        final failure = domain.QueryExecutionFailure.withContext(
+          message: 'Lock request timeout',
+          context: {'retryable': true},
+        );
+
+        // Act
+        final isTransient = retryManager.isTransientFailure(failure);
+
+        // Assert
+        expect(isTransient, isFalse);
+      });
+
+      test('should not retry operation when query execution failure is retryable', () async {
+        // Arrange
+        var attempts = 0;
+
+        // Act
+        final result = await retryManager.execute<String>(
+          () async {
+            attempts++;
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: 'Deadlock victim',
+                context: {'retryable': true},
+              ),
+            );
+          },
+          initialDelayMs: 10,
+        );
+
+        // Assert
+        expect(result.isError(), isTrue);
+        expect(attempts, 1);
+      });
+
       test('should not identify configuration failure as transient', () {
         // Arrange
         final failure = domain.ConfigurationFailure('Missing config');

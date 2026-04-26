@@ -675,7 +675,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
   }) async {
-    final effectiveTimeout = timeout ?? _timeoutFromSqlExecutionOptions(options);
+    final effectiveTimeout =
+        timeout ??
+        _timeoutFromSqlExecutionOptions(options) ??
+        (options.transaction ? ConnectionConstants.defaultTransactionalBatchTimeout : null);
     for (var attempt = 0; attempt < 2; attempt++) {
       final contextResult = await _prepareBatchExecutionContext(
         database: database,
@@ -1255,7 +1258,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionId: connId,
         query: query,
         parameters: parameters,
-        connectionString: connectionString,
         timeout: timeout,
       );
 
@@ -1315,6 +1317,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String connectionString,
     Duration? timeout,
   }) async {
+    if (timeout != null &&
+        !OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+          request,
+          preparedExecution,
+        )) {
+      return _runPreparedQueryExecution(
+        connectionId: connId,
+        request: request,
+        preparedExecution: preparedExecution,
+        timeout: timeout,
+      );
+    }
+
     if (timeout == null) {
       return _runQueryExecution(connId, request, preparedExecution);
     }
@@ -1386,12 +1401,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final statementOptions = timeout == null ? null : StatementOptions(timeout: timeout);
-    final result = await _executePreparedStatement(
+    final preparedStatementId = stmtId.getOrThrow();
+    final result = await _executePreparedStatementWithTimeout(
       connectionId: connectionId,
       preparedExecution: preparedExecution,
-      stmtId: stmtId.getOrThrow(),
-      options: statementOptions,
+      statementId: preparedStatementId,
+      timeout: timeout,
     );
     return result.fold(
       (queryResult) => _QueryExecutionOutcome.success(
@@ -1399,6 +1414,48 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       ),
       _QueryExecutionOutcome.failure,
     );
+  }
+
+  Future<_QueryExecutionOutcome> _runPreparedQueryExecution({
+    required String connectionId,
+    required QueryRequest request,
+    required OdbcPreparedQueryExecution preparedExecution,
+    Duration? timeout,
+  }) async {
+    final preparedStatements = <String, int>{};
+    final statementKey = _preparedStatementKeyFor(preparedExecution);
+    try {
+      final stmtId = await _getOrPrepareStatement(
+        connectionId: connectionId,
+        preparedExecution: preparedExecution,
+        preparedStatements: preparedStatements,
+        statementKey: statementKey,
+        timeout: timeout,
+      );
+      if (stmtId.isError()) {
+        return _QueryExecutionOutcome.failure(
+          stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
+        );
+      }
+
+      final result = await _executePreparedStatementWithTimeout(
+        connectionId: connectionId,
+        preparedExecution: preparedExecution,
+        statementId: stmtId.getOrThrow(),
+        timeout: timeout,
+      );
+      return result.fold(
+        (queryResult) => _QueryExecutionOutcome.success(
+          _createSuccessResponse(request, queryResult),
+        ),
+        _QueryExecutionOutcome.failure,
+      );
+    } finally {
+      await _closePreparedStatements(
+        connectionId,
+        preparedStatements.values,
+      );
+    }
   }
 
   Future<Result<int>> _getOrPrepareStatement({
@@ -1460,6 +1517,35 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  Future<Result<QueryResult>> _executePreparedStatementWithTimeout({
+    required String connectionId,
+    required OdbcPreparedQueryExecution preparedExecution,
+    required int statementId,
+    Duration? timeout,
+  }) async {
+    final statementOptions = timeout == null ? null : StatementOptions(timeout: timeout);
+    final execution = _executePreparedStatement(
+      connectionId: connectionId,
+      preparedExecution: preparedExecution,
+      stmtId: statementId,
+      options: statementOptions,
+    );
+    if (timeout == null) {
+      return execution;
+    }
+
+    return execution.timeout(
+      timeout,
+      onTimeout: () async {
+        await _cancelPreparedStatementForTimeout(
+          connectionId: connectionId,
+          statementId: statementId,
+        );
+        throw TimeoutException('Prepared statement execution deadline exceeded');
+      },
+    );
+  }
+
   Future<void> _closePreparedStatements(
     String connectionId,
     Iterable<int> stmtIds,
@@ -1472,11 +1558,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<QueryResult>> _runNonQueryWithTimeout({
     required String connectionId,
     required String query,
-    required String connectionString,
     Map<String, dynamic>? parameters,
     Duration? timeout,
   }) async {
-    Future<Result<QueryResult>> run() {
+    if (timeout == null) {
       if (parameters != null && parameters.isNotEmpty) {
         return _service.executeQueryNamed(
           connectionId,
@@ -1490,15 +1575,41 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    if (timeout == null) {
-      return run();
-    }
-
     try {
-      return await run().timeout(timeout);
+      final preparedExecution = OdbcPreparedQueryExecution(
+        sql: query,
+        parameters: parameters,
+      );
+      final preparedStatements = <String, int>{};
+      final statementKey = _preparedStatementKeyFor(preparedExecution);
+      try {
+        final stmtId = await _getOrPrepareStatement(
+          connectionId: connectionId,
+          preparedExecution: preparedExecution,
+          preparedStatements: preparedStatements,
+          statementKey: statementKey,
+          timeout: timeout,
+        );
+        if (stmtId.isError()) {
+          final error = stmtId.exceptionOrNull();
+          final failure = error is Exception ? error : Exception('prepare_statement_failed');
+          return Failure(failure);
+        }
+
+        return await _executePreparedStatementWithTimeout(
+          connectionId: connectionId,
+          preparedExecution: preparedExecution,
+          statementId: stmtId.getOrThrow(),
+          timeout: timeout,
+        );
+      } finally {
+        await _closePreparedStatements(
+          connectionId,
+          preparedStatements.values,
+        );
+      }
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
-      await _cancelConnectionForTimeout(connectionId, connectionString);
       developer.log(
         'SQL non-query timed out before completion',
         name: 'database_gateway',
@@ -1514,7 +1625,37 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String _,
   ) async {
     _markConnectionForDiscard(connectionId);
-    _metrics.recordTimeoutCancelSuccess();
+    _metrics.recordTimeoutCancelFailure();
+    developer.log(
+      'SQL query timed out; connection marked for discard because no statement handle is available to cancel',
+      name: 'database_gateway',
+      level: 900,
+    );
+  }
+
+  Future<void> _cancelPreparedStatementForTimeout({
+    required String connectionId,
+    required int statementId,
+  }) async {
+    final cancelResult = await _service.cancelStatement(
+      connectionId,
+      statementId,
+    );
+    cancelResult.fold(
+      (_) {
+        _metrics.recordTimeoutCancelSuccess();
+      },
+      (error) {
+        _markConnectionForDiscard(connectionId);
+        _metrics.recordTimeoutCancelFailure();
+        developer.log(
+          'Failed to cancel prepared statement after timeout',
+          name: 'database_gateway',
+          level: 900,
+          error: error,
+        );
+      },
+    );
   }
 
   Duration? _remainingTimeout(DateTime? deadline) {
@@ -1728,7 +1869,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               connectionId: connection.id,
               query: query,
               parameters: parameters,
-              connectionString: connectionString,
               timeout: timeout,
             );
 

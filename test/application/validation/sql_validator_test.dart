@@ -128,6 +128,14 @@ void main() {
         },
       );
 
+      test('should reject SELECT with table lock hint', () {
+        const query = 'SELECT * FROM users WITH (TABLOCKX)';
+
+        final result = SqlValidator.validateSelectQuery(query);
+
+        expect(result.isError(), isTrue);
+      });
+
       test('should accept SELECT with mixed case', () {
         // Arrange
         const query = 'select * from users';
@@ -222,6 +230,14 @@ void main() {
             expect((f.context['user_message'] as String?)?.isNotEmpty, isTrue);
           },
         );
+      });
+
+      test('should reject DML with table lock hint', () {
+        final r = SqlValidator.validateSqlForExecution(
+          "UPDATE dbo.users WITH (UPDLOCK, HOLDLOCK) SET name = 'x'",
+        );
+
+        expect(r.isError(), isTrue);
       });
     });
 

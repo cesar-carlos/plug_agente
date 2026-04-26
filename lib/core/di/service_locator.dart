@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
@@ -10,10 +11,14 @@ import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,6 +63,43 @@ Future<void> shutdownApp() async {
 
   // 5. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
+}
+
+Future<bool> reloadOdbcRuntimeDependencies() async {
+  try {
+    if (getIt.isRegistered<ITransportClient>()) {
+      await getIt<ITransportClient>().disconnect();
+    }
+
+    if (getIt.isRegistered<IConnectionPool>()) {
+      await getIt<IConnectionPool>().closeAll();
+    }
+
+    await _resetLazySingletonIfRegistered<ITransportClient>();
+    await _resetLazySingletonIfRegistered<RpcMethodDispatcher>();
+    await _resetLazySingletonIfRegistered<OdbcNativeMetricsService>();
+    await _resetLazySingletonIfRegistered<IStreamingDatabaseGateway>();
+    await _resetLazySingletonIfRegistered<IDatabaseGateway>();
+    await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
+    await _resetLazySingletonIfRegistered<IConnectionPool>();
+    return true;
+  } on Object catch (error, stackTrace) {
+    developer.log(
+      'Failed to reload ODBC runtime dependencies',
+      name: 'service_locator',
+      level: 900,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return false;
+  }
+}
+
+Future<void> _resetLazySingletonIfRegistered<T extends Object>() async {
+  if (!getIt.isRegistered<T>()) {
+    return;
+  }
+  await getIt.resetLazySingleton<T>();
 }
 
 Future<void> _migrateLegacyUserPreferences(

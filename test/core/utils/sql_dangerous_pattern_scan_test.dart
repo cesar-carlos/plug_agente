@@ -41,5 +41,35 @@ void main() {
         isTrue,
       );
     });
+
+    test('should return true for explicit lock hints', () {
+      expect(
+        sqlContainsTopLevelDangerousPatterns(
+          'SELECT * FROM users WITH (TABLOCKX)',
+        ),
+        isTrue,
+      );
+      expect(
+        sqlContainsTopLevelDangerousPatterns(
+          'UPDATE users WITH (UPDLOCK, HOLDLOCK) SET name = ?',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should return false for lock hint words inside literals and identifiers', () {
+      expect(
+        sqlContainsTopLevelDangerousPatterns(
+          "SELECT * FROM users WHERE note = 'TABLOCKX'",
+        ),
+        isFalse,
+      );
+      expect(
+        sqlContainsTopLevelDangerousPatterns(
+          'SELECT tablockx_value FROM users',
+        ),
+        isFalse,
+      );
+    });
   });
 }

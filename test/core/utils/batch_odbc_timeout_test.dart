@@ -3,10 +3,10 @@ import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
 
 void main() {
   group('mergeBatchOdbcTimeout', () {
-    test('should return null when stage timeout is null', () {
+    test('should return client cap when stage timeout is null', () {
       expect(
         mergeBatchOdbcTimeout(stageTimeout: null, timeoutMs: 30_000),
-        isNull,
+        const Duration(seconds: 30),
       );
     });
 

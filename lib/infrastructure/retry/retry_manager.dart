@@ -80,6 +80,12 @@ class RetryManager implements IRetryManager {
   bool isTransientFailure(Exception exception) {
     // Verificar se é um Failure do domínio com mensagem transitória
     if (exception is domain.Failure) {
+      // Query execution may have reached the database already. Retrying it here
+      // can duplicate non-idempotent statements such as INSERT/UPDATE/DELETE.
+      if (exception is domain.QueryExecutionFailure) {
+        return false;
+      }
+
       if (exception.context['poolExhausted'] == true) {
         return true;
       }
@@ -108,11 +114,6 @@ class RetryManager implements IRetryManager {
         if (message.contains('timeout') || message.contains('connection') || message.contains('network')) {
           return true;
         }
-        return false;
-      }
-
-      // Erros de query NÃO são transientes (SQL error, syntax error)
-      if (exception is domain.QueryExecutionFailure) {
         return false;
       }
 
