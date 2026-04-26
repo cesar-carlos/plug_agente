@@ -33,16 +33,18 @@ ArchitecturesAllowed=x64compatible
 MinVersion=10.0
 CloseApplications=yes
 CloseApplicationsFilter=plug_agente.exe
+SetupLogging=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -64,82 +66,34 @@ begin
   Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + '{#AutostartArg}';
 end;
 
-function IsAppRunning(const ExeName: String): Boolean;
+function IsVCRedistInstalled(): Boolean;
 var
-  ResultCode: Integer;
+  Installed: Integer;
 begin
-  Result := False;
-  if Exec('cmd.exe', '/c tasklist | findstr /I "' + ExeName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    Result := (ResultCode = 0);
-end;
-
-function CloseApp(const ExeName: String): Boolean;
-var
-  ResultCode: Integer;
-  Retries: Integer;
-begin
-  Result := False;
-  Exec('taskkill.exe', '/IM ' + ExeName + ' /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1500);
-  if not IsAppRunning(ExeName) then
-  begin
-    Result := True;
-    Exit;
-  end;
-  Retries := 0;
-  while IsAppRunning(ExeName) and (Retries < 10) do
-  begin
-    Exec('taskkill.exe', '/IM ' + ExeName + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(1000);
-    Retries := Retries + 1;
-    if not IsAppRunning(ExeName) then
-    begin
-      Result := True;
-      Exit;
-    end;
-  end;
-  Result := not IsAppRunning(ExeName);
+  Result := RegQueryDWordValue(
+    HKLM64,
+    'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
+    'Installed',
+    Installed
+  ) and (Installed = 1);
 end;
 
 function InitializeSetup(): Boolean;
-var
-  AppExe: String;
-  WaitCount: Integer;
 begin
   Result := True;
-  AppExe := ExpandConstant('{#MyAppExeName}');
 
-  if IsAppRunning(AppExe) then
+  if not IsVCRedistInstalled() then
   begin
     if WizardSilent() then
     begin
-      CloseApp(AppExe);
-      WaitCount := 0;
-      while IsAppRunning(AppExe) and (WaitCount < 30) do
-      begin
-        Sleep(500);
-        WaitCount := WaitCount + 1;
-      end;
+      Log('Microsoft Visual C++ Redistributable x64 was not detected. Continuing because setup is running silently.');
     end
     else
     begin
-      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' est' + Chr(225) + ' em execu' + Chr(231) + Chr(227) + 'o.' + #13#10 + #13#10 +
-        Chr(201) + ' necess' + Chr(225) + 'rio fechar o aplicativo para continuar. Deseja fechar agora?', mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        CloseApp(AppExe);
-        WaitCount := 0;
-        while IsAppRunning(AppExe) and (WaitCount < 30) do
-        begin
-          Sleep(500);
-          WaitCount := WaitCount + 1;
-        end;
-        if IsAppRunning(AppExe) then
-        begin
-          if MsgBox('O aplicativo ainda est' + Chr(225) + ' em execu' + Chr(231) + Chr(227) + 'o. Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
-            Result := False;
-        end;
-      end
-      else
+      if MsgBox('Microsoft Visual C++ Redistributable x64 n' + Chr(227) + 'o foi detectado.' + #13#10 + #13#10 +
+        'Instale-o antes de usar o ' + ExpandConstant('{#MyAppName}') + ':' + #13#10 +
+        'https://aka.ms/vs/17/release/vc_redist.x64.exe' + #13#10 + #13#10 +
+        'Deseja continuar a instala' + Chr(231) + Chr(227) + 'o mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
         Result := False;
     end;
   end;

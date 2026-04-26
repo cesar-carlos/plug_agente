@@ -1,18 +1,18 @@
-# Guia para Criar Release
+# Guia de Release e Versionamento
 
-Checklist operacional para criação de release do Plug Agente: versão, build do
-instalador, tag e publicação no GitHub.
+Fonte operacional para versionamento, build do instalador, tag e publicação do
+Plug Agente.
 
-## Formato de Tags
+## Versão e Tags
 
-As tags seguem o padrão **`v{VERSÃO}`**:
-
-- A versão vem do `pubspec.yaml` (campo `version`)
-- O prefixo `v` é obrigatório
-- Exemplo: versão `1.0.0` → tag `v1.0.0`
-
-Detalhes de SemVer e responsabilidades dos arquivos ficam em
-[version_strategy.md](version_strategy.md).
+- A versão nasce em `pubspec.yaml`, no formato `MAJOR.MINOR.PATCH+BUILD`.
+- `installer/update_version.py` sincroniza `installer/setup.iss` com a versão
+  curta (`MAJOR.MINOR.PATCH`) e `lib/core/constants/app_version.g.dart` com a
+  versão completa.
+- Tags usam `v{MAJOR.MINOR.PATCH}`. Exemplo: `version: 1.2.6+1` exige tag
+  `v1.2.6`.
+- O CI falha se `pubspec.yaml`, `installer/setup.iss` e
+  `lib/core/constants/app_version.g.dart` estiverem fora de sincronia.
 
 ## Processo Recomendado
 
@@ -21,7 +21,7 @@ Detalhes de SemVer e responsabilidades dos arquivos ficam em
 Edite `pubspec.yaml`:
 
 ```yaml
-version: 1.0.0+1
+version: 1.2.7+2
 ```
 
 ### 2. Gerar build Windows e instalador
@@ -30,64 +30,61 @@ version: 1.0.0+1
 python installer/build_installer.py
 ```
 
-O script executa `update_version.py`, `flutter build windows --release` e
-compila o Inno Setup. A saída será
-`installer/dist/PlugAgente-Setup-1.0.0.exe`.
+O script executa:
 
-> O `build_installer.py` injeta automaticamente
-> `--dart-define=AUTO_UPDATE_FEED_URL=...` usando o valor do `.env`.
+1. `installer/update_version.py`
+2. `flutter build windows --release`
+3. `ISCC installer/setup.iss`
 
-### 3. Validar artefatos versionados
+Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
+`--dart-define=AUTO_UPDATE_FEED_URL=...`.
+
+Saída esperada:
+
+```text
+installer/dist/PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
+```
+
+### 3. Revisar e commitar artefatos versionados
 
 ```bash
 git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
-git commit -m "chore: bump version to 1.0.0"
+git commit -m "chore: bump version to 1.2.7"
 git push origin main
 ```
 
-> `installer/setup.iss` e `lib/core/constants/app_version.g.dart` devem refletir
-> a versão do `pubspec.yaml`.
-> O CI valida essa sincronização; se houver divergência, o workflow falha em vez
-> de corrigir `main` automaticamente.
-
-### 4. Criar tag e enviar
+### 4. Criar tag
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.2.7
+git push origin v1.2.7
 ```
 
-### 5. Criar release no GitHub
+### 5. Publicar release no GitHub
 
-1. Acesse: https://github.com/cesar-carlos/plug_agente/releases
-2. Clique em **"Create a new release"**
-3. Selecione a tag `v1.0.0`
-4. Título: `Version 1.0.0`
-5. Adicione descrição com as mudanças
-6. Arraste o instalador (`PlugAgente-Setup-1.0.0.exe`) para upload
-7. Marque **"Set as the latest release"**
-8. Clique em **"Publish release"**
+1. Acesse `https://github.com/cesar-carlos/plug_agente/releases`.
+2. Crie uma release para a tag `v1.2.7`.
+3. Use título como `Version 1.2.7`.
+4. Anexe `installer/dist/PlugAgente-Setup-1.2.7.exe`.
+5. Publique como latest release quando for a versão estável mais recente.
 
-### 6. Verificar GitHub Actions
+### 6. Validar automação
 
-1. Acesse: https://github.com/cesar-carlos/plug_agente/actions
-2. O workflow **"Update Appcast on Release"** executará automaticamente
-3. Aguarde conclusão (1-2 minutos)
-4. Confirme que o `appcast.xml` foi atualizado com o asset e a versão esperados
-5. Confirme que o smoke check do feed publicado concluiu com sucesso
+Após publicar, confira o workflow **Update Appcast on Release** em GitHub
+Actions. Ele valida tag, versão, nome do asset e atualiza `appcast.xml`.
 
-## Checklist Rápido Pós-Release
+Feed oficial:
 
-1. Abra a URL oficial do feed:
-   `https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml`
-2. Verifique se a nova versão aparece no primeiro `<item>`
-3. Confirme que o `url` do `enclosure` aponta para o asset correto da release
-4. Em uma instalação anterior do app, clique em **Verificar atualizações**
-5. Valide a versão remota detectada e o comportamento esperado da atualização
+```text
+https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+```
 
-## Fluxo manual/avançado
+Validações detalhadas do feed e do update ficam em
+[auto_update_setup.md](auto_update_setup.md).
 
-Use apenas se precisar depurar o processo em etapas:
+## Fluxo Manual para Depuração
+
+Use apenas quando precisar isolar uma etapa:
 
 ```bash
 python installer/update_version.py
@@ -95,8 +92,10 @@ flutter build windows --release
 ISCC installer/setup.iss
 ```
 
-## Referências
+## Segurança Operacional
 
-- [version_strategy.md](version_strategy.md)
-- [auto_update_setup.md](auto_update_setup.md)
-- [testing_auto_update.md](testing_auto_update.md)
+- O fluxo atual publica `appcast.xml` sem `sparkle:dsaSignature`.
+- Para distribuição ampla, priorize assinatura de código do executável e do
+  instalador para reduzir alertas de SmartScreen e aumentar confiança no update.
+- A retenção do `appcast.xml` é limitada pelo workflow para evitar crescimento
+  indefinido do feed.

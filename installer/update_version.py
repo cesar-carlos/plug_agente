@@ -12,6 +12,7 @@ Run from project root:
 
 import re
 from pathlib import Path
+from typing import Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PUBSPEC = PROJECT_ROOT / "pubspec.yaml"
@@ -19,10 +20,13 @@ SETUP_ISS = PROJECT_ROOT / "installer" / "setup.iss"
 APP_VERSION_DART = PROJECT_ROOT / "lib" / "core" / "constants" / "app_version.g.dart"
 
 
-def get_version_from_pubspec() -> tuple[str, str]:
+def get_version_from_pubspec() -> Tuple[str, str]:
+    if not PUBSPEC.exists():
+        raise SystemExit(f"Error: pubspec.yaml not found at {PUBSPEC}")
+
     content = PUBSPEC.read_text(encoding="utf-8")
     match = re.search(
-        r'^version:\s*["\']?([\d.]+(?:\+\d+)?)["\']?\s*(?:#|$)',
+        r'^version:\s*["\']?(\d+\.\d+\.\d+(?:\+\d+)?)["\']?\s*(?:#|$)',
         content,
         re.MULTILINE,
     )
@@ -34,12 +38,20 @@ def get_version_from_pubspec() -> tuple[str, str]:
 
 
 def update_setup_iss(version: str) -> None:
+    if not SETUP_ISS.exists():
+        raise SystemExit(f"Error: setup.iss not found at {SETUP_ISS}")
+
     content = SETUP_ISS.read_text(encoding="utf-8-sig")
-    new_content = re.sub(
+    new_content, replacements = re.subn(
         r'#define MyAppVersion\s+".*"',
         f'#define MyAppVersion "{version}"',
         content,
     )
+    if replacements != 1:
+        raise SystemExit(
+            "Error: expected exactly one MyAppVersion define in installer/setup.iss, "
+            f"found {replacements}"
+        )
     SETUP_ISS.write_text(new_content, encoding="utf-8-sig")
     print(f"  setup.iss: MyAppVersion = {version}")
 

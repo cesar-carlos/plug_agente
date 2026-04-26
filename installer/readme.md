@@ -19,6 +19,7 @@ installer/
 - **Flutter** no PATH
 - **Inno Setup 6** (ISCC no PATH ou em `C:\Program Files (x86)\Inno Setup 6\`)
 - **Python 3.8+**
+- **Microsoft Visual C++ Redistributable x64** no ambiente de destino
 
 ## Uso
 
@@ -64,21 +65,13 @@ O nome segue o padrão esperado pelo workflow **Update Appcast on Release** (`.g
 
 ## Integração com release e auto-update
 
-1. **Versão**: definida em `pubspec.yaml`; `update_version.py` propaga para
-   `setup.iss` e `app_version.g.dart`.
-2. **Release**: após criar o instalador, publique no GitHub com tag
-   `v{versão}` e anexe o `.exe`.
-3. **Appcast**: o workflow atualiza `appcast.xml` automaticamente; clientes
-   recebem update na próxima checagem (1h) ou via botão manual.
-4. **Appcast/update**: o workflow publica o `appcast.xml` sem assinatura DSA.
-   Consulte [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
-
-Antes de criar a tag, garanta que `setup.iss` e `app_version.g.dart` já foram
-commitados junto com a mudança de `pubspec.yaml`; o CI valida esse sincronismo
-e não corrige mais a branch automaticamente.
+O processo de versão, tag, publicação e validação do feed fica em
+[docs/install/release_guide.md](../docs/install/release_guide.md) e
+[docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
+Este diretório mantém apenas os scripts e o arquivo Inno Setup.
 
 ## Documentação relacionada
 
 - [docs/install/readme.md](../docs/install/readme.md) - índice de instalação e release
 - [docs/install/release_guide.md](../docs/install/release_guide.md) - processo completo de release
-- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md) - feed oficial, appcast e validações de CI
+- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md) - feed oficial, appcast e validações

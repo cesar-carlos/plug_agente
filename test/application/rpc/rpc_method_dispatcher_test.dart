@@ -1368,7 +1368,7 @@ void main() {
       },
     );
 
-    test('should return error when SQL validation fails', () async {
+    test('should return sqlValidationFailed when SQL validation rejects statement', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
         method: 'sql.execute',
@@ -1381,7 +1381,7 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isError, isTrue);
-      expect(response.error!.code, equals(RpcErrorCode.invalidParams));
+      expect(response.error!.code, equals(RpcErrorCode.sqlValidationFailed));
     });
 
     test('should execute sql.executeBatch successfully', () async {

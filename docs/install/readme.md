@@ -6,8 +6,8 @@ atualização automática.
 ## Compatibilidade
 
 - **Windows 10/11**: suporte completo
-- **Windows 8/8.1 e Windows Server 2012+**: suporte degradado
-- **Abaixo de Windows 8 / Server 2012**: não suportado
+- **Windows Server 2016+**: suporte com possíveis recursos degradados
+- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: não suportado pelo instalador
 
 Checklist e matriz detalhada em [requirements.md](requirements.md).
 
@@ -22,7 +22,7 @@ Checklist e matriz detalhada em [requirements.md](requirements.md).
 
 ### Gerar instalador para release
 
-1. Revisar versionamento em [version_strategy.md](version_strategy.md)
+1. Revisar versionamento em [release_guide.md](release_guide.md)
 2. Executar `python installer/build_installer.py`
 3. Publicar conforme [release_guide.md](release_guide.md)
 
@@ -39,10 +39,8 @@ Saída esperada: `installer/dist/PlugAgente-Setup-{versão}.exe`.
 
 | Documento                                        | Quando usar                                          |
 | ------------------------------------------------ | ---------------------------------------------------- |
-| [release_guide.md](release_guide.md)             | Checklist operacional para build, tag e publicação   |
-| [version_strategy.md](version_strategy.md)       | Fonte de verdade para versão e convenção de tags     |
-| [auto_update_setup.md](auto_update_setup.md)     | Configuração do feed oficial, appcast e smoke checks |
-| [testing_auto_update.md](testing_auto_update.md) | Validação do fluxo automático e silencioso de update |
+| [release_guide.md](release_guide.md)             | Versionamento, build, tag, publicação e pós-release  |
+| [auto_update_setup.md](auto_update_setup.md)     | Feed oficial, appcast, smoke checks e testes         |
 
 ## Scripts úteis
 

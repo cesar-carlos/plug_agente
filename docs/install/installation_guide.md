@@ -12,12 +12,13 @@ Antes de começar, certifique-se de ter:
 2. **Permissões de Administrador** para instalação
 3. **Conexão com a Internet** (para atualizações, se configurado)
 4. **Espaço em disco** suficiente (mínimo 500 MB)
+5. **Microsoft Visual C++ Redistributable x64**
 
 Compatibilidade de sistema:
 
-- **Windows 10/11**: suporte completo (todos os recursos)
-- **Windows 8/8.1 e Windows Server 2012+**: suporte degradado (sem tray, notificações, auto-update)
-- **Abaixo de Windows 8 / Server 2012**: não suportado
+- **Windows 10/11**: suporte completo
+- **Windows Server 2016+**: suporte com possíveis recursos degradados
+- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: não suportado pelo instalador
 
 Consulte [requirements.md](requirements.md) para requisitos detalhados,
 compatibilidade, validação pós-instalação e notas sobre ODBC/PATH.
@@ -79,6 +80,19 @@ Selecione as opções desejadas e clique em **"Avançar"**
 
 ---
 
+## Instalação Silenciosa
+
+Para distribuição por TI, use os parâmetros padrão do Inno Setup:
+
+```powershell
+PlugAgente-Setup-{versão}.exe /VERYSILENT /NORESTART /LOG
+```
+
+O instalador requer administrador e grava aviso no log se o Visual C++
+Redistributable x64 não for detectado.
+
+---
+
 ## Passo 4: Monitor de Portas (Opcional)
 
 Se você utilizar o **Monitor de Portas** (PlugPortMon) para impressão:
@@ -128,7 +142,7 @@ desinstalar o aplicativo principal.
 2. Clique com o botão direito no arquivo `.exe`
 3. Selecione **"Executar como administrador"**
 
-### "Visual C++ Redistributables falhou ao instalar"
+### "Microsoft Visual C++ Redistributable x64 não foi detectado"
 
 1. Baixe manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe
 2. Execute como administrador
@@ -136,7 +150,7 @@ desinstalar o aplicativo principal.
 
 ### "Aplicativo não inicia após instalação"
 
-1. Verifique se o Visual C++ Redistributables está instalado
+1. Verifique se o Microsoft Visual C++ Redistributable x64 está instalado
 2. Verifique os logs em: `C:\ProgramData\PlugAgente\logs\`
 3. Tente executar como administrador
 

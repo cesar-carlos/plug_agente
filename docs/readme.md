@@ -18,9 +18,7 @@ docs/
 |  |- installation_guide.md
 |  |- requirements.md
 |  |- release_guide.md
-|  |- auto_update_setup.md
-|  |- testing_auto_update.md
-|  \- version_strategy.md
+|  \- auto_update_setup.md
 \- notes/
 ```
 

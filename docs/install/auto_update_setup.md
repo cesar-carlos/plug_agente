@@ -1,116 +1,106 @@
-# Configuração de Atualização Automática
+# Auto-Update
 
-Este documento explica como configurar e testar o sistema de atualização automática do Plug Agente.
-
-> **Nota**: Para instruções de como testar o auto-update, consulte [testing_auto_update.md](testing_auto_update.md).
-> **Nota**: Para instruções de como criar releases, consulte [release_guide.md](release_guide.md).
+Configuração e validação do update automático do Plug Agente no Windows.
 
 ## Visão Geral
 
-O sistema de atualização automática permite que o aplicativo verifique e
-instale atualizações automaticamente. Utiliza o pacote `auto_updater`
-(WinSparkle no Windows) com feed no formato Sparkle.
+O app usa `auto_updater`/WinSparkle com feed Sparkle em XML. O recurso só fica
+ativo quando `AUTO_UPDATE_FEED_URL` aponta para uma URL `.xml` e o runtime
+suporta auto-update.
 
-O auto-update só é ativado quando `AUTO_UPDATE_FEED_URL` está configurado e aponta para um feed Sparkle (URL terminando em `.xml`).
+Ordem de resolução:
 
-Ordem de resolução da configuração:
+1. `--dart-define=AUTO_UPDATE_FEED_URL=...` no build de release.
+2. `.env` em runtime para desenvolvimento e testes locais.
 
-1. `--dart-define=AUTO_UPDATE_FEED_URL=...` no build (recomendado para release)
-2. `.env` em runtime (fallback para desenvolvimento/testes)
+Em modo degradado, o auto-update fica desabilitado e a UI exibe uma mensagem
+informativa.
 
-Sem essa variável válida, o recurso fica desabilitado.
-
-Em modo degradado (Windows Server 2012/2016+), o auto-update não é suportado e a seção de atualizações exibe mensagem informativa.
-
-Comportamento atual da aplicação:
-
-- checagem automática em background (intervalo configurável via `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, padrão 1 hora, mínimo 1 hora);
-- checagem inicial ao subir o app;
-- checagem manual pela UI usa fluxo foreground do WinSparkle (pode exibir progresso nativo);
-- fluxo de download/aplicação permanece silencioso em background; a atualização é aplicada ao fechar o app.
-
-## Opção Recomendada: GitHub Releases + GitHub Raw
-
-O projeto está configurado para usar **GitHub Releases** para hospedar os
-executáveis e **GitHub Raw** como endpoint oficial do `appcast.xml`. O GitHub
-Actions atualiza o `appcast.xml` automaticamente quando um release é criado.
-
-### Configuração Inicial (Uma vez)
-
-#### 1. Verificar Permissões do GitHub Actions
-
-1. Acesse: https://github.com/cesar-carlos/plug_agente/settings/actions
-2. Em "Workflow permissions", selecione "Read and write permissions"
-3. Marque "Allow GitHub Actions to create and approve pull requests"
-
-#### 2. Configurar URL do feed (build/runtime)
-
-**Endpoint oficial:**
+## Feed Oficial
 
 ```text
 https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 ```
 
-**Opção recomendada (release):** usar `--dart-define` no build:
-
-```bash
-flutter build windows --release --dart-define=AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
-```
-
-> Se usar `python installer/build_installer.py`, o script injeta automaticamente esse `--dart-define` com base no `.env`.
-
-**Fallback local (dev/teste):** adicionar no arquivo `.env`:
+Para release, `python installer/build_installer.py` injeta o feed via
+`--dart-define` quando o `.env` contém:
 
 ```env
 AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 ```
 
-### Fluxo de Trabalho Automatizado
+## Workflow de Publicação
 
-1. **Gerar build Windows e instalador:** `python installer/build_installer.py`
-2. **Criar release no GitHub:** Consulte [release_guide.md](release_guide.md)
-3. **GitHub Actions** executa automaticamente e atualiza o `appcast.xml`
-4. **Smoke check de CI** valida o feed publicado contra os metadados reais da release
-5. Clientes recebem atualização na próxima verificação (a cada 1 hora) ou manualmente
+1. Gere o instalador com `python installer/build_installer.py`.
+2. Publique uma release seguindo [release_guide.md](release_guide.md).
+3. O workflow **Update Appcast on Release** valida versão, tag e asset.
+4. O workflow atualiza `appcast.xml` em `main`.
+5. O smoke check confirma que o feed publicado aponta para o asset esperado.
 
-### Observação sobre assinatura
+O asset deve seguir:
 
-O fluxo atual de update via GitHub está configurado sem assinatura DSA no
-`appcast.xml`. O workflow publica o feed com metadados da release e o cliente
-consome esse feed sem validar `sparkle:dsaSignature`.
-
-### Retenção do feed
-
-O workflow mantém apenas as versões mais recentes no `appcast.xml` para evitar
-crescimento indefinido do feed e reduzir ruído operacional durante inspeções e
-troubleshooting.
-
-### Estrutura do appcast.xml
-
-O arquivo é mantido automaticamente pelo GitHub Actions:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Plug Agente Updates</title>
-    <link>https://github.com/cesar-carlos/plug_agente/releases</link>
-    <item>
-      <title>Version 1.0.0</title>
-      <pubDate>Mon, 15 Jan 2024 10:00:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.0/PlugAgente-Setup-1.0.0.exe"
-        sparkle:version="1.0.0"
-        sparkle:os="windows"
-        length="52428800"
-        type="application/octet-stream" />
-    </item>
-  </channel>
-</rss>
+```text
+PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
 ```
 
-## Documentação Relacionada
+## Comportamento no App
 
-- [testing_auto_update.md](testing_auto_update.md): Como testar o sistema de atualização
-- [release_guide.md](release_guide.md): Como criar releases no GitHub
-- [version_strategy.md](version_strategy.md): Estratégia de versionamento
+- Checagem inicial em background ao subir o app.
+- Checagem automática a cada 1 hora, no mínimo.
+- Checagem manual pela UI em fluxo foreground do WinSparkle.
+- Download/aplicação silenciosos quando o ambiente suporta.
+- Atualização aplicada quando o app encerra ou quando o updater solicita quit.
+
+## Teste Rápido
+
+1. Instale uma versão antiga.
+2. Abra **Configurações** > **Atualizações**.
+3. Clique em **Verificar atualizações**.
+4. Valide:
+   - com versão nova: download/aplicação iniciam;
+   - sem versão nova: a UI informa que não há atualização.
+
+O endpoint `raw.githubusercontent.com` pode ficar em cache por alguns minutos
+após a publicação da release.
+
+## Teste End-to-End
+
+1. Instale uma versão antiga, por exemplo `1.2.6`.
+2. Publique nova versão, por exemplo `1.2.7`, com o asset correto.
+3. Aguarde o workflow atualizar `appcast.xml`.
+4. Inicie a versão antiga.
+5. Verifique logs de `auto_update_orchestrator`.
+6. Valide a checagem inicial, uma checagem manual e o comportamento de aplicação
+   do update.
+
+## Falhas Comuns
+
+### Workflow não executou
+
+- Release sem asset `PlugAgente-Setup-{versao}.exe`.
+- Asset com nome diferente da versão curta da tag.
+
+### Versão fora de sincronia
+
+- `pubspec.yaml`, `installer/setup.iss` e
+  `lib/core/constants/app_version.g.dart` divergem.
+- Rode `python installer/update_version.py`, revise o diff e commite as
+  alterações antes da tag.
+
+### Feed não configurado
+
+- Defina `AUTO_UPDATE_FEED_URL` no build ou no `.env`.
+- A URL precisa terminar em `.xml`, ignorando query string.
+
+### Feed publicado não reflete a release
+
+- Aguarde cache do GitHub Raw.
+- Confirme se o smoke check passou.
+- Confira se o item mais recente do `appcast.xml` contém a versão e o asset
+  esperados.
+
+## Assinatura
+
+O fluxo atual não publica `sparkle:dsaSignature` no `appcast.xml`. Para uso em
+produção ampla, trate assinatura do instalador/executável como requisito de
+distribuição, além das validações do feed.

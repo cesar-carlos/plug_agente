@@ -1,17 +1,27 @@
-name: Validate Version Sync
+name: Validate Installer Sync
 
 on:
   push:
     branches: [main]
     paths:
+      - 'constants/autostart_arg.txt'
       - 'pubspec.yaml'
+      - 'installer/constants.iss'
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
+      - 'lib/core/constants/app_strings.dart'
+      - 'scripts/verify_autostart_constant.ps1'
+      - 'windows/runner/launch_args_constants.h'
   pull_request:
     paths:
+      - 'constants/autostart_arg.txt'
       - 'pubspec.yaml'
+      - 'installer/constants.iss'
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
+      - 'lib/core/constants/app_strings.dart'
+      - 'scripts/verify_autostart_constant.ps1'
+      - 'windows/runner/launch_args_constants.h'
 
 jobs:
   validate-version-sync:
@@ -39,3 +49,7 @@ jobs:
             git diff -- installer/setup.iss lib/core/constants/app_version.g.dart
             exit 1
           fi
+
+      - name: Validate autostart argument constants
+        shell: pwsh
+        run: ./scripts/verify_autostart_constant.ps1

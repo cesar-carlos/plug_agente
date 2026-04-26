@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import List, Optional, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INSTALLER_DIR = PROJECT_ROOT / "installer"
@@ -42,17 +43,37 @@ def find_iscc() -> str:
     )
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> None:
-    result = subprocess.run(
-        cmd,
-        cwd=cwd or PROJECT_ROOT,
-        shell=True,
-    )
-    if result.returncode != 0:
-        sys.exit(result.returncode)
+def resolve_command(cmd: Sequence[str]) -> List[str]:
+    args = list(cmd)
+    if not args:
+        raise SystemExit("Comando vazio")
+
+    executable = args[0]
+    if Path(executable).parent == Path("."):
+        executable = shutil.which(executable) or executable
+
+    if Path(executable).suffix.lower() in {".bat", ".cmd"}:
+        return ["cmd.exe", "/d", "/c", executable, *args[1:]]
+
+    return [executable, *args[1:]]
 
 
-def resolve_auto_update_feed_url() -> str | None:
+def run(cmd: Sequence[str], cwd: Optional[Path] = None) -> None:
+    resolved_cmd = resolve_command(cmd)
+    try:
+        subprocess.run(
+            resolved_cmd,
+            cwd=cwd or PROJECT_ROOT,
+            check=True,
+        )
+    except FileNotFoundError as error:
+        executable = resolved_cmd[0] if resolved_cmd else "command"
+        raise SystemExit(f"Comando não encontrado: {executable}") from error
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(error.returncode) from error
+
+
+def resolve_auto_update_feed_url() -> Optional[str]:
     if not ENV_FILE.exists():
         return None
 
