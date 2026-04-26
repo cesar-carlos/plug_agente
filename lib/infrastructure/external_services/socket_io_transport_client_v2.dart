@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -53,9 +53,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
        _payloadSigner = payloadSigner,
        _protocolMetricsCollector = protocolMetricsCollector,
        _openRpcDocumentLoader = openRpcDocumentLoader ?? OpenRpcDocumentLoader(),
-       _logSummarizer = logSummarizer ?? PayloadLogSummarizer(
-         thresholdBytes: ConnectionConstants.socketLogPayloadSummaryThresholdBytes,
-       ) {
+       _logSummarizer =
+           logSummarizer ??
+           PayloadLogSummarizer(
+             thresholdBytes: ConnectionConstants.socketLogPayloadSummaryThresholdBytes,
+           ) {
     _pipelineCache = TransportPipelineCache(
       protocolProvider: () => _currentProtocol,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
@@ -390,6 +392,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
         unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
         final asString = reason is String ? reason : reason?.toString();
         _onHubLifecycle?.call(HubTransportDisconnected(reason: asString));
+        if (_isServerInitiatedDisconnect(asString)) {
+          AppLogger.warning('Server disconnected the Socket.IO namespace; scheduling fresh hub reconnect');
+          _onReconnectionNeeded?.call();
+        }
       });
 
       // Protocol negotiation response
@@ -576,6 +582,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (_isAuthRelated(structured, errorMessage)) {
       _onTokenExpired?.call();
     }
+  }
+
+  bool _isServerInitiatedDisconnect(String? reason) {
+    return reason?.toLowerCase() == 'io server disconnect';
   }
 
   /// Extracts structured fields when the hub sends a JSON-shaped error payload

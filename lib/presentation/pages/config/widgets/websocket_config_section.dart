@@ -47,7 +47,7 @@ class WebSocketConfigSection extends StatelessWidget {
             children: [
               _ServerSection(
                 formController: formController,
-                onLoginOrLogout: () => _handleLoginOrLogout(context),
+                onLoginOrLogout: () => unawaited(_handleLoginOrLogout(context)),
               ),
               const SizedBox(height: 24),
               const _OutboundCompressionSection(),
@@ -68,11 +68,12 @@ class WebSocketConfigSection extends StatelessWidget {
     );
   }
 
-  void _handleLoginOrLogout(BuildContext context) {
+  Future<void> _handleLoginOrLogout(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     if (authProvider.isAuthenticated) {
+      await Provider.of<ConnectionProvider>(context, listen: false).disconnect();
       authProvider.logout();
     } else {
       final serverUrl = normalizeServerUrl(
@@ -170,15 +171,24 @@ class _ServerSection extends StatelessWidget {
                       hint: l10n.wsHintPassword,
                     ),
                     const SizedBox(height: 16),
-                    AppButton(
-                      label: authProvider.status == AuthStatus.authenticating
-                          ? l10n.wsButtonAuthenticating
-                          : authProvider.isAuthenticated
-                          ? l10n.wsButtonLogout
-                          : l10n.wsButtonLogin,
-                      isPrimary: false,
-                      isLoading: authProvider.status == AuthStatus.authenticating,
-                      onPressed: onLoginOrLogout,
+                    Consumer<ConnectionProvider>(
+                      builder: (context, connectionProvider, _) {
+                        final isAuthenticating = authProvider.status == AuthStatus.authenticating;
+                        final isConnectionBusy =
+                            connectionProvider.status == ConnectionStatus.connecting ||
+                            connectionProvider.isReconnecting;
+                        final canSubmit = authProvider.isAuthenticated || (!isAuthenticating && !isConnectionBusy);
+                        return AppButton(
+                          label: isAuthenticating
+                              ? l10n.wsButtonAuthenticating
+                              : authProvider.isAuthenticated
+                              ? l10n.wsButtonLogout
+                              : l10n.wsButtonLogin,
+                          isPrimary: false,
+                          isLoading: isAuthenticating,
+                          onPressed: canSubmit ? onLoginOrLogout : null,
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -331,9 +341,13 @@ class _WebSocketActionButtons extends StatelessWidget {
       builder: (context, connectionProvider, _) {
         return Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
+            final isConnecting = connectionProvider.status == ConnectionStatus.connecting;
+            final isReconnecting = connectionProvider.status == ConnectionStatus.reconnecting;
+            final isConnectionBusy = isConnecting || isReconnecting;
             return SettingsActionRow(
               leading: AppButton(
                 label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
+                isLoading: isConnectionBusy,
                 onPressed: () => _handleConnectOrDisconnect(
                   context,
                   connectionProvider,
@@ -357,6 +371,10 @@ class _WebSocketActionButtons extends StatelessWidget {
     ConnectionProvider connectionProvider,
     AuthProvider authProvider,
   ) {
+    if (connectionProvider.status == ConnectionStatus.connecting ||
+        connectionProvider.status == ConnectionStatus.reconnecting) {
+      return;
+    }
     if (connectionProvider.isConnected) {
       connectionProvider.disconnect();
       return;

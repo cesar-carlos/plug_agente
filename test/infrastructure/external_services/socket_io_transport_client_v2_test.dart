@@ -284,6 +284,20 @@ void main() {
       );
     });
 
+    test('should request fresh reconnect after server-side disconnect', () async {
+      var reconnectRequests = 0;
+      client.setOnReconnectionNeeded(() => reconnectRequests++);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent('disconnect', 'io server disconnect');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(reconnectRequests, 1);
+    });
+
     test('should emit agent:ready after capabilities when readiness ack is negotiated', () async {
       when(
         () => mockNegotiator.negotiate(
