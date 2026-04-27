@@ -99,6 +99,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
       formError: formError,
       providerError: providerError,
       child: SingleChildScrollView(
+        padding: const EdgeInsets.only(right: AppSpacing.sm),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

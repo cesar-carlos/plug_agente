@@ -293,10 +293,15 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
     }).join('\n');
 
+    final tokenName = _nameController.text.trim();
+    final defaultFileName = tokenName.isNotEmpty
+        ? '${tokenName.toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_').replaceAll(RegExp(r'_+$'), '')}.txt'
+        : l10n.ctExportRulesDefaultFileName;
+
     try {
       final savePath = await FilePicker.platform.saveFile(
         dialogTitle: l10n.ctButtonExportRules,
-        fileName: l10n.ctExportRulesDefaultFileName,
+        fileName: defaultFileName,
         type: FileType.custom,
         allowedExtensions: ['txt'],
       );
