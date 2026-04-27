@@ -159,47 +159,56 @@ class _CreateTokenDialogContent extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: SettingsSectionTitle(
                     title: l10n.ctSectionRulesByResource,
                   ),
                 ),
-                FocusTraversalOrder(
-                  order: const NumericFocusOrder(8),
-                  child: isImportingRules
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      : AppButton(
-                          label: l10n.ctButtonImportRules,
-                          isPrimary: false,
-                          icon: FluentIcons.upload,
-                          onPressed: allPermissions ? null : onImportRules,
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(8),
+                        child: isImportingRules
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: ProgressRing(strokeWidth: 2),
+                              )
+                            : AppButton(
+                                label: l10n.ctButtonImportRules,
+                                isPrimary: false,
+                                icon: FluentIcons.upload,
+                                onPressed: allPermissions ? null : onImportRules,
+                              ),
+                      ),
+                      if (rules.isNotEmpty)
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(9),
+                          child: AppButton(
+                            label: l10n.ctButtonExportRules,
+                            isPrimary: false,
+                            icon: FluentIcons.download,
+                            onPressed: onExportRules,
+                          ),
                         ),
-                ),
-                if (rules.isNotEmpty) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  FocusTraversalOrder(
-                    order: const NumericFocusOrder(9),
-                    child: AppButton(
-                      label: l10n.ctButtonExportRules,
-                      isPrimary: false,
-                      icon: FluentIcons.download,
-                      onPressed: onExportRules,
-                    ),
-                  ),
-                ],
-                const SizedBox(width: AppSpacing.sm),
-                FocusTraversalOrder(
-                  order: const NumericFocusOrder(10),
-                  child: AppButton(
-                    label: l10n.ctButtonAddRule,
-                    isPrimary: false,
-                    icon: FluentIcons.add,
-                    onPressed: allPermissions ? null : onAddRule,
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(10),
+                        child: AppButton(
+                          label: l10n.ctButtonAddRule,
+                          isPrimary: false,
+                          icon: FluentIcons.add,
+                          onPressed: allPermissions ? null : onAddRule,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -23,7 +23,7 @@ void main() {
       expect(config.protocol, equals('jsonrpc-v2'));
     });
 
-    test('should keep jsonrpc-v2 when there is no common protocol', () {
+    test('should throw StateError when there is no common protocol', () {
       final agentCaps = ProtocolCapabilities.defaultCapabilities();
       const serverCaps = ProtocolCapabilities(
         protocols: ['custom-v3'],
@@ -31,12 +31,13 @@ void main() {
         compressions: ['none'],
       );
 
-      final config = negotiator.negotiate(
-        agentCapabilities: agentCaps,
-        serverCapabilities: serverCaps,
+      expect(
+        () => negotiator.negotiate(
+          agentCapabilities: agentCaps,
+          serverCapabilities: serverCaps,
+        ),
+        throwsA(isA<StateError>()),
       );
-
-      expect(config.protocol, equals('jsonrpc-v2'));
     });
 
     test('should keep the first common protocol when v2 is not preferred', () {

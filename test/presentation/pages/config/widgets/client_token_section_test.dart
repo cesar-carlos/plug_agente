@@ -84,6 +84,7 @@ void main() {
 
       expect(find.text(ptL10n.ctNoRulesAdded), findsOneWidget);
 
+      await tester.ensureVisible(find.text(ptL10n.ctButtonAddRule));
       await tester.tap(find.text(ptL10n.ctButtonAddRule));
       await tester.pumpAndSettle();
 
@@ -105,6 +106,7 @@ void main() {
       await tester.tap(find.text(ptL10n.ctButtonNewToken));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.text(ptL10n.ctButtonAddRule));
       await tester.tap(find.text(ptL10n.ctButtonAddRule));
       await tester.pumpAndSettle();
 
