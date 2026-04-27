@@ -34,6 +34,22 @@ class ExecuteSqlBatch {
     final batchDeadline = timeout == null ? null : DateTime.now().add(timeout);
 
     if (opts.transaction) {
+      for (var i = 0; i < commands.length; i++) {
+        final validation = SqlValidator.validateSqlForExecution(commands[i].sql);
+        if (validation.isError()) {
+          final failure = validation.exceptionOrNull()! as domain.Failure;
+          return Failure(
+            domain.ValidationFailure.withContext(
+              message: 'Invalid SQL in transactional batch at index $i: ${failure.message}',
+              context: {
+                'operation': 'batch_validation',
+                'index': i,
+                'reason': failure.context['reason'] ?? 'invalid_sql',
+              },
+            ),
+          );
+        }
+      }
       return _databaseGateway.executeBatch(
         agentId,
         commands,

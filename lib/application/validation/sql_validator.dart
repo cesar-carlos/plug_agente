@@ -135,12 +135,7 @@ class SqlValidator {
   static Result<SqlPaginationPlan> validatePaginationQuery(String query) {
     final selectValidation = validateSelectQuery(query);
     if (selectValidation.isError()) {
-      return Failure(
-        _sqlValidationFailure(
-          message: 'Pagination is supported only for SELECT/WITH queries',
-          userMessage: 'A paginação só pode ser usada com consultas SELECT ou WITH.',
-        ),
-      );
+      return Failure(selectValidation.exceptionOrNull()! as domain.ValidationFailure);
     }
 
     final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');

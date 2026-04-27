@@ -32,6 +32,37 @@ class ConfigFormController {
   bool _fieldsInitialized = false;
   bool get fieldsInitialized => _fieldsInitialized;
 
+  /// Clears all fields and the initialization guard so that a subsequent
+  /// [initializeFromConfig] call always re-populates for the new [Config].
+  /// Call this whenever the active config id changes.
+  void resetForConfig() {
+    _fieldsInitialized = false;
+    serverUrlController.clear();
+    agentIdController.clear();
+    authUsernameController.clear();
+    authPasswordController.clear();
+    driverNameController.clear();
+    odbcDriverNameController.clear();
+    usernameController.clear();
+    passwordController.clear();
+    databaseNameController.clear();
+    hostController.clear();
+    portController.clear();
+    nomeController.clear();
+    nomeFantasiaController.clear();
+    cnaeCnpjCpfController.clear();
+    telefoneController.clear();
+    celularController.clear();
+    emailController.clear();
+    enderecoController.clear();
+    numeroEnderecoController.clear();
+    bairroController.clear();
+    cepController.clear();
+    nomeMunicipioController.clear();
+    ufMunicipioController.clear();
+    observacaoController.clear();
+  }
+
   void initializeFromConfig(Config? config) {
     if (_fieldsInitialized || config == null) return;
 

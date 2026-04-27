@@ -137,10 +137,17 @@ class CapabilitiesNegotiator {
   }
 
   /// Sends the `agent:register` frame followed by the timeout watchdog.
+  /// If local validation rejects the register payload, the timer is not
+  /// started and a reconnect is triggered instead, so the transport never
+  /// reports a successful connect while the hub was never notified.
   Future<void> sendRegisterAndStartTimeout() async {
     _reRegisterCount = 0;
-    await _sendAgentRegister();
-    _startTimeoutTimer();
+    final sent = await _sendAgentRegister();
+    if (sent) {
+      _startTimeoutTimer();
+    } else {
+      _onTimeoutReconnect();
+    }
   }
 
   /// Same as [sendRegisterAndStartTimeout] but invoked on the `reconnect`
@@ -148,8 +155,13 @@ class CapabilitiesNegotiator {
   Future<void> sendReRegisterAfterReconnect() async {
     _reRegisterCount = 0;
     _awaitingPostReconnectCapabilities = true;
-    await _sendAgentRegister();
-    _startTimeoutTimer();
+    final sent = await _sendAgentRegister();
+    if (sent) {
+      _startTimeoutTimer();
+    } else {
+      _awaitingPostReconnectCapabilities = false;
+      _onTimeoutReconnect();
+    }
   }
 
   /// Processes the `agent:capabilities` envelope received from the hub.
@@ -200,7 +212,9 @@ class CapabilitiesNegotiator {
     }
   }
 
-  Future<void> _sendAgentRegister() async {
+  /// Returns `true` when the frame was emitted, `false` when local validation
+  /// rejected it. Callers must not start the capabilities timeout on `false`.
+  Future<bool> _sendAgentRegister() async {
     final agentCapabilities = _localCapabilitiesProvider();
 
     final registerData = {
@@ -214,11 +228,12 @@ class CapabilitiesNegotiator {
       if (validation.isError()) {
         final failure = validation.exceptionOrNull()! as domain.Failure;
         AppLogger.error('Invalid agent:register payload: ${failure.message}');
-        return;
+        return false;
       }
     }
 
     await _emit('agent:register', registerData);
+    return true;
   }
 
   void _startTimeoutTimer() {
@@ -233,8 +248,13 @@ class CapabilitiesNegotiator {
             'resilience: capabilities_timeout re_register_count=$_reRegisterCount '
             'max=${ConnectionConstants.capabilitiesMaxReRegisterAttempts}',
           );
-          unawaited(_sendAgentRegister());
-          _startTimeoutTimer();
+          unawaited(_sendAgentRegister().then((sent) {
+            if (sent) {
+              _startTimeoutTimer();
+            } else {
+              _onTimeoutReconnect();
+            }
+          }));
         } else {
           AppLogger.warning(
             'resilience: capabilities_timeout forcing_reconnect after_max_attempts',

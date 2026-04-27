@@ -180,12 +180,17 @@ class ConnectionProvider extends ChangeNotifier {
 
     result.fold(
       (_) {
+        if (_isDisconnectRequested) return;
         _cancelPersistentRetryTimer();
         _status = ConnectionStatus.connected;
         _error = '';
         AppLogger.info('Connected to hub successfully');
       },
       (failure) {
+        if (_isDisconnectRequested) {
+          _status = ConnectionStatus.disconnected;
+          return;
+        }
         _status = ConnectionStatus.error;
         _error = failure.toDisplayMessage();
         AppLogger.error(

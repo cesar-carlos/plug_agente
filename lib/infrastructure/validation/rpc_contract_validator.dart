@@ -8,6 +8,15 @@ import 'package:result_dart/result_dart.dart';
 class RpcContractValidator {
   const RpcContractValidator();
 
+  /// Normalizes [value] to [int] when possible. Accepts [int] directly and
+  /// rounds [num] (e.g. [double]) to handle JSON encoders that emit numbers
+  /// without a decimal point distinction.
+  static int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return null;
+  }
+
   Result<void> validateAgentRegister(Map<String, dynamic> data) {
     final agentId = data['agentId'];
     if (agentId is! String || agentId.trim().isEmpty) {
@@ -129,8 +138,8 @@ class RpcContractValidator {
     if (requestId != null && requestId is! String && requestId is! num) {
       return _invalid('Field "request_id" must be string, number, or null');
     }
-    final chunkIndex = data['chunk_index'];
-    if (chunkIndex is! int || chunkIndex < 0) {
+    final chunkIndex = _toInt(data['chunk_index']);
+    if (chunkIndex == null || chunkIndex < 0) {
       return _invalid('Field "chunk_index" must be >= 0');
     }
     final rows = data['rows'];
@@ -141,8 +150,9 @@ class RpcContractValidator {
       return _invalid('Field "rows" must contain objects only');
     }
 
-    final totalChunks = data['total_chunks'];
-    if (totalChunks != null && (totalChunks is! int || totalChunks < 1)) {
+    final totalChunksRaw = data['total_chunks'];
+    final totalChunks = totalChunksRaw != null ? _toInt(totalChunksRaw) : null;
+    if (totalChunksRaw != null && (totalChunks == null || totalChunks < 1)) {
       return _invalid('Field "total_chunks" must be >= 1');
     }
 
@@ -163,14 +173,15 @@ class RpcContractValidator {
     if (requestId != null && requestId is! String && requestId is! num) {
       return _invalid('Field "request_id" must be string, number, or null');
     }
-    final totalRows = data['total_rows'];
-    if (totalRows is! int || totalRows < 0) {
+    final totalRows = _toInt(data['total_rows']);
+    if (totalRows == null || totalRows < 0) {
       return _invalid('Field "total_rows" must be >= 0');
     }
 
     for (final key in ['affected_rows']) {
-      final value = data[key];
-      if (value != null && (value is! int || value < 0)) {
+      final raw = data[key];
+      final value = raw != null ? _toInt(raw) : null;
+      if (raw != null && (value == null || value < 0)) {
         return _invalid('Field "$key" must be >= 0');
       }
     }
@@ -228,8 +239,9 @@ class RpcContractValidator {
     }
 
     for (final key in ['row_count', 'returned_rows', 'affected_rows']) {
-      final value = result[key];
-      if (value != null && (value is! int || value < 0)) {
+      final raw = result[key];
+      final value = raw != null ? _toInt(raw) : null;
+      if (raw != null && (value == null || value < 0)) {
         return _invalid('Field "$key" must be >= 0');
       }
     }
@@ -239,8 +251,9 @@ class RpcContractValidator {
       return _invalid('Field "multi_result" must be a boolean');
     }
     for (final key in ['result_set_count', 'item_count']) {
-      final value = result[key];
-      if (value != null && (value is! int || value < 0)) {
+      final raw = result[key];
+      final value = raw != null ? _toInt(raw) : null;
+      if (raw != null && (value == null || value < 0)) {
         return _invalid('Field "$key" must be >= 0');
       }
     }

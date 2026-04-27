@@ -54,6 +54,21 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     });
   }
 
+  @override
+  void didUpdateWidget(WebSocketSettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.configId != widget.configId) {
+      _formController.resetForConfig();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (widget.configId != null) {
+          _loadConfig(widget.configId!);
+        }
+        _checkAndInitializeFields();
+      });
+    }
+  }
+
   Future<void> _loadConfig(String configId) async {
     final configProvider = context.read<ConfigProvider>();
     await configProvider.loadConfigById(configId);

@@ -22,6 +22,7 @@ class CompressionService {
     }
 
     final compressedResultSets = <QueryResultSet>[];
+    final compressedByLogicalIndex = <int, QueryResultSet>{};
     for (final resultSet in response.resultSets) {
       final compressedRows = await _compressor.compress(resultSet.rows);
       if (compressedRows.isError()) {
@@ -33,9 +34,9 @@ class CompressionService {
           ),
         );
       }
-      compressedResultSets.add(
-        resultSet.copyWith(rows: compressedRows.getOrNull()),
-      );
+      final compressed = resultSet.copyWith(rows: compressedRows.getOrNull());
+      compressedResultSets.add(compressed);
+      compressedByLogicalIndex[resultSet.index] = compressed;
     }
 
     final compressedItems = response.items
@@ -43,9 +44,13 @@ class CompressionService {
           if (item.resultSet == null) {
             return item;
           }
+          final compressed = compressedByLogicalIndex[item.resultSet!.index];
+          if (compressed == null) {
+            return item;
+          }
           return QueryResponseItem.resultSet(
             index: item.index,
-            resultSet: compressedResultSets[item.resultSet!.index],
+            resultSet: compressed,
           );
         })
         .toList(growable: false);
@@ -82,6 +87,7 @@ class CompressionService {
     }
 
     final decompressedResultSets = <QueryResultSet>[];
+    final decompressedByLogicalIndex = <int, QueryResultSet>{};
     for (final resultSet in response.resultSets) {
       final decompressedRows = await _compressor.decompress(resultSet.rows);
       if (decompressedRows.isError()) {
@@ -93,9 +99,9 @@ class CompressionService {
           ),
         );
       }
-      decompressedResultSets.add(
-        resultSet.copyWith(rows: decompressedRows.getOrNull()),
-      );
+      final decompressed = resultSet.copyWith(rows: decompressedRows.getOrNull());
+      decompressedResultSets.add(decompressed);
+      decompressedByLogicalIndex[resultSet.index] = decompressed;
     }
 
     final decompressedItems = response.items
@@ -103,9 +109,13 @@ class CompressionService {
           if (item.resultSet == null) {
             return item;
           }
+          final decompressed = decompressedByLogicalIndex[item.resultSet!.index];
+          if (decompressed == null) {
+            return item;
+          }
           return QueryResponseItem.resultSet(
             index: item.index,
-            resultSet: decompressedResultSets[item.resultSet!.index],
+            resultSet: decompressed,
           );
         })
         .toList(growable: false);

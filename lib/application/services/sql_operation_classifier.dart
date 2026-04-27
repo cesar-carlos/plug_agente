@@ -377,25 +377,52 @@ class SqlOperationClassifier {
     var inSingleQuote = false;
     var inDoubleQuote = false;
     var inBracketQuote = false;
-    for (var i = openIndex; i < sql.length; i++) {
+    var i = openIndex;
+    while (i < sql.length) {
       final char = sql[i];
-      if (!inDoubleQuote && !inBracketQuote && char == "'") {
-        inSingleQuote = !inSingleQuote;
+      if (inSingleQuote) {
+        // Handle SQL-style escaped single quote: '' inside a string literal
+        if (char == "'" && i + 1 < sql.length && sql[i + 1] == "'") {
+          i += 2;
+          continue;
+        }
+        if (char == "'") {
+          inSingleQuote = false;
+        }
+        i++;
         continue;
       }
-      if (!inSingleQuote && !inBracketQuote && char == '"') {
-        inDoubleQuote = !inDoubleQuote;
+      if (inDoubleQuote) {
+        if (char == '"' && i + 1 < sql.length && sql[i + 1] == '"') {
+          i += 2;
+          continue;
+        }
+        if (char == '"') {
+          inDoubleQuote = false;
+        }
+        i++;
         continue;
       }
-      if (!inSingleQuote && !inDoubleQuote && char == '[') {
+      if (inBracketQuote) {
+        if (char == ']') {
+          inBracketQuote = false;
+        }
+        i++;
+        continue;
+      }
+      if (char == "'") {
+        inSingleQuote = true;
+        i++;
+        continue;
+      }
+      if (char == '"') {
+        inDoubleQuote = true;
+        i++;
+        continue;
+      }
+      if (char == '[') {
         inBracketQuote = true;
-        continue;
-      }
-      if (inBracketQuote && char == ']') {
-        inBracketQuote = false;
-        continue;
-      }
-      if (inSingleQuote || inDoubleQuote || inBracketQuote) {
+        i++;
         continue;
       }
       if (char == '(') {
@@ -406,6 +433,7 @@ class SqlOperationClassifier {
           return i;
         }
       }
+      i++;
     }
     return -1;
   }

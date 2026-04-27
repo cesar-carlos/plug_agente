@@ -212,6 +212,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return error.toString();
   }
 
+  static final RegExp _dmlPrefix = RegExp(
+    r'^(insert|update|delete|merge)\s',
+    caseSensitive: false,
+  );
+
+  // Returns true when the query is DML so that affectedRows carries meaningful
+  // semantics. SELECT/WITH return false to avoid misleading row count reporting.
+  bool _isDmlQuery(String query) => _dmlPrefix.hasMatch(query.trimLeft());
+
   QueryResponse _createSuccessResponse(
     QueryRequest request,
     QueryResult queryResult,
@@ -225,12 +234,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
     final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
 
+    final isDml = _isDmlQuery(request.query);
     return QueryResponse(
       id: _uuid.v4(),
       requestId: request.id,
       agentId: request.agentId,
       data: data,
-      affectedRows: data.length,
+      affectedRows: isDml ? data.length : null,
       timestamp: DateTime.now(),
       columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
         queryResult.columns,

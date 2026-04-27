@@ -20,6 +20,12 @@ class RetryManager implements IRetryManager {
     int initialDelayMs = _defaultInitialDelayMs,
     double backoffMultiplier = _defaultBackoffMultiplier,
   }) async {
+    if (maxAttempts < 1) {
+      return Failure(
+        domain.ValidationFailure('maxAttempts must be at least 1, got $maxAttempts'),
+      );
+    }
+
     var attempts = 0;
     var delayMs = initialDelayMs;
     Exception? lastException;

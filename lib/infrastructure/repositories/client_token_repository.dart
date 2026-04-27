@@ -19,11 +19,15 @@ class ClientTokenRepository implements IClientTokenRepository {
     try {
       return await _localDataSource.getTokenById(tokenId);
     } on Exception catch (error, stackTrace) {
+      // Log at error level so DB failures are distinguishable from "not found"
+      // (null return). Callers that need to distinguish should use listTokens
+      // or a Result-returning overload when the distinction matters.
       developer.log(
-        'Failed to load client token by id',
+        'DB error loading client token by id — returning null',
         name: 'client_token_repository',
         error: error,
         stackTrace: stackTrace,
+        level: 1000,
       );
       return null;
     }

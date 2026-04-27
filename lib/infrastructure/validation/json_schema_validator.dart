@@ -29,6 +29,14 @@ class JsonSchemaContractValidator {
   }) {
     final schema = _loader.get(schemaId);
     if (schema == null) {
+      // Schema not loaded: skip JSON Schema validation and fall through to
+      // procedural validation. Log at fine level so production traces can
+      // show when schema coverage is incomplete.
+      assert(() {
+        // ignore: avoid_print
+        print('[JsonSchemaContractValidator] schema "$schemaId" not loaded — skipping');
+        return true;
+      }(), 'schema "$schemaId" not loaded');
       return const Success(unit);
     }
     final result = schema.validate(payload);

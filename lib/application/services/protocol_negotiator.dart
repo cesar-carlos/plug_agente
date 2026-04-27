@@ -11,10 +11,16 @@ class ProtocolNegotiator {
     bool preferJsonRpcV2 = true,
   }) {
     final commonProtocols = agentCapabilities.protocols.where(serverCapabilities.protocols.contains).toList();
+    if (commonProtocols.isEmpty) {
+      throw StateError(
+        'No common protocols between agent (${agentCapabilities.protocols}) '
+        'and server (${serverCapabilities.protocols})',
+      );
+    }
     final selectedProtocol =
         preferJsonRpcV2 && commonProtocols.contains('jsonrpc-v2') && agentCapabilities.supportsJsonRpcV2
         ? 'jsonrpc-v2'
-        : (commonProtocols.isNotEmpty ? commonProtocols.first : 'jsonrpc-v2');
+        : commonProtocols.first;
 
     // 2. Select encoding (prefer json for compatibility)
     final commonEncodings = agentCapabilities.encodings.where(serverCapabilities.encodings.contains).toList();

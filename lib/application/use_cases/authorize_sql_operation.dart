@@ -145,7 +145,12 @@ class AuthorizeSqlOperation {
             );
           },
           (failure) {
-            final error = failure as domain.Failure;
+            final error = failure is domain.Failure
+                ? failure
+                : domain.ConfigurationFailure.withContext(
+                    message: failure.toString(),
+                    context: const {'authorization': true, 'reason': 'unexpected_failure_type'},
+                  );
             for (final i in missIndices) {
               _cacheDecision(
                 key: decisionKeys[i],

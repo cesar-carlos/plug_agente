@@ -129,12 +129,13 @@ class OdbcConnectionPool implements IConnectionPool {
     for (final id in ids) {
       final result = await _service.disconnect(id);
       result.fold(
-        (_) {},
+        (_) {
+          _semaphore.release();
+        },
         (error) => errors.add(
           error is OdbcError ? error.message : error.toString(),
         ),
       );
-      _semaphore.release();
     }
     _leasedIds.clear();
     _leasedIdsByConnectionString.clear();
@@ -164,9 +165,16 @@ class OdbcConnectionPool implements IConnectionPool {
     );
 
     for (final id in ids.toList(growable: false)) {
-      await _service.disconnect(id);
-      _leasedIds.remove(id);
-      _semaphore.release();
+      final result = await _service.disconnect(id);
+      result.fold(
+        (_) {
+          _leasedIds.remove(id);
+          _semaphore.release();
+        },
+        (_) {
+          _leasedIds.remove(id);
+        },
+      );
     }
     return const Success(unit);
   }

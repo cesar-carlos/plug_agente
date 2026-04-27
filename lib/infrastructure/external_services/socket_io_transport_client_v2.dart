@@ -269,6 +269,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         : _responsePreparer.prepareForSend(responseData as RpcResponse);
     final validatedPayload = _responsePreparer.validateOutgoing(prepared);
     if (validatedPayload == null) {
+      AppLogger.warning('rpc:response outgoing validation returned null — emitting internal error');
+      final requestId = _extractResponseId(responseData);
+      await _emitInternalErrorResponse(requestId);
       return;
     }
     final outgoingPayload = await _prepareOutgoingPayloadAsync(
@@ -276,6 +279,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
       validatedPayload,
     );
     if (outgoingPayload == null) {
+      AppLogger.warning('rpc:response pipeline encoding returned null — emitting internal error');
+      final requestId = _extractResponseId(responseData);
+      await _emitInternalErrorResponse(requestId);
       return;
     }
 
@@ -865,6 +871,35 @@ class SocketIOTransportClientV2 implements ITransportClient {
   bool _supportsProtocolReadyAck() {
     final extensionValue = _currentProtocol.negotiatedExtensions['protocolReadyAck'];
     return extensionValue is bool && extensionValue;
+  }
+
+  /// Extracts the JSON-RPC `id` from a single [RpcResponse] or the first
+  /// element of a batch, returning null when the id cannot be resolved.
+  static dynamic _extractResponseId(dynamic responseData) {
+    if (responseData is RpcResponse) return responseData.id;
+    if (responseData is List<RpcResponse> && responseData.isNotEmpty) {
+      return responseData.first.id;
+    }
+    return null;
+  }
+
+  /// Emits a minimal internal-error [rpc:response] so the hub is never left
+  /// waiting for a reply when outgoing validation or encoding fails.
+  Future<void> _emitInternalErrorResponse(dynamic requestId) async {
+    if (_socket == null) return;
+    try {
+      final errorResponse = RpcResponse.error(
+        id: requestId,
+        error: RpcError(
+          code: RpcErrorCode.internalError,
+          message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
+        ),
+      );
+      final raw = errorResponse.toJson();
+      _socket!.emit('rpc:response', jsonEncode(raw));
+    } on Object catch (e, st) {
+      AppLogger.warning('Failed to emit fallback internal error response', e, st);
+    }
   }
 }
 

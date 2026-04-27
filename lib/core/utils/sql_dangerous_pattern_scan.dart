@@ -6,6 +6,7 @@
 /// dangerous keyword (drop, delete, insert, update, alter, create, truncate)
 /// appears outside string/bracket literals.
 bool sqlContainsTopLevelDangerousPatterns(String sql) {
+  final lower = sql.toLowerCase();
   var i = 0;
   var inSingle = false;
   var inDouble = false;
@@ -63,7 +64,7 @@ bool sqlContainsTopLevelDangerousPatterns(String sql) {
         }
         j++;
       }
-      if (_dangerousKeywordFollows(sql, j)) {
+      if (_dangerousKeywordFollows(lower, j)) {
         return true;
       }
       i++;
@@ -71,7 +72,7 @@ bool sqlContainsTopLevelDangerousPatterns(String sql) {
     }
 
     if (_isAsciiLetter(c.codeUnitAt(0))) {
-      if (_lockHintFollows(sql, i)) {
+      if (_lockHintFollows(lower, i)) {
         return true;
       }
       i++;
@@ -122,11 +123,12 @@ const List<String> _sqlLockHintKeywords = [
   'xlock',
 ];
 
-bool _dangerousKeywordFollows(String sql, int j) {
-  if (j >= sql.length) {
+// Expects [lower] to be the pre-lowercased version of the original SQL string,
+// ensuring index [j] aligns with the original scan position.
+bool _dangerousKeywordFollows(String lower, int j) {
+  if (j >= lower.length) {
     return false;
   }
-  final lower = sql.toLowerCase();
   for (final kw in _sqlDangerousKeywords) {
     if (j + kw.length > lower.length) {
       continue;
@@ -153,8 +155,8 @@ bool _dangerousKeywordFollows(String sql, int j) {
   return false;
 }
 
-bool _lockHintFollows(String sql, int j) {
-  final lower = sql.toLowerCase();
+// Expects [lower] to be the pre-lowercased version of the original SQL string.
+bool _lockHintFollows(String lower, int j) {
   for (final kw in _sqlLockHintKeywords) {
     if (j + kw.length > lower.length) {
       continue;

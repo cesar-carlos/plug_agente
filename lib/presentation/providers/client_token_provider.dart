@@ -85,10 +85,8 @@ class ClientTokenProvider extends ChangeNotifier {
 
     if (!silent) {
       _isLoading = false;
-      notifyListeners();
-    } else if (isSuccess) {
-      notifyListeners();
     }
+    notifyListeners();
 
     return isSuccess;
   }

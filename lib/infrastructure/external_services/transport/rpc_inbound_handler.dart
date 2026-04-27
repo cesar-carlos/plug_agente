@@ -382,7 +382,12 @@ class RpcInboundHandler {
 
       for (final item in data) {
         if (item is! Map<String, dynamic>) {
-          continue;
+          await _sendSchemaValidationError(
+            null,
+            RpcErrorCode.invalidRequest,
+            'Each element in a batch must be a JSON object',
+          );
+          return;
         }
         if (!_responsePreparer.verifyIncomingSignature(item)) {
           await _sendSchemaValidationError(

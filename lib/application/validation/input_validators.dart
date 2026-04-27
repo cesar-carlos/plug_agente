@@ -9,6 +9,9 @@ class InputValidators {
   static final RegExp _usernameCharClass = RegExp(r'^[a-z0-9_-]+$');
   static final RegExp _databaseNameCharClass = RegExp(r'^[a-zA-Z0-9_]+$');
   static final RegExp _digitsOnlyRegex = RegExp(r'^\d+$');
+  static final RegExp _nonDigit = RegExp('[^0-9]');
+  // Accepts "nome" or "schema.nome" — letters, digits, underscores, one optional dot.
+  static final RegExp _tableResourcePattern = RegExp(r'^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)?$');
 
   static Result<String> email(
     String value, {
@@ -133,6 +136,28 @@ class InputValidators {
     return schema.parseSafe(value);
   }
 
+  /// Validates a single table/view resource name.
+  /// Accepts `nome` or `schema.nome` (letters, digits, underscores, one dot).
+  static Result<String> tableResource(
+    String value, {
+    String? message,
+  }) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return Failure(
+        domain.ValidationFailure(message ?? 'Resource name cannot be empty'),
+      );
+    }
+    if (!_tableResourcePattern.hasMatch(trimmed)) {
+      return Failure(
+        domain.ValidationFailure(
+          message ?? 'Resource name "$trimmed" contains invalid characters',
+        ),
+      );
+    }
+    return Success(trimmed);
+  }
+
   static Result<String> databaseName(
     String value, {
     int minLength = 1,
@@ -239,7 +264,7 @@ class InputValidators {
   }
 
   static String _digitsOnly(String value) {
-    return value.replaceAll(RegExp('[^0-9]'), '');
+    return value.replaceAll(_nonDigit, '');
   }
 
   static bool _isAllDigitsEqual(String digits) {
