@@ -7,11 +7,14 @@ class ClientTokenCreateRequest {
     required this.allViews,
     required this.allPermissions,
     required this.rules,
+    this.name = '',
     this.payload = const <String, dynamic>{},
     this.agentId,
   });
 
   final String clientId;
+  /// User-defined display name for easy identification. Empty when not set.
+  final String name;
   final String? agentId;
   final Map<String, dynamic> payload;
   final bool allTables;
@@ -22,6 +25,7 @@ class ClientTokenCreateRequest {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'client_id': clientId,
+      if (name.isNotEmpty) 'name': name,
       if (agentId != null) 'agent_id': agentId,
       'payload': payload,
       'all_tables': allTables,

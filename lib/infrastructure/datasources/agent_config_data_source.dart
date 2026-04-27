@@ -43,6 +43,8 @@ class ConfigTable extends Table {
 class ClientTokenCacheTable extends Table {
   TextColumn get id => text()();
   TextColumn get clientId => text()();
+  // User-defined label for easy identification; empty string when not set.
+  TextColumn get name => text().withDefault(const Constant(''))();
   BoolColumn get isRevoked => boolean().withDefault(const Constant(false))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get agentId => text().nullable()();

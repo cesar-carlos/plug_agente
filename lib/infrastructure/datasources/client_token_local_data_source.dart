@@ -38,6 +38,7 @@ class ClientTokenLocalDataSource {
     final summary = ClientTokenSummary(
       id: tokenId,
       clientId: request.clientId.trim(),
+      name: request.name.trim(),
       createdAt: now,
       isRevoked: false,
       tokenValue: opaqueToken,
@@ -84,7 +85,9 @@ class ClientTokenLocalDataSource {
     final normalizedClientFilter = effectiveQuery.clientIdContains.trim();
     if (normalizedClientFilter.isNotEmpty) {
       statement.where(
-        (table) => table.clientId.like('%$normalizedClientFilter%'),
+        (table) =>
+            table.clientId.like('%$normalizedClientFilter%') |
+            table.name.like('%$normalizedClientFilter%'),
       );
     }
 
@@ -220,6 +223,7 @@ class ClientTokenLocalDataSource {
             .write(
               ClientTokenCacheTableCompanion(
                 clientId: Value(request.clientId.trim()),
+                name: Value(request.name.trim()),
                 agentId: Value(
                   request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
                 ),
@@ -274,6 +278,7 @@ class ClientTokenLocalDataSource {
     return ClientTokenCacheTableCompanion.insert(
       id: token.id,
       clientId: token.clientId,
+      name: Value(token.name),
       isRevoked: Value(token.isRevoked),
       agentId: Value(token.agentId),
       tokenValue: Value(_persistedTokenValue(token.tokenValue)),
@@ -300,6 +305,7 @@ class ClientTokenLocalDataSource {
     return ClientTokenSummary(
       id: row.id,
       clientId: row.clientId,
+      name: row.name,
       createdAt: row.createdAt,
       isRevoked: row.isRevoked,
       agentId: row.agentId,

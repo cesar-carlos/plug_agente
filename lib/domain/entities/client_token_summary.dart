@@ -10,6 +10,7 @@ class ClientTokenSummary {
     required this.allViews,
     required this.allPermissions,
     required this.rules,
+    this.name = '',
     this.version = 1,
     this.updatedAt,
     this.agentId,
@@ -34,6 +35,7 @@ class ClientTokenSummary {
     return ClientTokenSummary(
       id: source['id'] as String? ?? json['id'] as String? ?? '',
       clientId: source['client_id'] as String? ?? json['client_id'] as String? ?? '',
+      name: source['name'] as String? ?? json['name'] as String? ?? '',
       createdAt: createdAt,
       isRevoked: source['is_revoked'] as bool? ?? json['is_revoked'] as bool? ?? false,
       version: source['version'] as int? ?? json['version'] as int? ?? 1,
@@ -54,6 +56,8 @@ class ClientTokenSummary {
 
   final String id;
   final String clientId;
+  /// User-defined display name for easy identification. Empty when not set.
+  final String name;
   final DateTime createdAt;
   final bool isRevoked;
   final int version;
@@ -69,6 +73,7 @@ class ClientTokenSummary {
   ClientTokenSummary copyWith({
     String? id,
     String? clientId,
+    String? name,
     DateTime? createdAt,
     bool? isRevoked,
     int? version,
@@ -84,6 +89,7 @@ class ClientTokenSummary {
     return ClientTokenSummary(
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
+      name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
       isRevoked: isRevoked ?? this.isRevoked,
       version: version ?? this.version,
@@ -102,6 +108,7 @@ class ClientTokenSummary {
     return <String, dynamic>{
       'id': id,
       'client_id': clientId,
+      if (name.isNotEmpty) 'name': name,
       'created_at': createdAt.toUtc().toIso8601String(),
       'is_revoked': isRevoked,
       'version': version,

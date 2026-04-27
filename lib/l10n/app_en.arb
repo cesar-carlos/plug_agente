@@ -380,6 +380,8 @@
   "ctSectionTitle": "Client token authorization",
   "ctFieldClientId": "Client ID (auto-generated)",
   "ctFieldAgentIdOptional": "Agent ID (optional)",
+  "ctFieldName": "Name (optional)",
+  "ctHintName": "e.g. Client XYZ — Production",
   "ctFieldPayloadJsonOptional": "Payload JSON (optional)",
   "ctHintClientId": "Generated automatically",
   "ctHintAgentId": "agent-01",

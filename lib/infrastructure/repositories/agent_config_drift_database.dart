@@ -39,7 +39,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -123,6 +123,9 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
           configTable,
           configTable.hubProfileUpdatedAt as GeneratedColumn<Object>,
         );
+      }
+      if (from < 12) {
+        await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.name);
       }
       await _createClientTokenIndexes();
     },

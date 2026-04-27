@@ -57,6 +57,7 @@ class ClientTokenSection extends StatefulWidget {
 }
 
 class _ClientTokenSectionState extends State<ClientTokenSection> {
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _clientIdController = TextEditingController();
   final TextEditingController _agentIdController = TextEditingController();
   final TextEditingController _payloadController = TextEditingController();
@@ -96,6 +97,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _clientIdController.dispose();
     _agentIdController.dispose();
     _payloadController.dispose();
@@ -334,6 +336,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       _formError = '';
       _editingTokenId = baseToken?.id;
       _editingTokenVersion = baseToken?.version;
+      _nameController.text = baseToken?.name ?? '';
       _clientIdController.text = baseToken?.clientId ?? _generateClientId();
       _agentIdController.text = baseToken?.agentId ?? '';
       _payloadController.text = baseToken?.payload.isEmpty ?? true ? '' : jsonEncode(baseToken!.payload);
@@ -398,6 +401,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                           child: _CreateTokenDialogContent(
                             isCompact: isCompact,
                             agentFocusNode: _createTokenDialogAgentFocusNode,
+                            nameController: _nameController,
                             clientIdController: _clientIdController,
                             agentIdController: _agentIdController,
                             payloadController: _payloadController,
@@ -493,6 +497,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
     final request = ClientTokenCreateRequest(
       clientId: clientId,
+      name: _nameController.text.trim(),
       agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
       payload: payloadResult,
       allTables: _allTables,

@@ -3,7 +3,8 @@
 part of 'agent_config_drift_database.dart';
 
 // ignore_for_file: type=lint
-class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, ConfigData> {
+class $ConfigTableTable extends ConfigTable
+    with TableInfo<$ConfigTableTable, ConfigData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -329,15 +330,17 @@ class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, Co
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _hubProfileUpdatedAtMeta = const VerificationMeta('hubProfileUpdatedAt');
+  static const VerificationMeta _hubProfileUpdatedAtMeta =
+      const VerificationMeta('hubProfileUpdatedAt');
   @override
-  late final GeneratedColumn<String> hubProfileUpdatedAt = GeneratedColumn<String>(
-    'hub_profile_updated_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
+  late final GeneratedColumn<String> hubProfileUpdatedAt =
+      GeneratedColumn<String>(
+        'hub_profile_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -923,15 +926,25 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       id: Value(id),
       serverUrl: Value(serverUrl),
       agentId: Value(agentId),
-      authToken: authToken == null && nullToAbsent ? const Value.absent() : Value(authToken),
-      refreshToken: refreshToken == null && nullToAbsent ? const Value.absent() : Value(refreshToken),
-      authUsername: authUsername == null && nullToAbsent ? const Value.absent() : Value(authUsername),
-      authPassword: authPassword == null && nullToAbsent ? const Value.absent() : Value(authPassword),
+      authToken: authToken == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authToken),
+      refreshToken: refreshToken == null && nullToAbsent
+          ? const Value.absent()
+          : Value(refreshToken),
+      authUsername: authUsername == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authUsername),
+      authPassword: authPassword == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authPassword),
       driverName: Value(driverName),
       odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
-      password: password == null && nullToAbsent ? const Value.absent() : Value(password),
+      password: password == null && nullToAbsent
+          ? const Value.absent()
+          : Value(password),
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
@@ -948,7 +961,9 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       nomeMunicipio: Value(nomeMunicipio),
       ufMunicipio: Value(ufMunicipio),
       observacao: Value(observacao),
-      hubProfileVersion: hubProfileVersion == null && nullToAbsent ? const Value.absent() : Value(hubProfileVersion),
+      hubProfileVersion: hubProfileVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hubProfileVersion),
       hubProfileUpdatedAt: hubProfileUpdatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(hubProfileUpdatedAt),
@@ -1100,8 +1115,12 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
     ufMunicipio: ufMunicipio ?? this.ufMunicipio,
     observacao: observacao ?? this.observacao,
-    hubProfileVersion: hubProfileVersion.present ? hubProfileVersion.value : this.hubProfileVersion,
-    hubProfileUpdatedAt: hubProfileUpdatedAt.present ? hubProfileUpdatedAt.value : this.hubProfileUpdatedAt,
+    hubProfileVersion: hubProfileVersion.present
+        ? hubProfileVersion.value
+        : this.hubProfileVersion,
+    hubProfileUpdatedAt: hubProfileUpdatedAt.present
+        ? hubProfileUpdatedAt.value
+        : this.hubProfileUpdatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1111,32 +1130,62 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       serverUrl: data.serverUrl.present ? data.serverUrl.value : this.serverUrl,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
       authToken: data.authToken.present ? data.authToken.value : this.authToken,
-      refreshToken: data.refreshToken.present ? data.refreshToken.value : this.refreshToken,
-      authUsername: data.authUsername.present ? data.authUsername.value : this.authUsername,
-      authPassword: data.authPassword.present ? data.authPassword.value : this.authPassword,
-      driverName: data.driverName.present ? data.driverName.value : this.driverName,
-      odbcDriverName: data.odbcDriverName.present ? data.odbcDriverName.value : this.odbcDriverName,
-      connectionString: data.connectionString.present ? data.connectionString.value : this.connectionString,
+      refreshToken: data.refreshToken.present
+          ? data.refreshToken.value
+          : this.refreshToken,
+      authUsername: data.authUsername.present
+          ? data.authUsername.value
+          : this.authUsername,
+      authPassword: data.authPassword.present
+          ? data.authPassword.value
+          : this.authPassword,
+      driverName: data.driverName.present
+          ? data.driverName.value
+          : this.driverName,
+      odbcDriverName: data.odbcDriverName.present
+          ? data.odbcDriverName.value
+          : this.odbcDriverName,
+      connectionString: data.connectionString.present
+          ? data.connectionString.value
+          : this.connectionString,
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
-      databaseName: data.databaseName.present ? data.databaseName.value : this.databaseName,
+      databaseName: data.databaseName.present
+          ? data.databaseName.value
+          : this.databaseName,
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
       nome: data.nome.present ? data.nome.value : this.nome,
-      nomeFantasia: data.nomeFantasia.present ? data.nomeFantasia.value : this.nomeFantasia,
-      cnaeCnpjCpf: data.cnaeCnpjCpf.present ? data.cnaeCnpjCpf.value : this.cnaeCnpjCpf,
+      nomeFantasia: data.nomeFantasia.present
+          ? data.nomeFantasia.value
+          : this.nomeFantasia,
+      cnaeCnpjCpf: data.cnaeCnpjCpf.present
+          ? data.cnaeCnpjCpf.value
+          : this.cnaeCnpjCpf,
       telefone: data.telefone.present ? data.telefone.value : this.telefone,
       celular: data.celular.present ? data.celular.value : this.celular,
       email: data.email.present ? data.email.value : this.email,
       endereco: data.endereco.present ? data.endereco.value : this.endereco,
-      numeroEndereco: data.numeroEndereco.present ? data.numeroEndereco.value : this.numeroEndereco,
+      numeroEndereco: data.numeroEndereco.present
+          ? data.numeroEndereco.value
+          : this.numeroEndereco,
       bairro: data.bairro.present ? data.bairro.value : this.bairro,
       cep: data.cep.present ? data.cep.value : this.cep,
-      nomeMunicipio: data.nomeMunicipio.present ? data.nomeMunicipio.value : this.nomeMunicipio,
-      ufMunicipio: data.ufMunicipio.present ? data.ufMunicipio.value : this.ufMunicipio,
-      observacao: data.observacao.present ? data.observacao.value : this.observacao,
-      hubProfileVersion: data.hubProfileVersion.present ? data.hubProfileVersion.value : this.hubProfileVersion,
-      hubProfileUpdatedAt: data.hubProfileUpdatedAt.present ? data.hubProfileUpdatedAt.value : this.hubProfileUpdatedAt,
+      nomeMunicipio: data.nomeMunicipio.present
+          ? data.nomeMunicipio.value
+          : this.nomeMunicipio,
+      ufMunicipio: data.ufMunicipio.present
+          ? data.ufMunicipio.value
+          : this.ufMunicipio,
+      observacao: data.observacao.present
+          ? data.observacao.value
+          : this.observacao,
+      hubProfileVersion: data.hubProfileVersion.present
+          ? data.hubProfileVersion.value
+          : this.hubProfileVersion,
+      hubProfileUpdatedAt: data.hubProfileUpdatedAt.present
+          ? data.hubProfileUpdatedAt.value
+          : this.hubProfileUpdatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1431,7 +1480,8 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (ufMunicipio != null) 'uf_municipio': ufMunicipio,
       if (observacao != null) 'observacao': observacao,
       if (hubProfileVersion != null) 'hub_profile_version': hubProfileVersion,
-      if (hubProfileUpdatedAt != null) 'hub_profile_updated_at': hubProfileUpdatedAt,
+      if (hubProfileUpdatedAt != null)
+        'hub_profile_updated_at': hubProfileUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1684,6 +1734,16 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _isRevokedMeta = const VerificationMeta(
     'isRevoked',
   );
@@ -1851,6 +1911,7 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
   List<GeneratedColumn> get $columns => [
     id,
     clientId,
+    name,
     isRevoked,
     version,
     agentId,
@@ -1889,6 +1950,12 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
       );
     } else if (isInserting) {
       context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
     }
     if (data.containsKey('is_revoked')) {
       context.handle(
@@ -1999,6 +2066,10 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         DriftSqlType.string,
         data['${effectivePrefix}client_id'],
       )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
       isRevoked: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_revoked'],
@@ -2060,9 +2131,11 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
   }
 }
 
-class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCacheData> {
+class ClientTokenCacheData extends DataClass
+    implements Insertable<ClientTokenCacheData> {
   final String id;
   final String clientId;
+  final String name;
   final bool isRevoked;
   final int version;
   final String? agentId;
@@ -2079,6 +2152,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
   const ClientTokenCacheData({
     required this.id,
     required this.clientId,
+    required this.name,
     required this.isRevoked,
     required this.version,
     this.agentId,
@@ -2098,6 +2172,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['client_id'] = Variable<String>(clientId);
+    map['name'] = Variable<String>(name);
     map['is_revoked'] = Variable<bool>(isRevoked);
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || agentId != null) {
@@ -2124,12 +2199,19 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     return ClientTokenCacheTableCompanion(
       id: Value(id),
       clientId: Value(clientId),
+      name: Value(name),
       isRevoked: Value(isRevoked),
       version: Value(version),
-      agentId: agentId == null && nullToAbsent ? const Value.absent() : Value(agentId),
-      tokenValue: tokenValue == null && nullToAbsent ? const Value.absent() : Value(tokenValue),
+      agentId: agentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(agentId),
+      tokenValue: tokenValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tokenValue),
       createdAt: Value(createdAt),
-      updatedAt: updatedAt == null && nullToAbsent ? const Value.absent() : Value(updatedAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
       payloadJson: Value(payloadJson),
       allTables: Value(allTables),
       allViews: Value(allViews),
@@ -2148,6 +2230,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     return ClientTokenCacheData(
       id: serializer.fromJson<String>(json['id']),
       clientId: serializer.fromJson<String>(json['clientId']),
+      name: serializer.fromJson<String>(json['name']),
       isRevoked: serializer.fromJson<bool>(json['isRevoked']),
       version: serializer.fromJson<int>(json['version']),
       agentId: serializer.fromJson<String?>(json['agentId']),
@@ -2169,6 +2252,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'clientId': serializer.toJson<String>(clientId),
+      'name': serializer.toJson<String>(name),
       'isRevoked': serializer.toJson<bool>(isRevoked),
       'version': serializer.toJson<int>(version),
       'agentId': serializer.toJson<String?>(agentId),
@@ -2188,6 +2272,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
   ClientTokenCacheData copyWith({
     String? id,
     String? clientId,
+    String? name,
     bool? isRevoked,
     int? version,
     Value<String?> agentId = const Value.absent(),
@@ -2204,6 +2289,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
   }) => ClientTokenCacheData(
     id: id ?? this.id,
     clientId: clientId ?? this.clientId,
+    name: name ?? this.name,
     isRevoked: isRevoked ?? this.isRevoked,
     version: version ?? this.version,
     agentId: agentId.present ? agentId.value : this.agentId,
@@ -2222,16 +2308,23 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     return ClientTokenCacheData(
       id: data.id.present ? data.id.value : this.id,
       clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      name: data.name.present ? data.name.value : this.name,
       isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
       version: data.version.present ? data.version.value : this.version,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
-      tokenValue: data.tokenValue.present ? data.tokenValue.value : this.tokenValue,
+      tokenValue: data.tokenValue.present
+          ? data.tokenValue.value
+          : this.tokenValue,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      payloadJson: data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
       allTables: data.allTables.present ? data.allTables.value : this.allTables,
       allViews: data.allViews.present ? data.allViews.value : this.allViews,
-      allPermissions: data.allPermissions.present ? data.allPermissions.value : this.allPermissions,
+      allPermissions: data.allPermissions.present
+          ? data.allPermissions.value
+          : this.allPermissions,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
       tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
@@ -2243,6 +2336,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
     return (StringBuffer('ClientTokenCacheData(')
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
+          ..write('name: $name, ')
           ..write('isRevoked: $isRevoked, ')
           ..write('version: $version, ')
           ..write('agentId: $agentId, ')
@@ -2264,6 +2358,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
   int get hashCode => Object.hash(
     id,
     clientId,
+    name,
     isRevoked,
     version,
     agentId,
@@ -2284,6 +2379,7 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
       (other is ClientTokenCacheData &&
           other.id == this.id &&
           other.clientId == this.clientId &&
+          other.name == this.name &&
           other.isRevoked == this.isRevoked &&
           other.version == this.version &&
           other.agentId == this.agentId &&
@@ -2299,9 +2395,11 @@ class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCa
           other.tokenHash == this.tokenHash);
 }
 
-class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheData> {
+class ClientTokenCacheTableCompanion
+    extends UpdateCompanion<ClientTokenCacheData> {
   final Value<String> id;
   final Value<String> clientId;
+  final Value<String> name;
   final Value<bool> isRevoked;
   final Value<int> version;
   final Value<String?> agentId;
@@ -2319,6 +2417,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
   const ClientTokenCacheTableCompanion({
     this.id = const Value.absent(),
     this.clientId = const Value.absent(),
+    this.name = const Value.absent(),
     this.isRevoked = const Value.absent(),
     this.version = const Value.absent(),
     this.agentId = const Value.absent(),
@@ -2337,6 +2436,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
   ClientTokenCacheTableCompanion.insert({
     required String id,
     required String clientId,
+    this.name = const Value.absent(),
     this.isRevoked = const Value.absent(),
     this.version = const Value.absent(),
     this.agentId = const Value.absent(),
@@ -2358,6 +2458,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
   static Insertable<ClientTokenCacheData> custom({
     Expression<String>? id,
     Expression<String>? clientId,
+    Expression<String>? name,
     Expression<bool>? isRevoked,
     Expression<int>? version,
     Expression<String>? agentId,
@@ -2376,6 +2477,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (clientId != null) 'client_id': clientId,
+      if (name != null) 'name': name,
       if (isRevoked != null) 'is_revoked': isRevoked,
       if (version != null) 'version': version,
       if (agentId != null) 'agent_id': agentId,
@@ -2396,6 +2498,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
   ClientTokenCacheTableCompanion copyWith({
     Value<String>? id,
     Value<String>? clientId,
+    Value<String>? name,
     Value<bool>? isRevoked,
     Value<int>? version,
     Value<String?>? agentId,
@@ -2414,6 +2517,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
     return ClientTokenCacheTableCompanion(
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
+      name: name ?? this.name,
       isRevoked: isRevoked ?? this.isRevoked,
       version: version ?? this.version,
       agentId: agentId ?? this.agentId,
@@ -2439,6 +2543,9 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
     }
     if (clientId.present) {
       map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
     }
     if (isRevoked.present) {
       map['is_revoked'] = Variable<bool>(isRevoked.value);
@@ -2490,6 +2597,7 @@ class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheDat
     return (StringBuffer('ClientTokenCacheTableCompanion(')
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
+          ..write('name: $name, ')
           ..write('isRevoked: $isRevoked, ')
           ..write('version: $version, ')
           ..write('agentId: $agentId, ')
@@ -2513,9 +2621,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
-  late final $ClientTokenCacheTableTable clientTokenCacheTable = $ClientTokenCacheTableTable(this);
+  late final $ClientTokenCacheTableTable clientTokenCacheTable =
+      $ClientTokenCacheTableTable(this);
   @override
-  Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
+  Iterable<TableInfo<Table, Object?>> get allTables =>
+      allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     configTable,
@@ -2596,7 +2706,8 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -2765,7 +2876,8 @@ class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTa
   );
 }
 
-class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2934,7 +3046,8 @@ class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $Config
   );
 }
 
-class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2942,13 +3055,17 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get serverUrl => $composableBuilder(column: $table.serverUrl, builder: (column) => column);
+  GeneratedColumn<String> get serverUrl =>
+      $composableBuilder(column: $table.serverUrl, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId =>
+      $composableBuilder(column: $table.agentId, builder: (column) => column);
 
-  GeneratedColumn<String> get authToken => $composableBuilder(column: $table.authToken, builder: (column) => column);
+  GeneratedColumn<String> get authToken =>
+      $composableBuilder(column: $table.authToken, builder: (column) => column);
 
   GeneratedColumn<String> get refreshToken => $composableBuilder(
     column: $table.refreshToken,
@@ -2980,20 +3097,25 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get username => $composableBuilder(column: $table.username, builder: (column) => column);
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
 
-  GeneratedColumn<String> get password => $composableBuilder(column: $table.password, builder: (column) => column);
+  GeneratedColumn<String> get password =>
+      $composableBuilder(column: $table.password, builder: (column) => column);
 
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get host => $composableBuilder(column: $table.host, builder: (column) => column);
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
 
-  GeneratedColumn<int> get port => $composableBuilder(column: $table.port, builder: (column) => column);
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
 
-  GeneratedColumn<String> get nome => $composableBuilder(column: $table.nome, builder: (column) => column);
+  GeneratedColumn<String> get nome =>
+      $composableBuilder(column: $table.nome, builder: (column) => column);
 
   GeneratedColumn<String> get nomeFantasia => $composableBuilder(
     column: $table.nomeFantasia,
@@ -3005,22 +3127,28 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get telefone => $composableBuilder(column: $table.telefone, builder: (column) => column);
+  GeneratedColumn<String> get telefone =>
+      $composableBuilder(column: $table.telefone, builder: (column) => column);
 
-  GeneratedColumn<String> get celular => $composableBuilder(column: $table.celular, builder: (column) => column);
+  GeneratedColumn<String> get celular =>
+      $composableBuilder(column: $table.celular, builder: (column) => column);
 
-  GeneratedColumn<String> get email => $composableBuilder(column: $table.email, builder: (column) => column);
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
 
-  GeneratedColumn<String> get endereco => $composableBuilder(column: $table.endereco, builder: (column) => column);
+  GeneratedColumn<String> get endereco =>
+      $composableBuilder(column: $table.endereco, builder: (column) => column);
 
   GeneratedColumn<String> get numeroEndereco => $composableBuilder(
     column: $table.numeroEndereco,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get bairro => $composableBuilder(column: $table.bairro, builder: (column) => column);
+  GeneratedColumn<String> get bairro =>
+      $composableBuilder(column: $table.bairro, builder: (column) => column);
 
-  GeneratedColumn<String> get cep => $composableBuilder(column: $table.cep, builder: (column) => column);
+  GeneratedColumn<String> get cep =>
+      $composableBuilder(column: $table.cep, builder: (column) => column);
 
   GeneratedColumn<String> get nomeMunicipio => $composableBuilder(
     column: $table.nomeMunicipio,
@@ -3047,9 +3175,11 @@ class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $Conf
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$ConfigTableTableTableManager
@@ -3075,9 +3205,12 @@ class $$ConfigTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () => $$ConfigTableTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () => $$ConfigTableTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () => $$ConfigTableTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () =>
+              $$ConfigTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ConfigTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ConfigTableTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -3218,7 +3351,9 @@ class $$ConfigTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3245,6 +3380,7 @@ typedef $$ClientTokenCacheTableTableCreateCompanionBuilder =
     ClientTokenCacheTableCompanion Function({
       required String id,
       required String clientId,
+      Value<String> name,
       Value<bool> isRevoked,
       Value<int> version,
       Value<String?> agentId,
@@ -3264,6 +3400,7 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
     ClientTokenCacheTableCompanion Function({
       Value<String> id,
       Value<String> clientId,
+      Value<String> name,
       Value<bool> isRevoked,
       Value<int> version,
       Value<String?> agentId,
@@ -3280,7 +3417,8 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3295,6 +3433,11 @@ class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase,
 
   ColumnFilters<String> get clientId => $composableBuilder(
     column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3364,7 +3507,8 @@ class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase,
   );
 }
 
-class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3379,6 +3523,11 @@ class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabas
 
   ColumnOrderings<String> get clientId => $composableBuilder(
     column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -3448,7 +3597,8 @@ class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabas
   );
 }
 
-class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -3456,44 +3606,59 @@ class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatab
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<bool> get isRevoked => $composableBuilder(column: $table.isRevoked, builder: (column) => column);
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<int> get version => $composableBuilder(column: $table.version, builder: (column) => column);
+  GeneratedColumn<bool> get isRevoked =>
+      $composableBuilder(column: $table.isRevoked, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<String> get agentId =>
+      $composableBuilder(column: $table.agentId, builder: (column) => column);
 
   GeneratedColumn<String> get tokenValue => $composableBuilder(
     column: $table.tokenValue,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get payloadJson => $composableBuilder(
     column: $table.payloadJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get allTables => $composableBuilder(column: $table.allTables, builder: (column) => column);
+  GeneratedColumn<bool> get allTables =>
+      $composableBuilder(column: $table.allTables, builder: (column) => column);
 
-  GeneratedColumn<bool> get allViews => $composableBuilder(column: $table.allViews, builder: (column) => column);
+  GeneratedColumn<bool> get allViews =>
+      $composableBuilder(column: $table.allViews, builder: (column) => column);
 
   GeneratedColumn<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get rulesJson => $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+  GeneratedColumn<String> get rulesJson =>
+      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get syncedAt => $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get tokenHash => $composableBuilder(column: $table.tokenHash, builder: (column) => column);
+  GeneratedColumn<String> get tokenHash =>
+      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
 }
 
 class $$ClientTokenCacheTableTableTableManager
@@ -3509,7 +3674,11 @@ class $$ClientTokenCacheTableTableTableManager
           $$ClientTokenCacheTableTableUpdateCompanionBuilder,
           (
             ClientTokenCacheData,
-            BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
+            BaseReferences<
+              _$AppDatabase,
+              $ClientTokenCacheTableTable,
+              ClientTokenCacheData
+            >,
           ),
           ClientTokenCacheData,
           PrefetchHooks Function()
@@ -3521,22 +3690,26 @@ class $$ClientTokenCacheTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () => $$ClientTokenCacheTableTableFilterComposer(
-            $db: db,
-            $table: table,
-          ),
-          createOrderingComposer: () => $$ClientTokenCacheTableTableOrderingComposer(
-            $db: db,
-            $table: table,
-          ),
-          createComputedFieldComposer: () => $$ClientTokenCacheTableTableAnnotationComposer(
-            $db: db,
-            $table: table,
-          ),
+          createFilteringComposer: () =>
+              $$ClientTokenCacheTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ClientTokenCacheTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ClientTokenCacheTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> clientId = const Value.absent(),
+                Value<String> name = const Value.absent(),
                 Value<bool> isRevoked = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> agentId = const Value.absent(),
@@ -3554,6 +3727,7 @@ class $$ClientTokenCacheTableTableTableManager
               }) => ClientTokenCacheTableCompanion(
                 id: id,
                 clientId: clientId,
+                name: name,
                 isRevoked: isRevoked,
                 version: version,
                 agentId: agentId,
@@ -3573,6 +3747,7 @@ class $$ClientTokenCacheTableTableTableManager
               ({
                 required String id,
                 required String clientId,
+                Value<String> name = const Value.absent(),
                 Value<bool> isRevoked = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> agentId = const Value.absent(),
@@ -3590,6 +3765,7 @@ class $$ClientTokenCacheTableTableTableManager
               }) => ClientTokenCacheTableCompanion.insert(
                 id: id,
                 clientId: clientId,
+                name: name,
                 isRevoked: isRevoked,
                 version: version,
                 agentId: agentId,
@@ -3605,7 +3781,9 @@ class $$ClientTokenCacheTableTableTableManager
                 tokenHash: tokenHash,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -3623,7 +3801,11 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
       $$ClientTokenCacheTableTableUpdateCompanionBuilder,
       (
         ClientTokenCacheData,
-        BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
+        BaseReferences<
+          _$AppDatabase,
+          $ClientTokenCacheTableTable,
+          ClientTokenCacheData
+        >,
       ),
       ClientTokenCacheData,
       PrefetchHooks Function()
@@ -3632,7 +3814,8 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$ConfigTableTableTableManager get configTable => $$ConfigTableTableTableManager(_db, _db.configTable);
+  $$ConfigTableTableTableManager get configTable =>
+      $$ConfigTableTableTableManager(_db, _db.configTable);
   $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
       $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
 }

@@ -995,6 +995,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctFieldAgentIdOptional => 'Agent ID (opcional)';
 
   @override
+  String get ctFieldName => 'Nome (opcional)';
+
+  @override
+  String get ctHintName => 'Ex: Cliente XYZ — Produção';
+
+  @override
   String get ctFieldPayloadJsonOptional => 'Payload JSON (opcional)';
 
   @override

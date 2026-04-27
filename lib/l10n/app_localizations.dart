@@ -1976,6 +1976,18 @@ abstract class AppLocalizations {
   /// **'Agent ID (optional)'**
   String get ctFieldAgentIdOptional;
 
+  /// No description provided for @ctFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (optional)'**
+  String get ctFieldName;
+
+  /// No description provided for @ctHintName.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Client XYZ — Production'**
+  String get ctHintName;
+
   /// No description provided for @ctFieldPayloadJsonOptional.
   ///
   /// In en, this message translates to:

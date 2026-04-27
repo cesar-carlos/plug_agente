@@ -43,6 +43,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
   const _CreateTokenDialogContent({
     required this.isCompact,
     required this.agentFocusNode,
+    required this.nameController,
     required this.clientIdController,
     required this.agentIdController,
     required this.payloadController,
@@ -68,6 +69,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
 
   final bool isCompact;
   final FocusNode agentFocusNode;
+  final TextEditingController nameController;
   final TextEditingController clientIdController;
   final TextEditingController agentIdController;
   final TextEditingController payloadController;
@@ -101,6 +103,16 @@ class _CreateTokenDialogContent extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(1),
+              child: AppTextField(
+                label: l10n.ctFieldName,
+                controller: nameController,
+                hint: l10n.ctHintName,
+                textInputAction: TextInputAction.next,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
             _TokenIdentityFields(
               clientIdController: clientIdController,
               agentIdController: agentIdController,
@@ -110,7 +122,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             FocusTraversalOrder(
-              order: const NumericFocusOrder(3),
+              order: const NumericFocusOrder(4),
               child: AppTextField(
                 label: l10n.ctFieldPayloadJsonOptional,
                 controller: payloadController,
@@ -125,19 +137,19 @@ class _CreateTokenDialogContent extends StatelessWidget {
               runSpacing: AppSpacing.sm,
               children: [
                 _FlagCheckbox(
-                  focusOrder: 4,
+                  focusOrder: 5,
                   label: l10n.ctFlagAllTables,
                   value: allTables,
                   onChanged: onToggleAllTables,
                 ),
                 _FlagCheckbox(
-                  focusOrder: 5,
+                  focusOrder: 6,
                   label: l10n.ctFlagAllViews,
                   value: allViews,
                   onChanged: onToggleAllViews,
                 ),
                 _FlagCheckbox(
-                  focusOrder: 6,
+                  focusOrder: 7,
                   label: l10n.ctFlagAllPermissions,
                   value: allPermissions,
                   onChanged: onToggleAllPermissions,
@@ -153,7 +165,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
                   ),
                 ),
                 FocusTraversalOrder(
-                  order: const NumericFocusOrder(7),
+                  order: const NumericFocusOrder(8),
                   child: isImportingRules
                       ? const SizedBox(
                           width: 16,
@@ -170,7 +182,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
                 if (rules.isNotEmpty) ...[
                   const SizedBox(width: AppSpacing.sm),
                   FocusTraversalOrder(
-                    order: const NumericFocusOrder(8),
+                    order: const NumericFocusOrder(9),
                     child: AppButton(
                       label: l10n.ctButtonExportRules,
                       isPrimary: false,
@@ -181,7 +193,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
                 ],
                 const SizedBox(width: AppSpacing.sm),
                 FocusTraversalOrder(
-                  order: const NumericFocusOrder(9),
+                  order: const NumericFocusOrder(10),
                   child: AppButton(
                     label: l10n.ctButtonAddRule,
                     isPrimary: false,
@@ -365,7 +377,7 @@ class _TokenIdentityFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final Widget clientField = FocusTraversalOrder(
-      order: const NumericFocusOrder(1),
+      order: const NumericFocusOrder(2),
       child: AppTextField(
         label: l10n.ctFieldClientId,
         controller: clientIdController,
@@ -376,7 +388,7 @@ class _TokenIdentityFields extends StatelessWidget {
     );
 
     final Widget agentField = FocusTraversalOrder(
-      order: const NumericFocusOrder(2),
+      order: const NumericFocusOrder(3),
       child: AppTextField(
         label: l10n.ctFieldAgentIdOptional,
         controller: agentIdController,
@@ -562,7 +574,10 @@ class _TokenSummaryGrid extends StatelessWidget {
       rows: tokens,
       scrollController: scrollController,
       rowCells: (token) => [
-        SelectableText(token.clientId),
+        Tooltip(
+          message: token.name.isNotEmpty ? token.clientId : '',
+          child: SelectableText(token.name.isNotEmpty ? token.name : token.clientId),
+        ),
         SelectableText(token.id),
         Text(
           token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
