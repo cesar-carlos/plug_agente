@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
@@ -253,5 +256,54 @@ void main() {
       await _waitForStatus(provider, ConnectionStatus.error);
       expect(provider.error, isNotEmpty);
     });
+
+    test(
+      'should call refreshToken when hub signals token expiry during active reconnect burst',
+      () async {
+        final firstRecoverAttempt = Completer<Result<void>>();
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          if (connectCalls == 1) {
+            return const Success(unit);
+          }
+          if (connectCalls == 2) {
+            return firstRecoverAttempt.future;
+          }
+          return Failure(Exception('subsequent attempt'));
+        });
+
+        final mockAuth = _MockAuthProvider();
+        when(() => mockAuth.currentToken).thenReturn(
+          const AuthToken(token: 'access', refreshToken: 'refresh'),
+        );
+        when(() => mockAuth.refreshToken(any())).thenAnswer((_) async {});
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          configProvider: configProvider,
+          authProvider: mockAuth,
+          transportClient: transport,
+          initialReconnectDelay: const Duration(milliseconds: 5),
+          maxReconnectDelay: const Duration(milliseconds: 10),
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.onReconnectionNeeded?.call();
+
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        transport.onTokenExpired?.call();
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        verify(() => mockAuth.refreshToken(any())).called(greaterThanOrEqualTo(2));
+
+        firstRecoverAttempt.complete(Failure(Exception('unblock burst')));
+        await provider.disconnect();
+      },
+    );
   });
 }

@@ -281,7 +281,21 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> _handleTokenExpired() async {
-    if (_isReconnecting || _isDisconnectRequested) {
+    if (_isDisconnectRequested) {
+      return;
+    }
+
+    // During hub recovery burst/persistent retry, `_isReconnecting` is true but we still
+    // need to refresh — otherwise `_handleConnectionError` fires `_onTokenExpired` and we
+    // never rotate JWT until user logs out/in manually.
+    if (_isReconnecting) {
+      final context = _resolveConnectionContext();
+      if (context != null) {
+        AppLogger.warning(
+          'Hub reported authentication failure during reconnect; refreshing token',
+        );
+        await _tryRefreshToken(context.serverUrl);
+      }
       return;
     }
 
@@ -402,6 +416,7 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<bool> _recoverConnection(_ConnectionContext context) async {
+    await _tryRefreshToken(context.serverUrl);
     var authToken = _resolveAuthTokenForReconnect();
     for (var attempt = 1; attempt <= _maxReconnectAttempts && !_isDisconnectRequested; attempt++) {
       final delay = _computeReconnectDelay(attempt);
@@ -540,6 +555,10 @@ class ConnectionProvider extends ChangeNotifier {
         return;
       }
       _persistentRetryTickCount++;
+      AppLogger.info(
+        'resilience: hub_persistent_retry_tick tick=$_persistentRetryTickCount '
+        'agent_id=${context.agentId}',
+      );
       if (_persistentRetryTickCount % _tokenRefreshIntervalAttempts == 0) {
         await _tryRefreshToken(context.serverUrl);
       }

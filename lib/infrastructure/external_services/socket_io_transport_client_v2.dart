@@ -567,6 +567,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket = null;
     }
 
+    // Fire-and-forget: ConnectionProvider._handleTokenExpired schedules its own
+    // async recovery without blocking this synchronous socket event handler.
     if (_isAuthRelated(structured, errorMessage)) {
       _onTokenExpired?.call();
     }

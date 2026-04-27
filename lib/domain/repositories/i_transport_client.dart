@@ -16,6 +16,10 @@ abstract class ITransportClient {
   void setMessageCallback(
     void Function(String direction, String event, dynamic data)? callback,
   );
+
+  /// Fired when the transport detects an authentication failure (401 / token
+  /// invalid). The callback is fire-and-forget; the caller is responsible for
+  /// scheduling the async recovery work without blocking the socket event loop.
   void setOnTokenExpired(void Function()? callback);
   void setOnReconnectionNeeded(void Function()? callback);
 
