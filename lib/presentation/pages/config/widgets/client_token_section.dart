@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'dart:math' show max, min;
+
+import 'package:file_picker/file_picker.dart';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/semantics.dart';
@@ -113,11 +116,37 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
   }
 
+  // Merges [incoming] into [_rules]: deduplicates within the batch, then
+  // replaces existing rules with the same resource+type or appends new ones.
+  void _mergeRules(List<ClientTokenRuleDraft> incoming) {
+    final seen = <String>{};
+    final deduped = incoming.reversed
+        .where((d) => seen.add('${d.resource.toLowerCase()}:${d.resourceType.name}'))
+        .toList()
+        .reversed
+        .toList();
+
+    for (final draft in deduped) {
+      final existingIndex = _rules.indexWhere(
+        (r) => r.resource.toLowerCase() == draft.resource.toLowerCase() && r.resourceType == draft.resourceType,
+      );
+      if (existingIndex >= 0) {
+        _rules[existingIndex] = draft;
+      } else {
+        _rules.add(draft);
+      }
+    }
+  }
+
   Future<void> _openAddRuleModal() async {
-    final result = await showClientTokenRuleDialog(context: context);
+    final result = await showClientTokenRuleDialog(
+      context: context,
+      existingRules: List.unmodifiable(_rules),
+    );
     if (!mounted || result == null) return;
 
-    _rules.add(result);
+    _mergeRules(result);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _notifyCreateTokenDialogChanged();
@@ -128,16 +157,156 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     final result = await showClientTokenRuleDialog(
       context: context,
       initialRule: _rules[index],
+      existingRules: List.unmodifiable(_rules),
     );
     if (!mounted || result == null) return;
 
-    _rules[index] = result;
+    // Edit always returns exactly one draft — replace the edited entry.
+    _rules[index] = result.first;
     _notifyCreateTokenDialogChanged();
   }
 
   void _removeRule(int index) {
     _rules.removeAt(index);
     _notifyCreateTokenDialogChanged();
+  }
+
+  bool _isImportingRules = false;
+
+  void _setImportingRules(bool value) {
+    _isImportingRules = value;
+    _notifyCreateTokenDialogChanged();
+  }
+
+  Future<void> _handleImportRulesFromSection() async {
+    if (!mounted || _isImportingRules) return;
+    final l10n = AppLocalizations.of(context)!;
+
+    FilePickerResult? picked;
+    try {
+      picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['txt'],
+      );
+    } on Exception {
+      return;
+    }
+
+    if (picked == null || picked.files.isEmpty) return;
+    final filePath = picked.files.single.path;
+    if (filePath == null) return;
+
+    _setImportingRules(true);
+
+    try {
+      final file = File(filePath);
+      final size = await file.length();
+      if (!mounted) return;
+
+      if (size == 0) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorEmpty,
+        );
+        return;
+      }
+      if (size > maxRuleImportFileSizeBytes) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorFileTooLarge,
+        );
+        return;
+      }
+
+      final content = await file.readAsString();
+      if (!mounted) return;
+
+      final result = parseTokenRulesStrict(content);
+
+      if (result.drafts.isEmpty) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorEmpty,
+        );
+        return;
+      }
+
+      if (result.hasErrors) {
+        final firstError = result.errors.first;
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorInvalidFormat(firstError.line, firstError.content),
+        );
+        return;
+      }
+
+      _mergeRules(result.drafts);
+      _notifyCreateTokenDialogChanged();
+
+      if (mounted) {
+        final countAdded = result.drafts.length;
+        SettingsFeedback.showSuccess(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesSuccess(countAdded),
+        );
+      }
+    } on FormatException catch (e) {
+      developer.log('Rule import encoding error', name: 'client_token_section', error: e);
+      if (mounted) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorEmpty,
+        );
+      }
+    } on Exception catch (e) {
+      developer.log('Failed to import rules', name: 'client_token_section', error: e);
+      if (mounted) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorEmpty,
+        );
+      }
+    } finally {
+      if (mounted) _setImportingRules(false);
+    }
+  }
+
+  Future<void> _handleExportRules() async {
+    if (_rules.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+
+    final lines = _rules.map((rule) {
+      final perms = [
+        if (rule.canRead) 'read',
+        if (rule.canUpdate) 'update',
+        if (rule.canDelete) 'delete',
+      ].join(',');
+      return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
+    }).join('\n');
+
+    try {
+      final savePath = await FilePicker.platform.saveFile(
+        dialogTitle: l10n.ctButtonExportRules,
+        fileName: l10n.ctExportRulesDefaultFileName,
+        type: FileType.custom,
+        allowedExtensions: ['txt'],
+      );
+      if (savePath == null) return;
+      await File(savePath).writeAsString(lines);
+    } on Exception catch (e) {
+      developer.log(
+        'Failed to export rules',
+        name: 'client_token_section',
+        error: e,
+      );
+    }
   }
 
   Future<void> _openCreateTokenModal([ClientTokenSummary? baseToken]) async {
@@ -252,6 +421,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                               _notifyCreateTokenDialogChanged();
                             },
                             onAddRule: _openAddRuleModal,
+                            onExportRules: _handleExportRules,
+                            onImportRules: _handleImportRulesFromSection,
+                            isImportingRules: _isImportingRules,
                             onEditRule: _openEditRuleModal,
                             onDeleteRule: _removeRule,
                             onDismissCreatedToken: tokenProvider.clearLastCreatedToken,

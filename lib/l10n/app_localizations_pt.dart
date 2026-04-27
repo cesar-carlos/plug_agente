@@ -1243,10 +1243,82 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctTooltipEditToken => 'Editar token';
 
   @override
-  String get ctErrorRuleResourceRequired => 'Informe o recurso (schema.nome).';
+  String get ctErrorRuleResourceRequired => 'Informe ao menos um recurso (schema.nome).';
 
   @override
   String get ctErrorRulePermissionRequired => 'Selecione ao menos uma permissão para a regra.';
+
+  @override
+  String ctErrorRuleResourceInvalidChars(String resource) {
+    return 'Nome de recurso inválido: \"$resource\". Use apenas letras, números, underscores e um ponto opcional (schema.nome).';
+  }
+
+  @override
+  String ctRuleWarnDuplicates(String resources) {
+    return 'As regras a seguir já existem e serão substituídas: $resources. Confirme para continuar.';
+  }
+
+  @override
+  String get ctDialogConfirmReplace => 'Confirmar substituição';
+
+  @override
+  String get ctRuleImportFile => 'Importar .txt';
+
+  @override
+  String get ctButtonExportRules => 'Exportar regras';
+
+  @override
+  String get ctButtonImportRules => 'Importar regras';
+
+  @override
+  String get ctExportRulesDefaultFileName => 'regras_token.txt';
+
+  @override
+  String ctImportRulesErrorInvalidFormat(int line, String content) {
+    return 'Linha $line: \"$content\" — formato inválido. Cada linha deve estar no padrão completo: recurso;tipo;efeito;permissões (ex: dbo.clientes;table;allow;read).';
+  }
+
+  @override
+  String get ctImportRulesErrorEmpty => 'O arquivo está vazio ou não contém regras válidas.';
+
+  @override
+  String get ctImportRulesErrorFileTooLarge => 'O arquivo excede o tamanho máximo permitido (512 KB).';
+
+  @override
+  String ctImportRulesSuccess(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count regras importadas com sucesso.',
+      one: '1 regra importada com sucesso.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctRuleImportSuccess(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count regras importadas com sucesso.',
+      one: '1 regra importada com sucesso.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ctRuleImportErrorEmpty => 'O arquivo está vazio.';
+
+  @override
+  String get ctRuleImportErrorNoValidLines => 'Nenhuma linha válida encontrada no arquivo.';
+
+  @override
+  String get ctRuleImportErrorFileTooLarge => 'O arquivo excede o tamanho máximo permitido (512 KB).';
+
+  @override
+  String ctRuleImportErrorLineInvalid(int line, String content) {
+    return 'Linha $line: \"$content\" — formato inválido. Use schema.nome ou schema.nome;table;allow;read.';
+  }
 
   @override
   String get ctRuleFieldType => 'Tipo';
@@ -1258,7 +1330,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctRuleFieldResource => 'Recurso (schema.nome)';
 
   @override
-  String get ctRuleHintResource => 'dbo.clientes';
+  String get ctRuleHintResource => 'dbo.clientes; dbo.pedidos';
 
   @override
   String get ctLabelPayloadColon => 'Payload:';

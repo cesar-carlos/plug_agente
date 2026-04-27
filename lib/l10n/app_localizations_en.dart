@@ -1238,10 +1238,82 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctTooltipEditToken => 'Edit token';
 
   @override
-  String get ctErrorRuleResourceRequired => 'Enter the resource (schema.name).';
+  String get ctErrorRuleResourceRequired => 'Enter at least one resource (schema.name).';
 
   @override
   String get ctErrorRulePermissionRequired => 'Select at least one permission for the rule.';
+
+  @override
+  String ctErrorRuleResourceInvalidChars(String resource) {
+    return 'Invalid resource name: \"$resource\". Use only letters, numbers, underscores and an optional dot (schema.name).';
+  }
+
+  @override
+  String ctRuleWarnDuplicates(String resources) {
+    return 'The following rules already exist and will be replaced: $resources. Confirm to proceed.';
+  }
+
+  @override
+  String get ctDialogConfirmReplace => 'Confirm replacement';
+
+  @override
+  String get ctRuleImportFile => 'Import .txt';
+
+  @override
+  String get ctButtonExportRules => 'Export rules';
+
+  @override
+  String get ctButtonImportRules => 'Import rules';
+
+  @override
+  String get ctExportRulesDefaultFileName => 'token_rules.txt';
+
+  @override
+  String ctImportRulesErrorInvalidFormat(int line, String content) {
+    return 'Line $line: \"$content\" — invalid format. Each line must follow the full pattern: resource;type;effect;permissions (e.g. dbo.customers;table;allow;read).';
+  }
+
+  @override
+  String get ctImportRulesErrorEmpty => 'The file is empty or contains no valid rules.';
+
+  @override
+  String get ctImportRulesErrorFileTooLarge => 'The file exceeds the maximum allowed size (512 KB).';
+
+  @override
+  String ctImportRulesSuccess(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count rules imported successfully.',
+      one: '1 rule imported successfully.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctRuleImportSuccess(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count rules imported successfully.',
+      one: '1 rule imported successfully.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ctRuleImportErrorEmpty => 'The file is empty.';
+
+  @override
+  String get ctRuleImportErrorNoValidLines => 'No valid lines found in the file.';
+
+  @override
+  String get ctRuleImportErrorFileTooLarge => 'The file exceeds the maximum allowed size (512 KB).';
+
+  @override
+  String ctRuleImportErrorLineInvalid(int line, String content) {
+    return 'Line $line: \"$content\" — invalid format. Use schema.name or schema.name;table;allow;read.';
+  }
 
   @override
   String get ctRuleFieldType => 'Type';
@@ -1253,7 +1325,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctRuleFieldResource => 'Resource (schema.name)';
 
   @override
-  String get ctRuleHintResource => 'dbo.customers';
+  String get ctRuleHintResource => 'dbo.customers; dbo.orders';
 
   @override
   String get ctLabelPayloadColon => 'Payload:';

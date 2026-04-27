@@ -2471,7 +2471,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctErrorRuleResourceRequired.
   ///
   /// In en, this message translates to:
-  /// **'Enter the resource (schema.name).'**
+  /// **'Enter at least one resource (schema.name).'**
   String get ctErrorRuleResourceRequired;
 
   /// No description provided for @ctErrorRulePermissionRequired.
@@ -2479,6 +2479,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select at least one permission for the rule.'**
   String get ctErrorRulePermissionRequired;
+
+  /// No description provided for @ctErrorRuleResourceInvalidChars.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid resource name: \"{resource}\". Use only letters, numbers, underscores and an optional dot (schema.name).'**
+  String ctErrorRuleResourceInvalidChars(String resource);
+
+  /// No description provided for @ctRuleWarnDuplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'The following rules already exist and will be replaced: {resources}. Confirm to proceed.'**
+  String ctRuleWarnDuplicates(String resources);
+
+  /// No description provided for @ctDialogConfirmReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm replacement'**
+  String get ctDialogConfirmReplace;
+
+  /// No description provided for @ctRuleImportFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Import .txt'**
+  String get ctRuleImportFile;
+
+  /// No description provided for @ctButtonExportRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Export rules'**
+  String get ctButtonExportRules;
+
+  /// No description provided for @ctButtonImportRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Import rules'**
+  String get ctButtonImportRules;
+
+  /// No description provided for @ctExportRulesDefaultFileName.
+  ///
+  /// In en, this message translates to:
+  /// **'token_rules.txt'**
+  String get ctExportRulesDefaultFileName;
+
+  /// No description provided for @ctImportRulesErrorInvalidFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}: \"{content}\" — invalid format. Each line must follow the full pattern: resource;type;effect;permissions (e.g. dbo.customers;table;allow;read).'**
+  String ctImportRulesErrorInvalidFormat(int line, String content);
+
+  /// No description provided for @ctImportRulesErrorEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is empty or contains no valid rules.'**
+  String get ctImportRulesErrorEmpty;
+
+  /// No description provided for @ctImportRulesErrorFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The file exceeds the maximum allowed size (512 KB).'**
+  String get ctImportRulesErrorFileTooLarge;
+
+  /// No description provided for @ctImportRulesSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =1{1 rule imported successfully.} other{{count} rules imported successfully.}}'**
+  String ctImportRulesSuccess(int count);
+
+  /// No description provided for @ctRuleImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =1{1 rule imported successfully.} other{{count} rules imported successfully.}}'**
+  String ctRuleImportSuccess(int count);
+
+  /// No description provided for @ctRuleImportErrorEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is empty.'**
+  String get ctRuleImportErrorEmpty;
+
+  /// No description provided for @ctRuleImportErrorNoValidLines.
+  ///
+  /// In en, this message translates to:
+  /// **'No valid lines found in the file.'**
+  String get ctRuleImportErrorNoValidLines;
+
+  /// No description provided for @ctRuleImportErrorFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The file exceeds the maximum allowed size (512 KB).'**
+  String get ctRuleImportErrorFileTooLarge;
+
+  /// No description provided for @ctRuleImportErrorLineInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}: \"{content}\" — invalid format. Use schema.name or schema.name;table;allow;read.'**
+  String ctRuleImportErrorLineInvalid(int line, String content);
 
   /// No description provided for @ctRuleFieldType.
   ///
@@ -2501,7 +2597,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctRuleHintResource.
   ///
   /// In en, this message translates to:
-  /// **'dbo.customers'**
+  /// **'dbo.customers; dbo.orders'**
   String get ctRuleHintResource;
 
   /// No description provided for @ctLabelPayloadColon.

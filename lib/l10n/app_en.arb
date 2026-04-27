@@ -462,12 +462,60 @@
   "ctTooltipEditRule": "Edit rule",
   "ctTooltipDeleteRule": "Delete rule",
   "ctTooltipEditToken": "Edit token",
-  "ctErrorRuleResourceRequired": "Enter the resource (schema.name).",
+  "ctErrorRuleResourceRequired": "Enter at least one resource (schema.name).",
   "ctErrorRulePermissionRequired": "Select at least one permission for the rule.",
+  "ctErrorRuleResourceInvalidChars": "Invalid resource name: \"{resource}\". Use only letters, numbers, underscores and an optional dot (schema.name).",
+  "@ctErrorRuleResourceInvalidChars": {
+    "placeholders": {
+      "resource": { "type": "String" }
+    }
+  },
+  "ctRuleWarnDuplicates": "The following rules already exist and will be replaced: {resources}. Confirm to proceed.",
+  "ctDialogConfirmReplace": "Confirm replacement",
+  "@ctRuleWarnDuplicates": {
+    "placeholders": {
+      "resources": { "type": "String" }
+    }
+  },
+  "ctRuleImportFile": "Import .txt",
+  "ctButtonExportRules": "Export rules",
+  "ctButtonImportRules": "Import rules",
+  "ctExportRulesDefaultFileName": "token_rules.txt",
+  "ctImportRulesErrorInvalidFormat": "Line {line}: \"{content}\" — invalid format. Each line must follow the full pattern: resource;type;effect;permissions (e.g. dbo.customers;table;allow;read).",
+  "@ctImportRulesErrorInvalidFormat": {
+    "placeholders": {
+      "line": { "type": "int" },
+      "content": { "type": "String" }
+    }
+  },
+  "ctImportRulesErrorEmpty": "The file is empty or contains no valid rules.",
+  "ctImportRulesErrorFileTooLarge": "The file exceeds the maximum allowed size (512 KB).",
+  "ctImportRulesSuccess": "{count,plural, =1{1 rule imported successfully.} other{{count} rules imported successfully.}}",
+  "@ctImportRulesSuccess": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ctRuleImportSuccess": "{count,plural, =1{1 rule imported successfully.} other{{count} rules imported successfully.}}",
+  "@ctRuleImportSuccess": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ctRuleImportErrorEmpty": "The file is empty.",
+  "ctRuleImportErrorNoValidLines": "No valid lines found in the file.",
+  "ctRuleImportErrorFileTooLarge": "The file exceeds the maximum allowed size (512 KB).",
+  "ctRuleImportErrorLineInvalid": "Line {line}: \"{content}\" — invalid format. Use schema.name or schema.name;table;allow;read.",
+  "@ctRuleImportErrorLineInvalid": {
+    "placeholders": {
+      "line": { "type": "int" },
+      "content": { "type": "String" }
+    }
+  },
   "ctRuleFieldType": "Type",
   "ctRuleFieldEffect": "Effect",
   "ctRuleFieldResource": "Resource (schema.name)",
-  "ctRuleHintResource": "dbo.customers",
+  "ctRuleHintResource": "dbo.customers; dbo.orders",
   "ctLabelPayloadColon": "Payload:",
   "ctLabelRulesColon": "Rules:",
   "ctRuleFieldEffectColon": "Effect:",

@@ -102,17 +102,20 @@ class ClientTokenRulesGrid extends StatelessWidget {
         return AppDataGrid<ClientTokenRuleDraft>(
           columns: _gridColumns(l10n),
           rows: rules,
-          rowCells: (rule) => [
-            Text(rule.resourceType.name),
-            SelectableText(rule.resource),
-            Text(rule.effect.name),
-            Text(rule.permissionsLabel(l10n)),
-            _RuleActions(
-              l10n: l10n,
-              onEdit: () => onEdit(rules.indexOf(rule)),
-              onDelete: () => onDelete(rules.indexOf(rule)),
-            ),
-          ],
+          rowCells: (rule) {
+            final index = rules.indexWhere((r) => identical(r, rule));
+            return [
+              Text(rule.resourceType.name),
+              SelectableText(rule.resource),
+              Text(rule.effect.name),
+              Text(rule.permissionsLabel(l10n)),
+              _RuleActions(
+                l10n: l10n,
+                onEdit: () => onEdit(index),
+                onDelete: () => onDelete(index),
+              ),
+            ];
+          },
         );
       },
     );

@@ -462,12 +462,60 @@
   "ctTooltipEditRule": "Editar regra",
   "ctTooltipDeleteRule": "Excluir regra",
   "ctTooltipEditToken": "Editar token",
-  "ctErrorRuleResourceRequired": "Informe o recurso (schema.nome).",
+  "ctErrorRuleResourceRequired": "Informe ao menos um recurso (schema.nome).",
   "ctErrorRulePermissionRequired": "Selecione ao menos uma permissão para a regra.",
+  "ctErrorRuleResourceInvalidChars": "Nome de recurso inválido: \"{resource}\". Use apenas letras, números, underscores e um ponto opcional (schema.nome).",
+  "@ctErrorRuleResourceInvalidChars": {
+    "placeholders": {
+      "resource": { "type": "String" }
+    }
+  },
+  "ctRuleWarnDuplicates": "As regras a seguir já existem e serão substituídas: {resources}. Confirme para continuar.",
+  "ctDialogConfirmReplace": "Confirmar substituição",
+  "@ctRuleWarnDuplicates": {
+    "placeholders": {
+      "resources": { "type": "String" }
+    }
+  },
+  "ctRuleImportFile": "Importar .txt",
+  "ctButtonExportRules": "Exportar regras",
+  "ctButtonImportRules": "Importar regras",
+  "ctExportRulesDefaultFileName": "regras_token.txt",
+  "ctImportRulesErrorInvalidFormat": "Linha {line}: \"{content}\" — formato inválido. Cada linha deve estar no padrão completo: recurso;tipo;efeito;permissões (ex: dbo.clientes;table;allow;read).",
+  "@ctImportRulesErrorInvalidFormat": {
+    "placeholders": {
+      "line": { "type": "int" },
+      "content": { "type": "String" }
+    }
+  },
+  "ctImportRulesErrorEmpty": "O arquivo está vazio ou não contém regras válidas.",
+  "ctImportRulesErrorFileTooLarge": "O arquivo excede o tamanho máximo permitido (512 KB).",
+  "ctImportRulesSuccess": "{count,plural, =1{1 regra importada com sucesso.} other{{count} regras importadas com sucesso.}}",
+  "@ctImportRulesSuccess": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ctRuleImportSuccess": "{count,plural, =1{1 regra importada com sucesso.} other{{count} regras importadas com sucesso.}}",
+  "@ctRuleImportSuccess": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ctRuleImportErrorEmpty": "O arquivo está vazio.",
+  "ctRuleImportErrorNoValidLines": "Nenhuma linha válida encontrada no arquivo.",
+  "ctRuleImportErrorFileTooLarge": "O arquivo excede o tamanho máximo permitido (512 KB).",
+  "ctRuleImportErrorLineInvalid": "Linha {line}: \"{content}\" — formato inválido. Use schema.nome ou schema.nome;table;allow;read.",
+  "@ctRuleImportErrorLineInvalid": {
+    "placeholders": {
+      "line": { "type": "int" },
+      "content": { "type": "String" }
+    }
+  },
   "ctRuleFieldType": "Tipo",
   "ctRuleFieldEffect": "Efeito",
   "ctRuleFieldResource": "Recurso (schema.nome)",
-  "ctRuleHintResource": "dbo.clientes",
+  "ctRuleHintResource": "dbo.clientes; dbo.pedidos",
   "ctLabelPayloadColon": "Payload:",
   "ctLabelRulesColon": "Regras:",
   "ctRuleFieldEffectColon": "Efeito:",

@@ -57,6 +57,9 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.onToggleAllViews,
     required this.onToggleAllPermissions,
     required this.onAddRule,
+    required this.onExportRules,
+    required this.onImportRules,
+    required this.isImportingRules,
     required this.onEditRule,
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
@@ -79,6 +82,9 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final ValueChanged<bool> onToggleAllViews;
   final ValueChanged<bool> onToggleAllPermissions;
   final VoidCallback onAddRule;
+  final VoidCallback onExportRules;
+  final VoidCallback onImportRules;
+  final bool isImportingRules;
   final ValueChanged<int> onEditRule;
   final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
@@ -148,6 +154,34 @@ class _CreateTokenDialogContent extends StatelessWidget {
                 ),
                 FocusTraversalOrder(
                   order: const NumericFocusOrder(7),
+                  child: isImportingRules
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: ProgressRing(strokeWidth: 2),
+                        )
+                      : AppButton(
+                          label: l10n.ctButtonImportRules,
+                          isPrimary: false,
+                          icon: FluentIcons.upload,
+                          onPressed: allPermissions ? null : onImportRules,
+                        ),
+                ),
+                if (rules.isNotEmpty) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  FocusTraversalOrder(
+                    order: const NumericFocusOrder(8),
+                    child: AppButton(
+                      label: l10n.ctButtonExportRules,
+                      isPrimary: false,
+                      icon: FluentIcons.download,
+                      onPressed: onExportRules,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: AppSpacing.sm),
+                FocusTraversalOrder(
+                  order: const NumericFocusOrder(9),
                   child: AppButton(
                     label: l10n.ctButtonAddRule,
                     isPrimary: false,

@@ -63,59 +63,61 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
       title: Text(l10n.ctDialogTokenDetailsTitle),
       content: SizedBox(
         width: dialogWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DetailField(
-              label: l10n.ctLabelClient,
-              value: token.clientId,
-              selectable: true,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _DetailField(
-              label: l10n.ctLabelId,
-              value: token.id,
-              selectable: true,
-            ),
-            if (token.agentId != null && token.agentId!.trim().isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               _DetailField(
-                label: l10n.ctLabelAgent,
-                value: token.agentId!,
+                label: l10n.ctLabelClient,
+                value: token.clientId,
                 selectable: true,
               ),
+              const SizedBox(height: AppSpacing.sm),
+              _DetailField(
+                label: l10n.ctLabelId,
+                value: token.id,
+                selectable: true,
+              ),
+              if (token.agentId != null && token.agentId!.trim().isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _DetailField(
+                  label: l10n.ctLabelAgent,
+                  value: token.agentId!,
+                  selectable: true,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              _DetailField(
+                label: l10n.ctLabelStatus,
+                value: token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _DetailField(
+                label: l10n.ctLabelScope,
+                value: _buildScopeLabel(l10n),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _DetailField(
+                label: l10n.ctLabelCreatedAt,
+                value: token.createdAt.toLocal().toIso8601String(),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                '${l10n.ctLabelPayload}:',
+                style: context.bodyStrong,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _CodeSurface(text: _buildPayloadLabel()),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                '${l10n.ctLabelRules}:',
+                style: context.bodyStrong,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _RulesSurface(l10n: l10n, rules: token.rules),
             ],
-            const SizedBox(height: AppSpacing.sm),
-            _DetailField(
-              label: l10n.ctLabelStatus,
-              value: token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _DetailField(
-              label: l10n.ctLabelScope,
-              value: _buildScopeLabel(l10n),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _DetailField(
-              label: l10n.ctLabelCreatedAt,
-              value: token.createdAt.toLocal().toIso8601String(),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              '${l10n.ctLabelPayload}:',
-              style: context.bodyStrong,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            _CodeSurface(text: _buildPayloadLabel()),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              '${l10n.ctLabelRules}:',
-              style: context.bodyStrong,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            _RulesSurface(l10n: l10n, rules: token.rules),
-          ],
+          ),
         ),
       ),
       actions: [
