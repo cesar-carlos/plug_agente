@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('AppDatabase (AgentConfigDataSource)', () {
     test('getAllConfigs returns empty list for fresh database', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
@@ -94,6 +98,28 @@ void main() {
       final row = await db.getConfigById('single');
       expect(row?.connectionString, 'DSN=After');
       expect(row?.updatedAt.toUtc(), t2);
+    });
+
+    test('opens when name column already exists before migration v12', () async {
+      final tempDir = await Directory.systemTemp.createTemp('app_db_migration_');
+      addTearDown(() async {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final dbPath = '${tempDir.path}\\agent_config.db';
+
+      final initialDb = AppDatabase(databaseFilePath: dbPath);
+      await initialDb.getAllConfigs();
+      await initialDb.customStatement('PRAGMA user_version = 11;');
+      await initialDb.close();
+
+      final reopenedDb = AppDatabase(databaseFilePath: dbPath);
+      addTearDown(reopenedDb.close);
+
+      final rows = await reopenedDb.getAllConfigs();
+      expect(rows, isEmpty);
     });
   });
 }

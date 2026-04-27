@@ -159,7 +159,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: SettingsSectionTitle(
@@ -167,7 +166,6 @@ class _CreateTokenDialogContent extends StatelessWidget {
                   ),
                 ),
                 Flexible(
-                  fit: FlexFit.loose,
                   child: Wrap(
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,

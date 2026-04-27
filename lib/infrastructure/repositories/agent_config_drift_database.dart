@@ -125,7 +125,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         );
       }
       if (from < 12) {
-        await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.name);
+        await _addClientTokenNameColumnIfMissing(m);
       }
       await _createClientTokenIndexes();
     },
@@ -172,6 +172,23 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
     final rows = await customSelect(
       'PRAGMA table_info("config_table")',
       readsFrom: {configTable},
+    ).get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
+
+  Future<void> _addClientTokenNameColumnIfMissing(Migrator m) async {
+    final existing = await _readClientTokenTableColumnNames();
+    final sqlName = clientTokenCacheTable.name.name;
+    if (existing.contains(sqlName)) {
+      return;
+    }
+    await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.name);
+  }
+
+  Future<Set<String>> _readClientTokenTableColumnNames() async {
+    final rows = await customSelect(
+      'PRAGMA table_info("client_token_cache_table")',
+      readsFrom: {clientTokenCacheTable},
     ).get();
     return {for (final row in rows) row.read<String>('name')};
   }
