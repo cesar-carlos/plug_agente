@@ -3,6 +3,13 @@ name: Update Appcast on Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Git tag (e.g. v1.4.0). Release must exist with PlugAgente-Setup-*.exe asset."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   update-appcast:
@@ -21,6 +28,7 @@ jobs:
       asset_size: ${{ steps.asset.outputs.size }}
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -34,9 +42,46 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Load release context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          python3 << 'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = (os.environ.get("TAG") or "").strip()
+          if not tag:
+              print("Error: could not resolve release tag (event or workflow input).", file=sys.stderr)
+              sys.exit(1)
+          raw = subprocess.check_output(
+              ["gh", "api", f"repos/{repo}/releases/tags/{tag}"],
+              env={**os.environ},
+              text=True,
+          )
+          data = json.loads(raw)
+          body = data.get("body") or ""
+          with open("release_body.txt", "w", encoding="utf-8") as f:
+              f.write(body)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as gf:
+              gf.write(f"tag={data['tag_name']}\n")
+              gf.write(f"release_id={data['id']}\n")
+          PY
+
+      - name: Upload release body for smoke job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-body
+          path: release_body.txt
+
       - name: Fetch release tag
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ steps.ctx.outputs.tag }}
         run: |
           TAG_NAME="${RELEASE_TAG:-${GITHUB_REF#refs/tags/}}"
           git fetch origin tag "$TAG_NAME" 2>/dev/null || true
@@ -44,7 +89,7 @@ jobs:
       - name: Get release info
         id: release
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ steps.ctx.outputs.tag }}
         run: |
           TAG_NAME="${RELEASE_TAG:-${GITHUB_REF#refs/tags/}}"
           VERSION_SHORT="${TAG_NAME#v}"
@@ -83,7 +128,7 @@ jobs:
           ASSET_PATTERN: "PlugAgente-Setup-"
         run: |
           ASSET_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets")
+            "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ steps.ctx.outputs.release_id }}/assets")
 
           ASSET_CHOSEN=$(echo "$ASSET_RESPONSE" | python3 -c "
           import sys, json
@@ -162,13 +207,19 @@ jobs:
       - name: Update appcast.xml
         env:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
-          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           python3 << PYEOF
+          import re
           import xml.etree.ElementTree as ET
           from datetime import datetime, timezone
           import os
           import sys
+          from xml.sax.saxutils import escape
+
+          def appcast_description_body(raw: str, max_len: int = 2000) -> str:
+              """Release notes as safe XML character data (Sparkle/RSS description)."""
+              cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", raw)
+              return escape(cleaned[:max_len])
 
           TAG_NAME = "${{ steps.release.outputs.tag }}"
           VERSION_SHORT = "${{ steps.release.outputs.version }}"
@@ -177,7 +228,8 @@ jobs:
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
           MAX_APPCAST_ITEMS = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
-          RELEASE_BODY = (os.environ.get("RELEASE_BODY") or "").strip()
+          with open("release_body.txt", encoding="utf-8") as _bf:
+              RELEASE_BODY = _bf.read().strip()
 
           if not ASSET_URL or not ASSET_SIZE:
               print("Error: Asset URL or size not found")
@@ -211,7 +263,7 @@ jobs:
           ET.SubElement(item, "pubDate").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
           desc = ET.SubElement(item, "description")
           if RELEASE_BODY:
-              desc.text = RELEASE_BODY[:2000]
+              desc.text = appcast_description_body(RELEASE_BODY)
           else:
               desc.text = f"Nova Versão {VERSION} - Atualização automática via GitHub Release."
 
@@ -355,32 +407,42 @@ jobs:
       OFFICIAL_FEED_URL: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
     permissions:
       contents: read
+      actions: read
     steps:
+      - name: Download release body artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-body
+
       - name: Smoke validate published appcast feed
         env:
           ASSET_NAME: ${{ needs.update-appcast.outputs.asset_name }}
           ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
           ASSET_URL: ${{ needs.update-appcast.outputs.asset_url }}
           FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
-          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           python3 << 'PYEOF'
           import os
+          import re
           import sys
           import time
           import urllib.request
           import xml.etree.ElementTree as ET
+          def sanitize_release_notes(raw: str, max_len: int = 2000) -> str:
+              cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", raw)
+              return cleaned[:max_len]
 
           feed_url = os.environ["OFFICIAL_FEED_URL"].strip()
           full_version = os.environ["FULL_VERSION"].strip()
           asset_url = os.environ["ASSET_URL"].strip()
           asset_name = os.environ["ASSET_NAME"].strip()
           asset_size = os.environ["ASSET_SIZE"].strip()
-          release_body = (os.environ.get("RELEASE_BODY") or "").strip()
+          with open("release_body.txt", encoding="utf-8") as _bf:
+              release_body = _bf.read().strip()
           max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
           sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
           expected_description = (
-              release_body[:2000]
+              sanitize_release_notes(release_body)
               if release_body
               else f"Nova Versão {full_version} - Atualização automática via GitHub Release."
           )
