@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
@@ -10,6 +12,7 @@ import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
@@ -198,6 +201,12 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton(
+      () => HealthService(
+        metricsCollector: getIt<MetricsCollector>(),
+        gateway: getIt<IDatabaseGateway>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => DirectOdbcConnectionLimiter(
         maxConcurrent: getIt<IOdbcConnectionSettings>().poolSize,
         acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
@@ -290,16 +299,39 @@ void registerPlugDependencyGraph(
       },
     )
     ..registerLazySingleton<IDatabaseGateway>(
-      () => OdbcDatabaseGateway(
-        getIt<IAgentConfigRepository>(),
-        getIt<odbc.OdbcService>(),
-        getIt<IConnectionPool>(),
-        getIt<IRetryManager>(),
-        getIt<MetricsCollector>(),
-        getIt<IOdbcConnectionSettings>(),
-        featureFlags: getIt<FeatureFlags>(),
-        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
-      ),
+      () {
+        // Create base ODBC gateway
+        final baseGateway = OdbcDatabaseGateway(
+          getIt<IAgentConfigRepository>(),
+          getIt<odbc.OdbcService>(),
+          getIt<IConnectionPool>(),
+          getIt<IRetryManager>(),
+          getIt<MetricsCollector>(),
+          getIt<IOdbcConnectionSettings>(),
+          featureFlags: getIt<FeatureFlags>(),
+          directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        );
+
+        // Wrap with SQL execution queue for backpressure control
+        final sqlQueue = SqlExecutionQueue(
+          maxQueueSize: ConnectionConstants.sqlQueueMaxSize,
+          maxConcurrentWorkers: ConnectionConstants.sqlQueueMaxWorkers,
+          metricsCollector: getIt<MetricsCollector>(),
+          defaultEnqueueTimeout: ConnectionConstants.sqlQueueEnqueueTimeout,
+        );
+
+        developer.log(
+          'SQL queue initialized: maxSize=${ConnectionConstants.sqlQueueMaxSize}, '
+          'maxWorkers=${ConnectionConstants.sqlQueueMaxWorkers}',
+          name: 'plug_dependency_registrar',
+          level: 800,
+        );
+
+        return QueuedDatabaseGateway(
+          delegate: baseGateway,
+          queue: sqlQueue,
+        );
+      },
     )
     ..registerLazySingleton<IStreamingDatabaseGateway>(
       () => OdbcStreamingGateway(

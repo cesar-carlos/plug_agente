@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -16,10 +18,14 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     this._service,
     this._settings, {
     MetricsCollector? metricsCollector,
-  }) : _metrics = metricsCollector;
+  }) : _metrics = metricsCollector,
+       _nativeHandshakeSemaphore = PoolSemaphore(
+         ConnectionConstants.leasePoolNativeHandshakeConcurrency(_settings.poolSize),
+       );
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final MetricsCollector? _metrics;
+  final PoolSemaphore _nativeHandshakeSemaphore;
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
@@ -31,16 +37,17 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     return error.toString();
   }
 
-  String _poolConnectionString(String connectionString) {
-    if (_settings.nativePoolTestOnCheckout) {
-      return connectionString;
-    }
+  bool _messageIndicatesInvalidConnectionId(Object error) {
+    return _odbcErrorMessage(error).toLowerCase().contains('invalid connection id');
+  }
 
+  String _poolConnectionString(String connectionString) {
     if (connectionString.toLowerCase().contains('pooltestoncheckout=')) {
       return connectionString;
     }
 
-    return '$connectionString;PoolTestOnCheckout=false';
+    final testOnCheckout = _settings.nativePoolTestOnCheckout;
+    return '$connectionString;PoolTestOnCheckout=$testOnCheckout';
   }
 
   PoolOptions get _poolOptions {
@@ -110,11 +117,29 @@ class OdbcNativeConnectionPool implements IConnectionPool {
       level: 500,
     );
 
-    final poolResult = await _service.poolCreate(
-      _poolConnectionString(connectionString),
-      _settings.poolSize,
-      options: _poolOptions,
-    );
+    try {
+      await _nativeHandshakeSemaphore.acquire(
+        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+      );
+    } on TimeoutException catch (error) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('ODBC worker busy (native pool_create): ${error.message}'),
+          operation: 'pool_create',
+        ),
+      );
+    }
+
+    late Result<int> poolResult;
+    try {
+      poolResult = await _service.poolCreate(
+        _poolConnectionString(connectionString),
+        _settings.poolSize,
+        options: _poolOptions,
+      );
+    } finally {
+      _nativeHandshakeSemaphore.release();
+    }
 
     return poolResult.fold(
       (poolId) {
@@ -149,7 +174,27 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
     return poolResult.fold(
       (poolId) async {
-        final connResult = await _service.poolGetConnection(poolId);
+        try {
+          await _nativeHandshakeSemaphore.acquire(
+            timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+          );
+        } on TimeoutException catch (error) {
+          return Failure(
+            OdbcFailureMapper.mapPoolError(
+              StateError(
+                'ODBC worker busy (native pool_get_connection): ${error.message}',
+              ),
+              operation: 'pool_acquire',
+            ),
+          );
+        }
+
+        late Result<Connection> connResult;
+        try {
+          connResult = await _service.poolGetConnection(poolId);
+        } finally {
+          _nativeHandshakeSemaphore.release();
+        }
 
         return connResult.fold(
           (connection) {
@@ -169,37 +214,85 @@ class OdbcNativeConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> release(String connectionId) async {
-    final result = await _service.poolReleaseConnection(connectionId);
+    var handshakeHeld = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(
+        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+      );
+      handshakeHeld = true;
+    } on TimeoutException {
+      developer.log(
+        'Native pool release: handshake timeout; poolReleaseConnection anyway',
+        name: 'connection_pool',
+        level: 900,
+      );
+    }
+
+    late Result<void> result;
+    try {
+      result = await _service.poolReleaseConnection(connectionId);
+    } finally {
+      if (handshakeHeld) {
+        _nativeHandshakeSemaphore.release();
+      }
+    }
 
     return result.fold(
       (_) => const Success(unit),
-      (error) => Failure(
-        () {
-          _metrics?.recordPoolReleaseFailure();
-          return OdbcFailureMapper.mapPoolError(
+      (error) {
+        if (_messageIndicatesInvalidConnectionId(error)) {
+          return const Success(unit);
+        }
+        _metrics?.recordPoolReleaseFailure();
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
             error,
             operation: 'pool_release',
-          );
-        }(),
-      ),
+          ),
+        );
+      },
     );
   }
 
   @override
   Future<Result<void>> discard(String connectionId) async {
-    final result = await _service.disconnect(connectionId);
+    var handshakeHeld = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(
+        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+      );
+      handshakeHeld = true;
+    } on TimeoutException {
+      developer.log(
+        'Native pool discard: handshake timeout; disconnect anyway',
+        name: 'connection_pool',
+        level: 900,
+      );
+    }
+
+    late Result<void> result;
+    try {
+      result = await _service.disconnect(connectionId);
+    } finally {
+      if (handshakeHeld) {
+        _nativeHandshakeSemaphore.release();
+      }
+    }
 
     return result.fold(
       (_) => const Success(unit),
-      (error) => Failure(
-        () {
-          _metrics?.recordPoolReleaseFailure();
-          return OdbcFailureMapper.mapPoolError(
+      (error) {
+        if (_messageIndicatesInvalidConnectionId(error)) {
+          return const Success(unit);
+        }
+        _metrics?.recordPoolReleaseFailure();
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
             error,
             operation: 'pool_discard',
-          );
-        }(),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -214,11 +307,30 @@ class OdbcNativeConnectionPool implements IConnectionPool {
     final errors = <String>[];
 
     for (final poolId in _pools.values) {
-      final result = await _service.poolClose(poolId);
-      result.fold(
-        (_) {},
-        (error) => errors.add(_odbcErrorMessage(error)),
-      );
+      var handshakeHeld = false;
+      try {
+        await _nativeHandshakeSemaphore.acquire(
+          timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+        );
+        handshakeHeld = true;
+      } on TimeoutException {
+        developer.log(
+          'Native pool closeAll: handshake timeout; poolClose anyway',
+          name: 'connection_pool',
+          level: 900,
+        );
+      }
+      try {
+        final result = await _service.poolClose(poolId);
+        result.fold(
+          (_) {},
+          (error) => errors.add(_odbcErrorMessage(error)),
+        );
+      } finally {
+        if (handshakeHeld) {
+          _nativeHandshakeSemaphore.release();
+        }
+      }
     }
 
     _pools.clear();
@@ -250,7 +362,29 @@ class OdbcNativeConnectionPool implements IConnectionPool {
       level: 800,
     );
 
-    final closeResult = await _service.poolClose(poolId);
+    var handshakeHeld = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(
+        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+      );
+      handshakeHeld = true;
+    } on TimeoutException {
+      developer.log(
+        'Native pool recycle: handshake timeout; poolClose anyway',
+        name: 'connection_pool',
+        level: 900,
+      );
+    }
+
+    late Result<void> closeResult;
+    try {
+      closeResult = await _service.poolClose(poolId);
+    } finally {
+      if (handshakeHeld) {
+        _nativeHandshakeSemaphore.release();
+      }
+    }
+
     return closeResult.fold(
       (_) => const Success(unit),
       (error) => Failure(

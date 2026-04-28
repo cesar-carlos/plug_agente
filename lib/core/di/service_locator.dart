@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
@@ -31,9 +32,10 @@ odbc.ServiceLocator _odbcLocator = odbc.ServiceLocator();
 ///
 /// Sequência de encerramento:
 /// 1. Desconectar transporte (WebSocket)
-/// 2. Fechar pool de conexões ODBC
-/// 3. Fechar banco local (Drift)
-/// 4. Encerrar worker ODBC
+/// 2. Dispor fila SQL
+/// 3. Fechar pool de conexões ODBC
+/// 4. Fechar banco local (Drift)
+/// 5. Encerrar worker ODBC
 Future<void> shutdownApp() async {
   // 1. Desconectar transporte
   if (getIt.isRegistered<ITransportClient>()) {
@@ -41,19 +43,32 @@ Future<void> shutdownApp() async {
     await transport.disconnect();
   }
 
-  // 2. Fechar pool de conexões
+  // 2. Dispor fila SQL (antes de fechar o pool)
+  if (getIt.isRegistered<IDatabaseGateway>()) {
+    final gateway = getIt<IDatabaseGateway>();
+    if (gateway is QueuedDatabaseGateway) {
+      gateway.dispose();
+      developer.log(
+        'SQL execution queue disposed',
+        name: 'service_locator',
+        level: 800,
+      );
+    }
+  }
+
+  // 3. Fechar pool de conexões
   if (getIt.isRegistered<IConnectionPool>()) {
     final pool = getIt<IConnectionPool>();
     await pool.closeAll();
   }
 
-  // 3. Fechar banco local
+  // 4. Fechar banco local
   if (getIt.isRegistered<AppDatabase>()) {
     final db = getIt<AppDatabase>();
     await db.close();
   }
 
-  // 4. Dispose metrics collectors
+  // 5. Dispose metrics collectors
   if (getIt.isRegistered<MetricsCollector>()) {
     getIt<MetricsCollector>().dispose();
   }
@@ -61,7 +76,7 @@ Future<void> shutdownApp() async {
     getIt<ProtocolMetricsCollector>().dispose();
   }
 
-  // 5. Encerrar worker ODBC (synchronous)
+  // 6. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
 }
 

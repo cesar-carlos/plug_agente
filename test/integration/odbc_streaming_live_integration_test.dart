@@ -86,7 +86,18 @@ void main() async {
           fetchSize: 50,
         );
 
-        await Future<void>.delayed(const Duration(milliseconds: 250));
+        const waitForActive = Duration(seconds: 15);
+        final deadline = DateTime.now().add(waitForActive);
+        while (!gateway.hasActiveStream && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        expect(
+          gateway.hasActiveStream,
+          isTrue,
+          reason:
+              'Streaming did not become active before cancel (check DSN, long query, or connect latency)',
+        );
+
         final cancelResult = await gateway.cancelActiveStream();
         expect(cancelResult.isSuccess(), isTrue);
 

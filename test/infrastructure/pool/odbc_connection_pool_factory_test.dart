@@ -4,7 +4,6 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 
 import '../../helpers/mock_odbc_connection_settings.dart';
 
@@ -18,14 +17,14 @@ void main() {
       service = _MockOdbcService();
     });
 
-    test('returns OdbcNativeConnectionPool when useNativeOdbcPool is true', () {
+    test('returns lease OdbcConnectionPool when native pool setting was persisted as true', () {
       final settings = MockOdbcConnectionSettings(useNativeOdbcPool: true);
       final pool = createOdbcConnectionPool(
         service,
         settings,
         MetricsCollector(),
       );
-      expect(pool, isA<OdbcNativeConnectionPool>());
+      expect(pool, isA<OdbcConnectionPool>());
     });
 
     test('returns lease OdbcConnectionPool by default', () {

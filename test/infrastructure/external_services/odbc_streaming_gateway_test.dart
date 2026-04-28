@@ -310,7 +310,10 @@ void main() {
       },
     );
 
-    test('should return failure when cancel disconnect times out', () async {
+    test(
+      'should return success when cancel disconnect times out '
+      '(metrics still record disconnect timeout)',
+      () async {
       final controller = StreamController<Result<QueryResult>>();
 
       when(
@@ -357,7 +360,7 @@ void main() {
       await controller.close();
       final executionResult = await execution;
 
-      expect(cancelResult.isError(), isTrue);
+      expect(cancelResult.isSuccess(), isTrue);
       expect(executionResult.isError(), isTrue);
       expect(metrics.streamCancelDisconnectTimeoutCount, 1);
     });

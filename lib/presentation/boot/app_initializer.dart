@@ -15,7 +15,10 @@ import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
 
 typedef StartupWindowPreferences = ({
@@ -46,6 +49,9 @@ class AppInitializer {
 
     final capabilities = await _resolveRuntimeCapabilities();
     await setupDependencies(capabilities: capabilities);
+
+    // Warm up ODBC connection pool if connection string is configured
+    await _warmUpConnectionPool();
 
     final initialRoute = _resolveInitialRoute(args);
     await _initializeDesktopFeatures(capabilities);
@@ -106,6 +112,46 @@ class AppInitializer {
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink(args);
     return initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
+  }
+
+  Future<void> _warmUpConnectionPool() async {
+    try {
+      final config = getIt<IAgentConfigRepository>();
+      final configResult = await config.getCurrentConfig();
+      
+      await configResult.fold(
+        (agentConfig) async {
+          if (agentConfig.connectionString.isEmpty) {
+            developer.log(
+              'Skipping pool warm-up: no connection string configured',
+              name: 'app_initializer',
+              level: 500,
+            );
+            return;
+          }
+
+          final pool = getIt<IConnectionPool>();
+          if (pool is OdbcConnectionPool) {
+            await pool.warmUp(agentConfig.connectionString);
+          }
+        },
+        (failure) {
+          developer.log(
+            'Skipping pool warm-up: config not available',
+            name: 'app_initializer',
+            level: 500,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Pool warm-up failed (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _initializeDesktopFeatures(

@@ -24,11 +24,15 @@ class OdbcConnectionPool implements IConnectionPool {
     Duration? acquireTimeout,
     MetricsCollector? metricsCollector,
   }) : _semaphore = PoolSemaphore(_settings.poolSize),
+       _nativeHandshakeSemaphore = PoolSemaphore(
+         ConnectionConstants.leasePoolNativeHandshakeConcurrency(_settings.poolSize),
+       ),
        _acquireTimeout = acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
        _metrics = metricsCollector;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final PoolSemaphore _semaphore;
+  final PoolSemaphore _nativeHandshakeSemaphore;
   final Duration _acquireTimeout;
   final MetricsCollector? _metrics;
 
@@ -54,11 +58,31 @@ class OdbcConnectionPool implements IConnectionPool {
       );
     }
 
+    try {
+      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+    } on TimeoutException catch (error) {
+      _semaphore.release();
+      _metrics?.recordPoolAcquireTimeout();
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError(
+            'ODBC worker busy (connect): ${error.message}',
+          ),
+          operation: 'pool_acquire',
+        ),
+      );
+    }
+
     final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
-    final connectResult = await _service.connect(
-      connectionString,
-      options: options,
-    );
+    late Result<Connection> connectResult;
+    try {
+      connectResult = await _service.connect(
+        connectionString,
+        options: options,
+      );
+    } finally {
+      _nativeHandshakeSemaphore.release();
+    }
 
     return connectResult.fold(
       (Connection connection) {
@@ -86,9 +110,29 @@ class OdbcConnectionPool implements IConnectionPool {
   @override
   Future<Result<void>> release(String connectionId) async {
     final hadLease = _removeLeaseTracking(connectionId);
-    final disconnectResult = await _service.disconnect(connectionId);
     if (hadLease) {
       _semaphore.release();
+    }
+    var handshakeHeld = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+      handshakeHeld = true;
+    } on TimeoutException catch (error) {
+      developer.log(
+        'ODBC native handshake slot timeout during release; disconnecting anyway',
+        name: 'connection_pool',
+        level: 900,
+        error: error,
+      );
+    }
+
+    late Result<void> disconnectResult;
+    try {
+      disconnectResult = await _service.disconnect(connectionId);
+    } finally {
+      if (handshakeHeld) {
+        _nativeHandshakeSemaphore.release();
+      }
     }
 
     return disconnectResult.fold(
@@ -127,18 +171,12 @@ class OdbcConnectionPool implements IConnectionPool {
     final errors = <String>[];
     final ids = _leasedIds.toList(growable: false);
     for (final id in ids) {
-      final result = await _service.disconnect(id);
-      result.fold(
-        (_) {
-          _semaphore.release();
-        },
-        (error) => errors.add(
-          error is OdbcError ? error.message : error.toString(),
-        ),
-      );
+      final result = await release(id);
+      if (result.isError()) {
+        final err = result.exceptionOrNull();
+        errors.add(err?.toString() ?? 'release failed');
+      }
     }
-    _leasedIds.clear();
-    _leasedIdsByConnectionString.clear();
 
     if (errors.isNotEmpty) {
       return Failure(
@@ -149,6 +187,55 @@ class OdbcConnectionPool implements IConnectionPool {
       );
     }
     return const Success(unit);
+  }
+
+  /// Pre-warms the pool with connections to reduce first-request latency.
+  ///
+  /// Acquires [warmUpCount] connections (default: half of pool size), then
+  /// releases them immediately. This ensures connections are ready and reduces
+  /// cold-start latency.
+  ///
+  /// Failures during warm-up are logged but don't stop the process.
+  Future<void> warmUp(
+    String connectionString, {
+    int? warmUpCount,
+  }) async {
+    final count = warmUpCount ?? (_settings.poolSize / 2).ceil();
+    final connectionIds = <String>[];
+
+    developer.log(
+      'Warming up connection pool with $count connections',
+      name: 'connection_pool',
+      level: 800,
+    );
+
+    try {
+      for (var i = 0; i < count; i++) {
+        final result = await acquire(connectionString);
+        result.fold(
+          connectionIds.add,
+          (error) {
+            developer.log(
+              'Warm-up connection ${i + 1}/$count failed',
+              name: 'connection_pool',
+              level: 900,
+              error: error,
+            );
+          },
+        );
+      }
+
+      developer.log(
+        'Pool warm-up completed: ${connectionIds.length}/$count connections',
+        name: 'connection_pool',
+        level: 800,
+      );
+    } finally {
+      // Release all warmed-up connections
+      for (final id in connectionIds) {
+        unawaited(release(id));
+      }
+    }
   }
 
   @override
@@ -165,16 +252,7 @@ class OdbcConnectionPool implements IConnectionPool {
     );
 
     for (final id in ids.toList(growable: false)) {
-      final result = await _service.disconnect(id);
-      result.fold(
-        (_) {
-          _leasedIds.remove(id);
-          _semaphore.release();
-        },
-        (_) {
-          _leasedIds.remove(id);
-        },
-      );
+      await release(id);
     }
     return const Success(unit);
   }

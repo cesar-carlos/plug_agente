@@ -72,7 +72,7 @@ void main() {
         expect(createdPools, 1);
         verify(
           () => mockService.poolCreate(
-            'DSN=Test',
+            'DSN=Test;PoolTestOnCheckout=true',
             any(),
             options: any(named: 'options'),
           ),
@@ -142,7 +142,7 @@ void main() {
       final capturedOptions =
           verify(
                 () => mockService.poolCreate(
-                  'DSN=Options',
+                  'DSN=Options;PoolTestOnCheckout=true',
                   any(),
                   options: captureAny(named: 'options'),
                 ),
@@ -204,7 +204,7 @@ void main() {
       expect(result.isError(), isTrue);
       verify(
         () => mockService.poolCreate(
-          'DSN=Bad',
+          'DSN=Bad;PoolTestOnCheckout=true',
           any(),
           options: any(named: 'options'),
         ),
@@ -248,6 +248,38 @@ void main() {
       expect(result.isError(), isTrue);
       expect(metrics.poolReleaseFailureCount, 1);
       verify(() => mockService.poolReleaseConnection('cid')).called(1);
+    });
+
+    test('release treats invalid connection id as success', () async {
+      when(
+        () => mockService.poolReleaseConnection('cid'),
+      ).thenAnswer(
+        (_) async => const Failure(
+          ConnectionError(message: 'Invalid connection ID: 1000000'),
+        ),
+      );
+
+      final result = await pool.release('cid');
+
+      expect(result.isSuccess(), isTrue);
+      expect(metrics.poolReleaseFailureCount, 0);
+      verify(() => mockService.poolReleaseConnection('cid')).called(1);
+    });
+
+    test('discard treats invalid connection id as success', () async {
+      when(
+        () => mockService.disconnect('cid'),
+      ).thenAnswer(
+        (_) async => const Failure(
+          ConnectionError(message: 'Invalid connection ID: 1000000'),
+        ),
+      );
+
+      final result = await pool.discard('cid');
+
+      expect(result.isSuccess(), isTrue);
+      expect(metrics.poolReleaseFailureCount, 0);
+      verify(() => mockService.disconnect('cid')).called(1);
     });
 
     test('recycle with unknown connection string succeeds without close', () async {

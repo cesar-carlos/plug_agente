@@ -17,6 +17,7 @@ import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -131,6 +132,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
   final Set<String> _connectionsToDiscard = <String>{};
+  final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
+  final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
   static const int _multiResultSqlLogPreviewChars = 120;
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
@@ -150,6 +153,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   bool _looksLikeTimeoutError(Object error) {
     final message = _odbcErrorMessage(error).toLowerCase();
     return message.contains('timeout') || message.contains('timed out');
+  }
+
+  /// Gets or creates a circuit breaker for the given connection string.
+  ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
+    return _circuitBreakers.putIfAbsent(
+      connectionString,
+      () => ConnectionCircuitBreaker(
+        failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+        resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+      ),
+    );
   }
 
   ConnectionOptions get _connectionOptions => OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
@@ -382,11 +396,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               databaseOverride: database,
             );
 
-            return _executeQueryWithRetry(
-              request,
+            // Execute through circuit breaker for fail-fast behavior
+            final breaker = _getCircuitBreaker(connectionString);
+            return breaker.execute(
               connectionString,
-              localConfig,
-              timeout: timeout,
+              () => _executeQueryWithRetry(
+                request,
+                connectionString,
+                localConfig,
+                timeout: timeout,
+              ),
             );
           },
           (domainFailure) => Failure(
@@ -530,6 +549,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final connId = poolResult.getOrNull()!;
+    var releasedConnectionEarly = false;
 
     try {
       final outcome = await _runQueryExecutionWithTimeout(
@@ -544,6 +564,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         final error = outcome.error!;
         if (_isInvalidConnectionIdError(error)) {
           _markConnectionForDiscard(connId);
+          await _releaseConnectionSafely(connId);
+          releasedConnectionEarly = true;
           await _tryRecoverPoolAfterInvalidConnectionId(connectionString);
           _metrics.recordDirectConnectionFallback();
           developer.log(
@@ -672,8 +694,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         ),
       );
     } finally {
-      // Always release connection back to pool, even if query fails
-      await _releaseConnectionSafely(connId);
+      if (!releasedConnectionEarly) {
+        await _releaseConnectionSafely(connId);
+      }
     }
   }
 
@@ -807,6 +830,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<void> _releaseBatchConnection(_BatchExecutionContext context) async {
     if (context.ownedConnection) {
       try {
+        context.directLease?.release();
         await _disconnectOwnedConnectionSafely(
           context.connectionId,
           operation: 'batch_direct_disconnect',
@@ -1261,6 +1285,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final connId = poolResult.getOrNull()!;
+    var releasedConnectionEarly = false;
 
     try {
       // Use named parameters if available
@@ -1275,6 +1300,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         final error = result.exceptionOrNull()!;
         if (_isInvalidConnectionIdError(error)) {
           _markConnectionForDiscard(connId);
+          await _releaseConnectionSafely(connId);
+          releasedConnectionEarly = true;
           await _tryRecoverPoolAfterInvalidConnectionId(connectionString);
           _metrics.recordDirectConnectionFallback();
           developer.log(
@@ -1315,8 +1342,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         ),
       );
     } finally {
-      // Always release connection back to pool
-      await _releaseConnectionSafely(connId);
+      if (!releasedConnectionEarly) {
+        await _releaseConnectionSafely(connId);
+      }
     }
   }
 
@@ -1733,6 +1761,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return Failure(leaseResult.exceptionOrNull()!);
     }
     final directLease = leaseResult.getOrThrow();
+    var directLeaseReleased = false;
+    void releaseDirectLease() {
+      if (directLeaseReleased) {
+        return;
+      }
+      directLeaseReleased = true;
+      directLease.release();
+    }
+
     final connectResult = await _service.connect(
       connectionString,
       options: options ?? _connectionOptionsForTimeout(timeout),
@@ -1822,6 +1859,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               ),
             );
           } finally {
+            releaseDirectLease();
             await _disconnectOwnedConnectionSafely(
               connection.id,
               operation: 'query_direct_disconnect',
@@ -1849,7 +1887,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         },
       );
     } finally {
-      directLease.release();
+      releaseDirectLease();
     }
   }
 
@@ -1866,6 +1904,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return Failure(leaseResult.exceptionOrNull()!);
     }
     final directLease = leaseResult.getOrThrow();
+    var directLeaseReleased = false;
+    void releaseDirectLease() {
+      if (directLeaseReleased) {
+        return;
+      }
+      directLeaseReleased = true;
+      directLease.release();
+    }
+
     final connectResult = await _service.connect(
       connectionString,
       options: _connectionOptionsForTimeout(timeout),
@@ -1906,6 +1953,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               ),
             );
           } finally {
+            releaseDirectLease();
             await _disconnectOwnedConnectionSafely(
               connection.id,
               operation: 'non_query_direct_disconnect',
@@ -1925,7 +1973,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         },
       );
     } finally {
-      directLease.release();
+      releaseDirectLease();
     }
   }
 
@@ -2083,6 +2131,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<void> _tryRecoverPoolAfterInvalidConnectionId(
     String connectionString,
   ) async {
+    final now = DateTime.now();
+    final lastAttempt = _lastRecycleAttempt[connectionString];
+    if (lastAttempt != null && now.difference(lastAttempt) < const Duration(seconds: 5)) {
+      developer.log(
+        'Skipping pool recycle: recent recycle attempt (<5s ago)',
+        name: 'database_gateway',
+        level: 800,
+      );
+      return;
+    }
+
     final activeCountResult = await _connectionPool.getActiveCount();
     final activeCount = activeCountResult.getOrNull();
     if (activeCount != null && activeCount > 1) {
@@ -2094,6 +2153,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return;
     }
 
+    _lastRecycleAttempt[connectionString] = now;
     final recycleResult = await _connectionPool.recycle(connectionString);
     if (recycleResult.isSuccess()) {
       _metrics.recordPoolRecycle();

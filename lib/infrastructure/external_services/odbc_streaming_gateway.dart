@@ -56,7 +56,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
   final MetricsCollector? _metrics;
   final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
   bool _initialized = false;
-  static const Duration _cancelDisconnectTimeout = Duration(seconds: 3);
+  static const Duration _cancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
   @override
@@ -300,7 +300,11 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
       stream.isCancelRequested = true;
       final result = await _disconnectActiveStream(stream);
       if (result.isError()) {
-        return result;
+        app_log.AppLogger.warning(
+          'cancelActiveStream: disconnect after cancel request completed with error '
+          '(cancellation was still applied; execution will stop): '
+          '${result.exceptionOrNull()}',
+        );
       }
     }
 
@@ -315,6 +319,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     }
 
     stream.isDisconnectStarted = true;
+    stream.lease.release();
     try {
       final result = await _service.disconnect(stream.connectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
@@ -352,8 +357,6 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
           },
         ),
       );
-    } finally {
-      stream.lease.release();
     }
   }
 

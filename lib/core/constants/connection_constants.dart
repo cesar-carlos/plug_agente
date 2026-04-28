@@ -1,6 +1,20 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 /// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
   ConnectionConstants._();
+
+  /// Reads [key] from the map populated by `flutter_dotenv` after `load`.
+  ///
+  /// Returns null when dotenv is not initialized (common in unit tests), instead
+  /// of throwing.
+  static String? _optionalEnv(String key) {
+    try {
+      return dotenv.env[key];
+    } on Object {
+      return null;
+    }
+  }
 
   static const Duration defaultLoginTimeout = Duration(seconds: 30);
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
@@ -35,6 +49,44 @@ class ConnectionConstants {
   static const Duration defaultNativePoolIdleTimeout = Duration(minutes: 5);
   static const Duration defaultNativePoolMaxLifetime = Duration(hours: 1);
   static const Duration defaultNativePoolConnectionTimeout = defaultPoolAcquireTimeout;
+
+  /// ODBC pool size (configurable via ODBC_POOL_SIZE env var).
+  static int get poolSize =>
+      int.tryParse(_optionalEnv('ODBC_POOL_SIZE') ?? '') ?? defaultPoolSize;
+
+  /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
+  static int get sqlQueueMaxSize =>
+      int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;
+
+  /// SQL execution queue maximum concurrent workers (configurable via SQL_QUEUE_MAX_WORKERS env var).
+  static int get sqlQueueMaxWorkers =>
+      int.tryParse(_optionalEnv('SQL_QUEUE_MAX_WORKERS') ?? '') ?? poolSize;
+
+  /// SQL execution queue enqueue timeout in seconds (configurable via SQL_QUEUE_TIMEOUT_SEC env var).
+  static Duration get sqlQueueEnqueueTimeout => Duration(
+        seconds: int.tryParse(_optionalEnv('SQL_QUEUE_TIMEOUT_SEC') ?? '') ?? 5,
+      );
+
+  /// Circuit breaker failure threshold (configurable via CIRCUIT_BREAKER_FAILURE_THRESHOLD env var).
+  static int get circuitBreakerFailureThreshold =>
+      int.tryParse(_optionalEnv('CIRCUIT_BREAKER_FAILURE_THRESHOLD') ?? '') ?? 5;
+
+  /// Circuit breaker reset timeout in seconds (configurable via CIRCUIT_BREAKER_RESET_SEC env var).
+  static Duration get circuitBreakerResetTimeout => Duration(
+        seconds: int.tryParse(_optionalEnv('CIRCUIT_BREAKER_RESET_SEC') ?? '') ?? 30,
+      );
+
+  /// Caps parallel connect/disconnect RPCs from the lease ODBC pool into
+  /// odbc_fast. Unbounded bursts can queue past the worker's reply deadline.
+  static int leasePoolNativeHandshakeConcurrency(int poolSize) {
+    // Allow full parallelism up to poolSize for fallback scenarios where
+    // many direct connections happen simultaneously (e.g. native pool with
+    // invalid IDs). The worker should handle this with its own queueing.
+    if (poolSize < 1) {
+      return 1;
+    }
+    return poolSize;
+  }
 
   static const int socketConnectionTimeoutMs = 10000;
   static const int socketAckTimeoutMs = 8000;

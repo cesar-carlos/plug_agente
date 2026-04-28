@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
@@ -9,7 +10,7 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 /// Servico para coletar e gerenciar metricas de performance.
 ///
 /// Chaves em [_eventCounters] sao estaveis para exportacao (ex.: OpenTelemetry).
-class MetricsCollector implements IMetricsCollector {
+class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCollector {
   MetricsCollector();
 
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
@@ -63,6 +64,8 @@ class MetricsCollector implements IMetricsCollector {
   static const String _streamCancelBackpressureCounter = 'stream_cancel_backpressure';
   static const String _streamCancelDisconnectFailureCounter = 'stream_cancel_disconnect_failure';
   static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
+  static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
+  static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
 
   static const int _maxMetrics = 10000;
 
@@ -71,6 +74,12 @@ class MetricsCollector implements IMetricsCollector {
   final Map<String, int> _eventCounters = <String, int>{};
   int _activeDirectConnections = 0;
   int _maxActiveDirectConnections = 0;
+  int _currentQueueSize = 0;
+  int _maxQueueSize = 0;
+  int _currentActiveWorkers = 0;
+  int _maxActiveWorkers = 0;
+  final List<Duration> _queueWaitTimes = [];
+  static const int _maxWaitTimeSamples = 1000;
 
   @override
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
@@ -119,6 +128,19 @@ class MetricsCollector implements IMetricsCollector {
   int get streamCancelBackpressureCount => _eventCounters[_streamCancelBackpressureCounter] ?? 0;
   int get streamCancelDisconnectFailureCount => _eventCounters[_streamCancelDisconnectFailureCounter] ?? 0;
   int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
+  int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
+  int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
+  int get currentQueueSize => _currentQueueSize;
+  int get maxQueueSize => _maxQueueSize;
+  int get currentActiveWorkers => _currentActiveWorkers;
+  int get maxActiveWorkers => _maxActiveWorkers;
+  
+  /// Average queue wait time across recent samples.
+  Duration? get averageQueueWaitTime {
+    if (_queueWaitTimes.isEmpty) return null;
+    final totalMs = _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds);
+    return Duration(milliseconds: totalMs ~/ _queueWaitTimes.length);
+  }
 
   Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
 
@@ -128,6 +150,52 @@ class MetricsCollector implements IMetricsCollector {
     _eventCounters.clear();
     _activeDirectConnections = 0;
     _maxActiveDirectConnections = 0;
+    _currentQueueSize = 0;
+    _maxQueueSize = 0;
+    _currentActiveWorkers = 0;
+    _maxActiveWorkers = 0;
+    _queueWaitTimes.clear();
+  }
+
+  // SQL Execution Queue metrics implementation
+
+  @override
+  void recordQueueAdded(int currentSize) {
+    _currentQueueSize = currentSize;
+    if (currentSize > _maxQueueSize) {
+      _maxQueueSize = currentSize;
+    }
+  }
+
+  @override
+  void recordQueueRejection() {
+    _incrementEventCounter(_sqlQueueRejectionCounter);
+  }
+
+  @override
+  void recordQueueTimeout() {
+    _incrementEventCounter(_sqlQueueTimeoutCounter);
+  }
+
+  @override
+  void recordQueueWaitTime(Duration waitTime) {
+    _queueWaitTimes.add(waitTime);
+    if (_queueWaitTimes.length > _maxWaitTimeSamples) {
+      _queueWaitTimes.removeAt(0);
+    }
+  }
+
+  @override
+  void recordWorkerStarted(int activeCount) {
+    _currentActiveWorkers = activeCount;
+    if (activeCount > _maxActiveWorkers) {
+      _maxActiveWorkers = activeCount;
+    }
+  }
+
+  @override
+  void recordWorkerCompleted(int activeCount) {
+    _currentActiveWorkers = activeCount;
   }
 
   void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
@@ -317,6 +385,52 @@ class MetricsCollector implements IMetricsCollector {
   /// Exporta metricas para JSON.
   List<Map<String, dynamic>> exportToJson() {
     return _metrics.map((m) => m.toMap()).toList();
+  }
+
+  /// Gets a snapshot of current metrics for health/monitoring.
+  Map<String, Object> getSnapshot() {
+    final queryMetrics = _metrics.isNotEmpty ? _metrics : <QueryMetrics>[];
+    final totalQueries = queryMetrics.length;
+    final successfulQueries =
+        queryMetrics.where((m) => m.success).length;
+    final errorQueries = totalQueries - successfulQueries;
+
+    // Calculate latencies
+    final latencies = queryMetrics
+        .map((m) => m.executionDuration.inMilliseconds)
+        .toList()
+      ..sort();
+
+    final avgLatency = latencies.isNotEmpty
+        ? latencies.reduce((a, b) => a + b) / latencies.length
+        : 0.0;
+
+    final p95Latency = latencies.isNotEmpty
+        ? latencies[(latencies.length * 0.95).floor()]
+        : 0;
+
+    final p99Latency = latencies.isNotEmpty
+        ? latencies[(latencies.length * 0.99).floor()]
+        : 0;
+
+    return {
+      'query_count': totalQueries,
+      'query_error_count': errorQueries,
+      'query_avg_latency_ms': avgLatency,
+      'query_p95_latency_ms': p95Latency,
+      'query_p99_latency_ms': p99Latency,
+      'sql_queue_rejection_count': _sqlQueueRejectionCounter,
+      'sql_queue_timeout_count': _sqlQueueTimeoutCounter,
+      'sql_queue_current_size': _currentQueueSize,
+      'sql_queue_max_size': _maxQueueSize,
+      'sql_queue_current_workers': _currentActiveWorkers,
+      'sql_queue_max_workers': _maxActiveWorkers,
+      'sql_queue_avg_wait_time_ms': _queueWaitTimes.isEmpty
+          ? 0.0
+          : _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) /
+              _queueWaitTimes.length,
+      ..._eventCounters,
+    };
   }
 
   /// Dispose do controller.
