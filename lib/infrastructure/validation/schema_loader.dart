@@ -27,10 +27,12 @@ class TransportSchemaIds {
   static const String paramsSqlExecuteBatch = 'rpc.params.sql-execute-batch.schema.json';
   static const String paramsSqlCancel = 'rpc.params.sql-cancel.schema.json';
   static const String paramsAgentGetProfile = 'rpc.params.agent-get-profile.schema.json';
+  static const String paramsAgentGetHealth = 'rpc.params.agent-get-health.schema.json';
   static const String paramsClientTokenGetPolicy = 'rpc.params.client-token-get-policy.schema.json';
   static const String resultSqlExecute = 'rpc.result.sql-execute.schema.json';
   static const String resultSqlExecuteBatch = 'rpc.result.sql-execute-batch.schema.json';
   static const String resultAgentGetProfile = 'rpc.result.agent-get-profile.schema.json';
+  static const String resultAgentGetHealth = 'rpc.result.agent-get-health.schema.json';
   static const String resultClientTokenGetPolicy = 'rpc.result.client-token-get-policy.schema.json';
   static const String streamChunk = 'rpc.stream.chunk.schema.json';
   static const String streamComplete = 'rpc.stream.complete.schema.json';
@@ -51,10 +53,12 @@ class TransportSchemaIds {
     paramsSqlExecuteBatch,
     paramsSqlCancel,
     paramsAgentGetProfile,
+    paramsAgentGetHealth,
     paramsClientTokenGetPolicy,
     resultSqlExecute,
     resultSqlExecuteBatch,
     resultAgentGetProfile,
+    resultAgentGetHealth,
     resultClientTokenGetPolicy,
     streamChunk,
     streamComplete,

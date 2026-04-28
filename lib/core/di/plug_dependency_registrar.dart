@@ -264,6 +264,7 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
+        healthService: getIt<HealthService>(),
         normalizerService: getIt<QueryNormalizerService>(),
         uuid: getIt<Uuid>(),
         authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),

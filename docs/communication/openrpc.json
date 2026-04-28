@@ -2,8 +2,8 @@
   "openrpc": "1.3.2",
   "info": {
     "title": "Plug Agente Socket RPC",
-    "version": "2.8.0",
-    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. Application events are transported only inside PayloadFrame envelopes after agent:capabilities negotiation; requests sent earlier are rejected with invalid_request / protocol_not_ready. The logical RPC payload inside the frame remains JSON UTF-8, with gzip/none negotiated at the transport layer; the current runtime does not negotiate a separate binary codec such as MessagePack. After negotiation the agent may emit optional agent:ready for hubs that use explicit readiness when extensions.protocolReadyAck is negotiated. sql.execute results include effective_max_rows when applicable, and managed pagination requires an explicit ORDER BY for both page/page_size and cursor flows; generated SQL shape still depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Agent capabilities may also advertise recommendedStreamPullWindowSize / maxStreamPullWindowSize to guide rpc:stream.pull sizing. From profile 2.6, the agent may publish registration metadata in agent:register.profile and exposes method agent.getProfile for centralized registration flows; this method also accepts the same client_token aliases used by authorized SQL methods when agent-side authorization is enabled. Profile 2.7 adds client_token.getPolicy for resolved client-token policy introspection without executing SQL. See docs/communication/socket_communication_standard.md."
+    "version": "2.9.0",
+    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. Application events are transported only inside PayloadFrame envelopes after agent:capabilities negotiation; requests sent earlier are rejected with invalid_request / protocol_not_ready. The logical RPC payload inside the frame remains JSON UTF-8, with gzip/none negotiated at the transport layer; the current runtime does not negotiate a separate binary codec such as MessagePack. After negotiation the agent may emit optional agent:ready for hubs that use explicit readiness when extensions.protocolReadyAck is negotiated. sql.execute results include effective_max_rows when applicable, and managed pagination requires an explicit ORDER BY for both page/page_size and cursor flows; generated SQL shape still depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Agent capabilities may also advertise recommendedStreamPullWindowSize / maxStreamPullWindowSize to guide rpc:stream.pull sizing. From profile 2.6, the agent may publish registration metadata in agent:register.profile and exposes method agent.getProfile for centralized registration flows; this method also accepts the same client_token aliases used by authorized SQL methods when agent-side authorization is enabled. Profile 2.7 adds client_token.getPolicy for resolved client-token policy introspection without executing SQL. Profile 2.9 adds agent.getHealth for process health, ODBC pool and SQL queue metrics, and query latency aggregates. See docs/communication/socket_communication_standard.md."
   },
   "servers": [
     {
@@ -96,6 +96,25 @@
         "name": "result",
         "schema": {
           "$ref": "./schemas/rpc.result.agent-get-profile.schema.json"
+        }
+      }
+    },
+    {
+      "name": "agent.getHealth",
+      "summary": "Return application health, connection pool settings, optional SQL queue stats, query aggregates, and process uptime",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "./schemas/rpc.params.agent-get-health.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.agent-get-health.schema.json"
         }
       }
     },

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
@@ -42,6 +44,7 @@ import 'package:uuid/uuid.dart';
 class RpcMethodDispatcher {
   RpcMethodDispatcher({
     required IDatabaseGateway databaseGateway,
+    required HealthService healthService,
     required QueryNormalizerService normalizerService,
     required Uuid uuid,
     required AuthorizeSqlOperation authorizeSqlOperation,
@@ -63,6 +66,7 @@ class RpcMethodDispatcher {
     Duration queryStageBudget = _defaultQueryStageBudget,
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
   }) : _databaseGateway = databaseGateway,
+       _healthService = healthService,
        _normalizerService = normalizerService,
        _uuid = uuid,
        _authorizeSqlOperation = authorizeSqlOperation,
@@ -90,6 +94,7 @@ class RpcMethodDispatcher {
        );
 
   final IDatabaseGateway _databaseGateway;
+  final HealthService _healthService;
   final QueryNormalizerService _normalizerService;
   final Uuid _uuid;
   final AuthorizeSqlOperation _authorizeSqlOperation;
@@ -152,6 +157,10 @@ class RpcMethodDispatcher {
       'agent.getProfile' => await _handleAgentGetProfile(
         request,
         agentId,
+        clientToken,
+      ),
+      'agent.getHealth' => await _handleAgentGetHealth(
+        request,
         clientToken,
       ),
       'client_token.getPolicy' => await _handleClientTokenGetPolicy(
@@ -1263,6 +1272,50 @@ class RpcMethodDispatcher {
     return RpcResponse.success(
       id: request.id,
       result: payload,
+    );
+  }
+
+  Future<RpcResponse> _handleAgentGetHealth(
+    RpcRequest request,
+    String? clientToken,
+  ) async {
+    final deadline = _featureFlags.enableSocketTimeoutByStage
+        ? DateTime.now().add(_authorizationStageBudgetDuration)
+        : null;
+
+    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+      final rpcError = FailureToRpcErrorMapper.map(
+        _buildMissingClientTokenFailure(),
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+      final authResult = await _authorizeWithBudget(
+        token: clientToken,
+        sql: _agentProfileAuthorizationSql,
+        requestId: request.id?.toString(),
+        method: request.method,
+        deadline: deadline,
+      );
+      if (authResult.isError()) {
+        final failure = authResult.exceptionOrNull()! as domain.Failure;
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      }
+    }
+
+    final raw = _healthService.getHealthStatus();
+    final result = json.decode(json.encode(raw)) as Map<String, dynamic>;
+    return RpcResponse.success(
+      id: request.id,
+      result: result,
     );
   }
 

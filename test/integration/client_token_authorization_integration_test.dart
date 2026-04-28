@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -23,11 +24,17 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
+
+HealthService _healthServiceForIntegration(IDatabaseGateway gateway) => HealthService(
+      metricsCollector: MetricsCollector(),
+      gateway: gateway,
+    );
 
 class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
@@ -151,6 +158,7 @@ void main() {
 
     dispatcher = RpcMethodDispatcher(
       databaseGateway: mockGateway,
+      healthService: _healthServiceForIntegration(mockGateway),
       normalizerService: mockNormalizer,
       uuid: const Uuid(),
       authorizeSqlOperation: authorizeSqlOperation,
@@ -352,6 +360,7 @@ void main() {
         final getClientTokenPolicy = GetClientTokenPolicy(resolver);
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _healthServiceForIntegration(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
@@ -440,6 +449,7 @@ void main() {
         final getClientTokenPolicy = GetClientTokenPolicy(resolver);
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _healthServiceForIntegration(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,
@@ -523,6 +533,7 @@ void main() {
         final getClientTokenPolicy = GetClientTokenPolicy(resolver);
         final dispatcherWithLocalResolver = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _healthServiceForIntegration(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: authorizeSqlOperation,

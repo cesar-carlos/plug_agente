@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -18,6 +19,7 @@ import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:result_dart/result_dart.dart';
@@ -949,6 +951,10 @@ void main() {
 
           final realDispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
+            healthService: HealthService(
+              metricsCollector: MetricsCollector(),
+              gateway: mockGateway,
+            ),
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,

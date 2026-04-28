@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
@@ -24,6 +25,7 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -47,6 +49,11 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
 class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
+
+HealthService _testHealthService(IDatabaseGateway gateway) => HealthService(
+      metricsCollector: MetricsCollector(),
+      gateway: gateway,
+    );
 
 MockRpcStreamEmitter _stubRpcStreamEmitter() {
   final emitter = MockRpcStreamEmitter();
@@ -183,6 +190,7 @@ void main() {
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
@@ -222,6 +230,29 @@ void main() {
           jsonrpc: '2.0',
           method: 'agent.getProfile',
           id: 'req-profile-auth',
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isError, isTrue);
+        expect(
+          response.error!.code,
+          equals(RpcErrorCode.authenticationFailed),
+        );
+      },
+    );
+
+    test(
+      'should require client token for agent.getHealth when auth is enabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableClientTokenAuthorization,
+        ).thenReturn(true);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'agent.getHealth',
+          id: 'req-health-auth',
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
@@ -365,6 +396,7 @@ void main() {
 
       final limitedDispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
@@ -452,6 +484,7 @@ void main() {
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
@@ -502,6 +535,52 @@ void main() {
         ),
       ).called(1);
       verify(() => mockOdbcNativeMetricsService.collectSnapshot()).called(1);
+    });
+
+    test('should return health snapshot for agent.getHealth when authorized', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'agent.getHealth',
+        id: 'req-health',
+        params: {
+          'client_token': 'bearer-xyz',
+        },
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'bearer-xyz',
+      );
+
+      check(response.isSuccess).isTrue();
+      final result = response.result as Map<String, dynamic>;
+      check(result['status']).equals('healthy');
+      check(result['version']).isNotNull();
+      check(result['pool']).isNotNull();
+      check(result['sql_queue']).isNotNull();
+      check(result['queries']).isNotNull();
+      check(result['uptime_seconds']).isA<int>();
+      verify(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).called(1);
     });
 
     test('should return invalidParams when sql is missing', () async {
@@ -1186,6 +1265,7 @@ void main() {
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
@@ -1253,6 +1333,7 @@ void main() {
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
@@ -1965,6 +2046,7 @@ void main() {
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
@@ -2029,6 +2111,7 @@ void main() {
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
@@ -2097,6 +2180,7 @@ void main() {
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
           uuid: const Uuid(),
           authorizeSqlOperation: mockAuthorize,
@@ -2145,6 +2229,7 @@ void main() {
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,
@@ -2345,6 +2430,7 @@ void main() {
 
           dispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
+            healthService: _testHealthService(mockGateway),
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
@@ -2441,6 +2527,7 @@ void main() {
 
           dispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
+            healthService: _testHealthService(mockGateway),
             normalizerService: mockNormalizer,
             uuid: const Uuid(),
             authorizeSqlOperation: mockAuthorize,
@@ -2564,6 +2651,7 @@ void main() {
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
         uuid: const Uuid(),
         authorizeSqlOperation: mockAuthorize,

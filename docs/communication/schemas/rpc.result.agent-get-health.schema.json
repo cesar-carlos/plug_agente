@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-get-health.v1.json",
+  "title": "agent.getHealth result",
+  "type": "object",
+  "required": ["status", "timestamp", "version", "pool", "sql_queue", "queries", "uptime_seconds"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "healthy",
+      "description": "Liveness indicator for the agent process"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 instant when the snapshot was taken"
+    },
+    "version": {
+      "type": "string",
+      "description": "Application version string"
+    },
+    "pool": {
+      "type": "object",
+      "required": ["size"],
+      "properties": {
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Configured ODBC connection pool size"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sql_queue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "const": false,
+              "description": "SQL execution queue is not active for this gateway"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "enabled",
+            "current_size",
+            "max_size",
+            "active_workers",
+            "max_workers",
+            "rejections_total",
+            "timeouts_total",
+            "avg_wait_time_ms"
+          ],
+          "properties": {
+            "enabled": { "const": true },
+            "current_size": { "type": "integer", "minimum": 0 },
+            "max_size": { "type": "integer", "minimum": 0 },
+            "active_workers": { "type": "integer", "minimum": 0 },
+            "max_workers": { "type": "integer", "minimum": 0 },
+            "rejections_total": { "type": "integer", "minimum": 0 },
+            "timeouts_total": { "type": "integer", "minimum": 0 },
+            "avg_wait_time_ms": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "queries": {
+      "type": "object",
+      "required": ["total", "errors", "success_rate", "avg_latency_ms", "p95_latency_ms", "p99_latency_ms"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "success_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of completed queries without error"
+        },
+        "avg_latency_ms": { "type": "integer", "minimum": 0 },
+        "p95_latency_ms": { "type": "integer", "minimum": 0 },
+        "p99_latency_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "uptime_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Seconds since application start (after bootstrap marks uptime)"
+    }
+  },
+  "additionalProperties": false
+}

@@ -2,6 +2,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
@@ -139,6 +140,10 @@ class OdbcE2eRpcHarness {
 
     final dispatcher = RpcMethodDispatcher(
       databaseGateway: gateway,
+      healthService: HealthService(
+        metricsCollector: metrics,
+        gateway: gateway,
+      ),
       normalizerService: normalizer,
       uuid: const Uuid(),
       authorizeSqlOperation: authorize,

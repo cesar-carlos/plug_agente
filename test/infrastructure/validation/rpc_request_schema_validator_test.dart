@@ -275,6 +275,38 @@ void main() {
         expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
       });
 
+      test('should accept agent.getHealth params with client token alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'agent.getHealth',
+          'id': 'req-1',
+          'params': {
+            'auth': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject unsupported agent.getHealth params', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'agent.getHealth',
+          'id': 'req-1',
+          'params': {
+            'extra': 1,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
       test('should accept client_token.getPolicy params with client token alias', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',
