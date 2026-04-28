@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
+import 'package:plug_agente/core/runtime/app_uptime.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
@@ -45,6 +46,7 @@ class AppInitializer {
   final IWindowsRuntimeProbe runtimeProbe;
 
   Future<AppBootstrapData> initialize(List<String> args) async {
+    AppUptime.markStarted();
     await dotenv.load(isOptional: true);
 
     final capabilities = await _resolveRuntimeCapabilities();

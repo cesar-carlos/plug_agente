@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/runtime/app_uptime.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
@@ -53,7 +54,7 @@ class HealthService {
         'p95_latency_ms': (metrics['query_p95_latency_ms'] as num?)?.toInt() ?? 0,
         'p99_latency_ms': (metrics['query_p99_latency_ms'] as num?)?.toInt() ?? 0,
       },
-      'uptime_seconds': _getUptimeSeconds(),
+      'uptime_seconds': AppUptime.uptimeSeconds,
     };
   }
 
@@ -68,14 +69,5 @@ class HealthService {
     }
     final successful = total - errors;
     return (successful / total * 100).clamp(0, 100);
-  }
-
-  int _getUptimeSeconds() {
-    // Simple uptime based on first metric record
-    // Could be improved with app start time tracking
-    return DateTime.now()
-            .difference(DateTime.now().subtract(const Duration(hours: 1)))
-            .inSeconds
-            .abs();
   }
 }
