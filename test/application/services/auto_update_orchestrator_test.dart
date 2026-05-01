@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 
@@ -105,6 +106,21 @@ void main() {
 
         expect(fakeGateway.listener, isNotNull);
         expect(fakeGateway.feedUrls.single, 'https://example.com/appcast.xml');
+        expect(fakeGateway.interval, 3600);
+      });
+
+      test('falls back to official feed when environment is empty', () async {
+        dotenv.clean();
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+        );
+
+        await orchestrator.initialize();
+
+        expect(fakeGateway.listener, isNotNull);
+        expect(fakeGateway.feedUrls.single, officialAutoUpdateFeedUrl);
         expect(fakeGateway.interval, 3600);
       });
     });

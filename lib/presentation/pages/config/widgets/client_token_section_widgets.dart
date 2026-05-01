@@ -297,71 +297,91 @@ class _TokenListFilters extends StatelessWidget {
   final ValueChanged<ClientTokenSortOption> onSortChanged;
   final VoidCallback onClearFilters;
 
+  static const double _compactBreakpoint = 980;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          flex: 3,
-          child: AppTextField(
-            label: l10n.ctFilterClientId,
-            controller: clientFilterController,
-            hint: l10n.ctHintClientId,
-            onChanged: onClientFilterChanged,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          flex: 2,
-          child: AppDropdown<ClientTokenStatusFilter>(
-            label: l10n.ctFilterStatus,
-            value: tokenStatusFilter,
-            items: ClientTokenStatusFilter.values
-                .map(
-                  (item) => ComboBoxItem<ClientTokenStatusFilter>(
-                    value: item,
-                    child: Text(statusLabelBuilder(item)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onStatusChanged(value);
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          flex: 2,
-          child: AppDropdown<ClientTokenSortOption>(
-            label: l10n.ctFilterSort,
-            value: tokenSortOption,
-            items: ClientTokenSortOption.values
-                .map(
-                  (item) => ComboBoxItem<ClientTokenSortOption>(
-                    value: item,
-                    child: Text(sortLabelBuilder(item)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onSortChanged(value);
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        AppButton(
-          label: l10n.ctButtonClearFilters,
-          isPrimary: false,
-          icon: FluentIcons.clear_filter,
-          onPressed: onClearFilters,
-        ),
-      ],
+    final clientFilterField = AppTextField(
+      label: l10n.ctFilterClientId,
+      controller: clientFilterController,
+      onChanged: onClientFilterChanged,
+    );
+    final statusField = AppDropdown<ClientTokenStatusFilter>(
+      label: l10n.ctFilterStatus,
+      value: tokenStatusFilter,
+      items: ClientTokenStatusFilter.values
+          .map(
+            (item) => ComboBoxItem<ClientTokenStatusFilter>(
+              value: item,
+              child: Text(statusLabelBuilder(item)),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        if (value != null) {
+          onStatusChanged(value);
+        }
+      },
+    );
+    final sortField = AppDropdown<ClientTokenSortOption>(
+      label: l10n.ctFilterSort,
+      value: tokenSortOption,
+      items: ClientTokenSortOption.values
+          .map(
+            (item) => ComboBoxItem<ClientTokenSortOption>(
+              value: item,
+              child: Text(sortLabelBuilder(item)),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        if (value != null) {
+          onSortChanged(value);
+        }
+      },
+    );
+    final clearFiltersButton = AppButton(
+      label: l10n.ctButtonClearFilters,
+      isPrimary: false,
+      icon: FluentIcons.clear_filter,
+      onPressed: onClearFilters,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < _compactBreakpoint;
+        if (isCompact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              clientFilterField,
+              const SizedBox(height: AppSpacing.md),
+              statusField,
+              const SizedBox(height: AppSpacing.md),
+              sortField,
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: clearFiltersButton,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(flex: 3, child: clientFilterField),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(flex: 2, child: statusField),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(flex: 2, child: sortField),
+            const SizedBox(width: AppSpacing.md),
+            clearFiltersButton,
+          ],
+        );
+      },
     );
   }
 }
@@ -592,7 +612,7 @@ class _TokenSummaryGrid extends StatelessWidget {
         ),
         Text(_buildScopeLabel(token, l10n)),
         Text(
-          DateFormat('dd/MM/yyyy HH:mm').format(token.createdAt.toLocal()),
+          formatClientTokenDateTime(context, token.createdAt),
         ),
         _TokenRowActions(
           l10n: l10n,

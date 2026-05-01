@@ -3,6 +3,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_ui_formatters.dart';
 import 'package:plug_agente/shared/widgets/common/layout_components.dart';
 
 class ClientTokenRuleDraft {
@@ -105,9 +106,9 @@ class ClientTokenRulesGrid extends StatelessWidget {
           rowCells: (rule) {
             final index = rules.indexWhere((r) => identical(r, rule));
             return [
-              Text(rule.resourceType.name),
+              Text(localizeClientTokenRuleType(l10n, rule.resourceType)),
               SelectableText(rule.resource),
-              Text(rule.effect.name),
+              Text(localizeClientTokenRuleEffect(l10n, rule.effect)),
               Text(rule.permissionsLabel(l10n)),
               _RuleActions(
                 l10n: l10n,
@@ -190,7 +191,7 @@ class _CompactRuleCard extends StatelessWidget {
         children: [
           _CompactValueRow(
             label: l10n.ctGridColumnType,
-            value: rule.resourceType.name,
+            value: localizeClientTokenRuleType(l10n, rule.resourceType),
           ),
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(
@@ -201,7 +202,7 @@ class _CompactRuleCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(
             label: l10n.ctGridColumnEffect,
-            value: rule.effect.name,
+            value: localizeClientTokenRuleEffect(l10n, rule.effect),
           ),
           const SizedBox(height: AppSpacing.xs),
           _CompactValueRow(

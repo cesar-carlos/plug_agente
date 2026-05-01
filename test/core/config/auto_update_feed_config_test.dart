@@ -25,13 +25,13 @@ void main() {
       expect(result, 'https://env.example.com/feed.xml');
     });
 
-    test('returns empty string when no source is configured', () {
+    test('returns official feed when no source is configured', () {
       final result = resolveAutoUpdateFeedUrl(
         environment: const {},
         fromDefine: '',
       );
 
-      expect(result, isEmpty);
+      expect(result, officialAutoUpdateFeedUrl);
     });
   });
 

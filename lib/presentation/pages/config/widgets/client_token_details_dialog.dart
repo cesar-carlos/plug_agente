@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:intl/intl.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_ui_formatters.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 Future<void> showClientTokenDetailsDialog({
@@ -109,9 +109,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               _DetailField(
                 label: l10n.ctLabelCreatedAt,
-                value: DateFormat('dd/MM/yyyy HH:mm').format(
-                  token.createdAt.toLocal(),
-                ),
+                value: formatClientTokenDateTime(context, token.createdAt),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
@@ -220,7 +218,7 @@ class _RulesSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rules.isEmpty) {
-      return Text(l10n.ctScopeNotInformed);
+      return Text(l10n.ctNoRulesConfigured);
     }
 
     return Container(
@@ -274,11 +272,11 @@ class _RuleTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${rule.resource.resourceType.name}: ${rule.resource.name}',
+            '${localizeClientTokenRuleType(l10n, rule.resource.resourceType)}: ${rule.resource.name}',
             style: context.bodyStrong,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('${l10n.ctRuleFieldEffectColon} ${rule.effect.name}'),
+          Text('${l10n.ctRuleFieldEffectColon} ${localizeClientTokenRuleEffect(l10n, rule.effect)}'),
           const SizedBox(height: AppSpacing.xs),
           Text('${l10n.ctGridColumnPermissions}: $permissionsLabel'),
         ],

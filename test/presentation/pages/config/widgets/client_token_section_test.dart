@@ -191,6 +191,37 @@ void main() {
       },
     );
 
+    testWidgets(
+      'shows loading indicator while initial token list is loading',
+      (tester) async {
+        final completer = Completer<Result<List<ClientTokenSummary>>>();
+        when(
+          () => mockListClientTokens(query: any(named: 'query')),
+        ).thenAnswer((_) => completer.future);
+
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pump();
+
+        expect(find.byType(ProgressRing), findsWidgets);
+        expect(find.text(ptL10n.ctMsgNoTokenFound), findsNothing);
+
+        completer.complete(const Success(<ClientTokenSummary>[]));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'token list filters lay out without overflow on narrow width',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(820, 900));
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text(ptL10n.ctButtonClearFilters), findsOneWidget);
+      },
+    );
+
     testWidgets('escape closes create token dialog', (tester) async {
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();

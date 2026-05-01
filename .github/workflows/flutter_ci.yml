@@ -56,7 +56,7 @@ jobs:
           flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --reporter expanded > benchmark-artifacts/transport-benchmark.txt
 
       - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: transport-benchmark
           path: benchmark-artifacts/transport-benchmark.txt

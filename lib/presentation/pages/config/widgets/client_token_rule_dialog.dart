@@ -30,10 +30,11 @@ Future<List<ClientTokenRuleDraft>?> showClientTokenRuleDialog({
   ClientTokenRuleDraft? initialRule,
   List<ClientTokenRuleDraft> existingRules = const [],
 }) {
+  final l10n = AppLocalizations.of(context)!;
   return showGeneralDialog<List<ClientTokenRuleDraft>>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'Dismiss rule dialog',
+    barrierLabel: l10n.ctDialogDismissRule,
     barrierColor: Colors.black.withValues(alpha: _barrierOpacity),
     transitionDuration: AppConstants.ruleDialogTransition,
     pageBuilder: (dialogContext, primaryAnimation, secondaryAnimation) {
@@ -260,14 +261,16 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   // excluding the rule currently being edited (if any).
   List<String> _findDuplicates(List<ClientTokenRuleDraft> drafts) {
     return drafts
-        .where((d) => widget.existingRules.any((e) {
-              if (_isEditing &&
-                  e.resource.toLowerCase() == widget.initialRule!.resource.toLowerCase() &&
-                  e.resourceType == widget.initialRule!.resourceType) {
-                return false;
-              }
-              return e.resource.toLowerCase() == d.resource.toLowerCase() && e.resourceType == d.resourceType;
-            }))
+        .where(
+          (d) => widget.existingRules.any((e) {
+            if (_isEditing &&
+                e.resource.toLowerCase() == widget.initialRule!.resource.toLowerCase() &&
+                e.resourceType == widget.initialRule!.resourceType) {
+              return false;
+            }
+            return e.resource.toLowerCase() == d.resource.toLowerCase() && e.resourceType == d.resourceType;
+          }),
+        )
         .map((d) => d.resource)
         .toList();
   }

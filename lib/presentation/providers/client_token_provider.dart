@@ -60,11 +60,11 @@ class ClientTokenProvider extends ChangeNotifier {
     final effectiveQuery = query ?? _lastListQuery;
     _lastListQuery = effectiveQuery;
 
+    _isLoading = true;
     if (!silent) {
-      _isLoading = true;
       _error = '';
-      notifyListeners();
     }
+    notifyListeners();
 
     final result = await _listClientTokens(query: effectiveQuery);
 
@@ -77,15 +77,11 @@ class ClientTokenProvider extends ChangeNotifier {
         isSuccess = true;
       },
       (failure) {
-        if (!silent) {
-          _error = failure.toDisplayMessage();
-        }
+        _error = failure.toDisplayMessage();
       },
     );
 
-    if (!silent) {
-      _isLoading = false;
-    }
+    _isLoading = false;
     notifyListeners();
 
     return isSuccess;

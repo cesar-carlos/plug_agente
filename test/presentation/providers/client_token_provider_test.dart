@@ -110,6 +110,24 @@ void main() {
       expect(provider.error, isEmpty);
     });
 
+    test('should expose failure message when silent load fails', () async {
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Failure(domain.ServerFailure('load failed')),
+      );
+
+      final future = provider.loadTokens(silent: true);
+
+      expect(provider.isLoading, isTrue);
+
+      final success = await future;
+
+      expect(success, isFalse);
+      expect(provider.isLoading, isFalse);
+      expect(provider.error, contains('load failed'));
+    });
+
     test('should expose failure message when create fails', () async {
       when(() => mockCreateClientToken(any())).thenAnswer(
         (_) async => Failure(domain.ValidationFailure('invalid request')),

@@ -1104,13 +1104,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctHintPayloadJson => 'Objeto JSON (ex.: display_name, env)';
 
   @override
-  String get ctFlagAllTables => 'all_tables';
+  String get ctFlagAllTables => 'Todas as tabelas';
 
   @override
-  String get ctFlagAllViews => 'all_views';
+  String get ctFlagAllViews => 'Todas as views';
 
   @override
-  String get ctFlagAllPermissions => 'all_permissions';
+  String get ctFlagAllPermissions => 'Todas as permissões';
 
   @override
   String get ctSectionRulesByResource => 'Regras por recurso';
@@ -1168,7 +1168,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctMsgNoTokenMatchFilter => 'Nenhum token corresponde aos filtros aplicados.';
 
   @override
-  String get ctFilterClientId => 'Filtrar por Client ID';
+  String get ctFilterClientId => 'Filtrar por Client ID ou nome';
 
   @override
   String get ctFilterStatus => 'Filtrar por status';
@@ -1240,6 +1240,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctScopeNotInformed => 'não informado pela API';
 
   @override
+  String get ctNoRulesConfigured => 'Sem regras específicas';
+
+  @override
   String get ctStatusRevoked => 'revogado';
 
   @override
@@ -1277,13 +1280,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctErrorPayloadInvalidJson => 'Payload JSON invalido.';
 
   @override
-  String get ctPermissionRead => 'Read';
+  String get ctPermissionRead => 'Leitura';
 
   @override
-  String get ctPermissionUpdate => 'Update';
+  String get ctPermissionUpdate => 'Atualização';
 
   @override
-  String get ctPermissionDelete => 'Delete';
+  String get ctPermissionDelete => 'Exclusão';
+
+  @override
+  String get ctRuleTypeTable => 'Tabela';
+
+  @override
+  String get ctRuleTypeView => 'View';
+
+  @override
+  String get ctRuleTypeUnknown => 'Desconhecido';
+
+  @override
+  String get ctRuleEffectAllow => 'Permitir';
+
+  @override
+  String get ctRuleEffectDeny => 'Negar';
+
+  @override
+  String get ctDialogDismissCreateToken => 'Dispensar diálogo de criação de token';
+
+  @override
+  String get ctDialogDismissRule => 'Dispensar diálogo de regra';
 
   @override
   String get ctGridColumnType => 'Tipo';
