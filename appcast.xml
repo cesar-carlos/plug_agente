@@ -5,6 +5,18 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.5.1+1</title>
+   <pubDate>Fri, 01 May 2026 17:03:03 +0000</pubDate>
+   <description>## Plug Agente 1.5.1
+
+- Application version **1.5.1+1** (`pubspec.yaml`, Windows build, installer).
+- Fixes the auto-update flow by falling back to the official appcast feed when `AUTO_UPDATE_FEED_URL` is not explicitly configured.
+- Updates GitHub artifact actions to Node 24-compatible versions to remove Node 20 deprecation warnings from CI and release automation.
+
+**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.5.0...v1.5.1</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.1/PlugAgente-Setup-1.5.1.exe" sparkle:version="1.5.1+1" sparkle:os="windows" length="17816378" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.5.0+1</title>
    <pubDate>Fri, 01 May 2026 16:46:54 +0000</pubDate>
    <description>## Plug Agente 1.5.0
@@ -68,12 +80,6 @@ Build the Windows installer after \lutter build windows --release\ using Inno Se
    <pubDate>Mon, 23 Mar 2026 14:05:11 +0000</pubDate>
    <description>Nova Versão 1.1.1+17 - Atualização automática via GitHub Release.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.1/PlugAgente-Setup-1.1.1.exe" sparkle:version="1.1.1+17" sparkle:os="windows" length="36022507" type="application/octet-stream" sparkle:dsaSignature="MD0CHQCPHXRNeGvhBLK1bwIRbpFQkpq9A+5SVZ4Ifux2AhxMcsC+m3ArfIcBgYImLO5SFPsb2tXI7MmMk2Vd" />
-  </item>
-  <item>
-   <title>Version 1.1.0+16</title>
-   <pubDate>Fri, 20 Mar 2026 14:41:49 +0000</pubDate>
-   <description>Nova Versão 1.1.0+16 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.0/PlugAgente-Setup-1.1.0.exe" sparkle:version="1.1.0+16" sparkle:os="windows" length="35924380" type="application/octet-stream" sparkle:dsaSignature="MD0CHEvfUIGIRyATFSUdC9BliywkNmXAx7UIBhBMjnQCHQCXXctRcTsQOgg++y7y7BrMjENZgHa/awdYYwMi" />
   </item>
  </channel>
 </rss>
