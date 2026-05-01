@@ -8,12 +8,10 @@ String? resolveAutoUpdateFeedOverride({
   if (normalizedFromDefine.isNotEmpty) {
     return normalizedFromDefine;
   }
-
   final normalizedFromEnvironment = environment['AUTO_UPDATE_FEED_URL']?.trim() ?? '';
   if (normalizedFromEnvironment.isNotEmpty) {
     return normalizedFromEnvironment;
   }
-
   return null;
 }
 

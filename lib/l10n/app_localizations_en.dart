@@ -1280,13 +1280,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctHintPayloadJson => 'JSON object (e.g. display_name, env)';
 
   @override
-  String get ctFlagAllTables => 'all_tables';
+  String get ctFlagAllTables => 'All tables';
 
   @override
-  String get ctFlagAllViews => 'all_views';
+  String get ctFlagAllViews => 'All views';
 
   @override
-  String get ctFlagAllPermissions => 'all_permissions';
+  String get ctFlagAllPermissions => 'All permissions';
 
   @override
   String get ctSectionRulesByResource => 'Rules by resource';
@@ -1347,7 +1347,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctMsgNoTokenMatchFilter => 'No tokens match the applied filters.';
 
   @override
-  String get ctFilterClientId => 'Filter by client ID';
+  String get ctFilterClientId => 'Filter by client ID or name';
 
   @override
   String get ctFilterStatus => 'Filter by status';
@@ -1419,6 +1419,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctScopeNotInformed => 'not reported by the API';
 
   @override
+  String get ctNoRulesConfigured => 'No specific rules configured';
+
+  @override
   String get ctStatusRevoked => 'revoked';
 
   @override
@@ -1475,6 +1478,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctRuleTypeTable => 'Table';
+
+  @override
+  String get ctRuleTypeView => 'View';
+
+  @override
+  String get ctRuleTypeUnknown => 'Unknown';
+
+  @override
+  String get ctRuleEffectAllow => 'Allow';
+
+  @override
+  String get ctRuleEffectDeny => 'Deny';
+
+  @override
+  String get ctDialogDismissCreateToken => 'Dismiss create token dialog';
+
+  @override
+  String get ctDialogDismissRule => 'Dismiss rule dialog';
 
   @override
   String get ctPermissionDdl => 'DDL';

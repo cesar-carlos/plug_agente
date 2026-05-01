@@ -1425,6 +1425,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctScopeNotInformed => 'não informado pela API';
 
   @override
+  String get ctNoRulesConfigured => 'No specific rules configured';
+
+  @override
   String get ctStatusRevoked => 'revogado';
 
   @override
@@ -1483,6 +1486,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctRuleTypeTable => 'Tabela';
+
+  @override
+  String get ctRuleTypeView => 'View';
+
+  @override
+  String get ctRuleTypeUnknown => 'Desconhecido';
+
+  @override
+  String get ctRuleEffectAllow => 'Permitir';
+
+  @override
+  String get ctRuleEffectDeny => 'Negar';
+
+  @override
+  String get ctDialogDismissCreateToken => 'Dispensar dialogo de criacao de token';
+
+  @override
+  String get ctDialogDismissRule => 'Dispensar dialogo de regra';
 
   @override
   String get ctPermissionDdl => 'DDL';

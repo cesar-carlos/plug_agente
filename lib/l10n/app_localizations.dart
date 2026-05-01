@@ -2531,19 +2531,19 @@ abstract class AppLocalizations {
   /// No description provided for @ctFlagAllTables.
   ///
   /// In en, this message translates to:
-  /// **'all_tables'**
+  /// **'All tables'**
   String get ctFlagAllTables;
 
   /// No description provided for @ctFlagAllViews.
   ///
   /// In en, this message translates to:
-  /// **'all_views'**
+  /// **'All views'**
   String get ctFlagAllViews;
 
   /// No description provided for @ctFlagAllPermissions.
   ///
   /// In en, this message translates to:
-  /// **'all_permissions'**
+  /// **'All permissions'**
   String get ctFlagAllPermissions;
 
   /// No description provided for @ctSectionRulesByResource.
@@ -2663,7 +2663,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctFilterClientId.
   ///
   /// In en, this message translates to:
-  /// **'Filter by client ID'**
+  /// **'Filter by client ID or name'**
   String get ctFilterClientId;
 
   /// No description provided for @ctFilterStatus.
@@ -2804,6 +2804,12 @@ abstract class AppLocalizations {
   /// **'not reported by the API'**
   String get ctScopeNotInformed;
 
+  /// No description provided for @ctNoRulesConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No specific rules configured'**
+  String get ctNoRulesConfigured;
+
   /// No description provided for @ctStatusRevoked.
   ///
   /// In en, this message translates to:
@@ -2917,6 +2923,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete'**
   String get ctPermissionDelete;
+
+  /// No description provided for @ctRuleTypeTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Table'**
+  String get ctRuleTypeTable;
+
+  /// No description provided for @ctRuleTypeView.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get ctRuleTypeView;
+
+  /// No description provided for @ctRuleTypeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get ctRuleTypeUnknown;
+
+  /// No description provided for @ctRuleEffectAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get ctRuleEffectAllow;
+
+  /// No description provided for @ctRuleEffectDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get ctRuleEffectDeny;
+
+  /// No description provided for @ctDialogDismissCreateToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss create token dialog'**
+  String get ctDialogDismissCreateToken;
+
+  /// No description provided for @ctDialogDismissRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss rule dialog'**
+  String get ctDialogDismissRule;
 
   /// No description provided for @ctPermissionDdl.
   ///

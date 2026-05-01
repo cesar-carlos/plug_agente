@@ -74,9 +74,7 @@ class ClientTokenProvider extends ChangeNotifier {
     _lastListQuery = effectiveQuery;
     final generation = ++_loadGeneration;
 
-    if (!silent) {
-      _isLoading = true;
-    }
+    _isLoading = true;
     _error = '';
     notifyListeners();
 

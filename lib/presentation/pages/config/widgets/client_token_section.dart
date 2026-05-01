@@ -9,7 +9,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -26,6 +25,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_details_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_ui_formatters.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
@@ -332,6 +332,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (!mounted) {
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final isEditingToken = baseToken != null;
 
     final initialRules =
@@ -376,7 +377,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     try {
       await showGeneralDialog<void>(
         context: context,
-        barrierLabel: 'Dismiss create token dialog',
+        barrierLabel: l10n.ctDialogDismissCreateToken,
         barrierColor: Colors.black.withValues(
           alpha: _createTokenBarrierOpacity,
         ),
@@ -1052,8 +1053,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               ),
               const SizedBox(height: AppSpacing.sm),
               if (isInitialLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                const SizedBox(
+                  height: 160,
                   child: Center(
                     child: ProgressRing(),
                   ),
