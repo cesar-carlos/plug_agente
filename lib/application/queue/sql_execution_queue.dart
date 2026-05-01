@@ -134,10 +134,14 @@ class SqlExecutionQueue {
 
     final timeout = enqueueTimeout ?? _defaultEnqueueTimeout;
     try {
-      final result = await request.completer.future.timeout(timeout);
-      final waitTime = DateTime.now().difference(request.enqueuedAt);
+      await request.startedCompleter.future.timeout(timeout);
+
+      final result = await request.completer.future;
+      final waitTime = (request.startedAt ?? DateTime.now()).difference(
+        request.enqueuedAt,
+      );
       _metricsCollector?.recordQueueWaitTime(waitTime);
-      
+
       developer.log(
         'SQL request completed',
         name: 'sql_execution_queue',
@@ -148,9 +152,13 @@ class SqlExecutionQueue {
           'result': result.isSuccess() ? 'success' : 'failure',
         },
       );
-      
+
       return result;
     } on TimeoutException catch (error) {
+      request.isCancelled = true;
+      if (!request.hasStarted) {
+        _queue.remove(request);
+      }
       _metricsCollector?.recordQueueTimeout();
       developer.log(
         'SQL request TIMEOUT in queue',
@@ -183,6 +191,14 @@ class SqlExecutionQueue {
   Future<void> _processQueue() async {
     while (_activeWorkers < _maxConcurrentWorkers && _queue.isNotEmpty) {
       final request = _queue.removeFirst();
+      if (request.isCancelled || request.completer.isCompleted) {
+        continue;
+      }
+      request.hasStarted = true;
+      request.startedAt = DateTime.now();
+      if (!request.startedCompleter.isCompleted) {
+        request.startedCompleter.complete();
+      }
       _activeWorkers++;
       _metricsCollector?.recordWorkerStarted(_activeWorkers);
 
@@ -243,6 +259,9 @@ class SqlExecutionQueue {
         'request_id': ?request.requestId,
       },
     );
+    if (!request.startedCompleter.isCompleted && !request.hasStarted) {
+      request.startedCompleter.complete();
+    }
     request.completer.completeError(failure);
   }
 }
@@ -257,6 +276,10 @@ class _QueuedRequest<T extends Object> {
   final Future<Result<T>> Function() task;
   final DateTime enqueuedAt;
   final String? requestId;
+  bool hasStarted = false;
+  bool isCancelled = false;
+  DateTime? startedAt;
+  final Completer<void> startedCompleter = Completer<void>();
   final Completer<Result<T>> completer = Completer<Result<T>>();
 }
 

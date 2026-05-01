@@ -432,6 +432,9 @@ Response:
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
   esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
+- `options.timeout_ms`: teto opcional para a execucao ODBC desta request. O valor
+  efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
+  runtime (quando `enableSocketTimeoutByStage` estiver ligado).
 - `options.page` e `options.page_size`: habilitam paginacao server-side para
   `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
   o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
@@ -456,6 +459,8 @@ Response:
   leve (strings `'...'`, `"..."`, `[...]`, comentarios `--` e `/* */`), nao com
   parser SQL completo: nao cobre backticks estilo MySQL, dollar-quoting
   PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
+- O runtime atual suporta ate **5 parametros nomeados por comando**. Acima disso,
+  a request e rejeitada com erro de validacao.
 - `params.database`: override opcional do banco alvo para a request atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
   rejeitada com `invalid_params`.
@@ -583,14 +588,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
         "rows": [{ "orders_count": 2 }],
         "row_count": 1
       }
-    ],
-    "pagination": {
-      "page": 1,
-      "page_size": 100,
-      "returned_rows": 0,
-      "has_next_page": false,
-      "has_previous_page": false
-    }
+    ]
   }
 }
 ```
@@ -694,6 +692,9 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
   esta ativo.
+- `options.timeout_ms`: teto opcional para a execucao ODBC do batch. O valor
+  efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
+  runtime (quando `enableSocketTimeoutByStage` estiver ligado).
 - `commands[*].execution_order` e opcional (inteiro `>= 0`).
 - Quando `execution_order` nao e enviado, o comando segue a ordem da lista
   recebida (comportamento atual).
@@ -704,6 +705,10 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
   lista.
 - `result.items[*].index` continua representando o indice original do comando
   no array `commands`.
+- Cada `commands[*].sql` deve conter **exatamente um statement SQL de topo**.
+  Para scripts com multiplos statements/result sets na mesma execucao, use
+  `sql.execute` com `options.multi_result: true`.
+- O runtime atual suporta ate **5 parametros nomeados por comando**.
 - `params.database`: override opcional do banco alvo para o batch atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
   rejeitada com `invalid_params`.
@@ -859,8 +864,10 @@ Pelo menos um de `execution_id` ou `request_id` e obrigatorio.
 }
 ```
 
-**Nota**: O cancelamento aplica-se apenas a execucoes em streaming (ex.: Playground).
-Execucoes via `sql.execute` (nao-streaming) nao sao cancelaveis por este metodo.
+**Nota**: O cancelamento aplica-se apenas a execucoes em streaming rastreadas pelo
+runtime quando `enableSocketCancelMethod` esta ativo. Hoje isso cobre o caminho
+de streaming ativo do banco; respostas chunked geradas apos materializacao do
+resultado nao sao cancelaveis por este metodo.
 
 ## Metodo `agent.getProfile`
 

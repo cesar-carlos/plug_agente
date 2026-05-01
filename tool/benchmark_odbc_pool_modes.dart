@@ -23,9 +23,11 @@ Future<void> main(List<String> args) async {
   final query = _readStringArg(args, '--query') ?? Platform.environment['ODBC_BENCH_QUERY'] ?? 'SELECT 1';
   final iterations = _readIntArg(args, '--iterations') ?? 24;
   final concurrency = _readIntArg(args, '--concurrency') ?? 4;
+  final poolSize = _readIntArg(args, '--pool-size') ?? 8;
+  final warmupIterations = _readIntArg(args, '--warmup-iterations') ?? min(5, iterations);
 
-  final locator = ServiceLocator()..initialize();
-  final service = locator.service;
+  final locator = ServiceLocator()..initialize(useAsync: true);
+  final service = locator.asyncService;
   final initResult = await service.initialize();
   if (initResult.isError()) {
     stderr.writeln('Failed to initialize ODBC: ${initResult.exceptionOrNull()}');
@@ -33,36 +35,47 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  final leaseSettings = _BenchmarkConnectionSettings(poolSize: poolSize);
+  final nativeSettings = _BenchmarkConnectionSettings(
+    poolSize: poolSize,
+    useNativeOdbcPool: true,
+  );
+  final nativeNoCheckoutSettings = _BenchmarkConnectionSettings(
+    poolSize: poolSize,
+    useNativeOdbcPool: true,
+    nativePoolTestOnCheckout: false,
+  );
+
   final scenarios = <({String name, IConnectionPool pool})>[
     (
       name: 'lease_pool',
       pool: OdbcConnectionPool(
         service,
-        const _BenchmarkConnectionSettings(),
+        leaseSettings,
       ),
     ),
     (
       name: 'native_pool',
       pool: OdbcNativeConnectionPool(
         service,
-        const _BenchmarkConnectionSettings(useNativeOdbcPool: true),
+        nativeSettings,
       ),
     ),
     (
       name: 'native_pool_no_checkout_validation',
       pool: OdbcNativeConnectionPool(
         service,
-        const _BenchmarkConnectionSettings(
-          useNativeOdbcPool: true,
-          nativePoolTestOnCheckout: false,
-        ),
+        nativeNoCheckoutSettings,
       ),
     ),
   ];
 
   stdout.writeln('# ODBC Pool Benchmark');
+  stdout.writeln('- service_mode: async_worker');
   stdout.writeln('- iterations: $iterations');
   stdout.writeln('- concurrency: $concurrency');
+  stdout.writeln('- pool_size: $poolSize');
+  stdout.writeln('- warmup_iterations: $warmupIterations');
   stdout.writeln('- query: $query');
   stdout.writeln();
   stdout.writeln('| scenario | avg_ms | p95_ms | ok | fail |');
@@ -76,6 +89,7 @@ Future<void> main(List<String> args) async {
       query: query,
       iterations: iterations,
       concurrency: concurrency,
+      warmupIterations: warmupIterations,
     );
     stdout.writeln(
       '| ${scenario.name} | ${result.avgMs.toStringAsFixed(2)} | '
@@ -85,7 +99,7 @@ Future<void> main(List<String> args) async {
     await scenario.pool.closeAll();
   }
 
-  service.dispose();
+  locator.shutdown();
 }
 
 Future<_ScenarioResult> _runScenario({
@@ -95,11 +109,30 @@ Future<_ScenarioResult> _runScenario({
   required String query,
   required int iterations,
   required int concurrency,
+  required int warmupIterations,
 }) async {
   final latenciesMs = <double>[];
   var okCount = 0;
   var failCount = 0;
   var cursor = 0;
+
+  if (warmupIterations > 0) {
+    for (var i = 0; i < warmupIterations; i++) {
+      final acquired = await pool.acquire(connectionString);
+      if (acquired.isError()) {
+        continue;
+      }
+      final connectionId = acquired.getOrThrow();
+      try {
+        await service.executeQuery(
+          query,
+          connectionId: connectionId,
+        );
+      } finally {
+        await pool.release(connectionId);
+      }
+    }
+  }
 
   Future<void> worker() async {
     while (true) {
@@ -179,12 +212,13 @@ class _ScenarioResult {
 
 class _BenchmarkConnectionSettings implements IOdbcConnectionSettings {
   const _BenchmarkConnectionSettings({
+    this.poolSize = 8,
     this.useNativeOdbcPool = false,
     this.nativePoolTestOnCheckout = true,
   });
 
   @override
-  int get poolSize => 8;
+  final int poolSize;
 
   @override
   int get loginTimeoutSeconds => 30;

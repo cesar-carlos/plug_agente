@@ -127,6 +127,29 @@ void main() {
       check(result.isSuccess()).isTrue();
     });
 
+    test('should reject sql.executeBatch pagination options', () {
+      final data = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'sql.executeBatch',
+        'id': '1',
+        'params': {
+          'commands': [
+            {'sql': 'SELECT 1'},
+          ],
+          'options': {
+            'page': 1,
+            'page_size': 10,
+          },
+        },
+      };
+
+      final result = validator.validateSingle(data);
+      check(result.isError()).isTrue();
+      final err = result.exceptionOrNull()! as domain.ValidationFailure;
+      check(err.context['rpc_error_code']).equals(RpcErrorCode.invalidParams);
+      check(err.message).contains('unsupported properties');
+    });
+
     test('should reject preserve_sql combined with pagination', () {
       final data = <String, dynamic>{
         'jsonrpc': '2.0',

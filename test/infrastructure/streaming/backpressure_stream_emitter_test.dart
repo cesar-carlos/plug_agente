@@ -8,7 +8,7 @@ void main() {
     late List<({String event, Map<String, dynamic> payload})> emitted;
 
     BackpressureStreamEmitter createEmitter({
-      void Function(String streamId, BackpressureStreamEmitter)? onRegister,
+      bool Function(String streamId, BackpressureStreamEmitter)? onRegister,
       void Function(String streamId)? onUnregister,
     }) {
       emitted = [];
@@ -16,7 +16,7 @@ void main() {
         emit: (event, payload) async {
           emitted.add((event: event, payload: payload));
         },
-        onRegister: onRegister ?? (_, _) {},
+        onRegister: onRegister ?? (_, _) => true,
         onUnregister: onUnregister ?? (_) {},
       );
     }
@@ -139,7 +139,10 @@ void main() {
         var registeredId = '';
         var unregisteredId = '';
         final emitter = createEmitter(
-          onRegister: (id, _) => registeredId = id,
+          onRegister: (id, _) {
+            registeredId = id;
+            return true;
+          },
           onUnregister: (id) => unregisteredId = id,
         );
 
@@ -176,7 +179,7 @@ void main() {
           emit: (event, payload) async {
             emitted.add((event: event, payload: payload));
           },
-          onRegister: (_, _) {},
+          onRegister: (_, _) => true,
           onUnregister: (_) {},
           maxQueueSize: maxSize,
         );
@@ -250,6 +253,26 @@ void main() {
       emitter.releaseChunks(-1);
       await Future<void>.delayed(Duration.zero);
       check(emitted).length.equals(1);
+    });
+
+    test('should fail immediately when registration is rejected', () async {
+      final emitter = createEmitter(
+        onRegister: (_, _) => false,
+      );
+
+      final accepted = await emitter.emitChunk(
+        RpcStreamChunk(
+          streamId: 's-rejected',
+          requestId: 'req-1',
+          chunkIndex: 0,
+          rows: const [
+            {'id': 1},
+          ],
+        ),
+      );
+
+      check(accepted).isFalse();
+      check(emitted).isEmpty();
     });
   });
 }

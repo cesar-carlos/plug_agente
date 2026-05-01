@@ -239,6 +239,7 @@ class RpcMethodDispatcher {
     final multiResultRequested = _resolveMultiResult(params);
     final requestParameters = paramReader.boundParams;
     final database = paramReader.database;
+    final requestedTimeoutMs = _resolveRequestedTimeoutMs(params);
 
     if (multiResultRequested && requestParameters != null && requestParameters.isNotEmpty) {
       return _invalidParams(
@@ -326,6 +327,8 @@ class RpcMethodDispatcher {
       sql,
       request.isNotification ? null : streamEmitter,
       limits: limits,
+      deadline: deadline,
+      timeoutMs: requestedTimeoutMs,
     );
     if (streamingFromDbResponse != null) {
       return streamingFromDbResponse;
@@ -336,6 +339,7 @@ class RpcMethodDispatcher {
       database: database,
       requestId: request.id?.toString(),
       deadline: deadline,
+      timeoutMs: requestedTimeoutMs,
     );
 
     return result.fold<Future<RpcResponse>>(
@@ -494,6 +498,8 @@ class RpcMethodDispatcher {
     String sql,
     IRpcStreamEmitter? streamEmitter, {
     required TransportLimits limits,
+    required DateTime? deadline,
+    required int timeoutMs,
   }) async {
     if (!_featureFlags.enableSocketStreamingFromDb ||
         !_featureFlags.enableSocketStreamingChunks ||
@@ -528,6 +534,7 @@ class RpcMethodDispatcher {
     final executionId = _uuid.v4();
     var totalRows = 0;
     var chunkIndex = 0;
+    var overflowed = false;
     List<Map<String, dynamic>>? columnMetadata;
     _activeStreamExecution = _ActiveStreamExecution(
       streamId: streamId,
@@ -536,6 +543,13 @@ class RpcMethodDispatcher {
     );
 
     try {
+      final queryTimeout = mergeOdbcTimeout(
+        stageTimeout: _effectiveStageTimeout(
+          deadline: deadline,
+          stageBudget: _sqlExecuteTotalBudgetDuration,
+        ),
+        timeoutMs: timeoutMs,
+      );
       final streamResult = await gateway.executeQueryStream(
         sql.trim(),
         config.resolveConnectionString(),
@@ -553,6 +567,7 @@ class RpcMethodDispatcher {
               columnMetadata: columnMetadata,
             ),
           )) {
+            overflowed = true;
             await gateway.cancelActiveStream(
               executionId: executionId,
               reason: StreamingCancelReason.backpressureOverflow,
@@ -561,7 +576,7 @@ class RpcMethodDispatcher {
         },
         fetchSize: limits.streamingChunkSize,
         executionId: executionId,
-        queryTimeout: _sqlExecuteTotalBudgetDuration,
+        queryTimeout: queryTimeout,
       );
 
       if (streamResult.isError()) {
@@ -580,6 +595,31 @@ class RpcMethodDispatcher {
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
         return RpcResponse.error(id: request.id, error: rpcError);
+      }
+
+      if (overflowed) {
+        await _emitTerminalComplete(
+          streamEmitter: streamEmitter,
+          streamId: streamId,
+          requestId: request.id,
+          totalRows: totalRows,
+          status: StreamTerminalStatus.aborted,
+        );
+        return RpcResponse.error(
+          id: request.id,
+          error: RpcError(
+            code: RpcErrorCode.resultTooLarge,
+            message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
+            data: RpcErrorCode.buildErrorData(
+              code: RpcErrorCode.resultTooLarge,
+              technicalMessage:
+                  'Streaming buffer overflowed: hub not consuming fast enough; '
+                  'stream cancelled to avoid data loss.',
+              correlationId: request.id?.toString(),
+              subreason: 'backpressure_overflow',
+            ),
+          ),
+        );
       }
 
       await streamEmitter.emitComplete(
@@ -994,10 +1034,14 @@ class RpcMethodDispatcher {
     required String? database,
     required String? requestId,
     required DateTime? deadline,
+    required int timeoutMs,
   }) async {
-    final timeout = _effectiveStageTimeout(
-      deadline: deadline,
-      stageBudget: _queryStageBudgetDuration,
+    final timeout = mergeOdbcTimeout(
+      stageTimeout: _effectiveStageTimeout(
+        deadline: deadline,
+        stageBudget: _queryStageBudgetDuration,
+      ),
+      timeoutMs: timeoutMs,
     );
     if (timeout != null && timeout <= Duration.zero) {
       final context = <String, dynamic>{
@@ -1126,6 +1170,11 @@ class RpcMethodDispatcher {
       return Duration.zero;
     }
     return remaining < stageBudget ? remaining : stageBudget;
+  }
+
+  int _resolveRequestedTimeoutMs(Map<String, dynamic> params) {
+    final options = params['options'] as Map<String, dynamic>?;
+    return jsonPositiveInt(options?['timeout_ms']) ?? 0;
   }
 
   /// Handles sql.cancel method (cancels in-flight streaming execution).

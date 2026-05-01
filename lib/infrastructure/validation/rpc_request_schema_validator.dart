@@ -435,9 +435,6 @@ class RpcRequestSchemaValidator {
             'timeout_ms',
             'max_rows',
             'transaction',
-            'page',
-            'page_size',
-            'cursor',
           }
         : <String>{
             'timeout_ms',

@@ -207,6 +207,52 @@ void main() {
       expect(metrics.queueTimeoutCount, equals(1));
     });
 
+    test('should apply enqueue timeout only before task starts', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+      );
+
+      final result = await queue.submit<int>(
+        () async {
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+          return const res.Success(7);
+        },
+        enqueueTimeout: const Duration(milliseconds: 10),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow(), equals(7));
+    });
+
+    test('should not execute a request that timed out before start', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+      );
+
+      unawaited(
+        queue.submit<int>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+          return const res.Success(1);
+        }),
+      );
+
+      var executedTimedOutTask = false;
+      final result = await queue.submit<int>(
+        () async {
+          executedTimedOutTask = true;
+          return const res.Success(2);
+        },
+        enqueueTimeout: const Duration(milliseconds: 20),
+      );
+
+      expect(result.isError(), isTrue);
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(executedTimedOutTask, isFalse);
+    });
+
     test('should record queue metrics correctly', () async {
       final metrics = _MockMetricsCollector();
       final queue = SqlExecutionQueue(

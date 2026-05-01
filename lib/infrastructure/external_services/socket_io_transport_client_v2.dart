@@ -230,6 +230,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'stream_id=$streamId',
           );
         }
+        return accepted;
       },
       onUnregister: _streamEmitters.unregister,
     );

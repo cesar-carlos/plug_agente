@@ -10,7 +10,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 class BackpressureStreamEmitter implements IRpcStreamEmitter {
   BackpressureStreamEmitter({
     required Future<void> Function(String event, Map<String, dynamic> payload) emit,
-    required void Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
+    required bool Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
     required void Function(String streamId) onUnregister,
     int? maxQueueSize,
   }) : _emit = emit,
@@ -19,7 +19,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
        _maxQueueSize = maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
 
   final Future<void> Function(String event, Map<String, dynamic> payload) _emit;
-  final void Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
+  final bool Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
   final void Function(String streamId) _onUnregister;
   final int _maxQueueSize;
 
@@ -60,7 +60,10 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   Future<bool> emitChunk(RpcStreamChunk chunk) async {
     if (!_registered) {
       _streamId = chunk.streamId;
-      _onRegister(_streamId!, this);
+      final accepted = _onRegister(_streamId!, this);
+      if (!accepted) {
+        return false;
+      }
       _registered = true;
     }
     await _flush();

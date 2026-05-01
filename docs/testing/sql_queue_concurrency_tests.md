@@ -41,9 +41,11 @@ Location: `test/application/gateway/queued_database_gateway_test.dart`
 
 ### RpcMethodDispatcher Integration
 
-**Not yet implemented** - To be added when integrating QueuedDatabaseGateway into service locator.
+`QueuedDatabaseGateway` is already integrated in the production DI graph via
+`plug_dependency_registrar.dart`. The remaining gap is coverage that exercises
+the dispatcher and queue together under burst conditions.
 
-**Planned Coverage:**
+**Coverage target:**
 - `sql.execute` and `sql.executeBatch` are queued
 - `agent.getProfile` and `client_token.getPolicy` bypass queue
 - Timeout budgets are preserved (queue wait + ODBC execution)
@@ -60,6 +62,8 @@ E2E burst tests require a live ODBC connection and are opt-in via environment va
 - `ODBC_TEST_DSN` - Test database DSN  
 - `ODBC_TEST_USER` - Optional username
 - `ODBC_TEST_PASSWORD` - Optional password
+- `ODBC_INTEGRATION_LONG_QUERY` (or DB-specific variant) - Slow SQL used to
+  saturate the queue deterministically during burst tests
 
 See `docs/testing/e2e_setup.md` for full configuration.
 

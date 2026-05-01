@@ -1,7 +1,7 @@
 /// Merges stage-derived ODBC timeout with RPC `options.timeout_ms` (client cap).
 ///
 /// [timeoutMs] <= 0 means no client cap: [stageTimeout] is returned unchanged.
-Duration? mergeBatchOdbcTimeout({
+Duration? mergeOdbcTimeout({
   required Duration? stageTimeout,
   required int timeoutMs,
 }) {
@@ -13,4 +13,15 @@ Duration? mergeBatchOdbcTimeout({
     return client;
   }
   return stageTimeout < client ? stageTimeout : client;
+}
+
+/// Backwards-compatible alias kept for batch call sites and tests.
+Duration? mergeBatchOdbcTimeout({
+  required Duration? stageTimeout,
+  required int timeoutMs,
+}) {
+  return mergeOdbcTimeout(
+    stageTimeout: stageTimeout,
+    timeoutMs: timeoutMs,
+  );
 }

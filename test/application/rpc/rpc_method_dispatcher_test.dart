@@ -51,9 +51,9 @@ class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
 
 HealthService _testHealthService(IDatabaseGateway gateway) => HealthService(
-      metricsCollector: MetricsCollector(),
-      gateway: gateway,
-    );
+  metricsCollector: MetricsCollector(),
+  gateway: gateway,
+);
 
 MockRpcStreamEmitter _stubRpcStreamEmitter() {
   final emitter = MockRpcStreamEmitter();
@@ -652,6 +652,60 @@ void main() {
       expect(result['rows'], isNotNull);
       expect(result['row_count'], equals(1));
     });
+
+    test(
+      'should cap sql.execute ODBC timeout with options.timeout_ms when stage '
+      'budgets are enabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketTimeoutByStage,
+        ).thenReturn(true);
+
+        Duration? capturedTimeout;
+        when(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((invocation) async {
+          const sym = Symbol('timeout');
+          capturedTimeout = invocation.namedArguments.containsKey(sym)
+              ? invocation.namedArguments[sym] as Duration?
+              : null;
+          return Success(
+            QueryResponse(
+              id: 'exec-timeout',
+              requestId: 'req-timeout',
+              agentId: 'agent-1',
+              data: const [],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((invocation) => invocation.positionalArguments[0] as QueryResponse);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-timeout',
+          params: {
+            'sql': 'SELECT 1',
+            'options': {
+              'timeout_ms': 8000,
+            },
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isSuccess, isTrue);
+        expect(capturedTimeout, isNotNull);
+        expect(capturedTimeout!.inMilliseconds, lessThanOrEqualTo(8000));
+      },
+    );
 
     test(
       'should return databaseConnectionFailed when gateway returns ConnectionFailure',
@@ -1301,6 +1355,175 @@ void main() {
         verify(() => mockEmitter.emitChunk(any())).called(2);
         verify(() => mockEmitter.emitComplete(any())).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should cap DB streaming timeout with options.timeout_ms',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-1',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(
+          mockConfigRepo.getCurrentConfig,
+        ).thenAnswer((_) async => Success(config));
+
+        Duration? capturedTimeout;
+        when(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          const timeoutSymbol = Symbol('queryTimeout');
+          capturedTimeout = invocation.namedArguments[timeoutSymbol] as Duration?;
+          return const Success(unit);
+        });
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-stream-timeout',
+          params: {
+            'sql': 'SELECT * FROM users',
+            'options': {'timeout_ms': 5000},
+          },
+        );
+
+        final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => true);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: mockEmitter,
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(capturedTimeout, isNotNull);
+        expect(capturedTimeout!.inMilliseconds, lessThanOrEqualTo(5000));
+      },
+    );
+
+    test(
+      'should return resultTooLarge when DB streaming emitter rejects chunks',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-1',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(
+          mockConfigRepo.getCurrentConfig,
+        ).thenAnswer((_) async => Success(config));
+
+        when(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
+          await onChunk([
+            {'id': 1, 'name': 'a'},
+          ]);
+          return const Success(unit);
+        });
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-stream-overflow',
+          params: {'sql': 'SELECT * FROM users'},
+        );
+
+        final mockEmitter = MockRpcStreamEmitter();
+        when(() => mockEmitter.emitChunk(any())).thenAnswer((_) async => false);
+        when(() => mockEmitter.emitComplete(any())).thenAnswer((_) async {});
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: mockEmitter,
+        );
+
+        expect(response.isError, isTrue);
+        expect(response.error!.code, RpcErrorCode.resultTooLarge);
+        verify(
+          () => mockStreamingGateway.cancelActiveStream(
+            executionId: any(named: 'executionId'),
+            reason: StreamingCancelReason.backpressureOverflow,
+          ),
+        ).called(1);
       },
     );
 

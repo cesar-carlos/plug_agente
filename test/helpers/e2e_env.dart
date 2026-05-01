@@ -150,6 +150,10 @@ class E2EEnv {
   /// `odbc_lock_contention_live_integration_test` (real concurrency; opt-in).
   static bool get odbcRunLockContentionTests => _get('ODBC_RUN_LOCK_CONTENTION_TESTS') == 'true';
 
+  /// When true (`RUN_ODBC_BURST_TESTS=true`), runs
+  /// `sql_queue_burst_test` (queue/backpressure burst scenarios; opt-in).
+  static bool get odbcRunBurstTests => _get('RUN_ODBC_BURST_TESTS') == 'true';
+
   /// When true (`ODBC_E2E_DML_PERF_TESTS=true`), runs `odbc_dml_perf_live_e2e_test` (insert/update/delete timing).
   static bool get odbcE2eDmlPerfTests => _get('ODBC_E2E_DML_PERF_TESTS') == 'true';
 

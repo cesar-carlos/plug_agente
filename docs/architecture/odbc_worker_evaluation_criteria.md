@@ -143,6 +143,94 @@ final gateway = MultiWorkerDatabaseGateway(
 );
 ```
 
+## Driver Matrix
+
+Treat each driver family independently when evaluating performance changes.
+Do not assume that a gain or regression in one driver applies to the others.
+
+| Driver family | Default recommendation | Notes |
+|---------------|------------------------|-------|
+| **SQL Anywhere** | Keep **lease-based pool** as the default | Highest caution. Historical issues around invalid handles / buffer sizing make native pool changes high risk until benchmarks and soak tests prove stability. |
+| **SQL Server** | Lease pool by default; native pool is a **candidate for canary** after benchmarks | Good candidate for higher-throughput experiments, but only after validating timeouts, invalid connection IDs, and multi-result behavior under load. |
+| **PostgreSQL** | Lease pool by default; native pool may be evaluated after benchmarks | Validate cursor/pagination, streaming, and lock timeout behavior before changing pooling strategy. |
+
+### Driver-specific rollout rule
+
+- **No global pool strategy switch** without per-driver evidence.
+- Prefer **driver-specific gates** (flag, environment, canary cohort) over a single global toggle.
+- Keep the current lease-pool path as the safe fallback for every driver.
+
+## Rollout and Rollback
+
+### Rollout checklist for risky changes
+
+Apply this checklist before enabling:
+
+- native pool for any driver
+- tighter timeout budgets
+- changed backpressure defaults
+- multiple `odbc_fast` workers
+
+Checklist:
+
+1. Run targeted unit tests and integration tests
+2. Run opt-in burst tests with representative DSN/query
+3. Capture baseline and candidate metrics
+4. Enable change only behind a feature flag or controlled environment gate
+5. Start with one driver family / canary environment
+6. Monitor for at least one representative load window before widening rollout
+
+### Rollback triggers
+
+Roll back immediately if any of these regressions appear:
+
+- `poolAcquireTimeoutCount` or `sqlQueueTimeoutCount` spikes above baseline
+- new `invalid connection id` or pool recycle failures appear
+- `buffer too small` errors increase
+- backpressure aborts (`backpressure_overflow`) increase materially
+- cancellation starts failing or hanging
+- throughput gain is marginal while error rate or latency worsens
+
+### Rollback path
+
+Every optimization should preserve a simple rollback path:
+
+- disable the feature flag / environment gate
+- return to the lease-based pool and single-worker baseline
+- rerun smoke and burst tests
+- compare metrics against the previous stable baseline
+
+## Advanced Optimization Gates
+
+Use the following gates before implementing or enabling higher-risk changes.
+
+### Native pool
+
+Consider native pool only when **all** are true:
+
+- representative benchmark shows meaningful gain vs lease pool
+- no regression in `invalid connection id`, `buffer too small`, or pool recycle
+- burst tests remain stable for the target driver
+- rollback path is a simple driver/flag switch back to lease pool
+
+### Bulk insert
+
+Consider `bulkInsert` / `bulkInsertParallel` only when **all** are true:
+
+- workload is dominated by high-volume ingest (not OLTP-style mixed traffic)
+- protocol and authorization model can represent the operation safely
+- benchmark proves better throughput than `sql.executeBatch`
+- failure handling and partial-write semantics are explicitly documented
+
+### Multiple workers
+
+Consider multiple workers only when the earlier criteria in this document are met
+and the following also hold:
+
+- lease/native pool tuning is already exhausted
+- queue and backpressure behaviour are already stable in single-worker mode
+- metrics and cancellation routing are ready for per-worker partitioning
+
 ## Measurement Tools
 
 ### Profiling ODBC Worker

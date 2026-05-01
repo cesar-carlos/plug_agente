@@ -97,6 +97,7 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     await _resetLazySingletonIfRegistered<IDatabaseGateway>();
     await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
     await _resetLazySingletonIfRegistered<IConnectionPool>();
+    await _primeReloadedOdbcRuntimeDependencies();
     return true;
   } on Object catch (error, stackTrace) {
     developer.log(
@@ -108,6 +109,23 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     );
     return false;
   }
+}
+
+Future<void> _primeReloadedOdbcRuntimeDependencies() async {
+  final odbcInitResult = await getIt<odbc.OdbcService>().initialize();
+  odbcInitResult.fold(
+    (_) {},
+    (error) {
+      throw StateError('ODBC initialization failed after reload: $error');
+    },
+  );
+
+  // Recreate the main ODBC-facing singletons immediately so settings screens
+  // fail fast instead of deferring DI/configuration problems to the next query.
+  getIt<DirectOdbcConnectionLimiter>();
+  getIt<IConnectionPool>();
+  getIt<IStreamingDatabaseGateway>();
+  getIt<IDatabaseGateway>();
 }
 
 Future<void> _resetLazySingletonIfRegistered<T extends Object>() async {

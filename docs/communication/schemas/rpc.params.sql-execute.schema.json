@@ -14,7 +14,7 @@
     },
     "params": {
       "type": "object",
-      "description": "Named parameters for the SQL statement (e.g. { \"id\": 1 })",
+      "description": "Named parameters for the SQL statement (e.g. { \"id\": 1 }). Current runtime supports up to 5 named parameters per command.",
       "additionalProperties": true
     },
     "client_token": {
@@ -40,7 +40,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 30000,
-          "description": "Maximum execution time in milliseconds"
+          "description": "Maximum ODBC execution time in milliseconds. Effective timeout is the minimum between this value and any active internal stage budget."
         },
         "max_rows": {
           "type": "integer",
@@ -73,7 +73,7 @@
         },
         "multi_result": {
           "type": "boolean",
-          "description": "Enables multi-result execution for SQL batches that can return multiple result sets. Cannot be combined with pagination or named parameters."
+          "description": "Enables multi-result execution for SQL scripts or procedures that can return multiple result sets. Cannot be combined with pagination or named parameters."
         }
       },
       "additionalProperties": false,

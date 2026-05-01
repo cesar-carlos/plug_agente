@@ -19,11 +19,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1048576,
-            "description": "SQL statement to execute. Hard ceiling 1 MiB per command."
+            "description": "SQL statement to execute. Hard ceiling 1 MiB per command. Each command must contain exactly one top-level SQL statement."
           },
           "params": {
             "type": "object",
-            "description": "Named parameters for the SQL statement",
+            "description": "Named parameters for the SQL statement. Current runtime supports up to 5 named parameters per command.",
             "additionalProperties": true
           },
           "execution_order": {
@@ -58,7 +58,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 30000,
-          "description": "Maximum execution time in milliseconds"
+          "description": "Maximum ODBC execution time in milliseconds. Effective timeout is the minimum between this value and any active internal stage budget."
         },
         "max_rows": {
           "type": "integer",
