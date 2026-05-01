@@ -16,6 +16,7 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
@@ -111,6 +112,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     this._settings, {
     FeatureFlags? featureFlags,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
+    ISqlInvestigationCollector? sqlInvestigation,
   }) : _featureFlags = featureFlags,
        _directConnectionLimiter =
            directConnectionLimiter ??
@@ -119,6 +121,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
              acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
              metricsCollector: _metrics,
            ),
+       _sqlInvestigation = sqlInvestigation,
        _uuid = const Uuid();
   final OdbcService _service;
   final IAgentConfigRepository _configRepository;
@@ -128,6 +131,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final IOdbcConnectionSettings _settings;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final FeatureFlags? _featureFlags;
+  final ISqlInvestigationCollector? _sqlInvestigation;
   final Uuid _uuid;
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
@@ -224,6 +228,70 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return error.message;
     }
     return error.toString();
+  }
+
+  void _recordSqlInvestigationExecutionFailure({
+    required QueryRequest request,
+    required OdbcPreparedQueryExecution preparedExecution,
+    required String errorMessage,
+    required bool executedInDb,
+    String method = 'sql.execute',
+  }) {
+    if (!(_featureFlags?.enableDashboardSqlInvestigationFeed ?? true)) {
+      return;
+    }
+    final inv = _sqlInvestigation;
+    if (inv == null) {
+      return;
+    }
+    final original = request.query;
+    final effective = preparedExecution.sql;
+    final effectiveForUi = original.trim() == effective.trim() ? null : effective;
+    inv.recordExecutionFailure(
+      method: method,
+      originalSql: original,
+      errorMessage: errorMessage,
+      executedInDb: executedInDb,
+      effectiveSql: effectiveForUi,
+      rpcRequestId: request.sourceRpcRequestId,
+      internalQueryId: request.id,
+    );
+  }
+
+  static const int _batchSqlInvestigationPreviewMaxChars = 2000;
+
+  String _previewBatchCommandsForInvestigation(List<SqlCommand> commands) {
+    if (commands.isEmpty) {
+      return '';
+    }
+    final joined = commands.map((SqlCommand c) => c.sql).join('\n---\n');
+    if (joined.length <= _batchSqlInvestigationPreviewMaxChars) {
+      return joined;
+    }
+    return '${joined.substring(0, _batchSqlInvestigationPreviewMaxChars)}\n... [truncated]';
+  }
+
+  void _recordSqlInvestigationBatchInfrastructureFailure({
+    required String originalSql,
+    required String errorMessage,
+    String? rpcRequestId,
+    String method = 'sql.executeBatch',
+  }) {
+    if (!(_featureFlags?.enableDashboardSqlInvestigationFeed ?? true)) {
+      return;
+    }
+    final inv = _sqlInvestigation;
+    if (inv == null) {
+      return;
+    }
+    inv.recordExecutionFailure(
+      method: method,
+      originalSql: originalSql.isEmpty ? '(sql.executeBatch)' : originalSql,
+      errorMessage: errorMessage,
+      executedInDb: false,
+      effectiveSql: null,
+      rpcRequestId: rpcRequestId,
+    );
   }
 
   static final RegExp _dmlPrefix = RegExp(
@@ -483,12 +551,24 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       preparedExecution,
     );
     if (queryValidation != null) {
+      _recordSqlInvestigationExecutionFailure(
+        request: request,
+        preparedExecution: preparedExecution,
+        errorMessage: queryValidation.message,
+        executedInDb: false,
+      );
       return Failure(queryValidation);
     }
     final parameterValidation = OdbcGatewayQueryPreparation.validateParameterCount(
       preparedExecution,
     );
     if (parameterValidation != null) {
+      _recordSqlInvestigationExecutionFailure(
+        request: request,
+        preparedExecution: preparedExecution,
+        errorMessage: parameterValidation.message,
+        executedInDb: false,
+      );
       return Failure(parameterValidation);
     }
 
@@ -537,6 +617,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         query: request.query,
         executionDuration: stopwatch.elapsed,
         errorMessage: _odbcErrorMessage(error),
+      );
+
+      _recordSqlInvestigationExecutionFailure(
+        request: request,
+        preparedExecution: preparedExecution,
+        errorMessage: _odbcErrorMessage(error),
+        executedInDb: false,
       );
 
       return Failure(
@@ -624,6 +711,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           errorMessage: msg,
         );
 
+        _recordSqlInvestigationExecutionFailure(
+          request: request,
+          preparedExecution: preparedExecution,
+          errorMessage: msg,
+          executedInDb: true,
+        );
+
         return Failure(
           OdbcFailureMapper.mapQueryError(
             error,
@@ -680,6 +774,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         executionDuration: stopwatch.elapsed,
         errorMessage: 'Query execution timeout',
       );
+      _recordSqlInvestigationExecutionFailure(
+        request: request,
+        preparedExecution: preparedExecution,
+        errorMessage: 'Query execution timeout',
+        executedInDb: true,
+      );
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'SQL execution timeout',
@@ -707,16 +807,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String? database,
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
+    String? sourceRpcRequestId,
   }) async {
     final effectiveTimeout =
         timeout ??
         _timeoutFromSqlExecutionOptions(options) ??
         (options.transaction ? ConnectionConstants.defaultTransactionalBatchTimeout : null);
+    final batchPreview = _previewBatchCommandsForInvestigation(commands);
     for (var attempt = 0; attempt < 2; attempt++) {
       final contextResult = await _prepareBatchExecutionContext(
         database: database,
         timeout: effectiveTimeout,
         useOwnedConnection: options.transaction,
+        batchSqlPreview: batchPreview,
+        sourceRpcRequestId: sourceRpcRequestId,
       );
       if (contextResult.isError()) {
         return Failure(contextResult.exceptionOrNull()!);
@@ -758,6 +862,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             commands: commands,
             options: options,
             transaction: transaction,
+            sourceRpcRequestId: sourceRpcRequestId,
           );
           if (commandResult.isError()) {
             return Failure(commandResult.exceptionOrNull()!);
@@ -847,6 +952,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String? database,
     required Duration? timeout,
     required bool useOwnedConnection,
+    required String batchSqlPreview,
+    String? sourceRpcRequestId,
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -882,7 +989,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         operation: 'batch_transaction',
       );
       if (leaseResult.isError()) {
-        return Failure(leaseResult.exceptionOrNull()!);
+        final err = leaseResult.exceptionOrNull()!;
+        _recordSqlInvestigationBatchInfrastructureFailure(
+          originalSql: batchSqlPreview,
+          errorMessage: _odbcErrorMessage(err),
+          rpcRequestId: sourceRpcRequestId,
+        );
+        return Failure(err);
       }
       final directLease = leaseResult.getOrThrow();
       final connectResult = await _service.connect(
@@ -903,6 +1016,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         },
         (error) {
           directLease.release();
+          _recordSqlInvestigationBatchInfrastructureFailure(
+            originalSql: batchSqlPreview,
+            errorMessage: _odbcErrorMessage(error),
+            rpcRequestId: sourceRpcRequestId,
+          );
           return Failure(
             OdbcFailureMapper.mapConnectionError(
               error,
@@ -920,6 +1038,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final poolResult = await _connectionPool.acquire(connectionString);
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
+      _recordSqlInvestigationBatchInfrastructureFailure(
+        originalSql: batchSqlPreview,
+        errorMessage: _odbcErrorMessage(error),
+        rpcRequestId: sourceRpcRequestId,
+      );
       return Failure(
         OdbcFailureMapper.mapPoolError(
           error,
@@ -1012,6 +1135,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required List<SqlCommand> commands,
     required SqlExecutionOptions options,
     required _BatchTransactionGuard transaction,
+    String? sourceRpcRequestId,
   }) async {
     final results = <SqlCommandResult>[];
     final repeatedPreparedKeys = _collectRepeatedPreparedKeys(commands);
@@ -1053,6 +1177,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           query: command.sql,
           parameters: command.params,
           timestamp: DateTime.now(),
+          sourceRpcRequestId: sourceRpcRequestId,
         );
         final preparedExecution = OdbcPreparedQueryExecution(
           sql: command.sql,
@@ -1127,6 +1252,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   transactionId,
                 ),
               );
+              _recordSqlInvestigationExecutionFailure(
+                request: commandRequest,
+                preparedExecution: preparedExecution,
+                errorMessage: failure.message,
+                executedInDb: true,
+                method: 'sql.executeBatch',
+              );
               return Failure(
                 domain.QueryExecutionFailure.withContext(
                   message: 'Transaction aborted due to command failure',
@@ -1140,6 +1272,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 ),
               );
             }
+
+            _recordSqlInvestigationExecutionFailure(
+              request: commandRequest,
+              preparedExecution: preparedExecution,
+              errorMessage: failure.message,
+              executedInDb: true,
+              method: 'sql.executeBatch',
+            );
 
             results.add(
               SqlCommandResult.failure(index: i, error: failure.message),
@@ -1758,7 +1898,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
     if (leaseResult.isError()) {
       stopwatch.stop();
-      return Failure(leaseResult.exceptionOrNull()!);
+      final leaseFailure = leaseResult.exceptionOrNull()!;
+      _recordSqlInvestigationExecutionFailure(
+        request: request,
+        preparedExecution: preparedExecution,
+        errorMessage: leaseFailure.toString(),
+        executedInDb: false,
+      );
+      return Failure(leaseFailure);
     }
     final directLease = leaseResult.getOrThrow();
     var directLeaseReleased = false;
@@ -1808,6 +1955,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 executionDuration: stopwatch.elapsed,
                 errorMessage: _odbcErrorMessage(error),
               );
+              _recordSqlInvestigationExecutionFailure(
+                request: request,
+                preparedExecution: preparedExecution,
+                errorMessage: _odbcErrorMessage(error),
+                executedInDb: true,
+              );
               return Failure(
                 OdbcFailureMapper.mapQueryError(
                   error,
@@ -1845,6 +1998,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               executionDuration: stopwatch.elapsed,
               errorMessage: 'Query execution timeout',
             );
+            _recordSqlInvestigationExecutionFailure(
+              request: request,
+              preparedExecution: preparedExecution,
+              errorMessage: 'Query execution timeout',
+              executedInDb: true,
+            );
             return Failure(
               domain.QueryExecutionFailure.withContext(
                 message: 'SQL execution timeout',
@@ -1876,6 +2035,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             query: request.query,
             executionDuration: stopwatch.elapsed,
             errorMessage: _odbcErrorMessage(error),
+          );
+          _recordSqlInvestigationExecutionFailure(
+            request: request,
+            preparedExecution: preparedExecution,
+            errorMessage: _odbcErrorMessage(error),
+            executedInDb: false,
           );
           return Failure(
             OdbcFailureMapper.mapConnectionError(

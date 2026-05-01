@@ -74,6 +74,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
@@ -99,6 +100,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -225,6 +227,8 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
+    ..registerLazySingleton<SqlInvestigationCollector>(SqlInvestigationCollector.new)
+    ..registerLazySingleton<ISqlInvestigationCollector>(getIt.get<SqlInvestigationCollector>)
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton(
       () => HealthService(
@@ -303,6 +307,7 @@ void registerPlugDependencyGraph(
         deprecationMetrics: getIt<IDeprecationMetricsCollector>(),
         dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
         onIdempotencyFingerprintMismatch: getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
+        sqlInvestigation: getIt<ISqlInvestigationCollector>(),
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         odbcNativeMetricsService: getIt<OdbcNativeMetricsService>(),
       ),
@@ -337,6 +342,7 @@ void registerPlugDependencyGraph(
           getIt<IOdbcConnectionSettings>(),
           featureFlags: getIt<FeatureFlags>(),
           directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+          sqlInvestigation: getIt<ISqlInvestigationCollector>(),
         );
 
         // Wrap with SQL execution queue for backpressure control

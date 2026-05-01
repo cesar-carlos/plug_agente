@@ -55,6 +55,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     String? database,
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
+    String? sourceRpcRequestId,
   }) {
     // Route through queue (no requestId for batch)
     return _queue.submit(
@@ -64,6 +65,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         database: database,
         options: options,
         timeout: timeout,
+        sourceRpcRequestId: sourceRpcRequestId,
       ),
     );
   }

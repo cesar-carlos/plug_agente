@@ -8,12 +8,12 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/diagnostics_config_section.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
+import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 
 class WebSocketSettingsPage extends StatefulWidget {
@@ -284,7 +284,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 }
 
-/// Holds [SettingsTabView] state so tab changes do not rebuild [ScaffoldPage]
+/// Holds [AppFluentTabView] state so tab changes do not rebuild [ScaffoldPage]
 /// or the page header.
 class _WebSocketSettingsTabbedContent extends StatefulWidget {
   const _WebSocketSettingsTabbedContent({
@@ -305,7 +305,7 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return SettingsTabView(
+    return AppFluentTabView(
       currentIndex: _selectedTabIndex,
       onChanged: (int index) {
         if (index == _selectedTabIndex) {
@@ -313,8 +313,8 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
         }
         setState(() => _selectedTabIndex = index);
       },
-      items: <SettingsTabItem>[
-        SettingsTabItem(
+      items: <AppFluentTabItem>[
+        AppFluentTabItem(
           icon: FluentIcons.plug_connected,
           text: l10n.tabWebSocketConnection,
           body: ListenableBuilder(
@@ -333,12 +333,12 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
             },
           ),
         ),
-        SettingsTabItem(
+        AppFluentTabItem(
           icon: FluentIcons.permissions,
           text: l10n.tabClientTokenAuthorization,
           body: const _ClientTokenTabContent(),
         ),
-        SettingsTabItem(
+        AppFluentTabItem(
           icon: FluentIcons.info,
           text: l10n.tabWebSocketDiagnostics,
           body: const DiagnosticsConfigSection(),

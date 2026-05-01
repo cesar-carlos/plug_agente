@@ -33,6 +33,7 @@ import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
@@ -57,6 +58,7 @@ class RpcMethodDispatcher {
     IDeprecationMetricsCollector? deprecationMetrics,
     IRpcDispatchMetricsCollector? dispatchMetrics,
     void Function()? onIdempotencyFingerprintMismatch,
+    ISqlInvestigationCollector? sqlInvestigation,
     IStreamingDatabaseGateway? streamingGateway,
     OdbcNativeMetricsService? odbcNativeMetricsService,
     TransportLimits defaultLimits = const TransportLimits(),
@@ -79,6 +81,7 @@ class RpcMethodDispatcher {
        _deprecationMetrics = deprecationMetrics,
        _dispatchMetrics = dispatchMetrics,
        _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
+       _sqlInvestigation = sqlInvestigation,
        _streamingGateway = streamingGateway,
        _odbcNativeMetricsService = odbcNativeMetricsService,
        _defaultLimits = defaultLimits,
@@ -107,6 +110,7 @@ class RpcMethodDispatcher {
   final IDeprecationMetricsCollector? _deprecationMetrics;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final void Function()? _onIdempotencyFingerprintMismatch;
+  final ISqlInvestigationCollector? _sqlInvestigation;
   final IStreamingDatabaseGateway? _streamingGateway;
   final OdbcNativeMetricsService? _odbcNativeMetricsService;
   final TransportLimits _defaultLimits;
@@ -274,6 +278,11 @@ class RpcMethodDispatcher {
         method: request.method,
         reason: 'missing_client_token',
       );
+      _recordAuthSqlDenied(
+        request,
+        sql: sql,
+        explicitReason: 'missing_client_token',
+      );
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -319,6 +328,7 @@ class RpcMethodDispatcher {
       pagination: pagination,
       expectMultipleResults: multiResultRequested,
       sqlHandlingMode: sqlHandlingMode,
+      sourceRpcRequestId: request.id?.toString(),
     );
 
     final streamingFromDbResponse = await _tryStreamingFromDb(
@@ -768,6 +778,11 @@ class RpcMethodDispatcher {
         method: request.method,
         reason: 'missing_client_token',
       );
+      _recordAuthSqlDenied(
+        request,
+        sql: _sqlPreviewForBatch(commands),
+        explicitReason: 'missing_client_token',
+      );
       final rpcError = FailureToRpcErrorMapper.map(
         _buildMissingClientTokenFailure(),
         instance: request.id?.toString(),
@@ -804,6 +819,11 @@ class RpcMethodDispatcher {
             operation: ctx['operation'] as String?,
             resource: ctx['resource'] as String?,
             reason: ctx['reason'] as String?,
+          );
+          _recordAuthSqlDenied(
+            request,
+            sql: cmd.sql,
+            failure: failure,
           );
           final rpcError = FailureToRpcErrorMapper.map(
             failure,
@@ -944,6 +964,11 @@ class RpcMethodDispatcher {
           operation: ctx['operation'] as String?,
           resource: ctx['resource'] as String?,
           reason: ctx['reason'] as String?,
+        );
+        _recordAuthSqlDenied(
+          request,
+          sql: stmt,
+          failure: failure,
         );
         final rpcError = FailureToRpcErrorMapper.map(
           failure,
@@ -1137,6 +1162,7 @@ class RpcMethodDispatcher {
         database: database,
         options: options,
         timeout: timeout,
+        sourceRpcRequestId: requestId,
       );
     } on TimeoutException catch (error) {
       final context = <String, dynamic>{
@@ -1655,6 +1681,16 @@ class RpcMethodDispatcher {
     );
   }
 
+  static const int _sqlInvestigationBatchPreviewMaxChars = 8000;
+
+  String _sqlPreviewForBatch(List<SqlCommand> commands) {
+    final joined = commands.map((SqlCommand c) => c.sql).join('\n---\n');
+    if (joined.length <= _sqlInvestigationBatchPreviewMaxChars) {
+      return joined;
+    }
+    return '${joined.substring(0, _sqlInvestigationBatchPreviewMaxChars)}\n... [truncated]';
+  }
+
   String _authorizationFingerprint(String sql) {
     return sql.trim().replaceAll(_authorizationSqlWhitespaceCollapse, ' ').toLowerCase();
   }
@@ -2082,6 +2118,46 @@ class RpcMethodDispatcher {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  void _recordAuthSqlDenied(
+    RpcRequest request, {
+    required String sql,
+    domain.Failure? failure,
+    String? explicitReason,
+  }) {
+    if (!_featureFlags.enableDashboardSqlInvestigationFeed) {
+      return;
+    }
+    final collector = _sqlInvestigation;
+    if (collector == null) {
+      return;
+    }
+    if (!request.method.startsWith('sql.')) {
+      return;
+    }
+
+    var reason = explicitReason;
+    String? clientId;
+    String? operation;
+    String? resource;
+    if (failure != null) {
+      final ctx = failure.context;
+      reason ??= ctx['reason'] as String?;
+      clientId = ctx['client_id'] as String?;
+      operation = ctx['operation'] as String?;
+      resource = ctx['resource'] as String?;
+    }
+
+    collector.recordAuthorizationDenied(
+      method: request.method,
+      originalSql: sql,
+      rpcRequestId: request.id?.toString(),
+      reason: reason,
+      clientId: clientId,
+      operation: operation,
+      resource: resource,
+    );
   }
 }
 

@@ -202,6 +202,21 @@ void main() {
       check(collector.getSummary().total).equals(0);
     });
 
+    test('updates stream should emit when metrics change', () async {
+      var count = 0;
+      final sub = collector.updates.listen((_) => count++);
+
+      collector.recordAuthorized(clientId: 'c1');
+      await Future<void>.delayed(Duration.zero);
+      check(count).equals(1);
+
+      collector.clear();
+      await Future<void>.delayed(Duration.zero);
+      check(count).equals(2);
+
+      await sub.cancel();
+    });
+
     test('metrics list should be unmodifiable', () {
       collector.recordAuthorized(clientId: 'c1');
 

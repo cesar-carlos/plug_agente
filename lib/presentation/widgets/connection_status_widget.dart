@@ -52,6 +52,14 @@ class ConnectionStatusWidget extends StatelessWidget {
           _ => null,
         };
 
+        final iconSize = compact ? 14.0 : 16.0;
+        final lineStyle = compact
+            ? context.bodyText.copyWith(
+                fontSize: 12,
+                height: 1.2,
+              )
+            : context.bodyText;
+
         return Container(
           padding: compact
               ? const EdgeInsets.symmetric(
@@ -64,17 +72,17 @@ class ConnectionStatusWidget extends StatelessWidget {
                 ),
           decoration: BoxDecoration(
             color: FluentTheme.of(context).resources.subtleFillColorSecondary,
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius: BorderRadius.circular(compact ? AppRadius.sm : AppRadius.md),
           ),
           child: Row(
             children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: AppSpacing.sm),
+              Icon(icon, color: color, size: iconSize),
+              SizedBox(width: compact ? AppSpacing.xs : AppSpacing.sm),
               Tooltip(
                 message: hubErrorTooltip ?? statusText,
                 child: Text(
                   statusText,
-                  style: context.bodyText.copyWith(
+                  style: lineStyle.copyWith(
                     color: color,
                     fontWeight: FontWeight.w600,
                   ),
@@ -87,7 +95,7 @@ class ConnectionStatusWidget extends StatelessWidget {
                   label: '$dbShort. ${l10n.connectionStatusDatabaseTooltip}',
                   child: Text(
                     dbShort,
-                    style: context.bodyText.copyWith(
+                    style: lineStyle.copyWith(
                       color: connectionProvider.isDbConnected ? colors.success : colors.disabled,
                     ),
                   ),

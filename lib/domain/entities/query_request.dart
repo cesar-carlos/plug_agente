@@ -19,12 +19,18 @@ class QueryRequest {
     this.pagination,
     this.expectMultipleResults = false,
     this.sqlHandlingMode = SqlHandlingMode.managed,
+    this.sourceRpcRequestId,
   });
   final String id;
   final String agentId;
   final String query;
   final Map<String, dynamic>? parameters;
   final DateTime timestamp;
+
+  /// Optional JSON-RPC `id` from the hub request that produced this execution.
+  ///
+  /// Used for correlating ODBC outcomes with RPC traffic in diagnostics UIs.
+  final String? sourceRpcRequestId;
 
   /// Optional client token for authorization (when feature is enabled).
   final String? clientToken;

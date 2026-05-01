@@ -107,6 +107,16 @@ Cria tabela, insere muitas linhas (default **50 000**) com vários `sql.execut
 
 Tempos registados no log com nome `e2e.odbc_dml_bulk`. O teste utiliza `timeout` de 30 minutos; aumente o timeout do runner se 200k linhas for insuficiente.
 
+### SQL queue burst (`sql_queue_burst_test.dart`)
+
+Dispara **50** pedidos `executeQuery` em paralelo (`Future.wait`) contra um `QueuedDatabaseGateway` com fila pequena (**20**) e **4** workers, usando uma **query lenta** para saturar a fila (rejeições `sql_queue_full`) e validar recuperação sem fugas de leases no pool. Usa o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`). **Opt-in.**
+
+| Variável | Obrigatória | Descrição |
+| -------- | ----------- | --------- |
+| `RUN_ODBC_BURST_TESTS` | Sim | `true` para não ignorar este ficheiro |
+| DSN RPC | Sim | `ODBC_E2E_RPC_DSN` ou fallback na ordem habitual (Anywhere → SQL Server → PostgreSQL) |
+| Query longa | Sim | `E2EEnv.odbcLongQuery` deve estar definido (variáveis por motor em **ODBC** acima, ou `ODBC_INTEGRATION_LONG_QUERY`) — o teste precisa de SQL que demore o suficiente para encher a fila de propósito |
+
 ### ODBC lock contention (`odbc_lock_contention_live_integration_test.dart`)
 
 Cenário com **concorrência real** (pode ser lento ou sensível ao ambiente). Requer o mesmo DSN que os testes ODBC genéricos (`odbcConnectionStringAny`: SQL Anywhere → SQL Server → PostgreSQL).
@@ -123,7 +133,7 @@ Antes de rodar os testes, verifique se as variáveis estão corretas:
 dart run tool/check_e2e_env.dart
 ```
 
-O script exibe quais variáveis estão definidas e quais testes serão executados ou ignorados. Pode ser executado de qualquer diretório; localiza a raiz do projeto automaticamente.
+O script exibe quais variáveis estão definidas e quais testes serão executados ou ignorados. Pode ser executado de qualquer diretório; localiza a raiz do projeto automaticamente. Inclui também `RUN_ODBC_BURST_TESTS` e o estado de `sql_queue_burst_test` (DSN RPC + query longa).
 
 ## Executar Testes
 
@@ -151,6 +161,9 @@ flutter test test/integration/odbc_dml_perf_live_e2e_test.dart
 
 # ODBC DML carga massiva (~50k, chunked batches; opt-in: ODBC_E2E_DML_BULK_TESTS=true)
 flutter test test/integration/odbc_dml_bulk_load_live_e2e_test.dart
+
+# Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
+flutter test test/integration/sql_queue_burst_test.dart
 
 # Lock / concorrência (opt-in: ODBC_RUN_LOCK_CONTENTION_TESTS=true e DSN)
 flutter test test/integration/odbc_lock_contention_live_integration_test.dart
@@ -198,6 +211,7 @@ Edite as variáveis no início de cada script. Consulte `docs/database/sql_anywh
 - `test/integration/hub_socket_live_e2e_test.dart` – smoke Socket.IO com `SocketDataSource` (opt-in)
 - `test/integration/odbc_dml_perf_live_e2e_test.dart` – desempenho DML em lote (opt-in)
 - `test/integration/odbc_dml_bulk_load_live_e2e_test.dart` – carga massiva (ex.: 50k linhas, opt-in)
+- `test/integration/sql_queue_burst_test.dart` – burst paralelo na fila ODBC (opt-in: `RUN_ODBC_BURST_TESTS`)
 - `.env.example` – template das variáveis E2E/integração (benchmarks podem acrescentar muitas chaves no `.env` local)
 - `docs/database/sql_anywhere_connection.md` – formato de connection string SQL Anywhere
 

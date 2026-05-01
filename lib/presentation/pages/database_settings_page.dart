@@ -10,11 +10,11 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/extensions/failure_localization_extensions.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
+import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 
 class DatabaseSettingsPage extends StatefulWidget {
@@ -164,7 +164,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          child: SettingsTabView(
+          child: AppFluentTabView(
             currentIndex: _selectedTabIndex,
             onChanged: (index) {
               setState(() {
@@ -172,7 +172,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
               });
             },
             items: [
-              SettingsTabItem(
+              AppFluentTabItem(
                 icon: FluentIcons.database,
                 text: l10n.dbTabDatabase,
                 body: DatabaseConfigSection(
@@ -282,7 +282,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                   },
                 ),
               ),
-              SettingsTabItem(
+              AppFluentTabItem(
                 icon: FluentIcons.developer_tools,
                 text: l10n.dbTabAdvanced,
                 body: const OdbcConnectionPoolSection(),

@@ -16,6 +16,7 @@ abstract class IDatabaseGateway {
     String? database,
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
+    String? sourceRpcRequestId,
   });
   Future<Result<int>> executeNonQuery(
     String query,

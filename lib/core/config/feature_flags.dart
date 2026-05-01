@@ -32,6 +32,7 @@ class FeatureFlags {
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
   static const _keyEnableOdbcPaginatedSqlDebugLog = 'feature_enable_odbc_paginated_sql_debug_log';
+  static const _keyEnableDashboardSqlInvestigationFeed = 'feature_enable_dashboard_sql_investigation_feed';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
@@ -245,6 +246,14 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableOdbcPaginatedSqlDebugLog, value);
   }
 
+  /// When false, SQL investigation feed is not recorded or shown (reduces exposure of SQL text).
+  bool get enableDashboardSqlInvestigationFeed =>
+      _prefs.getBool(_keyEnableDashboardSqlInvestigationFeed) ?? true;
+
+  Future<void> setEnableDashboardSqlInvestigationFeed(bool value) async {
+    await _prefs.setBool(_keyEnableDashboardSqlInvestigationFeed, value);
+  }
+
   /// When set, overrides the default max failed ticks and env
   /// (`HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS`). `0` = unlimited retries.
   int? get hubPersistentRetryMaxFailedTicksOverride {
@@ -325,6 +334,7 @@ class FeatureFlags {
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
+    await setEnableDashboardSqlInvestigationFeed(true);
     await setEnableHubHardReloginRecovery(true);
     await setHubHardReloginFailureThreshold(3);
     await resetHubResilienceOverrides();

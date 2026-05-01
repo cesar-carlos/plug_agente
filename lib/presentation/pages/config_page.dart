@@ -10,11 +10,11 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/settings_tab_view.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
+import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 
 class ConfigPage extends StatefulWidget {
@@ -280,7 +280,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return SettingsTabView(
+    return AppFluentTabView(
       currentIndex: _selectedTabIndex,
       onChanged: (int index) {
         if (index == _selectedTabIndex) {
@@ -289,8 +289,8 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
 
         setState(() => _selectedTabIndex = index);
       },
-      items: <SettingsTabItem>[
-        SettingsTabItem(
+      items: <AppFluentTabItem>[
+        AppFluentTabItem(
           icon: FluentIcons.settings,
           text: l10n.configTabGeneral,
           body: GeneralConfigSection(

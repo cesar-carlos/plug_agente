@@ -722,6 +722,156 @@ abstract class AppLocalizations {
   /// **'preserve_sql (deprecated) usage'**
   String get wsLogPreserveSqlDeprecatedUses;
 
+  /// No description provided for @wsLogTabStream.
+  ///
+  /// In en, this message translates to:
+  /// **'Stream'**
+  String get wsLogTabStream;
+
+  /// No description provided for @wsLogTabSqlInvestigation.
+  ///
+  /// In en, this message translates to:
+  /// **'SQL'**
+  String get wsLogTabSqlInvestigation;
+
+  /// No description provided for @wsSqlInvestigationClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear SQL log'**
+  String get wsSqlInvestigationClear;
+
+  /// No description provided for @wsSqlInvestigationEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No SQL investigation events yet'**
+  String get wsSqlInvestigationEmpty;
+
+  /// No description provided for @wsSqlInvestigationKindAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization denied'**
+  String get wsSqlInvestigationKindAuth;
+
+  /// No description provided for @wsSqlInvestigationKindExec.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution error'**
+  String get wsSqlInvestigationKindExec;
+
+  /// No description provided for @wsSqlInvestigationRpcId.
+  ///
+  /// In en, this message translates to:
+  /// **'Request ID'**
+  String get wsSqlInvestigationRpcId;
+
+  /// No description provided for @wsSqlInvestigationInternalId.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal execution ID'**
+  String get wsSqlInvestigationInternalId;
+
+  /// No description provided for @wsSqlInvestigationReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get wsSqlInvestigationReason;
+
+  /// No description provided for @wsSqlInvestigationOriginalSql.
+  ///
+  /// In en, this message translates to:
+  /// **'SQL received'**
+  String get wsSqlInvestigationOriginalSql;
+
+  /// No description provided for @wsSqlInvestigationEffectiveSql.
+  ///
+  /// In en, this message translates to:
+  /// **'SQL sent to database'**
+  String get wsSqlInvestigationEffectiveSql;
+
+  /// No description provided for @wsSqlInvestigationNotExecuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Not executed on database'**
+  String get wsSqlInvestigationNotExecuted;
+
+  /// No description provided for @wsSqlInvestigationError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get wsSqlInvestigationError;
+
+  /// No description provided for @wsSqlInvestigationExecutedInDb.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to ODBC server'**
+  String get wsSqlInvestigationExecutedInDb;
+
+  /// No description provided for @wsSqlInvestigationExecution.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution'**
+  String get wsSqlInvestigationExecution;
+
+  /// No description provided for @wsSqlInvestigationMetaClientId.
+  ///
+  /// In en, this message translates to:
+  /// **'Client ID'**
+  String get wsSqlInvestigationMetaClientId;
+
+  /// No description provided for @wsSqlInvestigationMetaResource.
+  ///
+  /// In en, this message translates to:
+  /// **'Resource'**
+  String get wsSqlInvestigationMetaResource;
+
+  /// No description provided for @wsSqlInvestigationMetaOperation.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation'**
+  String get wsSqlInvestigationMetaOperation;
+
+  /// No description provided for @wsSqlInvestigationShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get wsSqlInvestigationShowMore;
+
+  /// No description provided for @wsSqlInvestigationShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get wsSqlInvestigationShowLess;
+
+  /// No description provided for @wsSqlInvestigationCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get wsSqlInvestigationCopy;
+
+  /// No description provided for @wsSqlInvestigationCopyTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy SQL to clipboard'**
+  String get wsSqlInvestigationCopyTooltip;
+
+  /// No description provided for @wsSqlInvestigationClearTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the SQL investigation event list'**
+  String get wsSqlInvestigationClearTooltip;
+
+  /// No description provided for @wsLogClearTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear WebSocket message log'**
+  String get wsLogClearTooltip;
+
+  /// No description provided for @wsLogToggleEnabledTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable or pause WebSocket message capture'**
+  String get wsLogToggleEnabledTooltip;
+
   /// No description provided for @mainDegradedModeTitle.
   ///
   /// In en, this message translates to:

@@ -31,6 +31,7 @@ import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/app/app.dart';
@@ -41,6 +42,7 @@ import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/providers/notification_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
+import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
@@ -135,6 +137,11 @@ class AppRoot extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
+        ChangeNotifierProvider(
+          create: (context) => SqlInvestigationProvider(
+            getIt<ISqlInvestigationCollector>(),
+          ),
+        ),
       ],
       child: _ProviderInitializer(
         initialRoute: initialRoute,

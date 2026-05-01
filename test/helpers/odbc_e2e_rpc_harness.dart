@@ -123,6 +123,7 @@ class OdbcE2eRpcHarness {
     when(() => featureFlags.enableSocketCancelMethod).thenReturn(false);
     when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(false);
     when(() => featureFlags.enableSocketStreamingChunks).thenReturn(false);
+    when(() => featureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
 
     final policyResolver = MockAuthorizationPolicyResolver();
     when(() => policyResolver.resolvePolicy(any())).thenAnswer(

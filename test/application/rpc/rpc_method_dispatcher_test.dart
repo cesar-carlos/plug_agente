@@ -165,6 +165,7 @@ void main() {
       ).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
+      when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
       when(() => mockOdbcNativeMetricsService.collectSnapshot()).thenAnswer(
         (_) async => const Success(<String, dynamic>{
           'engine': <String, dynamic>{'query_count': 2},
@@ -2056,6 +2057,7 @@ void main() {
             database: any(named: 'database'),
             options: any(named: 'options'),
             timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
           ),
         ).thenAnswer(
           (_) async => Failure(
@@ -2871,6 +2873,7 @@ void main() {
       ).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
+      when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,

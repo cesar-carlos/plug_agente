@@ -335,6 +335,81 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wsLogPreserveSqlDeprecatedUses => 'preserve_sql (deprecated) usage';
 
   @override
+  String get wsLogTabStream => 'Stream';
+
+  @override
+  String get wsLogTabSqlInvestigation => 'SQL';
+
+  @override
+  String get wsSqlInvestigationClear => 'Clear SQL log';
+
+  @override
+  String get wsSqlInvestigationEmpty => 'No SQL investigation events yet';
+
+  @override
+  String get wsSqlInvestigationKindAuth => 'Authorization denied';
+
+  @override
+  String get wsSqlInvestigationKindExec => 'Execution error';
+
+  @override
+  String get wsSqlInvestigationRpcId => 'Request ID';
+
+  @override
+  String get wsSqlInvestigationInternalId => 'Internal execution ID';
+
+  @override
+  String get wsSqlInvestigationReason => 'Reason';
+
+  @override
+  String get wsSqlInvestigationOriginalSql => 'SQL received';
+
+  @override
+  String get wsSqlInvestigationEffectiveSql => 'SQL sent to database';
+
+  @override
+  String get wsSqlInvestigationNotExecuted => 'Not executed on database';
+
+  @override
+  String get wsSqlInvestigationError => 'Error';
+
+  @override
+  String get wsSqlInvestigationExecutedInDb => 'Sent to ODBC server';
+
+  @override
+  String get wsSqlInvestigationExecution => 'Execution';
+
+  @override
+  String get wsSqlInvestigationMetaClientId => 'Client ID';
+
+  @override
+  String get wsSqlInvestigationMetaResource => 'Resource';
+
+  @override
+  String get wsSqlInvestigationMetaOperation => 'Operation';
+
+  @override
+  String get wsSqlInvestigationShowMore => 'Show more';
+
+  @override
+  String get wsSqlInvestigationShowLess => 'Show less';
+
+  @override
+  String get wsSqlInvestigationCopy => 'Copy';
+
+  @override
+  String get wsSqlInvestigationCopyTooltip => 'Copy SQL to clipboard';
+
+  @override
+  String get wsSqlInvestigationClearTooltip => 'Clear the SQL investigation event list';
+
+  @override
+  String get wsLogClearTooltip => 'Clear WebSocket message log';
+
+  @override
+  String get wsLogToggleEnabledTooltip => 'Enable or pause WebSocket message capture';
+
+  @override
   String get mainDegradedModeTitle => 'Degraded mode active';
 
   @override

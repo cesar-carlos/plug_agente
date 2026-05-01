@@ -14,11 +14,13 @@ import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
@@ -75,6 +77,9 @@ Future<void> shutdownApp() async {
   if (getIt.isRegistered<ProtocolMetricsCollector>()) {
     getIt<ProtocolMetricsCollector>().dispose();
   }
+  if (getIt.isRegistered<SqlInvestigationCollector>()) {
+    getIt<SqlInvestigationCollector>().dispose();
+  }
 
   // 6. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
@@ -84,6 +89,10 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
   try {
     if (getIt.isRegistered<ITransportClient>()) {
       await getIt<ITransportClient>().disconnect();
+    }
+
+    if (getIt.isRegistered<ISqlInvestigationCollector>()) {
+      getIt<ISqlInvestigationCollector>().clear();
     }
 
     if (getIt.isRegistered<IConnectionPool>()) {

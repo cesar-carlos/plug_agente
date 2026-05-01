@@ -29,6 +29,7 @@ class ExecuteSqlBatch {
     String? database,
     SqlExecutionOptions? options,
     Duration? timeout,
+    String? sourceRpcRequestId,
   }) async {
     final opts = options ?? const SqlExecutionOptions();
     final batchDeadline = timeout == null ? null : DateTime.now().add(timeout);
@@ -56,6 +57,7 @@ class ExecuteSqlBatch {
         database: database,
         options: opts,
         timeout: timeout,
+        sourceRpcRequestId: sourceRpcRequestId,
       );
     }
 
@@ -112,6 +114,7 @@ class ExecuteSqlBatch {
         command,
         agentId: agentId,
         requestId: _uuid.v4(),
+        sourceRpcRequestId: sourceRpcRequestId,
       );
       final executeResult = switch ((perCommandTimeout, database)) {
         (null, null) => await _databaseGateway.executeQuery(request),
@@ -167,6 +170,7 @@ class ExecuteSqlBatch {
     SqlCommand command, {
     required String agentId,
     required String requestId,
+    String? sourceRpcRequestId,
   }) {
     return QueryRequest(
       id: requestId,
@@ -174,6 +178,7 @@ class ExecuteSqlBatch {
       query: command.sql,
       parameters: command.params,
       timestamp: DateTime.now(),
+      sourceRpcRequestId: sourceRpcRequestId,
     );
   }
 }

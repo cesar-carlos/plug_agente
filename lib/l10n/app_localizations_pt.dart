@@ -336,6 +336,81 @@ class AppLocalizationsPt extends AppLocalizations {
   String get wsLogPreserveSqlDeprecatedUses => 'Uso de preserve_sql (deprecated)';
 
   @override
+  String get wsLogTabStream => 'Fluxo';
+
+  @override
+  String get wsLogTabSqlInvestigation => 'SQL';
+
+  @override
+  String get wsSqlInvestigationClear => 'Limpar SQL';
+
+  @override
+  String get wsSqlInvestigationEmpty => 'Nenhum evento de SQL para exibir ainda';
+
+  @override
+  String get wsSqlInvestigationKindAuth => 'Rejeição de autorização';
+
+  @override
+  String get wsSqlInvestigationKindExec => 'Erro de execução';
+
+  @override
+  String get wsSqlInvestigationRpcId => 'ID da requisição';
+
+  @override
+  String get wsSqlInvestigationInternalId => 'ID interno de execução';
+
+  @override
+  String get wsSqlInvestigationReason => 'Motivo';
+
+  @override
+  String get wsSqlInvestigationOriginalSql => 'SQL recebida';
+
+  @override
+  String get wsSqlInvestigationEffectiveSql => 'SQL enviada ao banco';
+
+  @override
+  String get wsSqlInvestigationNotExecuted => 'Não executada no banco';
+
+  @override
+  String get wsSqlInvestigationError => 'Erro';
+
+  @override
+  String get wsSqlInvestigationExecutedInDb => 'Enviada ao servidor ODBC';
+
+  @override
+  String get wsSqlInvestigationExecution => 'Execução';
+
+  @override
+  String get wsSqlInvestigationMetaClientId => 'ID do cliente';
+
+  @override
+  String get wsSqlInvestigationMetaResource => 'Recurso';
+
+  @override
+  String get wsSqlInvestigationMetaOperation => 'Operação';
+
+  @override
+  String get wsSqlInvestigationShowMore => 'Ver mais';
+
+  @override
+  String get wsSqlInvestigationShowLess => 'Ver menos';
+
+  @override
+  String get wsSqlInvestigationCopy => 'Copiar';
+
+  @override
+  String get wsSqlInvestigationCopyTooltip => 'Copiar SQL para a área de transferência';
+
+  @override
+  String get wsSqlInvestigationClearTooltip => 'Limpar a lista de eventos de investigação SQL';
+
+  @override
+  String get wsLogClearTooltip => 'Limpar o registo de mensagens WebSocket';
+
+  @override
+  String get wsLogToggleEnabledTooltip => 'Ativar ou pausar a captura de mensagens WebSocket';
+
+  @override
   String get mainDegradedModeTitle => 'Modo degradado ativo';
 
   @override

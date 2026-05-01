@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/authorization_metric.dart';
@@ -9,8 +10,12 @@ class AuthorizationMetricsCollector implements IAuthorizationMetricsCollector {
   AuthorizationMetricsCollector();
 
   final List<AuthorizationMetric> _metrics = [];
+  final StreamController<void> _updates = StreamController<void>.broadcast(sync: true);
 
   List<AuthorizationMetric> get metrics => List.unmodifiable(_metrics);
+
+  @override
+  Stream<void> get updates => _updates.stream;
 
   @override
   void recordAuthorized({
@@ -72,6 +77,9 @@ class AuthorizationMetricsCollector implements IAuthorizationMetricsCollector {
     if (_metrics.length > maxMetrics) {
       _metrics.removeAt(0);
     }
+    if (!_updates.isClosed) {
+      _updates.add(null);
+    }
   }
 
   void _logDenial(AuthorizationMetric metric) {
@@ -94,5 +102,8 @@ class AuthorizationMetricsCollector implements IAuthorizationMetricsCollector {
 
   void clear() {
     _metrics.clear();
+    if (!_updates.isClosed) {
+      _updates.add(null);
+    }
   }
 }

@@ -163,15 +163,21 @@ class _DashboardPageState extends State<DashboardPage> {
                   children: [
                     Text(
                       AppConstants.appName,
-                      style: context.pageTitle,
+                      style: context.pageTitle.copyWith(
+                        fontSize: 22,
+                        height: 1.15,
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       l10n.dashboardDescription,
-                      style: context.bodyMuted,
+                      style: context.bodyMuted.copyWith(
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const ConnectionStatusWidget(),
+                    const SizedBox(height: AppSpacing.sm),
+                    const ConnectionStatusWidget(compact: true),
                   ],
                 ),
               ),
@@ -231,39 +237,54 @@ class _OdbcMetricsCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.dashboardMetricsTitle,
-                  style: context.sectionTitle,
+                  style: context.sectionTitle.copyWith(
+                    fontSize: 15,
+                    height: 1.1,
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.sm),
               SizedBox(
-                width: 220,
+                width: 160,
                 child: ComboBox<_MetricsPeriod>(
                   value: selectedPeriod,
                   onChanged: onPeriodChanged,
                   isExpanded: true,
-                  placeholder: Text(l10n.dashboardMetricsPeriod),
+                  placeholder: Text(
+                    l10n.dashboardMetricsPeriod,
+                    style: context.bodyMuted.copyWith(fontSize: 12),
+                  ),
                   items: [
                     ComboBoxItem(
                       value: _MetricsPeriod.last1h,
-                      child: Text(l10n.dashboardMetricsPeriod1h),
+                      child: Text(
+                        l10n.dashboardMetricsPeriod1h,
+                        style: context.bodyText.copyWith(fontSize: 12),
+                      ),
                     ),
                     ComboBoxItem(
                       value: _MetricsPeriod.last24h,
-                      child: Text(l10n.dashboardMetricsPeriod24h),
+                      child: Text(
+                        l10n.dashboardMetricsPeriod24h,
+                        style: context.bodyText.copyWith(fontSize: 12),
+                      ),
                     ),
                     ComboBoxItem(
                       value: _MetricsPeriod.all,
-                      child: Text(l10n.dashboardMetricsPeriodAll),
+                      child: Text(
+                        l10n.dashboardMetricsPeriodAll,
+                        style: context.bodyText.copyWith(fontSize: 12),
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.sm,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
             children: [
               _MetricChip(
                 icon: FluentIcons.document,
@@ -318,6 +339,11 @@ class _OdbcMetricsCard extends StatelessWidget {
   }
 }
 
+const EdgeInsets _metricChipPadding = EdgeInsets.symmetric(
+  horizontal: AppSpacing.sm,
+  vertical: 2,
+);
+
 class _MetricChip extends StatelessWidget {
   const _MetricChip({
     required this.icon,
@@ -333,12 +359,15 @@ class _MetricChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
+    final labelStyle = context.bodyMuted.copyWith(fontSize: 11, height: 1.1);
+    final baseValueStyle = context.metricValue.copyWith(
+      fontSize: 12,
+      height: 1.1,
+    );
+    final valueStyle = valueColor != null ? baseValueStyle.copyWith(color: valueColor) : baseValueStyle;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
+      padding: _metricChipPadding,
       decoration: BoxDecoration(
         color: theme.resources.subtleFillColorSecondary,
         borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -346,15 +375,15 @@ class _MetricChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: AppSpacing.sm),
+          Icon(icon, size: 14),
+          const SizedBox(width: AppSpacing.xs),
           Text(
             '$label: ',
-            style: context.bodyMuted,
+            style: labelStyle,
           ),
           Text(
             value,
-            style: context.metricValue.copyWith(color: valueColor),
+            style: valueStyle,
           ),
         ],
       ),

@@ -1,9 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 
-/// Item for [SettingsTabView] (icon, label, body).
-class SettingsTabItem {
-  const SettingsTabItem({
+/// Item for [AppFluentTabView] (icon, label, body).
+class AppFluentTabItem {
+  const AppFluentTabItem({
     required this.icon,
     required this.text,
     required this.body,
@@ -14,14 +14,12 @@ class SettingsTabItem {
   final Widget body;
 }
 
-/// Padrão visual de abas em telas de configurações: Fluent `TabView` (faixa
-/// nativa + corpo com page view). Use este widget para manter identidade
-/// consistente com o restante do app (ex.: configurações da base de dados).
+/// Fluent `TabView` wrapper for consistent tabbed surfaces (settings, dashboard).
 ///
-/// Quando há apenas um item, a faixa de abas é omitida e o corpo é renderizado
-/// diretamente para evitar UI confusa (uma aba sozinha não traz informação).
-class SettingsTabView extends StatelessWidget {
-  const SettingsTabView({
+/// When there is only one item, the tab strip is omitted and the body is shown
+/// directly to avoid a redundant single tab.
+class AppFluentTabView extends StatelessWidget {
+  const AppFluentTabView({
     required this.currentIndex,
     required this.onChanged,
     required this.items,
@@ -30,7 +28,7 @@ class SettingsTabView extends StatelessWidget {
 
   final int currentIndex;
   final ValueChanged<int> onChanged;
-  final List<SettingsTabItem> items;
+  final List<AppFluentTabItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +37,7 @@ class SettingsTabView extends StatelessWidget {
         return const SizedBox.shrink();
       }
       return KeyedSubtree(
-        key: const ValueKey('settings_tab_view_single'),
+        key: const ValueKey('app_fluent_tab_view_single'),
         child: items.first.body,
       );
     }
@@ -49,7 +47,7 @@ class SettingsTabView extends StatelessWidget {
       minTabWidth: 180,
       tabs: items
           .map(
-            (SettingsTabItem item) => Tab(
+            (AppFluentTabItem item) => Tab(
               icon: Icon(item.icon),
               text: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

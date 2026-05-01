@@ -46,6 +46,9 @@ class AppConstants {
   static const String notificationAppUserModelGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
 
   static const Duration dashboardMetricsInterval = Duration(seconds: 5);
+
+  /// Max in-memory items for WebSocket log and SQL investigation dashboard feeds.
+  static const int dashboardDiagnosticFeedMaxItems = 500;
   static const Duration clientTokenDebounceDelay = Duration(milliseconds: 250);
   static const Duration formTransitionDelay = Duration(milliseconds: 100);
   static const Duration ruleDialogTransition = Duration(milliseconds: 120);

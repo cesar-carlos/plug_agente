@@ -195,6 +195,29 @@ void main() {
     print('  -> odbc_lock_contention_live_integration_test: ignorado (sem DSN)');
   }
 
+  final runBurst = get('RUN_ODBC_BURST_TESTS') == 'true';
+  print('');
+  print(
+    'RUN_ODBC_BURST_TESTS: ${runBurst ? "true (50 pedidos paralelos na fila)" : "não definido ou false"}',
+  );
+  final rpcOk = odbcE2eRpc != null && odbcE2eRpc.trim().isNotEmpty;
+  final longOk = odbcLong != null && odbcLong.trim().isNotEmpty;
+  if (runBurst && rpcOk && longOk) {
+    print('  -> sql_queue_burst_test: será executado (DSN RPC + query longa OK)');
+  } else if (!runBurst) {
+    print(
+      '  -> sql_queue_burst_test: ignorado (defina RUN_ODBC_BURST_TESTS=true, DSN RPC e '
+      'ODBC_INTEGRATION_LONG_QUERY* ou ODBC_INTEGRATION_LONG_QUERY)',
+    );
+  } else if (!rpcOk) {
+    print('  -> sql_queue_burst_test: ignorado (sem DSN RPC — ODBC_E2E_RPC_DSN ou fallback ODBC)');
+  } else if (!longOk) {
+    print(
+      '  -> sql_queue_burst_test: ignorado (query longa ausente — ODBC_INTEGRATION_LONG_QUERY* '
+      'ou ODBC_INTEGRATION_LONG_QUERY; ver docs/testing/e2e_setup.md)',
+    );
+  }
+
   print('');
   print('RUN_LIVE_HUB_TESTS: ${runLiveHub ? "OK (true)" : "não definido ou false"}');
   print('E2E_HUB_URL: ${hubUrlOk ? "OK" : "não definido"}');
@@ -212,6 +235,7 @@ void main() {
   print(
     'Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart',
   );
+  print('Burst (opt-in): flutter test test/integration/sql_queue_burst_test.dart');
 }
 
 Map<String, String> _loadEnv(File file) {

@@ -124,6 +124,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     String? database,
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
+    String? sourceRpcRequestId,
   }) async {
     final results = <SqlCommandResult>[];
 
@@ -136,6 +137,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
           query: command.sql,
           parameters: command.params,
           timestamp: DateTime.now(),
+          sourceRpcRequestId: sourceRpcRequestId,
         ),
         timeout: timeout,
         database: database,

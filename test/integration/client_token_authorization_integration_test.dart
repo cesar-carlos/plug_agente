@@ -147,6 +147,7 @@ void main() {
     ).thenReturn(false);
     when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(false);
     when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+    when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
 
     final classifier = SqlOperationClassifier();
     final tokenValidation = ClientTokenValidationService(mockResolver);

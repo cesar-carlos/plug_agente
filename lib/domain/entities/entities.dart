@@ -12,4 +12,5 @@ export 'config.dart';
 export 'query_pagination.dart';
 export 'query_request.dart';
 export 'query_response.dart';
+export 'sql_investigation_event.dart';
 export 'token_audit_event.dart';

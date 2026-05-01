@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/utils/log_sanitizer.dart';
 
-const _maxMessagesDefault = 500;
+const int _maxMessagesDefault = AppConstants.dashboardDiagnosticFeedMaxItems;
 
 /// Max chars for formattedData before truncation to avoid heavy UI work.
 const _maxFormattedDataChars = 8000;
