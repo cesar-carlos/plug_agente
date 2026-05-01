@@ -285,6 +285,7 @@ class ClientTokenProvider extends ChangeNotifier {
     final agentId = request.agentId?.trim();
     final next = current.copyWith(
       clientId: request.clientId.trim(),
+      name: request.name.trim(),
       agentId: agentId == null || agentId.isEmpty ? null : agentId,
       payload: request.payload,
       allTables: request.allTables,
@@ -298,7 +299,7 @@ class ClientTokenProvider extends ChangeNotifier {
 
     final mutable = List<ClientTokenSummary>.from(_tokens);
     mutable[index] = next;
-    _tokens = mutable;
+    _tokens = _applyQueryToTokens(mutable, _lastListQuery);
     return true;
   }
 
@@ -314,6 +315,60 @@ class ClientTokenProvider extends ChangeNotifier {
       version: current.version + 1,
       updatedAt: DateTime.now().toUtc(),
     );
-    _tokens = mutable;
+    _tokens = _applyQueryToTokens(mutable, _lastListQuery);
+  }
+
+  List<ClientTokenSummary> _applyQueryToTokens(
+    List<ClientTokenSummary> tokens,
+    ClientTokenListQuery query,
+  ) {
+    final normalizedClientFilter = query.clientIdContains.trim().toLowerCase();
+
+    final filtered = tokens.where((token) {
+      if (normalizedClientFilter.isNotEmpty) {
+        final matchesClientId = token.clientId.toLowerCase().contains(
+          normalizedClientFilter,
+        );
+        final matchesName = token.name.toLowerCase().contains(
+          normalizedClientFilter,
+        );
+        if (!matchesClientId && !matchesName) {
+          return false;
+        }
+      }
+
+      return switch (query.status) {
+        ClientTokenStatusFilter.all => true,
+        ClientTokenStatusFilter.active => !token.isRevoked,
+        ClientTokenStatusFilter.revoked => token.isRevoked,
+      };
+    }).toList();
+
+    filtered.sort((left, right) {
+      final bySelectedSort = switch (query.sort) {
+        ClientTokenSortOption.newest => right.createdAt.compareTo(left.createdAt),
+        ClientTokenSortOption.oldest => left.createdAt.compareTo(right.createdAt),
+        ClientTokenSortOption.clientAsc => left.clientId.toLowerCase().compareTo(
+          right.clientId.toLowerCase(),
+        ),
+        ClientTokenSortOption.clientDesc => right.clientId.toLowerCase().compareTo(
+          left.clientId.toLowerCase(),
+        ),
+      };
+
+      if (bySelectedSort != 0) {
+        return bySelectedSort;
+      }
+
+      return right.createdAt.compareTo(left.createdAt);
+    });
+
+    if (!query.hasPagination) {
+      return filtered;
+    }
+
+    final start = query.offset.clamp(0, filtered.length);
+    final end = (start + query.pageSize!).clamp(0, filtered.length);
+    return filtered.sublist(start, end);
   }
 }

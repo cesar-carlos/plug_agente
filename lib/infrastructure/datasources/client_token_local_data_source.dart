@@ -46,7 +46,7 @@ class ClientTokenLocalDataSource {
       allViews: request.allViews,
       allPermissions: request.allPermissions,
       rules: request.rules,
-      agentId: request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
+      agentId: _normalizeAgentId(request.agentId),
       payload: request.payload,
     );
 
@@ -60,6 +60,11 @@ class ClientTokenLocalDataSource {
   }
 
   Future<void> replaceTokens(List<ClientTokenSummary> tokens) async {
+    final previousRows = await _database.select(_database.clientTokenCacheTable).get();
+    final previousIds = previousRows.map((row) => row.id).toSet();
+    final nextIds = tokens.map((token) => token.id).toSet();
+    await _syncSecretsForReplacement(tokens);
+
     await _database.transaction(() async {
       await _database.delete(_database.clientTokenCacheTable).go();
 
@@ -74,6 +79,10 @@ class ClientTokenLocalDataSource {
         batch.insertAll(_database.clientTokenCacheTable, companions);
       });
     });
+
+    for (final staleId in previousIds.difference(nextIds)) {
+      await _deleteSecretBestEffort(staleId);
+    }
   }
 
   Future<List<ClientTokenSummary>> listTokens({
@@ -85,9 +94,7 @@ class ClientTokenLocalDataSource {
     final normalizedClientFilter = effectiveQuery.clientIdContains.trim();
     if (normalizedClientFilter.isNotEmpty) {
       statement.where(
-        (table) =>
-            table.clientId.like('%$normalizedClientFilter%') |
-            table.name.like('%$normalizedClientFilter%'),
+        (table) => table.clientId.like('%$normalizedClientFilter%') | table.name.like('%$normalizedClientFilter%'),
       );
     }
 
@@ -224,9 +231,7 @@ class ClientTokenLocalDataSource {
               ClientTokenCacheTableCompanion(
                 clientId: Value(request.clientId.trim()),
                 name: Value(request.name.trim()),
-                agentId: Value(
-                  request.agentId?.trim().isEmpty ?? true ? null : request.agentId,
-                ),
+                agentId: Value(_normalizeAgentId(request.agentId)),
                 tokenHash: Value(newTokenHash),
                 tokenValue: Value(_persistedTokenValue(newTokenValue)),
                 payloadJson: Value(jsonEncode(request.payload)),
@@ -280,7 +285,7 @@ class ClientTokenLocalDataSource {
       clientId: token.clientId,
       name: Value(token.name),
       isRevoked: Value(token.isRevoked),
-      agentId: Value(token.agentId),
+      agentId: Value(_normalizeAgentId(token.agentId)),
       tokenValue: Value(_persistedTokenValue(token.tokenValue)),
       createdAt: token.createdAt.toUtc(),
       updatedAt: Value(token.updatedAt),
@@ -293,7 +298,7 @@ class ClientTokenLocalDataSource {
         jsonEncode(token.rules.map((rule) => rule.toJson()).toList()),
       ),
       syncedAt: syncedAt,
-      tokenHash: tokenHash == null ? const Value.absent() : Value(tokenHash),
+      tokenHash: Value(tokenHash ?? _fallbackStoredTokenHash(token)),
     );
   }
 
@@ -376,6 +381,22 @@ class ClientTokenLocalDataSource {
     final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
     final suffix = _random.nextInt(1 << 20).toRadixString(16);
     return '${timestamp}_$suffix';
+  }
+
+  String? _normalizeAgentId(String? agentId) {
+    final trimmed = agentId?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _fallbackStoredTokenHash(ClientTokenSummary token) {
+    final tokenValue = token.tokenValue?.trim();
+    if (tokenValue != null && tokenValue.isNotEmpty) {
+      return _hashToken(tokenValue);
+    }
+    return 'missing:${token.id}';
   }
 
   String? _persistedTokenValue(String? tokenValue) {
@@ -487,6 +508,17 @@ class ClientTokenLocalDataSource {
         error: e,
         stackTrace: stackTrace,
       );
+    }
+  }
+
+  Future<void> _syncSecretsForReplacement(List<ClientTokenSummary> tokens) async {
+    for (final token in tokens) {
+      final tokenValue = token.tokenValue?.trim();
+      if (tokenValue == null || tokenValue.isEmpty) {
+        await _deleteSecretBestEffort(token.id);
+        continue;
+      }
+      await _saveSecretBestEffort(token.id, tokenValue);
     }
   }
 }

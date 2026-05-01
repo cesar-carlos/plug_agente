@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:intl/intl.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -73,6 +74,14 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
                 value: token.clientId,
                 selectable: true,
               ),
+              if (token.name.trim().isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _DetailField(
+                  label: l10n.ctFieldName,
+                  value: token.name,
+                  selectable: true,
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               _DetailField(
                 label: l10n.ctLabelId,
@@ -100,7 +109,9 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               _DetailField(
                 label: l10n.ctLabelCreatedAt,
-                value: token.createdAt.toLocal().toIso8601String(),
+                value: DateFormat('dd/MM/yyyy HH:mm').format(
+                  token.createdAt.toLocal(),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(

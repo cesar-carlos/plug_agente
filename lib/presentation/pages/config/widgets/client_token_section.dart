@@ -284,14 +284,16 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (_rules.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
 
-    final lines = _rules.map((rule) {
-      final perms = [
-        if (rule.canRead) 'read',
-        if (rule.canUpdate) 'update',
-        if (rule.canDelete) 'delete',
-      ].join(',');
-      return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
-    }).join('\n');
+    final lines = _rules
+        .map((rule) {
+          final perms = [
+            if (rule.canRead) 'read',
+            if (rule.canUpdate) 'update',
+            if (rule.canDelete) 'delete',
+          ].join(',');
+          return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
+        })
+        .join('\n');
 
     final tokenName = _nameController.text.trim();
     final defaultFileName = tokenName.isNotEmpty
@@ -360,7 +362,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     try {
       await showGeneralDialog<void>(
         context: context,
-        barrierDismissible: true,
         barrierLabel: 'Dismiss create token dialog',
         barrierColor: Colors.black.withValues(
           alpha: _createTokenBarrierOpacity,

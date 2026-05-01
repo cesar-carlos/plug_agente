@@ -139,6 +139,30 @@ void main() {
 
     test('should update token and refresh list', () async {
       when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-1',
+            clientId: 'client-1',
+            name: 'Old name',
+            createdAt: DateTime(2026, 3, 12),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      await provider.loadTokens(
+        query: const ClientTokenListQuery(
+          clientIdContains: 'client',
+          sort: ClientTokenSortOption.clientAsc,
+        ),
+      );
+
+      when(
         () => mockUpdateClientToken(
           'token-1',
           any(),
@@ -156,24 +180,63 @@ void main() {
 
       final success = await provider.updateToken(
         'token-1',
-        _buildRequest(),
+        _buildRequest(name: 'New name'),
         refreshTokens: false,
       );
 
       expect(success, isTrue);
       expect(provider.lastCreatedToken, equals('rotated-token-value'));
+      expect(provider.tokens.single.name, equals('New name'));
+      expect(provider.error, isEmpty);
+    });
+
+    test('should remove revoked token from active filtered list', () async {
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-1',
+            clientId: 'client-1',
+            createdAt: DateTime(2026, 3, 12),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      await provider.loadTokens(
+        query: const ClientTokenListQuery(
+          status: ClientTokenStatusFilter.active,
+        ),
+      );
+
+      when(
+        () => mockRevokeClientToken('token-1'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final success = await provider.revokeToken('token-1');
+
+      expect(success, isTrue);
+      expect(provider.tokens, isEmpty);
       expect(provider.error, isEmpty);
     });
   });
 }
 
-ClientTokenCreateRequest _buildRequest() {
-  return const ClientTokenCreateRequest(
-    clientId: 'client-1',
+ClientTokenCreateRequest _buildRequest({
+  String clientId = 'client-1',
+  String name = '',
+}) {
+  return ClientTokenCreateRequest(
+    clientId: clientId,
+    name: name,
     allTables: false,
     allViews: false,
     allPermissions: false,
-    rules: [
+    rules: const [
       ClientTokenRule(
         resource: DatabaseResource(
           resourceType: DatabaseResourceType.table,
