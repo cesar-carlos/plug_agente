@@ -5,6 +5,18 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.5.0+1</title>
+   <pubDate>Fri, 01 May 2026 16:46:54 +0000</pubDate>
+   <description>## Plug Agente 1.5.0
+
+- Application version **1.5.0+1** (`pubspec.yaml`, Windows build, installer).
+- Includes hardened hub reconnect and session recovery, SQL investigation feed and ODBC batch context improvements, and client token flow updates already merged to `main`.
+- Ships the Windows installer with the official auto-update feed embedded.
+
+**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.4.0...v1.5.0</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.0/PlugAgente-Setup-1.5.0.exe" sparkle:version="1.5.0+1" sparkle:os="windows" length="17815433" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.4.0+1</title>
    <pubDate>Tue, 28 Apr 2026 20:36:03 +0000</pubDate>
    <description>## Plug Agente 1.4.0
@@ -62,12 +74,6 @@ Build the Windows installer after \lutter build windows --release\ using Inno Se
    <pubDate>Fri, 20 Mar 2026 14:41:49 +0000</pubDate>
    <description>Nova Versão 1.1.0+16 - Atualização automática via GitHub Release.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.0/PlugAgente-Setup-1.1.0.exe" sparkle:version="1.1.0+16" sparkle:os="windows" length="35924380" type="application/octet-stream" sparkle:dsaSignature="MD0CHEvfUIGIRyATFSUdC9BliywkNmXAx7UIBhBMjnQCHQCXXctRcTsQOgg++y7y7BrMjENZgHa/awdYYwMi" />
-  </item>
-  <item>
-   <title>Version 1.0.13+14</title>
-   <pubDate>Wed, 18 Mar 2026 19:36:21 +0000</pubDate>
-   <description>Nova Versão 1.0.13+14 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.0.13/PlugAgente-Setup-1.0.13.exe" sparkle:version="1.0.13+14" sparkle:os="windows" length="35845472" type="application/octet-stream" sparkle:dsaSignature="MD0CHFp4vpwd5j2ou2fkfNhYxkjAzidkPBHJp8aGuEUCHQCfGHTjgH5GdFKUnzLNZQmKJINc3SULb1oQGuNE" />
   </item>
  </channel>
 </rss>
