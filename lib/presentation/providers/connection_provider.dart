@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
+import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -32,25 +35,35 @@ class ConnectionProvider extends ChangeNotifier {
     this._connectToHubUseCase,
     this._testDbConnectionUseCase,
     this._checkOdbcDriverUseCase, {
+    HubRecoveryAuthCoordinator? hubRecoveryAuthCoordinator,
+    CheckHubAvailability? checkHubAvailabilityUseCase,
     AuthProvider? authProvider,
     ConfigProvider? configProvider,
     ITransportClient? transportClient,
     HubResilienceConfig? hubResilience,
+    FeatureFlags? featureFlags,
     Duration initialReconnectDelay = _defaultInitialReconnectDelay,
     Duration maxReconnectDelay = _defaultMaxReconnectDelay,
     int tokenRefreshIntervalAttempts = _defaultTokenRefreshIntervalAttempts,
     int maxReconnectAttempts = _defaultMaxReconnectAttempts,
+    int hardReloginFailureThreshold = _defaultHardReloginFailureThreshold,
+    bool enableHardReloginRecovery = _defaultEnableHardReloginRecovery,
     Duration? hubPersistentRetryInterval,
     int? hubPersistentRetryMaxFailedTicks,
     Random? random,
-  }) : _authProvider = authProvider,
+  }) : _checkHubAvailabilityUseCase = checkHubAvailabilityUseCase,
+       _hubRecoveryAuthCoordinator = hubRecoveryAuthCoordinator,
+       _authProvider = authProvider,
        _configProvider = configProvider,
        _transportClientOverride = transportClient,
        _hubResilience = hubResilience,
+       _featureFlags = featureFlags,
        _initialReconnectDelay = initialReconnectDelay,
        _maxReconnectDelay = maxReconnectDelay,
        _tokenRefreshIntervalAttempts = tokenRefreshIntervalAttempts,
        _maxReconnectAttempts = maxReconnectAttempts,
+       _hardReloginFailureThresholdOverride = hardReloginFailureThreshold,
+       _enableHardReloginRecoveryOverride = enableHardReloginRecovery,
        _hubPersistentRetryIntervalOverride = hubPersistentRetryInterval,
        _hubPersistentRetryMaxFailedTicksOverride = hubPersistentRetryMaxFailedTicks,
        _random = random {
@@ -68,7 +81,16 @@ class ConnectionProvider extends ChangeNotifier {
         'must be >= 1',
       );
     }
+    if (_hardReloginFailureThresholdOverride < 1) {
+      throw ArgumentError.value(
+        hardReloginFailureThreshold,
+        'hardReloginFailureThreshold',
+        'must be >= 1',
+      );
+    }
   }
+  final CheckHubAvailability? _checkHubAvailabilityUseCase;
+  final HubRecoveryAuthCoordinator? _hubRecoveryAuthCoordinator;
   final ConnectToHub _connectToHubUseCase;
   final TestDbConnection _testDbConnectionUseCase;
   final CheckOdbcDriver _checkOdbcDriverUseCase;
@@ -76,6 +98,7 @@ class ConnectionProvider extends ChangeNotifier {
   ConfigProvider? _configProvider;
   final ITransportClient? _transportClientOverride;
   final HubResilienceConfig? _hubResilience;
+  final FeatureFlags? _featureFlags;
 
   void setAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
@@ -94,6 +117,9 @@ class ConnectionProvider extends ChangeNotifier {
   String? _lastServerUrl;
   String? _lastAgentId;
   String? _lastAuthToken;
+  bool _sessionAuthInvalid = false;
+  int _consecutiveReconnectFailures = 0;
+  bool _hardReloginAttemptedInCycle = false;
   Timer? _hubPersistentRetryTimer;
   int _persistentRetryTickCount = 0;
   int _persistentFailureCount = 0;
@@ -114,9 +140,16 @@ class ConnectionProvider extends ChangeNotifier {
   final Duration _maxReconnectDelay;
   final int _tokenRefreshIntervalAttempts;
   final int _maxReconnectAttempts;
+  final int _hardReloginFailureThresholdOverride;
+  final bool _enableHardReloginRecoveryOverride;
   final Duration? _hubPersistentRetryIntervalOverride;
   final int? _hubPersistentRetryMaxFailedTicksOverride;
   final Random? _random;
+
+  static const int _defaultHardReloginFailureThreshold = 3;
+  static const bool _defaultEnableHardReloginRecovery = true;
+  static const int _hardReloginMinThreshold = 1;
+  static const int _hardReloginMaxThreshold = 20;
 
   Duration get _effectiveHubPersistentRetryInterval =>
       _hubPersistentRetryIntervalOverride ??
@@ -127,6 +160,14 @@ class ConnectionProvider extends ChangeNotifier {
       _hubPersistentRetryMaxFailedTicksOverride ??
       _hubResilience?.maxFailedTicks ??
       ConnectionConstants.hubPersistentRetryMaxFailedTicks;
+
+  bool get _effectiveHardReloginRecoveryEnabled =>
+      _featureFlags?.enableHubHardReloginRecovery ?? _enableHardReloginRecoveryOverride;
+
+  int get _effectiveHardReloginFailureThreshold {
+    final configured = _featureFlags?.hubHardReloginFailureThreshold ?? _hardReloginFailureThresholdOverride;
+    return configured.clamp(_hardReloginMinThreshold, _hardReloginMaxThreshold);
+  }
 
   ConnectionStatus get status => _status;
   String get error => _error;
@@ -156,6 +197,9 @@ class ConnectionProvider extends ChangeNotifier {
   }) async {
     _cancelPersistentRetryTimer();
     _persistentFailureCount = 0;
+    _consecutiveReconnectFailures = 0;
+    _hardReloginAttemptedInCycle = false;
+    _sessionAuthInvalid = false;
     _isDisconnectRequested = false;
     _lastServerUrl = serverUrl;
     _lastAgentId = agentId;
@@ -206,6 +250,8 @@ class ConnectionProvider extends ChangeNotifier {
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
     _cancelPersistentRetryTimer();
+    _hardReloginAttemptedInCycle = false;
+    _consecutiveReconnectFailures = 0;
     final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
@@ -300,6 +346,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     _isReconnecting = true;
+    _hardReloginAttemptedInCycle = false;
     _status = ConnectionStatus.reconnecting;
     _error = '';
     AppLogger.warning('Token expired, attempting refresh...');
@@ -367,6 +414,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     _isReconnecting = true;
+    _hardReloginAttemptedInCycle = false;
     _status = ConnectionStatus.reconnecting;
     _error = '';
     AppLogger.warning('Reconnection needed after failed attempts');
@@ -431,6 +479,16 @@ class ConnectionProvider extends ChangeNotifier {
       AppLogger.info(
         'resilience: connect_attempt attempt=$attempt agent_id=${context.agentId}',
       );
+      final hubReachable = await _isHubReachableForReconnect(
+        context.serverUrl,
+        stage: 'burst',
+      );
+      if (!hubReachable) {
+        AppLogger.info(
+          'resilience: hub_unreachable_skip_connect attempt=$attempt agent_id=${context.agentId}',
+        );
+        continue;
+      }
       final connected = await _attemptReconnect(
         context.serverUrl,
         context.agentId,
@@ -439,6 +497,32 @@ class ConnectionProvider extends ChangeNotifier {
       if (connected) {
         AppLogger.info('Connection recovered on attempt $attempt');
         return true;
+      }
+
+      if (_shouldEscalateToHardRelogin) {
+        final hardReloginToken = await _attemptHardRelogin(context);
+        if (hardReloginToken == null) {
+          if (_status == ConnectionStatus.error) {
+            return false;
+          }
+        } else {
+          authToken = hardReloginToken;
+          final hubReachableAfterRelogin = await _isHubReachableForReconnect(
+            context.serverUrl,
+            stage: 'hard_relogin',
+          );
+          if (hubReachableAfterRelogin) {
+            final connectedAfterRelogin = await _attemptReconnect(
+              context.serverUrl,
+              context.agentId,
+              authToken: authToken,
+            );
+            if (connectedAfterRelogin) {
+              AppLogger.info('Connection recovered after hard relogin');
+              return true;
+            }
+          }
+        }
       }
 
       if (attempt % _tokenRefreshIntervalAttempts == 0) {
@@ -471,6 +555,8 @@ class ConnectionProvider extends ChangeNotifier {
       (_) {
         _cancelPersistentRetryTimer();
         _persistentFailureCount = 0;
+        _consecutiveReconnectFailures = 0;
+        _sessionAuthInvalid = false;
         _status = ConnectionStatus.connected;
         _error = '';
         _lastServerUrl = serverUrl;
@@ -482,6 +568,7 @@ class ConnectionProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
+        _consecutiveReconnectFailures++;
         _status = ConnectionStatus.reconnecting;
         _error = recordErrorMessage ? failure.toDisplayMessage() : '';
         AppLogger.warning(
@@ -562,6 +649,16 @@ class ConnectionProvider extends ChangeNotifier {
       if (_persistentRetryTickCount % _tokenRefreshIntervalAttempts == 0) {
         await _tryRefreshToken(context.serverUrl);
       }
+      final hubReachable = await _isHubReachableForReconnect(
+        context.serverUrl,
+        stage: 'persistent',
+      );
+      if (!hubReachable) {
+        AppLogger.info(
+          'resilience: hub_unreachable_skip_connect tick=$_persistentRetryTickCount agent_id=${context.agentId}',
+        );
+        return;
+      }
       final authToken = _resolveAuthTokenForReconnect();
       final ok = await _attemptReconnect(
         context.serverUrl,
@@ -571,6 +668,24 @@ class ConnectionProvider extends ChangeNotifier {
       );
       if (ok || _isDisconnectRequested) {
         return;
+      }
+      if (_shouldEscalateToHardRelogin) {
+        final hardReloginToken = await _attemptHardRelogin(context);
+        if (hardReloginToken == null) {
+          if (_status == ConnectionStatus.error) {
+            return;
+          }
+        } else {
+          final connectedAfterRelogin = await _attemptReconnect(
+            context.serverUrl,
+            context.agentId,
+            authToken: hardReloginToken,
+            recordErrorMessage: false,
+          );
+          if (connectedAfterRelogin) {
+            return;
+          }
+        }
       }
       if (_effectiveHubPersistentRetryMaxFailedTicks > 0) {
         _persistentFailureCount++;
@@ -599,18 +714,29 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<String?> _tryRefreshToken(String serverUrl) async {
+    final coordinator = _hubRecoveryAuthCoordinator;
     final authProvider = _authProvider;
-    if (authProvider == null) {
+    if (coordinator == null || authProvider == null) {
+      _sessionAuthInvalid = true;
       return null;
     }
 
-    await authProvider.refreshToken(serverUrl);
-    final refreshedToken = authProvider.currentToken?.token;
-    if (refreshedToken == null || refreshedToken.trim().isEmpty) {
-      return null;
-    }
-
-    return _lastAuthToken = refreshedToken.trim();
+    final refreshResult = await coordinator.refreshSession(
+      serverUrl,
+      currentToken: authProvider.currentToken,
+    );
+    return refreshResult.fold(
+      (token) {
+        authProvider.restoreToken(token);
+        _sessionAuthInvalid = false;
+        return _lastAuthToken = token.token.trim();
+      },
+      (failure) {
+        authProvider.setRecoveryError(failure.toDisplayMessage());
+        _sessionAuthInvalid = true;
+        return null;
+      },
+    );
   }
 
   _ConnectionContext? _resolveConnectionContext() {
@@ -631,7 +757,12 @@ class ConnectionProvider extends ChangeNotifier {
   String? _resolveAuthTokenForReconnect() {
     final liveToken = _authProvider?.currentToken?.token;
     if (liveToken != null && liveToken.trim().isNotEmpty) {
+      _sessionAuthInvalid = false;
       return _lastAuthToken = liveToken.trim();
+    }
+
+    if (_sessionAuthInvalid) {
+      return null;
     }
 
     final configToken = _configProvider?.currentConfig?.authToken;
@@ -640,6 +771,69 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     return _lastAuthToken;
+  }
+
+  Future<bool> _isHubReachableForReconnect(
+    String serverUrl, {
+    required String stage,
+  }) async {
+    final checkHubAvailabilityUseCase = _checkHubAvailabilityUseCase;
+    if (checkHubAvailabilityUseCase == null) {
+      return true;
+    }
+    final isReachable = await checkHubAvailabilityUseCase(serverUrl);
+    if (!isReachable) {
+      AppLogger.info('resilience: hub_probe_offline stage=$stage server=$serverUrl');
+    }
+    return isReachable;
+  }
+
+  bool get _shouldEscalateToHardRelogin {
+    if (!_effectiveHardReloginRecoveryEnabled) {
+      return false;
+    }
+    if (_hardReloginAttemptedInCycle) {
+      return false;
+    }
+    return _consecutiveReconnectFailures >= _effectiveHardReloginFailureThreshold;
+  }
+
+  Future<String?> _attemptHardRelogin(_ConnectionContext context) async {
+    _hardReloginAttemptedInCycle = true;
+    final coordinator = _hubRecoveryAuthCoordinator;
+    final authProvider = _authProvider;
+    if (coordinator == null || authProvider == null) {
+      _status = ConnectionStatus.error;
+      _error = 'Authentication provider unavailable for automatic relogin';
+      _cancelPersistentRetryTimer();
+      return null;
+    }
+
+    AppLogger.warning(
+      'resilience: escalating to automatic hard relogin after $_consecutiveReconnectFailures failures',
+    );
+    await authProvider.logout();
+
+    final reloginResult = await coordinator.loginWithStoredCredentials(
+      context.serverUrl,
+      context.agentId,
+    );
+    return reloginResult.fold(
+      (token) {
+        authProvider.restoreToken(token);
+        _sessionAuthInvalid = false;
+        _consecutiveReconnectFailures = 0;
+        return _lastAuthToken = token.token.trim();
+      },
+      (failure) {
+        authProvider.setRecoveryError(failure.toDisplayMessage());
+        _sessionAuthInvalid = true;
+        _status = ConnectionStatus.error;
+        _error = failure.toDisplayMessage();
+        _cancelPersistentRetryTimer();
+        return null;
+      },
+    );
   }
 
   Duration _computeReconnectDelay(int attempt) {

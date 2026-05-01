@@ -13,12 +13,14 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/health_service.dart';
+import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
+import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
@@ -62,6 +64,8 @@ import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_hub_availability_probe.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
@@ -80,6 +84,7 @@ import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_rest_client.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
+import 'package:plug_agente/infrastructure/external_services/hub_availability_probe.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
@@ -106,10 +111,12 @@ import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
+import 'package:plug_agente/infrastructure/stores/flutter_secure_hub_auth_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_authorization_decision_cache.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_hub_auth_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
 import 'package:uuid/uuid.dart';
@@ -171,6 +178,22 @@ void registerPlugDependencyGraph(
         }
       },
     )
+    ..registerLazySingleton<IHubAuthSecretStore>(
+      () {
+        try {
+          return FlutterSecureHubAuthSecretStore();
+        } on Object catch (e, stackTrace) {
+          developer.log(
+            'FlutterSecureHubAuthSecretStore init failed, using NoopHubAuthSecretStore',
+            name: 'plug_dependency_registrar',
+            level: 900,
+            error: e,
+            stackTrace: stackTrace,
+          );
+          return NoopHubAuthSecretStore();
+        }
+      },
+    )
     ..registerLazySingleton(
       () => ClientTokenLocalDataSource(
         getIt<AppDatabase>(),
@@ -188,7 +211,10 @@ void registerPlugDependencyGraph(
       getIt.get<DeprecationMetricsCollector>,
     )
     ..registerLazySingleton<IAgentConfigRepository>(
-      () => AgentConfigRepository(getIt<AppDatabase>()),
+      () => AgentConfigRepository(
+        getIt<AppDatabase>(),
+        authSecretStore: getIt<IHubAuthSecretStore>(),
+      ),
     )
     ..registerLazySingleton(() => const Uuid())
     ..registerLazySingleton<IConnectionPool>(
@@ -346,6 +372,16 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IAuthClient>(
       () => AuthClient(DioFactory.createDio()),
     )
+    ..registerLazySingleton<IHubAvailabilityProbe>(
+      () {
+        final probePath = dotenv.env['HUB_AVAILABILITY_PROBE_PATH']?.trim();
+        return HubAvailabilityProbe(
+          probePath: (probePath != null && probePath.isNotEmpty)
+              ? probePath
+              : AppConstants.defaultHubAvailabilityProbePath,
+        );
+      },
+    )
     ..registerLazySingleton<IAgentHubProfileGateway>(
       () => AgentHubProfileRestClient(DioFactory.createDio()),
     )
@@ -420,6 +456,15 @@ void registerPlugDependencyGraph(
       () => AuthService(getIt<IAuthClient>(), getIt<IAgentConfigRepository>()),
     )
     ..registerLazySingleton(
+      () => HubRecoveryAuthCoordinator(
+        getIt<LoadAgentConfig>(),
+        getIt<LoginUser>(),
+        getIt<RefreshAuthToken>(),
+        getIt<SaveAuthToken>(),
+        getIt<IAgentConfigRepository>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => QueryNormalizerService(getIt<QueryNormalizer>()),
     )
     ..registerLazySingleton(
@@ -435,6 +480,9 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton(
       () => CheckOdbcDriver(getIt<IOdbcDriverChecker>()),
+    )
+    ..registerLazySingleton(
+      () => CheckHubAvailability(getIt<IHubAvailabilityProbe>()),
     )
     ..registerLazySingleton(
       () => ExecutePlaygroundQuery(

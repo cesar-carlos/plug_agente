@@ -685,6 +685,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get diagnosticsHubReconnectInvalidInterval => 'Digite um número inteiro entre 5 e 86400.';
 
   @override
+  String get diagnosticsHubHardReloginEnabledLabel => 'Ativar fallback de hard relogin automático';
+
+  @override
+  String get diagnosticsHubHardReloginEnabledDescription =>
+      'Quando ativado, após falhas repetidas de reconexão o agente tentará logout, login com credenciais salvas e reconexão do socket.';
+
+  @override
+  String get diagnosticsHubHardReloginThresholdLabel => 'Falhas de reconexão antes do hard relogin';
+
+  @override
+  String get diagnosticsHubHardReloginThresholdHint => 'Intervalo permitido: 1-20. Valores menores escalam mais cedo.';
+
+  @override
+  String get diagnosticsHubHardReloginInvalidThreshold => 'Digite um número inteiro entre 1 e 20.';
+
+  @override
   String get msgServerUrlRequired => 'URL do servidor é obrigatória';
 
   @override

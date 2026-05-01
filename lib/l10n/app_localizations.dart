@@ -1376,6 +1376,36 @@ abstract class AppLocalizations {
   /// **'Enter a whole number between 5 and 86400.'**
   String get diagnosticsHubReconnectInvalidInterval;
 
+  /// No description provided for @diagnosticsHubHardReloginEnabledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable automatic hard relogin fallback'**
+  String get diagnosticsHubHardReloginEnabledLabel;
+
+  /// No description provided for @diagnosticsHubHardReloginEnabledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, after repeated reconnect failures the agent will attempt logout, login with saved credentials, and then reconnect the socket.'**
+  String get diagnosticsHubHardReloginEnabledDescription;
+
+  /// No description provided for @diagnosticsHubHardReloginThresholdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed reconnect attempts before hard relogin'**
+  String get diagnosticsHubHardReloginThresholdLabel;
+
+  /// No description provided for @diagnosticsHubHardReloginThresholdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed range: 1-20. Lower values escalate sooner.'**
+  String get diagnosticsHubHardReloginThresholdHint;
+
+  /// No description provided for @diagnosticsHubHardReloginInvalidThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number between 1 and 20.'**
+  String get diagnosticsHubHardReloginInvalidThreshold;
+
   /// No description provided for @msgServerUrlRequired.
   ///
   /// In en, this message translates to:

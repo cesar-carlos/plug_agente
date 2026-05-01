@@ -1,7 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
+import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
@@ -19,6 +21,7 @@ import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -84,6 +87,7 @@ class AppRoot extends StatelessWidget {
             getIt<LoginUser>(),
             getIt<RefreshAuthToken>(),
             getIt<SaveAuthToken>(),
+            hubRecoveryAuthCoordinator: getIt<HubRecoveryAuthCoordinator>(),
           ),
         ),
         ChangeNotifierProvider(
@@ -91,7 +95,10 @@ class AppRoot extends StatelessWidget {
             getIt<ConnectToHub>(),
             getIt<TestDbConnection>(),
             getIt<CheckOdbcDriver>(),
+            hubRecoveryAuthCoordinator: getIt<HubRecoveryAuthCoordinator>(),
+            checkHubAvailabilityUseCase: getIt<CheckHubAvailability>(),
             hubResilience: getIt<HubResilienceConfig>(),
+            featureFlags: getIt<FeatureFlags>(),
           ),
         ),
         ChangeNotifierProvider(
@@ -152,6 +159,7 @@ class _ProviderInitializer extends StatefulWidget {
 
 class _ProviderInitializerState extends State<_ProviderInitializer> {
   static const String _defaultServerUrl = 'https://api.example.com';
+  late final HubRecoveryAuthCoordinator _hubRecoveryAuthCoordinator = getIt<HubRecoveryAuthCoordinator>();
 
   ConnectionProvider? _connectionProvider;
   AuthProvider? _authProvider;
@@ -252,19 +260,45 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
       return;
     }
 
-    _startupFlowHandled = true;
     _startupFlowRunning = true;
     try {
       var authToken = startupContext.authToken;
-      if (startupContext.credentials != null) {
-        await authProvider.login(
-          startupContext.serverUrl,
-          startupContext.credentials!,
+      final persistedToken = startupContext.hasPersistedTokenPair
+          ? await _hubRecoveryAuthCoordinator.loadPersistedTokenPair()
+          : null;
+      if (persistedToken != null) {
+        authProvider.restoreToken(
+          persistedToken,
+          authenticated: false,
         );
-        final refreshedToken = authProvider.currentToken?.token.trim();
-        if (refreshedToken != null && refreshedToken.isNotEmpty) {
-          authToken = refreshedToken;
+        authToken = persistedToken.token;
+      }
+      if (startupContext.credentials != null) {
+        final loginResult = await _hubRecoveryAuthCoordinator.loginWithStoredCredentials(
+          startupContext.serverUrl,
+          startupContext.agentId,
+        );
+        var loginSucceeded = false;
+        loginResult.fold(
+          (token) {
+            authProvider.restoreToken(token);
+            authToken = token.token;
+            loginSucceeded = true;
+          },
+          (failure) {
+            authProvider.setRecoveryError('Automatic sign-in failed. Check saved credentials and try again.');
+          },
+        );
+        final hasRecoveredToken = authToken?.trim().isNotEmpty ?? false;
+        if (!loginSucceeded && !hasRecoveredToken) {
+          return;
         }
+      }
+
+      final hasStartupToken = authToken?.trim().isNotEmpty ?? false;
+      if (!hasStartupToken) {
+        authProvider.setRecoveryError('No stored session available for automatic connection.');
+        return;
       }
 
       await connectionProvider.connect(
@@ -272,9 +306,13 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
         startupContext.agentId,
         authToken: authToken,
       );
+      if (connectionProvider.status == ConnectionStatus.connected ||
+          connectionProvider.status == ConnectionStatus.connecting ||
+          connectionProvider.status == ConnectionStatus.reconnecting) {
+        _markStartupFlowHandled();
+      }
     } finally {
       _startupFlowRunning = false;
-      _configProvider?.removeListener(_onConfigStateChanged);
     }
   }
 
@@ -338,4 +376,6 @@ class _StartupContext {
   final String agentId;
   final String? authToken;
   final AuthCredentials? credentials;
+
+  bool get hasPersistedTokenPair => authToken != null && authToken!.trim().isNotEmpty;
 }

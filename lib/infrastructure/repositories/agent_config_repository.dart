@@ -2,12 +2,19 @@ import 'package:drift/drift.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
+import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentConfigRepository implements IAgentConfigRepository {
-  AgentConfigRepository(this._database);
+  AgentConfigRepository(
+    this._database, {
+    required IHubAuthSecretStore authSecretStore,
+  }) : _authSecretStore = authSecretStore;
+
   final AppDatabase _database;
+  final IHubAuthSecretStore _authSecretStore;
 
   domain.DatabaseFailure _buildDatabaseFailure(
     String message, {
@@ -32,7 +39,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
         return Failure(domain.NotFoundFailure('Config not found'));
       }
 
-      final config = _mapDataToEntity(configData);
+      final config = await _mapDataToEntity(configData);
       return Success(config);
     } on Exception catch (error) {
       return Failure(
@@ -53,7 +60,9 @@ class AgentConfigRepository implements IAgentConfigRepository {
     try {
       final configsData = await _database.select(_database.configTable).get();
 
-      final configs = configsData.map(_mapDataToEntity).toList();
+      final configs = await Future.wait(
+        configsData.map(_mapDataToEntity),
+      );
       return Success(configs);
     } on Exception catch (error) {
       return Failure(
@@ -69,7 +78,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
   @override
   Future<Result<Config>> save(Config config) async {
     try {
-      final configData = _mapEntityToData(config);
+      final configData = await _mapEntityToData(config);
 
       await _database.into(_database.configTable).insertOnConflictUpdate(configData);
 
@@ -94,6 +103,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
       await (_database.delete(
         _database.configTable,
       )..where((tbl) => tbl.id.equals(id))).go();
+      await _authSecretStore.deleteSecrets(id);
 
       // For Result<void>, we use a unit value
       return const Success<Object, Exception>(Object());
@@ -124,7 +134,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
         return Failure(domain.NotFoundFailure('No config found'));
       }
 
-      final config = _mapDataToEntity(configData);
+      final config = await _mapDataToEntity(configData);
       return Success(config);
     } on Exception catch (error) {
       return Failure(
@@ -137,15 +147,24 @@ class AgentConfigRepository implements IAgentConfigRepository {
     }
   }
 
-  ConfigData _mapEntityToData(Config config) {
+  Future<ConfigData> _mapEntityToData(Config config) async {
+    final secrets = HubAuthSecrets(
+      authToken: config.authToken,
+      refreshToken: config.refreshToken,
+      authPassword: config.authPassword,
+    );
+    final persistedSecrets = await _persistSecretsForSave(
+      config.id,
+      secrets,
+    );
     return ConfigData(
       id: config.id,
       serverUrl: config.serverUrl,
       agentId: config.agentId,
-      authToken: config.authToken,
-      refreshToken: config.refreshToken,
+      authToken: persistedSecrets.authToken,
+      refreshToken: persistedSecrets.refreshToken,
       authUsername: config.authUsername,
-      authPassword: config.authPassword,
+      authPassword: persistedSecrets.authPassword,
       driverName: config.driverName,
       odbcDriverName: config.odbcDriverName,
       connectionString: config.connectionString,
@@ -174,15 +193,16 @@ class AgentConfigRepository implements IAgentConfigRepository {
     );
   }
 
-  Config _mapDataToEntity(ConfigData data) {
+  Future<Config> _mapDataToEntity(ConfigData data) async {
+    final secrets = await _loadSecrets(data);
     return Config(
       id: data.id,
       serverUrl: data.serverUrl,
       agentId: data.agentId,
-      authToken: data.authToken,
-      refreshToken: data.refreshToken,
+      authToken: secrets.authToken,
+      refreshToken: secrets.refreshToken,
       authUsername: data.authUsername,
-      authPassword: data.authPassword,
+      authPassword: secrets.authPassword,
       driverName: data.driverName,
       odbcDriverName: data.odbcDriverName,
       connectionString: data.connectionString,
@@ -209,5 +229,77 @@ class AgentConfigRepository implements IAgentConfigRepository {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
+  }
+
+  Future<HubAuthSecrets> _persistSecretsForSave(
+    String configId,
+    HubAuthSecrets secrets,
+  ) async {
+    if (!_authSecretStore.isAvailable) {
+      return secrets;
+    }
+
+    try {
+      if (secrets.hasAny) {
+        await _authSecretStore.saveSecrets(configId, secrets);
+      } else {
+        await _authSecretStore.deleteSecrets(configId);
+      }
+      return const HubAuthSecrets();
+    } on Exception {
+      return secrets;
+    }
+  }
+
+  Future<HubAuthSecrets> _loadSecrets(ConfigData data) async {
+    final legacySecrets = HubAuthSecrets(
+      authToken: data.authToken,
+      refreshToken: data.refreshToken,
+      authPassword: data.authPassword,
+    );
+    if (!_authSecretStore.isAvailable) {
+      return legacySecrets;
+    }
+
+    try {
+      final storedSecrets = await _authSecretStore.readSecrets(data.id);
+      final mergedSecrets = storedSecrets.mergeMissingFrom(legacySecrets);
+      if (_needsSecureMigration(storedSecrets, legacySecrets)) {
+        await _authSecretStore.saveSecrets(data.id, mergedSecrets);
+        await _clearLegacySecretColumns(data.id);
+      }
+      return mergedSecrets;
+    } on Exception {
+      return legacySecrets;
+    }
+  }
+
+  Future<void> _clearLegacySecretColumns(String configId) async {
+    await (_database.update(_database.configTable)..where((tbl) => tbl.id.equals(configId))).write(
+      const ConfigTableCompanion(
+        authToken: Value<String?>(null),
+        refreshToken: Value<String?>(null),
+        authPassword: Value<String?>(null),
+      ),
+    );
+  }
+
+  bool _needsSecureMigration(
+    HubAuthSecrets storedSecrets,
+    HubAuthSecrets legacySecrets,
+  ) {
+    if (!legacySecrets.hasAny) {
+      return false;
+    }
+
+    final needsAuthToken =
+        (legacySecrets.authToken?.trim().isNotEmpty ?? false) && !(storedSecrets.authToken?.trim().isNotEmpty ?? false);
+    final needsRefreshToken =
+        (legacySecrets.refreshToken?.trim().isNotEmpty ?? false) &&
+        !(storedSecrets.refreshToken?.trim().isNotEmpty ?? false);
+    final needsPassword =
+        (legacySecrets.authPassword?.trim().isNotEmpty ?? false) &&
+        !(storedSecrets.authPassword?.trim().isNotEmpty ?? false);
+    return needsAuthToken || needsRefreshToken || needsPassword;
   }
 }

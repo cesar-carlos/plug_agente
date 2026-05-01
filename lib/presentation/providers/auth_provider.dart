@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
@@ -11,10 +14,17 @@ import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 enum AuthStatus { unauthenticated, authenticating, authenticated, error }
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider(this._loginUseCase, this._refreshUseCase, this._saveUseCase);
+  AuthProvider(
+    this._loginUseCase,
+    this._refreshUseCase,
+    this._saveUseCase, {
+    HubRecoveryAuthCoordinator? hubRecoveryAuthCoordinator,
+  }) : _hubRecoveryAuthCoordinator = hubRecoveryAuthCoordinator;
+
   final LoginUser _loginUseCase;
   final RefreshAuthToken _refreshUseCase;
   final SaveAuthToken _saveUseCase;
+  final HubRecoveryAuthCoordinator? _hubRecoveryAuthCoordinator;
 
   AuthStatus _status = AuthStatus.unauthenticated;
   String _error = '';
@@ -109,12 +119,37 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout({
+    bool clearStoredSession = false,
+  }) async {
     _currentToken = null;
     _status = AuthStatus.unauthenticated;
     _error = '';
     notifyListeners();
     AppLogger.info('User logged out');
+    if (clearStoredSession) {
+      final coordinator = _hubRecoveryAuthCoordinator;
+      if (coordinator != null) {
+        await coordinator.clearStoredSession();
+      }
+    }
+  }
+
+  void restoreToken(
+    AuthToken token, {
+    bool authenticated = true,
+  }) {
+    _currentToken = token;
+    _status = authenticated ? AuthStatus.authenticated : AuthStatus.unauthenticated;
+    _error = '';
+    notifyListeners();
+  }
+
+  void setRecoveryError(String message) {
+    _currentToken = null;
+    _status = AuthStatus.unauthenticated;
+    _error = message;
+    notifyListeners();
   }
 
   void clearError() {

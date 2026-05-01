@@ -10,8 +10,10 @@ class AppConstants {
 
   static const int connectionTimeoutSeconds = 30;
   static const int publicApiTimeoutSeconds = 15;
+  static const int hubAvailabilityProbeTimeoutSeconds = 4;
   static const int queryTimeoutSeconds = 60;
   static const int reconnectIntervalSeconds = 5;
+  static const String defaultHubAvailabilityProbePath = '/health';
 
   /// Hub burst recovery attempts (same value as [ConnectionConstants.defaultHubRecoveryBurstMaxAttempts]).
   static const int maxReconnectAttempts = ConnectionConstants.defaultHubRecoveryBurstMaxAttempts;

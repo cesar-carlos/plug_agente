@@ -24,20 +24,24 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   late final FeatureFlags _flags = getIt<FeatureFlags>();
   late final HubResilienceConfig _hubResilience = getIt<HubResilienceConfig>();
   late bool _odbcPaginatedSqlLog;
+  late bool _enableHardReloginRecovery;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _hubMaxTicksController = TextEditingController();
   final TextEditingController _hubIntervalSecondsController = TextEditingController();
+  final TextEditingController _hubHardReloginThresholdController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog;
+    _enableHardReloginRecovery = _flags.enableHubHardReloginRecovery;
     _reloadHubReconnectFields();
   }
 
   void _reloadHubReconnectFields() {
     _hubMaxTicksController.text = '${_hubResilience.maxFailedTicks}';
     _hubIntervalSecondsController.text = '${_hubResilience.persistentRetryInterval.inSeconds}';
+    _hubHardReloginThresholdController.text = '${_flags.hubHardReloginFailureThreshold}';
   }
 
   @override
@@ -45,6 +49,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
     _scrollController.dispose();
     _hubMaxTicksController.dispose();
     _hubIntervalSecondsController.dispose();
+    _hubHardReloginThresholdController.dispose();
     super.dispose();
   }
 
@@ -76,8 +81,21 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
       );
       return;
     }
+    final hardReloginThreshold = int.tryParse(
+      _hubHardReloginThresholdController.text.trim(),
+    );
+    if (hardReloginThreshold == null || hardReloginThreshold < 1 || hardReloginThreshold > 20) {
+      await SettingsFeedback.showError(
+        context: context,
+        title: l10n.modalTitleError,
+        message: l10n.diagnosticsHubHardReloginInvalidThreshold,
+      );
+      return;
+    }
     await _flags.setHubPersistentRetryMaxFailedTicksOverride(maxTicks);
     await _flags.setHubPersistentRetryIntervalSecondsOverride(intervalSec);
+    await _flags.setEnableHubHardReloginRecovery(_enableHardReloginRecovery);
+    await _flags.setHubHardReloginFailureThreshold(hardReloginThreshold);
     _reloadHubReconnectFields();
     if (!context.mounted) {
       return;
@@ -91,6 +109,9 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
 
   Future<void> _resetHubReconnect() async {
     await _flags.resetHubResilienceOverrides();
+    await _flags.setEnableHubHardReloginRecovery(true);
+    await _flags.setHubHardReloginFailureThreshold(3);
+    _enableHardReloginRecovery = _flags.enableHubHardReloginRecovery;
     _reloadHubReconnectFields();
     if (mounted) {
       setState(() {});
@@ -157,6 +178,26 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   Text(
                     l10n.diagnosticsHubReconnectEnvHint,
                     style: context.captionText,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SettingsToggleTile(
+                    label: l10n.diagnosticsHubHardReloginEnabledLabel,
+                    value: _enableHardReloginRecovery,
+                    onChanged: (bool value) {
+                      setState(() => _enableHardReloginRecovery = value);
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    l10n.diagnosticsHubHardReloginEnabledDescription,
+                    style: context.captionText,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: l10n.diagnosticsHubHardReloginThresholdLabel,
+                    hint: l10n.diagnosticsHubHardReloginThresholdHint,
+                    controller: _hubHardReloginThresholdController,
+                    keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Wrap(

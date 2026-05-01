@@ -74,7 +74,7 @@ class WebSocketConfigSection extends StatelessWidget {
 
     if (authProvider.isAuthenticated) {
       await Provider.of<ConnectionProvider>(context, listen: false).disconnect();
-      authProvider.logout();
+      await authProvider.logout(clearStoredSession: true);
     } else {
       final serverUrl = normalizeServerUrl(
         formController.serverUrlController.text,

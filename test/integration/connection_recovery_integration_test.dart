@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
@@ -21,6 +22,8 @@ class MockCheckOdbcDriver extends Mock implements CheckOdbcDriver {}
 class MockConfigProvider extends Mock implements ConfigProvider {}
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
+class MockHubRecoveryAuthCoordinator extends Mock implements HubRecoveryAuthCoordinator {}
 
 class FakeTransportClient implements ITransportClient {
   void Function()? onTokenExpired;
@@ -101,13 +104,24 @@ void main() {
     late MockTestDbConnection mockTestDb;
     late MockCheckOdbcDriver mockCheckDriver;
     late MockConfigProvider mockConfigProvider;
+    late MockHubRecoveryAuthCoordinator mockHubRecoveryAuthCoordinator;
     late FakeTransportClient fakeTransport;
+
+    setUpAll(() {
+      registerFallbackValue(
+        const AuthToken(
+          token: 'fallback-token',
+          refreshToken: 'fallback-refresh',
+        ),
+      );
+    });
 
     setUp(() {
       mockConnectToHub = MockConnectToHub();
       mockTestDb = MockTestDbConnection();
       mockCheckDriver = MockCheckOdbcDriver();
       mockConfigProvider = MockConfigProvider();
+      mockHubRecoveryAuthCoordinator = MockHubRecoveryAuthCoordinator();
       fakeTransport = FakeTransportClient();
     });
 
@@ -367,12 +381,39 @@ void main() {
         when(() => mockAuth.currentToken).thenReturn(
           const AuthToken(token: 'tok-2', refreshToken: 'refresh-1'),
         );
-        when(() => mockAuth.refreshToken(any())).thenAnswer((_) async {});
+        when(mockAuth.logout).thenAnswer((_) async {});
+        when(
+          () => mockHubRecoveryAuthCoordinator.refreshSession(
+            any(),
+            currentToken: any(named: 'currentToken'),
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            AuthToken(token: 'tok-2', refreshToken: 'refresh-1'),
+          ),
+        );
+        when(
+          () => mockAuth.restoreToken(
+            any(),
+            authenticated: any(named: 'authenticated'),
+          ),
+        ).thenReturn(null);
+        when(
+          () => mockHubRecoveryAuthCoordinator.loginWithStoredCredentials(
+            any(),
+            any(),
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            AuthToken(token: 'tok-3', refreshToken: 'refresh-2'),
+          ),
+        );
 
         final provider = ConnectionProvider(
           mockConnectToHub,
           mockTestDb,
           mockCheckDriver,
+          hubRecoveryAuthCoordinator: mockHubRecoveryAuthCoordinator,
           configProvider: mockConfigProvider,
           authProvider: mockAuth,
           transportClient: fakeTransport,

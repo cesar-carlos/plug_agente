@@ -682,6 +682,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsHubReconnectInvalidInterval => 'Enter a whole number between 5 and 86400.';
 
   @override
+  String get diagnosticsHubHardReloginEnabledLabel => 'Enable automatic hard relogin fallback';
+
+  @override
+  String get diagnosticsHubHardReloginEnabledDescription =>
+      'When enabled, after repeated reconnect failures the agent will attempt logout, login with saved credentials, and then reconnect the socket.';
+
+  @override
+  String get diagnosticsHubHardReloginThresholdLabel => 'Failed reconnect attempts before hard relogin';
+
+  @override
+  String get diagnosticsHubHardReloginThresholdHint => 'Allowed range: 1-20. Lower values escalate sooner.';
+
+  @override
+  String get diagnosticsHubHardReloginInvalidThreshold => 'Enter a whole number between 1 and 20.';
+
+  @override
   String get msgServerUrlRequired => 'Server URL is required';
 
   @override

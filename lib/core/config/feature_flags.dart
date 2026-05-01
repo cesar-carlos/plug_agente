@@ -34,6 +34,8 @@ class FeatureFlags {
   static const _keyEnableOdbcPaginatedSqlDebugLog = 'feature_enable_odbc_paginated_sql_debug_log';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
+  static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
+  static const _keyHubHardReloginFailureThreshold = 'feature_hub_hard_relogin_failure_threshold';
 
   /// Whether binary payload is enabled.
   bool get enableBinaryPayload => _prefs.getBool(_keyEnableBinaryPayload) ?? true;
@@ -282,6 +284,22 @@ class FeatureFlags {
     await _prefs.remove(_keyHubPersistentRetryIntervalSeconds);
   }
 
+  /// Whether reconnect recovery may escalate to automatic hard relogin
+  /// (logout -> login -> reconnect) when retries keep failing.
+  bool get enableHubHardReloginRecovery => _prefs.getBool(_keyEnableHubHardReloginRecovery) ?? true;
+
+  Future<void> setEnableHubHardReloginRecovery(bool value) async {
+    await _prefs.setBool(_keyEnableHubHardReloginRecovery, value);
+  }
+
+  /// Number of consecutive failed reconnect attempts before escalating to
+  /// automatic hard relogin. Clamped in callers to safe bounds.
+  int get hubHardReloginFailureThreshold => _prefs.getInt(_keyHubHardReloginFailureThreshold) ?? 3;
+
+  Future<void> setHubHardReloginFailureThreshold(int value) async {
+    await _prefs.setInt(_keyHubHardReloginFailureThreshold, value);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
@@ -307,6 +325,8 @@ class FeatureFlags {
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
+    await setEnableHubHardReloginRecovery(true);
+    await setHubHardReloginFailureThreshold(3);
     await resetHubResilienceOverrides();
   }
 }

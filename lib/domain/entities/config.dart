@@ -38,6 +38,8 @@ class Config {
     this.hubProfileVersion,
     this.hubProfileUpdatedAt,
   });
+
+  static const Object _unset = Object();
   final String id;
   final String serverUrl;
   final String agentId;
@@ -79,15 +81,15 @@ class Config {
     String? id,
     String? serverUrl,
     String? agentId,
-    String? authToken,
-    String? refreshToken,
-    String? authUsername,
-    String? authPassword,
+    Object? authToken = _unset,
+    Object? refreshToken = _unset,
+    Object? authUsername = _unset,
+    Object? authPassword = _unset,
     String? driverName,
     String? odbcDriverName,
     String? connectionString,
     String? username,
-    String? password,
+    Object? password = _unset,
     String? databaseName,
     String? host,
     int? port,
@@ -104,8 +106,8 @@ class Config {
     String? nomeMunicipio,
     String? ufMunicipio,
     String? observacao,
-    int? hubProfileVersion,
-    String? hubProfileUpdatedAt,
+    Object? hubProfileVersion = _unset,
+    Object? hubProfileUpdatedAt = _unset,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -113,15 +115,15 @@ class Config {
       id: id ?? this.id,
       serverUrl: serverUrl ?? this.serverUrl,
       agentId: agentId ?? this.agentId,
-      authToken: authToken ?? this.authToken,
-      refreshToken: refreshToken ?? this.refreshToken,
-      authUsername: authUsername ?? this.authUsername,
-      authPassword: authPassword ?? this.authPassword,
+      authToken: identical(authToken, _unset) ? this.authToken : authToken as String?,
+      refreshToken: identical(refreshToken, _unset) ? this.refreshToken : refreshToken as String?,
+      authUsername: identical(authUsername, _unset) ? this.authUsername : authUsername as String?,
+      authPassword: identical(authPassword, _unset) ? this.authPassword : authPassword as String?,
       driverName: driverName ?? this.driverName,
       odbcDriverName: odbcDriverName ?? this.odbcDriverName,
       connectionString: connectionString ?? this.connectionString,
       username: username ?? this.username,
-      password: password ?? this.password,
+      password: identical(password, _unset) ? this.password : password as String?,
       databaseName: databaseName ?? this.databaseName,
       host: host ?? this.host,
       port: port ?? this.port,
@@ -138,8 +140,10 @@ class Config {
       nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
       ufMunicipio: ufMunicipio ?? this.ufMunicipio,
       observacao: observacao ?? this.observacao,
-      hubProfileVersion: hubProfileVersion ?? this.hubProfileVersion,
-      hubProfileUpdatedAt: hubProfileUpdatedAt ?? this.hubProfileUpdatedAt,
+      hubProfileVersion: identical(hubProfileVersion, _unset) ? this.hubProfileVersion : hubProfileVersion as int?,
+      hubProfileUpdatedAt: identical(hubProfileUpdatedAt, _unset)
+          ? this.hubProfileUpdatedAt
+          : hubProfileUpdatedAt as String?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

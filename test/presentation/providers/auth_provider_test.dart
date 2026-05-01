@@ -249,7 +249,7 @@ void main() {
         expect(provider.currentToken, isNotNull);
 
         // Act
-        provider.logout();
+        await provider.logout();
 
         // Assert
         expect(provider.isAuthenticated, isFalse);
