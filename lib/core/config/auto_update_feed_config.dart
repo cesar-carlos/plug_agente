@@ -8,7 +8,11 @@ String resolveAutoUpdateFeedUrl({
   if (normalizedFromDefine.isNotEmpty) {
     return normalizedFromDefine;
   }
-  return environment['AUTO_UPDATE_FEED_URL']?.trim() ?? '';
+  final normalizedFromEnvironment = environment['AUTO_UPDATE_FEED_URL']?.trim() ?? '';
+  if (normalizedFromEnvironment.isNotEmpty) {
+    return normalizedFromEnvironment;
+  }
+  return officialAutoUpdateFeedUrl;
 }
 
 bool isSparkleFeedUrl(String url) {
