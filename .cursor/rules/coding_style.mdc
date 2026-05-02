@@ -11,6 +11,10 @@ alwaysApply: true
 Este arquivo e a fonte de verdade para sintaxe, naming, imports, tooling,
 async/logging e recursos modernos do Dart.
 
+O projeto usa Dart `^3.10.4`; recursos modernos disponiveis nessa constraint,
+como dot shorthands, records, patterns, switch expressions, class modifiers e
+null-aware collection elements podem ser usados quando melhorarem clareza.
+
 Nao repita aqui:
 
 - politica de comentarios e documentacao: `general_rules.mdc`
@@ -23,6 +27,9 @@ Nao repita aqui:
 - Prefira tipos concretos a `dynamic`
 - Use `final` para referencias que nao mudam
 - Use `var` apenas quando o tipo for obvio e nao reduzir clareza
+- Em variaveis locais, prefira inferencia (`final`/`var`) quando o lado direito
+  revela claramente o tipo; mantenha anotacao explicita quando ela documentar
+  contrato, evitar ambiguidade ou melhorar a leitura
 - Separe fases da funcao com poucas linhas em branco: validacao, trabalho,
   retorno
 - Prefira early return para reduzir aninhamento
@@ -46,6 +53,8 @@ String formatUserName(User user) {
   couber em uma linha
 - Use construtores nomeados quando houver mais de uma forma semantica de criar
   o objeto
+- Use declaracao de funcao local quando precisar nomear uma closure; nao atribua
+  uma lambda a variavel local se a funcao nao for reatribuida
 - Para widgets imutaveis, use `const` constructor; detalhes de widget ficam em
   `flutter_widgets.mdc`
 
@@ -121,6 +130,15 @@ final String message = 'Query ${request.id} finished in ${metrics.elapsedMs}ms';
 - Evite colecoes sem tipo
 - Prefira APIs de colecao declarativas (`map`, `where`, `expand`) quando
   melhorarem a leitura
+- Use collection `if`, `for`, spread (`...`) e null-aware spread (`...?`) quando
+  isso evitar mutacao manual sem esconder o fluxo
+- Use null-aware collection elements (`?value`, `?key: value`,
+  `key: ?value`) para inserir valores opcionais apenas quando presentes
+- Use `isEmpty` e `isNotEmpty` em vez de comparar `.length`
+- Use `whereType<T>()` para filtrar por tipo em vez de `cast<T>()` quando a
+  colecao puder conter valores de outros tipos
+- Evite `forEach` com function literal; prefira `for` quando houver bloco com
+  varios passos ou tear-off quando for apenas repassar a chamada
 - Use `StringBuffer` quando montar strings em acumulacoes maiores, loops ou
   concatenacoes frequentes
 
@@ -146,9 +164,23 @@ final List<String> activeIds = users
 
 ## Modern Dart
 
+### Version-Aware Usage
+
+- Use recursos modernos apenas quando a constraint de SDK do projeto permitir
+- Se uma feature nova exigir language version especifica, confirme
+  `environment.sdk` antes de transformar isso em padrao do codigo
+- Prefira recursos modernos quando eles removem boilerplate, casts ou estados
+  invalidos; evite usar sintaxe nova apenas por novidade
+
 ### Pattern Matching
 
 - Use patterns quando simplificarem leitura e eliminarem casts
+- Use `if case` para validar e destructurar ao mesmo tempo quando isso substituir
+  casts ou null checks ruidosos
+- Use destructuring em records e objetos quando os nomes extraidos ficarem mais
+  claros que acessos repetidos
+- Evite patterns muito densos; se a leitura exigir decodificar a sintaxe, extraia
+  uma funcao ou valor intermediario
 
 ```dart
 switch (result) {
@@ -163,7 +195,12 @@ switch (result) {
 
 - Prefira dot shorthand quando o tipo estiver obvio pelo contexto e isso reduzir
   ruido visual
+- Bons usos: enum values em atribuicoes, argumentos tipados e `switch`; named
+  constructors/factories; static members; `.new()` em inicializadores cujo tipo
+  ja esta explicito
 - Use com mais cuidado quando a origem do simbolo puder ficar ambigua
+- Evite dot shorthand com `var`, chains longas ou expressoes sem contexto de
+  tipo evidente
 - Evite dot shorthand se ele dificultar a navegacao ou a leitura fora do contexto
 
 ```dart
@@ -178,9 +215,12 @@ alignment: .center;
 
 - Use tear-offs quando eles deixarem callbacks e construtores mais diretos,
   legiveis e idiomaticos
-- Prefira tear-off a lambda trivial que apenas repassa a mesma assinatura
+- Prefira tear-off a lambda trivial que apenas repassa a mesma assinatura para
+  funcao, metodo, named constructor ou unnamed constructor
 - Evite tear-off quando ele esconder parametros relevantes, dificultar leitura
   ou tornar o fluxo menos obvio
+- Quando uma closure precisar de nome e corpo proprio, prefira declaracao de
+  funcao local em vez de variavel recebendo lambda
 
 ```dart
 items.map(UserTile.new);
@@ -191,6 +231,12 @@ onPressed: controller.refresh;
 
 - Use records para retornos pequenos e coesos, quando uma classe dedicada
   seria excesso
+- Prefira named fields em records publicos ou retornos que precisam ser lidos
+  fora de um escopo pequeno
+- Destructure records perto do ponto de uso quando isso deixar o fluxo mais
+  explicito
+- Nao use records para entidades de dominio, estados ricos ou dados que precisam
+  de invariantes, comportamento, documentacao propria ou evolucao de API
 
 ```dart
 ({int rows, Duration elapsed}) summarize(QueryMetrics metrics) {
@@ -204,6 +250,11 @@ onPressed: controller.refresh;
 ### Switch Expressions
 
 - Prefira `switch` exaustivo para enums e sealed types
+- Em `switch expression`, use `_` para fallback apenas quando o dominio for
+  realmente aberto; para enums e sealed types, prefira deixar o analyzer apontar
+  variantes faltantes
+- Use guard clauses (`when`) quando a condicao complementar pertencer ao proprio
+  case e mantiver o `switch` legivel
 
 ```dart
 final icon = switch (status) {
@@ -220,6 +271,8 @@ final icon = switch (status) {
 - Prefira sealed classes a enums quando cada variante precisar carregar dados
 - Em `switch` sobre sealed types, evite `default`; deixe o compilador sinalizar
   variantes faltantes
+- Mantenha subtipos diretos de uma sealed class no mesmo arquivo ou biblioteca
+  quando isso ajudar a preservar a visao completa do conjunto fechado
 
 ```dart
 sealed class QueryState {}
@@ -239,6 +292,24 @@ class QueryError extends QueryState {
 }
 ```
 
+### Class Modifiers
+
+- Use `sealed` para hierarquias fechadas que devem ser exaustivas em `switch`
+- Use `interface` quando a classe define um contrato para implementacoes externas
+  sem expor heranca de implementacao
+- Use `base` ou `final` quando a classe precisa controlar como pode ser
+  estendida fora da biblioteca
+- Evite modifiers por reflexo; escolha o modifier pela promessa de API que o
+  tipo precisa fazer
+
+```dart
+sealed class ConnectionState {}
+
+final class Connected extends ConnectionState {}
+
+final class Disconnected extends ConnectionState {}
+```
+
 ### Extension Methods
 
 - Use extensions quando o comportamento fizer sentido semantico no tipo receptor
@@ -253,6 +324,15 @@ extension AppThemeContext on BuildContext {
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
 }
 ```
+
+### Extension Types
+
+- Considere extension types para wrappers leves com semantica forte sobre um
+  valor existente, quando uma classe completa seria excesso
+- Use com parcimonia em fronteiras de dominio ou IDs tipados; confirme que a
+  semantica estatica melhora a seguranca sem confundir runtime e serializacao
+- Prefira value objects normais quando precisar de invariantes complexas,
+  comportamento rico ou compatibilidade clara com frameworks/codegen
 
 ## JSON e Codegen
 
@@ -330,6 +410,8 @@ Future<User> loadUser(String id) async {
 - [ ] Funcoes estao pequenas e com baixo aninhamento
 - [ ] Imports estao ordenados e limpos
 - [ ] `const`/`final` foram usados corretamente
+- [ ] Inference local (`final`/`var`) foi usada quando melhora leitura sem
+      esconder contratos
 - [ ] Logs usam ferramenta apropriada e preservam contexto
 - [ ] O conjunto de lints definido no projeto foi respeitado
 - [ ] `flutter analyze` foi executado quando a tarefa alterou codigo Dart
@@ -337,6 +419,9 @@ Future<User> loadUser(String id) async {
       validado
 - [ ] Dot shorthand foi usado apenas quando o contexto deixou o tipo obvio
 - [ ] Tear-offs foram usados apenas onde melhoram a leitura
+- [ ] Collections modernas (`if`, `for`, spread e null-aware elements) foram
+      usadas apenas quando simplificam o fluxo
 - [ ] Recursos modernos de Dart foram usados apenas quando melhoram a clareza
 - [ ] Sealed classes foram usadas quando variantes fixas modelam melhor o dominio
+- [ ] Class modifiers expressam uma promessa real de API
 - [ ] Extensions foram criadas apenas quando o receptor era semanticamente correto

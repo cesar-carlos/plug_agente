@@ -20,6 +20,8 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - Cada tipo deve ter uma razao principal para mudar
 - Evite classes que validam, persistem, formatam e apresentam ao mesmo tempo
 - Se um arquivo cresce porque agrega preocupacoes diferentes, separe-o
+- Se uma mudanca simples obriga editar varios metodos sem relacao direta,
+  reavalie a responsabilidade do tipo
 
 ## OCP
 
@@ -30,6 +32,8 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - Em UI e componentes Flutter, prefira primeiro composicao, parametros,
   builders e contratos pequenos; heranca deve ser excecao, nao padrao
 - Se um fluxo depende de `switch` frequente por tipo, reavalie a modelagem
+- Evite boolean flags que mudam fortemente o comportamento interno; quando a
+  variacao for importante, prefira tipos, estrategias ou comandos distintos
 
 ## LSP
 
@@ -52,6 +56,8 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - Defina contratos perto do dominio ou da camada consumidora, nao na
   implementacao concreta
 - Evite criar classes de alto nivel que instanciam suas dependencias
+- Nao crie interface por antecipacao quando so existe uma implementacao e nenhuma
+  fronteira arquitetural exige abstracao
 
 ## Heuristicas Praticas
 
@@ -64,6 +70,12 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - Se uma interface tem muitos metodos opcionais ou nao usados, aplique ISP
 - Se uma hierarquia de componentes exige overrides frequentes para ajustar
   pequenos detalhes visuais, prefira um componente base composicional
+- Se varios metodos recebem sempre o mesmo grupo de parametros, suspeite de
+  `data clump` e modele um objeto coeso
+- Se regras importantes dependem de strings, maps ou primitives sem semantica,
+  suspeite de `primitive obsession`
+- Se uma abstracao existe apenas para "facilitar testes", confirme que ela
+  tambem representa uma fronteira real do design
 
 ## Referencias Cruzadas
 
@@ -77,3 +89,5 @@ Nao repita aqui as regras de camada da arquitetura. Para isso, use
 - [ ] Interfaces estao pequenas e coesas
 - [ ] Dependencias entram por abstracao e construtor
 - [ ] Implementacoes podem ser substituidas sem quebrar o contrato esperado
+- [ ] Boolean flags, primitive obsession e data clumps foram evitados quando
+      indicavam modelagem fraca

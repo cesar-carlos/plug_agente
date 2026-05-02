@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plug Agente Repo Rules"
+  short_description: "Use the plug_agente repo rules and workflow"
+  default_prompt: "Use $plug-agente-repo-rules to work in the plug_agente repository following its AGENTS.md and .cursor/rules ownership."

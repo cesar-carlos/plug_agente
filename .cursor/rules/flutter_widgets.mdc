@@ -76,6 +76,10 @@ class _CounterPanelState extends State<CounterPanel> {
 - Prefira classes privadas pequenas a metodos `Widget _build...`
 - Se o mesmo padrao visual aparecer em mais de um lugar, extraia um
   componente reutilizavel
+- Para UI reutilizavel, prefira `StatelessWidget`/`StatefulWidget` com `const`
+  constructor a helper function que retorna `Widget`
+- Use componentizacao como estrategia padrao para reduzir duplicacao visual e
+  preservar identidade de UI entre telas
 - Mantenha `build()` legivel e raso
 - Nao retorne `Widget` de funcoes auxiliares quando uma classe privada ou
   construtor direto resolver
@@ -89,6 +93,9 @@ class _CounterPanelState extends State<CounterPanel> {
   base composicional e injete as diferencas em vez de subclassificar
 - Quando um padrao aparecer em mais de um fluxo, evolua primeiro o componente em
   `shared/` antes de duplicar ou criar uma nova variante isolada
+- Componentes compartilhados devem encapsular estrutura visual, spacing,
+  estados e tokens recorrentes; comportamento especifico da tela entra por
+  parametros, callbacks, slots ou builders
 
 ```dart
 class UserListPage extends StatelessWidget {
@@ -226,6 +233,11 @@ TextField(
   em componentes menores e coesos antes de recorrer a heranca
 - Prefira contratos pequenos e previsiveis para componentes compartilhados; isso
   facilita manutencao, testes e substituicao futura
+- Antes de criar uma nova superficie visual isolada, procure componente
+  existente em `shared/` ou no fluxo mais proximo e evolua-o quando a identidade
+  visual for a mesma
+- Nao crie componente compartilhado para uma variacao unica e especulativa; faca
+  isso quando houver repeticao real ou padrao visual deliberado do produto
 
 ## Texto e Localizacao no Widget
 
@@ -261,6 +273,7 @@ TextField(
 - [ ] Rebuilds de `Provider` ficaram granulares e coerentes com a subarvore
 - [ ] Componentes compartilhados evoluiram por composicao antes de considerar
       heranca
+- [ ] Padroes visuais repetidos foram componentizados antes de duplicar layout
 - [ ] Custos de renderizacao caros (`saveLayer`, clipping, opacity, intrinsics)
       foram evitados ou justificados
 - [ ] Performance foi avaliada em `profile mode` quando a tarefa exigir isso

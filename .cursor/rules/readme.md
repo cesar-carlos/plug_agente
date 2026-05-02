@@ -1,11 +1,12 @@
 # Cursor Rules - Guia de Uso
 
-Este diretorio contem as regras do Cursor para manter consistencia no projeto.
-Depois da consolidacao, as rules ficaram separadas em 3 grupos:
+Este diretorio contem as rules do Cursor para manter consistencia no projeto.
 
-- universais
-- Dart/Flutter
-- especificas do repositorio
+`rules_index.mdc` e a fonte de verdade para categorias, ownership por tema e
+coordenacao entre arquivos.
+
+Este `readme.md` existe para explicar manutencao, reaproveitamento e como
+evitar duplicacao entre rules.
 
 ## Estrutura
 
@@ -27,43 +28,31 @@ Depois da consolidacao, as rules ficaram separadas em 3 grupos:
 `-- project_specifics.mdc    # regras especificas do plug_agente
 ```
 
-## Categorias
+## Como Usar
 
-### 1. Universais
+1. Leia primeiro `rules_index.mdc`
+2. Leia `project_specifics.mdc` antes de mudar codigo real do repositorio
+3. Leia apenas as rules tematicas que a tarefa tocar
 
-Essas regras podem ser reaproveitadas em qualquer stack:
+Exemplo:
 
-- `general_rules.mdc`
-- `clean_architecture.mdc`
-- `solid_principles.mdc`
-- `testing.mdc`
-
-### 2. Dart/Flutter
-
-Essas regras sao reutilizaveis apenas em projetos Dart/Flutter:
-
-- `coding_style.mdc`
-- `null_safety.mdc`
-- `flutter_widgets.mdc`
-- `ui_ux_design.mdc`
-- `testing_dart_flutter.mdc`
-
-### 3. Especificas do Projeto
-
-Essas regras devem ser adaptadas para cada repositorio:
-
-- `project_specifics.mdc`
-
-## Fonte de Verdade por Tema
-
-- comportamento geral e higiene de codigo: `general_rules.mdc`
-- arquitetura em camadas: `clean_architecture.mdc`
-- design de classes e interfaces: `solid_principles.mdc`
-- testes universais: `testing.mdc`
-- sintaxe/estilo Dart: `coding_style.mdc`
-- Flutter e UI: `flutter_widgets.mdc` e `ui_ux_design.mdc`
+- arquitetura/imports: `clean_architecture.mdc`
+- estilo Dart/tooling: `coding_style.mdc`
+- widgets/layout/rebuild: `flutter_widgets.mdc`
+- UX desktop/acessibilidade: `ui_ux_design.mdc`
 - testes Dart/Flutter: `testing_dart_flutter.mdc`
-- decisoes do repositorio: `project_specifics.mdc`
+
+## Como Manter Sem Duplicar
+
+- Cada tema tem um unico arquivo dono definido em `rules_index.mdc`
+- Nao replique a mesma regra em varios arquivos; deixe a regra completa apenas
+  no arquivo dono
+- Quando um tema tiver parte generica e parte local, mantenha a parte generica
+  na rule tematica e deixe em `project_specifics.mdc` apenas o delta do
+  `plug_agente`
+- Prefira referencia cruzada curta em vez de copiar texto
+- Se uma rule mudar de escopo, atualize primeiro `rules_index.mdc` e depois
+  este `readme.md`
 
 ## Foco Atual destas Rules
 
@@ -132,7 +121,9 @@ alwaysApply: true
 ## Observacoes
 
 - Nao duplique regra em mais de um arquivo
-- Prefira referencia cruzada curta em vez de copiar texto
+- `project_specifics.mdc` complementa as rules tematicas; ele nao substitui
+  `clean_architecture.mdc`, `coding_style.mdc`, `flutter_widgets.mdc`,
+  `ui_ux_design.mdc`, `testing.mdc` ou `testing_dart_flutter.mdc`
 - Mantenha `rules_index.mdc` sincronizado quando um arquivo mudar de escopo
 - Quando uma regra nova surgir, primeiro decida se ela e universal,
   Dart/Flutter ou especifica do repositorio

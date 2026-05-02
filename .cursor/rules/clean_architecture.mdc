@@ -63,6 +63,19 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - Arquivos gerados, como codigo de `l10n` ou `build_runner`, nao redefinem a
   arquitetura; avalie a camada pelo papel do arquivo-fonte que os origina
 
+## Modelos e Mapeamento
+
+- Entidades de `domain` nao devem carregar formato de API, banco, Socket.IO,
+  Drift, JSON ou UI
+- DTOs, table models, payloads de transporte e view models pertencem a borda que
+  os consome ou produz
+- Converta modelos externos para tipos internos seguros em mappers, adapters,
+  datasources ou repositories, conforme a fronteira responsavel
+- Nao deixe modelos de `infrastructure` vazarem para `application` ou
+  `presentation`
+- Se dois modelos parecem iguais mas mudam por motivos diferentes, mantenha-os
+  separados e mapeie explicitamente
+
 ## Sinais de Violacao
 
 - `domain` conhecendo `Dio`, `Socket`, `BuildContext` ou `Widget`
@@ -70,6 +83,7 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - `application` importando widget, provider ou classe de infraestrutura
 - entidades com logica de persistencia, serializacao de transporte ou estado de
   tela
+- DTOs, rows de banco ou payloads Socket.IO usados como entidades de dominio
 - `shared` recebendo responsabilidades de fluxo, casos de uso ou acesso a dados
 - `core` virando deposito generico de classes que pertencem a `application` ou
   `infrastructure`
@@ -85,6 +99,8 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 - [ ] A direcao dos imports respeita a arquitetura
 - [ ] Efeitos colaterais ficaram fora de `domain`
 - [ ] `presentation` nao conhece implementacoes concretas de infraestrutura
+- [ ] DTOs, table models e payloads externos foram mapeados antes de cruzar
+      fronteiras internas
 - [ ] `core` e `shared` ficaram focados em reutilizacao transversal, sem virar
       camadas genericas
 - [ ] Contratos vivem em camadas internas e implementacoes nas externas

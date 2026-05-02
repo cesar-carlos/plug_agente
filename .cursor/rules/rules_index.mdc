@@ -12,6 +12,8 @@ alwaysApply: true
 - Prefer self-explanatory code via naming, structure, and focused abstractions
 - Never swallow errors silently
 - Prefer clear, actionable failures over generic error messages
+- Do not duplicate the same rule across multiple files; keep one owner and use
+  short cross-references elsewhere
 
 ## Rule Categories
 
@@ -19,12 +21,13 @@ alwaysApply: true
 
 Use these as language-agnostic guidance that can be reused in other stacks.
 
-- **`general_rules.mdc`**: cross-cutting behavior, docs/comments policy, reuse,
-  duplication, magic numbers, refactoring strategy
+- **`general_rules.mdc`**: cross-cutting behavior, Clean Code heuristics,
+  docs/comments policy, reuse, duplication, magic numbers, refactoring strategy
 - **`clean_architecture.mdc`**: layer boundaries and dependency direction
-- **`solid_principles.mdc`**: SRP/OCP/LSP/ISP/DIP design guidance
+- **`solid_principles.mdc`**: SRP/OCP/LSP/ISP/DIP design guidance and practical
+  code smell heuristics
 - **`testing.mdc`**: universal test strategy, isolation, mocking, failure-path
-  coverage
+  coverage, and tests as behavior contracts
 
 ### Dart and Flutter Rules
 
@@ -33,8 +36,9 @@ Use these only when the codebase is Dart/Flutter.
 - **`coding_style.mdc`**: Dart syntax, naming, imports, formatting,
   async/logging, tooling, and modern language features
 - **`null_safety.mdc`**: nullability modeling and safe access patterns
-- **`flutter_widgets.mdc`**: widget composition, local UI state, build/rebuild
-  performance, layout primitives, and Provider-friendly composition
+- **`flutter_widgets.mdc`**: widget composition, shared component strategy,
+  local UI state, build/rebuild performance, layout primitives, and
+  Provider-friendly composition
 - **`ui_ux_design.mdc`**: desktop design system, interaction patterns,
   accessibility, responsive desktop behavior, and Fluent-first guidance
 - **`testing_dart_flutter.mdc`**: Dart/Flutter test code, widget tests, test
@@ -42,13 +46,20 @@ Use these only when the codebase is Dart/Flutter.
 
 ### Project-Specific Rules
 
-- **`project_specifics.mdc`**: repo-specific architecture choices, packages,
-  transport contract, typed failures, desktop/runtime, persistence, and l10n
+- **`project_specifics.mdc`**: repo-specific stack choices, transport contract,
+  typed failures, desktop/runtime, persistence, l10n, and test environment
   decisions
 
 ## Coordination Rules
 
-- General behavior, docs/comments, reuse, duplication, refactoring strategy:
+- Each theme has a single owner file; when topics overlap, keep the full rule
+  only in the owner and reference it from the others
+- If a rule has both generic and repo-specific aspects, keep the generic
+  guidance in the thematic rule and leave only the repository delta in
+  `project_specifics.mdc`
+
+- General behavior, Clean Code, docs/comments, reuse, duplication, refactoring
+  strategy:
   `general_rules.mdc`
 - Layering and import direction: `clean_architecture.mdc`
 - Class and interface design: `solid_principles.mdc`
@@ -58,7 +69,8 @@ Use these only when the codebase is Dart/Flutter.
 - Flutter widget/layout code: `flutter_widgets.mdc`
 - Desktop UX/design: `ui_ux_design.mdc`
 - Dart/Flutter test code: `testing_dart_flutter.mdc`
-- Repo-specific packages, protocol rules, and failure mapping:
+- Repo-specific packages, protocol rules, failure mapping, runtime, persistence,
+  and test environment decisions:
   `project_specifics.mdc`
 
 ## Copying to Other Projects

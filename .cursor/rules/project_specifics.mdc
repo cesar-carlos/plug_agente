@@ -8,14 +8,23 @@ alwaysApply: true
 
 ## Escopo
 
-Este arquivo concentra apenas decisoes especificas deste repositorio.
+Este arquivo concentra somente decisoes especificas deste repositorio:
 
-Para regras genericas, consulte:
+- dependencias e escolhas obrigatorias de stack
+- contrato Plug, transporte e documentacao associada
+- runtime desktop, persistencia local e bootstrap
+- regras locais para `Result<T>`, failures e testes E2E/integracao
+
+Nao repita aqui regras genericas de:
 
 - `clean_architecture.mdc` para camadas e imports
 - `solid_principles.mdc` para SRP/DIP
 - `coding_style.mdc` para estilo Dart e logging
 - `flutter_widgets.mdc` e `ui_ux_design.mdc` para interface
+- `testing.mdc` e `testing_dart_flutter.mdc` para estrategia de testes
+
+Quando uma orientacao for reutilizavel fora do `plug_agente`, mova-a para a
+rule tematica dona do assunto e deixe aqui apenas o delta local do repositorio.
 
 ## Visao Geral
 
@@ -37,22 +46,20 @@ lib/
 `-- shared/            # componentes e widgets compartilhados
 ```
 
-## Responsabilidades de Dados e UI
+## Convencoes Locais de Ownership
 
-- `presentation` deve manter paginas, providers e controllers focados em estado
-  de exibicao e orquestracao da interacao
-- Providers/controllers funcionam como camada de apresentacao; nao devem virar
-  wrappers de rede, parse ou persistencia
-- Repositories sao a fonte de verdade dos dados do app e devem concentrar cache,
+Estas convencoes complementam `clean_architecture.mdc` com ownership especifico
+deste app:
+
+- Providers/controllers sao camada de apresentacao; devem ficar focados em
+  estado de exibicao e orquestracao da interacao
+- Repositories sao a fonte de verdade dos dados do app e concentram cache,
   retry, refresh e traducao de erros de acesso a dados
-- Services de infraestrutura devem encapsular ODBC, Socket.IO, arquivos, APIs e
-  outras fontes externas; mantenha esses services sem estado sempre que
-  possivel
-- Contratos de repositories e gateways devem viver nas camadas internas; as
-  implementacoes concretas ficam em `infrastructure`
-- Se uma regra de negocio precisar combinar dados de multiplos repositories,
-  faca isso em use case, application service ou camada apropriada, nao em
-  service de infraestrutura
+- Services de infraestrutura encapsulam ODBC, Socket.IO, arquivos, APIs e
+  outras fontes externas; mantenha-os sem estado sempre que possivel
+- Quando uma regra de negocio combinar dados de multiplos repositories, faca
+  isso em use case ou application service, nao em widget, provider ou service
+  de infraestrutura
 
 ## Dependencias Obrigatorias
 
@@ -142,13 +149,19 @@ lib/
 ## Erros e Resultados
 
 Este projeto usa `result_dart` e failures tipadas como padrao de fronteira.
+`Result<T>` e a estrategia Either-like oficial do repositorio para fluxos
+faliveis; nao substitua por `Either`, `dartz`, `null`, `bool` ou sentinel
+strings para representar erro.
 
 - Retorne `Result<T>` em fluxos faliveis de use cases, services,
   repositories e gateways
+- Todo fluxo falivel deve terminar em `Success` ou `Failure` tipada, com
+  significado claro para quem consome a API
 - Traduza excecoes de infraestrutura para failures especificas:
   `NetworkFailure`, `ConnectionFailure`, `ValidationFailure`, `ServerFailure`
 - Preserve `cause` e `context` quando mapear a falha
-- Exponha para a UI mensagens acionaveis; nao exponha stack trace bruto
+- Separe mensagem segura para usuario de contexto tecnico para log/diagnostico
+- Exponha para a UI mensagens claras e acionaveis; nao exponha stack trace bruto
 - Nao esconda erro com `catch` vazio, fallback silencioso ou
   `ServerFailure(e.toString())` generico em todo lugar
 
@@ -179,11 +192,16 @@ Future<Result<User>> getById(String id) async {
 
 ## Testes E2E e Integracao
 
-- Testes que usam API, ODBC ou outros recursos reais dependem de variaveis no `.env`
-- Use `E2EEnv` (`test/helpers/e2e_env.dart`) para acessar variaveis; chame `E2EEnv.load()` no inicio de `main()` do teste
-- Variaveis obrigatorias por tipo: `RUN_LIVE_API_TESTS` e `API_TEST_BASE_URL` para API; `ODBC_TEST_DSN*` para ODBC
-- Testes E2E devem usar `skip` quando variaveis nao estiverem definidas, com mensagem clara
-- Rode `dart run tool/check_e2e_env.dart` para verificar configuracao antes dos testes
+- Testes que usam API, ODBC ou outros recursos reais dependem de variaveis no
+  `.env`
+- Use `E2EEnv` (`test/helpers/e2e_env.dart`) para acessar variaveis; chame
+  `E2EEnv.load()` no inicio de `main()` do teste
+- Variaveis obrigatorias por tipo: `RUN_LIVE_API_TESTS` e
+  `API_TEST_BASE_URL` para API; `ODBC_TEST_DSN*` para ODBC
+- Testes E2E devem usar `skip` quando variaveis nao estiverem definidas, com
+  mensagem clara
+- Rode `dart run tool/check_e2e_env.dart` para verificar configuracao antes dos
+  testes
 - Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
 
 ## Expectativas de Teste no Repositorio
@@ -191,6 +209,10 @@ Future<Result<User>> getById(String id) async {
 - Em fluxos faliveis, teste `Success` e `Failure`
 - Quando houver `Failure`, valide o subtipo concreto e a `message` quando isso
   for relevante para o usuario ou diagnostico
+- Teste que excecoes relevantes sao mapeadas para a failure concreta esperada,
+  preservando contexto tecnico util
+- Teste que a mensagem exposta ao usuario continua clara e segura quando a falha
+  atravessa a fronteira ate a UI
 - Mudancas em transporte, protocolo, streaming, compressao e ODBC devem vir
   acompanhadas de testes de contrato, integracao ou regressao
 - Priorize testes em torno de `Result<T>`, mapeamento de failures e contratos do
@@ -217,12 +239,10 @@ result.fold(
 - Use `window_manager` para controle de janela
 - Use `tray_manager` ou a abstracao equivalente do projeto para integracao com
   tray; nao acople widgets diretamente a APIs da shell
-- Considere atalhos de teclado, foco e resize em todas as telas desktop
-- Para telas desktop-first, prefira Fluent UI como linguagem visual
-- Se uma tela ainda estiver em Material, mantenha o escopo isolado e
-  consistente
 - Centralize regras de startup, update, tray, auto-start e politicas de runtime
   em services/orchestrators dedicados, nao em pages
+- Diretrizes de UX desktop, foco, resize e linguagem visual ficam em
+  `ui_ux_design.mdc`
 
 ## Entry Point
 
@@ -240,14 +260,14 @@ Future<void> main(List<String> args) async {
 ## Checklist de Revisao
 
 - [ ] O codigo respeita as dependencias obrigatorias do projeto
-- [ ] Nenhuma camada importou `infrastructure` a partir de `presentation` ou
-      `application`
-- [ ] Providers/controllers ficaram focados em estado de apresentacao
+- [ ] Providers/controllers nao viraram wrappers de rede, parse ou persistencia
 - [ ] Repositories permanecem como fonte de verdade para dados e politicas de
       cache/retry/refresh
 - [ ] Services externos continuam sem estado sempre que possivel
 - [ ] Fluxos faliveis retornam `Result<T>` onde faz sentido
 - [ ] Failures estao tipadas e preservam contexto tecnico util
+- [ ] Nenhum fluxo falivel usa `null`, `bool`, string sentinela ou excecao crua
+      como contrato de erro
 - [ ] Persistencia local usa a ferramenta correta (`drift`,
       `shared_preferences`, `flutter_secure_storage`) para cada tipo de dado
 - [ ] Strings de UI respeitam a estrategia atual de localizacao da superficie

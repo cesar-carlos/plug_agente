@@ -78,6 +78,19 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 - Prefira poucos testes precisos a muitos testes redundantes
 - Quando uma regressao ocorrer, adicione um teste que a capture de forma direta
 
+## Testes Como Contrato de Design
+
+- Em refatoracoes, proteja comportamento observavel antes de reorganizar codigo
+  quando houver risco real
+- Teste contratos de dominio, use cases, protocolo, mapeamento de failures e
+  bordas externas pelo que eles prometem, nao pelo detalhe interno atual
+- Evite asserts acopladas a ordem, classe concreta ou metodo privado quando isso
+  nao fizer parte do contrato
+- Quando uma mudanca altera fronteira entre camadas, adicione ou atualize teste
+  no nivel mais simples que capture essa fronteira
+- Teste de regressao deve falhar pelo bug observado antes da correcao e continuar
+  expressivo depois da refatoracao
+
 ## Referencias Cruzadas
 
 - Arquitetura e contracts: `clean_architecture.mdc`
@@ -91,3 +104,5 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 - [ ] Dependencias externas foram isoladas adequadamente
 - [ ] Caminhos de falha relevantes estao cobertos
 - [ ] Casos criticos de dominio e integracao estao cobertos
+- [ ] Refatoracoes relevantes preservaram comportamento por testes ou analise
+      explicita de risco

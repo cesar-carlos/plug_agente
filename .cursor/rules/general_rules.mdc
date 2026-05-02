@@ -59,6 +59,20 @@ Evite:
 - Remova codigo morto, comentarios desatualizados e trechos comentados
 - Se um trecho exige explicacao longa, reestruture antes de comentar
 
+## Heuristicas de Clean Code
+
+- Prefira funcoes pequenas que revelem uma unica intencao
+- Separe validacao, transformacao, IO, decisao de negocio e apresentacao quando
+  essas responsabilidades comecarem a competir dentro do mesmo bloco
+- Use guard clauses para reduzir aninhamento quando o fluxo principal ficar mais
+  claro
+- Evite parametros demais; quando varios valores sempre viajam juntos, modele
+  um value object, request ou configuracao nomeada
+- Evite nomes genericos como `handle`, `process`, `data`, `manager` ou `helper`
+  quando eles escondem a responsabilidade real
+- Prefira tipos e nomes que expressem a regra do dominio em vez de comentarios
+  explicando como interpretar valores primitivos
+
 ## Duplicacao e Reuso
 
 - Extraia uma abstracao quando o mesmo padrao aparecer pela segunda vez com a
@@ -90,7 +104,10 @@ Prefira:
 
 ### Como refatorar com seguranca
 
-- Prefira passos pequenos e equivalentes em comportamento
+- Primeiro preserve ou caracterize o comportamento observavel quando houver
+  risco real de regressao
+- Refatore em passos pequenos: renomear, extrair, mover, simplificar e so entao
+  alterar comportamento quando a tarefa exigir
 - Nao misture limpeza estrutural com mudanca de regra no mesmo passo
 - Rode analyzer e testes existentes apos alteracoes estruturais relevantes
 - Se a area nao tiver cobertura suficiente, adicione testes minimos antes da
@@ -128,3 +145,5 @@ Prefira:
 - [ ] Comentarios e documentacao necessarios foram escritos em ingles
 - [ ] Valores literais com significado foram nomeados
 - [ ] Padroes repetidos viraram abstracoes pequenas e reutilizaveis
+- [ ] Funcoes e tipos nao misturam responsabilidades independentes
+- [ ] Nomes genericos foram substituidos por nomes que revelam intencao
