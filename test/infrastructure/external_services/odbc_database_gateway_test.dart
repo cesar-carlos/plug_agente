@@ -2111,6 +2111,168 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
+      'should recover non-transactional batch command after invalid pooled connection id',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const firstConnectionId = 'pool-batch-1';
+        const secondConnectionId = 'pool-batch-2';
+        final config = _buildConfig(connectionString);
+        var acquireCount = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(connectionString)).thenAnswer((_) async {
+          acquireCount++;
+          return Success(acquireCount == 1 ? firstConnectionId : secondConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: firstConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Failure(
+            ConnectionError(
+              message: 'Invalid connection ID: stale handle',
+              nativeCode: 100000,
+            ),
+          );
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: secondConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.discard(firstConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConnectionPool.release(secondConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConnectionPool.recycle(connectionString)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'SELECT 1')],
+          options: const SqlExecutionOptions(timeoutMs: 1200),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result.isSuccess(), isTrue);
+        final items = result.getOrNull()!;
+        expect(items, hasLength(1));
+        expect(items.single.ok, isTrue);
+        verify(() => mockConnectionPool.acquire(connectionString)).called(2);
+        verify(() => mockConnectionPool.discard(firstConnectionId)).called(1);
+        verify(() => mockConnectionPool.recycle(connectionString)).called(1);
+        verify(() => mockConnectionPool.release(secondConnectionId)).called(1);
+        verify(
+          () => mockService.executeQuery(
+            'SELECT 1',
+            connectionId: firstConnectionId,
+          ),
+        ).called(1);
+        verify(
+          () => mockService.executeQuery(
+            'SELECT 1',
+            connectionId: secondConnectionId,
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockService.prepare(
+            any(),
+            any(),
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'should avoid prepared statement churn for timed non-transactional batch commands',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const pooledConnectionId = 'pool-batch-direct-timeout-1';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(connectionString)).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            'SELECT 1',
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'SELECT 1')],
+          options: const SqlExecutionOptions(timeoutMs: 1200),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => mockService.executeQuery(
+            'SELECT 1',
+            connectionId: pooledConnectionId,
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockService.prepare(
+            any(),
+            any(),
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        );
+        verifyNever(
+          () => mockService.executePrepared(
+            any(),
+            any(),
+            any(),
+            any(),
+          ),
+        );
+      },
+    );
+
+    test(
       'should keep transactional batch execution with more than five named parameters',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';

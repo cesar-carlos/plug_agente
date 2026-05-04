@@ -488,6 +488,55 @@ void main() {
       expect(reacquired.getOrNull(), 'lease-2');
     });
 
+    test('discard should free the local lease before disconnect completes', () async {
+      mockSettings.poolSize = 1;
+      pool = OdbcConnectionPool(
+        mockService,
+        mockSettings,
+        acquireTimeout: const Duration(milliseconds: 30),
+      );
+
+      var connectCount = 0;
+      final disconnectCompleter = Completer<Result<void>>();
+      when(
+        () => mockService.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async {
+        connectCount++;
+        return Success(
+          Connection(
+            id: 'lease-$connectCount',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => mockService.disconnect('lease-1')).thenAnswer(
+        (_) => disconnectCompleter.future,
+      );
+      when(() => mockService.disconnect('lease-2')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final acquired = await pool.acquire('DSN=Test');
+      expect(acquired.getOrNull(), 'lease-1');
+
+      final discardFuture = pool.discard('lease-1');
+
+      final activeAfterDiscardStarted = await pool.getActiveCount();
+      expect(activeAfterDiscardStarted.getOrNull(), 0);
+
+      final reacquired = await pool.acquire('DSN=Test');
+      expect(reacquired.getOrNull(), 'lease-2');
+
+      disconnectCompleter.complete(const Success(unit));
+      final discarded = await discardFuture;
+      expect(discarded.isSuccess(), isTrue);
+    });
+
     test('release treats invalid connection id as a successful cleanup', () async {
       when(
         () => mockService.connect(

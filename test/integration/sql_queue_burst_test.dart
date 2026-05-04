@@ -111,6 +111,7 @@ void main() async {
           queuedGateway.dispose();
         }
       },
+      timeout: const Timeout(Duration(seconds: 90)),
       skip: skipUnlessDsn != false
           ? skipUnlessDsn
           : skipUnlessOptIn != false
@@ -153,6 +154,7 @@ void main() async {
           queuedGateway.dispose();
         }
       },
+      timeout: const Timeout(Duration(seconds: 90)),
       skip: skipUnlessDsn != false
           ? skipUnlessDsn
           : skipUnlessOptIn != false

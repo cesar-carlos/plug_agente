@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
@@ -29,6 +30,7 @@ class FakeTransportClient implements ITransportClient {
   void Function()? onTokenExpired;
   void Function()? onReconnectionNeeded;
   void Function(HubLifecycleNotification)? onHubLifecycle;
+  void Function()? onDisconnectSideEffect;
 
   @override
   Future<Result<void>> connect(
@@ -38,7 +40,10 @@ class FakeTransportClient implements ITransportClient {
   }) async => throw UnimplementedError();
 
   @override
-  Future<Result<void>> disconnect() async => const Success(unit);
+  Future<Result<void>> disconnect() async {
+    onDisconnectSideEffect?.call();
+    return const Success(unit);
+  }
 
   @override
   Future<Result<void>> sendResponse(QueryResponse response) async => const Success(unit);
@@ -166,6 +171,88 @@ void main() {
       verify(
         () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).called(greaterThanOrEqualTo(4));
+    });
+
+    test('full hub recovery orders transport disconnect before relogin then socket connect', () async {
+      final events = <String>[];
+      var connectPhase = 0;
+      when(
+        () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async {
+        connectPhase++;
+        events.add('connect_$connectPhase');
+        return const Success(unit);
+      });
+
+      fakeTransport.onDisconnectSideEffect = () {
+        events.add('disconnect');
+      };
+
+      final mockAuth = MockAuthProvider();
+      // ignore: unnecessary_lambdas — side-effect stub; tearoff would not capture `events`.
+      when(() => mockAuth.logout()).thenAnswer((_) {
+        events.add('logout');
+        return Future<void>.value();
+      });
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 't', refreshToken: 'r'),
+      );
+      when(
+        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+      ).thenReturn(null);
+      when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+      when(
+        () => mockHubRecoveryAuthCoordinator.loginWithStoredCredentials(any(), any()),
+      ).thenAnswer((_) async {
+        events.add('login');
+        return const Success(AuthToken(token: 't2', refreshToken: 'r2'));
+      });
+
+      final cfg = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17 for SQL Server',
+        connectionString: '',
+        username: '',
+        databaseName: '',
+        host: 'localhost',
+        port: 1433,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        serverUrl: 'https://hub.test',
+        agentId: 'agent-1',
+        authUsername: 'agent_user',
+        authPassword: 'agent_pass',
+        authToken: 't',
+        refreshToken: 'r',
+      );
+      when(() => mockConfigProvider.currentConfig).thenReturn(cfg);
+
+      final provider = ConnectionProvider(
+        mockConnectToHub,
+        mockTestDb,
+        mockCheckDriver,
+        hubRecoveryAuthCoordinator: mockHubRecoveryAuthCoordinator,
+        configProvider: mockConfigProvider,
+        authProvider: mockAuth,
+        transportClient: fakeTransport,
+        initialReconnectDelay: const Duration(milliseconds: 2),
+        maxReconnectDelay: const Duration(milliseconds: 4),
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 't');
+      fakeTransport.triggerReconnectionNeeded();
+      await waitForStatus(provider, ConnectionStatus.connected);
+
+      final d = events.indexOf('disconnect');
+      final lo = events.indexOf('logout');
+      final li = events.indexOf('login');
+      expect(d, greaterThanOrEqualTo(0));
+      expect(d, lessThan(lo));
+      expect(lo, lessThan(li));
+      expect(li, lessThan(events.indexOf('connect_2')));
+
+      await provider.disconnect();
     });
 
     test('should start persistent retry when burst recovery is exhausted', () async {

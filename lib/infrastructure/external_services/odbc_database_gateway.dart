@@ -94,6 +94,12 @@ class _BatchTransactionGuard {
   }
 }
 
+class _BatchConnectionState {
+  _BatchConnectionState(this.connectionId);
+
+  String? connectionId;
+}
+
 /// ODBC Database Gateway using odbc_fast package.
 ///
 /// This implementation provides:
@@ -862,11 +868,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
 
       final context = contextResult.getOrNull()!;
+      final connectionState = _BatchConnectionState(context.connectionId);
       var recycleAfterRelease = false;
       _BatchTransactionGuard? transaction;
       try {
         final beginResult = await _beginBatchTransactionIfNeeded(
-          connectionId: context.connectionId,
+          connectionId: connectionState.connectionId!,
           transactionEnabled: options.transaction,
           lockTimeout: _transactionLockTimeout(
             options: options,
@@ -893,6 +900,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
           final commandResult = await _executeBatchCommands(
             context: context,
+            connectionState: connectionState,
             agentId: agentId,
             commands: commands,
             options: options,
@@ -905,7 +913,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
           if (options.transaction && transaction.isActive) {
             final commitResult = await _commitBatchTransaction(
-              connectionId: context.connectionId,
+              connectionId: connectionState.connectionId!,
               transaction: transaction,
             );
             if (commitResult.isError()) {
@@ -916,12 +924,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           return commandResult;
         }
       } on Object catch (error, stackTrace) {
+        final activeConnectionId = connectionState.connectionId;
         if (options.transaction) {
           await transaction?.rollback(
-            (transactionId) => _rollbackTransactionIfNeeded(
-              context.connectionId,
-              transactionId,
-            ),
+            (transactionId) async {
+              if (activeConnectionId == null) {
+                return;
+              }
+              await _rollbackTransactionIfNeeded(
+                activeConnectionId,
+                transactionId,
+              );
+            },
           );
         }
         developer.log(
@@ -943,7 +957,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           ),
         );
       } finally {
-        await _releaseBatchConnection(context);
+        final activeConnectionId = connectionState.connectionId;
+        if (activeConnectionId != null) {
+          await _releaseBatchConnection(
+            _BatchExecutionContext(
+              connectionId: activeConnectionId,
+              connectionString: context.connectionString,
+              deadline: context.deadline,
+              directLease: context.directLease,
+              ownedConnection: context.ownedConnection,
+            ),
+          );
+        }
       }
 
       if (recycleAfterRelease) {
@@ -1171,6 +1196,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   Future<Result<List<SqlCommandResult>>> _executeBatchCommands({
     required _BatchExecutionContext context,
+    required _BatchConnectionState connectionState,
     required String agentId,
     required List<SqlCommand> commands,
     required SqlExecutionOptions options,
@@ -1223,31 +1249,43 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           sql: command.sql,
           parameters: command.params,
         );
-
         final remainingTimeout = _remainingTimeout(context.deadline);
-        try {
+
+        Future<_QueryExecutionOutcome> executeCurrentCommand() async {
+          final currentConnectionId = connectionState.connectionId;
+          if (currentConnectionId == null) {
+            return _QueryExecutionOutcome.failure(
+              StateError('batch_connection_unavailable'),
+            );
+          }
+
           final key = _preparedStatementKeyFor(preparedExecution);
           final usePrepared = repeatedPreparedKeys.contains(key);
-          final outcome = usePrepared
-              ? await _runPreparedBatchExecutionWithTimeout(
-                  connectionId: context.connectionId,
+          return usePrepared
+              ? _runPreparedBatchExecutionWithTimeout(
+                  connectionId: currentConnectionId,
                   request: commandRequest,
                   preparedExecution: preparedExecution,
                   preparedStatements: preparedStatements,
                   statementKey: key,
                   timeout: remainingTimeout,
                 )
-              : await _runQueryExecutionWithTimeout(
-                  connId: context.connectionId,
+              : _runQueryExecutionWithTimeout(
+                  connId: currentConnectionId,
                   request: commandRequest,
                   preparedExecution: preparedExecution,
                   connectionString: context.connectionString,
                   timeout: remainingTimeout,
+                  preferPreparedTimeout: options.transaction,
                 );
+        }
+
+        try {
+          var outcome = await executeCurrentCommand();
 
           if (!outcome.isSuccess) {
-            final error = outcome.error!;
-            final failure = OdbcFailureMapper.mapQueryError(
+            var error = outcome.error!;
+            var failure = OdbcFailureMapper.mapQueryError(
               error,
               operation: 'execute_batch_item',
               context: {
@@ -1259,7 +1297,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             if (options.transaction) {
               await transaction.rollback(
                 (transactionId) => _rollbackTransactionIfNeeded(
-                  context.connectionId,
+                  connectionState.connectionId!,
                   transactionId,
                 ),
               );
@@ -1281,6 +1319,43 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                     'detail': failure.message,
                   },
                 ),
+              );
+            }
+
+            if (_shouldRecoverNonTransactionalBatchConnection(failure)) {
+              outcome = await _retryBatchCommandAfterConnectionFailure(
+                context: context,
+                connectionState: connectionState,
+                preparedStatements: preparedStatements,
+                failure: failure,
+                executeCommand: executeCurrentCommand,
+              );
+              if (outcome.isSuccess) {
+                final response = outcome.response!;
+                final limitedRows = truncateSqlResultRows(
+                  response.data,
+                  options.maxRows,
+                );
+                results.add(
+                  SqlCommandResult.success(
+                    index: i,
+                    rows: limitedRows,
+                    rowCount: limitedRows.length,
+                    affectedRows: response.affectedRows,
+                    columnMetadata: response.columnMetadata,
+                  ),
+                );
+                continue;
+              }
+
+              error = outcome.error!;
+              failure = OdbcFailureMapper.mapQueryError(
+                error,
+                operation: 'execute_batch_item',
+                context: {
+                  'command_index': i,
+                  'transaction': options.transaction,
+                },
               );
             }
 
@@ -1316,7 +1391,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           if (options.transaction) {
             await transaction.rollback(
               (transactionId) => _rollbackTransactionIfNeeded(
-                context.connectionId,
+                connectionState.connectionId!,
                 transactionId,
               ),
             );
@@ -1350,13 +1425,78 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         }
       }
     } finally {
-      await _closePreparedStatements(
-        context.connectionId,
-        preparedStatements.values,
-      );
+      final activeConnectionId = connectionState.connectionId;
+      if (activeConnectionId != null) {
+        await _closePreparedStatements(
+          activeConnectionId,
+          preparedStatements.values,
+        );
+      }
     }
 
     return Success(results);
+  }
+
+  bool _shouldRecoverNonTransactionalBatchConnection(domain.Failure failure) {
+    if (failure is domain.ConnectionFailure) {
+      return true;
+    }
+
+    if (_queryFailureIndicatesInvalidConnectionId(failure)) {
+      return true;
+    }
+
+    return failure.context['connectionFailed'] == true;
+  }
+
+  Future<_QueryExecutionOutcome> _retryBatchCommandAfterConnectionFailure({
+    required _BatchExecutionContext context,
+    required _BatchConnectionState connectionState,
+    required Map<String, int> preparedStatements,
+    required domain.Failure failure,
+    required Future<_QueryExecutionOutcome> Function() executeCommand,
+  }) async {
+    final currentConnectionId = connectionState.connectionId;
+    if (currentConnectionId == null) {
+      return _QueryExecutionOutcome.failure(failure);
+    }
+
+    if (preparedStatements.isNotEmpty) {
+      await _closePreparedStatements(
+        currentConnectionId,
+        preparedStatements.values,
+      );
+      preparedStatements.clear();
+    }
+
+    _markConnectionForDiscard(currentConnectionId);
+    await _releaseConnectionSafely(currentConnectionId);
+    connectionState.connectionId = null;
+
+    if (_queryFailureIndicatesInvalidConnectionId(failure)) {
+      await _tryRecoverPoolAfterInvalidConnectionId(context.connectionString);
+    }
+
+    final reacquireResult = await _connectionPool.acquire(
+      context.connectionString,
+    );
+    if (reacquireResult.isError()) {
+      return _QueryExecutionOutcome.failure(
+        reacquireResult.exceptionOrNull() ?? failure,
+      );
+    }
+
+    connectionState.connectionId = reacquireResult.getOrThrow();
+    developer.log(
+      'Recovered pooled batch connection after command failure',
+      name: 'database_gateway',
+      level: 800,
+      error: {
+        'connection_string': context.connectionString,
+        'failed_reason': failure.context['reason'] ?? failure.message,
+      },
+    );
+    return executeCommand();
   }
 
   @override
@@ -1505,8 +1645,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required OdbcPreparedQueryExecution preparedExecution,
     required String connectionString,
     Duration? timeout,
+    bool preferPreparedTimeout = true,
   }) async {
     if (timeout != null &&
+        preferPreparedTimeout &&
         !OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
           request,
           preparedExecution,
@@ -2298,9 +2440,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   Future<void> _releaseConnectionSafely(String connectionId) async {
     final shouldDiscard = _connectionsToDiscard.remove(connectionId);
-    final releaseResult = shouldDiscard
-        ? await _connectionPool.discard(connectionId)
-        : await _connectionPool.release(connectionId);
+    if (shouldDiscard) {
+      unawaited(_discardConnectionSafely(connectionId));
+      return;
+    }
+
+    final releaseResult = await _connectionPool.release(connectionId);
     if (releaseResult.isSuccess()) {
       return;
     }
@@ -2312,6 +2457,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       name: 'database_gateway',
       level: 900,
       error: releaseError,
+    );
+  }
+
+  Future<void> _discardConnectionSafely(String connectionId) async {
+    final discardResult = await _connectionPool.discard(connectionId);
+    if (discardResult.isSuccess()) {
+      return;
+    }
+
+    final discardError = discardResult.exceptionOrNull()!;
+    _metrics.recordPoolReleaseFailure();
+    developer.log(
+      'Failed to discard pooled connection: $connectionId',
+      name: 'database_gateway',
+      level: 900,
+      error: discardError,
     );
   }
 

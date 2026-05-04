@@ -134,6 +134,7 @@ class OdbcConnectionPool implements IConnectionPool {
       operation: 'pool_release',
       logMessage: 'Failed to disconnect leased ODBC connection $connectionId',
       releaseLeaseOnFailure: false,
+      eagerLeaseRelease: false,
     );
   }
 
@@ -144,6 +145,7 @@ class OdbcConnectionPool implements IConnectionPool {
       operation: 'pool_discard',
       logMessage: 'Failed to discard leased ODBC connection $connectionId',
       releaseLeaseOnFailure: true,
+      eagerLeaseRelease: true,
     );
   }
 
@@ -306,20 +308,29 @@ class OdbcConnectionPool implements IConnectionPool {
     required String operation,
     required String logMessage,
     required bool releaseLeaseOnFailure,
+    required bool eagerLeaseRelease,
   }) async {
     final hadLease = _leasedIds.contains(connectionId);
+    var leaseReleasedEarly = false;
+
+    if (eagerLeaseRelease) {
+      _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+      leaseReleasedEarly = true;
+    }
 
     var handshakeHeld = false;
-    try {
-      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
-      handshakeHeld = true;
-    } on TimeoutException catch (error) {
-      developer.log(
-        'ODBC native handshake slot timeout during release; disconnecting anyway',
-        name: 'connection_pool',
-        level: 900,
-        error: error,
-      );
+    if (!eagerLeaseRelease) {
+      try {
+        await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+        handshakeHeld = true;
+      } on TimeoutException catch (error) {
+        developer.log(
+          'ODBC native handshake slot timeout during release; disconnecting anyway',
+          name: 'connection_pool',
+          level: 900,
+          error: error,
+        );
+      }
     }
 
     late Result<void> disconnectResult;
@@ -342,12 +353,16 @@ class OdbcConnectionPool implements IConnectionPool {
 
     return disconnectResult.fold(
       (_) {
-        _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+        if (!leaseReleasedEarly) {
+          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+        }
         return const Success(unit);
       },
       (error) {
         if (_messageIndicatesInvalidConnectionId(error)) {
-          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+          if (!leaseReleasedEarly) {
+            _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+          }
           return const Success(unit);
         }
 
@@ -359,7 +374,7 @@ class OdbcConnectionPool implements IConnectionPool {
           error: error,
         );
 
-        if (releaseLeaseOnFailure || _shouldForceFinalizeLeaseOnDisconnectError(error)) {
+        if (!leaseReleasedEarly && (releaseLeaseOnFailure || _shouldForceFinalizeLeaseOnDisconnectError(error))) {
           _finalizeLeaseRelease(connectionId, hadLease: hadLease);
         }
 

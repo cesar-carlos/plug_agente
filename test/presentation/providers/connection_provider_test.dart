@@ -338,6 +338,7 @@ void main() {
           initialReconnectDelay: const Duration(milliseconds: 5),
           maxReconnectDelay: const Duration(milliseconds: 10),
           hubTokenRefreshMinInterval: Duration.zero,
+          enableHardReloginRecovery: false,
         );
 
         await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -530,6 +531,7 @@ void main() {
         maxReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectAttempts: 2,
         hubTokenRefreshMinInterval: Duration.zero,
+        enableHardReloginRecovery: false,
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -575,6 +577,7 @@ void main() {
         maxReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectAttempts: 2,
         hubTokenRefreshMinInterval: Duration.zero,
+        enableHardReloginRecovery: false,
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -729,6 +732,35 @@ void main() {
           any(),
         ),
       ).called(greaterThanOrEqualTo(2));
+
+      await provider.disconnect();
+    });
+
+    test('persistent retry counts unreachable hub towards exhaustion cap', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => false);
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        transportClient: transport,
+        initialReconnectDelay: const Duration(milliseconds: 2),
+        maxReconnectDelay: const Duration(milliseconds: 4),
+        hubPersistentRetryInterval: const Duration(milliseconds: 25),
+        hubPersistentRetryMaxFailedTicks: 5,
+        enableHardReloginRecovery: false,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.onReconnectionNeeded?.call();
+
+      await _waitForStatus(provider, ConnectionStatus.error, timeout: const Duration(seconds: 4));
+      expect(provider.error, isNotEmpty);
 
       await provider.disconnect();
     });

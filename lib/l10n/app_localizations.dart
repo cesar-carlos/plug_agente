@@ -2834,6 +2834,24 @@ abstract class AppLocalizations {
   /// **'Hub: Reconnecting...'**
   String get connectionStatusHubReconnecting;
 
+  /// No description provided for @connectionStatusHubReconnectingSigningIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Signing in again...'**
+  String get connectionStatusHubReconnectingSigningIn;
+
+  /// No description provided for @connectionStatusHubReconnectingSocket.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Restoring connection...'**
+  String get connectionStatusHubReconnectingSocket;
+
+  /// No description provided for @connectionStatusHubReconnectingWaitingHub.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Waiting for server...'**
+  String get connectionStatusHubReconnectingWaitingHub;
+
   /// No description provided for @connectionStatusHubError.
   ///
   /// In en, this message translates to:

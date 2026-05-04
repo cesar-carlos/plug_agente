@@ -32,6 +32,10 @@ class ConnectionConstants {
   /// Interval between automatic hub reconnect attempts after the burst is exhausted.
   static const Duration hubPersistentRetryInterval = Duration(seconds: 45);
 
+  /// Minimum spacing between automatic hard relogin attempts during **persistent**
+  /// hub retry. Burst escalation and proactive pre-socket relogin ignore this cooldown.
+  static const Duration hubHardReloginCooldown = Duration(seconds: 60);
+
   /// Max failed persistent reconnect ticks before giving up (`0` = unlimited).
   static const int hubPersistentRetryMaxFailedTicks = 120;
 

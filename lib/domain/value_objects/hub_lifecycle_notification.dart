@@ -1,3 +1,9 @@
+/// Returns true when the Socket.IO disconnect reason is `io server disconnect`
+/// (hub closed the socket). Other reasons (for example `transport close`) are
+/// typically handled by transport-level auto reconnect.
+bool isHubIoServerInitiatedDisconnect(String? reason) =>
+    reason?.toLowerCase() == 'io server disconnect';
+
 /// Notifications emitted by the hub transport **after** the initial connect
 /// handshake Future completes.
 ///

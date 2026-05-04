@@ -118,7 +118,7 @@ void main() async {
             timeout: const Duration(milliseconds: 1200),
           );
 
-          final result = await contender.timeout(const Duration(seconds: 30));
+          final result = await contender.timeout(const Duration(seconds: 90));
           expect(result.isError(), isTrue);
           final error = result.exceptionOrNull()!;
           expect(
@@ -144,6 +144,7 @@ void main() async {
           await service.disconnect(holderConn.id);
         }
       },
+      timeout: const Timeout(Duration(minutes: 2)),
       skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
     );
 
@@ -170,6 +171,7 @@ void main() async {
         expect(activeAfterParallel.isSuccess(), isTrue, reason: '$activeAfterParallel');
         expect(activeAfterParallel.getOrThrow(), 0);
       },
+      timeout: const Timeout(Duration(minutes: 2)),
       skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
     );
   });

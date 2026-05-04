@@ -1446,6 +1446,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionStatusHubReconnecting => 'Hub: Reconnecting...';
 
   @override
+  String get connectionStatusHubReconnectingSigningIn => 'Hub: Signing in again...';
+
+  @override
+  String get connectionStatusHubReconnectingSocket => 'Hub: Restoring connection...';
+
+  @override
+  String get connectionStatusHubReconnectingWaitingHub => 'Hub: Waiting for server...';
+
+  @override
   String get connectionStatusHubError => 'Hub: Connection error';
 
   @override

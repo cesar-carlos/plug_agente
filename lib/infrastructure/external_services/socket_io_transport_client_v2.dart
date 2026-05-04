@@ -429,7 +429,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _heartbeat.stop();
         unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
         final asString = reason is String ? reason : reason?.toString();
-        final serverInitiated = _isServerInitiatedDisconnect(asString);
+        final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
         final disconnectLine =
             'resilience: ${_resilienceLogPrefix()}socket_transport event=disconnect '
             'kind=${serverInitiated ? "io_server_disconnect" : "client_or_network"} '
@@ -657,10 +657,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (_isAuthRelated(structured, errorMessage)) {
       _onTokenExpired?.call();
     }
-  }
-
-  bool _isServerInitiatedDisconnect(String? reason) {
-    return reason?.toLowerCase() == 'io server disconnect';
   }
 
   /// Extracts structured fields when the hub sends a JSON-shaped error payload

@@ -32,7 +32,12 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.reconnecting:
             icon = FluentIcons.sync;
             color = colors.warning;
-            statusText = l10n.connectionStatusHubReconnecting;
+            statusText = switch (connectionProvider.hubRecoveryUiHint) {
+              HubRecoveryUiHint.signingIn => l10n.connectionStatusHubReconnectingSigningIn,
+              HubRecoveryUiHint.connectingSocket => l10n.connectionStatusHubReconnectingSocket,
+              HubRecoveryUiHint.awaitingHubReachability => l10n.connectionStatusHubReconnectingWaitingHub,
+              HubRecoveryUiHint.none => l10n.connectionStatusHubReconnecting,
+            };
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = colors.error;
