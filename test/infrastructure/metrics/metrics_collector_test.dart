@@ -385,6 +385,30 @@ void main() {
         expect(collector.rpcSqlExecuteStreamingFromDbResponseCount, 1);
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 2);
       });
+
+      test('should increment auto-update counters', () {
+        collector.recordAutoUpdateManualCheckStarted();
+        collector.recordAutoUpdateManualCheckSuccessAvailable();
+        collector.recordAutoUpdateManualCheckSuccessNotAvailable();
+        collector.recordAutoUpdateManualCheckUpdaterError();
+        collector.recordAutoUpdateManualCheckTriggerTimeout();
+        collector.recordAutoUpdateManualCheckCompletionTimeout();
+        collector.recordAutoUpdateManualCheckTriggerFailure();
+        collector.recordAutoUpdateManualCheckNotInitialized();
+        collector.recordAutoUpdateCircuitOpened();
+        collector.recordAutoUpdateCircuitOpenRejected();
+
+        expect(collector.autoUpdateManualCheckStartedCount, 1);
+        expect(collector.autoUpdateManualCheckSuccessAvailableCount, 1);
+        expect(collector.autoUpdateManualCheckSuccessNotAvailableCount, 1);
+        expect(collector.autoUpdateManualCheckUpdaterErrorCount, 1);
+        expect(collector.autoUpdateManualCheckTriggerTimeoutCount, 1);
+        expect(collector.autoUpdateManualCheckCompletionTimeoutCount, 1);
+        expect(collector.autoUpdateManualCheckTriggerFailureCount, 1);
+        expect(collector.autoUpdateManualCheckNotInitializedCount, 1);
+        expect(collector.autoUpdateCircuitOpenedCount, 1);
+        expect(collector.autoUpdateCircuitOpenRejectedCount, 1);
+      });
     });
 
     group('exportToJson', () {

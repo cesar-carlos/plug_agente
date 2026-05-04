@@ -26,6 +26,7 @@ jobs:
       asset_url: ${{ steps.asset.outputs.url }}
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
+      dsa_signature: ${{ steps.sign.outputs.signature }}
     permissions:
       contents: write
       actions: write
@@ -122,6 +123,32 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Prepare DSA private key
+        id: dsa_key
+        env:
+          AUTO_UPDATE_DSA_PRIVATE_KEY_PEM: ${{ secrets.AUTO_UPDATE_DSA_PRIVATE_KEY_PEM }}
+        run: |
+          if [ -z "${AUTO_UPDATE_DSA_PRIVATE_KEY_PEM}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEY_PATH="${RUNNER_TEMP}/auto_update_dsa_priv.pem"
+          python3 << 'PYEOF'
+          import os
+          from pathlib import Path
+
+          key_path = Path(os.environ["RUNNER_TEMP"]) / "auto_update_dsa_priv.pem"
+          key_path.write_text(
+              os.environ["AUTO_UPDATE_DSA_PRIVATE_KEY_PEM"],
+              encoding="utf-8",
+          )
+          PYEOF
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Get asset info
         id: asset
         env:
@@ -153,6 +180,37 @@ jobs:
           echo "api_url=$ASSET_API_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
           echo "name=$ASSET_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download release asset for DSA signature
+        if: steps.dsa_key.outputs.enabled == 'true'
+        env:
+          ASSET_URL: ${{ steps.asset.outputs.url }}
+          ASSET_NAME: ${{ steps.asset.outputs.name }}
+        run: |
+          curl -L --fail "$ASSET_URL" --output "${RUNNER_TEMP}/${ASSET_NAME}"
+
+      - name: Sign release asset for appcast
+        if: steps.dsa_key.outputs.enabled == 'true'
+        id: sign
+        env:
+          ASSET_NAME: ${{ steps.asset.outputs.name }}
+          DSA_PRIVATE_KEY_PATH: ${{ steps.dsa_key.outputs.path }}
+        run: |
+          SIGNATURE_OUTPUT=$(dart run auto_updater:sign_update "${RUNNER_TEMP}/${ASSET_NAME}" "$DSA_PRIVATE_KEY_PATH")
+          echo "$SIGNATURE_OUTPUT"
+          SIGNATURE_OUTPUT="$SIGNATURE_OUTPUT" python3 << 'PYEOF'
+          import os
+          import re
+          import sys
+
+          output = os.environ.get("SIGNATURE_OUTPUT", "").strip()
+          match = re.search(r'sparkle:dsaSignature="([^"]+)"', output)
+          if match is None:
+              print("Error: DSA signature output is invalid.", file=sys.stderr)
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"signature={match.group(1)}\n")
+          PYEOF
 
       - name: Validate release consistency
         env:
@@ -207,6 +265,7 @@ jobs:
       - name: Update appcast.xml
         env:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
+          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
         run: |
           python3 << PYEOF
           import re
@@ -227,6 +286,7 @@ jobs:
           VERSION = FULL_VERSION if FULL_VERSION else VERSION_SHORT
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
+          DSA_SIGNATURE = os.environ.get("DSA_SIGNATURE", "").strip()
           MAX_APPCAST_ITEMS = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
           with open("release_body.txt", encoding="utf-8") as _bf:
               RELEASE_BODY = _bf.read().strip()
@@ -271,6 +331,8 @@ jobs:
           enclosure.set("url", ASSET_URL)
           enclosure.set(f"{{{SPARKLE_NS}}}version", VERSION)
           enclosure.set(f"{{{SPARKLE_NS}}}os", "windows")
+          if DSA_SIGNATURE:
+              enclosure.set(f"{{{SPARKLE_NS}}}dsaSignature", DSA_SIGNATURE)
           enclosure.set("length", str(ASSET_SIZE))
           enclosure.set("type", "application/octet-stream")
 
@@ -315,6 +377,7 @@ jobs:
           FULL_VERSION: ${{ steps.release.outputs.full_version }}
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           VERSION_SHORT: ${{ steps.release.outputs.version }}
+          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -323,6 +386,7 @@ jobs:
 
           version = (os.environ.get("FULL_VERSION") or os.environ.get("VERSION_SHORT", "")).strip()
           max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
+          dsa_signature = os.environ.get("DSA_SIGNATURE", "").strip()
           sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 
           tree = ET.parse("appcast.xml")
@@ -356,6 +420,11 @@ jobs:
               or matched_enclosure.get("sparkle:os")
               or ""
           ).strip()
+          current_signature = (
+              matched_enclosure.get(f"{{{sparkle_ns}}}dsaSignature")
+              or matched_enclosure.get("sparkle:dsaSignature")
+              or ""
+          ).strip()
 
           if not (url.startswith("https://") and url.lower().endswith(".exe")):
               print(f"Error: invalid enclosure url: {url!r}")
@@ -374,6 +443,13 @@ jobs:
 
           if os_name != "windows":
               print(f"Error: invalid sparkle:os value: {os_name!r}")
+              sys.exit(1)
+
+          if dsa_signature and current_signature != dsa_signature:
+              print(
+                  "Error: invalid sparkle:dsaSignature value. "
+                  f"expected={dsa_signature!r}, actual={current_signature!r}"
+              )
               sys.exit(1)
 
           item_count = len(channel.findall("item"))
@@ -420,6 +496,7 @@ jobs:
           ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
           ASSET_URL: ${{ needs.update-appcast.outputs.asset_url }}
           FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
+          DSA_SIGNATURE: ${{ needs.update-appcast.outputs.dsa_signature }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -437,6 +514,7 @@ jobs:
           asset_url = os.environ["ASSET_URL"].strip()
           asset_name = os.environ["ASSET_NAME"].strip()
           asset_size = os.environ["ASSET_SIZE"].strip()
+          dsa_signature = os.environ.get("DSA_SIGNATURE", "").strip()
           with open("release_body.txt", encoding="utf-8") as _bf:
               release_body = _bf.read().strip()
           max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
@@ -484,6 +562,11 @@ jobs:
                   ).strip()
                   latest_url = (enclosure.get("url") or "").strip()
                   latest_size = (enclosure.get("length") or "").strip()
+                  latest_signature = (
+                      enclosure.get(f"{{{sparkle_ns}}}dsaSignature")
+                      or enclosure.get("sparkle:dsaSignature")
+                      or ""
+                  ).strip()
 
                   if title != expected_title:
                       raise ValueError(
@@ -501,6 +584,8 @@ jobs:
                       raise ValueError("latest enclosure length does not match release asset size")
                   if asset_name not in latest_url:
                       raise ValueError("latest enclosure URL does not include expected asset name")
+                  if dsa_signature and latest_signature != dsa_signature:
+                      raise ValueError("latest enclosure signature does not match expected DSA signature")
 
                   print(
                       "Published appcast smoke validation passed "

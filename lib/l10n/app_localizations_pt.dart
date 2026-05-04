@@ -633,6 +633,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateTechnicalOfficialFeed => 'Feed oficial';
 
   @override
+  String get configUpdateTechnicalProbeRequestUrl => 'URL do probe';
+
+  @override
+  String get configUpdateTechnicalProbeSucceeded => 'Probe HTTP bem-sucedido';
+
+  @override
+  String get configUpdateTechnicalCompletionSource => 'Resultado do check';
+
+  @override
+  String get configUpdateTechnicalTriggerDurationMs => 'Tempo do disparo (ms)';
+
+  @override
+  String get configUpdateTechnicalTotalDurationMs => 'Tempo total (ms)';
+
+  @override
   String get configUpdateTechnicalFeedItemCount => 'Itens no feed';
 
   @override
@@ -643,6 +658,30 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateTechnicalAppcastError => 'Erro ao ler appcast';
+
+  @override
+  String get configUpdateCompletionSourceUpdateAvailable => 'Atualização disponível';
+
+  @override
+  String get configUpdateCompletionSourceUpdateNotAvailable => 'Sem atualização disponível';
+
+  @override
+  String get configUpdateCompletionSourceUpdaterError => 'Falha retornada pelo updater';
+
+  @override
+  String get configUpdateCompletionSourceTriggerTimeout => 'Timeout ao disparar o updater';
+
+  @override
+  String get configUpdateCompletionSourceCompletionTimeout => 'Timeout aguardando retorno do updater';
+
+  @override
+  String get configUpdateCompletionSourceTriggerFailure => 'Falha ao iniciar a checagem';
+
+  @override
+  String get configUpdateCompletionSourceNotInitialized => 'Auto-update não inicializado';
+
+  @override
+  String get configUpdateCompletionSourceCircuitOpen => 'Checagens pausadas por timeouts repetidos';
 
   @override
   String get gsSectionAppearance => 'Aparência';

@@ -51,6 +51,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
@@ -513,7 +514,11 @@ void registerPlugDependencyGraph(
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
-      () => AutoUpdateOrchestrator(getIt<RuntimeCapabilities>()),
+      () => AutoUpdateOrchestrator(
+        getIt<RuntimeCapabilities>(),
+        settingsStore: getIt<IAppSettingsStore>(),
+        metricsCollector: getIt<MetricsCollector>(),
+      ),
     )
     ..registerLazySingleton(
       () => PushAgentProfileToHub(

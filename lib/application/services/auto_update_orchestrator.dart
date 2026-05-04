@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -48,21 +52,45 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     this._capabilities, {
     IAutoUpdaterGateway updaterGateway = const AutoUpdaterGateway(),
     IAppcastProbeService appcastProbeService = const AppcastProbeService(),
-    Duration manualCheckTimeout = _defaultManualCheckTimeout,
+    IAppSettingsStore? settingsStore,
+    MetricsCollector? metricsCollector,
+    Duration manualTriggerTimeout = _defaultManualTriggerTimeout,
+    Duration manualCompletionTimeout = _defaultManualCompletionTimeout,
+    int timeoutCircuitThreshold = _defaultTimeoutCircuitThreshold,
+    Duration timeoutCircuitCooldown = _defaultTimeoutCircuitCooldown,
   }) : _updaterGateway = updaterGateway,
        _appcastProbeService = appcastProbeService,
-       _manualCheckTimeout = manualCheckTimeout;
+       _settingsStore = settingsStore,
+       _metricsCollector = metricsCollector,
+       _manualTriggerTimeout = manualTriggerTimeout,
+       _manualCompletionTimeout = manualCompletionTimeout,
+       _timeoutCircuitThreshold = timeoutCircuitThreshold,
+       _timeoutCircuitCooldown = timeoutCircuitCooldown {
+    _hydratePersistedDiagnostics();
+  }
 
   final RuntimeCapabilities _capabilities;
   final IAutoUpdaterGateway _updaterGateway;
   final IAppcastProbeService _appcastProbeService;
-  final Duration _manualCheckTimeout;
+  final IAppSettingsStore? _settingsStore;
+  final MetricsCollector? _metricsCollector;
+  final Duration _manualTriggerTimeout;
+  final Duration _manualCompletionTimeout;
+  final int _timeoutCircuitThreshold;
+  final Duration _timeoutCircuitCooldown;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
   bool _isManualCheck = false;
   UpdateCheckDiagnostics? _activeManualDiagnostics;
   UpdateCheckDiagnostics? _lastManualDiagnostics;
+  String? _activeCheckId;
+
+  static const String _lastDiagnosticsKey = 'auto_update.last_manual_diagnostics';
+  static const String _timeoutConsecutiveCountKey = 'auto_update.timeout_consecutive_count';
+  static const String _timeoutCooldownUntilKey = 'auto_update.timeout_cooldown_until_ms';
+  static const int _defaultTimeoutCircuitThreshold = 3;
+  static const Duration _defaultTimeoutCircuitCooldown = Duration(minutes: 15);
 
   String? get _feedUrl {
     final url = resolveAutoUpdateFeedUrl(environment: dotenv.env);
@@ -85,11 +113,230 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     return error.toString();
   }
 
+  void _logManualCheck(
+    String message, {
+    int level = 800,
+    String? checkId,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    final diagnostics = _activeManualDiagnostics;
+    final context = <String>[
+      if (checkId != null) 'check_id=$checkId',
+      if (diagnostics != null) 'configured_feed=${diagnostics.configuredFeedUrl}',
+      if (diagnostics?.probeRequestUrl != null) 'probe_request_url=${diagnostics!.probeRequestUrl}',
+      if (diagnostics?.completionSource != null) 'completion_source=${diagnostics!.completionSource!.name}',
+    ].join(' | ');
+    developer.log(
+      context.isEmpty ? message : '$message | $context',
+      name: 'auto_update_orchestrator',
+      level: level,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  domain.Failure _buildManualFailure({
+    required String message,
+    required UpdateCheckCompletionSource completionSource,
+    Exception? cause,
+    Map<String, dynamic> context = const <String, dynamic>{},
+  }) {
+    return domain.ServerFailure.withContext(
+      message: message,
+      cause: cause,
+      context: <String, dynamic>{
+        'operation': 'checkManual',
+        'completion_source': completionSource.name,
+        if (_activeCheckId != null) 'check_id': _activeCheckId,
+        ...context,
+      },
+    );
+  }
+
   @override
   bool get isAvailable => _capabilities.supportsAutoUpdate && _feedUrl != null;
 
   @override
   UpdateCheckDiagnostics? get lastManualDiagnostics => _lastManualDiagnostics;
+
+  void _hydratePersistedDiagnostics() {
+    final raw = _settingsStore?.getString(_lastDiagnosticsKey);
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        _lastManualDiagnostics = UpdateCheckDiagnostics.fromJson(decoded);
+      }
+    } on FormatException catch (error, stackTrace) {
+      developer.log(
+        'Failed to parse persisted auto-update diagnostics',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _persistLastManualDiagnostics() async {
+    final settingsStore = _settingsStore;
+    final diagnostics = _lastManualDiagnostics;
+    if (settingsStore == null || diagnostics == null) {
+      return;
+    }
+    try {
+      await settingsStore.setString(
+        _lastDiagnosticsKey,
+        jsonEncode(diagnostics.toJson()),
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to persist auto-update diagnostics',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  int _consecutiveTimeoutCount() =>
+      _settingsStore?.getInt(_timeoutConsecutiveCountKey) ?? 0;
+
+  DateTime? _timeoutCooldownUntil() {
+    final timestamp = _settingsStore?.getInt(_timeoutCooldownUntilKey);
+    if (timestamp == null || timestamp <= 0) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  }
+
+  Future<void> _recordTimeoutOutcome() async {
+    final settingsStore = _settingsStore;
+    if (settingsStore == null) {
+      return;
+    }
+    final nextCount = _consecutiveTimeoutCount() + 1;
+    final values = <String, Object>{
+      _timeoutConsecutiveCountKey: nextCount,
+    };
+    if (nextCount >= _timeoutCircuitThreshold) {
+      final cooldownUntil = DateTime.now().add(_timeoutCircuitCooldown);
+      values[_timeoutCooldownUntilKey] = cooldownUntil.millisecondsSinceEpoch;
+      _metricsCollector?.recordAutoUpdateCircuitOpened();
+      _logManualCheck(
+        'Auto-update manual check circuit opened',
+        checkId: _activeCheckId,
+        level: 900,
+      );
+    }
+    try {
+      await settingsStore.setValues(values);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to persist auto-update timeout state',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _resetTimeoutCircuitIfNeeded() async {
+    final settingsStore = _settingsStore;
+    if (settingsStore == null) {
+      return;
+    }
+    final hasTimeoutCount = settingsStore.containsKey(_timeoutConsecutiveCountKey);
+    final hasCooldown = settingsStore.containsKey(_timeoutCooldownUntilKey);
+    if (!hasTimeoutCount && !hasCooldown) {
+      return;
+    }
+    try {
+      await settingsStore.remove(_timeoutConsecutiveCountKey);
+      await settingsStore.remove(_timeoutCooldownUntilKey);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to reset auto-update timeout circuit state',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<Result<bool>?> _buildCircuitOpenFailure(String feedUrl) async {
+    final cooldownUntil = _timeoutCooldownUntil();
+    if (cooldownUntil == null) {
+      return null;
+    }
+    final remaining = cooldownUntil.difference(DateTime.now());
+    if (remaining.isNegative || remaining == Duration.zero) {
+      await _resetTimeoutCircuitIfNeeded();
+      return null;
+    }
+
+    final minutesRemaining = remaining.inMinutes;
+    final humanRemaining = minutesRemaining >= 1
+        ? '$minutesRemaining min'
+        : '${remaining.inSeconds}s';
+    final now = DateTime.now();
+    final failure = Failure<bool, Exception>(
+      _buildManualFailure(
+        message:
+            'Update checks are temporarily paused after repeated updater timeouts. '
+            'Try again in about $humanRemaining.',
+        completionSource: UpdateCheckCompletionSource.circuitOpen,
+        context: <String, dynamic>{
+          'cooldown_remaining_ms': remaining.inMilliseconds,
+        },
+      ),
+    );
+    _lastManualDiagnostics = UpdateCheckDiagnostics(
+      checkedAt: now,
+      configuredFeedUrl: feedUrl,
+      requestedFeedUrl: feedUrl,
+      currentVersion: AppConstants.appVersion,
+      completedAt: now,
+      completionSource: UpdateCheckCompletionSource.circuitOpen,
+      errorMessage:
+          'Update checks are temporarily paused after repeated updater timeouts. '
+          'Try again in about $humanRemaining.',
+    );
+    await _persistLastManualDiagnostics();
+    _metricsCollector?.recordAutoUpdateCircuitOpenRejected();
+    return failure;
+  }
+
+  void _recordCompletionMetric(UpdateCheckCompletionSource source) {
+    final metricsCollector = _metricsCollector;
+    if (metricsCollector == null) {
+      return;
+    }
+    switch (source) {
+      case UpdateCheckCompletionSource.updateAvailable:
+        metricsCollector.recordAutoUpdateManualCheckSuccessAvailable();
+      case UpdateCheckCompletionSource.updateNotAvailable:
+        metricsCollector.recordAutoUpdateManualCheckSuccessNotAvailable();
+      case UpdateCheckCompletionSource.updaterError:
+        metricsCollector.recordAutoUpdateManualCheckUpdaterError();
+      case UpdateCheckCompletionSource.triggerTimeout:
+        metricsCollector.recordAutoUpdateManualCheckTriggerTimeout();
+      case UpdateCheckCompletionSource.completionTimeout:
+        metricsCollector.recordAutoUpdateManualCheckCompletionTimeout();
+      case UpdateCheckCompletionSource.triggerFailure:
+        metricsCollector.recordAutoUpdateManualCheckTriggerFailure();
+      case UpdateCheckCompletionSource.notInitialized:
+        metricsCollector.recordAutoUpdateManualCheckNotInitialized();
+      case UpdateCheckCompletionSource.circuitOpen:
+        metricsCollector.recordAutoUpdateCircuitOpenRejected();
+    }
+  }
 
   @override
   Future<void> initialize() async {
@@ -168,7 +415,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
-  static const Duration _defaultManualCheckTimeout = Duration(seconds: 60);
+  static const Duration _defaultManualTriggerTimeout = Duration(seconds: 15);
+  static const Duration _defaultManualCompletionTimeout = Duration(seconds: 60);
 
   @override
   Future<Result<bool>> checkManual() async {
@@ -191,15 +439,32 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       );
     }
 
+    final circuitOpenFailure = await _buildCircuitOpenFailure(feedUrl);
+    if (circuitOpenFailure != null) {
+      return circuitOpenFailure;
+    }
+
     if (!_isInitialized) {
       await initialize();
       if (!_isInitialized) {
-        return Failure<bool, Exception>(
-          domain.ServerFailure.withContext(
+        final failure = Failure<bool, Exception>(
+          _buildManualFailure(
             message: 'Auto-update is not initialized',
-            context: {'operation': 'checkManual'},
+            completionSource: UpdateCheckCompletionSource.notInitialized,
           ),
         );
+        _lastManualDiagnostics = UpdateCheckDiagnostics(
+          checkedAt: DateTime.now(),
+          configuredFeedUrl: feedUrl,
+          requestedFeedUrl: feedUrl,
+          currentVersion: AppConstants.appVersion,
+          completedAt: DateTime.now(),
+          completionSource: UpdateCheckCompletionSource.notInitialized,
+          errorMessage: 'Auto-update is not initialized',
+        );
+        await _persistLastManualDiagnostics();
+        _recordCompletionMetric(UpdateCheckCompletionSource.notInitialized);
+        return failure;
       }
     }
 
@@ -214,85 +479,166 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
     _manualCheckCompleter = Completer<Result<bool>>();
     _isManualCheck = true;
+    _activeCheckId = 'manual-${DateTime.now().millisecondsSinceEpoch}';
     final manualFeedUrl = _buildManualFeedUrl(feedUrl);
+    _metricsCollector?.recordAutoUpdateManualCheckStarted();
     _activeManualDiagnostics = UpdateCheckDiagnostics(
       checkedAt: DateTime.now(),
       configuredFeedUrl: feedUrl,
       requestedFeedUrl: manualFeedUrl,
+      currentVersion: AppConstants.appVersion,
+      probeRequestUrl: manualFeedUrl,
     );
     try {
-      developer.log(
-        'Manual update check triggered (configured feed: $feedUrl, requested feed: $manualFeedUrl)',
-        name: 'auto_update_orchestrator',
-        level: 800,
+      _logManualCheck(
+        'Manual update check triggered',
+        checkId: _activeCheckId,
       );
       final probeResult = await _appcastProbeService.probeLatest(
         feedUrl: manualFeedUrl,
       );
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        probeRequestUrl: probeResult.requestUrl,
+        probeSucceeded: probeResult.errorMessage == null,
         appcastProbeVersion: probeResult.latestVersion,
         appcastProbeItemCount: probeResult.itemCount,
         probeErrorMessage: probeResult.errorMessage,
       );
-      await _updaterGateway.setFeedURL(manualFeedUrl);
-      await _updaterGateway.checkForUpdates(inBackground: false);
+      final triggerStartedAt = DateTime.now();
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        triggerStartedAt: triggerStartedAt,
+      );
+      await _updaterGateway
+          .checkForUpdates(inBackground: false)
+          .timeout(_manualTriggerTimeout);
+      final triggerCompletedAt = DateTime.now();
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        triggerCompletedAt: triggerCompletedAt,
+      );
+      _logManualCheck(
+        'Manual update trigger returned to Dart '
+        '(trigger_duration_ms=${triggerCompletedAt.difference(triggerStartedAt).inMilliseconds})',
+        checkId: _activeCheckId,
+      );
       return await _manualCheckCompleter!.future.timeout(
-        _manualCheckTimeout,
+        _manualCompletionTimeout,
         onTimeout: () {
           final failure = Failure<bool, Exception>(
-            domain.ServerFailure.withContext(
-              message: 'Update check timed out',
-              context: {'operation': 'checkManual'},
+            _buildManualFailure(
+              message: 'Update check timed out while waiting for updater completion',
+              completionSource: UpdateCheckCompletionSource.completionTimeout,
             ),
           );
-          _completeManualCheck(failure);
+          _completeManualCheck(
+            failure,
+            completionSource: UpdateCheckCompletionSource.completionTimeout,
+          );
           return failure;
         },
       );
-    } on Exception catch (e) {
+    } on TimeoutException catch (e) {
+      final now = DateTime.now();
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+        triggerCompletedAt: now,
+      );
       final failure = Failure<bool, Exception>(
-        domain.ServerFailure.withContext(
-          message: 'Failed to trigger update check',
+        _buildManualFailure(
+          message: 'Update check trigger timed out before updater responded',
+          completionSource: UpdateCheckCompletionSource.triggerTimeout,
           cause: e,
-          context: {'operation': 'checkManual'},
         ),
       );
-      _completeManualCheck(failure);
+      _completeManualCheck(
+        failure,
+        completionSource: UpdateCheckCompletionSource.triggerTimeout,
+      );
+      return failure;
+    } on Exception catch (e) {
+      final failure = Failure<bool, Exception>(
+        _buildManualFailure(
+          message: 'Failed to trigger update check',
+          cause: e,
+          completionSource: UpdateCheckCompletionSource.triggerFailure,
+        ),
+      );
+      _completeManualCheck(
+        failure,
+        completionSource: UpdateCheckCompletionSource.triggerFailure,
+      );
       return failure;
     } finally {
-      if (_isInitialized) {
-        try {
-          await _updaterGateway.setFeedURL(feedUrl);
-        } on Exception catch (e, s) {
-          developer.log(
-            'Failed to restore configured feed URL after manual update check',
-            name: 'auto_update_orchestrator',
-            level: 900,
-            error: e,
-            stackTrace: s,
-          );
-        }
-      }
       _lastManualDiagnostics = _activeManualDiagnostics;
+      final completionSource = _lastManualDiagnostics?.completionSource;
+      if (completionSource == UpdateCheckCompletionSource.triggerTimeout ||
+          completionSource == UpdateCheckCompletionSource.completionTimeout) {
+        await _recordTimeoutOutcome();
+      } else if (completionSource != null &&
+          completionSource != UpdateCheckCompletionSource.circuitOpen) {
+        await _resetTimeoutCircuitIfNeeded();
+      }
+      await _persistLastManualDiagnostics();
       _activeManualDiagnostics = null;
       _isManualCheck = false;
       _manualCheckCompleter = null;
+      _activeCheckId = null;
     }
   }
 
-  void _completeManualCheck(Result<bool> result) {
+  void _completeManualCheck(
+    Result<bool> result, {
+    UpdateCheckCompletionSource? completionSource,
+  }) {
+    final completedAt = DateTime.now();
+    final isTrackedManualCheck = _activeManualDiagnostics != null;
     result.fold(
       (isUpdateAvailable) {
+        final resolvedCompletionSource =
+            completionSource ??
+            (isUpdateAvailable
+                ? UpdateCheckCompletionSource.updateAvailable
+                : UpdateCheckCompletionSource.updateNotAvailable);
         _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+          completedAt: completedAt,
+          completionSource: resolvedCompletionSource,
           updateAvailable: isUpdateAvailable,
         );
+        if (isTrackedManualCheck) {
+          _recordCompletionMetric(resolvedCompletionSource);
+        }
       },
       (error) {
+        final resolvedCompletionSource =
+            completionSource ?? UpdateCheckCompletionSource.updaterError;
         _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
+          completedAt: completedAt,
+          completionSource: resolvedCompletionSource,
           errorMessage: _extractFailureMessage(error),
         );
+        if (isTrackedManualCheck) {
+          _recordCompletionMetric(resolvedCompletionSource);
+        }
       },
     );
+    final diagnostics = _activeManualDiagnostics;
+    if (diagnostics != null &&
+        diagnostics.triggerStartedAt != null &&
+        diagnostics.triggerCompletedAt != null) {
+      final triggerDuration = diagnostics.triggerCompletedAt!
+          .difference(diagnostics.triggerStartedAt!)
+          .inMilliseconds;
+      final totalDuration =
+          completedAt.difference(diagnostics.checkedAt).inMilliseconds;
+      _logManualCheck(
+        'Manual update check completed '
+        '(trigger_duration_ms=$triggerDuration, total_duration_ms=$totalDuration)',
+        checkId: _activeCheckId,
+      );
+    } else {
+      _logManualCheck(
+        'Manual update check completed',
+        checkId: _activeCheckId,
+      );
+    }
     if (_isManualCheck && _manualCheckCompleter != null && !_manualCheckCompleter!.isCompleted) {
       _manualCheckCompleter!.complete(result);
     }
@@ -300,74 +646,78 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   void onUpdaterError(UpdaterError? error) {
-    developer.log(
+    _logManualCheck(
       'Auto-updater error: $error',
-      name: 'auto_update_orchestrator',
+      checkId: _activeCheckId,
       level: 900,
     );
     _completeManualCheck(
       Failure<bool, Exception>(
-        domain.ServerFailure.withContext(
+        _buildManualFailure(
           message: error?.toString() ?? 'Update check failed',
+          completionSource: UpdateCheckCompletionSource.updaterError,
           context: {'operation': 'onUpdaterError'},
         ),
       ),
+      completionSource: UpdateCheckCompletionSource.updaterError,
     );
   }
 
   @override
   void onUpdaterCheckingForUpdate(Appcast? appcast) {
-    developer.log(
+    _logManualCheck(
       'Checking for updates... (items: ${appcast?.items.length ?? 0})',
-      name: 'auto_update_orchestrator',
-      level: 800,
+      checkId: _activeCheckId,
     );
   }
 
   @override
   void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
-    developer.log(
-      'Update available: ${appcastItem?.versionString} (display: ${appcastItem?.displayVersionString})',
-      name: 'auto_update_orchestrator',
-      level: 800,
+    _logManualCheck(
+      'Update available: ${appcastItem?.versionString} '
+      '(display: ${appcastItem?.displayVersionString})',
+      checkId: _activeCheckId,
     );
     _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
       remoteVersion: appcastItem?.versionString,
       remoteDisplayVersion: appcastItem?.displayVersionString,
     );
-    _completeManualCheck(const Success(true));
+    _completeManualCheck(
+      const Success(true),
+      completionSource: UpdateCheckCompletionSource.updateAvailable,
+    );
   }
 
   @override
   void onUpdaterUpdateNotAvailable(UpdaterError? error) {
-    developer.log(
+    _logManualCheck(
       'No update available (manual: $_isManualCheck, error: $error)',
-      name: 'auto_update_orchestrator',
-      level: 800,
+      checkId: _activeCheckId,
     );
     if (error != null) {
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         errorMessage: error.message,
       );
     }
-    _completeManualCheck(const Success(false));
+    _completeManualCheck(
+      const Success(false),
+      completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+    );
   }
 
   @override
   void onUpdaterUpdateDownloaded(AppcastItem? appcastItem) {
-    developer.log(
+    _logManualCheck(
       'Update downloaded: ${appcastItem?.versionString}',
-      name: 'auto_update_orchestrator',
-      level: 800,
+      checkId: _activeCheckId,
     );
   }
 
   @override
   void onUpdaterBeforeQuitForUpdate(AppcastItem? appcastItem) {
-    developer.log(
+    _logManualCheck(
       'Before quit for update: ${appcastItem?.versionString}',
-      name: 'auto_update_orchestrator',
-      level: 800,
+      checkId: _activeCheckId,
     );
     windowManager.setPreventClose(false);
   }

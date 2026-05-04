@@ -66,6 +66,24 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
   static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
   static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
+  static const String _autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
+  static const String _autoUpdateManualCheckSuccessAvailableCounter =
+      'auto_update_manual_check_success_available';
+  static const String _autoUpdateManualCheckSuccessNotAvailableCounter =
+      'auto_update_manual_check_success_not_available';
+  static const String _autoUpdateManualCheckUpdaterErrorCounter =
+      'auto_update_manual_check_updater_error';
+  static const String _autoUpdateManualCheckTriggerTimeoutCounter =
+      'auto_update_manual_check_trigger_timeout';
+  static const String _autoUpdateManualCheckCompletionTimeoutCounter =
+      'auto_update_manual_check_completion_timeout';
+  static const String _autoUpdateManualCheckTriggerFailureCounter =
+      'auto_update_manual_check_trigger_failure';
+  static const String _autoUpdateManualCheckNotInitializedCounter =
+      'auto_update_manual_check_not_initialized';
+  static const String _autoUpdateCircuitOpenedCounter = 'auto_update_circuit_opened';
+  static const String _autoUpdateCircuitOpenRejectedCounter =
+      'auto_update_circuit_open_rejected';
 
   static const int _maxMetrics = 10000;
 
@@ -130,6 +148,26 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
   int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
   int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
+  int get autoUpdateManualCheckStartedCount =>
+      _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
+  int get autoUpdateManualCheckSuccessAvailableCount =>
+      _eventCounters[_autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
+  int get autoUpdateManualCheckSuccessNotAvailableCount =>
+      _eventCounters[_autoUpdateManualCheckSuccessNotAvailableCounter] ?? 0;
+  int get autoUpdateManualCheckUpdaterErrorCount =>
+      _eventCounters[_autoUpdateManualCheckUpdaterErrorCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerTimeoutCount =>
+      _eventCounters[_autoUpdateManualCheckTriggerTimeoutCounter] ?? 0;
+  int get autoUpdateManualCheckCompletionTimeoutCount =>
+      _eventCounters[_autoUpdateManualCheckCompletionTimeoutCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerFailureCount =>
+      _eventCounters[_autoUpdateManualCheckTriggerFailureCounter] ?? 0;
+  int get autoUpdateManualCheckNotInitializedCount =>
+      _eventCounters[_autoUpdateManualCheckNotInitializedCounter] ?? 0;
+  int get autoUpdateCircuitOpenedCount =>
+      _eventCounters[_autoUpdateCircuitOpenedCounter] ?? 0;
+  int get autoUpdateCircuitOpenRejectedCount =>
+      _eventCounters[_autoUpdateCircuitOpenRejectedCounter] ?? 0;
   int get currentQueueSize => _currentQueueSize;
   int get maxQueueSize => _maxQueueSize;
   int get currentActiveWorkers => _currentActiveWorkers;
@@ -298,6 +336,36 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   void recordStreamCancelDisconnectFailure() => _incrementEventCounter(_streamCancelDisconnectFailureCounter);
 
   void recordStreamCancelDisconnectTimeout() => _incrementEventCounter(_streamCancelDisconnectTimeoutCounter);
+
+  void recordAutoUpdateManualCheckStarted() =>
+      _incrementEventCounter(_autoUpdateManualCheckStartedCounter);
+
+  void recordAutoUpdateManualCheckSuccessAvailable() =>
+      _incrementEventCounter(_autoUpdateManualCheckSuccessAvailableCounter);
+
+  void recordAutoUpdateManualCheckSuccessNotAvailable() =>
+      _incrementEventCounter(_autoUpdateManualCheckSuccessNotAvailableCounter);
+
+  void recordAutoUpdateManualCheckUpdaterError() =>
+      _incrementEventCounter(_autoUpdateManualCheckUpdaterErrorCounter);
+
+  void recordAutoUpdateManualCheckTriggerTimeout() =>
+      _incrementEventCounter(_autoUpdateManualCheckTriggerTimeoutCounter);
+
+  void recordAutoUpdateManualCheckCompletionTimeout() =>
+      _incrementEventCounter(_autoUpdateManualCheckCompletionTimeoutCounter);
+
+  void recordAutoUpdateManualCheckTriggerFailure() =>
+      _incrementEventCounter(_autoUpdateManualCheckTriggerFailureCounter);
+
+  void recordAutoUpdateManualCheckNotInitialized() =>
+      _incrementEventCounter(_autoUpdateManualCheckNotInitializedCounter);
+
+  void recordAutoUpdateCircuitOpened() =>
+      _incrementEventCounter(_autoUpdateCircuitOpenedCounter);
+
+  void recordAutoUpdateCircuitOpenRejected() =>
+      _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
 class FakeAutoUpdaterGateway implements IAutoUpdaterGateway {
   UpdaterListener? listener;
@@ -13,6 +19,7 @@ class FakeAutoUpdaterGateway implements IAutoUpdaterGateway {
   int? interval;
   bool? lastInBackground;
   Exception? checkError;
+  Exception? setFeedError;
   Future<void> Function()? onCheckForUpdates;
 
   @override
@@ -22,6 +29,9 @@ class FakeAutoUpdaterGateway implements IAutoUpdaterGateway {
 
   @override
   Future<void> setFeedURL(String feedUrl) async {
+    if (setFeedError != null) {
+      throw setFeedError!;
+    }
     feedUrls.add(feedUrl);
   }
 
@@ -67,11 +77,16 @@ class FakeAppcastProbeService implements IAppcastProbeService {
 
 void main() {
   group('AutoUpdateOrchestrator', () {
+    late InMemoryAppSettingsStore settingsStore;
+    late MetricsCollector metricsCollector;
+
     setUp(() {
       dotenv.clean();
       dotenv.loadFromString(
         envString: 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\nAUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
       );
+      settingsStore = InMemoryAppSettingsStore();
+      metricsCollector = MetricsCollector();
     });
 
     group('isAvailable', () {
@@ -100,6 +115,8 @@ void main() {
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         await orchestrator.initialize();
@@ -115,6 +132,8 @@ void main() {
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         await orchestrator.initialize();
@@ -144,13 +163,15 @@ void main() {
         );
       });
 
-      test('returns Success(true) when update is available', () async {
+      test('uses fixed feed and probe cache-busting when update is available', () async {
         final fakeGateway = FakeAutoUpdaterGateway();
         final fakeProbe = FakeAppcastProbeService();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
           appcastProbeService: fakeProbe,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         fakeGateway.onCheckForUpdates = () async {
@@ -165,15 +186,41 @@ void main() {
           (_) => fail('Expected success'),
         );
         expect(fakeGateway.lastInBackground, isFalse);
-        expect(fakeGateway.feedUrls.length, 3);
-        expect(fakeGateway.feedUrls[1], contains('cb='));
-        expect(fakeGateway.feedUrls.last, 'https://example.com/appcast.xml');
-        expect(fakeProbe.lastProbeUrl, equals(fakeGateway.feedUrls[1]));
+        expect(fakeGateway.feedUrls, <String>['https://example.com/appcast.xml']);
+        expect(fakeProbe.lastProbeUrl, contains('cb='));
+        expect(orchestrator.lastManualDiagnostics?.configuredFeedUrl, 'https://example.com/appcast.xml');
+        expect(orchestrator.lastManualDiagnostics?.requestedFeedUrl, contains('cb='));
+        expect(orchestrator.lastManualDiagnostics?.probeRequestUrl, contains('cb='));
+        expect(orchestrator.lastManualDiagnostics?.probeSucceeded, isTrue);
         expect(orchestrator.lastManualDiagnostics?.updateAvailable, isTrue);
         expect(
-          orchestrator.lastManualDiagnostics?.appcastProbeVersion,
-          '1.0.99+1',
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateAvailable,
         );
+        expect(orchestrator.lastManualDiagnostics?.currentVersion, AppConstants.appVersion);
+        expect(metricsCollector.autoUpdateManualCheckStartedCount, 1);
+        expect(metricsCollector.autoUpdateManualCheckSuccessAvailableCount, 1);
+      });
+
+      test('does not call setFeedURL again after initialize', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        fakeGateway.onCheckForUpdates = () async {
+          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        };
+
+        await orchestrator.initialize();
+        final result = await orchestrator.checkManual();
+
+        expect(result.isSuccess(), isTrue);
+        expect(fakeGateway.feedUrls, <String>['https://example.com/appcast.xml']);
       });
 
       test('returns Success(false) when update is not available', () async {
@@ -188,6 +235,8 @@ void main() {
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
           appcastProbeService: fakeProbe,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         fakeGateway.onCheckForUpdates = () async {
@@ -203,20 +252,24 @@ void main() {
         );
         expect(fakeGateway.lastInBackground, isFalse);
         expect(orchestrator.lastManualDiagnostics?.updateAvailable, isFalse);
+        expect(orchestrator.lastManualDiagnostics?.appcastProbeVersion, '1.0.13+14');
         expect(
-          orchestrator.lastManualDiagnostics?.appcastProbeVersion,
-          '1.0.13+14',
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateNotAvailable,
         );
+        expect(metricsCollector.autoUpdateManualCheckSuccessNotAvailableCount, 1);
       });
 
-      test('returns Failure when updater listener does not complete before timeout', () async {
+      test('returns Failure when updater listener does not complete before completion timeout', () async {
         final fakeGateway = FakeAutoUpdaterGateway();
         final fakeProbe = FakeAppcastProbeService();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
           appcastProbeService: fakeProbe,
-          manualCheckTimeout: const Duration(milliseconds: 10),
+          manualCompletionTimeout: const Duration(milliseconds: 10),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         final result = await orchestrator.checkManual();
@@ -226,23 +279,62 @@ void main() {
           (_) => fail('Expected failure'),
           (failure) {
             final f = failure as domain.Failure;
-            expect(f.message, contains('timed out'));
+            expect(f.message, contains('waiting for updater completion'));
           },
         );
-        expect(fakeGateway.feedUrls.last, 'https://example.com/appcast.xml');
+        expect(
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.completionTimeout,
+        );
         expect(
           orchestrator.lastManualDiagnostics?.errorMessage,
-          contains('timed out'),
+          contains('waiting for updater completion'),
         );
+        expect(metricsCollector.autoUpdateManualCheckCompletionTimeoutCount, 1);
+      });
+
+      test('returns Failure when trigger does not return before trigger timeout', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final fakeProbe = FakeAppcastProbeService();
+        final triggerCompleter = Completer<void>();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: fakeProbe,
+          manualTriggerTimeout: const Duration(milliseconds: 10),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        fakeGateway.onCheckForUpdates = () => triggerCompleter.future;
+
+        final result = await orchestrator.checkManual();
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as domain.Failure;
+            expect(f.message, contains('trigger timed out'));
+          },
+        );
+        expect(
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.triggerTimeout,
+        );
+        expect(metricsCollector.autoUpdateManualCheckTriggerTimeoutCount, 1);
       });
 
       test('returns Failure when check trigger throws', () async {
-        final fakeGateway = FakeAutoUpdaterGateway()..checkError = Exception('boom');
+        final fakeGateway = FakeAutoUpdaterGateway()
+          ..checkError = Exception('boom');
         final fakeProbe = FakeAppcastProbeService();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
           appcastProbeService: fakeProbe,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
         );
 
         final result = await orchestrator.checkManual();
@@ -256,9 +348,141 @@ void main() {
           },
         );
         expect(
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.triggerFailure,
+        );
+        expect(
           orchestrator.lastManualDiagnostics?.errorMessage,
           contains('Failed to trigger update check'),
         );
+        expect(metricsCollector.autoUpdateManualCheckTriggerFailureCount, 1);
+      });
+
+      test('keeps updater trigger running even when probe fails', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml?cb=1',
+            errorMessage: 'HTTP 500',
+          );
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: fakeProbe,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        fakeGateway.onCheckForUpdates = () async {
+          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        };
+
+        final result = await orchestrator.checkManual();
+
+        expect(result.isSuccess(), isTrue);
+        expect(orchestrator.lastManualDiagnostics?.probeSucceeded, isFalse);
+        expect(orchestrator.lastManualDiagnostics?.probeErrorMessage, 'HTTP 500');
+        expect(fakeGateway.lastInBackground, isFalse);
+      });
+
+      test('returns Failure with notInitialized completion source when initialize does not finish', () async {
+        final fakeGateway = FakeAutoUpdaterGateway()
+          ..setFeedError = Exception('init failed');
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.checkManual();
+
+        expect(result.isError(), isTrue);
+        expect(
+          orchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.notInitialized,
+        );
+        expect(metricsCollector.autoUpdateManualCheckNotInitializedCount, 1);
+      });
+
+      test('persists diagnostics and hydrates them in a new orchestrator instance', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        fakeGateway.onCheckForUpdates = () async {
+          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        };
+
+        final result = await orchestrator.checkManual();
+        expect(result.isSuccess(), isTrue);
+
+        final restored = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: MetricsCollector(),
+        );
+
+        expect(
+          restored.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateNotAvailable,
+        );
+        expect(
+          restored.lastManualDiagnostics?.configuredFeedUrl,
+          'https://example.com/appcast.xml',
+        );
+      });
+
+      test('opens a timeout circuit after repeated timeouts and rejects new checks', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          manualCompletionTimeout: const Duration(milliseconds: 10),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          timeoutCircuitThreshold: 2,
+          timeoutCircuitCooldown: const Duration(minutes: 5),
+        );
+
+        final firstResult = await orchestrator.checkManual();
+        final secondResult = await orchestrator.checkManual();
+        final blockedOrchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: FakeAppcastProbeService(),
+          manualCompletionTimeout: const Duration(milliseconds: 10),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          timeoutCircuitThreshold: 2,
+          timeoutCircuitCooldown: const Duration(minutes: 5),
+        );
+        final blockedResult = await blockedOrchestrator.checkManual();
+
+        expect(firstResult.isError(), isTrue);
+        expect(secondResult.isError(), isTrue);
+        expect(blockedResult.isError(), isTrue);
+        expect(
+          blockedOrchestrator.lastManualDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.circuitOpen,
+        );
+        blockedResult.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as domain.Failure;
+            expect(f.message, contains('temporarily paused'));
+          },
+        );
+        expect(metricsCollector.autoUpdateCircuitOpenedCount, 1);
+        expect(metricsCollector.autoUpdateCircuitOpenRejectedCount, 1);
       });
     });
   });

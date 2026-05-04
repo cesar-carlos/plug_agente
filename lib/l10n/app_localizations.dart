@@ -1286,6 +1286,36 @@ abstract class AppLocalizations {
   /// **'Official feed'**
   String get configUpdateTechnicalOfficialFeed;
 
+  /// No description provided for @configUpdateTechnicalProbeRequestUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Probe URL'**
+  String get configUpdateTechnicalProbeRequestUrl;
+
+  /// No description provided for @configUpdateTechnicalProbeSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'HTTP probe succeeded'**
+  String get configUpdateTechnicalProbeSucceeded;
+
+  /// No description provided for @configUpdateTechnicalCompletionSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Check result'**
+  String get configUpdateTechnicalCompletionSource;
+
+  /// No description provided for @configUpdateTechnicalTriggerDurationMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger duration (ms)'**
+  String get configUpdateTechnicalTriggerDurationMs;
+
+  /// No description provided for @configUpdateTechnicalTotalDurationMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Total duration (ms)'**
+  String get configUpdateTechnicalTotalDurationMs;
+
   /// No description provided for @configUpdateTechnicalFeedItemCount.
   ///
   /// In en, this message translates to:
@@ -1309,6 +1339,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error reading appcast'**
   String get configUpdateTechnicalAppcastError;
+
+  /// No description provided for @configUpdateCompletionSourceUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get configUpdateCompletionSourceUpdateAvailable;
+
+  /// No description provided for @configUpdateCompletionSourceUpdateNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No update available'**
+  String get configUpdateCompletionSourceUpdateNotAvailable;
+
+  /// No description provided for @configUpdateCompletionSourceUpdaterError.
+  ///
+  /// In en, this message translates to:
+  /// **'Updater returned an error'**
+  String get configUpdateCompletionSourceUpdaterError;
+
+  /// No description provided for @configUpdateCompletionSourceTriggerTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout while triggering the updater'**
+  String get configUpdateCompletionSourceTriggerTimeout;
+
+  /// No description provided for @configUpdateCompletionSourceCompletionTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout while waiting for updater completion'**
+  String get configUpdateCompletionSourceCompletionTimeout;
+
+  /// No description provided for @configUpdateCompletionSourceTriggerFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start the update check'**
+  String get configUpdateCompletionSourceTriggerFailure;
+
+  /// No description provided for @configUpdateCompletionSourceNotInitialized.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-update not initialized'**
+  String get configUpdateCompletionSourceNotInitialized;
+
+  /// No description provided for @configUpdateCompletionSourceCircuitOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks paused after repeated timeouts'**
+  String get configUpdateCompletionSourceCircuitOpen;
 
   /// No description provided for @gsSectionAppearance.
   ///

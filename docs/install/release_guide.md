@@ -1,14 +1,14 @@
 # Guia de Release e Versionamento
 
-Fonte operacional para versionamento, build do instalador, tag e publicação do
+Fonte operacional para versionamento, build do instalador, tag e publicacao do
 Plug Agente.
 
-## Versão e Tags
+## Versao e Tags
 
-- A versão nasce em `pubspec.yaml`, no formato `MAJOR.MINOR.PATCH+BUILD`.
-- `installer/update_version.py` sincroniza `installer/setup.iss` com a versão
+- A versao nasce em `pubspec.yaml`, no formato `MAJOR.MINOR.PATCH+BUILD`.
+- `installer/update_version.py` sincroniza `installer/setup.iss` com a versao
   curta (`MAJOR.MINOR.PATCH`) e `lib/core/constants/app_version.g.dart` com a
-  versão completa.
+  versao completa.
 - Tags usam `v{MAJOR.MINOR.PATCH}`. Exemplo: `version: 1.2.6+1` exige tag
   `v1.2.6`.
 - O CI falha se `pubspec.yaml`, `installer/setup.iss` e
@@ -16,7 +16,7 @@ Plug Agente.
 
 ## Processo Recomendado
 
-### 1. Atualizar versão
+### 1. Atualizar versao
 
 Edite `pubspec.yaml`:
 
@@ -39,7 +39,20 @@ O script executa:
 Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
 `--dart-define=AUTO_UPDATE_FEED_URL=...`.
 
-Saída esperada:
+Se `.env` tambem definir `AUTO_UPDATE_DSA_PRIVATE_KEY_PATH`, o script assina o
+instalador com `dart run auto_updater:sign_update` e salva um sidecar:
+
+```text
+installer/dist/PlugAgente-Setup-{MAJOR.MINOR.PATCH}.signature.txt
+```
+
+Para tornar essa assinatura obrigatoria no build local, defina:
+
+```env
+AUTO_UPDATE_REQUIRE_DSA_SIGNATURE=true
+```
+
+Saida esperada:
 
 ```text
 installer/dist/PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
@@ -64,14 +77,16 @@ git push origin v1.2.7
 
 1. Acesse `https://github.com/cesar-carlos/plug_agente/releases`.
 2. Crie uma release para a tag `v1.2.7`.
-3. Use título como `Version 1.2.7`.
+3. Use titulo como `Version 1.2.7`.
 4. Anexe `installer/dist/PlugAgente-Setup-1.2.7.exe`.
-5. Publique como latest release quando for a versão estável mais recente.
+5. Publique como latest release quando for a versao estavel mais recente.
 
-### 6. Validar automação
+### 6. Validar automacao
 
-Após publicar, confira o workflow **Update Appcast on Release** em GitHub
-Actions. Ele valida tag, versão, nome do asset e atualiza `appcast.xml`.
+Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
+Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e,
+quando a secret `AUTO_UPDATE_DSA_PRIVATE_KEY_PEM` estiver configurada no
+GitHub, publica tambem `sparkle:dsaSignature` no feed.
 
 Feed oficial:
 
@@ -79,10 +94,10 @@ Feed oficial:
 https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 ```
 
-Validações detalhadas do feed e do update ficam em
+Validacoes detalhadas do feed e do update ficam em
 [auto_update_setup.md](auto_update_setup.md).
 
-## Fluxo Manual para Depuração
+## Fluxo Manual para Depuracao
 
 Use apenas quando precisar isolar uma etapa:
 
@@ -92,10 +107,13 @@ flutter build windows --release
 ISCC installer/setup.iss
 ```
 
-## Segurança Operacional
+## Seguranca Operacional
 
-- O fluxo atual publica `appcast.xml` sem `sparkle:dsaSignature`.
-- Para distribuição ampla, priorize assinatura de código do executável e do
-  instalador para reduzir alertas de SmartScreen e aumentar confiança no update.
-- A retenção do `appcast.xml` é limitada pelo workflow para evitar crescimento
+- Embuta `dsa_pub.pem` no app Windows via `windows/runner/Runner.rc`.
+- Para incluir `sparkle:dsaSignature` no feed oficial, configure a secret
+  `AUTO_UPDATE_DSA_PRIVATE_KEY_PEM` no GitHub Actions.
+- Para distribuicao ampla, priorize tambem assinatura de codigo do executavel e
+  do instalador para reduzir alertas de SmartScreen e aumentar confianca no
+  update.
+- A retencao do `appcast.xml` e limitada pelo workflow para evitar crescimento
   indefinido do feed.

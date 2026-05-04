@@ -45,6 +45,38 @@ class _ConfigPageState extends State<ConfigPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
+  String _formatDurationMs(DateTime? startedAt, DateTime? completedAt) {
+    if (startedAt == null || completedAt == null) {
+      return '-';
+    }
+    return completedAt.difference(startedAt).inMilliseconds.toString();
+  }
+
+  String _formatCompletionSource(
+    AppLocalizations l10n,
+    UpdateCheckCompletionSource? source,
+  ) {
+    return switch (source) {
+      UpdateCheckCompletionSource.updateAvailable =>
+        l10n.configUpdateCompletionSourceUpdateAvailable,
+      UpdateCheckCompletionSource.updateNotAvailable =>
+        l10n.configUpdateCompletionSourceUpdateNotAvailable,
+      UpdateCheckCompletionSource.updaterError =>
+        l10n.configUpdateCompletionSourceUpdaterError,
+      UpdateCheckCompletionSource.triggerTimeout =>
+        l10n.configUpdateCompletionSourceTriggerTimeout,
+      UpdateCheckCompletionSource.completionTimeout =>
+        l10n.configUpdateCompletionSourceCompletionTimeout,
+      UpdateCheckCompletionSource.triggerFailure =>
+        l10n.configUpdateCompletionSourceTriggerFailure,
+      UpdateCheckCompletionSource.notInitialized =>
+        l10n.configUpdateCompletionSourceNotInitialized,
+      UpdateCheckCompletionSource.circuitOpen =>
+        l10n.configUpdateCompletionSourceCircuitOpen,
+      null => '-',
+    };
+  }
+
   String _getUpdateUnavailableMessage(AppLocalizations l10n) {
     final capabilities = getIt<RuntimeCapabilities>();
     return capabilities.supportsAutoUpdate
@@ -62,11 +94,16 @@ class _ConfigPageState extends State<ConfigPage> {
 
     final lines = <String>[
       l10n.configUpdateTechnicalTitle,
-      '${l10n.configUpdateTechnicalCurrentVersion}: $_appVersion',
+      '${l10n.configUpdateTechnicalCurrentVersion}: ${diagnostics.currentVersion ?? _appVersion}',
       '${l10n.configUpdateTechnicalCheckedAt}: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
       '${l10n.configUpdateTechnicalConfiguredFeed}: ${diagnostics.configuredFeedUrl}',
       '${l10n.configUpdateTechnicalRequestedFeed}: ${diagnostics.requestedFeedUrl}',
       '${l10n.configUpdateTechnicalOfficialFeed}: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      '${l10n.configUpdateTechnicalProbeRequestUrl}: ${diagnostics.probeRequestUrl ?? diagnostics.requestedFeedUrl}',
+      '${l10n.configUpdateTechnicalProbeSucceeded}: ${diagnostics.probeSucceeded == null ? '-' : diagnostics.probeSucceeded! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      '${l10n.configUpdateTechnicalCompletionSource}: ${_formatCompletionSource(l10n, diagnostics.completionSource)}',
+      '${l10n.configUpdateTechnicalTriggerDurationMs}: ${_formatDurationMs(diagnostics.triggerStartedAt, diagnostics.triggerCompletedAt)}',
+      '${l10n.configUpdateTechnicalTotalDurationMs}: ${_formatDurationMs(diagnostics.checkedAt, diagnostics.completedAt)}',
     ];
 
     if (diagnostics.appcastProbeItemCount != null) {
