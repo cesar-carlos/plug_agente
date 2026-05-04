@@ -24,6 +24,7 @@ binario esta documentado em
 
 ## Status de implementacao
 
+
 | Item                                                                 | Status                                                                                                                     |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | JSON-RPC 2.0 (`rpc:request`/`rpc:response`)                          | implemented                                                                                                                |
@@ -70,6 +71,7 @@ binario esta documentado em
 | Replay protection por janela de request ID                           | implemented (agent-side)                                                                                                   |
 | Auditoria de token management                                        | implemented (via feature flag)                                                                                             |
 
+
 ## Plug JSON-RPC Profile
 
 O transporte usa JSON-RPC 2.0 como base, mas o contrato operacional deste
@@ -83,7 +85,7 @@ Esse profile formaliza extensoes que nao fazem parte do JSON-RPC puro:
 - payload de erro estruturado em `error.data`
 - limites negociados no handshake
 - paginacao por `page/page_size` e por `cursor`, sempre exigindo `ORDER BY`
-  explicito para estabilidade e reescrita gerenciada
+explicito para estabilidade e reescrita gerenciada
 
 As semanticas ativas podem ser anunciadas em `capabilities.extensions` no
 handshake.
@@ -107,7 +109,7 @@ handshake.
 - `hub:heartbeat_ack`
   - recebido do hub como confirmacao de heartbeat
   - na ausencia de `ack` por janelas consecutivas, o agente marca conexao como
-    stale e aciona fluxo de reconexao
+  stale e aciona fluxo de reconexao
 
 ### Requisicoes de execucao
 
@@ -116,18 +118,20 @@ handshake.
 
 ## Mapa rapido de eventos
 
-| Evento               | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
-| -------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+
+| Evento                 | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
+| ---------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile? }>`          | `agent:capabilities` ou `agent:register_error`                                                                                                             |
 | `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
-| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. `code/reason` `transient_failure` ou `rate_limited` agendam novo registro; demais valores forçam reconexao.                 |
-| `agent:ready`        | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
-| `rpc:request`        | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
-| `rpc:request_ack`    | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
-| `rpc:batch_ack`      | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
-| `rpc:chunk`          | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
-| `rpc:complete`       | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
-| `rpc:stream.pull`    | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
+| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. `code/reason` `transient_failure` ou `rate_limited` agendam novo registro; demais valores forçam reconexao.                  |
+| `agent:ready`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
+| `rpc:request`          | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
+| `rpc:request_ack`      | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:batch_ack`        | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
+| `rpc:complete`         | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
+| `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
+
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
 de `capabilitiesTimeoutMs` (default 8 s) apos `agent:register`, o agente reenvia
@@ -149,10 +153,10 @@ enviar RPC antes disso, o agente rejeita a request com erro de contrato
 O padrao fisico da comunicacao agora tem duas camadas:
 
 1. **Payload logico**
-   - envelope JSON-RPC, handshake, heartbeat, ack ou evento de streaming.
+  - envelope JSON-RPC, handshake, heartbeat, ack ou evento de streaming.
 2. **Payload fisico**
-   - o payload logico e serializado em JSON UTF-8, opcionalmente comprimido com
-     GZIP e empacotado em `PayloadFrame`.
+  - o payload logico e serializado em JSON UTF-8, opcionalmente comprimido com
+   GZIP e empacotado em `PayloadFrame`.
 
 Fluxo de saida implementado:
 
@@ -160,7 +164,7 @@ Fluxo de saida implementado:
 2. serializar em bytes (`enc: json`);
 3. aplicar compressao quando o tamanho atingir `compressionThreshold`;
 4. montar `PayloadFrame` com `originalSize`, `compressedSize`, `traceId` e
-   `requestId`;
+  `requestId`;
 5. assinar o frame quando `enablePayloadSigning` estiver ativo;
 6. emitir via Socket.IO.
 
@@ -182,11 +186,11 @@ Regras atuais:
 
 - nao existe API dedicada de transferencia de arquivo no contrato publicado;
 - se um metodo de negocio precisar carregar conteudo de arquivo, esse conteudo
-  deve primeiro ser serializado no payload logico do metodo;
+deve primeiro ser serializado no payload logico do metodo;
 - depois disso, **a mensagem inteira** segue o mesmo processo padrao:
-  serializacao -> compressao -> frame binario;
+serializacao -> compressao -> frame binario;
 - clientes nao devem tentar “pular” o `PayloadFrame` e enviar bytes crus fora
-  do contrato Socket.IO/JSON-RPC.
+do contrato Socket.IO/JSON-RPC.
 
 Para cargas grandes, a recomendacao operacional e usar chunking no nivel do
 metodo de negocio, sem abrir excecao para o transporte.
@@ -197,13 +201,13 @@ Fluxo atual para resultados grandes:
 
 1. Hub envia `rpc:request` com `sql.execute`.
 2. Agente inicia execucao; se resultado exceder limite, retorna resposta inicial
-   com `stream_id` e emite `rpc:chunk` para cada lote ordenado.
+  com `stream_id` e emite `rpc:chunk` para cada lote ordenado.
 3. Agente emite `rpc:complete` ao finalizar com `total_rows` e resumo.
-   Se o stream for interrompido por backpressure, erro ODBC ou falha de envio apos chunks parciais, o agente emite ainda `rpc:complete` com `terminal_status`: `aborted` (ex.: fila/backpressure) ou `error` (ex.: falha de execucao), para o hub fechar o stream de forma deterministica; o `rpc:response` associado pode ser erro.
+  Se o stream for interrompido por backpressure, erro ODBC ou falha de envio apos chunks parciais, o agente emite ainda `rpc:complete` com `terminal_status`: `aborted` (ex.: fila/backpressure) ou `error` (ex.: falha de execucao), para o hub fechar o stream de forma deterministica; o `rpc:response` associado pode ser erro.
 4. Se `enableSocketBackpressure`: agente espera `rpc:stream.pull` antes de enviar
-   proximos chunks; `window_size` controla quantos chunks enviar por pull.
+  proximos chunks; `window_size` controla quantos chunks enviar por pull.
 5. **Overflow de buffer**: se a fila de chunks atingir o limite (`maxBackpressureChunkQueueSize`)
-   e o hub nao enviar `rpc:stream.pull` a tempo, o agente **nao descarta** chunks silenciosamente.
+  e o hub nao enviar `rpc:stream.pull` a tempo, o agente **nao descarta** chunks silenciosamente.
    Em vez disso, cancela o stream e retorna erro RPC `resultTooLarge` (`-32105`) com
    `reason: result_too_large` (canonico) e `subreason: backpressure_overflow` (refinamento da causa).
    O hub deve consumir mais rapido ou aumentar `window_size`.
@@ -219,11 +223,13 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 
 ## Garantia de entrega (quando `enableSocketDeliveryGuarantees` ativo)
 
+
 | Tipo de evento                 | Garantia                   | Mecanismo                                                      |
 | ------------------------------ | -------------------------- | -------------------------------------------------------------- |
 | Telemetria/notification        | best effort                | sem ack                                                        |
 | Request critico hub -> agente  | at least once              | `rpc:request_ack` / `rpc:batch_ack` + retry hub + idempotencia |
 | Response critico agente -> hub | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack                 |
+
 
 ## Notification JSON-RPC (contrato formal)
 
@@ -253,12 +259,13 @@ Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
 ### Feature flag
 
 - `enableSocketNotificationsContract`: quando ativo, o agente aplica
-  as regras acima de forma estrita. Quando desativado, notifications
-  ainda sao aceitas mas podem gerar response vazio.
+as regras acima de forma estrita. Quando desativado, notifications
+ainda sao aceitas mas podem gerar response vazio.
 
 ## Regras formais de batch (contrato)
 
 ### Limites
+
 
 | Parametro              | Valor       | Descricao                                             |
 | ---------------------- | ----------- | ----------------------------------------------------- |
@@ -266,6 +273,7 @@ Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
 | IDs unicos             | obrigatorio | IDs duplicados retornam `-32600` (quando strict mode) |
 | Ordem de processamento | sequencial  | Respostas na mesma ordem dos requests                 |
 | Notifications em batch | permitido   | Itens sem `id` nao geram response                     |
+
 
 ### Regras de validacao (strict mode)
 
@@ -280,8 +288,8 @@ Quando `enableSocketBatchStrictValidation` esta ativo:
 
 - Batch **nao** e atomico por padrao. Cada comando e executado independentemente.
 - Para atomicidade, use `options.transaction: true` em `sql.executeBatch`.
-  Nesse modo, os comandos sao executados na **mesma conexao** e em
-  **transacao real de banco** (`begin/commit/rollback`).
+Nesse modo, os comandos sao executados na **mesma conexao** e em
+**transacao real de banco** (`begin/commit/rollback`).
 - Se um item falha, os demais continuam sendo processados (exceto em modo transacional).
 
 ### Exemplo de batch com notification
@@ -329,6 +337,7 @@ Response (notification nao gera item):
 
 ### Definicao
 
+
 | Campo              | Tipo              | Obrigatorio    | Descricao                                                                                                                                                                                                 |
 | ------------------ | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api_version`      | string            | recomendado    | Versao do contrato (ex.: `"2.1"`). O runtime atual aceita requests sem esse campo como compatibilidade com v2.0 implicito e sempre o inclui nas responses quando `enableSocketApiVersionMeta` esta ativo. |
@@ -339,6 +348,7 @@ Response (notification nao gera item):
 | `meta.agent_id`    | string            | sim (response) | Identificador do agente                                                                                                                                                                                   |
 | `meta.timestamp`   | string (ISO-8601) | sim (response) | Instante UTC do envio. Em requests, e recomendado para rastreabilidade, mas nao exigido pelo runtime atual.                                                                                               |
 
+
 ### Notificacoes (`id` ausente)
 
 - Pedidos **notification** (sem `id` no JSON-RPC) **nao** associam resposta nem correlacao por `id`.
@@ -346,20 +356,20 @@ Response (notification nao gera item):
 ### Nota operacional (largura de banda)
 
 - A compressao outbound continua sendo controlada pela politica local do agente
-  e pela negociacao de capacidades (`compressions`, `compressionThreshold`,
-  `maxCompressedPayloadBytes` e afins). Nao existe, no runtime atual, override
-  por request via `meta`.
+e pela negociacao de capacidades (`compressions`, `compressionThreshold`,
+`maxCompressedPayloadBytes` e afins). Nao existe, no runtime atual, override
+por request via `meta`.
 
 ### Politica de obrigatoriedade
 
 - Quando `enableSocketApiVersionMeta` esta ativo, `api_version` e `meta`
-  sao **incluidos automaticamente** pelo agente em toda response.
+sao **incluidos automaticamente** pelo agente em toda response.
 - Requests do hub **devem** incluir `api_version` e `meta` para rastreabilidade
-  quando o integrador quiser aderir ao profile v2.1+ completo.
+quando o integrador quiser aderir ao profile v2.1+ completo.
 - Se o hub envia request sem `api_version`, o agente aceita e trata como v2.0 implicito.
 - Responses sempre incluem `api_version` e `meta` quando a feature flag esta ativa.
 - `traceparent`/`tracestate` sao o formato recomendado para rastreamento
-  distribuido; `trace_id` permanece como compatibilidade legada.
+distribuido; `trace_id` permanece como compatibilidade legada.
 
 ### Exemplo completo (request + response)
 
@@ -431,59 +441,59 @@ Response:
 ```
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
-  esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
+esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
 - `options.timeout_ms`: teto opcional para a execucao ODBC desta request. O valor
-  efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
-  runtime (quando `enableSocketTimeoutByStage` estiver ligado).
+efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
+runtime (quando `enableSocketTimeoutByStage` estiver ligado).
 - `options.page` e `options.page_size`: habilitam paginacao server-side para
-  `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
-  o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
-  explicito.
+`SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
+o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
+explicito.
 - **Dialeto da SQL gerada (paginacao gerenciada):** o agente reescreve a query
-  conforme o driver configurado — **PostgreSQL** usa `LIMIT`/`OFFSET` no
-  envelope; **SQL Server** usa `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`;
-  **SQL Anywhere** usa `TOP n START AT m` (nao suporta `OFFSET`/`FETCH` do
-  SQL Server). Integradores (ex.: plug_server) devem enviar apenas `sql` +
-  `options`; nao dependem da forma literal da SQL final.
+conforme o driver configurado — **PostgreSQL** usa `LIMIT`/`OFFSET` no
+envelope; **SQL Server** usa `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`;
+**SQL Anywhere** usa `TOP n START AT m` (nao suporta `OFFSET`/`FETCH` do
+SQL Server). Integradores (ex.: plug_server) devem enviar apenas `sql` +
+`options`; nao dependem da forma literal da SQL final.
 - `options.execution_mode`: controla como o agente trata a SQL. `managed`
-  (default) permite reescrita gerenciada para paginacao quando aplicavel.
-  `preserve` executa a SQL exatamente como foi enviada e nao aplica reescrita
-  gerenciada para paginacao. Nao pode ser combinado com `page`, `page_size`
-  ou `cursor`.
+(default) permite reescrita gerenciada para paginacao quando aplicavel.
+`preserve` executa a SQL exatamente como foi enviada e nao aplica reescrita
+gerenciada para paginacao. Nao pode ser combinado com `page`, `page_size`
+ou `cursor`.
 - `options.preserve_sql`: alias legado para `execution_mode: "preserve"`.
 - `options.multi_result`: habilita retorno explicito de multiplos result sets
-  e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
-  com paginacao nem com `params` nomeados. Com autorizacao por token ativa, cada
-  statement separado por `;` e avaliado isoladamente (mesmo modelo que
-  `sql.executeBatch`). O agente detecta multiplos statements com um scanner
-  leve (strings `'...'`, `"..."`, `[...]`, comentarios `--` e `/* */`), nao com
-  parser SQL completo: nao cobre backticks estilo MySQL, dollar-quoting
-  PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
+e row counts em `result.result_sets` e `result.items`. Nao pode ser combinado
+com paginacao nem com `params` nomeados. Com autorizacao por token ativa, cada
+statement separado por `;` e avaliado isoladamente (mesmo modelo que
+`sql.executeBatch`). O agente detecta multiplos statements com um scanner
+leve (strings `'...'`, `"..."`, `[...]`, comentarios `--` e `/* */`), nao com
+parser SQL completo: nao cobre backticks estilo MySQL, dollar-quoting
+PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
 - O runtime atual suporta ate **5 parametros nomeados por comando**. Acima disso,
-  a request e rejeitada com erro de validacao.
+a request e rejeitada com erro de validacao.
 - `params.database`: override opcional do banco alvo para a request atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
-  rejeitada com `invalid_params`.
+rejeitada com `invalid_params`.
 - Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
-  para evitar crescimento sem limite.
+para evitar crescimento sem limite.
 - Cache de decisoes de autorizacao SQL e cache de politica de token (em memoria)
-  usam LRU com limite de entradas (padrao 8192 e 2048; configuravel via
-  `AUTH_DECISION_CACHE_MAX_ENTRIES` e `AUTH_POLICY_CACHE_MAX_ENTRIES` no `.env`)
-  alem de TTL por entrada. Invalidacao apos alterar token afeta apenas o hash da
-  credencial afetada quando o segredo e resolvido; caso contrario o agente faz
-  flush completo desses caches. Contadores de evento no `MetricsCollector`:
-  `auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
-  `auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
-  `rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
-  `rpc_sql_execute_materialized_response`, `rpc_stream_terminal_complete_emitted`,
-  `rpc_stream_terminal_complete_failed`, `rpc_response_ack_retry`,
-  `rpc_response_ack_fallback_without_ack`.
+usam LRU com limite de entradas (padrao 8192 e 2048; configuravel via
+`AUTH_DECISION_CACHE_MAX_ENTRIES` e `AUTH_POLICY_CACHE_MAX_ENTRIES` no `.env`)
+alem de TTL por entrada. Invalidacao apos alterar token afeta apenas o hash da
+credencial afetada quando o segredo e resolvido; caso contrario o agente faz
+flush completo desses caches. Contadores de evento no `MetricsCollector`:
+`auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
+`auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
+`rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
+`rpc_sql_execute_materialized_response`, `rpc_stream_terminal_complete_emitted`,
+`rpc_stream_terminal_complete_failed`, `rpc_response_ack_retry`,
+`rpc_response_ack_fallback_without_ack`.
 - Requests paginadas seguem o caminho request/response tradicional; nao usam
-  streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ativo.
+streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ativo.
 - `options.cursor`: token opaco de continuacao retornado em
-  `result.pagination.next_cursor`. Quando presente, nao deve ser combinado com
-  `page` ou `page_size`, e carrega fingerprint da query + chave(s) do
-  `ORDER BY` para continuacao keyset.
+`result.pagination.next_cursor`. Quando presente, nao deve ser combinado com
+`page` ou `page_size`, e carrega fingerprint da query + chave(s) do
+`ORDER BY` para continuacao keyset.
 
 Exemplo de continuacao por cursor:
 
@@ -594,27 +604,27 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 ```
 
 - `pagination` e retornado apenas quando a request inclui
-  `options.page` + `options.page_size` ou `options.cursor`.
+`options.page` + `options.page_size` ou `options.cursor`.
 - Requests com `options.execution_mode: "preserve"` nao recebem
-  `result.pagination`, porque o agente nao gerencia a SQL nem o
-  cursor/paginacao do comando.
+`result.pagination`, porque o agente nao gerencia a SQL nem o
+cursor/paginacao do comando.
 - `result.sql_handling_mode` expone o modo efetivamente usado (`managed` ou
-  `preserve`).
+`preserve`).
 - `result.max_rows_handling` informa a politica ativa para `max_rows`.
-  No estado atual, o valor e `response_truncation`.
+No estado atual, o valor e `response_truncation`.
 - `result.effective_max_rows` expoe o limite efetivo de linhas aplicado apos a
-  negociacao (min entre o solicitado e o limite do transporte). Facilita debug
-  e suporte.
+negociacao (min entre o solicitado e o limite do transporte). Facilita debug
+e suporte.
 - `result_sets` e `items` aparecem apenas quando a execucao retorna multiplos
-  result sets ou row counts no mesmo comando.
+result sets ou row counts no mesmo comando.
 - Quando `item_count` ou `result_set_count` estao presentes, devem coincidir com
-  o comprimento de `items` e de `result_sets`, respetivamente (validacao
-  outbound no agente).
+o comprimento de `items` e de `result_sets`, respetivamente (validacao
+outbound no agente).
 - `current_cursor` e `next_cursor` podem aparecer quando o fluxo de
-  continuacao por cursor estiver em uso.
+continuacao por cursor estiver em uso.
 - `next_cursor` e gerado a partir da ultima linha retornada e pressupoe
-  `ORDER BY` deterministico; para resultados estaveis, a ordenacao deve ser
-  unica no conjunto consultado.
+`ORDER BY` deterministico; para resultados estaveis, a ordenacao deve ser
+unica no conjunto consultado.
 
 ### Response de erro
 
@@ -691,29 +701,29 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 ```
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
-  esta ativo.
+esta ativo.
 - `options.timeout_ms`: teto opcional para a execucao ODBC do batch. O valor
-  efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
-  runtime (quando `enableSocketTimeoutByStage` estiver ligado).
+efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
+runtime (quando `enableSocketTimeoutByStage` estiver ligado).
 - `commands[*].execution_order` e opcional (inteiro `>= 0`).
 - Quando `execution_order` nao e enviado, o comando segue a ordem da lista
-  recebida (comportamento atual).
+recebida (comportamento atual).
 - Quando o batch mistura comandos com e sem `execution_order`, os comandos com
-  `execution_order` sao executados primeiro (ordem crescente), e os sem ordem
-  explicita sao executados depois, mantendo a ordem original da lista.
+`execution_order` sao executados primeiro (ordem crescente), e os sem ordem
+explicita sao executados depois, mantendo a ordem original da lista.
 - Quando ha empate de `execution_order`, o desempate usa a ordem original da
-  lista.
+lista.
 - `result.items[*].index` continua representando o indice original do comando
-  no array `commands`.
+no array `commands`.
 - Cada `commands[*].sql` deve conter **exatamente um statement SQL de topo**.
-  Para scripts com multiplos statements/result sets na mesma execucao, use
-  `sql.execute` com `options.multi_result: true`.
+Para scripts com multiplos statements/result sets na mesma execucao, use
+`sql.execute` com `options.multi_result: true`.
 - O runtime atual suporta ate **5 parametros nomeados por comando**.
 - `params.database`: override opcional do banco alvo para o batch atual.
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
-  rejeitada com `invalid_params`.
+rejeitada com `invalid_params`.
 - Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
-  para evitar crescimento sem limite.
+para evitar crescimento sem limite.
 
 ### Response de batch (exemplo)
 
@@ -737,9 +747,9 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 ```
 
 - **Ordem do array em batch JSON-RPC:** o agente monta o array de respostas na
-  ordem crescente do indice do request no batch (mesma ordem de iteracao do
-  processamento). Notifications nao geram entrada; correlacione cada resposta
-  pelo `id` JSON-RPC.
+ordem crescente do indice do request no batch (mesma ordem de iteracao do
+processamento). Notifications nao geram entrada; correlacione cada resposta
+pelo `id` JSON-RPC.
 
 ## Catalogo de Erros
 
@@ -778,6 +788,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 ## Erros acionaveis para clientes
 
+
 | Codigo   | Cenario comum                                                                                      | Acao recomendada no cliente                                                                         |
 | -------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `-32700` | JSON malformado                                                                                    | corrigir serializacao JSON e reenviar                                                               |
@@ -794,6 +805,7 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 | `-32012` | erro de rede                                                                                       | reconectar socket e repetir com controle                                                            |
 | `-32013` | cota por janela (`RpcRequestGuard`) **ou** limite de handlers `rpc:request` concorrentes no agente | backoff; reduzir taxa enviada ao agente; ver `technical_message` (distingue janela vs concorrencia) |
 | `-32014` | request duplicada (replay)                                                                         | reenviar com novo `id`/correlation                                                                  |
+
 
 ### Formato de erro
 
@@ -873,72 +885,72 @@ resultado nao sao cancelaveis por este metodo.
 
 - **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
 - **Objetivo:** retornar os dados cadastrais atuais do agente para fluxos de
-  cadastro/conciliacao no servidor central, sem expor credenciais de auth ou
-  detalhes de conexao ODBC.
+cadastro/conciliacao no servidor central, sem expor credenciais de auth ou
+detalhes de conexao ODBC.
 - **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`)
-  quando a autorizacao agent-side estiver ativa; fora isso, pode ser ausente ou
-  objeto vazio.
+quando a autorizacao agent-side estiver ativa; fora isso, pode ser ausente ou
+objeto vazio.
 - **Result:** inclui `agent_id`, bloco `profile` e `updated_at`.
 - **Erro esperado:** quando nao houver configuracao carregada, o metodo retorna
-  erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
+erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
 
 ## Metodo `client_token.getPolicy`
 
 - **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
 - **Objetivo:** retornar a **politica de autorizacao** ja resolvida para o token
-  apresentado (mesmo pipeline que valida `sql.execute`: store local por hash,
-  cache, JWT/JWKS quando aplicavel, revogacao em sessao). Serve para introspecao
-  no hub (permissao por recurso, flags `all_tables` / `all_views` /
-  `all_permissions`, regras `allow`/`deny`, `payload` livre), sem executar SQL.
+apresentado (mesmo pipeline que valida `sql.execute`: store local por hash,
+cache, JWT/JWKS quando aplicavel, revogacao em sessao). Serve para introspecao
+no hub (permissao por recurso, flags `all_tables` / `all_views` /
+`all_permissions`, regras `allow`/`deny`, `payload` livre), sem executar SQL.
 - **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`),
-  com as mesmas regras de schema que `agent.getProfile`. Quando
-  `enableClientTokenAuthorization` esta **desligado**, o metodo responde com erro
-  de parametros (`-32602`) com `reason` `client_token_authorization_disabled`.
-  Quando `enableClientTokenPolicyIntrospection` esta **desligado** (default
-  **true**), responde `-32602` com `reason` `client_token_introspection_disabled`.
+com as mesmas regras de schema que `agent.getProfile`. Quando
+`enableClientTokenAuthorization` esta **desligado**, o metodo responde com erro
+de parametros (`-32602`) com `reason` `client_token_authorization_disabled`.
+Quando `enableClientTokenPolicyIntrospection` esta **desligado** (default
+**true**), responde `-32602` com `reason` `client_token_introspection_disabled`.
 - **Rate limit:** por escopo `agent_id` + hash do credential (mesmo minuto UTC);
-  limite configuravel por env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (default
-  **120**; **0** = sem limite). Para limitar crescimento do mapa interno com
-  muitos tokens distintos no mesmo minuto, use `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`
-  (default **8192**; **0** = sem teto por quantidade de escopos). Excesso de
-  chamadas retorna `-32013` com `reason` `client_token_get_policy_rate_limited`
-  e, em `error.data`, `retry_after_ms` (milissegundos ate o proximo minuto UTC)
-  e `reset_at` (ISO 8601 do fim da janela).
+limite configuravel por env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (default
+**120**; **0** = sem limite). Para limitar crescimento do mapa interno com
+muitos tokens distintos no mesmo minuto, use `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`
+(default **8192**; **0** = sem teto por quantidade de escopos). Excesso de
+chamadas retorna `-32013` com `reason` `client_token_get_policy_rate_limited`
+e, em `error.data`, `retry_after_ms` (milissegundos ate o proximo minuto UTC)
+e `reset_at` (ISO 8601 do fim da janela).
 - **Result:** objeto alinhado a `ClientTokenPolicy` (`client_id`, `agent_id`
-  opcional, `payload` com chaves sensiveis redigidas como `[REDACTED]`,
-  `all_tables`, `all_views`, `all_permissions`,
-  `is_revoked`, `rules` com `resource_type`, `resource`, `effect`, `read`,
-  `update`, `delete`). Campos opcionais quando disponiveis: `token_id` (id do
-  registro local ou `jti` do JWT), `issued_at`, `updated_at` (ISO 8601). **Nao**
-  inclui o segredo do token nem `token_value`.
+opcional, `payload` com chaves sensiveis redigidas como `[REDACTED]`,
+`all_tables`, `all_views`, `all_permissions`,
+`is_revoked`, `rules` com `resource_type`, `resource`, `effect`, `read`,
+`update`, `delete`). Campos opcionais quando disponiveis: `token_id` (id do
+registro local ou `jti` do JWT), `issued_at`, `updated_at` (ISO 8601). **Nao**
+inclui o segredo do token nem `token_value`.
 - **Diferenca vs `agent.getProfile`:** este metodo descreve **permissao do
-  token**; `agent.getProfile` descreve **cadastro do agente** em configuracao
-  local.
+token**; `agent.getProfile` descreve **cadastro do agente** em configuracao
+local.
 - **Diferenca vs `sql.execute`:** nao executa consulta no banco; apenas resolve e
-  devolve politica.
+devolve politica.
 - **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao encontrado
-  que o fluxo de autorizacao SQL, mapeados via `FailureToRpcErrorMapper`
-  (por exemplo `-32001` autenticacao, `-32002` autorizacao com `reason` em
-  `error.data`).
+que o fluxo de autorizacao SQL, mapeados via `FailureToRpcErrorMapper`
+(por exemplo `-32001` autenticacao, `-32002` autorizacao com `reason` em
+`error.data`).
 - **Transporte:** com auth e introspecao ativos, o cliente de transporte aplica a mesma
-  heuristica de log/refresh de token que para `sql.*` (ex.: `token_revoked` ou
-  falha de autenticacao pode solicitar refresh da credencial).
-- **Observabilidade:** contadores `rpc_client_token_get_policy_*` no
-  `MetricsCollector` (sucesso, falha de resolucao agregada, falhas por tipo de
-  `Failure`, rate limit).
+heuristica de log/refresh de token que para `sql.`* (ex.: `token_revoked` ou
+falha de autenticacao pode solicitar refresh da credencial).
+- **Observabilidade:** contadores `rpc_client_token_get_policy_`* no
+`MetricsCollector` (sucesso, falha de resolucao agregada, falhas por tipo de
+`Failure`, rate limit).
 
 ## Metodo `rpc.discover`
 
 - **Onde roda:** tratado no transporte (`SocketIOTransportClientV2`) **antes** do
-  `RpcMethodDispatcher`; nao passa por `sql.execute` nem exige `client_token`.
+`RpcMethodDispatcher`; nao passa por `sql.execute` nem exige `client_token`.
 - **Resultado:** corpo do documento OpenRPC publicado (`docs/communication/openrpc.json`),
-  carregado de asset em runtime com fallback para disco e documento minimo embutido.
+carregado de asset em runtime com fallback para disco e documento minimo embutido.
 - **Batch:** cada item de batch com `method: "rpc.discover"` e processado da mesma
-  forma no loop do transporte.
+forma no loop do transporte.
 - **Notifications e contrato estrito:** com `enableSocketNotificationsContract`
-  ativo, um pedido **sem** `id` (notification JSON-RPC) **nao** recebe
-  `rpc:response` — regra geral de notifications. Para obter o OpenRPC, o hub deve
-  enviar `rpc.discover` com `id` definido.
+ativo, um pedido **sem** `id` (notification JSON-RPC) **nao** recebe
+`rpc:response` — regra geral de notifications. Para obter o OpenRPC, o hub deve
+enviar `rpc.discover` com `id` definido.
 
 ## Contrato obrigatorio de erro (`error.data`)
 
@@ -981,6 +993,7 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 
 ### `category`
 
+
 | Valor        | Uso                                    |
 | ------------ | -------------------------------------- |
 | `validation` | erro de contrato, parametro ou formato |
@@ -991,7 +1004,9 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 | `database`   | conectividade/configuracao do banco    |
 | `internal`   | falha interna nao categorizada         |
 
+
 ### `reason`
+
 
 | Codigo   | `reason` recomendado                                                                                                           |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -1017,6 +1032,7 @@ implementacao. Novos valores devem ser adicionados de forma versionada.
 | `-32106` | `database_connection_failed`                                                                                                   |
 | `-32107` | `query_timeout`                                                                                                                |
 | `-32108` | `invalid_database_config`                                                                                                      |
+
 
 Regras:
 
@@ -1052,18 +1068,19 @@ Regras:
 ### Reconnect e recovery
 
 - **Reconexao curta** (`ConnectionProvider` + `computeReconnectDelay`): apos
-  desconexao, o agente agenda atrasos com backoff exponencial a partir de
-  **5 s** por tentativa (`AppConstants.reconnectIntervalSeconds`), multiplicador
-  **2^(tentativa-1)** (ex.: ~5 s, ~10 s, ~20 s antes das tentativas 1..3), com
-  **teto de 60 s** por intervalo (`maxReconnectDelay`) e **jitter** de ±15%.
+desconexao, o agente agenda atrasos com backoff exponencial a partir de
+**5 s** por tentativa (`AppConstants.reconnectIntervalSeconds`), multiplicador
+**2^(tentativa-1)** (ex.: ~5 s, ~10 s, ~20 s antes das tentativas 1..3), com
+**teto de 60 s** por intervalo (`maxReconnectDelay`) e **jitter** de ±15%.
 - **Max tentativas**: 3 tentativas por ciclo de recovery
-  (`AppConstants.maxReconnectAttempts` / `ConnectionConstants.defaultMaxReconnectAttempts`).
+(`AppConstants.maxReconnectAttempts` / `ConnectionConstants.defaultMaxReconnectAttempts`).
 - **Token expirado**: ao detectar `token_revoked` ou `authentication_failed`, o
-  agente tenta refresh via AuthProvider e reconecta com token renovado.
+agente tenta refresh via AuthProvider e reconecta com token renovado.
 - **Heartbeat**: `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack`
-  em 2 janelas consecutivas aciona reconexao.
+em 2 janelas consecutivas aciona reconexao.
 
 ### Rate limiting e cota de concorrencia (agent-side)
+
 
 | Parametro                  | Valor padrao              | Descricao                                                              |
 | -------------------------- | ------------------------- | ---------------------------------------------------------------------- |
@@ -1071,6 +1088,7 @@ Regras:
 | `maxRequestsPerWindow`     | 120                       | Maximo de eventos contados na janela antes do guard de taxa            |
 | `maxConcurrentRpcHandlers` | 32                        | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo |
 | Codigo de erro (ambos)     | `-32013` (`rate_limited`) | HTTP 429; `error.data.reason` permanece `rate_limited`                 |
+
 
 O codigo `-32013` e reutilizado para duas politicas independentes: (1) excesso de
 volume na janela deslizante (`RpcRequestGuard`) e (2) saturacao do pool de
@@ -1080,17 +1098,21 @@ handlers concorrentes no transporte. O hub/cliente deve usar
 
 ### Replay protection
 
+
 | Parametro      | Valor padrao                 | Descricao                          |
 | -------------- | ---------------------------- | ---------------------------------- |
 | `replayWindow` | 2 minutos                    | Janela de validade de `request.id` |
 | Codigo de erro | `-32014` (`replay_detected`) | HTTP 409                           |
 
+
 ### Codigos de erro finais (transport)
+
 
 | Codigo   | `reason`          | `category` | `retryable` |
 | -------- | ----------------- | ---------- | ----------- |
 | `-32013` | `rate_limited`    | transport  | false       |
 | `-32014` | `replay_detected` | transport  | false       |
+
 
 ## Compatibilidade de erro
 
@@ -1100,7 +1122,7 @@ erros exclusivamente pelo envelope JSON-RPC v2.
 ## Idioma e localizacao de erros
 
 - `message`, `reason`, `technical_message`: manter em ingles estavel
-  (orientado a contrato e logs).
+(orientado a contrato e logs).
 - `user_message`: texto amigavel localizavel (pt-BR na UI atual).
 - Evitar mistura de idiomas no mesmo campo.
 
@@ -1128,7 +1150,7 @@ Exemplo de capacidades anunciadas (alinhado a
     "plugProfile": "plug-jsonrpc-profile/2.5",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
-    "paginationModes": ["page-offset", "cursor-keyset"],
+    "paginationModes": ["page-offset", "cursor-keyset", "cursor-offset"],
     "traceContext": ["w3c-trace-context", "legacy-trace-id"],
     "errorFormat": "structured-error-data"
   }
@@ -1152,9 +1174,9 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 - O agente transmite eventos de aplicacao em `PayloadFrame` binario.
 - O runtime atual **nao** aceita payload logico JSON cru em eventos de
-  aplicacao; clientes devem sempre enviar `PayloadFrame`.
+aplicacao; clientes devem sempre enviar `PayloadFrame`.
 - Eventos legados fora do contrato v2 continuam fora do escopo deste
-  documento.
+documento.
 
 ### Exemplo de payload legado (v1)
 
@@ -1196,9 +1218,11 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 ### Onde passar o token
 
+
 | Protocolo          | Local                                                          |
 | ------------------ | -------------------------------------------------------------- |
 | v2 (`rpc:request`) | `params.client_token` ou `params.clientToken` ou `params.auth` |
+
 
 ### Feature flag
 
@@ -1214,18 +1238,19 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 - Logs estruturados no transporte para decisoes de autorizacao no fluxo RPC (`authorization.allowed` e `authorization.denied`).
 - Exibicao de resumo de autorizacao no dashboard via `WebSocketLogViewer`.
 - Quando o RPC retorna `authentication_failed` ou `token_revoked`, o transporte
-  dispara callback de refresh de token/reconexao.
+dispara callback de refresh de token/reconexao.
 - Contadores operacionais em memoria para observabilidade de resiliencia:
-  `timeout_cancel_success`, `timeout_cancel_failure`,
-  `transaction_rollback_failure` e `idempotency_fingerprint_mismatch`.
+`timeout_cancel_success`, `timeout_cancel_failure`,
+`transaction_rollback_failure` e `idempotency_fingerprint_mismatch`.
 - Decodificacao inbound do `PayloadFrame` (apos validacao do frame):
-  `transport_inbound_decode_sync` e `transport_inbound_decode_async`
-  (`MetricsCollector`), para distinguir caminho sincrono vs isolate em cargas
-  grandes ou gzip pesado.
+`transport_inbound_decode_sync` e `transport_inbound_decode_async`
+(`MetricsCollector`), para distinguir caminho sincrono vs isolate em cargas
+grandes ou gzip pesado.
 
 ## Politica de versao e deprecacao
 
 ### Versionamento
+
 
 | Versao | Descricao                                                                                                             | Status |
 | ------ | --------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -1239,10 +1264,11 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 | `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
 | `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
 
+
 ### Regras de versionamento
 
 - **Semver no contrato**: versoes `major.minor`. Major = breaking change; minor = extensao compativel.
-- **`api_version`** no payload indica a versao do contrato que o emissor espera.
+- `**api_version`** no payload indica a versao do contrato que o emissor espera.
 - Se o agente recebe uma `api_version` desconhecida, processa como a versao mais recente suportada e inclui sua propria `api_version` na response.
 - Novas features sao introduzidas como **extensoes opcionais** (feature flags) e promovidas a default apos validacao.
 
@@ -1264,6 +1290,7 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 
 ### Limites do agente (defaults atuais)
 
+
 | Parametro                 | Valor padrao | Descricao                                                                 |
 | ------------------------- | ------------ | ------------------------------------------------------------------------- |
 | `max_payload_bytes`       | 10 MB        | Tamanho maximo de um unico payload (request ou response)                  |
@@ -1272,6 +1299,7 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 | `max_concurrent_streams`  | 1            | Maximo de streams de resultado ativos simultaneamente                     |
 | `streaming_chunk_size`    | 500          | Linhas por chunk em streaming                                             |
 | `streaming_row_threshold` | 500          | Acima deste limite negociado, resultado pode ser streamed automaticamente |
+
 
 ### Negociacao (implementado)
 
@@ -1333,22 +1361,24 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 
 ### Campos
 
+
 | Campo              | Tipo   | Descricao                       |
 | ------------------ | ------ | ------------------------------- |
 | `signature.alg`    | string | Algoritmo (ex.: `hmac-sha256`)  |
 | `signature.value`  | string | Assinatura codificada em base64 |
 | `signature.key_id` | string | Identificador da chave usada    |
 
+
 ### Regras
 
 - **Opcional**: o emissor pode omitir `signature`; o receptor aceita sem verificar.
 - **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida,
-  retorna `-32001` (`Authentication failed`) com `error.data.reason`:
-  `invalid_signature` (frame de transporte ou assinatura legada no JSON logico).
+retorna `-32001` (`Authentication failed`) com `error.data.reason`:
+`invalid_signature` (frame de transporte ou assinatura legada no JSON logico).
 - **Escopo principal**: a assinatura cobre `schemaVersion`, `enc`, `cmp`,
-  `contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
+`contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
 - **Compatibilidade**: quando o modo binario estiver desativado por feature
-  flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
+flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
 - **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
 - **Key management**: chaves compartilhadas configuradas no agente via settings. Rotacao por `key_id`.
 
@@ -1361,110 +1391,111 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - Classe `PayloadSigner` em `infrastructure/security/payload_signer.dart`.
 - Chaves configuradas via `.env` (`PAYLOAD_SIGNING_KEY`, `PAYLOAD_SIGNING_KEY_ID`).
 - Integrado ao `SocketIOTransportClientV2`: assina frames enviados e verifica
-  frames recebidos.
+frames recebidos.
 - Comparacao constant-time para prevenir timing attacks.
 - Feature flag `enablePayloadSigning` (default `false`).
 
 ## Limites operacionais atuais
 
 - `options.timeout_ms` suportado em `sql.execute` e `sql.executeBatch`.
-  Quando timeouts por estagio do socket estao ativos, o timeout ODBC efetivo do
-  batch e o **minimo** entre o orcamento do estagio SQL e `options.timeout_ms`
-  (este ultimo age como teto por pedido). Em `sql.executeBatch` com
-  `transaction: false`, o agente aplica o **tempo restante** do orcamento a cada
-  comando em sequencia; se o orcamento esgotar antes de um comando, o batch
-  falha com contexto de timeout/budget (sem executar esse comando).
+Quando timeouts por estagio do socket estao ativos, o timeout ODBC efetivo do
+batch e o **minimo** entre o orcamento do estagio SQL e `options.timeout_ms`
+(este ultimo age como teto por pedido). Em `sql.executeBatch` com
+`transaction: false`, o agente aplica o **tempo restante** do orcamento a cada
+comando em sequencia; se o orcamento esgotar antes de um comando, o batch
+falha com contexto de timeout/budget (sem executar esse comando).
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
 - `options.execution_mode` suportado em `sql.execute`.
 - `options.preserve_sql` suportado em `sql.execute` como alias legado.
 - `sql.executeBatch` **nao** suporta `execution_mode`; todos os comandos rodam em
-  modo managed implicito. Politica futura: evoluir em versao posterior (ex.:
-  `options.execution_mode` no batch ou `commands[*].execution_mode` por comando).
+modo managed implicito. Politica futura: evoluir em versao posterior (ex.:
+`options.execution_mode` no batch ou `commands[*].execution_mode` por comando).
 - `options.multi_result` suportado em `sql.execute`.
 - `commands[*].execution_order` suportado em `sql.executeBatch`.
 - `result.pagination` retornado apenas para requests paginadas.
 - `result.result_sets` e `result.items` retornados apenas para execucoes
-  multi-result.
+multi-result.
 - Para fluxos sem streaming, payload segue request/response unico.
 - Requests paginadas nao usam o modo de streaming direto do banco.
 - `options.execution_mode: "preserve"` mantem a SQL original; limites, auth,
-  schema e tratamento de erro continuam sendo aplicados normalmente.
+schema e tratamento de erro continuam sendo aplicados normalmente.
 - `max_rows` continua sendo aplicado como truncamento da response
-  (`response_truncation`). O agente nao reescreve a SQL para empurrar esse
-  limite ao banco quando `execution_mode` e `preserve`.
+(`response_truncation`). O agente nao reescreve a SQL para empurrar esse
+limite ao banco quando `execution_mode` e `preserve`.
 - Limites de transporte documentados na secao "Limites negociados" acima.
 
 ## Limitacoes e observacoes do estado atual
 
 - O transporte ativo usa `PayloadFrame` binario como camada fisica padrao.
 - O payload logico dentro do frame continua sendo **JSON UTF-8**; o frame
-  binario reduz overhead de transporte e suporta bytes/signature, mas **nao**
-  significa que o runtime atual use MessagePack, Protobuf ou outro codec
-  binario real.
+binario reduz overhead de transporte e suporta bytes/signature, mas **nao**
+significa que o runtime atual use MessagePack, Protobuf ou outro codec
+binario real.
 - O runtime atual nao oferece fallback para payload logico JSON cru em eventos
-  de aplicacao.
+de aplicacao.
 - A compressao de **envio** (agente -> hub) segue o limiar negociado
-  `compressionThreshold`. No modo **automatico** (`OutboundCompressionMode.auto`
-  nas configuracoes do agente), o GZIP e aplicado apenas quando o bloco
-  comprimido e **menor** que o JSON UTF-8 bruto; caso contrario o frame usa
-  `cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
-  permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
-  devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
+`compressionThreshold`. No modo **automatico** (`OutboundCompressionMode.auto`
+nas configuracoes do agente), o GZIP e aplicado apenas quando o bloco
+comprimido e **menor** que o JSON UTF-8 bruto; caso contrario o frame usa
+`cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
+permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
+devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
 - O runtime atual **nao** suporta sobrescrever essa politica por request via
-  `meta`; a negociacao `compressions: none` na sessao continua a impedir GZIP
-  outbound.
+`meta`; a negociacao `compressions: none` na sessao continua a impedir GZIP
+outbound.
 - Nao existe metodo RPC generico de transferencia de arquivo no contrato atual;
-  qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
-  e, depois, transportado dentro do `PayloadFrame`.
+qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
+e, depois, transportado dentro do `PayloadFrame`.
 - Metodo `sql.cancel` disponivel via feature flag `enableSocketCancelMethod`
-  (cancela execucao em streaming ativa; execucoes nao-streaming nao sao
-  cancelaveis).
+(cancela execucao em streaming ativa; execucoes nao-streaming nao sao
+cancelaveis).
 - Streaming chunked: ativo via `enableSocketStreamingChunks`; resultados
-  acima de `streaming_row_threshold` negociado sao enviados em chunks
-  (`rpc:chunk`, `rpc:complete`).
+acima de `streaming_row_threshold` negociado sao enviados em chunks
+(`rpc:chunk`, `rpc:complete`).
 - Backpressure: implementado quando `enableSocketBackpressure`; o hub envia
-  `rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
-  envia por vez; credito inicial de 1 chunk.
+`rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
+envia por vez; credito inicial de 1 chunk.
 - `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
-  contrato formal na secao "api_version e meta".
+contrato formal na secao "api_version e meta".
 - `agent:ready` e enviado apos `agent:capabilities` como ack explicito de
-  prontidao; hubs antigos podem ignorar o evento sem impacto funcional.
+prontidao; hubs antigos podem ignorar o evento sem impacto funcional.
 - Notification JSON-RPC (sem `id`) formalizada na secao "Notification JSON-RPC";
-  enforcement via `enableSocketNotificationsContract`.
+enforcement via `enableSocketNotificationsContract`.
 - Regras estritas de batch formalizadas na secao "Regras formais de batch";
-  enforcement via `enableSocketBatchStrictValidation`.
+enforcement via `enableSocketBatchStrictValidation`.
 - Timeout por etapa (SQL, transporte, ack) disponivel via
-  `enableSocketTimeoutByStage`; erros incluem `reason` especifico
-  (`query_timeout`, `transport_timeout`, `ack_timeout`).
+`enableSocketTimeoutByStage`; erros incluem `reason` especifico
+(`query_timeout`, `transport_timeout`, `ack_timeout`).
 - Em timeout de SQL, o agente aplica cancelamento best-effort da execucao no
-  banco (desconexao/recuperacao de conexao) para evitar trabalho zumbi.
+banco (desconexao/recuperacao de conexao) para evitar trabalho zumbi.
 - Garantia de entrega por tipo de evento disponivel via
-  `enableSocketDeliveryGuarantees`; ver tabela abaixo quando ativo.
+`enableSocketDeliveryGuarantees`; ver tabela abaixo quando ativo.
 - Connection state recovery com retry/backoff esta ativo agent-side.
 - Politica de refresh/auth no reconnect esta ativa agent-side.
 - Rate limits/quotas por evento estao ativos agent-side.
 - Schemas JSON publicados em `docs/communication/schemas/`. Validacao automatica
-  na entrada disponivel via `enableSocketSchemaValidation`.
+na entrada disponivel via `enableSocketSchemaValidation`.
 - Validacao de contrato na **saida** (`rpc:response`, respostas batch e eventos
-  de streaming) via `enableSocketOutgoingContractValidation` (default **true**);
-  para payloads de saida muito grandes (~2 MiB UTF-8 JSON estimados), a
-  validacao de saida e omitida para limitar CPU (o frame ainda respeita limites
-  negociados de tamanho).
+de streaming) via `enableSocketOutgoingContractValidation` (default **true**);
+para payloads de saida muito grandes (~2 MiB UTF-8 JSON estimados), a
+validacao de saida e omitida para limitar CPU (o frame ainda respeita limites
+negociados de tamanho).
 - Tracer de mensagens Socket: com `enableSocketSummarizeLargePayloadLogs`
-  (default **true**), payloads acima de ~8 KiB UTF-8 estimados sao substituidos
-  por um resumo no callback (nao altera o fio).
+(default **true**), payloads acima de ~8 KiB UTF-8 estimados sao substituidos
+por um resumo no callback (nao altera o fio).
 - Implementacao: serializacao/deserializacao JSON UTF-8 acima de ~384 KiB pode
-  executar em isolate no envio (`prepareSendAsync`) e na recepcao
-  (`receiveProcessAsync`). Fingerprint de idempotencia (quando a flag esta
-  ativa) tambem pode ser calculado em isolate para `params` grandes.
+executar em isolate no envio (`prepareSendAsync`) e na recepcao
+(`receiveProcessAsync`). Fingerprint de idempotencia (quando a flag esta
+ativa) tambem pode ser calculado em isolate para `params` grandes.
 - Estrategia atual recomendada: manter **JSON + GZIP** como baseline do
-  transporte, usando o modo outbound `auto` quando o emissor quiser preservar a
-  opcao de cair para `cmp: none` caso o bloco comprimido nao compense. Avaliar
-  codec binario real so se benchmark do pipeline mostrar gargalo concreto que
-  nao seja resolvido por shape de payload ou por `gzip`.
+transporte, usando o modo outbound `auto` quando o emissor quiser preservar a
+opcao de cair para `cmp: none` caso o bloco comprimido nao compense. Avaliar
+codec binario real so se benchmark do pipeline mostrar gargalo concreto que
+nao seja resolvido por shape de payload ou por `gzip`.
 - Perfis operacionais recomendados para `outboundCompressionMode`:
+
 
 | Perfil              | Configuracao | Quando usar                                                                  | Trade-off principal                                        |
 | ------------------- | ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -1472,57 +1503,58 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 | Balanceado (padrao) | `auto`       | Trafego misto em producao, com variacao de tamanho e compressibilidade       | Equilibra banda e CPU por mensagem (`cmp: gzip` ou `none`) |
 | Economia de banda   | `gzip`       | Links limitados, respostas SQL grandes/repetitivas, custo de CPU aceitavel   | Reduz bytes no fio, com aumento de latencia/CPU            |
 
+
 - Parametros atuais recomendados (com base em benchmark):
   - `compressionThreshold`: `1024`
   - `gzipIsolateThresholdBytes`: `32 * 1024` (32 KiB)
   - `jsonPayloadIsolateEncodeThresholdBytes`: `384 * 1024` (384 KiB)
 - OpenRPC publicado em `docs/communication/openrpc.json` para descoberta do
-  profile RPC.
+profile RPC.
 - Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
-  Permissoes armazenadas em SQLite local; token usado apenas para validacao e lookup.
+Permissoes armazenadas em SQLite local; token usado apenas para validacao e lookup.
 - Validacao criptografica de token (issuer/audience/kid/alg) disponivel via
-  `enableSocketJwksValidation` como fallback para JWT externos; JWKS URL derivado de
-  `serverUrl/.well-known/jwks.json` ou override por `JWKS_URL` (env). Opcional: `JWKS_ISSUER`, `JWKS_AUDIENCE`.
+`enableSocketJwksValidation` como fallback para JWT externos; JWKS URL derivado de
+`serverUrl/.well-known/jwks.json` ou override por `JWKS_URL` (env). Opcional: `JWKS_ISSUER`, `JWKS_AUDIENCE`.
 - Revogacao de token com efeito em sessao ativa disponivel via
-  `enableSocketRevokedTokenInSession`; tokens revogados sao armazenados em
-  memoria com TTL e rejeitados em novas requests sem exigir reconexao.
+`enableSocketRevokedTokenInSession`; tokens revogados sao armazenados em
+memoria com TTL e rejeitados em novas requests sem exigir reconexao.
 - Trilha de auditoria para token management (create/revoke/revoked_in_session)
-  disponivel via `enableTokenAudit`; persistencia em JSONL.
+disponivel via `enableTokenAudit`; persistencia em JSONL.
 
 ## Checklist de homologacao do cliente
 
 ### Fluxo basico
 
-- [ ] Executa fluxo v2 completo (`agent:register` -> `rpc:request` -> `rpc:response`) usando `PayloadFrame`.
-- [ ] Homologa encode/compress/decode/decompress no cliente.
-- [ ] Trata erro JSON-RPC em vez de assumir sempre `result`.
-- [ ] Homologa `sql.execute` com sucesso e com falha SQL.
-- [ ] Homologa `sql.executeBatch` com itens de retorno.
-- [ ] Confirma que o cliente rejeita eventos sem `PayloadFrame` (o agente nao aceita JSON cru em eventos de app; nao ha fallback para protocolo legado).
+- Executa fluxo v2 completo (`agent:register` -> `rpc:request` -> `rpc:response`) usando `PayloadFrame`.
+- Homologa encode/compress/decode/decompress no cliente.
+- Trata erro JSON-RPC em vez de assumir sempre `result`.
+- Homologa `sql.execute` com sucesso e com falha SQL.
+- Homologa `sql.executeBatch` com itens de retorno.
+- Confirma que o cliente rejeita eventos sem `PayloadFrame` (o agente nao aceita JSON cru em eventos de app; nao ha fallback para protocolo legado).
 
 ### Erros e retry
 
-- [ ] Homologa erros de payload invalido (`-32009`) e decode (`-32010`).
-- [ ] Homologa falha de frame/signature/descompressao (`-32011` e `invalid_signature`).
-- [ ] Homologa falha de auth (`-32001`) e permissao (`-32002`).
-- [ ] Valida regra de retry somente quando `retryable=true`.
-- [ ] Exibe `user_message` ao usuario e registra `correlation_id` para suporte.
-- [ ] Garante equivalencia de comportamento entre legado e v2 para mesmos cenarios.
+- Homologa erros de payload invalido (`-32009`) e decode (`-32010`).
+- Homologa falha de frame/signature/descompressao (`-32011` e `invalid_signature`).
+- Homologa falha de auth (`-32001`) e permissao (`-32002`).
+- Valida regra de retry somente quando `retryable=true`.
+- Exibe `user_message` ao usuario e registra `correlation_id` para suporte.
+- Garante equivalencia de comportamento entre legado e v2 para mesmos cenarios.
 
 ### Autorizacao
 
-- [ ] Envia `client_token` em `params` para toda request quando auth ativo.
-- [ ] Trata `-32001` (missing/invalid token) e `-32002` (unauthorized).
-- [ ] Valida que token revogado retorna `-32002` com `reason: token_revoked`.
-- [ ] Homologa `client_token.getPolicy` com auth ativo (policy coerente com token).
+- Envia `client_token` em `params` para toda request quando auth ativo.
+- Trata `-32001` (missing/invalid token) e `-32002` (unauthorized).
+- Valida que token revogado retorna `-32002` com `reason: token_revoked`.
+- Homologa `client_token.getPolicy` com auth ativo (policy coerente com token).
 
 ### Contrato v2.1
 
-- [ ] Inclui `api_version` e `meta` em requests (quando feature ativa).
-- [ ] Valida que responses incluem `api_version` e `meta`.
-- [ ] Trata notifications (request sem `id`) sem esperar response.
-- [ ] Respeita limite de 32 itens por batch com IDs unicos.
-- [ ] Valida schemas de params conforme schemas publicados.
+- Inclui `api_version` e `meta` em requests (quando feature ativa).
+- Valida que responses incluem `api_version` e `meta`.
+- Trata notifications (request sem `id`) sem esperar response.
+- Respeita limite de 32 itens por batch com IDs unicos.
+- Valida schemas de params conforme schemas publicados.
 
 ## Changelog do protocolo (implementado)
 
@@ -1569,56 +1601,56 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - `options.cursor` passa a representar continuacao keyset com fingerprint da query.
 - `notificationNullIdCompatibility` passa a governar `id: null` em runtime.
 - Respostas `rpc:response`, `rpc:chunk`, `rpc:complete` e payloads de handshake
-  sao validados antes do envio quando `enableSocketSchemaValidation` e
-  `enableSocketOutgoingContractValidation` estao ativos (com omissao de
-  validacao de saida acima do limiar de tamanho documentado nas limitacoes).
+sao validados antes do envio quando `enableSocketSchemaValidation` e
+`enableSocketOutgoingContractValidation` estao ativos (com omissao de
+validacao de saida acima do limiar de tamanho documentado nas limitacoes).
 - `rpc.discover` retorna o documento OpenRPC publicado.
 - Todos os eventos de aplicacao passam a trafegar em `PayloadFrame` binario.
 - Compressao GZIP foi movida para a borda de transporte com fallback `cmp: none`
-  por threshold.
+por threshold.
 - Assinatura passa a cobrir o frame de transporte quando o modo binario esta
-  ativo.
+ativo.
 - `sql.executeBatch` aceita `commands[*].execution_order` opcional, com
-  fallback para ordem da lista quando ausente.
+fallback para ordem da lista quando ausente.
 
 ### `v2.5` (sql handling mode + passthrough explicito)
 
 - `options.execution_mode` adicionado a `sql.execute` com valores `managed`
-  (default) e `preserve`.
+(default) e `preserve`.
 - `options.preserve_sql` mantido como alias legado para
-  `execution_mode: "preserve"`.
+`execution_mode: "preserve"`.
 - Responses de `sql.execute` passam a incluir `sql_handling_mode`.
 - Responses de `sql.execute` passam a incluir `max_rows_handling`.
 - `execution_mode: "preserve"` nao pode ser combinado com `page`,
-  `page_size` ou `cursor`.
+`page_size` ou `cursor`.
 - `max_rows` em modo `preserve` permanece como truncamento da response, sem
-  reescrita da SQL enviada pelo cliente.
+reescrita da SQL enviada pelo cliente.
 
 ### Ajustes pos-v2.5 (readiness explicito e hints de backpressure)
 
 - `agent:ready` adicionado como evento opcional apos `agent:capabilities`.
 - `extensions.protocolReadyAck = true` passa a anunciar suporte ao ack explicito
-  de prontidao.
+de prontidao.
 - `extensions.recommendedStreamPullWindowSize` e
-  `extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
-  hub ajustar `rpc:stream.pull`.
+`extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
+hub ajustar `rpc:stream.pull`.
 
 ### `v2.7` (introspecao de client token policy)
 
 - Metodo RPC `client_token.getPolicy` para retornar a politica resolvida
-  (`ClientTokenPolicy`) do token apresentado, sem executar SQL.
+(`ClientTokenPolicy`) do token apresentado, sem executar SQL.
 - Schemas JSON dedicados em `docs/communication/schemas/` para params e result.
 - OpenRPC `info.version` alinhado a `2.7.0` e entrada do metodo em `methods`.
 
 ### `v2.8` (getPolicy endurecimento e metadata)
 
 - Flag `enableClientTokenPolicyIntrospection` (default true) para desligar o
-  metodo sem desativar autorizacao SQL.
+metodo sem desativar autorizacao SQL.
 - Resultado com `token_id` / `issued_at` / `updated_at` quando aplicavel; `payload`
-  com redacao de chaves sensiveis na resposta RPC.
+com redacao de chaves sensiveis na resposta RPC.
 - Rate limit por agente+credential (`CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE`,
-  default 120) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
-  default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
+default 120) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
+default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
 - Redacao de `payload` com allowlist para chaves operacionais (`token_scope`, etc.).
 - Metricas de dispatch para sucesso, falha agregada, falha por tipo de `Failure`, e rate limit.
 - Toggle de introspecao em configuracao desktop (WebSocket / politica de client token).
@@ -1627,22 +1659,22 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
-  `computeReconnectDelay` (base 5 s, teto 60 s, jitter).
+`computeReconnectDelay` (base 5 s, teto 60 s, jitter).
 - Assinatura invalida: `error.data.reason` = `invalid_signature` com codigo
-  `-32001` (inclui falha de assinatura do `PayloadFrame` na decodificacao).
+`-32001` (inclui falha de assinatura do `PayloadFrame` na decodificacao).
 - `rpc.discover`: fluxo no transporte, OpenRPC, e interacao com notifications
-  estritas.
+estritas.
 - `agent.getProfile`: metodo RPC para consulta de cadastro atual do agente,
-  documentado no OpenRPC e retornado via `rpc:response`.
+documentado no OpenRPC e retornado via `rpc:response`.
 - Exemplo de `extensions` em capabilities alinhado ao default do agente.
 - Tabela "Mapa rapido de eventos" corrigida em Markdown.
 - Compressao outbound `none` / `gzip` / `auto` (politica local); fio apenas
-  `cmp: none` ou `cmp: gzip`; anuncio `compressions` conforme modo.
+`cmp: none` ou `cmp: gzip`; anuncio `compressions` conforme modo.
 - `-32013`: janela de taxa (`RpcRequestGuard`) e limite de handlers concorrentes
-  (`maxConcurrentRpcHandlers`, default 32).
+(`maxConcurrentRpcHandlers`, default 32).
 - Feature flags `enableSocketOutgoingContractValidation` e
-  `enableSocketSummarizeLargePayloadLogs`; isolate JSON ~384 KiB e fingerprint
-  de idempotencia para cargas grandes.
+`enableSocketSummarizeLargePayloadLogs`; isolate JSON ~384 KiB e fingerprint
+de idempotencia para cargas grandes.
 
 ## Schemas JSON (contrato)
 
@@ -1695,3 +1727,4 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 - Negociacao: `lib/application/services/protocol_negotiator.dart`
 - Guia de cliente: `docs/communication/socketio_client_binary_transport.md`
 - Evolucao pendente: `docs/communication/socket_communication_roadmap.md`
+

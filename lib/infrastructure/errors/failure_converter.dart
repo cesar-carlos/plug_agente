@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 
 /// Helper utilities for converting exceptions to failures
@@ -29,6 +31,10 @@ class FailureConverter {
       ...?(operation != null ? {'operation': operation} : null),
       ...additionalContext,
     };
+
+    if (exception is DioException) {
+      return _mapDioException(exception, context);
+    }
 
     // Direct exception handling for known types
     if (exception is FormatException) {
@@ -135,6 +141,74 @@ class FailureConverter {
     }
 
     return 'An error occurred';
+  }
+
+  static Failure _mapDioException(DioException exception, Map<String, dynamic> context) {
+    final dioContext = <String, dynamic>{
+      ...context,
+      'dio_type': exception.type.name,
+      if (exception.response?.statusCode != null) 'http_status': exception.response!.statusCode,
+    };
+
+    switch (exception.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+      case DioExceptionType.badCertificate:
+        return NetworkFailure.withContext(
+          message: _extractMessage(exception),
+          cause: exception,
+          context: dioContext,
+        );
+      case DioExceptionType.badResponse:
+        final statusCode = exception.response?.statusCode ?? 0;
+        if (statusCode >= 500 && statusCode < 600) {
+          return NetworkFailure.withContext(
+            message: _extractMessage(exception),
+            cause: exception,
+            context: dioContext,
+          );
+        }
+        if (statusCode >= 400 && statusCode < 500) {
+          return ValidationFailure.withContext(
+            message: _extractMessage(exception),
+            cause: exception,
+            context: dioContext,
+          );
+        }
+        return NetworkFailure.withContext(
+          message: _extractMessage(exception),
+          cause: exception,
+          context: dioContext,
+        );
+      case DioExceptionType.cancel:
+        return NetworkFailure.withContext(
+          message: _extractMessage(exception),
+          cause: exception,
+          context: {
+            ...dioContext,
+            'cancelled': true,
+          },
+        );
+      case DioExceptionType.unknown:
+        break;
+    }
+
+    final lower = exception.toString().toLowerCase();
+    if (lower.contains('socket') || lower.contains('connection') || lower.contains('timeout')) {
+      return NetworkFailure.withContext(
+        message: _extractMessage(exception),
+        cause: exception,
+        context: dioContext,
+      );
+    }
+
+    return ServerFailure.withContext(
+      message: _extractMessage(exception),
+      cause: exception,
+      context: dioContext,
+    );
   }
 
   /// Wraps an exception with additional context for debugging.

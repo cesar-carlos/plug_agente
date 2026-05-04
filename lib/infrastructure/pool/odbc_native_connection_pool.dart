@@ -4,8 +4,10 @@ import 'dart:developer' as developer;
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
@@ -30,16 +32,9 @@ class OdbcNativeConnectionPool implements IConnectionPool {
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
 
-  String _odbcErrorMessage(Object error) {
-    if (error is OdbcError) {
-      return error.message;
-    }
-    return error.toString();
-  }
+  String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
 
-  bool _messageIndicatesInvalidConnectionId(Object error) {
-    return _odbcErrorMessage(error).toLowerCase().contains('invalid connection id');
-  }
+  bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
 
   String _poolConnectionString(String connectionString) {
     if (connectionString.toLowerCase().contains('pooltestoncheckout=')) {
@@ -169,7 +164,22 @@ class OdbcNativeConnectionPool implements IConnectionPool {
   }
 
   @override
-  Future<Result<String>> acquire(String connectionString) async {
+  Future<Result<String>> acquire(
+    String connectionString, {
+    ConnectionOptions? options,
+  }) async {
+    if (options != null) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Native ODBC pool does not support custom connection options.',
+          context: <String, dynamic>{
+            'operation': 'pool_acquire',
+            'reason': 'native_pool_custom_options_unsupported',
+          },
+        ),
+      );
+    }
+
     final poolResult = await _getOrCreatePool(connectionString);
 
     return poolResult.fold(
@@ -400,10 +410,16 @@ class OdbcNativeConnectionPool implements IConnectionPool {
   }
 
   @override
-  Future<Result<int>> getActiveCount() async {
+  Future<Result<int>> getActiveCount({String? connectionString}) async {
     var totalActive = 0;
 
-    for (final poolId in _pools.values) {
+    final poolsToCount = connectionString == null
+        ? _pools.values.toList(growable: false)
+        : <int>[
+            if (_pools[connectionString] case final int poolId) poolId,
+          ];
+
+    for (final poolId in poolsToCount) {
       final stateResult = await _service.poolGetState(poolId);
       if (stateResult.isError()) {
         return Failure(

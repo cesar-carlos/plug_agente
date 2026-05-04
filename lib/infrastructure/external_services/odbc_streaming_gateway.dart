@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
@@ -61,6 +62,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
   @override
   bool get hasActiveStream => _activeStreams.isNotEmpty;
+
+  bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
 
   ConnectionOptions _buildStreamingConnectionOptions(
     int chunkSizeBytes, {
@@ -263,6 +266,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
             ),
           );
         } finally {
+          activeStream.lease.release();
           await _disconnectActiveStream(activeStream);
           _activeStreams.remove(streamExecutionId);
         }
@@ -319,12 +323,14 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
     }
 
     stream.isDisconnectStarted = true;
-    stream.lease.release();
     try {
       final result = await _service.disconnect(stream.connectionId).timeout(_cancelDisconnectTimeout);
       return result.fold(
         (_) => const Success(unit),
         (error) {
+          if (_messageIndicatesInvalidConnectionId(error)) {
+            return const Success(unit);
+          }
           _metrics?.recordStreamCancelDisconnectFailure();
           return Failure(
             OdbcFailureMapper.mapConnectionError(

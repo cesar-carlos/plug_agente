@@ -148,9 +148,25 @@ ORDER BY $orderByClause
           name: 'odbc_paginated_sql_builder',
           level: 900,
         );
-        return null;
+        return _buildOffsetCursorToken(
+          pagination: pagination,
+          returnedRows: pageData.length,
+        );
       }
-      lastRowValues.add(lastRow[term.lookupKey]);
+
+      final value = lastRow[term.lookupKey];
+      if (value == null) {
+        developer.log(
+          'Falling back to offset cursor because "${term.lookupKey}" is null',
+          name: 'odbc_paginated_sql_builder',
+          level: 800,
+        );
+        return _buildOffsetCursorToken(
+          pagination: pagination,
+          returnedRows: pageData.length,
+        );
+      }
+      lastRowValues.add(value);
     }
 
     return QueryPaginationCursor(
@@ -159,6 +175,17 @@ ORDER BY $orderByClause
       queryHash: pagination.queryHash,
       orderBy: pagination.orderBy,
       lastRowValues: lastRowValues,
+    ).toToken();
+  }
+
+  static String _buildOffsetCursorToken({
+    required QueryPaginationRequest pagination,
+    required int returnedRows,
+  }) {
+    return QueryPaginationCursor(
+      page: pagination.page + 1,
+      pageSize: pagination.pageSize,
+      offset: pagination.offset + returnedRows,
     ).toToken();
   }
 

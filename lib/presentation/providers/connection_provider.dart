@@ -50,6 +50,7 @@ class ConnectionProvider extends ChangeNotifier {
     bool enableHardReloginRecovery = _defaultEnableHardReloginRecovery,
     Duration? hubPersistentRetryInterval,
     int? hubPersistentRetryMaxFailedTicks,
+    Duration? hubTokenRefreshMinInterval,
     Random? random,
   }) : _checkHubAvailabilityUseCase = checkHubAvailabilityUseCase,
        _hubRecoveryAuthCoordinator = hubRecoveryAuthCoordinator,
@@ -66,6 +67,7 @@ class ConnectionProvider extends ChangeNotifier {
        _enableHardReloginRecoveryOverride = enableHardReloginRecovery,
        _hubPersistentRetryIntervalOverride = hubPersistentRetryInterval,
        _hubPersistentRetryMaxFailedTicksOverride = hubPersistentRetryMaxFailedTicks,
+       _hubTokenRefreshMinIntervalOverride = hubTokenRefreshMinInterval,
        _random = random {
     if (_tokenRefreshIntervalAttempts < 1) {
       throw ArgumentError.value(
@@ -86,6 +88,13 @@ class ConnectionProvider extends ChangeNotifier {
         hardReloginFailureThreshold,
         'hardReloginFailureThreshold',
         'must be >= 1',
+      );
+    }
+    if (hubTokenRefreshMinInterval != null && hubTokenRefreshMinInterval.inMicroseconds < 0) {
+      throw ArgumentError.value(
+        hubTokenRefreshMinInterval,
+        'hubTokenRefreshMinInterval',
+        'must not be negative',
       );
     }
   }
@@ -124,6 +133,8 @@ class ConnectionProvider extends ChangeNotifier {
   int _persistentRetryTickCount = 0;
   int _persistentFailureCount = 0;
   bool _persistentRetryInFlight = false;
+  DateTime? _lastHubRefreshHttpCompletedAt;
+  int _reconnectQuietFailureLogCount = 0;
 
   static const Duration _defaultInitialReconnectDelay = Duration(
     seconds: AppConstants.reconnectIntervalSeconds,
@@ -144,6 +155,7 @@ class ConnectionProvider extends ChangeNotifier {
   final bool _enableHardReloginRecoveryOverride;
   final Duration? _hubPersistentRetryIntervalOverride;
   final int? _hubPersistentRetryMaxFailedTicksOverride;
+  final Duration? _hubTokenRefreshMinIntervalOverride;
   final Random? _random;
 
   static const int _defaultHardReloginFailureThreshold = 3;
@@ -160,6 +172,9 @@ class ConnectionProvider extends ChangeNotifier {
       _hubPersistentRetryMaxFailedTicksOverride ??
       _hubResilience?.maxFailedTicks ??
       ConnectionConstants.hubPersistentRetryMaxFailedTicks;
+
+  Duration get _effectiveHubTokenRefreshMinInterval =>
+      _hubTokenRefreshMinIntervalOverride ?? ConnectionConstants.hubTokenRefreshMinInterval;
 
   bool get _effectiveHardReloginRecoveryEnabled =>
       _featureFlags?.enableHubHardReloginRecovery ?? _enableHardReloginRecoveryOverride;
@@ -200,6 +215,8 @@ class ConnectionProvider extends ChangeNotifier {
     _consecutiveReconnectFailures = 0;
     _hardReloginAttemptedInCycle = false;
     _sessionAuthInvalid = false;
+    _lastHubRefreshHttpCompletedAt = null;
+    _reconnectQuietFailureLogCount = 0;
     _isDisconnectRequested = false;
     _lastServerUrl = serverUrl;
     _lastAgentId = agentId;
@@ -252,6 +269,8 @@ class ConnectionProvider extends ChangeNotifier {
     _cancelPersistentRetryTimer();
     _hardReloginAttemptedInCycle = false;
     _consecutiveReconnectFailures = 0;
+    _lastHubRefreshHttpCompletedAt = null;
+    _reconnectQuietFailureLogCount = 0;
     final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
     await transportClient.disconnect();
     _status = ConnectionStatus.disconnected;
@@ -557,6 +576,7 @@ class ConnectionProvider extends ChangeNotifier {
         _persistentFailureCount = 0;
         _consecutiveReconnectFailures = 0;
         _sessionAuthInvalid = false;
+        _reconnectQuietFailureLogCount = 0;
         _status = ConnectionStatus.connected;
         _error = '';
         _lastServerUrl = serverUrl;
@@ -567,14 +587,27 @@ class ConnectionProvider extends ChangeNotifier {
         AppLogger.info('Reconnection attempt succeeded');
         return true;
       },
-      (failure) {
+      (Object failure) {
         _consecutiveReconnectFailures++;
         _status = ConnectionStatus.reconnecting;
         _error = recordErrorMessage ? failure.toDisplayMessage() : '';
-        AppLogger.warning(
-          'Reconnection attempt failed: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        if (recordErrorMessage) {
+          AppLogger.warning(
+            'Reconnection attempt failed: ${failure.toDisplayMessage()}',
+            failure.toTechnicalMessage(),
+          );
+        } else {
+          _reconnectQuietFailureLogCount++;
+          const stride = ConnectionConstants.hubReconnectFailureLogThrottleStride;
+          if (_reconnectQuietFailureLogCount == 1 || _reconnectQuietFailureLogCount % stride == 0) {
+            AppLogger.warning(
+              'resilience: reconnect event=attempt_failed_throttled '
+              'count=$_reconnectQuietFailureLogCount stride=$stride '
+              'display=${failure.toDisplayMessage()}',
+              failure.toTechnicalMessage(),
+            );
+          }
+        }
         return false;
       },
     );
@@ -631,6 +664,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
     _persistentRetryInFlight = true;
     try {
+      _hardReloginAttemptedInCycle = false;
       if (_isDisconnectRequested) {
         _cancelPersistentRetryTimer();
         return;
@@ -721,22 +755,47 @@ class ConnectionProvider extends ChangeNotifier {
       return null;
     }
 
-    final refreshResult = await coordinator.refreshSession(
-      serverUrl,
-      currentToken: authProvider.currentToken,
-    );
-    return refreshResult.fold(
-      (token) {
-        authProvider.restoreToken(token);
-        _sessionAuthInvalid = false;
-        return _lastAuthToken = token.token.trim();
-      },
-      (failure) {
-        authProvider.setRecoveryError(failure.toDisplayMessage());
-        _sessionAuthInvalid = true;
-        return null;
-      },
-    );
+    final minGap = _effectiveHubTokenRefreshMinInterval;
+    final last = _lastHubRefreshHttpCompletedAt;
+    if (minGap > Duration.zero &&
+        last != null &&
+        DateTime.now().difference(last) < minGap) {
+      AppLogger.debug(
+        'resilience: token_refresh event=skipped_min_interval '
+        'min_interval_ms=${minGap.inMilliseconds} '
+        'elapsed_ms=${DateTime.now().difference(last).inMilliseconds}',
+      );
+      return null;
+    }
+
+    try {
+      final refreshResult = await coordinator.refreshSession(
+        serverUrl,
+        currentToken: authProvider.currentToken,
+      );
+      return refreshResult.fold(
+        (token) {
+          authProvider.restoreToken(token);
+          _sessionAuthInvalid = false;
+          return _lastAuthToken = token.token.trim();
+        },
+        (Object failure) {
+          if (failure is domain_errors.Failure && failure.isTransient) {
+            AppLogger.warning(
+              'resilience: token_refresh event=transient_failure '
+              'display=${failure.toDisplayMessage()} '
+              'technical=${failure.toTechnicalMessage()}',
+            );
+            return null;
+          }
+          authProvider.setRecoveryError(failure.toDisplayMessage());
+          _sessionAuthInvalid = true;
+          return null;
+        },
+      );
+    } finally {
+      _lastHubRefreshHttpCompletedAt = DateTime.now();
+    }
   }
 
   _ConnectionContext? _resolveConnectionContext() {
@@ -781,9 +840,20 @@ class ConnectionProvider extends ChangeNotifier {
     if (checkHubAvailabilityUseCase == null) {
       return true;
     }
+    final sw = Stopwatch()..start();
     final isReachable = await checkHubAvailabilityUseCase(serverUrl);
+    sw.stop();
+    final elapsedMs = sw.elapsedMilliseconds;
+    if (elapsedMs >= ConnectionConstants.hubAvailabilityProbeSlowLogThresholdMs) {
+      AppLogger.info(
+        'resilience: hub_probe_slow elapsed_ms=$elapsedMs stage=$stage server=$serverUrl '
+        'reachable=$isReachable',
+      );
+    }
     if (!isReachable) {
-      AppLogger.info('resilience: hub_probe_offline stage=$stage server=$serverUrl');
+      AppLogger.info(
+        'resilience: hub_probe_offline stage=$stage server=$serverUrl elapsed_ms=$elapsedMs',
+      );
     }
     return isReachable;
   }

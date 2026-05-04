@@ -23,6 +23,10 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 class MockConnectionPool extends Mock implements IConnectionPool {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const ConnectionOptions());
+  });
+
   group('OdbcDatabaseGateway', () {
     late MockOdbcService mockService;
     late MockAgentConfigRepository mockConfigRepository;
@@ -50,8 +54,12 @@ void main() {
       when(() => mockConnectionPool.discard(any())).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConnectionPool.getActiveCount()).thenAnswer((_) async {
-        return const Success(1);
+      when(
+        () => mockConnectionPool.getActiveCount(
+          connectionString: any(named: 'connectionString'),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(0);
       });
       when(
         () => mockService.prepare(
@@ -202,27 +210,18 @@ void main() {
     );
 
     test(
-      'should reuse adaptive buffer hint and skip pooled path on recurring query',
+      'should record structured connect timeout on direct fallback from upstream invalid connection id',
       () async {
-        const pooledConnectionId = 'pool-buffer-1';
-        const firstDirectId = 'direct-buffer-1';
-        const secondDirectId = 'direct-buffer-2';
+        const pooledConnectionId = 'pool-invalid-upstream';
         const sql = 'SELECT * FROM users';
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
-        final request1 = QueryRequest(
-          id: 'req-buffer-1',
+        final request = QueryRequest(
+          id: 'req-timeout-fallback-1',
           agentId: config.agentId,
           query: sql,
           timestamp: DateTime.now(),
         );
-        final request2 = QueryRequest(
-          id: 'req-buffer-2',
-          agentId: config.agentId,
-          query: sql,
-          timestamp: DateTime.now(),
-        );
-        final capturedBufferSizes = <int>[];
 
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
@@ -240,18 +239,76 @@ void main() {
           ),
         ).thenAnswer((_) async {
           return const Failure(
-            ValidationError(message: 'buffer too small: need 67108864 bytes'),
+            ValidationError(message: 'Invalid connection ID'),
           );
         });
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
-        ).thenAnswer((invocation) async {
-          final options = invocation.namedArguments[#options] as ConnectionOptions;
-          capturedBufferSizes.add(options.maxResultBufferBytes ?? 0);
-          final id = capturedBufferSizes.length == 1 ? firstDirectId : secondDirectId;
+        ).thenAnswer((_) async {
+          return const Failure(
+            ConnectionError(
+              message: 'Login handshake stalled',
+              sqlState: 'HYT00',
+            ),
+          );
+        });
+        when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.ConnectionFailure>());
+        expect(metrics.connectTimeoutCount, 1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.recycle(any())).called(1);
+      },
+    );
+
+    test(
+      'should fallback to direct connection on structured invalid pooled connection id',
+      () async {
+        const pooledConnectionId = 'pool-invalid-native';
+        const directConnectionId = 'direct-native-1';
+        const sql = 'SELECT * FROM users';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-invalid-native-1',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Failure(
+            ConnectionError(
+              message: 'stale handle from worker',
+              nativeCode: 100000,
+            ),
+          );
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
           return Success(
             Connection(
-              id: id,
+              id: directConnectionId,
               connectionString: connectionString,
               createdAt: DateTime.now(),
               isActive: true,
@@ -261,11 +318,176 @@ void main() {
         when(
           () => mockService.executeQuery(
             any(),
+            connectionId: directConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verify(() => mockService.connect(any(), options: any(named: 'options'))).called(1);
+        verify(() => mockService.disconnect(directConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.recycle(any())).called(1);
+      },
+    );
+
+    test(
+      'should skip pool recycle when another lease for the same DSN is still active',
+      () async {
+        const pooledConnectionId = 'pool-invalid-shared';
+        const directConnectionId = 'direct-shared-1';
+        const sql = 'SELECT * FROM users';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-invalid-shared-1',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockConnectionPool.getActiveCount(
+            connectionString: connectionString,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(1);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Failure(
+            ConnectionError(
+              message: 'stale handle from worker',
+              nativeCode: 100000,
+            ),
+          );
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: directConnectionId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: directConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verifyNever(() => mockConnectionPool.recycle(connectionString));
+      },
+    );
+
+    test(
+      'should reuse adaptive buffer hint through pooled acquire on recurring query',
+      () async {
+        const firstPooledId = 'pool-buffer-1';
+        const retryPooledId = 'pool-buffer-2';
+        const hintedPooledId = 'pool-buffer-3';
+        const sql = 'SELECT * FROM users';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request1 = QueryRequest(
+          id: 'req-buffer-1',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+        );
+        final request2 = QueryRequest(
+          id: 'req-buffer-2',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+        );
+        final capturedAcquireBuffers = <int>[];
+        var plainAcquireCount = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(
+          () => mockConnectionPool.acquire(
+            any(),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          if (options == null) {
+            plainAcquireCount++;
+            return plainAcquireCount == 1
+                ? const Success(firstPooledId)
+                : Failure(domain.ConnectionFailure('unexpected plain acquire'));
+          }
+          capturedAcquireBuffers.add(options.maxResultBufferBytes ?? 0);
+          return Success(
+            capturedAcquireBuffers.length == 1 ? retryPooledId : hintedPooledId,
+          );
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
             connectionId: any(named: 'connectionId'),
           ),
         ).thenAnswer((invocation) async {
-          final connectionId = invocation.namedArguments[#connectionId] as String?;
-          if (connectionId == pooledConnectionId) {
+          final connectionId = invocation.namedArguments[#connectionId] as String;
+          if (connectionId == firstPooledId) {
             return const Failure(
               ValidationError(message: 'buffer too small: need 67108864 bytes'),
             );
@@ -280,13 +502,7 @@ void main() {
             ),
           );
         });
-        when(() => mockService.disconnect(firstDirectId)).thenAnswer((_) async {
-          return const Success(unit);
-        });
-        when(() => mockService.disconnect(secondDirectId)).thenAnswer((_) async {
-          return const Success(unit);
-        });
-        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+        when(() => mockConnectionPool.release(any())).thenAnswer((_) async {
           return const Success(unit);
         });
 
@@ -295,10 +511,11 @@ void main() {
 
         expect(first.isSuccess(), isTrue);
         expect(second.isSuccess(), isTrue);
-        expect(capturedBufferSizes, hasLength(2));
-        expect(capturedBufferSizes[0], greaterThan(32 * 1024 * 1024));
-        expect(capturedBufferSizes[1], equals(capturedBufferSizes[0]));
-        verify(() => mockConnectionPool.acquire(any())).called(1);
+        expect(plainAcquireCount, 1);
+        expect(capturedAcquireBuffers, hasLength(2));
+        expect(capturedAcquireBuffers[0], greaterThan(32 * 1024 * 1024));
+        expect(capturedAcquireBuffers[1], equals(capturedAcquireBuffers[0]));
+        verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
       },
     );
 
@@ -351,11 +568,139 @@ void main() {
       verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
     });
 
+    test('should allow executeQueryNamed with more than five named parameters', () async {
+      const pooledConnectionId = 'pool-many-params';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      const sql = '''
+SELECT * FROM users
+WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
+''';
+      const parameters = {
+        'a': 1,
+        'b': 2,
+        'c': 3,
+        'd': 4,
+        'e': 5,
+        'f': 6,
+      };
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-many-params',
+        agentId: config.agentId,
+        query: sql,
+        parameters: parameters,
+        timestamp: DateTime.now(),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQueryNamed(
+          pooledConnectionId,
+          any(),
+          any(),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => mockService.executeQueryNamed(
+          pooledConnectionId,
+          sql,
+          parameters,
+        ),
+      ).called(1);
+    });
+
+    test('should allow repeated named placeholders with colon and at-sign syntax', () async {
+      const pooledConnectionId = 'pool-repeated-named';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      const sql = '''
+SELECT * FROM users
+WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
+''';
+      const parameters = {
+        'id': 42,
+        'label': 'active',
+      };
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-repeated-named',
+        agentId: config.agentId,
+        query: sql,
+        parameters: parameters,
+        timestamp: DateTime.now(),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQueryNamed(
+          pooledConnectionId,
+          any(),
+          any(),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [42],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => mockService.executeQueryNamed(
+          pooledConnectionId,
+          sql,
+          parameters,
+        ),
+      ).called(1);
+    });
+
     test(
       'should retry with expanded buffer when pooled query buffer is too small',
       () async {
-        const pooledConnectionId = 'pool-buffer';
-        const directConnectionId = 'direct-buffer';
+        const pooledConnectionId = 'pool-buffer-1';
+        const retriedPooledId = 'pool-buffer-2';
         const sql = 'SELECT * FROM very_large_table';
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
@@ -374,39 +719,34 @@ void main() {
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
-          return const Success(pooledConnectionId);
+        final capturedRetryBuffers = <int>[];
+        when(
+          () => mockConnectionPool.acquire(
+            any(),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          if (options == null) {
+            return const Success(pooledConnectionId);
+          }
+          capturedRetryBuffers.add(options.maxResultBufferBytes ?? 0);
+          return const Success(retriedPooledId);
         });
         when(
           () => mockService.executeQuery(
             any(),
-            connectionId: pooledConnectionId,
+            connectionId: any(named: 'connectionId'),
           ),
-        ).thenAnswer((_) async {
-          return const Failure(
-            QueryError(
-              message: 'Buffer too small: need 60830894 bytes, got 33554432',
-            ),
-          );
-        });
-        when(
-          () => mockService.connect(any(), options: any(named: 'options')),
-        ).thenAnswer((_) async {
-          return Success(
-            Connection(
-              id: directConnectionId,
-              connectionString: connectionString,
-              createdAt: DateTime.now(),
-              isActive: true,
-            ),
-          );
-        });
-        when(
-          () => mockService.executeQuery(
-            any(),
-            connectionId: directConnectionId,
-          ),
-        ).thenAnswer((_) async {
+        ).thenAnswer((invocation) async {
+          final connectionId = invocation.namedArguments[#connectionId] as String;
+          if (connectionId == pooledConnectionId) {
+            return const Failure(
+              QueryError(
+                message: 'Buffer too small: need 60830894 bytes, got 33554432',
+              ),
+            );
+          }
           return const Success(
             QueryResult(
               columns: ['id'],
@@ -417,25 +757,96 @@ void main() {
             ),
           );
         });
-        when(() => mockService.disconnect(directConnectionId)).thenAnswer((
-          _,
-        ) async {
-          return const Success(unit);
-        });
-        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
-          _,
-        ) async {
+        when(() => mockConnectionPool.release(any())).thenAnswer((_) async {
           return const Success(unit);
         });
 
         final result = await gateway.executeQuery(request);
 
         expect(result.isSuccess(), isTrue);
-        verify(
-          () => mockService.connect(any(), options: any(named: 'options')),
-        ).called(1);
-        verify(() => mockService.disconnect(directConnectionId)).called(1);
+        expect(capturedRetryBuffers, hasLength(1));
+        expect(capturedRetryBuffers.single, greaterThan(32 * 1024 * 1024));
+        verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
         verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.release(retriedPooledId)).called(1);
+      },
+    );
+
+    test(
+      'should retry with expanded buffer when pooled query exposes mapped buffer-too-small failure',
+      () async {
+        const pooledConnectionId = 'pool-buffer-mapped-1';
+        const retriedPooledId = 'pool-buffer-mapped-2';
+        const sql = 'SELECT * FROM very_large_table';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-buffer-mapped',
+          agentId: config.agentId,
+          query: sql,
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        final capturedRetryBuffers = <int>[];
+        when(
+          () => mockConnectionPool.acquire(
+            any(),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          if (options == null) {
+            return const Success(pooledConnectionId);
+          }
+          capturedRetryBuffers.add(options.maxResultBufferBytes ?? 0);
+          return const Success(retriedPooledId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        ).thenAnswer((invocation) async {
+          final connectionId = invocation.namedArguments[#connectionId] as String;
+          if (connectionId == pooledConnectionId) {
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: 'Result buffer exceeded',
+                context: {
+                  'reason': 'buffer_too_small',
+                  'odbc_message': 'Buffer too small: need 60830894 bytes, got 33554432',
+                },
+              ),
+            );
+          }
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        expect(capturedRetryBuffers, hasLength(1));
+        expect(capturedRetryBuffers.single, greaterThan(32 * 1024 * 1024));
+        verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
+        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.release(retriedPooledId)).called(1);
       },
     );
 
@@ -1474,6 +1885,120 @@ void main() {
     );
 
     test(
+      'should retry transactional batch when transaction start fails with structured invalid connection id',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const firstOwnedId = 'owned-retry-1';
+        const secondOwnedId = 'owned-retry-2';
+        final config = _buildConfig(connectionString);
+        var connectCount = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          connectCount++;
+          final connectionId = connectCount == 1 ? firstOwnedId : secondOwnedId;
+          return Success(
+            Connection(
+              id: connectionId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            firstOwnedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
+          return const Failure(
+            ConnectionError(
+              message: 'stale transaction handle',
+              nativeCode: 100000,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            secondOwnedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(1);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: secondOwnedId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.commitTransaction(secondOwnedId, 1)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(firstOwnedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(secondOwnedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'SELECT 1')],
+          options: const SqlExecutionOptions(
+            transaction: true,
+            timeoutMs: 1200,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(() => mockConnectionPool.acquire(any()));
+        verify(
+          () => mockService.beginTransaction(
+            firstOwnedId,
+            savepointDialect: SavepointDialect.auto,
+            accessMode: TransactionAccessMode.readWrite,
+            lockTimeout: const Duration(milliseconds: 1200),
+          ),
+        ).called(1);
+        verify(
+          () => mockService.beginTransaction(
+            secondOwnedId,
+            savepointDialect: SavepointDialect.auto,
+            accessMode: TransactionAccessMode.readWrite,
+            lockTimeout: const Duration(milliseconds: 1200),
+          ),
+        ).called(1);
+        verify(() => mockService.disconnect(firstOwnedId)).called(1);
+        verify(() => mockService.disconnect(secondOwnedId)).called(1);
+        verifyNever(() => mockConnectionPool.recycle(any()));
+        expect(metrics.transactionalBatchDirectPathCount, 1);
+      },
+    );
+
+    test(
       'should reuse prepared statements for repeated transactional batch commands',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -1582,6 +2107,119 @@ void main() {
           ),
         ).called(2);
         verify(() => mockService.closeStatement(ownedId, stmtId)).called(1);
+      },
+    );
+
+    test(
+      'should keep transactional batch execution with more than five named parameters',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const ownedId = 'owned-many-params-1';
+        const stmtId = 79;
+        const sql = '''
+SELECT * FROM users
+WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
+''';
+        const parameters = {
+          'a': 1,
+          'b': 2,
+          'c': 3,
+          'd': 4,
+          'e': 5,
+          'f': 6,
+        };
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(1);
+        });
+        when(
+          () => mockService.prepareNamed(
+            ownedId,
+            sql,
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        ).thenAnswer((_) async => const Success(stmtId));
+        when(
+          () => mockService.executePreparedNamed(
+            ownedId,
+            stmtId,
+            parameters,
+            any(),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.commitTransaction(ownedId, 1)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.closeStatement(ownedId, stmtId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(
+              sql: sql,
+              params: parameters,
+            ),
+          ],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => mockService.prepareNamed(
+            ownedId,
+            sql,
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        ).called(1);
+        verify(
+          () => mockService.executePreparedNamed(
+            ownedId,
+            stmtId,
+            parameters,
+            any(),
+          ),
+        ).called(1);
       },
     );
 
@@ -1750,7 +2388,7 @@ void main() {
     );
 
     test(
-      'should return timeout failure and release pooled connection after best-effort cancel',
+      'should return timeout failure and discard pooled connection after best-effort cancel',
       () async {
         const pooledConnectionId = 'pool-timeout-1';
         const sql = 'SELECT * FROM users';
@@ -1794,6 +2432,9 @@ void main() {
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
           return const Success(unit);
         });
+        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
 
         final result = await gateway.executeQuery(
           request,
@@ -1808,8 +2449,8 @@ void main() {
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
-        verifyNever(() => mockConnectionPool.discard(pooledConnectionId));
-        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verifyNever(() => mockConnectionPool.release(pooledConnectionId));
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
       },
     );
 

@@ -16,6 +16,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
+import 'package:plug_agente/infrastructure/external_services/hub_connect_error_auth_heuristics.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
@@ -629,16 +630,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   static bool _isAuthRelatedErrorMessage(String errorMessage) {
-    return errorMessage.contains('Authentication') ||
-        errorMessage.contains('Invalid token') ||
-        errorMessage.contains('401');
+    return isHubConnectAuthRelatedMessage(errorMessage);
   }
 
   domain.Failure _buildConnectionFailure(String errorMessage, Object error) {
-    final normalizedError = errorMessage.toLowerCase();
-    if (normalizedError.contains('authentication') ||
-        normalizedError.contains('invalid token') ||
-        normalizedError.contains('401')) {
+    if (isHubConnectAuthRelatedMessage(errorMessage)) {
       return domain.ConfigurationFailure.withContext(
         message: 'Authentication failed. Please sign in again.',
         cause: error,
@@ -942,14 +938,13 @@ class _StructuredConnectError {
   final String? message;
 
   bool get isAuthRelated {
-    if (code != null) {
-      final lc = code!.toLowerCase();
-      if (lc.contains('auth') || lc == 'unauthorized' || lc == '401') return true;
+    if (isHubConnectAuthRelatedStructured(code: code, reason: reason)) {
+      return true;
     }
-    if (reason != null) {
-      final lr = reason!.toLowerCase();
-      if (lr.contains('auth') || lr == 'token_revoked' || lr == 'unauthorized') return true;
+    final msg = message;
+    if (msg == null || msg.trim().isEmpty) {
+      return false;
     }
-    return false;
+    return isHubConnectAuthRelatedMessage(msg);
   }
 }

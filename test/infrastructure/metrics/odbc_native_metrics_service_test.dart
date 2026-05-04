@@ -158,12 +158,25 @@ void main() {
           ConnectionError(message: 'native metrics failed'),
         ),
       );
+      when(() => mockService.getPreparedStatementsMetrics()).thenAnswer(
+        (_) async => const Success(
+          PreparedStatementMetrics(
+            cacheSize: 0,
+            cacheMaxSize: 16,
+            cacheHits: 0,
+            cacheMisses: 0,
+            totalPrepares: 0,
+            totalExecutions: 0,
+            memoryUsageBytes: 0,
+            avgExecutionsPerStmt: 0,
+          ),
+        ),
+      );
 
       final result = await service.collectSnapshot();
 
       expect(result.isError(), isTrue);
       expect(result.exceptionOrNull(), isA<domain.ConnectionFailure>());
-      verifyNever(() => mockService.getPreparedStatementsMetrics());
     });
   });
 }

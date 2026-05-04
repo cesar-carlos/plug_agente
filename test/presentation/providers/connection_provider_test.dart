@@ -10,6 +10,7 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
@@ -26,8 +27,7 @@ class _MockCheckOdbcDriver extends Mock implements CheckOdbcDriver {}
 
 class _MockCheckHubAvailability extends Mock implements CheckHubAvailability {}
 
-class _MockHubRecoveryAuthCoordinator extends Mock
-    implements HubRecoveryAuthCoordinator {}
+class _MockHubRecoveryAuthCoordinator extends Mock implements HubRecoveryAuthCoordinator {}
 
 class _MockConfigProvider extends Mock implements ConfigProvider {}
 
@@ -160,6 +160,15 @@ void main() {
           testDb,
           checkDriver,
           maxReconnectAttempts: 0,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          hubTokenRefreshMinInterval: const Duration(microseconds: -1),
         ),
         throwsArgumentError,
       );
@@ -325,6 +334,7 @@ void main() {
           transportClient: transport,
           initialReconnectDelay: const Duration(milliseconds: 5),
           maxReconnectDelay: const Duration(milliseconds: 10),
+          hubTokenRefreshMinInterval: Duration.zero,
         );
 
         await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -364,6 +374,7 @@ void main() {
         initialReconnectDelay: const Duration(milliseconds: 5),
         maxReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectAttempts: 2,
+        hubTokenRefreshMinInterval: Duration.zero,
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -456,6 +467,7 @@ void main() {
         initialReconnectDelay: const Duration(milliseconds: 5),
         maxReconnectDelay: const Duration(milliseconds: 10),
         hardReloginFailureThreshold: 1,
+        hubTokenRefreshMinInterval: Duration.zero,
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
@@ -470,6 +482,250 @@ void main() {
         ),
       ).called(greaterThanOrEqualTo(1));
       expect(callCount, greaterThanOrEqualTo(3));
+
+      await provider.disconnect();
+    });
+
+    test('transient refresh failure does not call setRecoveryError during reconnection burst', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 'access', refreshToken: 'refresh'),
+      );
+      when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+      when(
+        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+      ).thenReturn(null);
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => Failure(
+          domain_failures.NetworkFailure.withContext(
+            message: 'hub offline',
+            context: const <String, Object>{},
+          ),
+        ),
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        initialReconnectDelay: const Duration(milliseconds: 5),
+        maxReconnectDelay: const Duration(milliseconds: 10),
+        maxReconnectAttempts: 2,
+        hubTokenRefreshMinInterval: Duration.zero,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.onReconnectionNeeded?.call();
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      verifyNever(() => mockAuth.setRecoveryError(any()));
+
+      await provider.disconnect();
+    });
+
+    test('non-transient refresh failure calls setRecoveryError', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 'access', refreshToken: 'refresh'),
+      );
+      when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => Failure(domain_failures.ValidationFailure('Refresh token expired or revoked')),
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        initialReconnectDelay: const Duration(milliseconds: 5),
+        maxReconnectDelay: const Duration(milliseconds: 10),
+        maxReconnectAttempts: 2,
+        hubTokenRefreshMinInterval: Duration.zero,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.onReconnectionNeeded?.call();
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      verify(() => mockAuth.setRecoveryError(any())).called(1);
+
+      await provider.disconnect();
+    });
+
+    test('rate-limits HTTP refresh during recovery burst when min interval is set', () async {
+      var refreshCalls = 0;
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => Failure(Exception('hub down')));
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer((_) async {
+        refreshCalls++;
+        return const Success(AuthToken(token: 't1', refreshToken: 'r1'));
+      });
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 'access', refreshToken: 'refresh'),
+      );
+      when(
+        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+      ).thenReturn(null);
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        hubTokenRefreshMinInterval: const Duration(seconds: 30),
+        initialReconnectDelay: const Duration(milliseconds: 1),
+        maxReconnectDelay: const Duration(milliseconds: 2),
+        enableHardReloginRecovery: false,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.onReconnectionNeeded?.call();
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(refreshCalls, 1);
+
+      await provider.disconnect();
+    });
+
+    test('persistent hub retry can hard relogin again on a later tick', () async {
+      var connectCalls = 0;
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async {
+        connectCalls++;
+        if (connectCalls == 1) {
+          return const Success(unit);
+        }
+        return Failure(Exception('hub socket down'));
+      });
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(
+          AuthToken(token: 'access', refreshToken: 'refresh'),
+        ),
+      );
+      when(
+        () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
+          any(),
+          any(),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(
+          AuthToken(token: 'new-access', refreshToken: 'new-refresh'),
+        ),
+      );
+
+      final configWithCredentials = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17 for SQL Server',
+        connectionString: '',
+        username: '',
+        databaseName: '',
+        host: 'localhost',
+        port: 1433,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        serverUrl: 'https://hub.test',
+        agentId: 'agent-1',
+        authUsername: 'agent_user',
+        authPassword: 'agent_pass',
+        authToken: 'tok-1',
+        refreshToken: 'refresh-1',
+      );
+      when(() => configProvider.currentConfig).thenReturn(configWithCredentials);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 'access', refreshToken: 'refresh'),
+      );
+      when(mockAuth.logout).thenAnswer((_) async {});
+      when(() => mockAuth.isAuthenticated).thenReturn(true);
+      when(
+        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+      ).thenReturn(null);
+      when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        initialReconnectDelay: const Duration(milliseconds: 1),
+        maxReconnectDelay: const Duration(milliseconds: 2),
+        maxReconnectAttempts: 1,
+        hardReloginFailureThreshold: 1,
+        hubPersistentRetryInterval: const Duration(milliseconds: 50),
+        hubPersistentRetryMaxFailedTicks: 0,
+        hubTokenRefreshMinInterval: Duration.zero,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.onReconnectionNeeded?.call();
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      verify(
+        () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
+          any(),
+          any(),
+        ),
+      ).called(greaterThanOrEqualTo(2));
 
       await provider.disconnect();
     });

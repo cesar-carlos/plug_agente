@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/infrastructure/errors/failure_converter.dart';
@@ -232,6 +234,52 @@ void main() {
         expect(failure, isA<NetworkFailure>());
         expect(failure.context['timeout'], isTrue);
         expect(failure.context['timeout_stage'], 'transport');
+      });
+
+      test('should convert DioException connectionTimeout to NetworkFailure', () {
+        final exception = DioException(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          type: DioExceptionType.connectionTimeout,
+        );
+        final stackTrace = StackTrace.current;
+
+        final failure = FailureConverter.convert(
+          exception,
+          stackTrace,
+          operation: 'refreshToken',
+        );
+
+        expect(failure, isA<NetworkFailure>());
+        expect(failure.isTransient, isTrue);
+        expect(failure.context['dio_type'], 'connectionTimeout');
+      });
+
+      test('should convert DioException badResponse 503 to NetworkFailure', () {
+        final exception = DioException(
+          requestOptions: RequestOptions(path: '/x'),
+          type: DioExceptionType.badResponse,
+          response: Response<void>(
+            requestOptions: RequestOptions(path: '/x'),
+            statusCode: 503,
+          ),
+        );
+        final failure = FailureConverter.convert(exception, StackTrace.current);
+        expect(failure, isA<NetworkFailure>());
+        expect(failure.isTransient, isTrue);
+      });
+
+      test('should convert DioException badResponse 401 to ValidationFailure', () {
+        final exception = DioException(
+          requestOptions: RequestOptions(path: '/x'),
+          type: DioExceptionType.badResponse,
+          response: Response<void>(
+            requestOptions: RequestOptions(path: '/x'),
+            statusCode: 401,
+          ),
+        );
+        final failure = FailureConverter.convert(exception, StackTrace.current);
+        expect(failure, isA<ValidationFailure>());
+        expect(failure.isTransient, isFalse);
       });
 
       test('should use default message when exception string is empty', () {

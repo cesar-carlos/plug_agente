@@ -120,7 +120,7 @@ class AppInitializer {
     try {
       final config = getIt<IAgentConfigRepository>();
       final configResult = await config.getCurrentConfig();
-      
+
       await configResult.fold(
         (agentConfig) async {
           if (agentConfig.connectionString.isEmpty) {
@@ -134,7 +134,18 @@ class AppInitializer {
 
           final pool = getIt<IConnectionPool>();
           if (pool is OdbcConnectionPool) {
-            await pool.warmUp(agentConfig.connectionString);
+            final warmUpResult = await pool.warmUp(agentConfig.connectionString);
+            warmUpResult.fold(
+              (_) {},
+              (failure) {
+                developer.log(
+                  'Pool warm-up cleanup failed (continuing without)',
+                  name: 'app_initializer',
+                  level: 900,
+                  error: failure,
+                );
+              },
+            );
           }
         },
         (failure) {

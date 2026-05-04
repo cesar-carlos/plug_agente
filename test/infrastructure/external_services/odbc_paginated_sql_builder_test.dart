@@ -24,5 +24,34 @@ void main() {
       );
       expect(sql, contains('TOP 6 START AT 1'));
     });
+
+    test('buildNextCursorToken falls back to offset cursor when order value is null', () {
+      const pagination = QueryPaginationRequest(
+        page: 2,
+        pageSize: 3,
+        queryHash: 'qh',
+        orderBy: [
+          QueryPaginationOrderTerm(
+            expression: 'created_at',
+            lookupKey: 'created_at',
+          ),
+        ],
+      );
+
+      final token = OdbcPaginatedSqlBuilder.buildNextCursorToken(
+        pagination: pagination,
+        pageData: const [
+          {'created_at': '2026-05-01T00:00:00Z'},
+          {'created_at': null},
+        ],
+      );
+
+      expect(token, isNotNull);
+      final decoded = QueryPaginationCursor.fromToken(token!);
+      expect(decoded.page, 3);
+      expect(decoded.pageSize, 3);
+      expect(decoded.offset, 5);
+      expect(decoded.isStableCursor, isFalse);
+    });
   });
 }

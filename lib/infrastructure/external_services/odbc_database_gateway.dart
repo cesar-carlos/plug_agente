@@ -21,6 +21,7 @@ import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
@@ -154,10 +155,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return '${collapsed.substring(0, _multiResultSqlLogPreviewChars)}…';
   }
 
-  bool _looksLikeTimeoutError(Object error) {
-    final message = _odbcErrorMessage(error).toLowerCase();
-    return message.contains('timeout') || message.contains('timed out');
-  }
+  bool _looksLikeTimeoutError(Object error) => OdbcErrorInspector.isTimeout(error);
 
   /// Gets or creates a circuit breaker for the given connection string.
   ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
@@ -223,11 +221,28 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  String _odbcErrorMessage(Object error) {
-    if (error is OdbcError) {
-      return error.message;
+  String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
+
+  String _bufferExpansionErrorMessage(Object error) {
+    if (error is domain.Failure) {
+      final rawOdbcMessage = error.context['odbc_message'];
+      if (rawOdbcMessage is String && rawOdbcMessage.trim().isNotEmpty) {
+        return rawOdbcMessage;
+      }
     }
-    return error.toString();
+    return _odbcErrorMessage(error);
+  }
+
+  bool _isBufferTooSmallError(Object error) {
+    if (error is domain.Failure && error.context['reason'] == 'buffer_too_small') {
+      return true;
+    }
+    if (error is domain.Failure && OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(error.message)) {
+      return true;
+    }
+    return OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
+      _bufferExpansionErrorMessage(error),
+    );
   }
 
   void _recordSqlInvestigationExecutionFailure({
@@ -559,19 +574,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
       return Failure(queryValidation);
     }
-    final parameterValidation = OdbcGatewayQueryPreparation.validateParameterCount(
-      preparedExecution,
-    );
-    if (parameterValidation != null) {
-      _recordSqlInvestigationExecutionFailure(
-        request: request,
-        preparedExecution: preparedExecution,
-        errorMessage: parameterValidation.message,
-        executedInDb: false,
-      );
-      return Failure(parameterValidation);
-    }
-
     OdbcGatewayQueryPreparation.maybeLogPaginatedSqlRewrite(
       featureFlags: _featureFlags,
       request: request,
@@ -579,27 +581,52 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       preparedExecution: preparedExecution,
     );
 
+    final baseOptions = _connectionOptionsForTimeout(timeout);
     final hintedOptions = _hintedConnectionOptions(
       connectionString: connectionString,
       sql: preparedExecution.sql,
+      baseOptions: baseOptions,
     );
     if (hintedOptions != null) {
       developer.log(
-        'Using cached adaptive buffer hint for direct query execution',
+        'Using cached adaptive buffer hint for pooled query execution',
         name: 'database_gateway',
         level: 800,
       );
-      return _executeQueryWithoutPool(
+      return _executeQueryWithPool(
         request,
         connectionString,
         stopwatch,
-        options: hintedOptions,
         preparedExecution: preparedExecution,
         timeout: timeout,
+        acquireOptions: hintedOptions,
       );
     }
 
-    final poolResult = await _connectionPool.acquire(connectionString);
+    return _executeQueryWithPool(
+      request,
+      connectionString,
+      stopwatch,
+      preparedExecution: preparedExecution,
+      timeout: timeout,
+    );
+  }
+
+  Future<Result<QueryResponse>> _executeQueryWithPool(
+    QueryRequest request,
+    String connectionString,
+    Stopwatch stopwatch, {
+    required OdbcPreparedQueryExecution preparedExecution,
+    required Duration? timeout,
+    ConnectionOptions? acquireOptions,
+    bool allowAdaptiveRetry = true,
+  }) async {
+    final poolResult = acquireOptions == null
+        ? await _connectionPool.acquire(connectionString)
+        : await _connectionPool.acquire(
+            connectionString,
+            options: acquireOptions,
+          );
 
     if (poolResult.isError()) {
       stopwatch.stop();
@@ -635,8 +662,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final connId = poolResult.getOrNull()!;
+    final connId = poolResult.getOrThrow();
     var releasedConnectionEarly = false;
+    final effectiveOptions = acquireOptions ?? _connectionOptionsForTimeout(timeout);
 
     try {
       final outcome = await _runQueryExecutionWithTimeout(
@@ -668,15 +696,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             timeout: timeout,
           );
         }
-        if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
-          _odbcErrorMessage(error),
-        )) {
+
+        if (allowAdaptiveRetry && _isBufferTooSmallError(error)) {
+          final currentBufferBytes =
+              effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
           _adaptiveBufferCache.rememberExpandedBuffer(
             connectionString: connectionString,
             sql: preparedExecution.sql,
-            currentBufferBytes:
-                _connectionOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes,
-            errorMessage: _odbcErrorMessage(error),
+            currentBufferBytes: currentBufferBytes,
+            errorMessage: _bufferExpansionErrorMessage(error),
           );
           developer.log(
             'Buffer too small in pooled query, retrying with expanded buffer',
@@ -684,16 +712,23 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             level: 900,
             error: error,
           );
-          _metrics.recordDirectConnectionFallback();
-          return _executeQueryWithoutPool(
+          await _releaseConnectionSafely(connId);
+          releasedConnectionEarly = true;
+          return _executeQueryWithPool(
             request,
             connectionString,
             stopwatch,
-            options: _buildExpandedConnectionOptions(error),
             preparedExecution: preparedExecution,
             timeout: timeout,
+            acquireOptions: _buildExpandedConnectionOptions(
+              error,
+              baseOptions: effectiveOptions,
+              currentBufferBytes: currentBufferBytes,
+            ),
+            allowAdaptiveRetry: false,
           );
         }
+
         stopwatch.stop();
 
         developer.log(
@@ -934,15 +969,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   Future<void> _releaseBatchConnection(_BatchExecutionContext context) async {
     if (context.ownedConnection) {
-      try {
-        context.directLease?.release();
+      final directLease = context.directLease;
+      if (directLease == null) {
         await _disconnectOwnedConnectionSafely(
           context.connectionId,
           operation: 'batch_direct_disconnect',
         );
-      } finally {
-        context.directLease?.release();
+        return;
       }
+
+      await _disconnectOwnedConnectionAndReleaseLease(
+        connectionId: context.connectionId,
+        directLease: directLease,
+        operation: 'batch_direct_disconnect',
+      );
       return;
     }
     await _releaseConnectionSafely(context.connectionId);
@@ -998,7 +1038,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         return Failure(err);
       }
       final directLease = leaseResult.getOrThrow();
-      final connectResult = await _service.connect(
+      final connectResult = await _connectSafely(
         connectionString,
         options: _connectionOptionsForTimeout(timeout),
       );
@@ -1183,35 +1223,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           sql: command.sql,
           parameters: command.params,
         );
-        final parameterValidation = OdbcGatewayQueryPreparation.validateParameterCount(
-          preparedExecution,
-        );
-        if (parameterValidation != null) {
-          if (options.transaction) {
-            await transaction.rollback(
-              (transactionId) => _rollbackTransactionIfNeeded(
-                context.connectionId,
-                transactionId,
-              ),
-            );
-            return Failure(
-              domain.QueryExecutionFailure.withContext(
-                message: 'Transaction aborted due to invalid prepared statement parameters',
-                cause: parameterValidation,
-                context: {
-                  'reason': 'transaction_failed',
-                  'operation': 'transaction_validation',
-                  'failedIndex': i,
-                  'detail': parameterValidation.message,
-                },
-              ),
-            );
-          }
-          results.add(
-            SqlCommandResult.failure(index: i, error: parameterValidation.message),
-          );
-          continue;
-        }
 
         final remainingTimeout = _remainingTimeout(context.deadline);
         try {
@@ -1715,9 +1726,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return execution.timeout(
       timeout,
       onTimeout: () async {
-        await _cancelPreparedStatementForTimeout(
-          connectionId: connectionId,
-          statementId: statementId,
+        _markConnectionForDiscard(connectionId);
+        unawaited(
+          _cancelPreparedStatementForTimeout(
+            connectionId: connectionId,
+            statementId: statementId,
+          ),
         );
         throw TimeoutException('Prepared statement execution deadline exceeded');
       },
@@ -1729,7 +1743,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Iterable<int> stmtIds,
   ) async {
     for (final stmtId in stmtIds) {
-      await _service.closeStatement(connectionId, stmtId);
+      try {
+        await _service.closeStatement(connectionId, stmtId);
+      } on Object catch (error) {
+        developer.log(
+          'Failed to close prepared statement after execution',
+          name: 'database_gateway',
+          level: 900,
+          error: error,
+        );
+      }
     }
   }
 
@@ -1892,6 +1915,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     ConnectionOptions? options,
     Duration? timeout,
     bool afterVacuousPooledMulti = false,
+    bool allowAdaptiveRetry = true,
   }) async {
     final leaseResult = await _directConnectionLimiter.acquire(
       operation: 'query_direct',
@@ -1917,14 +1941,29 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       directLease.release();
     }
 
-    final connectResult = await _service.connect(
-      connectionString,
-      options: options ?? _connectionOptionsForTimeout(timeout),
-    );
+    final effectiveOptions = options ?? _connectionOptionsForTimeout(timeout);
 
     try {
+      final connectResult = await _connectSafely(
+        connectionString,
+        options: effectiveOptions,
+      );
       return await connectResult.fold(
         (connection) async {
+          var connectionCleanedUp = false;
+
+          Future<void> cleanupOwnedConnection() async {
+            if (connectionCleanedUp) {
+              return;
+            }
+            connectionCleanedUp = true;
+            await _disconnectOwnedConnectionAndReleaseLease(
+              connectionId: connection.id,
+              directLease: directLease,
+              operation: 'query_direct_disconnect',
+            );
+          }
+
           try {
             final outcome = await _runQueryExecutionWithTimeout(
               connId: connection.id,
@@ -1935,18 +1974,39 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             );
             if (!outcome.isSuccess) {
               final error = outcome.error!;
-              if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
-                _odbcErrorMessage(error),
-              )) {
+              if (_isBufferTooSmallError(error)) {
                 final currentBufferBytes =
-                    (options ?? _connectionOptions).maxResultBufferBytes ??
-                    ConnectionConstants.defaultMaxResultBufferBytes;
+                    effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
                 _adaptiveBufferCache.rememberExpandedBuffer(
                   connectionString: connectionString,
                   sql: preparedExecution.sql,
                   currentBufferBytes: currentBufferBytes,
-                  errorMessage: _odbcErrorMessage(error),
+                  errorMessage: _bufferExpansionErrorMessage(error),
                 );
+
+                if (allowAdaptiveRetry) {
+                  await cleanupOwnedConnection();
+                  developer.log(
+                    'Buffer too small in direct query, retrying with expanded buffer',
+                    name: 'database_gateway',
+                    level: 900,
+                    error: error,
+                  );
+                  return _executeQueryWithoutPool(
+                    request,
+                    connectionString,
+                    stopwatch,
+                    preparedExecution: preparedExecution,
+                    options: _buildExpandedConnectionOptions(
+                      error,
+                      baseOptions: effectiveOptions,
+                      currentBufferBytes: currentBufferBytes,
+                    ),
+                    timeout: timeout,
+                    afterVacuousPooledMulti: afterVacuousPooledMulti,
+                    allowAdaptiveRetry: false,
+                  );
+                }
               }
               stopwatch.stop();
               _metrics.recordFailure(
@@ -2018,11 +2078,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               ),
             );
           } finally {
-            releaseDirectLease();
-            await _disconnectOwnedConnectionSafely(
-              connection.id,
-              operation: 'query_direct_disconnect',
-            );
+            await cleanupOwnedConnection();
           }
         },
         (error) {
@@ -2078,12 +2134,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       directLease.release();
     }
 
-    final connectResult = await _service.connect(
-      connectionString,
-      options: _connectionOptionsForTimeout(timeout),
-    );
-
     try {
+      final connectResult = await _connectSafely(
+        connectionString,
+        options: _connectionOptionsForTimeout(timeout),
+      );
       return await connectResult.fold(
         (connection) async {
           try {
@@ -2118,9 +2173,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               ),
             );
           } finally {
-            releaseDirectLease();
-            await _disconnectOwnedConnectionSafely(
-              connection.id,
+            await _disconnectOwnedConnectionAndReleaseLease(
+              connectionId: connection.id,
+              directLease: directLease,
               operation: 'non_query_direct_disconnect',
             );
           }
@@ -2201,7 +2256,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String operation,
   }) async {
     _connectionsToDiscard.remove(connectionId);
-    final disconnectResult = await _service.disconnect(connectionId);
+    late Result<void> disconnectResult;
+    try {
+      disconnectResult = await _service.disconnect(connectionId);
+    } on Object catch (error) {
+      disconnectResult = Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: operation,
+        ),
+      );
+    }
     if (disconnectResult.isSuccess()) {
       return;
     }
@@ -2214,6 +2279,21 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       level: 900,
       error: disconnectError,
     );
+  }
+
+  Future<void> _disconnectOwnedConnectionAndReleaseLease({
+    required String connectionId,
+    required DirectOdbcConnectionLease directLease,
+    required String operation,
+  }) async {
+    try {
+      await _disconnectOwnedConnectionSafely(
+        connectionId,
+        operation: operation,
+      );
+    } finally {
+      directLease.release();
+    }
   }
 
   Future<void> _releaseConnectionSafely(String connectionId) async {
@@ -2239,15 +2319,33 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     _connectionsToDiscard.add(connectionId);
   }
 
-  ConnectionOptions _buildExpandedConnectionOptions(Object error) {
-    final currentBufferBytes = OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024;
+  Future<Result<Connection>> _connectSafely(
+    String connectionString, {
+    required ConnectionOptions options,
+  }) async {
+    try {
+      return await _service.connect(connectionString, options: options);
+    } on Object catch (error) {
+      return Failure(
+        error is Exception ? error : Exception(error.toString()),
+      );
+    }
+  }
+
+  ConnectionOptions _buildExpandedConnectionOptions(
+    Object error, {
+    required ConnectionOptions baseOptions,
+    required int currentBufferBytes,
+  }) {
     final expandedBufferBytes = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
       currentBufferBytes: currentBufferBytes,
-      errorMessage: _odbcErrorMessage(error),
+      errorMessage: _bufferExpansionErrorMessage(error),
     );
-    final initialResultBufferBytes = expandedBufferBytes < ConnectionConstants.defaultInitialResultBufferBytes
-        ? expandedBufferBytes
-        : ConnectionConstants.defaultInitialResultBufferBytes;
+    final baseInitialBufferBytes =
+        baseOptions.initialResultBufferBytes ?? ConnectionConstants.defaultInitialResultBufferBytes;
+    final initialResultBufferBytes = baseInitialBufferBytes < expandedBufferBytes
+        ? baseInitialBufferBytes
+        : expandedBufferBytes;
 
     developer.log(
       'Expanding max result buffer for retry: '
@@ -2257,19 +2355,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
 
     return ConnectionOptions(
-      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
-      queryTimeout: ConnectionConstants.defaultQueryTimeout,
+      loginTimeout: baseOptions.loginTimeout,
+      queryTimeout: baseOptions.queryTimeout,
       maxResultBufferBytes: expandedBufferBytes,
       initialResultBufferBytes: initialResultBufferBytes,
-      autoReconnectOnConnectionLost: true,
-      maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
-      reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+      autoReconnectOnConnectionLost: baseOptions.autoReconnectOnConnectionLost,
+      maxReconnectAttempts: baseOptions.maxReconnectAttempts,
+      reconnectBackoff: baseOptions.reconnectBackoff,
     );
   }
 
   ConnectionOptions? _hintedConnectionOptions({
     required String connectionString,
     required String sql,
+    required ConnectionOptions baseOptions,
   }) {
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
@@ -2279,7 +2378,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return null;
     }
 
-    final baseOptions = _connectionOptions;
     final initialBufferBytes =
         baseOptions.initialResultBufferBytes ?? ConnectionConstants.defaultInitialResultBufferBytes;
     return ConnectionOptions(
@@ -2307,11 +2405,23 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return;
     }
 
-    final activeCountResult = await _connectionPool.getActiveCount();
-    final activeCount = activeCountResult.getOrNull();
-    if (activeCount != null && activeCount > 1) {
+    final activeCountResult = await _connectionPool.getActiveCount(
+      connectionString: connectionString,
+    );
+    if (activeCountResult.isError()) {
       developer.log(
-        'Skipping broad pool recycle because other ODBC leases are active',
+        'Skipping pool recycle because active-count snapshot failed',
+        name: 'database_gateway',
+        level: 900,
+        error: activeCountResult.exceptionOrNull(),
+      );
+      return;
+    }
+
+    final activeCount = activeCountResult.getOrThrow();
+    if (activeCount > 0) {
+      developer.log(
+        'Skipping pool recycle because another lease for the same DSN is active',
         name: 'database_gateway',
         level: 800,
       );
@@ -2358,31 +2468,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _queryFailureIndicatesInvalidConnectionId(domain.Failure failure) {
-    final ctx = failure.context;
-    final err = ctx['error'] != null ? ctx['error'].toString() : failure.message;
-    return _isInvalidConnectionIdError(err);
+    return _isInvalidConnectionIdError(failure);
   }
 
-  bool _isInvalidConnectionIdError(Object error) {
-    final message = _odbcErrorMessage(error).toLowerCase();
-
-    if (error is ValidationError) {
-      return message.contains('invalid connection id');
-    }
-
-    if (error is ConnectionError) {
-      if (error.nativeCode == 100000) {
-        return true;
-      }
-      return message.contains('invalid connection id');
-    }
-
-    if (error is OdbcError || error is QueryError) {
-      return message.contains('invalid connection id');
-    }
-
-    return message.contains('invalid connection id');
-  }
+  bool _isInvalidConnectionIdError(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
 
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {
     return switch (driverName) {

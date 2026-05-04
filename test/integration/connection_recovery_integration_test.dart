@@ -188,6 +188,7 @@ void main() {
         initialReconnectDelay: const Duration(milliseconds: 10),
         maxReconnectDelay: const Duration(milliseconds: 20),
         hubPersistentRetryInterval: const Duration(milliseconds: 30),
+        enableHardReloginRecovery: false,
       );
 
       await provider.connect('https://hub.test', 'agent-1');
@@ -259,6 +260,7 @@ void main() {
         maxReconnectDelay: const Duration(milliseconds: 20),
         hubPersistentRetryInterval: const Duration(milliseconds: 50),
         hubPersistentRetryMaxFailedTicks: 4,
+        enableHardReloginRecovery: false,
       );
 
       await provider.connect('https://hub.test', 'agent-1');

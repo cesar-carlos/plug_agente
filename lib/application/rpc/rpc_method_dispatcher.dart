@@ -2061,7 +2061,7 @@ class RpcMethodDispatcher {
   ) {
     final rawModes = negotiatedExtensions['paginationModes'];
     if (rawModes is! List<dynamic> || rawModes.isEmpty) {
-      return {'page-offset', 'cursor-keyset'};
+      return {'page-offset', 'cursor-keyset', 'cursor-offset'};
     }
     return rawModes.whereType<String>().toSet();
   }

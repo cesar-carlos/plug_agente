@@ -1,10 +1,11 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 
 class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   MockOdbcConnectionSettings({
     this.poolSize = 4,
     this.loginTimeoutSeconds = 30,
-    this.maxResultBufferMb = 32,
+    this.maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024),
     this.streamingChunkSizeKb = 1024,
     this.useNativeOdbcPool = false,
     this.nativePoolTestOnCheckout = true,

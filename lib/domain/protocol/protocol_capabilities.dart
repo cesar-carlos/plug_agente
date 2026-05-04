@@ -55,7 +55,7 @@ class ProtocolCapabilities {
       'plugProfile': ProtocolVersion.plugProfile,
       'orderedBatchResponses': true,
       'notificationNullIdCompatibility': true,
-      'paginationModes': ['page-offset', 'cursor-keyset'],
+      'paginationModes': ['page-offset', 'cursor-keyset', 'cursor-offset'],
       'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
       'errorFormat': 'structured-error-data',
       // Backpressure window hints communicate the agent's preferred and maximum

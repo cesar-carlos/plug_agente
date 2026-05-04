@@ -74,6 +74,10 @@ void main() {
         config.negotiatedExtensions['transportFrame'],
         'payload-frame/1.0',
       );
+      expect(
+        config.negotiatedExtensions['paginationModes'],
+        contains('cursor-offset'),
+      );
     });
 
     test('should select json encoding when both support it', () {

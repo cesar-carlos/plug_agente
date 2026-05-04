@@ -23,7 +23,9 @@ class OdbcNativeMetricsService {
   final IOdbcConnectionSettings? _settings;
 
   Future<Result<Map<String, dynamic>>> collectSnapshot() async {
-    final metricsResult = await _service.getMetrics();
+    final metricsFuture = _service.getMetrics();
+    final preparedFuture = _service.getPreparedStatementsMetrics();
+    final metricsResult = await metricsFuture;
     if (metricsResult.isError()) {
       return Failure(
         OdbcFailureMapper.mapConnectionError(
@@ -33,7 +35,7 @@ class OdbcNativeMetricsService {
       );
     }
 
-    final preparedResult = await _service.getPreparedStatementsMetrics();
+    final preparedResult = await preparedFuture;
     if (preparedResult.isError()) {
       return Failure(
         OdbcFailureMapper.mapConnectionError(
@@ -46,16 +48,20 @@ class OdbcNativeMetricsService {
     final metrics = metricsResult.getOrThrow();
     final prepared = preparedResult.getOrThrow();
     final resolvedConnectionString = await _resolveConnectionString();
-    final validationSnapshot = await _collectValidationSnapshot(
+    final validationFuture = _collectValidationSnapshot(
       resolvedConnectionString,
     );
-    final capabilitiesSnapshot = await _collectCapabilitiesSnapshot(
+    final capabilitiesFuture = _collectCapabilitiesSnapshot(
       resolvedConnectionString,
     );
-    final nativePoolSnapshot = await _collectNativePoolSnapshot(
+    final nativePoolFuture = _collectNativePoolSnapshot(
       resolvedConnectionString,
     );
-    final appPoolSnapshot = await _collectAppPoolSnapshot();
+    final appPoolFuture = _collectAppPoolSnapshot();
+    final validationSnapshot = await validationFuture;
+    final capabilitiesSnapshot = await capabilitiesFuture;
+    final nativePoolSnapshot = await nativePoolFuture;
+    final appPoolSnapshot = await appPoolFuture;
 
     return Success(<String, dynamic>{
       'engine': <String, dynamic>{

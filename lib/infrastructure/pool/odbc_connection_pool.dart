@@ -6,6 +6,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
@@ -39,8 +40,17 @@ class OdbcConnectionPool implements IConnectionPool {
   final Map<String, Set<String>> _leasedIdsByConnectionString = {};
   final Set<String> _leasedIds = {};
 
+  bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
+
+  bool _shouldForceFinalizeLeaseOnDisconnectError(Object error) {
+    return _messageIndicatesInvalidConnectionId(error) || OdbcErrorInspector.isTimeout(error);
+  }
+
   @override
-  Future<Result<String>> acquire(String connectionString) async {
+  Future<Result<String>> acquire(
+    String connectionString, {
+    ConnectionOptions? options,
+  }) async {
     try {
       await _semaphore.acquire(
         timeout: _acquireTimeout,
@@ -73,13 +83,23 @@ class OdbcConnectionPool implements IConnectionPool {
       );
     }
 
-    final options = OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+    final resolvedOptions = options ?? OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
     late Result<Connection> connectResult;
     try {
-      connectResult = await _service.connect(
-        connectionString,
-        options: options,
-      );
+      try {
+        connectResult = await _service.connect(
+          connectionString,
+          options: resolvedOptions,
+        );
+      } on Object catch (error) {
+        _semaphore.release();
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'pool_acquire',
+          ),
+        );
+      }
     } finally {
       _nativeHandshakeSemaphore.release();
     }
@@ -109,55 +129,22 @@ class OdbcConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> release(String connectionId) async {
-    final hadLease = _removeLeaseTracking(connectionId);
-    if (hadLease) {
-      _semaphore.release();
-    }
-    var handshakeHeld = false;
-    try {
-      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
-      handshakeHeld = true;
-    } on TimeoutException catch (error) {
-      developer.log(
-        'ODBC native handshake slot timeout during release; disconnecting anyway',
-        name: 'connection_pool',
-        level: 900,
-        error: error,
-      );
-    }
-
-    late Result<void> disconnectResult;
-    try {
-      disconnectResult = await _service.disconnect(connectionId);
-    } finally {
-      if (handshakeHeld) {
-        _nativeHandshakeSemaphore.release();
-      }
-    }
-
-    return disconnectResult.fold(
-      (_) => const Success(unit),
-      (error) {
-        _metrics?.recordPoolReleaseFailure();
-        developer.log(
-          'Failed to disconnect leased ODBC connection $connectionId',
-          name: 'connection_pool',
-          level: 900,
-          error: error,
-        );
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_release',
-          ),
-        );
-      },
+    return _disconnectLeasedConnection(
+      connectionId,
+      operation: 'pool_release',
+      logMessage: 'Failed to disconnect leased ODBC connection $connectionId',
+      releaseLeaseOnFailure: false,
     );
   }
 
   @override
   Future<Result<void>> discard(String connectionId) async {
-    return release(connectionId);
+    return _disconnectLeasedConnection(
+      connectionId,
+      operation: 'pool_discard',
+      logMessage: 'Failed to discard leased ODBC connection $connectionId',
+      releaseLeaseOnFailure: true,
+    );
   }
 
   @override
@@ -195,13 +182,14 @@ class OdbcConnectionPool implements IConnectionPool {
   /// releases them immediately. This ensures connections are ready and reduces
   /// cold-start latency.
   ///
-  /// Failures during warm-up are logged but don't stop the process.
-  Future<void> warmUp(
+  /// Returns aggregated failures when cleanup or acquisition cannot complete.
+  Future<Result<void>> warmUp(
     String connectionString, {
     int? warmUpCount,
   }) async {
     final count = warmUpCount ?? (_settings.poolSize / 2).ceil();
     final connectionIds = <String>[];
+    final errors = <String>[];
 
     developer.log(
       'Warming up connection pool with $count connections',
@@ -221,6 +209,7 @@ class OdbcConnectionPool implements IConnectionPool {
               level: 900,
               error: error,
             );
+            errors.add('warmup_acquire_${i + 1}: $error');
           },
         );
       }
@@ -231,16 +220,40 @@ class OdbcConnectionPool implements IConnectionPool {
         level: 800,
       );
     } finally {
-      // Release all warmed-up connections
       for (final id in connectionIds) {
-        unawaited(release(id));
+        final cleanup = await discard(id);
+        cleanup.fold(
+          (_) {},
+          (error) {
+            developer.log(
+              'Warm-up cleanup failed for $id',
+              name: 'connection_pool',
+              level: 900,
+              error: error,
+            );
+            errors.add('warmup_cleanup_$id: $error');
+          },
+        );
       }
     }
+
+    if (errors.isNotEmpty) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError(errors.join(', ')),
+          operation: 'pool_warm_up',
+        ),
+      );
+    }
+
+    return const Success(unit);
   }
 
   @override
   Future<Result<void>> recycle(String connectionString) async {
-    final ids = _leasedIdsByConnectionString.remove(connectionString);
+    final ids = _leasedIdsByConnectionString[connectionString]?.toList(
+      growable: false,
+    );
     if (ids == null || ids.isEmpty) {
       return const Success(unit);
     }
@@ -251,20 +264,123 @@ class OdbcConnectionPool implements IConnectionPool {
       level: 800,
     );
 
-    for (final id in ids.toList(growable: false)) {
-      await release(id);
+    final errors = <String>[];
+    for (final id in ids) {
+      final result = await release(id);
+      if (result.isError()) {
+        final error = result.exceptionOrNull();
+        errors.add(error?.toString() ?? 'release failed');
+      }
+    }
+
+    if (errors.isNotEmpty) {
+      _metrics?.recordPoolRecycleFailure();
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          Exception(errors.join(', ')),
+          operation: 'pool_recycle',
+        ),
+      );
     }
     return const Success(unit);
   }
 
   @override
-  Future<Result<int>> getActiveCount() async {
-    return Success(_leasedIds.length);
+  Future<Result<int>> getActiveCount({String? connectionString}) async {
+    if (connectionString == null) {
+      return Success(_leasedIds.length);
+    }
+
+    return Success(
+      _leasedIdsByConnectionString[connectionString]?.length ?? 0,
+    );
   }
 
   @override
   Future<Result<void>> healthCheckAll() async {
     return const Success(unit);
+  }
+
+  Future<Result<void>> _disconnectLeasedConnection(
+    String connectionId, {
+    required String operation,
+    required String logMessage,
+    required bool releaseLeaseOnFailure,
+  }) async {
+    final hadLease = _leasedIds.contains(connectionId);
+
+    var handshakeHeld = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+      handshakeHeld = true;
+    } on TimeoutException catch (error) {
+      developer.log(
+        'ODBC native handshake slot timeout during release; disconnecting anyway',
+        name: 'connection_pool',
+        level: 900,
+        error: error,
+      );
+    }
+
+    late Result<void> disconnectResult;
+    try {
+      try {
+        disconnectResult = await _service.disconnect(connectionId);
+      } on Object catch (error) {
+        disconnectResult = Failure(
+          OdbcFailureMapper.mapPoolError(
+            error,
+            operation: operation,
+          ),
+        );
+      }
+    } finally {
+      if (handshakeHeld) {
+        _nativeHandshakeSemaphore.release();
+      }
+    }
+
+    return disconnectResult.fold(
+      (_) {
+        _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+        return const Success(unit);
+      },
+      (error) {
+        if (_messageIndicatesInvalidConnectionId(error)) {
+          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+          return const Success(unit);
+        }
+
+        _metrics?.recordPoolReleaseFailure();
+        developer.log(
+          logMessage,
+          name: 'connection_pool',
+          level: 900,
+          error: error,
+        );
+
+        if (releaseLeaseOnFailure || _shouldForceFinalizeLeaseOnDisconnectError(error)) {
+          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
+        }
+
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
+            error,
+            operation: operation,
+          ),
+        );
+      },
+    );
+  }
+
+  void _finalizeLeaseRelease(
+    String connectionId, {
+    required bool hadLease,
+  }) {
+    final removed = _removeLeaseTracking(connectionId);
+    if (hadLease && removed) {
+      _semaphore.release();
+    }
   }
 
   bool _removeLeaseTracking(String connectionId) {

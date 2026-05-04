@@ -20,7 +20,7 @@ class ConnectionConstants {
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
   static const Duration defaultTransactionalBatchTimeout = Duration(seconds: 60);
   static const Duration defaultStreamingQueryTimeout = Duration(minutes: 5);
-  static const int defaultMaxResultBufferBytes = 32 * 1024 * 1024;
+  static const int defaultMaxResultBufferBytes = 64 * 1024 * 1024;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
 
@@ -51,21 +51,18 @@ class ConnectionConstants {
   static const Duration defaultNativePoolConnectionTimeout = defaultPoolAcquireTimeout;
 
   /// ODBC pool size (configurable via ODBC_POOL_SIZE env var).
-  static int get poolSize =>
-      int.tryParse(_optionalEnv('ODBC_POOL_SIZE') ?? '') ?? defaultPoolSize;
+  static int get poolSize => int.tryParse(_optionalEnv('ODBC_POOL_SIZE') ?? '') ?? defaultPoolSize;
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
-  static int get sqlQueueMaxSize =>
-      int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;
+  static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;
 
   /// SQL execution queue maximum concurrent workers (configurable via SQL_QUEUE_MAX_WORKERS env var).
-  static int get sqlQueueMaxWorkers =>
-      int.tryParse(_optionalEnv('SQL_QUEUE_MAX_WORKERS') ?? '') ?? poolSize;
+  static int get sqlQueueMaxWorkers => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_WORKERS') ?? '') ?? poolSize;
 
   /// SQL execution queue enqueue timeout in seconds (configurable via SQL_QUEUE_TIMEOUT_SEC env var).
   static Duration get sqlQueueEnqueueTimeout => Duration(
-        seconds: int.tryParse(_optionalEnv('SQL_QUEUE_TIMEOUT_SEC') ?? '') ?? 5,
-      );
+    seconds: int.tryParse(_optionalEnv('SQL_QUEUE_TIMEOUT_SEC') ?? '') ?? 5,
+  );
 
   /// Circuit breaker failure threshold (configurable via CIRCUIT_BREAKER_FAILURE_THRESHOLD env var).
   static int get circuitBreakerFailureThreshold =>
@@ -73,19 +70,19 @@ class ConnectionConstants {
 
   /// Circuit breaker reset timeout in seconds (configurable via CIRCUIT_BREAKER_RESET_SEC env var).
   static Duration get circuitBreakerResetTimeout => Duration(
-        seconds: int.tryParse(_optionalEnv('CIRCUIT_BREAKER_RESET_SEC') ?? '') ?? 30,
-      );
+    seconds: int.tryParse(_optionalEnv('CIRCUIT_BREAKER_RESET_SEC') ?? '') ?? 30,
+  );
 
   /// Caps parallel connect/disconnect RPCs from the lease ODBC pool into
   /// odbc_fast. Unbounded bursts can queue past the worker's reply deadline.
   static int leasePoolNativeHandshakeConcurrency(int poolSize) {
-    // Allow full parallelism up to poolSize for fallback scenarios where
-    // many direct connections happen simultaneously (e.g. native pool with
-    // invalid IDs). The worker should handle this with its own queueing.
+    // The ODBC async worker stays more reliable when connect/disconnect
+    // handshakes are bounded to a small fan-out instead of matching the full
+    // app-level pool concurrency.
     if (poolSize < 1) {
       return 1;
     }
-    return poolSize;
+    return poolSize > 2 ? 2 : poolSize;
   }
 
   static const int socketConnectionTimeoutMs = 10000;
@@ -137,6 +134,17 @@ class ConnectionConstants {
   /// Max distinct agent+credential scopes tracked by the getPolicy rate limiter at once.
   /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS` (`0` = no cap on distinct keys).
   static const int clientTokenGetPolicyDefaultMaxScopeKeys = 8192;
+
+  /// Minimum wall-clock interval between HTTP token refresh attempts during hub
+  /// recovery (reduces auth endpoint load when the transport is still failing).
+  static const Duration hubTokenRefreshMinInterval = Duration(seconds: 5);
+
+  /// When hub reconnect logs omit user-facing error text (`recordErrorMessage: false`),
+  /// emit a warning every N failures to avoid log storms during persistent retry.
+  static const int hubReconnectFailureLogThrottleStride = 10;
+
+  /// Log hub reachability probes that exceed this duration (diagnostics).
+  static const int hubAvailabilityProbeSlowLogThresholdMs = 1000;
 
   /// UTF-8 JSON size above which message tracing replaces the raw payload with a
   /// summary (when `FeatureFlags.enableSocketSummarizeLargePayloadLogs` is on).

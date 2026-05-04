@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
@@ -13,6 +14,7 @@ class MockOdbcService extends Mock implements OdbcService {}
 void main() {
   setUpAll(() {
     registerFallbackValue(const PoolOptions());
+    registerFallbackValue(const ConnectionOptions());
   });
 
   group('OdbcNativeConnectionPool', () {
@@ -151,6 +153,17 @@ void main() {
       expect(capturedOptions.idleTimeout, ConnectionConstants.defaultNativePoolIdleTimeout);
       expect(capturedOptions.maxLifetime, ConnectionConstants.defaultNativePoolMaxLifetime);
       expect(capturedOptions.connectionTimeout, ConnectionConstants.defaultNativePoolConnectionTimeout);
+    });
+
+    test('should reject custom connection options explicitly', () async {
+      final result = await pool.acquire(
+        'DSN=Options',
+        options: const ConnectionOptions(queryTimeout: Duration(seconds: 5)),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ConfigurationFailure>());
+      verifyNever(() => mockService.poolCreate(any(), any(), options: any(named: 'options')));
     });
 
     test('should close created pools and clear internal state', () async {
@@ -390,6 +403,56 @@ void main() {
 
       expect(count.isSuccess(), isTrue);
       expect(count.getOrThrow(), 6);
+    });
+
+    test('getActiveCount can scope active connections by connection string', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((invocation) async {
+        final connectionString = invocation.positionalArguments.first as String;
+        return Success(connectionString.contains('Alpha') ? 51 : 52);
+      });
+      when(() => mockService.poolGetConnection(51)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'alpha-1',
+            connectionString: 'DSN=Alpha',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolGetConnection(52)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'beta-1',
+            connectionString: 'DSN=Beta',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolGetState(51)).thenAnswer(
+        (_) async => const Success(PoolState(size: 5, idle: 1)),
+      );
+      when(() => mockService.poolGetState(52)).thenAnswer(
+        (_) async => const Success(PoolState(size: 3, idle: 2)),
+      );
+
+      await pool.acquire('DSN=Alpha');
+      await pool.acquire('DSN=Beta');
+
+      final alphaCount = await pool.getActiveCount(connectionString: 'DSN=Alpha');
+      final betaCount = await pool.getActiveCount(connectionString: 'DSN=Beta');
+      final allCount = await pool.getActiveCount();
+
+      expect(alphaCount.getOrThrow(), 4);
+      expect(betaCount.getOrThrow(), 1);
+      expect(allCount.getOrThrow(), 5);
     });
 
     test('getActiveCount returns failure when pool state cannot be read', () async {

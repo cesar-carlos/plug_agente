@@ -73,5 +73,36 @@ void main() {
         expect(info.nextCursor, isNotNull);
       },
     );
+
+    test('should emit offset fallback cursor when last ordered row contains null', () {
+      const pagination = QueryPaginationRequest(
+        page: 1,
+        pageSize: 2,
+        queryHash: 'qh',
+        orderBy: [
+          QueryPaginationOrderTerm(
+            expression: 'created_at',
+            lookupKey: 'created_at',
+          ),
+        ],
+      );
+      final rawData = [
+        {'created_at': '2026-05-01T00:00:00Z'},
+        {'created_at': null},
+        {'created_at': '2026-05-03T00:00:00Z'},
+      ];
+
+      final info = OdbcGatewayQueryResultMapper.buildPaginationResponse(
+        pagination,
+        rawData,
+      );
+
+      expect(info, isNotNull);
+      final decoded = QueryPaginationCursor.fromToken(info!.nextCursor!);
+      expect(info.hasNextPage, isTrue);
+      expect(decoded.offset, 2);
+      expect(decoded.page, 2);
+      expect(decoded.isStableCursor, isFalse);
+    });
   });
 }

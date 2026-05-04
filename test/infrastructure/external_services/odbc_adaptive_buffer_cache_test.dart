@@ -20,5 +20,27 @@ void main() {
 
       expect(hint, greaterThan(2097152));
     });
+
+    test('should expire hints after ttl', () async {
+      final cache = OdbcAdaptiveBufferCache(
+        entryTtl: const Duration(milliseconds: 10),
+      );
+
+      cache.rememberExpandedBuffer(
+        connectionString: 'DSN=Test',
+        sql: 'SELECT * FROM users',
+        currentBufferBytes: 1024 * 1024,
+        errorMessage: 'buffer too small: need 2097152 bytes',
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final hint = cache.lookup(
+        connectionString: 'DSN=Test',
+        sql: 'SELECT * FROM users',
+      );
+
+      expect(hint, isNull);
+    });
   });
 }
