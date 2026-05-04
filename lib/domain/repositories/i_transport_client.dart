@@ -26,4 +26,8 @@ abstract class ITransportClient {
   /// Reports hub transport lifecycle after the initial connect Future settles.
   /// Pass null to clear the callback.
   void setOnHubLifecycle(void Function(HubLifecycleNotification notification)? callback);
+
+  /// Optional correlation id appended to `resilience:` transport logs; set by
+  /// the connection presentation layer during hub recovery. Pass null to clear.
+  void setResilienceLogContext(String? recoveryId);
 }

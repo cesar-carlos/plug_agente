@@ -64,6 +64,9 @@ class _FakeTransport implements ITransportClient {
 
   @override
   void setOnHubLifecycle(void Function(HubLifecycleNotification)? callback) => onHubLifecycle = callback;
+
+  @override
+  void setResilienceLogContext(String? recoveryId) {}
 }
 
 Future<void> _waitForStatus(

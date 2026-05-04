@@ -69,6 +69,9 @@ class FakeTransportClient implements ITransportClient {
     onHubLifecycle = callback;
   }
 
+  @override
+  void setResilienceLogContext(String? recoveryId) {}
+
   void triggerReconnectionNeeded() => onReconnectionNeeded?.call();
   void triggerTokenExpired() => onTokenExpired?.call();
 

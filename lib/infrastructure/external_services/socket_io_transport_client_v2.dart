@@ -134,6 +134,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
   late final RpcInboundHandler _inboundHandler;
 
   io.Socket? _socket;
+  String? _resilienceRecoveryId;
+  String _resilienceLogPrefix() {
+    final id = _resilienceRecoveryId;
+    if (id == null || id.isEmpty) {
+      return '';
+    }
+    return 'recovery_id=$id ';
+  }
+
   String _agentId = '';
   ProtocolConfig _currentProtocol = const ProtocolConfig(
     protocol: 'jsonrpc-v2',
@@ -180,6 +189,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
   @override
   void setOnHubLifecycle(void Function(HubLifecycleNotification notification)? callback) {
     _onHubLifecycle = callback;
+  }
+
+  @override
+  void setResilienceLogContext(String? recoveryId) {
+    final trimmed = recoveryId?.trim();
+    _resilienceRecoveryId = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
   void _logMessage(String direction, String event, dynamic data) {
@@ -356,6 +371,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('connect', (_) async {
         timeoutTimer?.cancel();
         _logMessage('RECEIVED', 'connect', null);
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_connected agent_id=$_agentId',
+        );
         _authorizationDecisionLogger.resetSessionState();
         _heartbeat.resetTransientState();
         await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
@@ -367,6 +385,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       _socket!.on('reconnect', (_) async {
         _logMessage('RECEIVED', 'reconnect', null);
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_reconnected '
+          'agent_id=$_agentId',
+        );
         _heartbeat.resetTransientState();
         await _capabilitiesNegotiator.sendReRegisterAfterReconnect();
       });
@@ -374,12 +396,20 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('reconnect_attempt', (dynamic data) {
         _logMessage('RECEIVED', 'reconnect_attempt', data);
         final n = data is int ? data : (data is num ? data.toInt() : int.tryParse('$data'));
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_attempt '
+          'attempt=$n agent_id=$_agentId',
+        );
         _onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: n));
       });
 
       _socket!.on('reconnect_failed', (_) {
         _logMessage('ERROR', 'reconnect_failed', null);
-        AppLogger.error('Reconnection failed after multiple attempts');
+        AppLogger.error(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_exhausted '
+          'agent_id=$_agentId — Socket.IO gave up after repeated transport reconnects; '
+          'escalating to application-level hub recovery',
+        );
         _onReconnectionNeeded?.call();
       });
 
@@ -399,9 +429,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _heartbeat.stop();
         unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
         final asString = reason is String ? reason : reason?.toString();
+        final serverInitiated = _isServerInitiatedDisconnect(asString);
+        final disconnectLine =
+            'resilience: ${_resilienceLogPrefix()}socket_transport event=disconnect '
+            'kind=${serverInitiated ? "io_server_disconnect" : "client_or_network"} '
+            'reason=${asString ?? "unknown"} agent_id=$_agentId '
+            '${serverInitiated ? "action=schedule_full_hub_reconnect" : "action=await_transport_reconnect"}';
+        if (serverInitiated) {
+          AppLogger.warning(disconnectLine);
+        } else {
+          AppLogger.info(disconnectLine);
+        }
         _onHubLifecycle?.call(HubTransportDisconnected(reason: asString));
-        if (_isServerInitiatedDisconnect(asString)) {
-          AppLogger.warning('Server disconnected the Socket.IO namespace; scheduling fresh hub reconnect');
+        if (serverInitiated) {
           _onReconnectionNeeded?.call();
         }
       });
@@ -439,12 +479,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       _socket!.connect();
 
+      AppLogger.info(
+        'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_started '
+        'agent_id=$_agentId',
+      );
+
       timeoutTimer = Timer(
         const Duration(
           milliseconds: ConnectionConstants.socketConnectionTimeoutMs,
         ),
         () {
           if (!completer.isCompleted) {
+            AppLogger.warning(
+              'resilience: ${_resilienceLogPrefix()}socket_transport event=initial_connect_timeout '
+              'timeout_ms=${ConnectionConstants.socketConnectionTimeoutMs} '
+              'agent_id=$_agentId',
+            );
             _socket?.dispose();
             _socket = null;
             completer.complete(
@@ -461,6 +511,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
       return await completer.future;
     } on Exception catch (e) {
+      AppLogger.error(
+        'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_exception agent_id=$_agentId',
+        e,
+      );
       _socket?.dispose();
       _socket = null;
       return Failure(
@@ -496,11 +550,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _heartbeat.start();
 
         if (wasPostReconnect) {
+          AppLogger.info(
+            'resilience: ${_resilienceLogPrefix()}socket_transport event=post_reconnect_capabilities_ok '
+            'protocol=${_currentProtocol.protocol} agent_id=$_agentId',
+          );
           _onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
         }
       case CapabilitiesNegotiationFailure(:final error, :final stackTrace):
         AppLogger.error(
-          'Failed to negotiate mandatory transport contract',
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=capabilities_negotiation_failed '
+          'agent_id=$_agentId — mandatory transport contract rejected',
           error,
           stackTrace,
         );
@@ -562,7 +621,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final errorMessage = structured?.message ?? error.toString();
     final errorObj = error as Object? ?? Exception(errorMessage);
     final failure = _buildConnectionFailure(errorMessage, errorObj);
-    AppLogger.error('Connection error: ${failure.message}', failure.toTechnicalMessage());
+    AppLogger.error(
+      'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_error ${failure.message}',
+      failure.toTechnicalMessage(),
+    );
 
     if (!completer.isCompleted) {
       _socket?.dispose();
@@ -587,7 +649,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final errorMessage = structured?.message ?? error.toString();
     final errorObj = error as Object? ?? Exception(errorMessage);
     final failure = _buildConnectionFailure(errorMessage, errorObj);
-    AppLogger.error('Socket error: ${failure.message}', failure.toTechnicalMessage());
+    AppLogger.error(
+      'resilience: ${_resilienceLogPrefix()}socket_transport event=socket_error ${failure.message}',
+      failure.toTechnicalMessage(),
+    );
 
     if (_isAuthRelated(structured, errorMessage)) {
       _onTokenExpired?.call();

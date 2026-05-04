@@ -135,6 +135,7 @@ class ConnectionProvider extends ChangeNotifier {
   bool _persistentRetryInFlight = false;
   DateTime? _lastHubRefreshHttpCompletedAt;
   int _reconnectQuietFailureLogCount = 0;
+  String? _resilienceRecoveryId;
 
   static const Duration _defaultInitialReconnectDelay = Duration(
     seconds: AppConstants.reconnectIntervalSeconds,
@@ -205,6 +206,37 @@ class ConnectionProvider extends ChangeNotifier {
   bool get isReconnecting => _isReconnecting || _status == ConnectionStatus.reconnecting;
   bool get isCheckingDriver => _isCheckingDriver;
 
+  String _resilienceLogPrefix() {
+    final id = _resilienceRecoveryId;
+    if (id == null || id.isEmpty) {
+      return '';
+    }
+    return 'recovery_id=$id ';
+  }
+
+  void _syncTransportResilienceLogContext() {
+    final transport = _transportClientOverride;
+    if (transport != null) {
+      transport.setResilienceLogContext(_resilienceRecoveryId);
+      return;
+    }
+    if (getIt.isRegistered<ITransportClient>()) {
+      getIt<ITransportClient>().setResilienceLogContext(_resilienceRecoveryId);
+    }
+  }
+
+  void _beginResilienceRecovery() {
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final entropy = _random?.nextInt(0x100000) ?? 0;
+    _resilienceRecoveryId = 'rec-${stamp}_${entropy.toRadixString(16)}';
+    _syncTransportResilienceLogContext();
+  }
+
+  void _clearResilienceRecovery() {
+    _resilienceRecoveryId = null;
+    _syncTransportResilienceLogContext();
+  }
+
   Future<void> connect(
     String serverUrl,
     String agentId, {
@@ -217,6 +249,7 @@ class ConnectionProvider extends ChangeNotifier {
     _sessionAuthInvalid = false;
     _lastHubRefreshHttpCompletedAt = null;
     _reconnectQuietFailureLogCount = 0;
+    _clearResilienceRecovery();
     _isDisconnectRequested = false;
     _lastServerUrl = serverUrl;
     _lastAgentId = agentId;
@@ -243,6 +276,7 @@ class ConnectionProvider extends ChangeNotifier {
       (_) {
         if (_isDisconnectRequested) return;
         _cancelPersistentRetryTimer();
+        _clearResilienceRecovery();
         _status = ConnectionStatus.connected;
         _error = '';
         AppLogger.info('Connected to hub successfully');
@@ -266,6 +300,7 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
+    _clearResilienceRecovery();
     _cancelPersistentRetryTimer();
     _hardReloginAttemptedInCycle = false;
     _consecutiveReconnectFailures = 0;
@@ -359,6 +394,10 @@ class ConnectionProvider extends ChangeNotifier {
         AppLogger.warning(
           'Hub reported authentication failure during reconnect; refreshing token',
         );
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}token_refresh event=during_reconnect_burst '
+          'agent_id=${context.agentId}',
+        );
         await _tryRefreshToken(context.serverUrl);
       }
       return;
@@ -372,17 +411,20 @@ class ConnectionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      _beginResilienceRecovery();
       final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
       await transportClient.disconnect();
 
       final context = _resolveConnectionContext();
       if (context == null) {
+        _clearResilienceRecovery();
         _status = ConnectionStatus.error;
         _error = 'Connection context unavailable for token refresh';
         AppLogger.error('Cannot refresh token without connection context');
       } else {
         final refreshedToken = await _tryRefreshToken(context.serverUrl);
         if (refreshedToken == null) {
+          _clearResilienceRecovery();
           _status = ConnectionStatus.error;
           _error = 'Failed to refresh authentication token';
           AppLogger.error('Token refresh failed during reconnect policy');
@@ -409,6 +451,7 @@ class ConnectionProvider extends ChangeNotifier {
         }
       }
     } on Exception catch (error, stackTrace) {
+      _clearResilienceRecovery();
       _status = ConnectionStatus.error;
       final failure = domain_errors.ConnectionFailure.withContext(
         message: 'Failed to refresh token',
@@ -429,6 +472,10 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> _handleReconnectionNeeded() async {
     if (_isReconnecting || _isDisconnectRequested) {
+      AppLogger.debug(
+        'resilience: ${_resilienceLogPrefix()}reconnect event=handler_skipped '
+        'reconnecting=$_isReconnecting disconnect_requested=$_isDisconnectRequested',
+      );
       return;
     }
 
@@ -446,15 +493,28 @@ class ConnectionProvider extends ChangeNotifier {
         _error = 'Server URL or Agent ID not available for reconnection';
         AppLogger.error('Missing server URL or agent ID for reconnection');
       } else {
+        _beginResilienceRecovery();
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}reconnect event=full_recovery_started '
+          'agent_id=${context.agentId}',
+        );
         final connected = await _recoverConnection(context);
         if (_isDisconnectRequested) {
           _status = ConnectionStatus.disconnected;
           _error = '';
           AppLogger.info('Reconnection loop cancelled by user disconnect');
+          _clearResilienceRecovery();
           return;
+        }
+        if (connected) {
+          AppLogger.info(
+            'resilience: ${_resilienceLogPrefix()}reconnect event=burst_recovery_complete '
+            'agent_id=${context.agentId}',
+          );
         }
         if (!connected) {
           if (_isDisconnectRequested) {
+            _clearResilienceRecovery();
             return;
           }
           _status = ConnectionStatus.reconnecting;
@@ -464,6 +524,7 @@ class ConnectionProvider extends ChangeNotifier {
         }
       }
     } on Exception catch (error, stackTrace) {
+      _clearResilienceRecovery();
       _status = ConnectionStatus.error;
       final failure = domain_errors.ConnectionFailure.withContext(
         message: 'Failed to reconnect to the hub',
@@ -483,20 +544,24 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   Future<bool> _recoverConnection(_ConnectionContext context) async {
+    AppLogger.info(
+      'resilience: ${_resilienceLogPrefix()}burst_recovery event=started max_attempts=$_maxReconnectAttempts '
+      'agent_id=${context.agentId}',
+    );
     await _tryRefreshToken(context.serverUrl);
     var authToken = _resolveAuthTokenForReconnect();
     for (var attempt = 1; attempt <= _maxReconnectAttempts && !_isDisconnectRequested; attempt++) {
       final delay = _computeReconnectDelay(attempt);
       if (delay > Duration.zero) {
         AppLogger.info(
-          'resilience: reconnect_delay_ms attempt=$attempt '
+          'resilience: ${_resilienceLogPrefix()}reconnect_delay_ms attempt=$attempt '
           'delay_ms=${delay.inMilliseconds} agent_id=${context.agentId}',
         );
         await Future<void>.delayed(delay);
       }
 
       AppLogger.info(
-        'resilience: connect_attempt attempt=$attempt agent_id=${context.agentId}',
+        'resilience: ${_resilienceLogPrefix()}connect_attempt attempt=$attempt agent_id=${context.agentId}',
       );
       final hubReachable = await _isHubReachableForReconnect(
         context.serverUrl,
@@ -504,7 +569,7 @@ class ConnectionProvider extends ChangeNotifier {
       );
       if (!hubReachable) {
         AppLogger.info(
-          'resilience: hub_unreachable_skip_connect attempt=$attempt agent_id=${context.agentId}',
+          'resilience: ${_resilienceLogPrefix()}hub_unreachable_skip_connect attempt=$attempt agent_id=${context.agentId}',
         );
         continue;
       }
@@ -553,7 +618,8 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     AppLogger.warning(
-      'Connection recovery exhausted maximum attempts ($_maxReconnectAttempts)',
+      'resilience: ${_resilienceLogPrefix()}burst_recovery event=exhausted max_attempts=$_maxReconnectAttempts '
+      'agent_id=${context.agentId}',
     );
     return false;
   }
@@ -584,7 +650,10 @@ class ConnectionProvider extends ChangeNotifier {
         if (authToken != null && authToken.trim().isNotEmpty) {
           _lastAuthToken = authToken.trim();
         }
-        AppLogger.info('Reconnection attempt succeeded');
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}hub_connect event=succeeded agent_id=$agentId',
+        );
+        _clearResilienceRecovery();
         return true;
       },
       (Object failure) {
@@ -601,7 +670,7 @@ class ConnectionProvider extends ChangeNotifier {
           const stride = ConnectionConstants.hubReconnectFailureLogThrottleStride;
           if (_reconnectQuietFailureLogCount == 1 || _reconnectQuietFailureLogCount % stride == 0) {
             AppLogger.warning(
-              'resilience: reconnect event=attempt_failed_throttled '
+              'resilience: ${_resilienceLogPrefix()}reconnect event=attempt_failed_throttled '
               'count=$_reconnectQuietFailureLogCount stride=$stride '
               'display=${failure.toDisplayMessage()}',
               failure.toTechnicalMessage(),
@@ -618,16 +687,21 @@ class ConnectionProvider extends ChangeNotifier {
       return;
     }
     switch (notification) {
-      case HubTransportDisconnected():
+      case HubTransportDisconnected(:final reason):
         if (_status == ConnectionStatus.disconnected) {
           return;
         }
+        AppLogger.warning(
+          'resilience: ${_resilienceLogPrefix()}hub_transport event=socket_disconnected '
+          'reason=${reason ?? "unknown"} '
+          'agent_id=${_lastAgentId ?? "?"}',
+        );
         _status = ConnectionStatus.reconnecting;
         _error = '';
         notifyListeners();
       case HubTransportReconnectAttempt(:final attemptNumber):
         AppLogger.info(
-          'resilience: hub_socket_reconnect_attempt attempt=$attemptNumber '
+          'resilience: ${_resilienceLogPrefix()}hub_socket_reconnect_attempt attempt=$attemptNumber '
           'status=${_status.name}',
         );
         if (_status == ConnectionStatus.connected) {
@@ -636,6 +710,11 @@ class ConnectionProvider extends ChangeNotifier {
           notifyListeners();
         }
       case HubTransportAutoReconnectSucceeded():
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}hub_transport event=auto_reconnect_capabilities_ok '
+          'agent_id=${_lastAgentId ?? "?"}',
+        );
+        _clearResilienceRecovery();
         _cancelPersistentRetryTimer();
         _status = ConnectionStatus.connected;
         _error = '';
@@ -652,6 +731,13 @@ class ConnectionProvider extends ChangeNotifier {
     _cancelPersistentRetryTimer();
     _persistentRetryTickCount = 0;
     _persistentFailureCount = 0;
+    final ctx = _resolveConnectionContext();
+    AppLogger.warning(
+      'resilience: ${_resilienceLogPrefix()}persistent_retry event=started '
+      'interval_ms=${_effectiveHubPersistentRetryInterval.inMilliseconds} '
+      'max_failed_ticks=$_effectiveHubPersistentRetryMaxFailedTicks '
+      'agent_id=${ctx?.agentId ?? "?"}',
+    );
     unawaited(_persistentRetryTick());
     _hubPersistentRetryTimer = Timer.periodic(_effectiveHubPersistentRetryInterval, (_) {
       unawaited(_persistentRetryTick());
@@ -671,13 +757,17 @@ class ConnectionProvider extends ChangeNotifier {
       }
       final context = _resolveConnectionContext();
       if (context == null) {
-        AppLogger.warning('persistent hub retry skipped: missing server URL or agent ID');
+        AppLogger.warning(
+          'resilience: ${_resilienceLogPrefix()}persistent_retry event=context_missing '
+          'reason=missing_server_url_or_agent_id',
+        );
+        _clearResilienceRecovery();
         _cancelPersistentRetryTimer();
         return;
       }
       _persistentRetryTickCount++;
       AppLogger.info(
-        'resilience: hub_persistent_retry_tick tick=$_persistentRetryTickCount '
+        'resilience: ${_resilienceLogPrefix()}hub_persistent_retry_tick tick=$_persistentRetryTickCount '
         'agent_id=${context.agentId}',
       );
       if (_persistentRetryTickCount % _tokenRefreshIntervalAttempts == 0) {
@@ -689,7 +779,7 @@ class ConnectionProvider extends ChangeNotifier {
       );
       if (!hubReachable) {
         AppLogger.info(
-          'resilience: hub_unreachable_skip_connect tick=$_persistentRetryTickCount agent_id=${context.agentId}',
+          'resilience: ${_resilienceLogPrefix()}hub_unreachable_skip_connect tick=$_persistentRetryTickCount agent_id=${context.agentId}',
         );
         return;
       }
@@ -701,6 +791,12 @@ class ConnectionProvider extends ChangeNotifier {
         recordErrorMessage: false,
       );
       if (ok || _isDisconnectRequested) {
+        if (ok) {
+          AppLogger.info(
+            'resilience: ${_resilienceLogPrefix()}persistent_retry event=hub_reconnect_succeeded '
+            'tick=$_persistentRetryTickCount agent_id=${context.agentId}',
+          );
+        }
         return;
       }
       if (_shouldEscalateToHardRelogin) {
@@ -724,7 +820,7 @@ class ConnectionProvider extends ChangeNotifier {
       if (_effectiveHubPersistentRetryMaxFailedTicks > 0) {
         _persistentFailureCount++;
         AppLogger.info(
-          'resilience: hub_persistent_retry_failure '
+          'resilience: ${_resilienceLogPrefix()}hub_persistent_retry_failure '
           'count=$_persistentFailureCount '
           'max=$_effectiveHubPersistentRetryMaxFailedTicks '
           'agent_id=${context.agentId}',
@@ -733,6 +829,13 @@ class ConnectionProvider extends ChangeNotifier {
           _cancelPersistentRetryTimer();
           _status = ConnectionStatus.error;
           _error = ConnectionConstants.hubPersistentRetryExhaustedMessage;
+          AppLogger.warning(
+            'resilience: ${_resilienceLogPrefix()}persistent_retry event=exhausted '
+            'failures=$_persistentFailureCount '
+            'max=$_effectiveHubPersistentRetryMaxFailedTicks '
+            'agent_id=${context.agentId}',
+          );
+          _clearResilienceRecovery();
           notifyListeners();
         }
       }
@@ -761,7 +864,7 @@ class ConnectionProvider extends ChangeNotifier {
         last != null &&
         DateTime.now().difference(last) < minGap) {
       AppLogger.debug(
-        'resilience: token_refresh event=skipped_min_interval '
+        'resilience: ${_resilienceLogPrefix()}token_refresh event=skipped_min_interval '
         'min_interval_ms=${minGap.inMilliseconds} '
         'elapsed_ms=${DateTime.now().difference(last).inMilliseconds}',
       );
@@ -782,7 +885,7 @@ class ConnectionProvider extends ChangeNotifier {
         (Object failure) {
           if (failure is domain_errors.Failure && failure.isTransient) {
             AppLogger.warning(
-              'resilience: token_refresh event=transient_failure '
+              'resilience: ${_resilienceLogPrefix()}token_refresh event=transient_failure '
               'display=${failure.toDisplayMessage()} '
               'technical=${failure.toTechnicalMessage()}',
             );
@@ -846,13 +949,13 @@ class ConnectionProvider extends ChangeNotifier {
     final elapsedMs = sw.elapsedMilliseconds;
     if (elapsedMs >= ConnectionConstants.hubAvailabilityProbeSlowLogThresholdMs) {
       AppLogger.info(
-        'resilience: hub_probe_slow elapsed_ms=$elapsedMs stage=$stage server=$serverUrl '
+        'resilience: ${_resilienceLogPrefix()}hub_probe_slow elapsed_ms=$elapsedMs stage=$stage server=$serverUrl '
         'reachable=$isReachable',
       );
     }
     if (!isReachable) {
       AppLogger.info(
-        'resilience: hub_probe_offline stage=$stage server=$serverUrl elapsed_ms=$elapsedMs',
+        'resilience: ${_resilienceLogPrefix()}hub_probe_offline stage=$stage server=$serverUrl elapsed_ms=$elapsedMs',
       );
     }
     return isReachable;
@@ -873,6 +976,7 @@ class ConnectionProvider extends ChangeNotifier {
     final coordinator = _hubRecoveryAuthCoordinator;
     final authProvider = _authProvider;
     if (coordinator == null || authProvider == null) {
+      _clearResilienceRecovery();
       _status = ConnectionStatus.error;
       _error = 'Authentication provider unavailable for automatic relogin';
       _cancelPersistentRetryTimer();
@@ -880,7 +984,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     AppLogger.warning(
-      'resilience: escalating to automatic hard relogin after $_consecutiveReconnectFailures failures',
+      'resilience: ${_resilienceLogPrefix()}escalating to automatic hard relogin after $_consecutiveReconnectFailures failures',
     );
     await authProvider.logout();
 
@@ -901,6 +1005,7 @@ class ConnectionProvider extends ChangeNotifier {
         _status = ConnectionStatus.error;
         _error = failure.toDisplayMessage();
         _cancelPersistentRetryTimer();
+        _clearResilienceRecovery();
         return null;
       },
     );
