@@ -126,6 +126,8 @@ void main() async {
               ),
             });
           }
+          // Keep each bulk chunk on a single direct connection so the live
+          // load test does not trip pool/circuit-breaker pressure mid-batch.
           final insertReq = RpcRequest(
             jsonrpc: '2.0',
             method: 'sql.executeBatch',
@@ -133,7 +135,7 @@ void main() async {
             params: {
               'commands': commands,
               'options': {
-                'transaction': false,
+                'transaction': true,
                 'max_rows': take + 8,
               },
             },

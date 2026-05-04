@@ -719,6 +719,7 @@ void main() {
         hubPersistentRetryInterval: const Duration(milliseconds: 50),
         hubPersistentRetryMaxFailedTicks: 0,
         hubTokenRefreshMinInterval: Duration.zero,
+        hubHardReloginCooldown: Duration.zero,
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');

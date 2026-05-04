@@ -117,6 +117,30 @@ void main() {
       when(() => mockService.cancelStatement(any(), any())).thenAnswer((_) async {
         return const Success(unit);
       });
+      when(() => mockService.executeAsyncStart(any(), any())).thenAnswer((_) async {
+        return const Failure(
+          UnsupportedFeatureError(message: 'async execution unsupported'),
+        );
+      });
+      when(() => mockService.asyncPoll(any())).thenAnswer((_) async {
+        return const Success(1);
+      });
+      when(
+        () => mockService.asyncGetResult(
+          any(),
+          maxBufferBytes: any(named: 'maxBufferBytes'),
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(columns: [], rows: [], rowCount: 0),
+        );
+      });
+      when(() => mockService.asyncCancel(any())).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockService.asyncFree(any())).thenAnswer((_) async {
+        return const Success(unit);
+      });
     });
 
     test(
@@ -2546,6 +2570,205 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         verify(() => mockService.rollbackTransaction(ownedId, 99)).called(1);
         verify(() => mockService.disconnect(ownedId)).called(1);
         expect(metrics.transactionRollbackAttemptCount, 1);
+      },
+    );
+
+    test(
+      'should use native async request lifecycle for timed non-query without parameters',
+      () async {
+        const pooledConnectionId = 'pool-async-non-query-1';
+        const asyncRequestId = 41;
+        const sql = 'UPDATE users SET active = 1';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        var pollCount = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeAsyncStart(
+            pooledConnectionId,
+            sql,
+          ),
+        ).thenAnswer((_) async => const Success(asyncRequestId));
+        when(() => mockService.asyncPoll(asyncRequestId)).thenAnswer((_) async {
+          pollCount++;
+          return Success(pollCount == 1 ? 0 : 1);
+        });
+        when(
+          () => mockService.asyncGetResult(
+            asyncRequestId,
+            maxBufferBytes: any(named: 'maxBufferBytes'),
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(columns: [], rows: [], rowCount: 3),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeNonQuery(
+          sql,
+          null,
+          timeout: const Duration(milliseconds: 1200),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrNull(), 3);
+        verify(() => mockService.executeAsyncStart(pooledConnectionId, sql)).called(1);
+        verify(() => mockService.asyncPoll(asyncRequestId)).called(2);
+        verify(
+          () => mockService.asyncGetResult(
+            asyncRequestId,
+            maxBufferBytes: any(named: 'maxBufferBytes'),
+          ),
+        ).called(1);
+        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
+        verify(() => mockConnectionPool.release(pooledConnectionId)).called(1);
+        verifyNever(
+          () => mockService.prepare(
+            any(),
+            any(),
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        );
+        verifyNever(
+          () => mockService.executePrepared(
+            any(),
+            any(),
+            any(),
+            any(),
+          ),
+        );
+      },
+    );
+
+    test(
+      'should fallback to prepared timeout path when async request start is unsupported for non-query',
+      () async {
+        const pooledConnectionId = 'pool-async-fallback-1';
+        const sql = 'UPDATE users SET active = 1';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeAsyncStart(
+            pooledConnectionId,
+            sql,
+          ),
+        ).thenAnswer((_) async {
+          return const Failure(
+            UnsupportedFeatureError(message: 'async execution unsupported'),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeNonQuery(
+          sql,
+          null,
+          timeout: const Duration(milliseconds: 1200),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(() => mockService.executeAsyncStart(pooledConnectionId, sql)).called(1);
+        verify(
+          () => mockService.prepare(
+            pooledConnectionId,
+            sql,
+            timeoutMs: 1200,
+          ),
+        ).called(1);
+        final executePreparedCall = verify(
+          () => mockService.executePrepared(
+            pooledConnectionId,
+            9001,
+            captureAny(),
+            captureAny(),
+          ),
+        );
+        executePreparedCall.called(1);
+        expect(executePreparedCall.captured[0], isNull);
+        expect(executePreparedCall.captured[1], isA<StatementOptions>());
+        verify(() => mockService.closeStatement(pooledConnectionId, 9001)).called(1);
+      },
+    );
+
+    test(
+      'should cancel native async non-query request on timeout and discard pooled connection',
+      () async {
+        const pooledConnectionId = 'pool-async-timeout-1';
+        const asyncRequestId = 52;
+        const sql = 'UPDATE users SET active = 1';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeAsyncStart(
+            pooledConnectionId,
+            sql,
+          ),
+        ).thenAnswer((_) async => const Success(asyncRequestId));
+        when(() => mockService.asyncPoll(asyncRequestId)).thenAnswer((_) async {
+          return const Success(0);
+        });
+        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeNonQuery(
+          sql,
+          null,
+          timeout: const Duration(milliseconds: 20),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        expect(failure, isA<domain.QueryExecutionFailure>());
+        final queryFailure = failure! as domain.QueryExecutionFailure;
+        expect(queryFailure.context['timeout'], isTrue);
+        expect(queryFailure.context['reason'], 'query_timeout');
+        expect(metrics.timeoutCancelSuccessCount, 1);
+        verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
+        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
+        verifyNever(() => mockConnectionPool.release(pooledConnectionId));
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verifyNever(
+          () => mockService.prepare(
+            any(),
+            any(),
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        );
       },
     );
 

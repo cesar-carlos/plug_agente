@@ -146,6 +146,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
   final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
   static const int _multiResultSqlLogPreviewChars = 120;
+  static const int _asyncRequestPendingStatus = 0;
+  static const int _asyncRequestReadyStatus = 1;
+  static const int _asyncRequestErrorStatus = -1;
+  static const int _asyncRequestCancelledStatus = -2;
+  static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
     RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
@@ -237,6 +242,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
     }
     return _odbcErrorMessage(error);
+  }
+
+  Exception _asException(
+    Object? error, {
+    required String fallbackMessage,
+  }) {
+    if (error is Exception) {
+      return error;
+    }
+    if (error == null) {
+      return Exception(fallbackMessage);
+    }
+    return Exception(error.toString());
   }
 
   bool _isBufferTooSmallError(Object error) {
@@ -1919,6 +1937,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     try {
+      if (parameters == null || parameters.isEmpty) {
+        final asyncResult = await _runNativeAsyncQueryWithTimeout(
+          connectionId: connectionId,
+          query: query,
+          timeout: timeout,
+        );
+        if (asyncResult.isSuccess()) {
+          return asyncResult;
+        }
+
+        final asyncError = asyncResult.exceptionOrNull();
+        if (asyncError is! UnsupportedFeatureError) {
+          return Failure(
+            _asException(
+              asyncError,
+              fallbackMessage: 'async_sql_execution_failed',
+            ),
+          );
+        }
+      }
+
       final preparedExecution = OdbcPreparedQueryExecution(
         sql: query,
         parameters: parameters,
@@ -1963,6 +2002,68 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
   }
 
+  Future<Result<QueryResult>> _runNativeAsyncQueryWithTimeout({
+    required String connectionId,
+    required String query,
+    required Duration timeout,
+  }) async {
+    final startResult = await _service.executeAsyncStart(
+      connectionId,
+      query,
+    );
+    if (startResult.isError()) {
+      return Failure(startResult.exceptionOrNull()!);
+    }
+
+    final requestId = startResult.getOrThrow();
+    final deadline = DateTime.now().add(timeout);
+
+    try {
+      while (true) {
+        final pollResult = await _service.asyncPoll(requestId);
+        if (pollResult.isError()) {
+          return Failure(pollResult.exceptionOrNull()!);
+        }
+
+        final status = pollResult.getOrThrow();
+        switch (status) {
+          case _asyncRequestReadyStatus:
+            final result = await _service.asyncGetResult(requestId);
+            return result.fold(Success.new, Failure.new);
+          case _asyncRequestPendingStatus:
+            final remaining = deadline.difference(DateTime.now());
+            if (remaining <= Duration.zero) {
+              await _cancelAsyncRequestForTimeout(
+                connectionId: connectionId,
+                requestId: requestId,
+              );
+              throw TimeoutException('Async SQL execution deadline exceeded');
+            }
+            final delay = remaining < _asyncRequestPollInterval ? remaining : _asyncRequestPollInterval;
+            await Future<void>.delayed(delay);
+            continue;
+          case _asyncRequestErrorStatus:
+          case _asyncRequestCancelledStatus:
+            final result = await _service.asyncGetResult(requestId);
+            if (result.isError()) {
+              return Failure(result.exceptionOrNull()!);
+            }
+            return Failure(
+              Exception(
+                'Async SQL request completed with status $status without error payload',
+              ),
+            );
+          default:
+            return Failure(
+              Exception('Unexpected async SQL request status: $status'),
+            );
+        }
+      }
+    } finally {
+      await _freeAsyncRequestSafely(requestId);
+    }
+  }
+
   Future<void> _cancelConnectionForTimeout(
     String connectionId,
     String _,
@@ -1998,6 +2099,42 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           error: error,
         );
       },
+    );
+  }
+
+  Future<void> _cancelAsyncRequestForTimeout({
+    required String connectionId,
+    required int requestId,
+  }) async {
+    _markConnectionForDiscard(connectionId);
+    final cancelResult = await _service.asyncCancel(requestId);
+    cancelResult.fold(
+      (_) {
+        _metrics.recordTimeoutCancelSuccess();
+      },
+      (error) {
+        _metrics.recordTimeoutCancelFailure();
+        developer.log(
+          'Failed to cancel async SQL request after timeout',
+          name: 'database_gateway',
+          level: 900,
+          error: error,
+        );
+      },
+    );
+  }
+
+  Future<void> _freeAsyncRequestSafely(int requestId) async {
+    final freeResult = await _service.asyncFree(requestId);
+    if (freeResult.isSuccess()) {
+      return;
+    }
+
+    developer.log(
+      'Failed to free async SQL request after completion',
+      name: 'database_gateway',
+      level: 900,
+      error: freeResult.exceptionOrNull(),
     );
   }
 
