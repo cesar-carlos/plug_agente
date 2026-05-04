@@ -5,6 +5,16 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.5.2+1</title>
+   <pubDate>Mon, 04 May 2026 15:18:16 +0000</pubDate>
+   <description>Version 1.5.2
+
+- ODBC reliability improvements for timeout, cancelation, pooling, and invalid-connection recovery.
+- Added regression coverage for provider recovery behavior and live bulk DML execution.
+- Release includes Windows installer asset PlugAgente-Setup-1.5.2.exe.</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.2/PlugAgente-Setup-1.5.2.exe" sparkle:version="1.5.2+1" sparkle:os="windows" length="36873558" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.5.1+1</title>
    <pubDate>Fri, 01 May 2026 17:03:03 +0000</pubDate>
    <description>## Plug Agente 1.5.1
@@ -74,12 +84,6 @@ Build the Windows installer after \lutter build windows --release\ using Inno Se
    <pubDate>Thu, 26 Mar 2026 18:42:11 +0000</pubDate>
    <description>Nova Versão 1.1.2+18 - Atualização automática via GitHub Release.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.2/PlugAgente-Setup-1.1.2.exe" sparkle:version="1.1.2+18" sparkle:os="windows" length="36027535" type="application/octet-stream" sparkle:dsaSignature="MDwCHHXBBRvRgEWcj2s/+ajMr2A7Fat7Sa4J8yg6qYQCHEZKtLO2fDUwnPB12vpwHkbiSrN/Ke9SLEZC54g=" />
-  </item>
-  <item>
-   <title>Version 1.1.1+17</title>
-   <pubDate>Mon, 23 Mar 2026 14:05:11 +0000</pubDate>
-   <description>Nova Versão 1.1.1+17 - Atualização automática via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.1.1/PlugAgente-Setup-1.1.1.exe" sparkle:version="1.1.1+17" sparkle:os="windows" length="36022507" type="application/octet-stream" sparkle:dsaSignature="MD0CHQCPHXRNeGvhBLK1bwIRbpFQkpq9A+5SVZ4Ifux2AhxMcsC+m3ArfIcBgYImLO5SFPsb2tXI7MmMk2Vd" />
   </item>
  </channel>
 </rss>
