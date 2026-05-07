@@ -27,6 +27,10 @@ class SqlValidator {
     'insert ',
     'merge ',
     'delete ',
+    'create ',
+    'alter ',
+    'drop ',
+    'truncate ',
   ];
 
   static final RegExp _normalizeFingerprintWhitespace = RegExp(r'\s+');
@@ -48,7 +52,7 @@ class SqlValidator {
   );
 
   /// Validates SQL for execution in RPC/legacy flows.
-  /// Allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE.
+  /// Allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE and DDL v1.
   /// Blocks multiple statements, comments, and dangerous patterns.
   static Result<void> validateSqlForExecution(
     String query, {
@@ -78,8 +82,10 @@ class SqlValidator {
     if (!startsWithAllowed) {
       return Failure(
         _sqlValidationFailure(
-          message: 'Unsupported SQL operation. Allowed: SELECT, WITH, UPDATE, INSERT, MERGE, DELETE',
-          userMessage: 'Operação SQL não suportada. Use apenas SELECT, WITH, UPDATE, INSERT, MERGE ou DELETE.',
+          message:
+              'Unsupported SQL operation. Allowed: SELECT, WITH, UPDATE, INSERT, MERGE, DELETE, CREATE, ALTER, DROP, TRUNCATE',
+          userMessage:
+              'Operação SQL não suportada. Use apenas SELECT, WITH, UPDATE, INSERT, MERGE, DELETE, CREATE, ALTER, DROP ou TRUNCATE.',
         ),
       );
     }

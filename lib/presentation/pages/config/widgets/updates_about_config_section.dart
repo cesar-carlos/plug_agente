@@ -1,0 +1,81 @@
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
+
+class UpdatesAboutConfigSection extends StatelessWidget {
+  const UpdatesAboutConfigSection({
+    required this.appVersion,
+    required this.lastUpdateCheck,
+    required this.onCheckUpdates,
+    this.supportsAutoUpdate = true,
+    this.isCheckingUpdates = false,
+    super.key,
+  });
+
+  final String appVersion;
+  final String lastUpdateCheck;
+  final VoidCallback onCheckUpdates;
+  final bool supportsAutoUpdate;
+  final bool isCheckingUpdates;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
+    return SingleChildScrollView(
+      child: SettingsSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SettingsSectionTitle(title: l10n.gsSectionUpdates),
+            const SizedBox(height: AppSpacing.md),
+            if (supportsAutoUpdate)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
+                      style: context.bodyText,
+                    ),
+                  ),
+                  if (isCheckingUpdates)
+                    const SizedBox(
+                      key: ValueKey('updates_progress_ring'),
+                      width: 20,
+                      height: 20,
+                      child: ProgressRing(strokeWidth: 2),
+                    )
+                  else
+                    IconButton(
+                      key: const ValueKey('updates_refresh_button'),
+                      icon: const Icon(FluentIcons.refresh),
+                      onPressed: onCheckUpdates,
+                    ),
+                ],
+              )
+            else
+              Text(
+                l10n.configAutoUpdateNotSupported,
+                style: context.captionText,
+              ),
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(),
+            const SizedBox(height: AppSpacing.lg),
+            SettingsSectionTitle(title: l10n.gsSectionAbout),
+            const SizedBox(height: AppSpacing.md),
+            SettingsKeyValue(
+              label: l10n.gsLabelVersion,
+              value: appVersion,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SettingsKeyValue(
+              label: l10n.gsLabelLicense,
+              value: l10n.gsLicenseMit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

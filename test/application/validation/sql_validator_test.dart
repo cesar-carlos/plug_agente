@@ -219,17 +219,24 @@ void main() {
         },
       );
 
-      test('should reject DROP', () {
-        final r = SqlValidator.validateSqlForExecution('DROP TABLE users');
-        expect(r.isError(), isTrue);
-        r.fold(
-          (_) => fail('Should have failed'),
-          (failure) {
-            final f = failure as ValidationFailure;
-            expect(f.context['operation'], equals('sql_validation'));
-            expect((f.context['user_message'] as String?)?.isNotEmpty, isTrue);
-          },
+      test('should accept DDL v1 statements', () {
+        final create = SqlValidator.validateSqlForExecution(
+          'CREATE TABLE dbo.users (id INT)',
         );
+        final alter = SqlValidator.validateSqlForExecution(
+          'ALTER TABLE dbo.users ADD name VARCHAR(100)',
+        );
+        final drop = SqlValidator.validateSqlForExecution(
+          'DROP TABLE dbo.users',
+        );
+        final truncate = SqlValidator.validateSqlForExecution(
+          'TRUNCATE TABLE dbo.users',
+        );
+
+        expect(create.isSuccess(), isTrue);
+        expect(alter.isSuccess(), isTrue);
+        expect(drop.isSuccess(), isTrue);
+        expect(truncate.isSuccess(), isTrue);
       });
 
       test('should reject DML with table lock hint', () {

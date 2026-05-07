@@ -7,7 +7,7 @@
   <item>
    <title>Version 1.5.3+1</title>
    <pubDate>Mon, 04 May 2026 18:03:27 +0000</pubDate>
-   <description>ï»¿Version 1.5.3
+   <description>Version 1.5.3
 
 - Harden the Windows auto-update flow by keeping the updater feed fixed per session and adding explicit trigger/completion timeout handling.
 - Persist manual update diagnostics, add dedicated auto-update metrics, and improve the Settings UI technical details for support scenarios.

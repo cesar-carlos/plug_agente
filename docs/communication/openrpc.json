@@ -15,7 +15,7 @@
   "methods": [
     {
       "name": "sql.execute",
-      "summary": "Execute a SQL statement, optionally returning multiple result sets",
+      "summary": "Execute a SQL statement (SELECT, DML, or DDL v1), optionally returning multiple result sets",
       "paramStructure": "by-name",
       "params": [
         {
@@ -35,7 +35,7 @@
     },
     {
       "name": "sql.executeBatch",
-      "summary": "Execute multiple SQL statements in a batch with optional per-command execution order",
+      "summary": "Execute multiple SQL statements in a batch with optional per-command execution order and DDL v1 support",
       "paramStructure": "by-name",
       "params": [
         {
@@ -120,7 +120,7 @@
     },
     {
       "name": "client_token.getPolicy",
-      "summary": "Return the resolved client token policy (permissions and metadata) for the presented token",
+      "summary": "Return the resolved client token policy, including global_permissions, derived legacy all_permissions, rules, and redacted payload metadata",
       "paramStructure": "by-name",
       "params": [
         {

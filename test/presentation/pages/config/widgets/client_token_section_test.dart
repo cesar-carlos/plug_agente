@@ -145,6 +145,109 @@ void main() {
     );
 
     testWidgets(
+      'should show validation error when payload.database is not a string',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1600, 1200));
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
+        await tester.pumpAndSettle();
+
+        final payloadField = find.byWidgetPredicate((widget) {
+          return widget is TextBox && widget.maxLines == 4;
+        });
+        await tester.enterText(payloadField, '{"database":123}');
+        await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
+        await tester.tap(find.text(ptL10n.ctButtonCreateToken));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(ptL10n.ctErrorPayloadDatabaseMustBeString),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'should require at least one global permission when global scope is enabled',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1600, 1200));
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctFlagAllTables));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
+        await tester.tap(find.text(ptL10n.ctButtonCreateToken));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(ptL10n.ctErrorGlobalPermissionRequired),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'should hide rule actions in global mode and save without rules',
+      (tester) async {
+        when(
+          () => mockCreateClientToken(any()),
+        ).thenAnswer((_) async => const Success('tok'));
+
+        await tester.binding.setSurfaceSize(const Size(1600, 1200));
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctButtonNewToken));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text(ptL10n.ctButtonAddRule));
+        await tester.tap(find.text(ptL10n.ctButtonAddRule));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextBox).last, 'dbo.clientes');
+        await tester.tap(find.text(ptL10n.ctDialogSaveRule));
+        await tester.pumpAndSettle();
+
+        expect(find.text('dbo.clientes'), findsOneWidget);
+        expect(find.text(ptL10n.ctButtonImportRules), findsOneWidget);
+        expect(find.text(ptL10n.ctButtonAddRule), findsOneWidget);
+
+        await tester.tap(find.text(ptL10n.ctFlagAllTables));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(ptL10n.ctPermissionRead));
+        await tester.pumpAndSettle();
+
+        expect(find.text(ptL10n.ctButtonImportRules), findsNothing);
+        expect(find.text(ptL10n.ctButtonAddRule), findsNothing);
+        expect(find.text(ptL10n.ctButtonExportRules), findsNothing);
+        expect(find.text('dbo.clientes'), findsNothing);
+        expect(find.text(ptL10n.ctGlobalScopeRulesDisabled), findsOneWidget);
+
+        await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
+        await tester.tap(find.text(ptL10n.ctButtonCreateToken));
+        await tester.pumpAndSettle();
+
+        final captured =
+            verify(
+                  () => mockCreateClientToken(captureAny()),
+                ).captured.single
+                as ClientTokenCreateRequest;
+        expect(captured.rules, isEmpty);
+        expect(captured.globalPermissions.canRead, isTrue);
+        expect(captured.globalPermissions.canUpdate, isFalse);
+        expect(captured.globalPermissions.canDelete, isFalse);
+        expect(captured.globalPermissions.canDdl, isFalse);
+      },
+    );
+
+    testWidgets(
       'create token dialog lays out without overflow on short viewport',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(920, 480));
@@ -218,7 +321,10 @@ void main() {
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(ptL10n.ctFlagAllPermissions));
+        await tester.tap(find.text(ptL10n.ctFlagAllTables));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctPermissionRead));
         await tester.pumpAndSettle();
 
         await tester.tap(find.text(ptL10n.ctButtonCreateToken));
@@ -247,7 +353,10 @@ void main() {
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(ptL10n.ctFlagAllPermissions));
+        await tester.tap(find.text(ptL10n.ctFlagAllTables));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ptL10n.ctPermissionRead));
         await tester.pumpAndSettle();
 
         final agentField = find.byWidgetPredicate(

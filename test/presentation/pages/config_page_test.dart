@@ -101,6 +101,9 @@ void main() {
 
     await pumpPage(tester, orchestrator: orchestrator);
 
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
     await tester.pump();
 
@@ -139,6 +142,9 @@ void main() {
     );
 
     await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
     await tester.pumpAndSettle();

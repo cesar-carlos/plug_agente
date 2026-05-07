@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -21,10 +22,32 @@ class CreateClientToken {
       return Failure(domain.ValidationFailure('client_id is required'));
     }
 
-    if (!request.allPermissions && request.rules.isEmpty) {
+    final payloadValidationError = validateClientTokenPayload(request.payload);
+    if (payloadValidationError != null) {
       return Failure(
         domain.ValidationFailure(
-          'At least one rule is required when all_permissions is false',
+          switch (payloadValidationError) {
+            ClientTokenPayloadValidationError.databaseMustBeString =>
+              'payload.database must be a string',
+            ClientTokenPayloadValidationError.databaseCannotBeEmpty =>
+              'payload.database must not be empty',
+          },
+        ),
+      );
+    }
+
+    if (request.usesGlobalScope) {
+      if (!request.effectiveGlobalPermissions.hasAnyPermission) {
+        return Failure(
+          domain.ValidationFailure(
+            'At least one global permission is required when all_tables or all_views is enabled',
+          ),
+        );
+      }
+    } else if (request.effectiveRules.isEmpty) {
+      return Failure(
+        domain.ValidationFailure(
+          'At least one rule is required when global scope is disabled',
         ),
       );
     }

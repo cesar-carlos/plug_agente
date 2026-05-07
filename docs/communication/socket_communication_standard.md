@@ -472,6 +472,9 @@ PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
 - O runtime atual suporta ate **5 parametros nomeados por comando**. Acima disso,
 a request e rejeitada com erro de validacao.
 - `params.database`: override opcional do banco alvo para a request atual.
+Quando `payload.database` estiver presente na politica resolvida do token,
+este campo passa a ser obrigatorio e deve coincidir com o valor configurado
+apos normalizacao simples (`trim` + case-insensitive).
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
 rejeitada com `invalid_params`.
 - Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
@@ -720,6 +723,9 @@ Para scripts com multiplos statements/result sets na mesma execucao, use
 `sql.execute` com `options.multi_result: true`.
 - O runtime atual suporta ate **5 parametros nomeados por comando**.
 - `params.database`: override opcional do banco alvo para o batch atual.
+Quando `payload.database` estiver presente na politica resolvida do token,
+este campo passa a ser obrigatorio e deve coincidir com o valor configurado
+apos normalizacao simples (`trim` + case-insensitive).
 - `idempotency_key`: reutilizacao da mesma chave com payload diferente e
 rejeitada com `invalid_params`.
 - Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
@@ -900,8 +906,9 @@ erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
 - **Objetivo:** retornar a **politica de autorizacao** ja resolvida para o token
 apresentado (mesmo pipeline que valida `sql.execute`: store local por hash,
 cache, JWT/JWKS quando aplicavel, revogacao em sessao). Serve para introspecao
-no hub (permissao por recurso, flags `all_tables` / `all_views` /
-`all_permissions`, regras `allow`/`deny`, `payload` livre), sem executar SQL.
+no hub (permissao por recurso, flags `all_tables` / `all_views`,
+`global_permissions`, `all_permissions` legado derivado, regras `allow`/`deny`,
+`payload` livre), sem executar SQL.
 - **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`),
 com as mesmas regras de schema que `agent.getProfile`. Quando
 `enableClientTokenAuthorization` esta **desligado**, o metodo responde com erro
@@ -918,11 +925,13 @@ e, em `error.data`, `retry_after_ms` (milissegundos ate o proximo minuto UTC)
 e `reset_at` (ISO 8601 do fim da janela).
 - **Result:** objeto alinhado a `ClientTokenPolicy` (`client_id`, `agent_id`
 opcional, `payload` com chaves sensiveis redigidas como `[REDACTED]`,
-`all_tables`, `all_views`, `all_permissions`,
+`all_tables`, `all_views`, `global_permissions`, `all_permissions`,
 `is_revoked`, `rules` com `resource_type`, `resource`, `effect`, `read`,
-`update`, `delete`). Campos opcionais quando disponiveis: `token_id` (id do
-registro local ou `jti` do JWT), `issued_at`, `updated_at` (ISO 8601). **Nao**
-inclui o segredo do token nem `token_value`.
+`update`, `delete`, `ddl`). Campos opcionais quando disponiveis: `token_id`
+(id do registro local ou `jti` do JWT), `issued_at`, `updated_at` (ISO 8601).
+`payload.database`, quando presente, oficializa uma restricao extra para
+`sql.execute` e `sql.executeBatch`: a request deve informar o mesmo `database`.
+**Nao** inclui o segredo do token nem `token_value`.
 - **Diferenca vs `agent.getProfile`:** este metodo descreve **permissao do
 token**; `agent.getProfile` descreve **cadastro do agente** em configuracao
 local.
@@ -1207,7 +1216,7 @@ documento.
 
 1. Cliente envia token em `params.client_token` ou `params.clientToken` ou `params.auth`.
 2. Agente normaliza (aceita `Bearer <token>` ou token direto).
-3. Lookup local: hash SHA-256 do token -> SQLite -> politica (regras, all_tables, all_views, all_permissions).
+3. Lookup local: hash SHA-256 do token -> SQLite -> politica (regras, all_tables, all_views, global_permissions e `all_permissions` legado derivado).
 4. Se nao encontrado localmente: fallback opcional para JWKS (JWT) quando `enableSocketJwksValidation` ativo.
 5. Politica define se a operacao SQL e permitida; deny tem precedencia sobre allow.
 
@@ -1727,4 +1736,3 @@ de idempotencia para cargas grandes.
 - Negociacao: `lib/application/services/protocol_negotiator.dart`
 - Guia de cliente: `docs/communication/socketio_client_binary_transport.md`
 - Evolucao pendente: `docs/communication/socket_communication_roadmap.md`
-

@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 
 class ClientTokenSummary {
   const ClientTokenSummary({
@@ -6,17 +7,24 @@ class ClientTokenSummary {
     required this.clientId,
     required this.createdAt,
     required this.isRevoked,
-    required this.allTables,
-    required this.allViews,
-    required this.allPermissions,
+    required bool allTables,
+    required bool allViews,
     required this.rules,
+    ClientPermissionSet? globalPermissions,
+    bool? allPermissions,
     this.name = '',
     this.version = 1,
     this.updatedAt,
     this.agentId,
     this.payload = const <String, dynamic>{},
     this.tokenValue,
-  });
+  }) : allTables = allTables || (allPermissions ?? false),
+       allViews = allViews || (allPermissions ?? false),
+       globalPermissions =
+           globalPermissions ??
+           ((allPermissions ?? false)
+               ? ClientPermissionSet.fullAccess
+               : ((allTables || allViews) ? ClientPermissionSet.legacyScopedAccess : ClientPermissionSet.none));
 
   factory ClientTokenSummary.fromJson(Map<String, dynamic> json) {
     final policyJson = json['policy'] as Map<String, dynamic>?;
@@ -27,6 +35,7 @@ class ClientTokenSummary {
         .map(Map<String, dynamic>.from)
         .map(ClientTokenRule.fromJson)
         .toList();
+    final legacyAllPermissions = source['all_permissions'] as bool? ?? false;
     final createdAt = _parseDateTime(
       source['created_at'] ?? json['created_at'],
     );
@@ -45,9 +54,10 @@ class ClientTokenSummary {
       agentId: source['agent_id'] as String?,
       payload: payload,
       tokenValue: source['token_value'] as String? ?? json['token_value'] as String?,
-      allTables: source['all_tables'] as bool? ?? false,
-      allViews: source['all_views'] as bool? ?? false,
-      allPermissions: source['all_permissions'] as bool? ?? false,
+      allTables: source['all_tables'] as bool? ?? legacyAllPermissions,
+      allViews: source['all_views'] as bool? ?? legacyAllPermissions,
+      globalPermissions: _parseGlobalPermissions(source),
+      allPermissions: legacyAllPermissions,
       rules: parsedRules,
     );
   }
@@ -56,6 +66,7 @@ class ClientTokenSummary {
 
   final String id;
   final String clientId;
+
   /// User-defined display name for easy identification. Empty when not set.
   final String name;
   final DateTime createdAt;
@@ -67,8 +78,10 @@ class ClientTokenSummary {
   final String? tokenValue;
   final bool allTables;
   final bool allViews;
-  final bool allPermissions;
+  final ClientPermissionSet globalPermissions;
   final List<ClientTokenRule> rules;
+
+  bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
 
   ClientTokenSummary copyWith({
     String? id,
@@ -83,7 +96,7 @@ class ClientTokenSummary {
     Object? tokenValue = _unset,
     bool? allTables,
     bool? allViews,
-    bool? allPermissions,
+    ClientPermissionSet? globalPermissions,
     List<ClientTokenRule>? rules,
   }) {
     return ClientTokenSummary(
@@ -99,7 +112,7 @@ class ClientTokenSummary {
       tokenValue: identical(tokenValue, _unset) ? this.tokenValue : tokenValue as String?,
       allTables: allTables ?? this.allTables,
       allViews: allViews ?? this.allViews,
-      allPermissions: allPermissions ?? this.allPermissions,
+      globalPermissions: globalPermissions ?? this.globalPermissions,
       rules: rules ?? this.rules,
     );
   }
@@ -118,6 +131,7 @@ class ClientTokenSummary {
       if (tokenValue != null) 'token_value': tokenValue,
       'all_tables': allTables,
       'all_views': allViews,
+      'global_permissions': globalPermissions.toJson(),
       'all_permissions': allPermissions,
       'rules': rules.map((rule) => rule.toJson()).toList(),
     };
@@ -152,5 +166,29 @@ class ClientTokenSummary {
       return Map<String, dynamic>.from(rawValue);
     }
     return const <String, dynamic>{};
+  }
+
+  static ClientPermissionSet _parseGlobalPermissions(
+    Map<String, dynamic> source,
+  ) {
+    final rawGlobalPermissions = source['global_permissions'];
+    if (rawGlobalPermissions is Map<dynamic, dynamic>) {
+      return ClientPermissionSet.fromJson(
+        Map<String, dynamic>.from(rawGlobalPermissions),
+      );
+    }
+
+    final legacyAllPermissions = source['all_permissions'] as bool? ?? false;
+    if (legacyAllPermissions) {
+      return ClientPermissionSet.fullAccess;
+    }
+
+    final legacyAllTables = source['all_tables'] as bool? ?? false;
+    final legacyAllViews = source['all_views'] as bool? ?? false;
+    if (legacyAllTables || legacyAllViews) {
+      return ClientPermissionSet.legacyScopedAccess;
+    }
+
+    return ClientPermissionSet.none;
   }
 }

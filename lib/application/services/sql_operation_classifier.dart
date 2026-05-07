@@ -87,6 +87,12 @@ class SqlOperationClassifier {
     if (sql.startsWith('delete ')) {
       return SqlOperation.delete;
     }
+    if (sql.startsWith('create ') ||
+        sql.startsWith('alter ') ||
+        sql.startsWith('drop ') ||
+        sql.startsWith('truncate ')) {
+      return SqlOperation.ddl;
+    }
     return null;
   }
 
@@ -118,9 +124,110 @@ class SqlOperationClassifier {
       }
     } else if (operation == SqlOperation.delete) {
       resources.addAll(_extractByKeywords(sql, const ['from']));
+    } else if (operation == SqlOperation.ddl) {
+      final ddlTarget = _extractDdlTarget(sql);
+      if (ddlTarget != null) {
+        resources.add(ddlTarget);
+      }
     }
 
     return resources.where((resource) => !_isCteAliasReference(resource, cteAliases)).toList();
+  }
+
+  DatabaseResource? _extractDdlTarget(String sql) {
+    final lowerSql = sql.toLowerCase();
+    String? verb;
+    if (lowerSql.startsWith('create ')) {
+      verb = 'create';
+    } else if (lowerSql.startsWith('alter ')) {
+      verb = 'alter';
+    } else if (lowerSql.startsWith('drop ')) {
+      verb = 'drop';
+    } else if (lowerSql.startsWith('truncate ')) {
+      verb = 'truncate';
+    }
+    if (verb == null) {
+      return null;
+    }
+
+    final objectKeyword = _findDdlObjectKeyword(
+      lowerSql,
+      _skipWhitespace(sql, verb.length),
+      verb: verb,
+    );
+    if (objectKeyword == null) {
+      return null;
+    }
+
+    var nextIndex = _skipWhitespace(
+      sql,
+      objectKeyword.index + objectKeyword.keyword.length,
+    );
+    nextIndex = _skipOptionalKeywordSequence(
+          lowerSql,
+          sql,
+          nextIndex,
+          const ['if', 'exists'],
+        ) ??
+        nextIndex;
+    nextIndex = _skipOptionalKeywordSequence(
+          lowerSql,
+          sql,
+          nextIndex,
+          const ['if', 'not', 'exists'],
+        ) ??
+        nextIndex;
+
+    final identifier = _readQualifiedIdentifier(sql, nextIndex);
+    if (identifier == null || identifier.value.trim().isEmpty) {
+      return null;
+    }
+
+    return DatabaseResource(
+      resourceType: objectKeyword.keyword == 'view'
+          ? DatabaseResourceType.view
+          : DatabaseResourceType.table,
+      name: identifier.value,
+    );
+  }
+
+  _DdlObjectKeyword? _findDdlObjectKeyword(
+    String lowerSql,
+    int start, {
+    required String verb,
+  }) {
+    final keywords = switch (verb) {
+      'truncate' => const ['table'],
+      _ => const ['table', 'view'],
+    };
+
+    _DdlObjectKeyword? match;
+    for (final keyword in keywords) {
+      final keywordIndex = _findKeyword(lowerSql, keyword, start);
+      if (keywordIndex < 0) {
+        continue;
+      }
+      if (match == null || keywordIndex < match.index) {
+        match = _DdlObjectKeyword(keyword: keyword, index: keywordIndex);
+      }
+    }
+    return match;
+  }
+
+  int? _skipOptionalKeywordSequence(
+    String lowerSql,
+    String sql,
+    int start,
+    List<String> keywords,
+  ) {
+    var index = _skipWhitespace(sql, start);
+    for (final keyword in keywords) {
+      if (!_isKeywordAt(lowerSql, keyword, index)) {
+        return null;
+      }
+      index = _skipWhitespace(sql, index + keyword.length);
+    }
+    return index;
   }
 
   Set<DatabaseResource> _extractByKeywords(
@@ -453,4 +560,14 @@ class _ParsedIdentifier {
 
   final String value;
   final int nextIndex;
+}
+
+class _DdlObjectKeyword {
+  const _DdlObjectKeyword({
+    required this.keyword,
+    required this.index,
+  });
+
+  final String keyword;
+  final int index;
 }

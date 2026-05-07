@@ -572,7 +572,144 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configTabGeneral => 'Geral';
 
   @override
+  String get configTabPreferences => 'Preferências';
+
+  @override
+  String get configTabUpdatesAbout => 'Atualizações e sobre';
+
+  @override
+  String get configTabBackup => 'Cópia de segurança';
+
+  @override
   String get configTabWebSocket => 'WebSocket';
+
+  @override
+  String get configBackupSectionTitle => 'Cópia de segurança local';
+
+  @override
+  String get configBackupIntro =>
+      'Exporte ou restaure a base local do agente (configuração) e o ficheiro de definições globais. O arquivo pode conter credenciais do hub guardadas na base. Segredos que existem só no armazenamento seguro do Windows não são incluídos—pode ser necessário voltar a autenticar após restaurar.';
+
+  @override
+  String get configBackupDuplicateNote =>
+      'Restaurar a mesma cópia de segurança em duas máquinas pode registar o mesmo agente duas vezes. A aplicação verifica o hub quando possível; se a verificação falhar, deve confirmar que aceita o risco.';
+
+  @override
+  String get configBackupSingleInstanceNote =>
+      'Não execute duas cópias da aplicação sobre a mesma pasta de dados global.';
+
+  @override
+  String configBackupRestoreDiagnosticsHint(String fileName) {
+    return 'Se a restauração falhar depois de a aplicação fechar, os detalhes ficam em $fileName na pasta de dados da aplicação.';
+  }
+
+  @override
+  String get configBackupButtonExport => 'Exportar cópia de segurança…';
+
+  @override
+  String get configBackupButtonRestore => 'Restaurar a partir da cópia…';
+
+  @override
+  String get configBackupExporting => 'A exportar cópia de segurança…';
+
+  @override
+  String get configBackupRestoring => 'A preparar restauração…';
+
+  @override
+  String get configBackupExportSuccessTitle => 'Cópia guardada';
+
+  @override
+  String get configBackupExportSuccessMessage => 'O ficheiro de cópia de segurança foi criado com sucesso.';
+
+  @override
+  String get configBackupRestoreDialogTitle => 'Restaurar cópia de segurança';
+
+  @override
+  String get configBackupRestoreDialogBody =>
+      'Isto substitui a base local e as definições. A aplicação será fechada—volte a abri-la depois. Os ficheiros atuais são copiados para .bak antes da substituição.';
+
+  @override
+  String get configBackupRestoreDuplicateWarning =>
+      'Este ID de agente parece ligado no hub. Restaurar pode duplicar uma sessão ativa a menos que a outra máquina esteja offline.';
+
+  @override
+  String get configBackupRestoreVerifyWarning =>
+      'Não foi possível verificar se este agente já está ligado (rede ou sessão expirada). Confirme que nenhuma outra máquina está a usar esta mesma cópia.';
+
+  @override
+  String get configBackupRestoreInstallationMismatch =>
+      'Esta cópia foi criada noutra instalação (ID de instalação diferente).';
+
+  @override
+  String get configBackupCheckboxAcknowledgeDuplicate =>
+      'Confirmo que a outra sessão está offline ou aceito o risco de agente duplicado.';
+
+  @override
+  String get configBackupCheckboxAcknowledgeUncertain =>
+      'Compreendo que o hub não pôde ser verificado e aceito o risco.';
+
+  @override
+  String get configBackupRestoreConfirm => 'Restaurar e sair';
+
+  @override
+  String get configBackupCancel => 'Cancelar';
+
+  @override
+  String get configBackupErrMissingManifestOrDb => 'O arquivo não contém o manifest ou a base de dados.';
+
+  @override
+  String get configBackupErrInvalidManifest => 'O manifest da cópia é inválido.';
+
+  @override
+  String get configBackupErrUnsupportedFormat => 'Este formato de cópia não é suportado.';
+
+  @override
+  String get configBackupErrDbVersion => 'Não foi possível ler a versão do esquema na base da cópia.';
+
+  @override
+  String get configBackupErrNewerBackup =>
+      'Esta cópia foi criada com uma versão mais recente da aplicação. Atualize antes de restaurar.';
+
+  @override
+  String get configBackupErrInvalidEntry => 'O arquivo contém uma entrada de ficheiro inválida.';
+
+  @override
+  String get configBackupErrExportDbNotFound => 'Ficheiro da base local não encontrado.';
+
+  @override
+  String get configBackupErrExportZip => 'Falha ao criar o arquivo de cópia.';
+
+  @override
+  String get configBackupErrExportWrite => 'Não foi possível gravar o ficheiro de cópia.';
+
+  @override
+  String get configBackupErrExportGeneric => 'Erro inesperado ao exportar a cópia.';
+
+  @override
+  String get configBackupErrReadZip => 'Não foi possível ler o ficheiro de cópia.';
+
+  @override
+  String get configBackupErrStageGeneric => 'Falha ao ler o arquivo de cópia.';
+
+  @override
+  String get configBackupErrApplyMissingDb => 'Ficheiro da base preparada em falta.';
+
+  @override
+  String get configBackupErrApplyWrite => 'Não foi possível aplicar os ficheiros da cópia.';
+
+  @override
+  String get configBackupRestoreFailedTitle => 'Falha na restauração';
+
+  @override
+  String get configBackupExportFailedTitle => 'Falha na exportação';
+
+  @override
+  String get configBackupRestoreRestartNotice =>
+      'A aplicação será fechada. Abra-a novamente para usar os dados restaurados.';
+
+  @override
+  String get configBackupRestoreOlderSchemaNote =>
+      'Esta cópia usa um esquema de base de dados mais antigo. A aplicação irá migrá-lo no próximo arranque.';
 
   @override
   String get configLastUpdateNever => 'Nunca verificado';
@@ -1310,10 +1447,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctErrorRuleOrAllPermissionsRequired => 'Adicione ao menos uma regra valida ou marque all_permissions.';
 
   @override
+  String get ctErrorRuleOrGlobalPermissionsRequired =>
+      'Adicione ao menos uma regra valida quando o escopo global estiver desligado.';
+
+  @override
+  String get ctErrorGlobalPermissionRequired =>
+      'Selecione ao menos uma permissao global quando all_tables ou all_views estiver ativo.';
+
+  @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload deve ser um objeto JSON valido.';
 
   @override
   String get ctErrorPayloadInvalidJson => 'Payload JSON invalido.';
+
+  @override
+  String get ctErrorPayloadDatabaseMustBeString => 'payload.database deve ser uma string.';
+
+  @override
+  String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database nao pode ficar vazio.';
 
   @override
   String get ctPermissionRead => 'Read';
@@ -1323,6 +1474,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctPermissionDdl => 'DDL';
+
+  @override
+  String get ctGlobalScopeRulesDisabled =>
+      'O escopo global esta ativo. As regras por recurso ficam ocultas e serao removidas ao salvar este token.';
 
   @override
   String get ctGridColumnType => 'Tipo';

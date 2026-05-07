@@ -8,6 +8,7 @@
     "payload",
     "all_tables",
     "all_views",
+    "global_permissions",
     "all_permissions",
     "is_revoked",
     "rules"
@@ -31,11 +32,22 @@
     },
     "payload": {
       "type": "object",
-      "description": "Free-form metadata; values under secret-like keys may be replaced with [REDACTED] on the wire",
+      "description": "Free-form metadata; values under secret-like keys may be replaced with [REDACTED] on the wire. payload.database, when present, constrains sql.execute/sql.executeBatch requests to send the same explicit database value.",
       "additionalProperties": true
     },
     "all_tables": { "type": "boolean" },
     "all_views": { "type": "boolean" },
+    "global_permissions": {
+      "type": "object",
+      "required": ["read", "update", "delete", "ddl"],
+      "properties": {
+        "read": { "type": "boolean" },
+        "update": { "type": "boolean" },
+        "delete": { "type": "boolean" },
+        "ddl": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "all_permissions": { "type": "boolean" },
     "is_revoked": { "type": "boolean" },
     "rules": {
@@ -48,7 +60,8 @@
           "effect",
           "read",
           "update",
-          "delete"
+          "delete",
+          "ddl"
         ],
         "properties": {
           "resource_type": {
@@ -62,7 +75,8 @@
           },
           "read": { "type": "boolean" },
           "update": { "type": "boolean" },
-          "delete": { "type": "boolean" }
+          "delete": { "type": "boolean" },
+          "ddl": { "type": "boolean" }
         },
         "additionalProperties": false
       }

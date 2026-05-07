@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +57,19 @@ void main() {
 
       expect(store.getKeys(), isEmpty);
       expect(File(settingsPath).existsSync(), isFalse);
+    });
+
+    test('flushPendingPersistence waits for concurrent queued writes', () async {
+      final store = GlobalAppSettingsStore(filePath: settingsPath);
+      await store.initialize();
+
+      unawaited(store.setString('race_key', 'first'));
+      unawaited(store.setString('race_key', 'second'));
+
+      await store.flushPendingPersistence();
+
+      final decoded = jsonDecode(await File(settingsPath).readAsString()) as Map<String, dynamic>;
+      expect(decoded['race_key'], 'second');
     });
   });
 }

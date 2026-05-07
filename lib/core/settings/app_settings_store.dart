@@ -24,6 +24,7 @@ abstract interface class IAppSettingsStore {
   Future<void> setValue(String key, Object value);
   Future<void> remove(String key);
   Future<void> setValues(Map<String, Object> values);
+  Future<void> flushPendingPersistence();
 }
 
 class GlobalAppSettingsStore implements IAppSettingsStore {
@@ -238,6 +239,11 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     }
   }
 
+  @override
+  Future<void> flushPendingPersistence() async {
+    await _writeQueue;
+  }
+
   Future<void> _persist() {
     return _writeQueue = _writeQueue
         .catchError((Object e, StackTrace stackTrace) {
@@ -400,4 +406,7 @@ class InMemoryAppSettingsStore implements IAppSettingsStore {
   Future<void> setValues(Map<String, Object> values) async {
     _data.addAll(values);
   }
+
+  @override
+  Future<void> flushPendingPersistence() async {}
 }

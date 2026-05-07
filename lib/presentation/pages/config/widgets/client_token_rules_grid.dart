@@ -13,6 +13,7 @@ class ClientTokenRuleDraft {
     required this.canRead,
     required this.canUpdate,
     required this.canDelete,
+    required this.canDdl,
   });
 
   final String resource;
@@ -21,14 +22,16 @@ class ClientTokenRuleDraft {
   final bool canRead;
   final bool canUpdate;
   final bool canDelete;
+  final bool canDdl;
 
-  bool get hasAnyPermission => canRead || canUpdate || canDelete;
+  bool get hasAnyPermission => canRead || canUpdate || canDelete || canDdl;
 
   String permissionsLabel(AppLocalizations l10n) {
     final labels = <String>[];
     if (canRead) labels.add(l10n.ctPermissionRead);
     if (canUpdate) labels.add(l10n.ctPermissionUpdate);
     if (canDelete) labels.add(l10n.ctPermissionDelete);
+    if (canDdl) labels.add(l10n.ctPermissionDdl);
     return labels.join(', ');
   }
 
@@ -39,6 +42,7 @@ class ClientTokenRuleDraft {
     bool? canRead,
     bool? canUpdate,
     bool? canDelete,
+    bool? canDdl,
   }) {
     return ClientTokenRuleDraft(
       resource: resource ?? this.resource,
@@ -47,6 +51,7 @@ class ClientTokenRuleDraft {
       canRead: canRead ?? this.canRead,
       canUpdate: canUpdate ?? this.canUpdate,
       canDelete: canDelete ?? this.canDelete,
+      canDdl: canDdl ?? this.canDdl,
     );
   }
 }

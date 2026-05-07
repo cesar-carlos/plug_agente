@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
+import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
 class ClientTokenVersionConflictException implements Exception {
@@ -44,8 +45,8 @@ class ClientTokenLocalDataSource {
       tokenValue: opaqueToken,
       allTables: request.allTables,
       allViews: request.allViews,
-      allPermissions: request.allPermissions,
-      rules: request.rules,
+      globalPermissions: request.effectiveGlobalPermissions,
+      rules: request.effectiveRules,
       agentId: _normalizeAgentId(request.agentId),
       payload: request.payload,
     );
@@ -238,9 +239,12 @@ class ClientTokenLocalDataSource {
                 allTables: Value(request.allTables),
                 allViews: Value(request.allViews),
                 allPermissions: Value(request.allPermissions),
+                globalPermissionsJson: Value(
+                  jsonEncode(request.effectiveGlobalPermissions.toJson()),
+                ),
                 rulesJson: Value(
                   jsonEncode(
-                    request.rules.map((rule) => rule.toJson()).toList(),
+                    request.effectiveRules.map((rule) => rule.toJson()).toList(),
                   ),
                 ),
                 version: Value(nextVersion),
@@ -294,6 +298,7 @@ class ClientTokenLocalDataSource {
       allTables: Value(token.allTables),
       allViews: Value(token.allViews),
       allPermissions: Value(token.allPermissions),
+      globalPermissionsJson: Value(jsonEncode(token.globalPermissions.toJson())),
       rulesJson: Value(
         jsonEncode(token.rules.map((rule) => rule.toJson()).toList()),
       ),
@@ -320,7 +325,12 @@ class ClientTokenLocalDataSource {
       payload: _decodePayload(row.payloadJson),
       allTables: row.allTables,
       allViews: row.allViews,
-      allPermissions: row.allPermissions,
+      globalPermissions: _decodeGlobalPermissions(
+        row.globalPermissionsJson,
+        legacyAllPermissions: row.allPermissions,
+        legacyAllTables: row.allTables,
+        legacyAllViews: row.allViews,
+      ),
       rules: _decodeRules(row.rulesJson),
     );
   }
@@ -360,6 +370,40 @@ class ClientTokenLocalDataSource {
       );
       return const <ClientTokenRule>[];
     }
+  }
+
+  ClientPermissionSet _decodeGlobalPermissions(
+    String globalPermissionsJson, {
+    required bool legacyAllPermissions,
+    required bool legacyAllTables,
+    required bool legacyAllViews,
+  }) {
+    try {
+      final decoded = jsonDecode(globalPermissionsJson);
+      if (decoded is Map<String, dynamic>) {
+        return ClientPermissionSet.fromJson(decoded);
+      }
+      if (decoded is Map<dynamic, dynamic>) {
+        return ClientPermissionSet.fromJson(
+          Map<String, dynamic>.from(decoded),
+        );
+      }
+    } on FormatException catch (error, stackTrace) {
+      developer.log(
+        'Invalid global permissions JSON in token cache',
+        name: 'client_token_local_data_source',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    if (legacyAllPermissions) {
+      return ClientPermissionSet.fullAccess;
+    }
+    if (legacyAllTables || legacyAllViews) {
+      return ClientPermissionSet.legacyScopedAccess;
+    }
+    return ClientPermissionSet.none;
   }
 
   String _generateOpaqueToken() {

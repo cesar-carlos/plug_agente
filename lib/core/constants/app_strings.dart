@@ -252,6 +252,7 @@ class AppStrings {
 
   // Single Instance (used by native runner; kept here for consistency)
   // Must match constants/autostart_arg.txt and installer/constants.iss
+  // UX: see also l10n `configBackupSingleInstanceNote` (global data folder warning).
   static const String singleInstanceArgAutostart = '--autostart';
   static const String singleInstanceTitle = 'Plug Agente';
   static const String singleInstanceMessage = 'O aplicativo Plug Agente já está em execução.';

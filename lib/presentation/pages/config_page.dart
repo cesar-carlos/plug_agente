@@ -9,7 +9,9 @@ import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/general_config_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/backup_config_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/preferences_config_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/updates_about_config_section.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -329,27 +331,38 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
       items: <AppFluentTabItem>[
         AppFluentTabItem(
           icon: FluentIcons.settings,
-          text: l10n.configTabGeneral,
-          body: GeneralConfigSection(
-            appVersion: widget.appVersion,
+          text: l10n.configTabPreferences,
+          body: PreferencesConfigSection(
             isDarkThemeEnabled: widget.isDarkThemeEnabled,
             startWithWindows: widget.startWithWindows,
             startMinimized: widget.startMinimized,
             minimizeToTray: widget.minimizeToTray,
             closeToTray: widget.closeToTray,
-            lastUpdateCheck: widget.lastUpdateCheck,
-            isCheckingUpdates: widget.isCheckingUpdates,
             startupSupported: widget.startupSupported,
             startupError: widget.startupError,
-            supportsAutoUpdate: widget.supportsAutoUpdate,
             onDarkThemeChanged: widget.onDarkThemeChanged,
             onStartWithWindowsChanged: widget.onStartWithWindowsChanged,
             onStartMinimizedChanged: widget.onStartMinimizedChanged,
             onMinimizeToTrayChanged: widget.onMinimizeToTrayChanged,
             onCloseToTrayChanged: widget.onCloseToTrayChanged,
             onOpenStartupSettings: widget.onOpenStartupSettings,
+          ),
+        ),
+        AppFluentTabItem(
+          icon: FluentIcons.download,
+          text: l10n.configTabUpdatesAbout,
+          body: UpdatesAboutConfigSection(
+            appVersion: widget.appVersion,
+            lastUpdateCheck: widget.lastUpdateCheck,
+            isCheckingUpdates: widget.isCheckingUpdates,
+            supportsAutoUpdate: widget.supportsAutoUpdate,
             onCheckUpdates: widget.onCheckUpdates,
           ),
+        ),
+        AppFluentTabItem(
+          icon: FluentIcons.save,
+          text: l10n.configTabBackup,
+          body: const BackupConfigSection(),
         ),
       ],
     );

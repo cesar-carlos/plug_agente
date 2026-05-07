@@ -25,6 +25,7 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
@@ -356,10 +357,19 @@ void main() {
             clientId: 'hub-client',
             allTables: true,
             allViews: false,
-            allPermissions: false,
+            globalPermissions: ClientPermissionSet(
+              canRead: true,
+              canUpdate: false,
+              canDelete: false,
+              canDdl: true,
+            ),
             rules: [],
             agentId: 'agent-x',
-            payload: {'env': 'prod', 'api_token': 'secret'},
+            payload: {
+              'env': 'prod',
+              'database': 'ERP_MAIN',
+              'api_token': 'secret',
+            },
           ),
         ),
       );
@@ -382,8 +392,19 @@ void main() {
       expect(result['client_id'], equals('hub-client'));
       expect(result['agent_id'], equals('agent-x'));
       expect(result['all_tables'], isTrue);
+      expect(result['all_permissions'], isFalse);
+      expect(
+        result['global_permissions'],
+        equals(<String, dynamic>{
+          'read': true,
+          'update': false,
+          'delete': false,
+          'ddl': true,
+        }),
+      );
       final payload = result['payload'] as Map<String, dynamic>;
       expect(payload['env'], equals('prod'));
+      expect(payload['database'], equals('ERP_MAIN'));
       expect(payload['api_token'], equals('[REDACTED]'));
     });
 
@@ -637,7 +658,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -652,6 +677,69 @@ void main() {
       expect(result['max_rows_handling'], 'response_truncation');
       expect(result['rows'], isNotNull);
       expect(result['row_count'], equals(1));
+    });
+
+    test('should forward request database to authorization for sql.execute', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestDatabase: any(named: 'requestDatabase'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-db-auth',
+        params: {
+          'sql': 'SELECT * FROM users',
+          'database': ' ERP_MAIN ',
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-db-auth',
+        agentId: 'agent-1',
+        data: const [
+          {'id': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) => queryResponse);
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'opaque-token',
+      );
+
+      expect(response.isSuccess, isTrue);
+      verify(
+        () => mockAuthorize(
+          token: 'opaque-token',
+          sql: 'SELECT * FROM users',
+          requestDatabase: ' ERP_MAIN ',
+          requestId: 'req-db-auth',
+          method: 'sql.execute',
+        ),
+      ).called(1);
     });
 
     test(
@@ -1679,7 +1767,7 @@ void main() {
         method: 'sql.execute',
         id: 'req-1',
         params: {
-          'sql': 'DROP TABLE users',
+          'sql': 'EXEC dbo.usp_do_work',
         },
       );
 
@@ -1729,6 +1817,81 @@ void main() {
       final result = response.result as Map<String, dynamic>;
       expect(result['items'], hasLength(2));
       expect(result['total_commands'], equals(2));
+    });
+
+    test('should forward request database to authorization for sql.executeBatch', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestDatabase: any(named: 'requestDatabase'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.executeBatch',
+        id: 'req-batch-db-auth',
+        params: {
+          'database': 'erp_main',
+          'commands': [
+            {'sql': 'SELECT * FROM users WHERE id = 1'},
+            {'sql': 'SELECT COUNT(*) FROM users'},
+          ],
+        },
+      );
+
+      final queryResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-batch-db-auth',
+        agentId: 'agent-1',
+        data: const [
+          {'id': 1, 'name': 'John'},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(() => mockNormalizer.normalize(any())).thenAnswer(
+        (invocation) => invocation.positionalArguments[0] as QueryResponse,
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'opaque-token',
+      );
+
+      expect(response.isSuccess, isTrue);
+      verify(
+        () => mockAuthorize(
+          token: 'opaque-token',
+          sql: 'SELECT * FROM users WHERE id = 1',
+          requestDatabase: 'erp_main',
+          requestId: 'req-batch-db-auth',
+          method: 'sql.executeBatch',
+        ),
+      ).called(1);
+      verify(
+        () => mockAuthorize(
+          token: 'opaque-token',
+          sql: 'SELECT COUNT(*) FROM users',
+          requestDatabase: 'erp_main',
+          requestId: 'req-batch-db-auth',
+          method: 'sql.executeBatch',
+        ),
+      ).called(1);
     });
 
     test(

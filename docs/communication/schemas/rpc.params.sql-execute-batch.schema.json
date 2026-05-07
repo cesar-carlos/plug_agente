@@ -19,7 +19,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1048576,
-            "description": "SQL statement to execute. Hard ceiling 1 MiB per command. Each command must contain exactly one top-level SQL statement."
+            "description": "SQL statement to execute. Supports SELECT/INSERT/UPDATE/DELETE/MERGE/WITH plus DDL v1 (CREATE/ALTER/DROP TABLE/VIEW and TRUNCATE TABLE). Hard ceiling 1 MiB per command. Each command must contain exactly one top-level SQL statement."
           },
           "params": {
             "type": "object",
@@ -76,7 +76,7 @@
     },
     "database": {
       "type": "string",
-      "description": "Optional target database override for this batch request"
+      "description": "Optional target database override for this batch request. When the resolved client token payload contains payload.database, this field becomes required and must match it exactly after trim + case-insensitive normalization."
     }
   },
   "additionalProperties": false

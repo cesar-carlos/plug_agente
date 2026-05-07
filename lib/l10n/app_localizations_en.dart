@@ -569,7 +569,142 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configTabGeneral => 'General';
 
   @override
+  String get configTabPreferences => 'Preferences';
+
+  @override
+  String get configTabUpdatesAbout => 'Updates & about';
+
+  @override
+  String get configTabBackup => 'Backup';
+
+  @override
   String get configTabWebSocket => 'WebSocket';
+
+  @override
+  String get configBackupSectionTitle => 'Local backup';
+
+  @override
+  String get configBackupIntro =>
+      'Export or restore the local agent database (configuration) and the global settings file. The archive may contain hub credentials stored in the database. Secrets stored only in Windows secure storage are not included—you may need to sign in again after a restore.';
+
+  @override
+  String get configBackupDuplicateNote =>
+      'Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.';
+
+  @override
+  String get configBackupSingleInstanceNote => 'Do not run two copies of the app against the same global data folder.';
+
+  @override
+  String configBackupRestoreDiagnosticsHint(String fileName) {
+    return 'If restore fails after the app closes, details are saved as $fileName in the app data folder.';
+  }
+
+  @override
+  String get configBackupButtonExport => 'Export backup…';
+
+  @override
+  String get configBackupButtonRestore => 'Restore from backup…';
+
+  @override
+  String get configBackupExporting => 'Exporting backup…';
+
+  @override
+  String get configBackupRestoring => 'Preparing restore…';
+
+  @override
+  String get configBackupExportSuccessTitle => 'Backup saved';
+
+  @override
+  String get configBackupExportSuccessMessage => 'The backup file was created successfully.';
+
+  @override
+  String get configBackupRestoreDialogTitle => 'Restore backup';
+
+  @override
+  String get configBackupRestoreDialogBody =>
+      'This replaces the local database and settings. The application will close—start it again afterward. Current files are copied to .bak before replacement.';
+
+  @override
+  String get configBackupRestoreDuplicateWarning =>
+      'This agent ID appears connected on the hub. Restoring may duplicate an active session unless the other machine is offline.';
+
+  @override
+  String get configBackupRestoreVerifyWarning =>
+      'Could not verify whether this agent is already connected (network or expired session). Confirm that no other machine is using this same backup.';
+
+  @override
+  String get configBackupRestoreInstallationMismatch =>
+      'This backup was created on another installation (different installation ID).';
+
+  @override
+  String get configBackupCheckboxAcknowledgeDuplicate =>
+      'I confirm the other session is offline or I accept the risk of a duplicate agent.';
+
+  @override
+  String get configBackupCheckboxAcknowledgeUncertain =>
+      'I understand the hub could not be verified and I accept the risk.';
+
+  @override
+  String get configBackupRestoreConfirm => 'Restore and exit';
+
+  @override
+  String get configBackupCancel => 'Cancel';
+
+  @override
+  String get configBackupErrMissingManifestOrDb => 'The archive is missing manifest or database files.';
+
+  @override
+  String get configBackupErrInvalidManifest => 'The backup manifest is invalid.';
+
+  @override
+  String get configBackupErrUnsupportedFormat => 'This backup format is not supported.';
+
+  @override
+  String get configBackupErrDbVersion => 'Could not read the schema version from the backup database.';
+
+  @override
+  String get configBackupErrNewerBackup =>
+      'This backup was created with a newer app version. Update the app before restoring.';
+
+  @override
+  String get configBackupErrInvalidEntry => 'The archive contains an invalid file entry.';
+
+  @override
+  String get configBackupErrExportDbNotFound => 'Local database file was not found.';
+
+  @override
+  String get configBackupErrExportZip => 'Failed to build the backup archive.';
+
+  @override
+  String get configBackupErrExportWrite => 'Could not write the backup file.';
+
+  @override
+  String get configBackupErrExportGeneric => 'Unexpected error while exporting backup.';
+
+  @override
+  String get configBackupErrReadZip => 'Could not read the backup file.';
+
+  @override
+  String get configBackupErrStageGeneric => 'Failed to read the backup archive.';
+
+  @override
+  String get configBackupErrApplyMissingDb => 'Staged database file is missing.';
+
+  @override
+  String get configBackupErrApplyWrite => 'Could not apply backup files.';
+
+  @override
+  String get configBackupRestoreFailedTitle => 'Restore failed';
+
+  @override
+  String get configBackupExportFailedTitle => 'Export failed';
+
+  @override
+  String get configBackupRestoreRestartNotice => 'The application will close. Start it again to use the restored data.';
+
+  @override
+  String get configBackupRestoreOlderSchemaNote =>
+      'This backup uses an older database schema. The app will migrate it on the next start.';
 
   @override
   String get configLastUpdateNever => 'Never checked';
@@ -1305,10 +1440,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctErrorRuleOrAllPermissionsRequired => 'Add at least one valid rule or enable all_permissions.';
 
   @override
+  String get ctErrorRuleOrGlobalPermissionsRequired => 'Add at least one valid rule when global scope is disabled.';
+
+  @override
+  String get ctErrorGlobalPermissionRequired =>
+      'Select at least one global permission when all_tables or all_views is enabled.';
+
+  @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload must be a valid JSON object.';
 
   @override
   String get ctErrorPayloadInvalidJson => 'Invalid JSON payload.';
+
+  @override
+  String get ctErrorPayloadDatabaseMustBeString => 'payload.database must be a string.';
+
+  @override
+  String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database must not be empty.';
 
   @override
   String get ctPermissionRead => 'Read';
@@ -1318,6 +1466,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctPermissionDdl => 'DDL';
+
+  @override
+  String get ctGlobalScopeRulesDisabled =>
+      'Global scope is enabled. Resource rules are hidden and will be removed when you save this token.';
 
   @override
   String get ctGridColumnType => 'Type';

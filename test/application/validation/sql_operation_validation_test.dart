@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/domain/value_objects/database_resource.dart';
 
 /// Test matrix for SQL validation and classification (Fase 4).
 void main() {
@@ -84,7 +85,7 @@ void main() {
       });
     });
 
-    group('ambiguous / multi-statement (deny by default)', () {
+    group('DDL and multi-statement handling', () {
       test('should reject multiple statements', () {
         final r = SqlValidator.validateSqlForExecution(
           'SELECT * FROM users; DELETE FROM users',
@@ -92,21 +93,28 @@ void main() {
         expect(r.isError(), isTrue);
       });
 
-      test('should reject DROP', () {
+      test('should accept DROP', () {
         final r = SqlValidator.validateSqlForExecution('DROP TABLE users');
-        expect(r.isError(), isTrue);
+        expect(r.isSuccess(), isTrue);
       });
 
-      test('should reject ALTER', () {
+      test('should accept ALTER', () {
         final r = SqlValidator.validateSqlForExecution(
           'ALTER TABLE users ADD x INT',
         );
-        expect(r.isError(), isTrue);
+        expect(r.isSuccess(), isTrue);
       });
 
-      test('should reject TRUNCATE', () {
+      test('should accept TRUNCATE', () {
         final r = SqlValidator.validateSqlForExecution('TRUNCATE TABLE users');
-        expect(r.isError(), isTrue);
+        expect(r.isSuccess(), isTrue);
+      });
+
+      test('should accept CREATE VIEW', () {
+        final r = SqlValidator.validateSqlForExecution(
+          'CREATE VIEW dbo.active_users AS SELECT * FROM dbo.users',
+        );
+        expect(r.isSuccess(), isTrue);
       });
 
       test('should reject query with line comment', () {
@@ -320,6 +328,36 @@ void main() {
               c.resources.any((x) => x.normalizedName == 'dbo.tabela'),
               isTrue,
             );
+          },
+          (_) => fail('Expected success'),
+        );
+      });
+    });
+
+    group('DDL', () {
+      test('should classify DROP TABLE as ddl targeting table', () {
+        final r = classifier.classify('DROP TABLE dbo.users');
+        expect(r.isSuccess(), isTrue);
+        r.fold(
+          (c) {
+            expect(c.operation, equals(SqlOperation.ddl));
+            expect(c.resources.single.resourceType, equals(DatabaseResourceType.table));
+            expect(c.resources.single.normalizedName, equals('dbo.users'));
+          },
+          (_) => fail('Expected success'),
+        );
+      });
+
+      test('should classify CREATE VIEW as ddl targeting view', () {
+        final r = classifier.classify(
+          'CREATE VIEW dbo.active_users AS SELECT * FROM dbo.users',
+        );
+        expect(r.isSuccess(), isTrue);
+        r.fold(
+          (c) {
+            expect(c.operation, equals(SqlOperation.ddl));
+            expect(c.resources.single.resourceType, equals(DatabaseResourceType.view));
+            expect(c.resources.single.normalizedName, equals('dbo.active_users'));
           },
           (_) => fail('Expected success'),
         );

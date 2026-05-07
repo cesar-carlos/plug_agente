@@ -224,6 +224,87 @@ void main() {
         expect(ordersEntry!.allowed, isFalse);
       },
     );
+
+    test('should authorize DDL when matching rule grants ddl permission', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildDdlPolicy()));
+
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: 'DROP TABLE dbo.users',
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should deny when payload database exists and request database is missing', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildDatabaseScopedPolicy()));
+
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as ConfigurationFailure;
+          expect(authFailure.context['reason'], equals('database_required'));
+          expect(authFailure.context['expected_database'], equals('erp_main'));
+        },
+      );
+    });
+
+    test('should deny when request database does not match payload.database', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildDatabaseScopedPolicy()));
+
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+        requestDatabase: 'erp_secondary',
+      );
+
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as ConfigurationFailure;
+          expect(authFailure.context['reason'], equals('database_mismatch'));
+          expect(authFailure.context['expected_database'], equals('erp_main'));
+          expect(
+            authFailure.context['request_database'],
+            equals('erp_secondary'),
+          );
+        },
+      );
+    });
+
+    test('should normalize request database before matching payload.database', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildDatabaseScopedPolicy()));
+
+      final first = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+        requestDatabase: ' ERP_MAIN ',
+      );
+      final second = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+        requestDatabase: 'erp_main',
+      );
+
+      expect(first.isSuccess(), isTrue);
+      expect(second.isSuccess(), isTrue);
+      verify(() => resolver.resolvePolicy(any())).called(1);
+    });
   });
 }
 
@@ -280,5 +361,53 @@ ClientTokenPolicy _buildNoAccessPolicy() {
     allViews: false,
     allPermissions: false,
     rules: <ClientTokenRule>[],
+  );
+}
+
+ClientTokenPolicy _buildDdlPolicy() {
+  return const ClientTokenPolicy(
+    clientId: 'client-acme',
+    allTables: false,
+    allViews: false,
+    allPermissions: false,
+    rules: <ClientTokenRule>[
+      ClientTokenRule(
+        resource: DatabaseResource(
+          resourceType: DatabaseResourceType.table,
+          name: 'dbo.users',
+        ),
+        permissions: ClientPermissionSet(
+          canRead: false,
+          canUpdate: false,
+          canDelete: false,
+          canDdl: true,
+        ),
+        effect: ClientTokenRuleEffect.allow,
+      ),
+    ],
+  );
+}
+
+ClientTokenPolicy _buildDatabaseScopedPolicy() {
+  return const ClientTokenPolicy(
+    clientId: 'client-acme',
+    allTables: false,
+    allViews: false,
+    allPermissions: false,
+    payload: <String, dynamic>{'database': 'ERP_MAIN'},
+    rules: <ClientTokenRule>[
+      ClientTokenRule(
+        resource: DatabaseResource(
+          resourceType: DatabaseResourceType.unknown,
+          name: 'dbo.users',
+        ),
+        permissions: ClientPermissionSet(
+          canRead: true,
+          canUpdate: false,
+          canDelete: false,
+        ),
+        effect: ClientTokenRuleEffect.allow,
+      ),
+    ],
   );
 }

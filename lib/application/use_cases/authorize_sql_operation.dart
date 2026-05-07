@@ -30,6 +30,7 @@ class AuthorizeSqlOperation {
   Future<Result<void>> call({
     required String token,
     required String sql,
+    String? requestDatabase,
     String? requestId,
     String? method,
   }) async {
@@ -37,6 +38,9 @@ class AuthorizeSqlOperation {
     return classificationResult.fold(
       (classification) async {
         final tokenHash = hashClientCredentialToken(token);
+        final normalizedRequestDatabase = _normalizeDatabaseName(
+          requestDatabase,
+        );
         final resources = classification.resources;
         final decisionKeys = resources
             .map(
@@ -44,6 +48,7 @@ class AuthorizeSqlOperation {
                 tokenHash: tokenHash,
                 operation: classification.operation.name,
                 resource: resource.normalizedName,
+                requestDatabase: normalizedRequestDatabase,
               ),
             )
             .toList(growable: false);
@@ -70,7 +75,9 @@ class AuthorizeSqlOperation {
             continue;
           }
           deniedNames.add(name);
-          if (clientIdFromCache == null && entry.clientId != null && entry.clientId!.isNotEmpty) {
+          if (clientIdFromCache == null &&
+              entry.clientId != null &&
+              entry.clientId!.isNotEmpty) {
             clientIdFromCache = entry.clientId;
           }
           _recordReasonForName(
@@ -98,6 +105,27 @@ class AuthorizeSqlOperation {
         final policyResult = await _tokenValidationService.validate(token);
         return policyResult.fold(
           (policy) {
+            final databaseConstraintFailure = _validateDatabaseConstraint(
+              policy: policy,
+              requestDatabase: normalizedRequestDatabase,
+              classification: classification,
+            );
+            if (databaseConstraintFailure != null) {
+              final reason =
+                  databaseConstraintFailure.context['reason'] as String?;
+              for (final i in missIndices) {
+                _cacheDecision(
+                  key: decisionKeys[i],
+                  allowed: false,
+                  clientId: policy.clientId,
+                  reason: reason,
+                  requestId: requestId,
+                  method: method,
+                );
+              }
+              return Failure(databaseConstraintFailure);
+            }
+
             for (final i in missIndices) {
               final resource = resources[i];
               final allowed = policy.isAllowed(
@@ -114,7 +142,9 @@ class AuthorizeSqlOperation {
                 );
               } else {
                 final name = resource.normalizedName;
-                final reason = policy.isRevoked ? 'token_revoked' : 'missing_permission';
+                final reason = policy.isRevoked
+                    ? 'token_revoked'
+                    : 'missing_permission';
                 _cacheDecision(
                   key: decisionKeys[i],
                   allowed: false,
@@ -149,7 +179,10 @@ class AuthorizeSqlOperation {
                 ? failure
                 : domain.ConfigurationFailure.withContext(
                     message: failure.toString(),
-                    context: const {'authorization': true, 'reason': 'unexpected_failure_type'},
+                    context: const {
+                      'authorization': true,
+                      'reason': 'unexpected_failure_type',
+                    },
                   );
             for (final i in missIndices) {
               _cacheDecision(
@@ -173,8 +206,7 @@ class AuthorizeSqlOperation {
               'authorization': true,
               'reason': 'invalid_policy',
               'user_message':
-                  'Comando SQL nao suportado para autorizacao. '
-                  'Revise a consulta enviada.',
+                  'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
             },
           ),
         );
@@ -215,11 +247,16 @@ class AuthorizeSqlOperation {
     );
     final opName = classification.operation.name;
     final resourceList = _formatNameListForMessage(sorted);
-    final userMessage = topReason == 'token_revoked'
-        ? 'Token revogado. Gere um novo token para continuar. '
-              'Recursos na consulta: $resourceList.'
-        : 'Acesso negado para ${_operationLabel(classification.operation)} '
-              'nos recursos: $resourceList.';
+    final userMessage = switch (topReason) {
+      'token_revoked' =>
+        'Token revogado. Gere um novo token para continuar. Recursos na consulta: $resourceList.',
+      'database_required' =>
+        'Este token exige que a request informe o database configurado no payload antes de ${_operationLabel(classification.operation)}: $resourceList.',
+      'database_mismatch' =>
+        'O database enviado na request nao corresponde ao database configurado no token para ${_operationLabel(classification.operation)}: $resourceList.',
+      _ =>
+        'Acesso negado para ${_operationLabel(classification.operation)} nos recursos: $resourceList.',
+    };
 
     return domain.ConfigurationFailure.withContext(
       message: _formatTechnicalMessage(
@@ -245,9 +282,12 @@ class AuthorizeSqlOperation {
     if (policy != null && policy.isRevoked) {
       return 'token_revoked';
     }
-    for (final r in reasonByDeniedName.values) {
-      if (r == 'token_revoked') {
+    for (final reason in reasonByDeniedName.values) {
+      if (reason == 'token_revoked') {
         return 'token_revoked';
+      }
+      if (reason == 'database_required' || reason == 'database_mismatch') {
+        return reason;
       }
     }
     return 'missing_permission';
@@ -267,7 +307,7 @@ class AuthorizeSqlOperation {
   }
 
   String _formatNameListForMessage(List<String> sorted) {
-    return sorted.map((e) => e).join(', ');
+    return sorted.join(', ');
   }
 
   String _formatTechnicalMessage({
@@ -280,7 +320,9 @@ class AuthorizeSqlOperation {
     if (resourceNames.length <= _kMaxResourceNamesInTechnicalMessage) {
       return 'Authorization denied for $operation on ${resourceNames.join(', ')}';
     }
-    final head = resourceNames.take(_kMaxResourceNamesInTechnicalMessage).join(', ');
+    final head = resourceNames
+        .take(_kMaxResourceNamesInTechnicalMessage)
+        .join(', ');
     final rest = resourceNames.length - _kMaxResourceNamesInTechnicalMessage;
     return 'Authorization denied for $operation on $head (+$rest more)';
   }
@@ -314,8 +356,12 @@ class AuthorizeSqlOperation {
     required String tokenHash,
     required String operation,
     required String resource,
+    required String? requestDatabase,
   }) {
-    return '$tokenHash|$operation|$resource';
+    if (requestDatabase == null) {
+      return '$tokenHash|$operation|$resource';
+    }
+    return '$tokenHash|$operation|db:$requestDatabase|$resource';
   }
 
   String _operationLabel(SqlOperation operation) {
@@ -323,6 +369,69 @@ class AuthorizeSqlOperation {
       SqlOperation.read => 'consultar',
       SqlOperation.update => 'alterar',
       SqlOperation.delete => 'excluir',
+      SqlOperation.ddl => 'executar DDL',
     };
+  }
+
+  domain.ConfigurationFailure? _validateDatabaseConstraint({
+    required ClientTokenPolicy policy,
+    required String? requestDatabase,
+    required SqlOperationClassification classification,
+  }) {
+    final expectedDatabase = policy.payloadDatabaseConstraint;
+    if (expectedDatabase == null) {
+      return null;
+    }
+
+    if (requestDatabase == null) {
+      return domain.ConfigurationFailure.withContext(
+        message:
+            'Authorization denied: database is required and must match token payload.database',
+        context: {
+          'authorization': true,
+          'reason': 'database_required',
+          'client_id': policy.clientId,
+          'operation': classification.operation.name,
+          'resource': classification.resources.first.normalizedName,
+          'denied_resources': classification.resources
+              .map((resource) => resource.normalizedName)
+              .toList(growable: false),
+          'expected_database': expectedDatabase,
+          'user_message':
+              'Este token exige que a request informe o database "$expectedDatabase".',
+        },
+      );
+    }
+
+    if (requestDatabase == expectedDatabase) {
+      return null;
+    }
+
+    return domain.ConfigurationFailure.withContext(
+      message:
+          'Authorization denied: request database "$requestDatabase" does not match token payload.database "$expectedDatabase"',
+      context: {
+        'authorization': true,
+        'reason': 'database_mismatch',
+        'client_id': policy.clientId,
+        'operation': classification.operation.name,
+        'resource': classification.resources.first.normalizedName,
+        'denied_resources': classification.resources
+            .map((resource) => resource.normalizedName)
+            .toList(growable: false),
+        'expected_database': expectedDatabase,
+        'request_database': requestDatabase,
+        'user_message':
+            'Este token esta restrito ao database "$expectedDatabase". Database recebido: "$requestDatabase".',
+      },
+    );
+  }
+
+  String? _normalizeDatabaseName(String? rawValue) {
+    final normalized = rawValue?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
   }
 }
