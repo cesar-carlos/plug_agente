@@ -5,6 +5,19 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.0+1</title>
+   <pubDate>Thu, 07 May 2026 21:00:00 +0000</pubDate>
+   <description>Version 1.6.0
+
+- Settings reorganized into Preferences, Client tokens, and Updates / About; local backup and restore of app data with safer SQLite handling and optional ZIP encoding in a worker isolate.
+- Hub duplicate-agent guard: timeout and parsing for the connected-agents list before destructive restore operations.
+- Granular global client token permissions (DDL and resource-level rules) with SQL authorization updates and contract/schema alignment.
+- Playground query validation rejects common DDL-style statement prefixes; installer and app version 1.6.0+1.
+
+Release includes the Windows installer asset PlugAgente-Setup-1.6.0.exe.</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.0/PlugAgente-Setup-1.6.0.exe" sparkle:version="1.6.0+1" sparkle:os="windows" length="36766313" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.5.3+1</title>
    <pubDate>Mon, 04 May 2026 18:03:27 +0000</pubDate>
    <description>Version 1.5.3
