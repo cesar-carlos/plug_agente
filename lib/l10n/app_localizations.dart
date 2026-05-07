@@ -90,7 +90,10 @@ abstract class AppLocalizations {
   ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[Locale('en'), Locale('pt')];
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
+    Locale('pt')
+  ];
 
   /// No description provided for @navDashboard.
   ///
@@ -1172,11 +1175,251 @@ abstract class AppLocalizations {
   /// **'General'**
   String get configTabGeneral;
 
+  /// No description provided for @configTabPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences'**
+  String get configTabPreferences;
+
+  /// No description provided for @configTabUpdatesAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates & about'**
+  String get configTabUpdatesAbout;
+
+  /// No description provided for @configTabBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup'**
+  String get configTabBackup;
+
   /// No description provided for @configTabWebSocket.
   ///
   /// In en, this message translates to:
   /// **'WebSocket'**
   String get configTabWebSocket;
+
+  /// No description provided for @configBackupSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local backup'**
+  String get configBackupSectionTitle;
+
+  /// No description provided for @configBackupIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Export or restore the local agent database (configuration) and the global settings file. The archive may contain hub credentials stored in the database. Secrets stored only in Windows secure storage are not included—you may need to sign in again after a restore.'**
+  String get configBackupIntro;
+
+  /// No description provided for @configBackupDuplicateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.'**
+  String get configBackupDuplicateNote;
+
+  /// No description provided for @configBackupSingleInstanceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not run two copies of the app against the same global data folder.'**
+  String get configBackupSingleInstanceNote;
+
+  /// No description provided for @configBackupButtonExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export backup…'**
+  String get configBackupButtonExport;
+
+  /// No description provided for @configBackupButtonRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from backup…'**
+  String get configBackupButtonRestore;
+
+  /// No description provided for @configBackupExporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Exporting backup…'**
+  String get configBackupExporting;
+
+  /// No description provided for @configBackupRestoring.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing restore…'**
+  String get configBackupRestoring;
+
+  /// No description provided for @configBackupExportSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup saved'**
+  String get configBackupExportSuccessTitle;
+
+  /// No description provided for @configBackupExportSuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup file was created successfully.'**
+  String get configBackupExportSuccessMessage;
+
+  /// No description provided for @configBackupRestoreDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore backup'**
+  String get configBackupRestoreDialogTitle;
+
+  /// No description provided for @configBackupRestoreDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This replaces the local database and settings. The application will close—start it again afterward. Current files are copied to .bak before replacement.'**
+  String get configBackupRestoreDialogBody;
+
+  /// No description provided for @configBackupRestoreDuplicateWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This agent ID appears connected on the hub. Restoring may duplicate an active session unless the other machine is offline.'**
+  String get configBackupRestoreDuplicateWarning;
+
+  /// No description provided for @configBackupRestoreVerifyWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify whether this agent is already connected (network or expired session). Confirm that no other machine is using this same backup.'**
+  String get configBackupRestoreVerifyWarning;
+
+  /// No description provided for @configBackupRestoreInstallationMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup was created on another installation (different installation ID).'**
+  String get configBackupRestoreInstallationMismatch;
+
+  /// No description provided for @configBackupCheckboxAcknowledgeDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'I confirm the other session is offline or I accept the risk of a duplicate agent.'**
+  String get configBackupCheckboxAcknowledgeDuplicate;
+
+  /// No description provided for @configBackupCheckboxAcknowledgeUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand the hub could not be verified and I accept the risk.'**
+  String get configBackupCheckboxAcknowledgeUncertain;
+
+  /// No description provided for @configBackupRestoreConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore and exit'**
+  String get configBackupRestoreConfirm;
+
+  /// No description provided for @configBackupCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get configBackupCancel;
+
+  /// No description provided for @configBackupErrMissingManifestOrDb.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive is missing manifest or database files.'**
+  String get configBackupErrMissingManifestOrDb;
+
+  /// No description provided for @configBackupErrInvalidManifest.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup manifest is invalid.'**
+  String get configBackupErrInvalidManifest;
+
+  /// No description provided for @configBackupErrUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup format is not supported.'**
+  String get configBackupErrUnsupportedFormat;
+
+  /// No description provided for @configBackupErrDbVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the schema version from the backup database.'**
+  String get configBackupErrDbVersion;
+
+  /// No description provided for @configBackupErrNewerBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup was created with a newer app version. Update the app before restoring.'**
+  String get configBackupErrNewerBackup;
+
+  /// No description provided for @configBackupErrInvalidEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive contains an invalid file entry.'**
+  String get configBackupErrInvalidEntry;
+
+  /// No description provided for @configBackupErrExportDbNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Local database file was not found.'**
+  String get configBackupErrExportDbNotFound;
+
+  /// No description provided for @configBackupErrExportZip.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to build the backup archive.'**
+  String get configBackupErrExportZip;
+
+  /// No description provided for @configBackupErrExportWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not write the backup file.'**
+  String get configBackupErrExportWrite;
+
+  /// No description provided for @configBackupErrExportGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected error while exporting backup.'**
+  String get configBackupErrExportGeneric;
+
+  /// No description provided for @configBackupErrReadZip.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the backup file.'**
+  String get configBackupErrReadZip;
+
+  /// No description provided for @configBackupErrStageGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to read the backup archive.'**
+  String get configBackupErrStageGeneric;
+
+  /// No description provided for @configBackupErrApplyMissingDb.
+  ///
+  /// In en, this message translates to:
+  /// **'Staged database file is missing.'**
+  String get configBackupErrApplyMissingDb;
+
+  /// No description provided for @configBackupErrApplyWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not apply backup files.'**
+  String get configBackupErrApplyWrite;
+
+  /// No description provided for @configBackupRestoreFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore failed'**
+  String get configBackupRestoreFailedTitle;
+
+  /// No description provided for @configBackupExportFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed'**
+  String get configBackupExportFailedTitle;
+
+  /// No description provided for @configBackupRestoreRestartNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The application will close. Start it again to use the restored data.'**
+  String get configBackupRestoreRestartNotice;
+
+  /// No description provided for @configBackupRestoreOlderSchemaNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup uses an older database schema. The app will migrate it on the next start.'**
+  String get configBackupRestoreOlderSchemaNote;
 
   /// No description provided for @configLastUpdateNever.
   ///
@@ -3133,18 +3376,18 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en':
-      return AppLocalizationsEn();
-    case 'pt':
-      return AppLocalizationsPt();
+    case 'en': return AppLocalizationsEn();
+    case 'pt': return AppLocalizationsPt();
   }
 
   throw FlutterError(
     'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
     'an issue with the localizations generation tool. Please file an issue '
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
+    'that was used.'
   );
 }

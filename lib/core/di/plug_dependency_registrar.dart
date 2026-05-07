@@ -62,12 +62,14 @@ import 'package:plug_agente/domain/repositories/i_authorization_metrics_collecto
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
+import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_availability_probe.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
+import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -80,11 +82,13 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_rest_client.dart';
 import 'package:plug_agente/infrastructure/external_services/auth_client.dart';
+import 'package:plug_agente/infrastructure/external_services/connected_agents_rest_client.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/hub_availability_probe.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
@@ -378,6 +382,22 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
     ..registerLazySingleton<IAuthClient>(
       () => AuthClient(DioFactory.createDio()),
+    )
+    ..registerLazySingleton<IConnectedAgentsGateway>(
+      () => ConnectedAgentsRestClient(
+        DioFactory.createDio(
+          requestTimeout: const Duration(seconds: AppConstants.authTimeoutSeconds),
+        ),
+      ),
+    )
+    ..registerLazySingleton<ILocalAppDataBackupService>(
+      () => LocalAppDataBackupService(
+        database: getIt<AppDatabase>(),
+        storageContext: getIt<GlobalStorageContext>(),
+        settingsStore: getIt<IAppSettingsStore>(),
+        authClient: getIt<IAuthClient>(),
+        connectedAgentsGateway: getIt<IConnectedAgentsGateway>(),
+      ),
     )
     ..registerLazySingleton<IHubAvailabilityProbe>(
       () {

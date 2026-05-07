@@ -5,26 +5,21 @@ import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
-class GeneralConfigSection extends StatelessWidget {
-  const GeneralConfigSection({
+class PreferencesConfigSection extends StatelessWidget {
+  const PreferencesConfigSection({
     required this.isDarkThemeEnabled,
     required this.startWithWindows,
     required this.startMinimized,
     required this.minimizeToTray,
     required this.closeToTray,
-    required this.lastUpdateCheck,
     required this.onDarkThemeChanged,
     required this.onStartWithWindowsChanged,
     required this.onStartMinimizedChanged,
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
-    required this.onCheckUpdates,
     required this.onOpenStartupSettings,
-    required this.appVersion,
     this.startupSupported = true,
     this.startupError,
-    this.supportsAutoUpdate = true,
-    this.isCheckingUpdates = false,
     super.key,
   });
 
@@ -33,24 +28,18 @@ class GeneralConfigSection extends StatelessWidget {
   final bool startMinimized;
   final bool minimizeToTray;
   final bool closeToTray;
-  final String lastUpdateCheck;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
   final ValueChanged<bool> onStartMinimizedChanged;
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
-  final VoidCallback onCheckUpdates;
   final VoidCallback onOpenStartupSettings;
-  final String appVersion;
   final bool startupSupported;
   final SystemSettingsErrorState? startupError;
-  final bool supportsAutoUpdate;
-  final bool isCheckingUpdates;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -97,54 +86,6 @@ class GeneralConfigSection extends StatelessWidget {
               label: l10n.gsToggleCloseToTray,
               value: closeToTray,
               onChanged: onCloseToTrayChanged,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Divider(),
-            const SizedBox(height: AppSpacing.lg),
-            SettingsSectionTitle(title: l10n.gsSectionUpdates),
-            const SizedBox(height: AppSpacing.md),
-            if (supportsAutoUpdate)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
-                      style: context.bodyText,
-                    ),
-                  ),
-                  if (isCheckingUpdates)
-                    const SizedBox(
-                      key: ValueKey('updates_progress_ring'),
-                      width: 20,
-                      height: 20,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  else
-                    IconButton(
-                      key: const ValueKey('updates_refresh_button'),
-                      icon: const Icon(FluentIcons.refresh),
-                      onPressed: onCheckUpdates,
-                    ),
-                ],
-              )
-            else
-              Text(
-                l10n.configAutoUpdateNotSupported,
-                style: context.captionText,
-              ),
-            const SizedBox(height: AppSpacing.lg),
-            const Divider(),
-            const SizedBox(height: AppSpacing.lg),
-            SettingsSectionTitle(title: l10n.gsSectionAbout),
-            const SizedBox(height: AppSpacing.md),
-            SettingsKeyValue(
-              label: l10n.gsLabelVersion,
-              value: appVersion,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            SettingsKeyValue(
-              label: l10n.gsLabelLicense,
-              value: l10n.gsLicenseMit,
             ),
           ],
         ),
