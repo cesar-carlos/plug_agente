@@ -204,7 +204,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get msgOdbcDriverNameRequired => 'Nome do Driver ODBC é obrigatório';
 
   @override
-  String get msgConnectionCheckFailed => 'Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.';
+  String get msgConnectionCheckFailed =>
+      'Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.';
 
   @override
   String get btnOk => 'OK';
@@ -231,16 +232,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardDescription => 'Monitore o status do seu agente e conexões de banco de dados aqui.';
 
   @override
-  String get odbcDriverNotFound => 'O driver ODBC configurado não foi encontrado neste computador. Revise o driver e a fonte de dados nas configurações.';
+  String get odbcDriverNotFound =>
+      'O driver ODBC configurado não foi encontrado neste computador. Revise o driver e a fonte de dados nas configurações.';
 
   @override
   String get odbcAuthFailed => 'Não foi possível autenticar no banco de dados. Verifique usuário, senha e permissões.';
 
   @override
-  String get odbcServerUnreachable => 'Não foi possível conectar ao servidor do banco. Verifique host, porta, VPN e disponibilidade da rede.';
+  String get odbcServerUnreachable =>
+      'Não foi possível conectar ao servidor do banco. Verifique host, porta, VPN e disponibilidade da rede.';
 
   @override
-  String get odbcConnectionTimeout => 'A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.';
+  String get odbcConnectionTimeout =>
+      'A conexão com o banco demorou mais do que o esperado. Confirme se o servidor está acessível e tente novamente.';
 
   @override
   String get odbcConnectionFailed => 'Não foi possível estabelecer conexão com o banco de dados.';
@@ -475,16 +479,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get queryPlaygroundHintLastRunPreserve => 'Última execução: SQL preservada (sem reescrita de paginação pelo agente).';
+  String get queryPlaygroundHintLastRunPreserve =>
+      'Última execução: SQL preservada (sem reescrita de paginação pelo agente).';
 
   @override
-  String get queryPlaygroundHintLastRunManagedPagination => 'Última execução: paginação gerenciada — a SQL pode ter sido reescrita para o dialeto do banco.';
+  String get queryPlaygroundHintLastRunManagedPagination =>
+      'Última execução: paginação gerenciada — a SQL pode ter sido reescrita para o dialeto do banco.';
 
   @override
-  String get queryPlaygroundHintLastRunManaged => 'Última execução: modo gerenciado — limites e ajustes do agente podem aplicar-se à SQL.';
+  String get queryPlaygroundHintLastRunManaged =>
+      'Última execução: modo gerenciado — limites e ajustes do agente podem aplicar-se à SQL.';
 
   @override
-  String get queryPlaygroundHintLastRunStreaming => 'Última execução: modo streaming — resultados recebidos em fluxo contínuo.';
+  String get queryPlaygroundHintLastRunStreaming =>
+      'Última execução: modo streaming — resultados recebidos em fluxo contínuo.';
 
   @override
   String get querySqlLabel => 'Consulta SQL';
@@ -508,7 +516,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get querySqlHandlingModePreserve => 'Preservar SQL';
 
   @override
-  String get querySqlHandlingModePreserveHint => 'Executa a SQL exatamente como enviada, sem reescrita de paginação gerenciada';
+  String get querySqlHandlingModePreserveHint =>
+      'Executa a SQL exatamente como enviada, sem reescrita de paginação gerenciada';
 
   @override
   String get queryStreamingMode => 'Modo streaming';
@@ -578,13 +587,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configBackupSectionTitle => 'Cópia de segurança local';
 
   @override
-  String get configBackupIntro => 'Exporte ou restaure a base local do agente (configuração) e o ficheiro de definições globais. O arquivo pode conter credenciais do hub guardadas na base. Segredos que existem só no armazenamento seguro do Windows não são incluídos—pode ser necessário voltar a autenticar após restaurar.';
+  String get configBackupIntro =>
+      'Exporte ou restaure a base local do agente (configuração) e o ficheiro de definições globais. O arquivo pode conter credenciais do hub guardadas na base. Segredos que existem só no armazenamento seguro do Windows não são incluídos—pode ser necessário voltar a autenticar após restaurar.';
 
   @override
-  String get configBackupDuplicateNote => 'Restaurar a mesma cópia de segurança em duas máquinas pode registar o mesmo agente duas vezes. A aplicação verifica o hub quando possível; se a verificação falhar, deve confirmar que aceita o risco.';
+  String get configBackupDuplicateNote =>
+      'Restaurar a mesma cópia de segurança em duas máquinas pode registar o mesmo agente duas vezes. A aplicação verifica o hub quando possível; se a verificação falhar, deve confirmar que aceita o risco.';
 
   @override
-  String get configBackupSingleInstanceNote => 'Não execute duas cópias da aplicação sobre a mesma pasta de dados global.';
+  String get configBackupSingleInstanceNote =>
+      'Não execute duas cópias da aplicação sobre a mesma pasta de dados global.';
+
+  @override
+  String configBackupRestoreDiagnosticsHint(String fileName) {
+    return 'Se a restauração falhar depois de a aplicação fechar, os detalhes ficam em $fileName na pasta de dados da aplicação.';
+  }
 
   @override
   String get configBackupButtonExport => 'Exportar cópia de segurança…';
@@ -608,22 +625,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configBackupRestoreDialogTitle => 'Restaurar cópia de segurança';
 
   @override
-  String get configBackupRestoreDialogBody => 'Isto substitui a base local e as definições. A aplicação será fechada—volte a abri-la depois. Os ficheiros atuais são copiados para .bak antes da substituição.';
+  String get configBackupRestoreDialogBody =>
+      'Isto substitui a base local e as definições. A aplicação será fechada—volte a abri-la depois. Os ficheiros atuais são copiados para .bak antes da substituição.';
 
   @override
-  String get configBackupRestoreDuplicateWarning => 'Este ID de agente parece ligado no hub. Restaurar pode duplicar uma sessão ativa a menos que a outra máquina esteja offline.';
+  String get configBackupRestoreDuplicateWarning =>
+      'Este ID de agente parece ligado no hub. Restaurar pode duplicar uma sessão ativa a menos que a outra máquina esteja offline.';
 
   @override
-  String get configBackupRestoreVerifyWarning => 'Não foi possível verificar se este agente já está ligado (rede ou sessão expirada). Confirme que nenhuma outra máquina está a usar esta mesma cópia.';
+  String get configBackupRestoreVerifyWarning =>
+      'Não foi possível verificar se este agente já está ligado (rede ou sessão expirada). Confirme que nenhuma outra máquina está a usar esta mesma cópia.';
 
   @override
-  String get configBackupRestoreInstallationMismatch => 'Esta cópia foi criada noutra instalação (ID de instalação diferente).';
+  String get configBackupRestoreInstallationMismatch =>
+      'Esta cópia foi criada noutra instalação (ID de instalação diferente).';
 
   @override
-  String get configBackupCheckboxAcknowledgeDuplicate => 'Confirmo que a outra sessão está offline ou aceito o risco de agente duplicado.';
+  String get configBackupCheckboxAcknowledgeDuplicate =>
+      'Confirmo que a outra sessão está offline ou aceito o risco de agente duplicado.';
 
   @override
-  String get configBackupCheckboxAcknowledgeUncertain => 'Compreendo que o hub não pôde ser verificado e aceito o risco.';
+  String get configBackupCheckboxAcknowledgeUncertain =>
+      'Compreendo que o hub não pôde ser verificado e aceito o risco.';
 
   @override
   String get configBackupRestoreConfirm => 'Restaurar e sair';
@@ -644,7 +667,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configBackupErrDbVersion => 'Não foi possível ler a versão do esquema na base da cópia.';
 
   @override
-  String get configBackupErrNewerBackup => 'Esta cópia foi criada com uma versão mais recente da aplicação. Atualize antes de restaurar.';
+  String get configBackupErrNewerBackup =>
+      'Esta cópia foi criada com uma versão mais recente da aplicação. Atualize antes de restaurar.';
 
   @override
   String get configBackupErrInvalidEntry => 'O arquivo contém uma entrada de ficheiro inválida.';
@@ -680,10 +704,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configBackupExportFailedTitle => 'Falha na exportação';
 
   @override
-  String get configBackupRestoreRestartNotice => 'A aplicação será fechada. Abra-a novamente para usar os dados restaurados.';
+  String get configBackupRestoreRestartNotice =>
+      'A aplicação será fechada. Abra-a novamente para usar os dados restaurados.';
 
   @override
-  String get configBackupRestoreOlderSchemaNote => 'Esta cópia usa um esquema de base de dados mais antigo. A aplicação irá migrá-lo no próximo arranque.';
+  String get configBackupRestoreOlderSchemaNote =>
+      'Esta cópia usa um esquema de base de dados mais antigo. A aplicação irá migrá-lo no próximo arranque.';
 
   @override
   String get configLastUpdateNever => 'Nunca verificado';
@@ -701,10 +727,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdatesNotAvailable => 'Você já está na versão mais recente.';
 
   @override
-  String get configUpdatesNotAvailableHint => 'Se você acabou de publicar uma nova versão, aguarde até 5 minutos e tente novamente.';
+  String get configUpdatesNotAvailableHint =>
+      'Se você acabou de publicar uma nova versão, aguarde até 5 minutos e tente novamente.';
 
   @override
-  String get configAutoUpdateNotConfigured => 'Auto-update não está configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
+  String get configAutoUpdateNotConfigured =>
+      'Auto-update não está configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
 
   @override
   String configAutoUpdateOfficialFeedExpected(String url) {
@@ -861,13 +889,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get diagnosticsWarningTitle => 'Dados sensíveis nos logs';
 
   @override
-  String get diagnosticsWarningBody => 'As opções abaixo podem gravar SQL ou detalhes técnicos nos logs do aplicativo. Use apenas para depuração e desative em produção quando houver dados pessoais ou segredos.';
+  String get diagnosticsWarningBody =>
+      'As opções abaixo podem gravar SQL ou detalhes técnicos nos logs do aplicativo. Use apenas para depuração e desative em produção quando houver dados pessoais ou segredos.';
 
   @override
   String get diagnosticsOdbcPaginatedSqlLogLabel => 'Log de SQL paginada (ODBC)';
 
   @override
-  String get diagnosticsOdbcPaginatedSqlLogDescription => 'Quando ativado, o agente registra a SQL final após reescrita de paginação gerenciada (developer log).';
+  String get diagnosticsOdbcPaginatedSqlLogDescription =>
+      'Quando ativado, o agente registra a SQL final após reescrita de paginação gerenciada (developer log).';
 
   @override
   String get diagnosticsHubReconnectSectionTitle => 'Reconexão com o hub (recuperação offline)';
@@ -876,16 +906,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get diagnosticsHubReconnectMaxTicksLabel => 'Máximo de tentativas falhas antes de desistir';
 
   @override
-  String get diagnosticsHubReconnectMaxTicksHint => '0 mantém tentativas indefinidamente. Valores menores param antes com erro.';
+  String get diagnosticsHubReconnectMaxTicksHint =>
+      '0 mantém tentativas indefinidamente. Valores menores param antes com erro.';
 
   @override
   String get diagnosticsHubReconnectIntervalLabel => 'Segundos entre tentativas (após o burst)';
 
   @override
-  String get diagnosticsHubReconnectIntervalHint => 'Intervalo permitido: 5–86400. Mudanças no intervalo valem na próxima vez que a retentativa persistente iniciar.';
+  String get diagnosticsHubReconnectIntervalHint =>
+      'Intervalo permitido: 5–86400. Mudanças no intervalo valem na próxima vez que a retentativa persistente iniciar.';
 
   @override
-  String get diagnosticsHubReconnectEnvHint => 'Se você limpar as preferências (Usar padrões), os valores ainda podem vir de HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS e HUB_PERSISTENT_RETRY_INTERVAL_SECONDS no arquivo de ambiente e, em seguida, dos padrões internos.';
+  String get diagnosticsHubReconnectEnvHint =>
+      'Se você limpar as preferências (Usar padrões), os valores ainda podem vir de HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS e HUB_PERSISTENT_RETRY_INTERVAL_SECONDS no arquivo de ambiente e, em seguida, dos padrões internos.';
 
   @override
   String get diagnosticsHubReconnectApply => 'Aplicar ajustes de reconexão';
@@ -906,7 +939,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get diagnosticsHubHardReloginEnabledLabel => 'Ativar fallback de hard relogin automático';
 
   @override
-  String get diagnosticsHubHardReloginEnabledDescription => 'Quando ativado, após falhas repetidas de reconexão o agente tentará logout, login com credenciais salvas e reconexão do socket.';
+  String get diagnosticsHubHardReloginEnabledDescription =>
+      'Quando ativado, após falhas repetidas de reconexão o agente tentará logout, login com credenciais salvas e reconexão do socket.';
 
   @override
   String get diagnosticsHubHardReloginThresholdLabel => 'Falhas de reconexão antes do hard relogin';
@@ -1053,7 +1087,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get wsOutboundCompressionAuto => 'Automático';
 
   @override
-  String get wsOutboundCompressionDescription => 'Automático: acima do limite negociado, o agente comprime com GZIP apenas se o resultado for menor que o JSON em UTF-8 (evita CPU e tráfego em dados pouco compressíveis).';
+  String get wsOutboundCompressionDescription =>
+      'Automático: acima do limite negociado, o agente comprime com GZIP apenas se o resultado for menor que o JSON em UTF-8 (evita CPU e tráfego em dados pouco compressíveis).';
 
   @override
   String get wsSectionClientTokenPolicy => 'Política de client token (RPC)';
@@ -1062,7 +1097,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get wsFieldClientTokenPolicyIntrospection => 'Permitir introspecção client_token.getPolicy';
 
   @override
-  String get wsClientTokenPolicyIntrospectionDescription => 'Desligado: o hub não pode chamar client_token.getPolicy para ler metadados de permissões; a autorização SQL com client_token não é afetada.';
+  String get wsClientTokenPolicyIntrospectionDescription =>
+      'Desligado: o hub não pode chamar client_token.getPolicy para ler metadados de permissões; a autorização SQL com client_token não é afetada.';
 
   @override
   String get dbSectionTitle => 'Configuração do banco de dados';
@@ -1125,10 +1161,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcErrorSaveFailed => 'Falha ao salvar configurações avançadas. Tente novamente.';
 
   @override
-  String get odbcSuccessAppliedNow => 'As configurações de pool, timeout e streaming foram salvas e aplicadas para novas conexões.';
+  String get odbcSuccessAppliedNow =>
+      'As configurações de pool, timeout e streaming foram salvas e aplicadas para novas conexões.';
 
   @override
-  String get odbcSuccessAppliedGradually => 'As configurações de pool, timeout e streaming foram salvas. As novas opções serão aplicadas gradualmente em novas conexões.';
+  String get odbcSuccessAppliedGradually =>
+      'As configurações de pool, timeout e streaming foram salvas. As novas opções serão aplicadas gradualmente em novas conexões.';
 
   @override
   String get odbcSuccessPoolModeRestartAppend => ' Reinicie o aplicativo para aplicar a troca do modo de pool ODBC.';
@@ -1143,7 +1181,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcBlockPool => 'Pool de conexões';
 
   @override
-  String get odbcBlockPoolDescription => 'Múltiplas conexões são reutilizadas automaticamente. Melhora performance em cenários de alta concorrência.';
+  String get odbcBlockPoolDescription =>
+      'Múltiplas conexões são reutilizadas automaticamente. Melhora performance em cenários de alta concorrência.';
 
   @override
   String get odbcFieldPoolSize => 'Tamanho máximo do pool';
@@ -1155,13 +1194,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcFieldNativePool => 'Pool nativo ODBC (experimental)';
 
   @override
-  String get odbcTextNativePoolHelp => 'Desligado por padrão: cada consulta usa conexão dedicada com buffer configurado (mais estável). Ative apenas para testar desempenho ou quando o driver/pacote tratar buffers no pool nativo. Após alterar, reinicie o aplicativo para o modo valer de fato.';
+  String get odbcTextNativePoolHelp =>
+      'Desligado por padrão: cada consulta usa conexão dedicada com buffer configurado (mais estável). Ative apenas para testar desempenho ou quando o driver/pacote tratar buffers no pool nativo. Após alterar, reinicie o aplicativo para o modo valer de fato.';
 
   @override
   String get odbcFieldNativePoolCheckoutValidation => 'Validar conexão ao retirar do pool nativo';
 
   @override
-  String get odbcTextNativePoolCheckoutValidationHelp => 'Ligado por padrão. Desative apenas para benchmark ou tuning avançado quando quiser comparar o custo do checkout validation do driver.';
+  String get odbcTextNativePoolCheckoutValidationHelp =>
+      'Ligado por padrão. Desative apenas para benchmark ou tuning avançado quando quiser comparar o custo do checkout validation do driver.';
 
   @override
   String get odbcBlockTimeouts => 'Timeouts';
@@ -1179,7 +1220,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcHintResultBuffer => '32';
 
   @override
-  String get odbcTextResultBufferHelp => 'Tamanho máximo do buffer em memória para resultados de queries. Aumentar pode melhorar performance em queries grandes.';
+  String get odbcTextResultBufferHelp =>
+      'Tamanho máximo do buffer em memória para resultados de queries. Aumentar pode melhorar performance em queries grandes.';
 
   @override
   String get odbcBlockStreaming => 'Streaming';
@@ -1191,13 +1233,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcHintChunkSize => '1024';
 
   @override
-  String get odbcTextStreamingHelp => 'Controla o tamanho dos chunks enviados para a UI durante queries em streaming. Valores maiores reduzem eventos de atualização e podem melhorar throughput.';
+  String get odbcTextStreamingHelp =>
+      'Controla o tamanho dos chunks enviados para a UI durante queries em streaming. Valores maiores reduzem eventos de atualização e podem melhorar throughput.';
 
   @override
   String get odbcTextQuickRecommendation => 'Recomendação rápida:';
 
   @override
-  String get odbcTextQuickRecommendationItems => '• 256-512 KB: feedback visual mais frequente\n• 1024 KB: equilíbrio geral (padrão)\n• 2048-4096 KB: maior throughput em datasets grandes';
+  String get odbcTextQuickRecommendationItems =>
+      '• 256-512 KB: feedback visual mais frequente\n• 1024 KB: equilíbrio geral (padrão)\n• 2048-4096 KB: maior throughput em datasets grandes';
 
   @override
   String get odbcTextChunkWarning => 'Se houver travamentos de UI ou uso alto de memória, reduza o chunk.';
@@ -1281,7 +1325,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctInfoClientTokenCopied => 'Token do cliente copiado';
 
   @override
-  String get ctInfoClientTokenUnavailable => 'Token indisponivel para este registro. Gere um novo token para copiar o valor secreto.';
+  String get ctInfoClientTokenUnavailable =>
+      'Token indisponivel para este registro. Gere um novo token para copiar o valor secreto.';
 
   @override
   String get ctButtonEdit => 'Editar';
@@ -1389,7 +1434,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctConfirmRevokeTitle => 'Revogar token';
 
   @override
-  String get ctConfirmRevokeMessage => 'Tem certeza que deseja revogar este token? O token deixará de funcionar imediatamente.';
+  String get ctConfirmRevokeMessage =>
+      'Tem certeza que deseja revogar este token? O token deixará de funcionar imediatamente.';
 
   @override
   String get ctConfirmDeleteTitle => 'Excluir token';
@@ -1401,10 +1447,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctErrorRuleOrAllPermissionsRequired => 'Adicione ao menos uma regra valida ou marque all_permissions.';
 
   @override
-  String get ctErrorRuleOrGlobalPermissionsRequired => 'Adicione ao menos uma regra valida quando o escopo global estiver desligado.';
+  String get ctErrorRuleOrGlobalPermissionsRequired =>
+      'Adicione ao menos uma regra valida quando o escopo global estiver desligado.';
 
   @override
-  String get ctErrorGlobalPermissionRequired => 'Selecione ao menos uma permissao global quando all_tables ou all_views estiver ativo.';
+  String get ctErrorGlobalPermissionRequired =>
+      'Selecione ao menos uma permissao global quando all_tables ou all_views estiver ativo.';
 
   @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload deve ser um objeto JSON valido.';
@@ -1431,7 +1479,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctPermissionDdl => 'DDL';
 
   @override
-  String get ctGlobalScopeRulesDisabled => 'O escopo global esta ativo. As regras por recurso ficam ocultas e serao removidas ao salvar este token.';
+  String get ctGlobalScopeRulesDisabled =>
+      'O escopo global esta ativo. As regras por recurso ficam ocultas e serao removidas ao salvar este token.';
 
   @override
   String get ctGridColumnType => 'Tipo';
@@ -1614,7 +1663,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectionStatusHubDisconnected => 'Hub: Desconectado';
 
   @override
-  String get msgHubPersistentRetryExhausted => 'Não foi possível alcançar o hub após várias tentativas. Verifique a URL do servidor, a rede e o login e toque em Conectar.';
+  String get msgHubPersistentRetryExhausted =>
+      'Não foi possível alcançar o hub após várias tentativas. Verifique a URL do servidor, a rede e o login e toque em Conectar.';
 
   @override
   String get connectionStatusDatabaseConnected => 'BD: Conectado';
@@ -1623,7 +1673,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectionStatusDatabaseDisconnected => 'BD: Desconectado';
 
   @override
-  String get connectionStatusDatabaseTooltip => 'Última verificação ODBC bem-sucedida (teste de conexão ou consulta). Não indica uma sessão permanente com o banco.';
+  String get connectionStatusDatabaseTooltip =>
+      'Última verificação ODBC bem-sucedida (teste de conexão ou consulta). Não indica uma sessão permanente com o banco.';
 
   @override
   String get formHintCep => '00.000-000';

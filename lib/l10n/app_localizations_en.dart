@@ -231,16 +231,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardDescription => 'Monitor your agent status and database connections here.';
 
   @override
-  String get odbcDriverNotFound => 'The configured ODBC driver was not found on this computer. Review the driver and data source in settings.';
+  String get odbcDriverNotFound =>
+      'The configured ODBC driver was not found on this computer. Review the driver and data source in settings.';
 
   @override
   String get odbcAuthFailed => 'Could not authenticate to the database. Check username, password and permissions.';
 
   @override
-  String get odbcServerUnreachable => 'Could not connect to the database server. Check host, port, VPN and network availability.';
+  String get odbcServerUnreachable =>
+      'Could not connect to the database server. Check host, port, VPN and network availability.';
 
   @override
-  String get odbcConnectionTimeout => 'The connection to the database took longer than expected. Confirm the server is accessible and try again.';
+  String get odbcConnectionTimeout =>
+      'The connection to the database took longer than expected. Confirm the server is accessible and try again.';
 
   @override
   String get odbcConnectionFailed => 'Could not establish connection to the database.';
@@ -478,13 +481,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queryPlaygroundHintLastRunPreserve => 'Last run: SQL preserved (no pagination rewrite by the agent).';
 
   @override
-  String get queryPlaygroundHintLastRunManagedPagination => 'Last run: managed pagination — SQL may have been rewritten for your database dialect.';
+  String get queryPlaygroundHintLastRunManagedPagination =>
+      'Last run: managed pagination — SQL may have been rewritten for your database dialect.';
 
   @override
-  String get queryPlaygroundHintLastRunManaged => 'Last run: managed mode — agent limits and adjustments may apply to the SQL.';
+  String get queryPlaygroundHintLastRunManaged =>
+      'Last run: managed mode — agent limits and adjustments may apply to the SQL.';
 
   @override
-  String get queryPlaygroundHintLastRunStreaming => 'Last run: streaming mode — results received as a continuous stream.';
+  String get queryPlaygroundHintLastRunStreaming =>
+      'Last run: streaming mode — results received as a continuous stream.';
 
   @override
   String get querySqlLabel => 'SQL query';
@@ -578,13 +584,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configBackupSectionTitle => 'Local backup';
 
   @override
-  String get configBackupIntro => 'Export or restore the local agent database (configuration) and the global settings file. The archive may contain hub credentials stored in the database. Secrets stored only in Windows secure storage are not included—you may need to sign in again after a restore.';
+  String get configBackupIntro =>
+      'Export or restore the local agent database (configuration) and the global settings file. The archive may contain hub credentials stored in the database. Secrets stored only in Windows secure storage are not included—you may need to sign in again after a restore.';
 
   @override
-  String get configBackupDuplicateNote => 'Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.';
+  String get configBackupDuplicateNote =>
+      'Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.';
 
   @override
   String get configBackupSingleInstanceNote => 'Do not run two copies of the app against the same global data folder.';
+
+  @override
+  String configBackupRestoreDiagnosticsHint(String fileName) {
+    return 'If restore fails after the app closes, details are saved as $fileName in the app data folder.';
+  }
 
   @override
   String get configBackupButtonExport => 'Export backup…';
@@ -608,22 +621,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configBackupRestoreDialogTitle => 'Restore backup';
 
   @override
-  String get configBackupRestoreDialogBody => 'This replaces the local database and settings. The application will close—start it again afterward. Current files are copied to .bak before replacement.';
+  String get configBackupRestoreDialogBody =>
+      'This replaces the local database and settings. The application will close—start it again afterward. Current files are copied to .bak before replacement.';
 
   @override
-  String get configBackupRestoreDuplicateWarning => 'This agent ID appears connected on the hub. Restoring may duplicate an active session unless the other machine is offline.';
+  String get configBackupRestoreDuplicateWarning =>
+      'This agent ID appears connected on the hub. Restoring may duplicate an active session unless the other machine is offline.';
 
   @override
-  String get configBackupRestoreVerifyWarning => 'Could not verify whether this agent is already connected (network or expired session). Confirm that no other machine is using this same backup.';
+  String get configBackupRestoreVerifyWarning =>
+      'Could not verify whether this agent is already connected (network or expired session). Confirm that no other machine is using this same backup.';
 
   @override
-  String get configBackupRestoreInstallationMismatch => 'This backup was created on another installation (different installation ID).';
+  String get configBackupRestoreInstallationMismatch =>
+      'This backup was created on another installation (different installation ID).';
 
   @override
-  String get configBackupCheckboxAcknowledgeDuplicate => 'I confirm the other session is offline or I accept the risk of a duplicate agent.';
+  String get configBackupCheckboxAcknowledgeDuplicate =>
+      'I confirm the other session is offline or I accept the risk of a duplicate agent.';
 
   @override
-  String get configBackupCheckboxAcknowledgeUncertain => 'I understand the hub could not be verified and I accept the risk.';
+  String get configBackupCheckboxAcknowledgeUncertain =>
+      'I understand the hub could not be verified and I accept the risk.';
 
   @override
   String get configBackupRestoreConfirm => 'Restore and exit';
@@ -644,7 +663,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configBackupErrDbVersion => 'Could not read the schema version from the backup database.';
 
   @override
-  String get configBackupErrNewerBackup => 'This backup was created with a newer app version. Update the app before restoring.';
+  String get configBackupErrNewerBackup =>
+      'This backup was created with a newer app version. Update the app before restoring.';
 
   @override
   String get configBackupErrInvalidEntry => 'The archive contains an invalid file entry.';
@@ -683,7 +703,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configBackupRestoreRestartNotice => 'The application will close. Start it again to use the restored data.';
 
   @override
-  String get configBackupRestoreOlderSchemaNote => 'This backup uses an older database schema. The app will migrate it on the next start.';
+  String get configBackupRestoreOlderSchemaNote =>
+      'This backup uses an older database schema. The app will migrate it on the next start.';
 
   @override
   String get configLastUpdateNever => 'Never checked';
@@ -701,10 +722,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configUpdatesNotAvailable => 'You are already on the latest version.';
 
   @override
-  String get configUpdatesNotAvailableHint => 'If you just published a new version, wait up to 5 minutes and try again.';
+  String get configUpdatesNotAvailableHint =>
+      'If you just published a new version, wait up to 5 minutes and try again.';
 
   @override
-  String get configAutoUpdateNotConfigured => 'Auto-update is not configured. Set AUTO_UPDATE_FEED_URL to a Sparkle feed (.xml).';
+  String get configAutoUpdateNotConfigured =>
+      'Auto-update is not configured. Set AUTO_UPDATE_FEED_URL to a Sparkle feed (.xml).';
 
   @override
   String configAutoUpdateOfficialFeedExpected(String url) {
@@ -861,13 +884,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsWarningTitle => 'Sensitive data in logs';
 
   @override
-  String get diagnosticsWarningBody => 'The options below may log SQL or technical details in the application logs. Use only for debugging and disable in production when handling personal data or secrets.';
+  String get diagnosticsWarningBody =>
+      'The options below may log SQL or technical details in the application logs. Use only for debugging and disable in production when handling personal data or secrets.';
 
   @override
   String get diagnosticsOdbcPaginatedSqlLogLabel => 'Paginated SQL log (ODBC)';
 
   @override
-  String get diagnosticsOdbcPaginatedSqlLogDescription => 'When enabled, the agent logs the final SQL after managed-pagination rewrite (developer log).';
+  String get diagnosticsOdbcPaginatedSqlLogDescription =>
+      'When enabled, the agent logs the final SQL after managed-pagination rewrite (developer log).';
 
   @override
   String get diagnosticsHubReconnectSectionTitle => 'Hub reconnect (offline recovery)';
@@ -876,16 +901,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsHubReconnectMaxTicksLabel => 'Max failed reconnect ticks before giving up';
 
   @override
-  String get diagnosticsHubReconnectMaxTicksHint => '0 keeps retrying indefinitely. Lower values stop sooner with an error.';
+  String get diagnosticsHubReconnectMaxTicksHint =>
+      '0 keeps retrying indefinitely. Lower values stop sooner with an error.';
 
   @override
   String get diagnosticsHubReconnectIntervalLabel => 'Seconds between reconnect attempts (after burst)';
 
   @override
-  String get diagnosticsHubReconnectIntervalHint => 'Allowed range: 5–86400. Interval changes apply the next time persistent retry starts.';
+  String get diagnosticsHubReconnectIntervalHint =>
+      'Allowed range: 5–86400. Interval changes apply the next time persistent retry starts.';
 
   @override
-  String get diagnosticsHubReconnectEnvHint => 'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.';
+  String get diagnosticsHubReconnectEnvHint =>
+      'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.';
 
   @override
   String get diagnosticsHubReconnectApply => 'Apply hub retry settings';
@@ -906,7 +934,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsHubHardReloginEnabledLabel => 'Enable automatic hard relogin fallback';
 
   @override
-  String get diagnosticsHubHardReloginEnabledDescription => 'When enabled, after repeated reconnect failures the agent will attempt logout, login with saved credentials, and then reconnect the socket.';
+  String get diagnosticsHubHardReloginEnabledDescription =>
+      'When enabled, after repeated reconnect failures the agent will attempt logout, login with saved credentials, and then reconnect the socket.';
 
   @override
   String get diagnosticsHubHardReloginThresholdLabel => 'Failed reconnect attempts before hard relogin';
@@ -1053,7 +1082,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wsOutboundCompressionAuto => 'Automatic';
 
   @override
-  String get wsOutboundCompressionDescription => 'Automatic: above the negotiated limit, the agent compresses with GZIP only if the result is smaller than JSON in UTF-8 (saves CPU and traffic on low-compressibility data).';
+  String get wsOutboundCompressionDescription =>
+      'Automatic: above the negotiated limit, the agent compresses with GZIP only if the result is smaller than JSON in UTF-8 (saves CPU and traffic on low-compressibility data).';
 
   @override
   String get wsSectionClientTokenPolicy => 'Client token policy (RPC)';
@@ -1062,7 +1092,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wsFieldClientTokenPolicyIntrospection => 'Allow client_token.getPolicy introspection';
 
   @override
-  String get wsClientTokenPolicyIntrospectionDescription => 'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.';
+  String get wsClientTokenPolicyIntrospectionDescription =>
+      'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.';
 
   @override
   String get dbSectionTitle => 'Database configuration';
@@ -1128,7 +1159,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcSuccessAppliedNow => 'Pool, timeout and streaming settings were saved and apply to new connections.';
 
   @override
-  String get odbcSuccessAppliedGradually => 'Pool, timeout and streaming settings were saved. New options apply gradually to new connections.';
+  String get odbcSuccessAppliedGradually =>
+      'Pool, timeout and streaming settings were saved. New options apply gradually to new connections.';
 
   @override
   String get odbcSuccessPoolModeRestartAppend => ' Restart the app for the ODBC pool mode change to take effect.';
@@ -1143,7 +1175,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcBlockPool => 'Connection pool';
 
   @override
-  String get odbcBlockPoolDescription => 'Multiple connections are reused automatically. Improves performance under high concurrency.';
+  String get odbcBlockPoolDescription =>
+      'Multiple connections are reused automatically. Improves performance under high concurrency.';
 
   @override
   String get odbcFieldPoolSize => 'Maximum pool size';
@@ -1155,13 +1188,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcFieldNativePool => 'Native ODBC pool (experimental)';
 
   @override
-  String get odbcTextNativePoolHelp => 'Off by default: each query uses a dedicated connection with the configured buffer (more stable). Enable only to test performance or when the driver/package handles buffers in the native pool. Restart the app after changing for it to take effect.';
+  String get odbcTextNativePoolHelp =>
+      'Off by default: each query uses a dedicated connection with the configured buffer (more stable). Enable only to test performance or when the driver/package handles buffers in the native pool. Restart the app after changing for it to take effect.';
 
   @override
   String get odbcFieldNativePoolCheckoutValidation => 'Validate connection when checking out from native pool';
 
   @override
-  String get odbcTextNativePoolCheckoutValidationHelp => 'On by default. Disable only for benchmarks or advanced tuning when comparing native pool checkout validation cost.';
+  String get odbcTextNativePoolCheckoutValidationHelp =>
+      'On by default. Disable only for benchmarks or advanced tuning when comparing native pool checkout validation cost.';
 
   @override
   String get odbcBlockTimeouts => 'Timeouts';
@@ -1179,7 +1214,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcHintResultBuffer => '32';
 
   @override
-  String get odbcTextResultBufferHelp => 'Maximum in-memory buffer size for query results. Increasing may improve performance for large queries.';
+  String get odbcTextResultBufferHelp =>
+      'Maximum in-memory buffer size for query results. Increasing may improve performance for large queries.';
 
   @override
   String get odbcBlockStreaming => 'Streaming';
@@ -1191,13 +1227,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcHintChunkSize => '1024';
 
   @override
-  String get odbcTextStreamingHelp => 'Chunk size sent to the UI during streaming queries. Larger values reduce update events and may improve throughput.';
+  String get odbcTextStreamingHelp =>
+      'Chunk size sent to the UI during streaming queries. Larger values reduce update events and may improve throughput.';
 
   @override
   String get odbcTextQuickRecommendation => 'Quick recommendation:';
 
   @override
-  String get odbcTextQuickRecommendationItems => '• 256–512 KB: more frequent visual feedback\n• 1024 KB: general balance (default)\n• 2048–4096 KB: higher throughput for large datasets';
+  String get odbcTextQuickRecommendationItems =>
+      '• 256–512 KB: more frequent visual feedback\n• 1024 KB: general balance (default)\n• 2048–4096 KB: higher throughput for large datasets';
 
   @override
   String get odbcTextChunkWarning => 'If the UI freezes or memory use is high, reduce the chunk size.';
@@ -1281,7 +1319,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctInfoClientTokenCopied => 'Client token copied';
 
   @override
-  String get ctInfoClientTokenUnavailable => 'Token unavailable for this record. Create a new token to copy the secret value.';
+  String get ctInfoClientTokenUnavailable =>
+      'Token unavailable for this record. Create a new token to copy the secret value.';
 
   @override
   String get ctButtonEdit => 'Edit';
@@ -1404,7 +1443,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctErrorRuleOrGlobalPermissionsRequired => 'Add at least one valid rule when global scope is disabled.';
 
   @override
-  String get ctErrorGlobalPermissionRequired => 'Select at least one global permission when all_tables or all_views is enabled.';
+  String get ctErrorGlobalPermissionRequired =>
+      'Select at least one global permission when all_tables or all_views is enabled.';
 
   @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload must be a valid JSON object.';
@@ -1431,7 +1471,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctPermissionDdl => 'DDL';
 
   @override
-  String get ctGlobalScopeRulesDisabled => 'Global scope is enabled. Resource rules are hidden and will be removed when you save this token.';
+  String get ctGlobalScopeRulesDisabled =>
+      'Global scope is enabled. Resource rules are hidden and will be removed when you save this token.';
 
   @override
   String get ctGridColumnType => 'Type';
@@ -1614,7 +1655,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionStatusHubDisconnected => 'Hub: Disconnected';
 
   @override
-  String get msgHubPersistentRetryExhausted => 'Could not reach the hub after many attempts. Check the server URL, network, and sign-in, then tap Connect.';
+  String get msgHubPersistentRetryExhausted =>
+      'Could not reach the hub after many attempts. Check the server URL, network, and sign-in, then tap Connect.';
 
   @override
   String get connectionStatusDatabaseConnected => 'DB: Connected';
@@ -1623,7 +1665,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionStatusDatabaseDisconnected => 'DB: Disconnected';
 
   @override
-  String get connectionStatusDatabaseTooltip => 'Last successful ODBC check (connection test or query). Not a permanent database session.';
+  String get connectionStatusDatabaseTooltip =>
+      'Last successful ODBC check (connection test or query). Not a permanent database session.';
 
   @override
   String get formHintCep => '00.000-000';

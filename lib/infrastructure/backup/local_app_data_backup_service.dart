@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -15,10 +16,13 @@ import 'package:plug_agente/domain/repositories/i_auth_client.dart';
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/backup/backup_sqlite_reader.dart';
+import 'package:plug_agente/infrastructure/backup/backup_zip_encoder.dart';
 import 'package:plug_agente/infrastructure/backup/connected_agents_response_parser.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
+
+const int _backupExportIsolateMinBytes = 512 * 1024;
 
 const int _backupManifestFormatVersion = 1;
 const String _manifestFileName = 'manifest.json';
@@ -62,8 +66,10 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
   Future<Result<void>> exportBackupZip(String destinationZipPath) async {
     final out = File(destinationZipPath);
     try {
-      developer.log('local_backup export start', name: 'local_app_data_backup');
-      await _database.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+      developer.log(
+        'operation=exportBackupZip phase=start',
+        name: 'local_app_data_backup',
+      );
 
       final installationId = await _ensureInstallationId();
       final manifest = <String, dynamic>{
@@ -77,16 +83,11 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       final dbFile = File(_storageContext.databaseFilePath);
       final settingsFile = File(_storageContext.settingsFilePath);
 
-      final archive = Archive();
-      archive.addFile(
-        ArchiveFile(
-          _manifestFileName,
-          utf8.encode(jsonEncode(manifest)).length,
-          utf8.encode(jsonEncode(manifest)),
-        ),
-      );
-
       if (!dbFile.existsSync()) {
+        developer.log(
+          'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportDbNotFound}',
+          name: 'local_app_data_backup',
+        );
         return Failure(
           domain.DatabaseFailure.withContext(
             message: 'Local database file was not found',
@@ -97,16 +98,27 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
           ),
         );
       }
-      final dbBytes = await dbFile.readAsBytes();
-      archive.addFile(ArchiveFile(_dbFileName, dbBytes.length, dbBytes));
 
+      final dbBytes = await _readDbBytesWithCheckpointOrVacuumFallback(dbFile);
+
+      Uint8List? settingsBytes;
       if (settingsFile.existsSync()) {
-        final sBytes = await settingsFile.readAsBytes();
-        archive.addFile(ArchiveFile(_settingsFileName, sBytes.length, sBytes));
+        settingsBytes = Uint8List.fromList(await settingsFile.readAsBytes());
       }
 
-      final zipBytes = ZipEncoder().encode(archive);
+      final manifestBytes = Uint8List.fromList(utf8.encode(jsonEncode(manifest)));
+      final payloadBytes = manifestBytes.length + dbBytes.length + (settingsBytes?.length ?? 0);
+      final zipBytes = await _encodeZipPayload(
+        manifestBytes: manifestBytes,
+        dbBytes: dbBytes,
+        settingsBytes: settingsBytes,
+        payloadBytes: payloadBytes,
+      );
       if (zipBytes == null) {
+        developer.log(
+          'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportZip}',
+          name: 'local_app_data_backup',
+        );
         return Failure(
           domain.DatabaseFailure.withContext(
             message: 'Failed to build backup archive',
@@ -123,11 +135,14 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         await parent.create(recursive: true);
       }
       await out.writeAsBytes(zipBytes, flush: true);
-      developer.log('local_backup export done', name: 'local_app_data_backup');
+      developer.log(
+        'operation=exportBackupZip outcome=success bytes=$payloadBytes zipBytes=${zipBytes.length}',
+        name: 'local_app_data_backup',
+      );
       return const Success(unit);
     } on FileSystemException catch (e, st) {
       developer.log(
-        'local_backup export failed',
+        'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportWrite}',
         name: 'local_app_data_backup',
         error: e,
         stackTrace: st,
@@ -145,7 +160,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       );
     } on Exception catch (e, st) {
       developer.log(
-        'local_backup export failed',
+        'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportGeneric}',
         name: 'local_app_data_backup',
         error: e,
         stackTrace: st,
@@ -275,23 +290,27 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
           : null;
       final currentInstallationId = _settingsStore.getString(AppConstants.installationIdSettingsKey);
 
-      return Success(
-        RestoreStagingSnapshot(
-          tempDirectoryPath: root,
-          stagedDatabasePath: dbStaged.path,
-          stagedSettingsPath: stagedSettingsPath,
-          backupUserVersion: backupUserVersion,
-          duplicateRisk: duplicateRisk,
-          manifestInstallationId: manifestInstallationId,
-          currentInstallationId: currentInstallationId,
-        ),
+      final snapshot = RestoreStagingSnapshot(
+        tempDirectoryPath: root,
+        stagedDatabasePath: dbStaged.path,
+        stagedSettingsPath: stagedSettingsPath,
+        backupUserVersion: backupUserVersion,
+        duplicateRisk: duplicateRisk,
+        manifestInstallationId: manifestInstallationId,
+        currentInstallationId: currentInstallationId,
       );
+
+      developer.log(
+        'operation=stageRestoreFromZip outcome=success duplicateRisk=${snapshot.duplicateRisk.name}',
+        name: 'local_app_data_backup',
+      );
+      return Success(snapshot);
     } on FormatException catch (e, st) {
       if (staging != null) {
         _deleteDirIfExists(staging.path);
       }
       developer.log(
-        'local_backup stage failed',
+        'operation=stageRestoreFromZip outcome=failure backupError=${LocalBackupErrorCodes.readZip}',
         name: 'local_app_data_backup',
         error: e,
         stackTrace: st,
@@ -307,7 +326,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         _deleteDirIfExists(staging.path);
       }
       developer.log(
-        'local_backup stage failed',
+        'operation=stageRestoreFromZip outcome=failure backupError=${LocalBackupErrorCodes.stageGeneric}',
         name: 'local_app_data_backup',
         error: e,
         stackTrace: st,
@@ -365,6 +384,10 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
   @override
   Future<Result<void>> applyRestore(RestoreStagingSnapshot staging) async {
     try {
+      _deleteIfExists(
+        File(p.join(_storageContext.appDirectoryPath, AppConstants.lastRestoreErrorFileName)),
+      );
+
       final targetDb = File(_storageContext.databaseFilePath);
       final targetSettings = File(_storageContext.settingsFilePath);
       final stagedDb = File(staging.stagedDatabasePath);
@@ -397,11 +420,14 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         }
       }
 
-      developer.log('local_backup apply done', name: 'local_app_data_backup');
+      developer.log(
+        'operation=applyRestore outcome=success',
+        name: 'local_app_data_backup',
+      );
       return const Success(unit);
     } on FileSystemException catch (e, st) {
       developer.log(
-        'local_backup apply failed',
+        'operation=applyRestore outcome=failure backupError=${LocalBackupErrorCodes.applyWrite}',
         name: 'local_app_data_backup',
         error: e,
         stackTrace: st,
@@ -422,6 +448,79 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
   @override
   void disposeStaging(RestoreStagingSnapshot staging) {
     _deleteDirIfExists(staging.tempDirectoryPath);
+  }
+
+  Future<Uint8List> _readDbBytesWithCheckpointOrVacuumFallback(File dbFile) async {
+    try {
+      await _database.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+      developer.log(
+        'operation=readDbForExport outcome=checkpoint_ok',
+        name: 'local_app_data_backup',
+      );
+      return dbFile.readAsBytes();
+    } on Object catch (e, st) {
+      developer.log(
+        'operation=readDbForExport outcome=checkpoint_failed_try_vacuum',
+        name: 'local_app_data_backup',
+        error: e,
+        stackTrace: st,
+      );
+      return _readDbBytesViaVacuumIntoOrLive(dbFile);
+    }
+  }
+
+  Future<Uint8List> _readDbBytesViaVacuumIntoOrLive(File dbFile) async {
+    final tempName = 'agent_config_vacuum_${DateTime.now().microsecondsSinceEpoch}.sqlite';
+    final tempPath = p.join(_storageContext.appDirectoryPath, tempName);
+    try {
+      await _database.customStatement('VACUUM INTO ${_sqliteStringLiteral(tempPath)}');
+      final bytes = await File(tempPath).readAsBytes();
+      developer.log(
+        'operation=vacuumIntoExport outcome=success',
+        name: 'local_app_data_backup',
+      );
+      return bytes;
+    } on Object catch (e, st) {
+      developer.log(
+        'operation=vacuumIntoExport outcome=failure_using_live_file',
+        name: 'local_app_data_backup',
+        error: e,
+        stackTrace: st,
+      );
+      return dbFile.readAsBytes();
+    } finally {
+      _deleteIfExists(File(tempPath));
+    }
+  }
+
+  String _sqliteStringLiteral(String nativePath) {
+    final normalized = nativePath.replaceAll(r'\', '/');
+    return "'${normalized.replaceAll("'", "''")}'";
+  }
+
+  Future<Uint8List?> _encodeZipPayload({
+    required Uint8List manifestBytes,
+    required Uint8List dbBytes,
+    required Uint8List? settingsBytes,
+    required int payloadBytes,
+  }) async {
+    final parts = BackupZipEncodeParts(
+      manifestBytes: manifestBytes,
+      dbBytes: dbBytes,
+      settingsBytes: settingsBytes,
+    );
+    if (payloadBytes >= _backupExportIsolateMinBytes) {
+      developer.log(
+        'operation=encodeZip isolate=true payloadBytes=$payloadBytes',
+        name: 'local_app_data_backup',
+      );
+      return Isolate.run(() => encodeBackupZipBytes(parts));
+    }
+    developer.log(
+      'operation=encodeZip isolate=false payloadBytes=$payloadBytes',
+      name: 'local_app_data_backup',
+    );
+    return encodeBackupZipBytes(parts);
   }
 
   Future<String> _ensureInstallationId() async {

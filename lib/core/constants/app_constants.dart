@@ -45,6 +45,9 @@ class AppConstants {
   static const String agentsListPath = '/api/v1/agents';
 
   static const String installationIdSettingsKey = 'plug_agente.installation_id';
+
+  /// Written under the global app data directory when restore fails after shutdown.
+  static const String lastRestoreErrorFileName = 'last_restore_error.txt';
   static const String notificationAppUserModelGuid = 'A181BB32-71A7-4B9E-9C3F-8E2D1B4A5C6D';
 
   static const int userAgentInitPollIntervalMs = 10;

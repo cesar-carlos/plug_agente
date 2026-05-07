@@ -240,6 +240,7 @@
   "configBackupIntro": "Exporte ou restaure a base local do agente (configuração) e o ficheiro de definições globais. O arquivo pode conter credenciais do hub guardadas na base. Segredos que existem só no armazenamento seguro do Windows não são incluídos—pode ser necessário voltar a autenticar após restaurar.",
   "configBackupDuplicateNote": "Restaurar a mesma cópia de segurança em duas máquinas pode registar o mesmo agente duas vezes. A aplicação verifica o hub quando possível; se a verificação falhar, deve confirmar que aceita o risco.",
   "configBackupSingleInstanceNote": "Não execute duas cópias da aplicação sobre a mesma pasta de dados global.",
+  "configBackupRestoreDiagnosticsHint": "Se a restauração falhar depois de a aplicação fechar, os detalhes ficam em {fileName} na pasta de dados da aplicação.",
   "configBackupButtonExport": "Exportar cópia de segurança…",
   "configBackupButtonRestore": "Restaurar a partir da cópia…",
   "configBackupExporting": "A exportar cópia de segurança…",

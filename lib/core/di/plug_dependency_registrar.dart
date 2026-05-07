@@ -386,7 +386,7 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IConnectedAgentsGateway>(
       () => ConnectedAgentsRestClient(
         DioFactory.createDio(
-          requestTimeout: const Duration(seconds: AppConstants.authTimeoutSeconds),
+          requestTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
         ),
       ),
     )

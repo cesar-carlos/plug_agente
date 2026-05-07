@@ -3,12 +3,16 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/backup/local_data_backup.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
+import 'package:plug_agente/infrastructure/backup/restore_failure_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_failure_localizer.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -168,6 +172,10 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
         name: 'backup_config_section',
         error: failure,
       );
+      await RestoreFailureDiagnostics.writeFromFailure(
+        storage: getIt<GlobalStorageContext>(),
+        failure: failure,
+      );
       exit(1);
     }
 
@@ -190,6 +198,15 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
             Text(l10n.configBackupDuplicateNote, style: context.captionText),
             const SizedBox(height: AppSpacing.sm),
             Text(l10n.configBackupSingleInstanceNote, style: context.captionText),
+            if (l10n.localeName.startsWith('pt')) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(AppStrings.singleInstanceMessage, style: context.captionText),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              l10n.configBackupRestoreDiagnosticsHint(AppConstants.lastRestoreErrorFileName),
+              style: context.captionText,
+            ),
             const SizedBox(height: AppSpacing.lg),
             Wrap(
               spacing: AppSpacing.md,

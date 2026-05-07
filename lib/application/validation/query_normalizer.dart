@@ -1,12 +1,22 @@
 class QueryNormalizer {
   static final RegExp _whitespaceCollapse = RegExp(r'\s+');
 
+  static final RegExp _disallowedStatementStart = RegExp(
+    r'^(drop|truncate|alter|create|merge|grant|revoke)\b',
+  );
+
   bool isValidQuery(String query) {
-    if (query.isEmpty) return false;
+    if (query.trim().isEmpty) {
+      return false;
+    }
 
-    final normalizedQuery = query.trim().toLowerCase();
+    final collapsed = query.replaceAllMapped(_whitespaceCollapse, (match) => ' ').trim().toLowerCase();
 
-    if (normalizedQuery.startsWith('delete ') && !normalizedQuery.contains('where')) {
+    if (_disallowedStatementStart.hasMatch(collapsed)) {
+      return false;
+    }
+
+    if (collapsed.startsWith('delete ') && !collapsed.contains(' where ')) {
       return false;
     }
 

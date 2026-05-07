@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// REST client for hub agent listing used during backup restore (duplicate-session probe).
+///
+/// Uses a short Dio timeout from dependency registration and per-request caps
+/// from ConnectionConstants.backupRestoreAgentsListTimeout.
 class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
   ConnectedAgentsRestClient(this._dio);
 
@@ -29,14 +35,18 @@ class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
 
     final url = joinServerUrlAndPath(trimmedUrl, AppConstants.agentsListPath);
     try {
-      final response = await _dio.get<dynamic>(
-        url,
-        options: Options(
-          headers: <String, dynamic>{
-            'Authorization': 'Bearer $token',
-          },
-        ),
-      );
+      final response = await _dio
+          .get<dynamic>(
+            url,
+            options: Options(
+              headers: <String, dynamic>{
+                'Authorization': 'Bearer $token',
+              },
+              receiveTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
+              sendTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
+            ),
+          )
+          .timeout(ConnectionConstants.backupRestoreAgentsListTimeout);
 
       if (response.statusCode == AppConstants.httpStatusOk && response.data != null) {
         final body = switch (response.data) {
@@ -52,6 +62,20 @@ class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
         domain.ServerFailure.withContext(
           message: 'Could not load agent list from hub',
           context: {'statusCode': response.statusCode},
+        ),
+      );
+    } on TimeoutException catch (e, stackTrace) {
+      developer.log(
+        'connected_agents fetch timed out',
+        name: 'connected_agents_rest_client',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Hub agent list request timed out',
+          cause: e,
+          context: const {'operation': 'fetchAgentsList'},
         ),
       );
     } on DioException catch (e, stackTrace) {
