@@ -2600,6 +2600,18 @@ abstract class AppLocalizations {
   /// **'Add at least one valid rule or enable all_permissions.'**
   String get ctErrorRuleOrAllPermissionsRequired;
 
+  /// No description provided for @ctErrorRuleOrGlobalPermissionsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one valid rule when global scope is disabled.'**
+  String get ctErrorRuleOrGlobalPermissionsRequired;
+
+  /// No description provided for @ctErrorGlobalPermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one global permission when all_tables or all_views is enabled.'**
+  String get ctErrorGlobalPermissionRequired;
+
   /// No description provided for @ctErrorPayloadMustBeJsonObject.
   ///
   /// In en, this message translates to:
@@ -2611,6 +2623,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invalid JSON payload.'**
   String get ctErrorPayloadInvalidJson;
+
+  /// No description provided for @ctErrorPayloadDatabaseMustBeString.
+  ///
+  /// In en, this message translates to:
+  /// **'payload.database must be a string.'**
+  String get ctErrorPayloadDatabaseMustBeString;
+
+  /// No description provided for @ctErrorPayloadDatabaseCannotBeEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'payload.database must not be empty.'**
+  String get ctErrorPayloadDatabaseCannotBeEmpty;
 
   /// No description provided for @ctPermissionRead.
   ///
@@ -2629,6 +2653,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete'**
   String get ctPermissionDelete;
+
+  /// No description provided for @ctPermissionDdl.
+  ///
+  /// In en, this message translates to:
+  /// **'DDL'**
+  String get ctPermissionDdl;
+
+  /// No description provided for @ctGlobalScopeRulesDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Global scope is enabled. Resource rules are hidden and will be removed when you save this token.'**
+  String get ctGlobalScopeRulesDisabled;
 
   /// No description provided for @ctGridColumnType.
   ///

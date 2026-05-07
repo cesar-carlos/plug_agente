@@ -70,13 +70,18 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
   bool _allTables = false;
   bool _allViews = false;
-  bool _allPermissions = false;
+  bool _globalCanRead = false;
+  bool _globalCanUpdate = false;
+  bool _globalCanDelete = false;
+  bool _globalCanDdl = false;
   ClientTokenStatusFilter _tokenStatusFilter = ClientTokenStatusFilter.all;
   ClientTokenSortOption _tokenSortOption = ClientTokenSortOption.newest;
   bool _autoRefreshAfterCreate = true;
   String _formError = '';
   String? _editingTokenId;
   int? _editingTokenVersion;
+
+  bool get _isGlobalScopeMode => _allTables || _allViews;
 
   @override
   void initState() {
@@ -141,6 +146,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _openAddRuleModal() async {
+    if (_isGlobalScopeMode) {
+      return;
+    }
     final result = await showClientTokenRuleDialog(
       context: context,
       existingRules: List.unmodifiable(_rules),
@@ -181,7 +189,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _handleImportRulesFromSection() async {
-    if (!mounted || _isImportingRules) return;
+    if (!mounted || _isImportingRules || _isGlobalScopeMode) return;
     final l10n = AppLocalizations.of(context)!;
 
     FilePickerResult? picked;
@@ -290,6 +298,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             if (rule.canRead) 'read',
             if (rule.canUpdate) 'update',
             if (rule.canDelete) 'delete',
+            if (rule.canDdl) 'ddl',
           ].join(',');
           return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
         })
@@ -334,6 +343,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 canRead: rule.permissions.canRead,
                 canUpdate: rule.permissions.canUpdate,
                 canDelete: rule.permissions.canDelete,
+                canDdl: rule.permissions.canDdl,
               ),
             )
             .toList() ??
@@ -352,7 +362,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         ..addAll(initialRules);
       _allTables = baseToken?.allTables ?? false;
       _allViews = baseToken?.allViews ?? false;
-      _allPermissions = baseToken?.allPermissions ?? false;
+      _globalCanRead = baseToken?.globalPermissions.canRead ?? false;
+      _globalCanUpdate = baseToken?.globalPermissions.canUpdate ?? false;
+      _globalCanDelete = baseToken?.globalPermissions.canDelete ?? false;
+      _globalCanDdl = baseToken?.globalPermissions.canDdl ?? false;
     });
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
@@ -414,7 +427,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                             rules: _rules,
                             allTables: _allTables,
                             allViews: _allViews,
-                            allPermissions: _allPermissions,
+                            globalCanRead: _globalCanRead,
+                            globalCanUpdate: _globalCanUpdate,
+                            globalCanDelete: _globalCanDelete,
+                            globalCanDdl: _globalCanDdl,
                             formError: _formError,
                             providerError: tokenProvider.error,
                             lastCreatedToken: tokenProvider.lastCreatedToken,
@@ -426,8 +442,20 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                               _allViews = value;
                               _notifyCreateTokenDialogChanged();
                             },
-                            onToggleAllPermissions: (value) {
-                              _allPermissions = value;
+                            onToggleGlobalRead: (value) {
+                              _globalCanRead = value;
+                              _notifyCreateTokenDialogChanged();
+                            },
+                            onToggleGlobalUpdate: (value) {
+                              _globalCanUpdate = value;
+                              _notifyCreateTokenDialogChanged();
+                            },
+                            onToggleGlobalDelete: (value) {
+                              _globalCanDelete = value;
+                              _notifyCreateTokenDialogChanged();
+                            },
+                            onToggleGlobalDdl: (value) {
+                              _globalCanDdl = value;
                               _notifyCreateTokenDialogChanged();
                             },
                             onAddRule: _openAddRuleModal,
@@ -494,9 +522,15 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       return;
     }
 
+    final globalPermissions = _buildGlobalPermissions();
     final rules = _buildRules();
-    if (!_allPermissions && rules.isEmpty) {
-      _formError = AppLocalizations.of(context)!.ctErrorRuleOrAllPermissionsRequired;
+    if (_isGlobalScopeMode && !globalPermissions.hasAnyPermission) {
+      _formError = AppLocalizations.of(context)!.ctErrorGlobalPermissionRequired;
+      _notifyCreateTokenDialogChanged();
+      return;
+    }
+    if (!_isGlobalScopeMode && rules.isEmpty) {
+      _formError = AppLocalizations.of(context)!.ctErrorRuleOrGlobalPermissionsRequired;
       _notifyCreateTokenDialogChanged();
       return;
     }
@@ -508,8 +542,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       payload: payloadResult,
       allTables: _allTables,
       allViews: _allViews,
-      allPermissions: _allPermissions,
-      rules: rules,
+      globalPermissions: globalPermissions,
+      rules: _isGlobalScopeMode ? const <ClientTokenRule>[] : rules,
     );
 
     final previousOffset = _getCurrentScrollOffset();
@@ -549,13 +583,29 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _rules.clear();
     _allTables = false;
     _allViews = false;
-    _allPermissions = false;
+    _globalCanRead = false;
+    _globalCanUpdate = false;
+    _globalCanDelete = false;
+    _globalCanDdl = false;
   }
 
   Map<String, dynamic>? _parsePayload() {
     final (:payload, :error) = parseClientTokenPayloadJson(_payloadController.text);
     if (error == null) {
-      return payload;
+      final payloadValidationError = validateClientTokenPayload(payload!);
+      if (payloadValidationError == null) {
+        return payload;
+      }
+      _formError = switch (payloadValidationError) {
+        ClientTokenPayloadValidationError.databaseMustBeString => AppLocalizations.of(
+          context,
+        )!.ctErrorPayloadDatabaseMustBeString,
+        ClientTokenPayloadValidationError.databaseCannotBeEmpty => AppLocalizations.of(
+          context,
+        )!.ctErrorPayloadDatabaseCannotBeEmpty,
+      };
+      _notifyCreateTokenDialogChanged();
+      return null;
     }
     _formError = switch (error) {
       ClientTokenPayloadParseError.invalidJson => AppLocalizations.of(context)!.ctErrorPayloadInvalidJson,
@@ -563,6 +613,19 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     };
     _notifyCreateTokenDialogChanged();
     return null;
+  }
+
+  ClientPermissionSet _buildGlobalPermissions() {
+    if (!_isGlobalScopeMode) {
+      return ClientPermissionSet.none;
+    }
+
+    return ClientPermissionSet(
+      canRead: _globalCanRead,
+      canUpdate: _globalCanUpdate,
+      canDelete: _globalCanDelete,
+      canDdl: _globalCanDdl,
+    );
   }
 
   String _generateClientId() {
@@ -586,6 +649,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             canRead: draft.canRead,
             canUpdate: draft.canUpdate,
             canDelete: draft.canDelete,
+            canDdl: draft.canDdl,
           ),
           effect: draft.effect,
         ),

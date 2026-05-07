@@ -1872,6 +1872,20 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _globalPermissionsJsonMeta =
+      const VerificationMeta('globalPermissionsJson');
+  @override
+  late final GeneratedColumn<String> globalPermissionsJson =
+      GeneratedColumn<String>(
+        'global_permissions_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(
+          '{"read":false,"update":false,"delete":false,"ddl":false}',
+        ),
+      );
   static const VerificationMeta _rulesJsonMeta = const VerificationMeta(
     'rulesJson',
   );
@@ -1922,6 +1936,7 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     allTables,
     allViews,
     allPermissions,
+    globalPermissionsJson,
     rulesJson,
     syncedAt,
     tokenHash,
@@ -2025,6 +2040,15 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         ),
       );
     }
+    if (data.containsKey('global_permissions_json')) {
+      context.handle(
+        _globalPermissionsJsonMeta,
+        globalPermissionsJson.isAcceptableOrUnknown(
+          data['global_permissions_json']!,
+          _globalPermissionsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('rules_json')) {
       context.handle(
         _rulesJsonMeta,
@@ -2110,6 +2134,10 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
         DriftSqlType.bool,
         data['${effectivePrefix}all_permissions'],
       )!,
+      globalPermissionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}global_permissions_json'],
+      )!,
       rulesJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}rules_json'],
@@ -2146,6 +2174,7 @@ class ClientTokenCacheData extends DataClass
   final bool allTables;
   final bool allViews;
   final bool allPermissions;
+  final String globalPermissionsJson;
   final String rulesJson;
   final DateTime syncedAt;
   final String tokenHash;
@@ -2163,6 +2192,7 @@ class ClientTokenCacheData extends DataClass
     required this.allTables,
     required this.allViews,
     required this.allPermissions,
+    required this.globalPermissionsJson,
     required this.rulesJson,
     required this.syncedAt,
     required this.tokenHash,
@@ -2189,6 +2219,7 @@ class ClientTokenCacheData extends DataClass
     map['all_tables'] = Variable<bool>(allTables);
     map['all_views'] = Variable<bool>(allViews);
     map['all_permissions'] = Variable<bool>(allPermissions);
+    map['global_permissions_json'] = Variable<String>(globalPermissionsJson);
     map['rules_json'] = Variable<String>(rulesJson);
     map['synced_at'] = Variable<DateTime>(syncedAt);
     map['token_hash'] = Variable<String>(tokenHash);
@@ -2216,6 +2247,7 @@ class ClientTokenCacheData extends DataClass
       allTables: Value(allTables),
       allViews: Value(allViews),
       allPermissions: Value(allPermissions),
+      globalPermissionsJson: Value(globalPermissionsJson),
       rulesJson: Value(rulesJson),
       syncedAt: Value(syncedAt),
       tokenHash: Value(tokenHash),
@@ -2241,6 +2273,9 @@ class ClientTokenCacheData extends DataClass
       allTables: serializer.fromJson<bool>(json['allTables']),
       allViews: serializer.fromJson<bool>(json['allViews']),
       allPermissions: serializer.fromJson<bool>(json['allPermissions']),
+      globalPermissionsJson: serializer.fromJson<String>(
+        json['globalPermissionsJson'],
+      ),
       rulesJson: serializer.fromJson<String>(json['rulesJson']),
       syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
       tokenHash: serializer.fromJson<String>(json['tokenHash']),
@@ -2263,6 +2298,7 @@ class ClientTokenCacheData extends DataClass
       'allTables': serializer.toJson<bool>(allTables),
       'allViews': serializer.toJson<bool>(allViews),
       'allPermissions': serializer.toJson<bool>(allPermissions),
+      'globalPermissionsJson': serializer.toJson<String>(globalPermissionsJson),
       'rulesJson': serializer.toJson<String>(rulesJson),
       'syncedAt': serializer.toJson<DateTime>(syncedAt),
       'tokenHash': serializer.toJson<String>(tokenHash),
@@ -2283,6 +2319,7 @@ class ClientTokenCacheData extends DataClass
     bool? allTables,
     bool? allViews,
     bool? allPermissions,
+    String? globalPermissionsJson,
     String? rulesJson,
     DateTime? syncedAt,
     String? tokenHash,
@@ -2300,6 +2337,7 @@ class ClientTokenCacheData extends DataClass
     allTables: allTables ?? this.allTables,
     allViews: allViews ?? this.allViews,
     allPermissions: allPermissions ?? this.allPermissions,
+    globalPermissionsJson: globalPermissionsJson ?? this.globalPermissionsJson,
     rulesJson: rulesJson ?? this.rulesJson,
     syncedAt: syncedAt ?? this.syncedAt,
     tokenHash: tokenHash ?? this.tokenHash,
@@ -2325,6 +2363,9 @@ class ClientTokenCacheData extends DataClass
       allPermissions: data.allPermissions.present
           ? data.allPermissions.value
           : this.allPermissions,
+      globalPermissionsJson: data.globalPermissionsJson.present
+          ? data.globalPermissionsJson.value
+          : this.globalPermissionsJson,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
       tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
@@ -2347,6 +2388,7 @@ class ClientTokenCacheData extends DataClass
           ..write('allTables: $allTables, ')
           ..write('allViews: $allViews, ')
           ..write('allPermissions: $allPermissions, ')
+          ..write('globalPermissionsJson: $globalPermissionsJson, ')
           ..write('rulesJson: $rulesJson, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('tokenHash: $tokenHash')
@@ -2369,6 +2411,7 @@ class ClientTokenCacheData extends DataClass
     allTables,
     allViews,
     allPermissions,
+    globalPermissionsJson,
     rulesJson,
     syncedAt,
     tokenHash,
@@ -2390,6 +2433,7 @@ class ClientTokenCacheData extends DataClass
           other.allTables == this.allTables &&
           other.allViews == this.allViews &&
           other.allPermissions == this.allPermissions &&
+          other.globalPermissionsJson == this.globalPermissionsJson &&
           other.rulesJson == this.rulesJson &&
           other.syncedAt == this.syncedAt &&
           other.tokenHash == this.tokenHash);
@@ -2410,6 +2454,7 @@ class ClientTokenCacheTableCompanion
   final Value<bool> allTables;
   final Value<bool> allViews;
   final Value<bool> allPermissions;
+  final Value<String> globalPermissionsJson;
   final Value<String> rulesJson;
   final Value<DateTime> syncedAt;
   final Value<String> tokenHash;
@@ -2428,6 +2473,7 @@ class ClientTokenCacheTableCompanion
     this.allTables = const Value.absent(),
     this.allViews = const Value.absent(),
     this.allPermissions = const Value.absent(),
+    this.globalPermissionsJson = const Value.absent(),
     this.rulesJson = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.tokenHash = const Value.absent(),
@@ -2447,6 +2493,7 @@ class ClientTokenCacheTableCompanion
     this.allTables = const Value.absent(),
     this.allViews = const Value.absent(),
     this.allPermissions = const Value.absent(),
+    this.globalPermissionsJson = const Value.absent(),
     this.rulesJson = const Value.absent(),
     required DateTime syncedAt,
     this.tokenHash = const Value.absent(),
@@ -2469,6 +2516,7 @@ class ClientTokenCacheTableCompanion
     Expression<bool>? allTables,
     Expression<bool>? allViews,
     Expression<bool>? allPermissions,
+    Expression<String>? globalPermissionsJson,
     Expression<String>? rulesJson,
     Expression<DateTime>? syncedAt,
     Expression<String>? tokenHash,
@@ -2488,6 +2536,8 @@ class ClientTokenCacheTableCompanion
       if (allTables != null) 'all_tables': allTables,
       if (allViews != null) 'all_views': allViews,
       if (allPermissions != null) 'all_permissions': allPermissions,
+      if (globalPermissionsJson != null)
+        'global_permissions_json': globalPermissionsJson,
       if (rulesJson != null) 'rules_json': rulesJson,
       if (syncedAt != null) 'synced_at': syncedAt,
       if (tokenHash != null) 'token_hash': tokenHash,
@@ -2509,6 +2559,7 @@ class ClientTokenCacheTableCompanion
     Value<bool>? allTables,
     Value<bool>? allViews,
     Value<bool>? allPermissions,
+    Value<String>? globalPermissionsJson,
     Value<String>? rulesJson,
     Value<DateTime>? syncedAt,
     Value<String>? tokenHash,
@@ -2528,6 +2579,8 @@ class ClientTokenCacheTableCompanion
       allTables: allTables ?? this.allTables,
       allViews: allViews ?? this.allViews,
       allPermissions: allPermissions ?? this.allPermissions,
+      globalPermissionsJson:
+          globalPermissionsJson ?? this.globalPermissionsJson,
       rulesJson: rulesJson ?? this.rulesJson,
       syncedAt: syncedAt ?? this.syncedAt,
       tokenHash: tokenHash ?? this.tokenHash,
@@ -2577,6 +2630,11 @@ class ClientTokenCacheTableCompanion
     if (allPermissions.present) {
       map['all_permissions'] = Variable<bool>(allPermissions.value);
     }
+    if (globalPermissionsJson.present) {
+      map['global_permissions_json'] = Variable<String>(
+        globalPermissionsJson.value,
+      );
+    }
     if (rulesJson.present) {
       map['rules_json'] = Variable<String>(rulesJson.value);
     }
@@ -2608,6 +2666,7 @@ class ClientTokenCacheTableCompanion
           ..write('allTables: $allTables, ')
           ..write('allViews: $allViews, ')
           ..write('allPermissions: $allPermissions, ')
+          ..write('globalPermissionsJson: $globalPermissionsJson, ')
           ..write('rulesJson: $rulesJson, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('tokenHash: $tokenHash, ')
@@ -3391,6 +3450,7 @@ typedef $$ClientTokenCacheTableTableCreateCompanionBuilder =
       Value<bool> allTables,
       Value<bool> allViews,
       Value<bool> allPermissions,
+      Value<String> globalPermissionsJson,
       Value<String> rulesJson,
       required DateTime syncedAt,
       Value<String> tokenHash,
@@ -3411,6 +3471,7 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<bool> allTables,
       Value<bool> allViews,
       Value<bool> allPermissions,
+      Value<String> globalPermissionsJson,
       Value<String> rulesJson,
       Value<DateTime> syncedAt,
       Value<String> tokenHash,
@@ -3488,6 +3549,11 @@ class $$ClientTokenCacheTableTableFilterComposer
 
   ColumnFilters<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get globalPermissionsJson => $composableBuilder(
+    column: $table.globalPermissionsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3581,6 +3647,11 @@ class $$ClientTokenCacheTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get globalPermissionsJson => $composableBuilder(
+    column: $table.globalPermissionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get rulesJson => $composableBuilder(
     column: $table.rulesJson,
     builder: (column) => ColumnOrderings(column),
@@ -3648,6 +3719,11 @@ class $$ClientTokenCacheTableTableAnnotationComposer
 
   GeneratedColumn<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get globalPermissionsJson => $composableBuilder(
+    column: $table.globalPermissionsJson,
     builder: (column) => column,
   );
 
@@ -3720,6 +3796,7 @@ class $$ClientTokenCacheTableTableTableManager
                 Value<bool> allTables = const Value.absent(),
                 Value<bool> allViews = const Value.absent(),
                 Value<bool> allPermissions = const Value.absent(),
+                Value<String> globalPermissionsJson = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
                 Value<DateTime> syncedAt = const Value.absent(),
                 Value<String> tokenHash = const Value.absent(),
@@ -3738,6 +3815,7 @@ class $$ClientTokenCacheTableTableTableManager
                 allTables: allTables,
                 allViews: allViews,
                 allPermissions: allPermissions,
+                globalPermissionsJson: globalPermissionsJson,
                 rulesJson: rulesJson,
                 syncedAt: syncedAt,
                 tokenHash: tokenHash,
@@ -3758,6 +3836,7 @@ class $$ClientTokenCacheTableTableTableManager
                 Value<bool> allTables = const Value.absent(),
                 Value<bool> allViews = const Value.absent(),
                 Value<bool> allPermissions = const Value.absent(),
+                Value<String> globalPermissionsJson = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
                 required DateTime syncedAt,
                 Value<String> tokenHash = const Value.absent(),
@@ -3776,6 +3855,7 @@ class $$ClientTokenCacheTableTableTableManager
                 allTables: allTables,
                 allViews: allViews,
                 allPermissions: allPermissions,
+                globalPermissionsJson: globalPermissionsJson,
                 rulesJson: rulesJson,
                 syncedAt: syncedAt,
                 tokenHash: tokenHash,

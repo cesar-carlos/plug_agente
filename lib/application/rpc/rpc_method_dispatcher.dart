@@ -297,6 +297,7 @@ class RpcMethodDispatcher {
         sql: sql,
         multiResultRequested: multiResultRequested,
         clientToken: clientToken,
+        requestDatabase: database,
         deadline: deadline,
       );
       if (authDenied != null) {
@@ -791,6 +792,8 @@ class RpcMethodDispatcher {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
+    final database = params['database'] as String?;
+
     if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
       final authorizedSqlFingerprints = <String>{};
       for (final cmd in commands) {
@@ -803,6 +806,7 @@ class RpcMethodDispatcher {
         final authResult = await _authorizeWithBudget(
           token: clientToken,
           sql: cmd.sql,
+          requestDatabase: database,
           requestId: request.id?.toString(),
           method: request.method,
           deadline: deadline,
@@ -851,7 +855,6 @@ class RpcMethodDispatcher {
     );
 
     // Execute batch
-    final database = params['database'] as String?;
     final batchStartedAt = DateTime.now().toUtc();
     final result = await _executeSqlBatchWithBudget(
       agentId,
@@ -928,6 +931,7 @@ class RpcMethodDispatcher {
     required String sql,
     required bool multiResultRequested,
     required String clientToken,
+    required String? requestDatabase,
     required DateTime? deadline,
   }) async {
     final statements = !multiResultRequested ? <String>[sql] : sqlStatementsForClientTokenAuthorization(sql);
@@ -948,6 +952,7 @@ class RpcMethodDispatcher {
       final authResult = await _authorizeWithBudget(
         token: clientToken,
         sql: stmt,
+        requestDatabase: requestDatabase,
         requestId: request.id?.toString(),
         method: request.method,
         deadline: deadline,
@@ -989,6 +994,7 @@ class RpcMethodDispatcher {
   Future<Result<void>> _authorizeWithBudget({
     required String token,
     required String sql,
+    required String? requestDatabase,
     required String? requestId,
     required String method,
     required DateTime? deadline,
@@ -1022,6 +1028,7 @@ class RpcMethodDispatcher {
         return _authorizeSqlOperation(
           token: token,
           sql: sql,
+          requestDatabase: requestDatabase,
           requestId: requestId,
           method: method,
         );
@@ -1029,6 +1036,7 @@ class RpcMethodDispatcher {
       return await _authorizeSqlOperation(
         token: token,
         sql: sql,
+        requestDatabase: requestDatabase,
         requestId: requestId,
         method: method,
       ).timeout(timeout);
@@ -1291,6 +1299,7 @@ class RpcMethodDispatcher {
       final authResult = await _authorizeWithBudget(
         token: clientToken,
         sql: _agentProfileAuthorizationSql,
+        requestDatabase: null,
         requestId: request.id?.toString(),
         method: request.method,
         deadline: deadline,
@@ -1371,6 +1380,7 @@ class RpcMethodDispatcher {
       final authResult = await _authorizeWithBudget(
         token: clientToken,
         sql: _agentProfileAuthorizationSql,
+        requestDatabase: null,
         requestId: request.id?.toString(),
         method: request.method,
         deadline: deadline,

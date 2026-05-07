@@ -25,6 +25,19 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
 
   final ClientTokenSummary token;
 
+  String _buildPermissionsLabel(
+    ClientPermissionSet permissions,
+    AppLocalizations l10n,
+  ) {
+    final labels = <String>[
+      if (permissions.canRead) l10n.ctPermissionRead,
+      if (permissions.canUpdate) l10n.ctPermissionUpdate,
+      if (permissions.canDelete) l10n.ctPermissionDelete,
+      if (permissions.canDdl) l10n.ctPermissionDdl,
+    ];
+    return labels.join(', ');
+  }
+
   String _buildScopeLabel(AppLocalizations l10n) {
     if (token.allPermissions) {
       return l10n.ctScopeAllPermissions;
@@ -39,7 +52,11 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
     if (scopes.isEmpty) {
       return l10n.ctScopeRestricted;
     }
-    return '${l10n.ctScopeRestricted} (${scopes.join(', ')})';
+    final permissionsLabel = _buildPermissionsLabel(token.globalPermissions, l10n);
+    if (permissionsLabel.isEmpty) {
+      return '${l10n.ctScopeRestricted} (${scopes.join(', ')})';
+    }
+    return '${scopes.join(', ')}: $permissionsLabel';
   }
 
   String _buildPayloadLabel() {
@@ -210,6 +227,9 @@ class _RulesSurface extends StatelessWidget {
     }
     if (permissions.canDelete) {
       labels.add(l10n.ctPermissionDelete);
+    }
+    if (permissions.canDdl) {
+      labels.add(l10n.ctPermissionDdl);
     }
     if (labels.isEmpty) {
       return l10n.ctRuleNoPermission;

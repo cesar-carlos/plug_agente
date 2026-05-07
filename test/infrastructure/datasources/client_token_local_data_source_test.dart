@@ -2,8 +2,11 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
+import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
+import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
@@ -42,6 +45,54 @@ void main() {
       final byHash = await ds.getTokenByHash(hash);
       expect(byHash?.id, byId.id);
     });
+
+    test(
+      'createToken persists payload.database and canonical global permissions while dropping resource rules in global mode',
+      () async {
+        final db = AppDatabase(executor: NativeDatabase.memory());
+        addTearDown(db.close);
+        final ds = ClientTokenLocalDataSource(db);
+
+        final opaque = await ds.createToken(
+          const ClientTokenCreateRequest(
+            clientId: 'global-client',
+            allTables: true,
+            allViews: false,
+            globalPermissions: ClientPermissionSet(
+              canRead: true,
+              canUpdate: false,
+              canDelete: false,
+              canDdl: true,
+            ),
+            payload: {'database': 'ERP_MAIN', 'env': 'prod'},
+            rules: [
+              ClientTokenRule(
+                resource: DatabaseResource(
+                  resourceType: DatabaseResourceType.table,
+                  name: 'dbo.should_be_discarded',
+                ),
+                permissions: ClientPermissionSet(
+                  canRead: true,
+                  canUpdate: true,
+                  canDelete: false,
+                ),
+                effect: ClientTokenRuleEffect.allow,
+              ),
+            ],
+          ),
+        );
+
+        final byId = await ds.getTokenById((await ds.listTokens()).single.id);
+
+        expect(byId, isNotNull);
+        expect(byId!.tokenValue, opaque);
+        expect(byId.payload, const {'database': 'ERP_MAIN', 'env': 'prod'});
+        expect(byId.globalPermissions.canRead, isTrue);
+        expect(byId.globalPermissions.canDdl, isTrue);
+        expect(byId.globalPermissions.canUpdate, isFalse);
+        expect(byId.rules, isEmpty);
+      },
+    );
 
     test('listTokens filters by clientIdContains status and sort', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());

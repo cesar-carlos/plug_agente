@@ -61,7 +61,7 @@ Future<List<ClientTokenRuleDraft>?> showClientTokenRuleDialog({
 
 const Set<String> _validTypes = {'table', 'view'};
 const Set<String> _validEffects = {'allow', 'deny'};
-const Set<String> _validPermissions = {'read', 'update', 'delete'};
+const Set<String> _validPermissions = {'read', 'update', 'delete', 'ddl'};
 
 /// Parses a file/text content into a list of [ClientTokenRuleDraft].
 ///
@@ -89,6 +89,7 @@ _ParseResult _parseRules(
   required bool defaultCanRead,
   required bool defaultCanUpdate,
   required bool defaultCanDelete,
+  required bool defaultCanDdl,
   bool strictFormat = false,
 }) {
   final drafts = <ClientTokenRuleDraft>[];
@@ -124,6 +125,7 @@ _ParseResult _parseRules(
           canRead: perms.canRead,
           canUpdate: perms.canUpdate,
           canDelete: perms.canDelete,
+          canDdl: perms.canDdl,
         ),
       );
       continue;
@@ -153,6 +155,7 @@ _ParseResult _parseRules(
           canRead: defaultCanRead,
           canUpdate: defaultCanUpdate,
           canDelete: defaultCanDelete,
+          canDdl: defaultCanDdl,
         ),
       );
       addedFromLine++;
@@ -170,12 +173,13 @@ bool _isValidPermissionField(String field) {
   return tokens.isNotEmpty && tokens.every(_validPermissions.contains);
 }
 
-({bool canRead, bool canUpdate, bool canDelete}) _parsePermissions(String field) {
+({bool canRead, bool canUpdate, bool canDelete, bool canDdl}) _parsePermissions(String field) {
   final tokens = field.toLowerCase().split(',').map((t) => t.trim()).toSet();
   return (
     canRead: tokens.contains('read'),
     canUpdate: tokens.contains('update'),
     canDelete: tokens.contains('delete'),
+    canDdl: tokens.contains('ddl'),
   );
 }
 
@@ -221,6 +225,7 @@ TokenRuleImportResult parseTokenRulesStrict(String content) {
     defaultCanRead: false,
     defaultCanUpdate: false,
     defaultCanDelete: false,
+    defaultCanDdl: false,
     strictFormat: true,
   );
 }
@@ -249,6 +254,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   late bool _canRead;
   late bool _canUpdate;
   late bool _canDelete;
+  late bool _canDdl;
   String _formError = '';
   String _duplicateWarning = '';
   List<ClientTokenRuleDraft>? _pendingDrafts;
@@ -283,6 +289,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
     _canRead = initial?.canRead ?? true;
     _canUpdate = initial?.canUpdate ?? false;
     _canDelete = initial?.canDelete ?? false;
+    _canDdl = initial?.canDdl ?? false;
   }
 
   void _clearPendingOnChange() {
@@ -332,7 +339,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
       setState(() => _formError = l10n.ctErrorRuleResourceRequired);
       return;
     }
-    if (!(_canRead || _canUpdate || _canDelete)) {
+    if (!(_canRead || _canUpdate || _canDelete || _canDdl)) {
       setState(() => _formError = l10n.ctErrorRulePermissionRequired);
       return;
     }
@@ -344,6 +351,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
       defaultCanRead: _canRead,
       defaultCanUpdate: _canUpdate,
       defaultCanDelete: _canDelete,
+      defaultCanDdl: _canDdl,
     );
 
     if (result.hasErrors) {
@@ -427,6 +435,7 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
         defaultCanRead: _canRead,
         defaultCanUpdate: _canUpdate,
         defaultCanDelete: _canDelete,
+        defaultCanDdl: _canDdl,
       );
 
       if (parseResult.drafts.isEmpty) {
@@ -561,6 +570,11 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
                     label: l10n.ctPermissionDelete,
                     value: _canDelete,
                     onChanged: (v) => _onPermissionChanged(() => _canDelete = v),
+                  ),
+                  _PermissionToggle(
+                    label: l10n.ctPermissionDdl,
+                    value: _canDdl,
+                    onChanged: (v) => _onPermissionChanged(() => _canDdl = v),
                   ),
                 ],
               ),

@@ -37,6 +37,34 @@ void main() {
       expect(payload['token_scope'], equals('read:db'));
       expect(payload['id_token'], equals('[REDACTED]'));
     });
+
+    test('should expose global_permissions and derived all_permissions', () {
+      const policy = ClientTokenPolicy(
+        clientId: 'c1',
+        allTables: true,
+        allViews: true,
+        globalPermissions: ClientPermissionSet(
+          canRead: true,
+          canUpdate: true,
+          canDelete: true,
+          canDdl: true,
+        ),
+        rules: [],
+      );
+
+      final json = policy.toRpcResultJson();
+
+      expect(
+        json['global_permissions'],
+        equals(<String, dynamic>{
+          'read': true,
+          'update': true,
+          'delete': true,
+          'ddl': true,
+        }),
+      );
+      expect(json['all_permissions'], isTrue);
+    });
   });
 
   group('SensitiveMapRedactor', () {
@@ -311,6 +339,54 @@ void main() {
       ).isFalse();
     });
 
+    test(
+      'should honor granular global permissions when allTables is true',
+      () {
+        const policy = ClientTokenPolicy(
+          clientId: clientId,
+          allTables: true,
+          allViews: false,
+          globalPermissions: ClientPermissionSet(
+            canRead: true,
+            canUpdate: false,
+            canDelete: false,
+            canDdl: true,
+          ),
+          rules: [],
+        );
+
+        check(
+          policy.isAllowed(
+            operation: SqlOperation.read,
+            resource: const DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 'dbo.users',
+            ),
+          ),
+        ).isTrue();
+
+        check(
+          policy.isAllowed(
+            operation: SqlOperation.update,
+            resource: const DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 'dbo.users',
+            ),
+          ),
+        ).isFalse();
+
+        check(
+          policy.isAllowed(
+            operation: SqlOperation.ddl,
+            resource: const DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 'dbo.users',
+            ),
+          ),
+        ).isTrue();
+      },
+    );
+
     test('should allow all views when allViews is true', () {
       const policy = ClientTokenPolicy(
         clientId: clientId,
@@ -425,6 +501,19 @@ void main() {
       );
 
       check(result).isFalse();
+    });
+
+    test('should normalize payload.database constraint', () {
+      const policy = ClientTokenPolicy(
+        clientId: clientId,
+        allTables: false,
+        allViews: false,
+        allPermissions: false,
+        payload: <String, dynamic>{'database': ' ERP_MAIN '},
+        rules: [],
+      );
+
+      expect(policy.payloadDatabaseConstraint, equals('erp_main'));
     });
   });
 }

@@ -1305,10 +1305,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctErrorRuleOrAllPermissionsRequired => 'Add at least one valid rule or enable all_permissions.';
 
   @override
+  String get ctErrorRuleOrGlobalPermissionsRequired => 'Add at least one valid rule when global scope is disabled.';
+
+  @override
+  String get ctErrorGlobalPermissionRequired =>
+      'Select at least one global permission when all_tables or all_views is enabled.';
+
+  @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload must be a valid JSON object.';
 
   @override
   String get ctErrorPayloadInvalidJson => 'Invalid JSON payload.';
+
+  @override
+  String get ctErrorPayloadDatabaseMustBeString => 'payload.database must be a string.';
+
+  @override
+  String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database must not be empty.';
 
   @override
   String get ctPermissionRead => 'Read';
@@ -1318,6 +1331,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctPermissionDdl => 'DDL';
+
+  @override
+  String get ctGlobalScopeRulesDisabled =>
+      'Global scope is enabled. Resource rules are hidden and will be removed when you save this token.';
 
   @override
   String get ctGridColumnType => 'Type';

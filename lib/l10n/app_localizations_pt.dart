@@ -1310,10 +1310,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctErrorRuleOrAllPermissionsRequired => 'Adicione ao menos uma regra valida ou marque all_permissions.';
 
   @override
+  String get ctErrorRuleOrGlobalPermissionsRequired =>
+      'Adicione ao menos uma regra valida quando o escopo global estiver desligado.';
+
+  @override
+  String get ctErrorGlobalPermissionRequired =>
+      'Selecione ao menos uma permissao global quando all_tables ou all_views estiver ativo.';
+
+  @override
   String get ctErrorPayloadMustBeJsonObject => 'Payload deve ser um objeto JSON valido.';
 
   @override
   String get ctErrorPayloadInvalidJson => 'Payload JSON invalido.';
+
+  @override
+  String get ctErrorPayloadDatabaseMustBeString => 'payload.database deve ser uma string.';
+
+  @override
+  String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database nao pode ficar vazio.';
 
   @override
   String get ctPermissionRead => 'Read';
@@ -1323,6 +1337,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctPermissionDelete => 'Delete';
+
+  @override
+  String get ctPermissionDdl => 'DDL';
+
+  @override
+  String get ctGlobalScopeRulesDisabled =>
+      'O escopo global esta ativo. As regras por recurso ficam ocultas e serao removidas ao salvar este token.';
 
   @override
   String get ctGridColumnType => 'Tipo';

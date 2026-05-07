@@ -39,7 +39,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -127,6 +127,32 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       if (from < 12) {
         await _addClientTokenNameColumnIfMissing(m);
       }
+      if (from < 13) {
+        await _addClientTokenGlobalPermissionsColumnIfMissing(m);
+        await customStatement(
+          '''
+          UPDATE client_token_cache_table
+          SET global_permissions_json = CASE
+            WHEN all_permissions = 1 THEN '{"read":true,"update":true,"delete":true,"ddl":true}'
+            WHEN all_tables = 1 OR all_views = 1 THEN '{"read":true,"update":true,"delete":true,"ddl":false}'
+            ELSE '{"read":false,"update":false,"delete":false,"ddl":false}'
+          END
+          WHERE global_permissions_json IS NULL
+             OR TRIM(global_permissions_json) = ''
+             OR global_permissions_json = '{"read":false,"update":false,"delete":false,"ddl":false}'
+          ''',
+        );
+        await customStatement(
+          '''
+          UPDATE client_token_cache_table
+          SET all_tables = 1,
+              all_views = 1,
+              all_permissions = 1,
+              global_permissions_json = '{"read":true,"update":true,"delete":true,"ddl":true}'
+          WHERE all_permissions = 1
+          ''',
+        );
+      }
       await _createClientTokenIndexes();
     },
     beforeOpen: (details) async {
@@ -183,6 +209,20 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       return;
     }
     await m.addColumn(clientTokenCacheTable, clientTokenCacheTable.name);
+  }
+
+  Future<void> _addClientTokenGlobalPermissionsColumnIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readClientTokenTableColumnNames();
+    final sqlName = clientTokenCacheTable.globalPermissionsJson.name;
+    if (existing.contains(sqlName)) {
+      return;
+    }
+    await m.addColumn(
+      clientTokenCacheTable,
+      clientTokenCacheTable.globalPermissionsJson,
+    );
   }
 
   Future<Set<String>> _readClientTokenTableColumnNames() async {

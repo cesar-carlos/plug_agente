@@ -10,7 +10,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 1048576,
-      "description": "SQL statement to execute (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH). Hard ceiling 1 MiB; the negotiated transport payload limit may be lower."
+      "description": "SQL statement to execute (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH, CREATE, ALTER, DROP, TRUNCATE). DDL v1 covers CREATE/ALTER/DROP TABLE/VIEW and TRUNCATE TABLE. Hard ceiling 1 MiB; the negotiated transport payload limit may be lower."
     },
     "params": {
       "type": "object",
@@ -139,7 +139,7 @@
     },
     "database": {
       "type": "string",
-      "description": "Optional target database override for this request"
+      "description": "Optional target database override for this request. When the resolved client token payload contains payload.database, this field becomes required and must match it exactly after trim + case-insensitive normalization."
     }
   },
   "allOf": [

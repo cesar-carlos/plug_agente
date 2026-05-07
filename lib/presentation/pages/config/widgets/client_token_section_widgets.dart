@@ -50,13 +50,19 @@ class _CreateTokenDialogContent extends StatelessWidget {
     required this.rules,
     required this.allTables,
     required this.allViews,
-    required this.allPermissions,
+    required this.globalCanRead,
+    required this.globalCanUpdate,
+    required this.globalCanDelete,
+    required this.globalCanDdl,
     required this.formError,
     required this.providerError,
     required this.lastCreatedToken,
     required this.onToggleAllTables,
     required this.onToggleAllViews,
-    required this.onToggleAllPermissions,
+    required this.onToggleGlobalRead,
+    required this.onToggleGlobalUpdate,
+    required this.onToggleGlobalDelete,
+    required this.onToggleGlobalDdl,
     required this.onAddRule,
     required this.onExportRules,
     required this.onImportRules,
@@ -76,13 +82,19 @@ class _CreateTokenDialogContent extends StatelessWidget {
   final List<ClientTokenRuleDraft> rules;
   final bool allTables;
   final bool allViews;
-  final bool allPermissions;
+  final bool globalCanRead;
+  final bool globalCanUpdate;
+  final bool globalCanDelete;
+  final bool globalCanDdl;
   final String formError;
   final String providerError;
   final String? lastCreatedToken;
   final ValueChanged<bool> onToggleAllTables;
   final ValueChanged<bool> onToggleAllViews;
-  final ValueChanged<bool> onToggleAllPermissions;
+  final ValueChanged<bool> onToggleGlobalRead;
+  final ValueChanged<bool> onToggleGlobalUpdate;
+  final ValueChanged<bool> onToggleGlobalDelete;
+  final ValueChanged<bool> onToggleGlobalDdl;
   final VoidCallback onAddRule;
   final VoidCallback onExportRules;
   final VoidCallback onImportRules;
@@ -95,6 +107,7 @@ class _CreateTokenDialogContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final isGlobalScopeMode = allTables || allViews;
     return _TokenFormErrorAnnouncer(
       formError: formError,
       providerError: providerError,
@@ -151,9 +164,27 @@ class _CreateTokenDialogContent extends StatelessWidget {
                 ),
                 _FlagCheckbox(
                   focusOrder: 7,
-                  label: l10n.ctFlagAllPermissions,
-                  value: allPermissions,
-                  onChanged: onToggleAllPermissions,
+                  label: l10n.ctPermissionRead,
+                  value: globalCanRead,
+                  onChanged: onToggleGlobalRead,
+                ),
+                _FlagCheckbox(
+                  focusOrder: 8,
+                  label: l10n.ctPermissionUpdate,
+                  value: globalCanUpdate,
+                  onChanged: onToggleGlobalUpdate,
+                ),
+                _FlagCheckbox(
+                  focusOrder: 9,
+                  label: l10n.ctPermissionDelete,
+                  value: globalCanDelete,
+                  onChanged: onToggleGlobalDelete,
+                ),
+                _FlagCheckbox(
+                  focusOrder: 10,
+                  label: l10n.ctPermissionDdl,
+                  value: globalCanDdl,
+                  onChanged: onToggleGlobalDdl,
                 ),
               ],
             ),
@@ -172,24 +203,25 @@ class _CreateTokenDialogContent extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     alignment: WrapAlignment.end,
                     children: [
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(8),
-                        child: isImportingRules
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: ProgressRing(strokeWidth: 2),
-                              )
-                            : AppButton(
-                                label: l10n.ctButtonImportRules,
-                                isPrimary: false,
-                                icon: FluentIcons.upload,
-                                onPressed: allPermissions ? null : onImportRules,
-                              ),
-                      ),
-                      if (rules.isNotEmpty)
+                      if (!isGlobalScopeMode)
                         FocusTraversalOrder(
-                          order: const NumericFocusOrder(9),
+                          order: const NumericFocusOrder(20),
+                          child: isImportingRules
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: ProgressRing(strokeWidth: 2),
+                                )
+                              : AppButton(
+                                  label: l10n.ctButtonImportRules,
+                                  isPrimary: false,
+                                  icon: FluentIcons.upload,
+                                  onPressed: onImportRules,
+                                ),
+                        ),
+                      if (!isGlobalScopeMode && rules.isNotEmpty)
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(21),
                           child: AppButton(
                             label: l10n.ctButtonExportRules,
                             isPrimary: false,
@@ -197,22 +229,25 @@ class _CreateTokenDialogContent extends StatelessWidget {
                             onPressed: onExportRules,
                           ),
                         ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(10),
-                        child: AppButton(
-                          label: l10n.ctButtonAddRule,
-                          isPrimary: false,
-                          icon: FluentIcons.add,
-                          onPressed: allPermissions ? null : onAddRule,
+                      if (!isGlobalScopeMode)
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(22),
+                          child: AppButton(
+                            label: l10n.ctButtonAddRule,
+                            isPrimary: false,
+                            icon: FluentIcons.add,
+                            onPressed: onAddRule,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            if (rules.isEmpty)
+            if (isGlobalScopeMode)
+              Text(l10n.ctGlobalScopeRulesDisabled)
+            else if (rules.isEmpty)
               Text(l10n.ctNoRulesAdded)
             else
               ClientTokenRulesGrid(
@@ -565,13 +600,37 @@ class _TokenSummaryGrid extends StatelessWidget {
   final ValueChanged<ClientTokenSummary> onRevoke;
   final ValueChanged<ClientTokenSummary> onDelete;
 
+  String _buildPermissionsLabel(
+    ClientPermissionSet permissions,
+    AppLocalizations l10n,
+  ) {
+    final labels = <String>[
+      if (permissions.canRead) l10n.ctPermissionRead,
+      if (permissions.canUpdate) l10n.ctPermissionUpdate,
+      if (permissions.canDelete) l10n.ctPermissionDelete,
+      if (permissions.canDdl) l10n.ctPermissionDdl,
+    ];
+    return labels.join(', ');
+  }
+
   String _buildScopeLabel(ClientTokenSummary token, AppLocalizations l10n) {
     if (token.allPermissions) return l10n.ctScopeAllPermissions;
     final scopes = <String>[
       if (token.allTables) l10n.ctScopeTables,
       if (token.allViews) l10n.ctScopeViews,
     ];
-    return scopes.isEmpty ? l10n.ctScopeRestricted : scopes.join(', ');
+    if (scopes.isEmpty) {
+      return l10n.ctScopeRestricted;
+    }
+
+    final permissionsLabel = _buildPermissionsLabel(
+      token.globalPermissions,
+      l10n,
+    );
+    if (permissionsLabel.isEmpty) {
+      return scopes.join(', ');
+    }
+    return '${scopes.join(', ')}: $permissionsLabel';
   }
 
   @override
