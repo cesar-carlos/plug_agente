@@ -416,7 +416,10 @@ class RpcRequestSchemaValidator {
       'options',
       'database',
       'interval_seconds',
+      'execution_timeout_seconds',
       'condition',
+      'notification_policy',
+      'persistence',
       'run_immediately',
       'idempotency_key',
     };
@@ -453,7 +456,7 @@ class RpcRequestSchemaValidator {
       if (condition is! Map<String, dynamic>) {
         return _invalidParams('Field "params.condition" must be an object');
       }
-      const conditionKeys = {'type'};
+      const conditionKeys = {'type', 'min_rows'};
       final extraConditionKeys = condition.keys.where(
         (key) => !conditionKeys.contains(key),
       );
@@ -463,11 +466,77 @@ class RpcRequestSchemaValidator {
           '${extraConditionKeys.join(", ")}',
         );
       }
-      if (condition['type'] != 'rows_present') {
+      final conditionType = condition['type'];
+      if (conditionType != 'rows_present' && conditionType != 'row_count_gt') {
         return _invalidParams(
-          'Field "params.condition.type" must be "rows_present"',
+          'Field "params.condition.type" must be "rows_present" or "row_count_gt"',
         );
       }
+      final minRows = condition['min_rows'];
+      if (conditionType == 'row_count_gt' && (minRows is! int || minRows < 0)) {
+        return _invalidParams(
+          'Field "params.condition.min_rows" must be a non-negative integer',
+        );
+      }
+    }
+
+    final notificationPolicy = params['notification_policy'];
+    if (notificationPolicy != null) {
+      if (notificationPolicy is! Map<String, dynamic>) {
+        return _invalidParams('Field "params.notification_policy" must be an object');
+      }
+      const policyKeys = {'mode', 'min_interval_seconds'};
+      final extraPolicyKeys = notificationPolicy.keys.where(
+        (key) => !policyKeys.contains(key),
+      );
+      if (extraPolicyKeys.isNotEmpty) {
+        return _invalidParams(
+          'Field "params.notification_policy" contains unsupported properties: '
+          '${extraPolicyKeys.join(", ")}',
+        );
+      }
+      const modes = {'every_tick', 'once_until_empty', 'on_change'};
+      final mode = notificationPolicy['mode'];
+      if (mode != null && !modes.contains(mode)) {
+        return _invalidParams(
+          'Field "params.notification_policy.mode" must be every_tick, once_until_empty, or on_change',
+        );
+      }
+      final minInterval = notificationPolicy['min_interval_seconds'];
+      if (minInterval != null && (minInterval is! int || minInterval < 0)) {
+        return _invalidParams(
+          'Field "params.notification_policy.min_interval_seconds" must be a non-negative integer',
+        );
+      }
+    }
+
+    final persistence = params['persistence'];
+    if (persistence != null) {
+      if (persistence is! Map<String, dynamic>) {
+        return _invalidParams('Field "params.persistence" must be an object');
+      }
+      const persistenceKeys = {'mode'};
+      final extraPersistenceKeys = persistence.keys.where(
+        (key) => !persistenceKeys.contains(key),
+      );
+      if (extraPersistenceKeys.isNotEmpty) {
+        return _invalidParams(
+          'Field "params.persistence" contains unsupported properties: '
+          '${extraPersistenceKeys.join(", ")}',
+        );
+      }
+      if (persistence['mode'] != 'session') {
+        return _invalidParams(
+          'Field "params.persistence.mode" must be "session"',
+        );
+      }
+    }
+
+    final executionTimeoutSeconds = params['execution_timeout_seconds'];
+    if (executionTimeoutSeconds != null && executionTimeoutSeconds is! int) {
+      return _invalidParams(
+        'Field "params.execution_timeout_seconds" must be an integer',
+      );
     }
 
     final runImmediately = params['run_immediately'];

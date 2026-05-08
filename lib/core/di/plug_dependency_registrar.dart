@@ -241,6 +241,7 @@ void registerPlugDependencyGraph(
       () => HealthService(
         metricsCollector: getIt<MetricsCollector>(),
         gateway: getIt<IDatabaseGateway>(),
+        sqlObserverService: getIt<SqlObserverService>(),
       ),
     )
     ..registerLazySingleton(

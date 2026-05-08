@@ -136,6 +136,15 @@ class ConnectionConstants {
   /// Max active SQL observers kept in memory for a single socket session.
   static const int maxSqlObserversPerSession = 16;
 
+  /// Default per-tick SQL observer execution timeout.
+  static const Duration sqlObserverDefaultExecutionTimeout = defaultQueryTimeout;
+
+  /// Minimum accepted per-tick SQL observer execution timeout.
+  static const Duration sqlObserverMinExecutionTimeout = Duration(seconds: 1);
+
+  /// Maximum accepted per-tick SQL observer execution timeout.
+  static const Duration sqlObserverMaxExecutionTimeout = Duration(minutes: 30);
+
   /// Idle timeout for an RPC streaming emitter. If the hub does not call
   /// `rpc:stream.pull` within this window after the last activity, the emitter
   /// is unregistered defensively to avoid leaks across long-lived sockets.

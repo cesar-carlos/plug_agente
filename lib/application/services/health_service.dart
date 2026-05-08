@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/services/sql_observer_service.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/runtime/app_uptime.dart';
@@ -10,11 +11,14 @@ class HealthService {
   HealthService({
     required MetricsCollector metricsCollector,
     required IDatabaseGateway gateway,
+    SqlObserverService? sqlObserverService,
   }) : _metrics = metricsCollector,
-       _gateway = gateway;
+       _gateway = gateway,
+       _sqlObserverService = sqlObserverService;
 
   final MetricsCollector _metrics;
   final IDatabaseGateway _gateway;
+  final SqlObserverService? _sqlObserverService;
 
   /// Gets current health status with system metrics.
   Map<String, Object?> getHealthStatus() {
@@ -59,6 +63,18 @@ class HealthService {
         'p95_latency_ms': (metrics['query_p95_latency_ms'] as num?)?.toInt() ?? 0,
         'p99_latency_ms': (metrics['query_p99_latency_ms'] as num?)?.toInt() ?? 0,
       },
+      'sql_observers':
+          _sqlObserverService?.metricsSnapshot().toJson() ??
+          const {
+            'active': 0,
+            'registered_total': 0,
+            'unregistered_total': 0,
+            'ticks_total': 0,
+            'notifications_total': 0,
+            'errors_total': 0,
+            'skipped_overlap_total': 0,
+            'avg_latency_ms': 0,
+          },
       'uptime_seconds': AppUptime.uptimeSeconds,
     };
   }

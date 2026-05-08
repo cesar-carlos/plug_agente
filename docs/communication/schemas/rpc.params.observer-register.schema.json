@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/rpc.params.observer-register.v1.json",
   "title": "observer.register params",
-  "description": "Registers a session-scoped SQL observer that periodically executes SQL and emits observer notifications when rows are returned.",
+  "description": "Registers a session-scoped SQL observer that periodically executes SQL and emits observer notifications when its configured condition is satisfied.",
   "type": "object",
   "required": ["sql"],
   "properties": {
@@ -38,12 +38,62 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "rows_present"
+          "enum": ["rows_present", "row_count_gt"]
+        },
+        "min_rows": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "required": ["type"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "row_count_gt" }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["min_rows"]
+          }
+        }
+      ],
       "additionalProperties": false,
       "default": { "type": "rows_present" }
+    },
+    "notification_policy": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["every_tick", "once_until_empty", "on_change"],
+          "default": "every_tick"
+        },
+        "min_interval_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "default": { "mode": "every_tick" }
+    },
+    "execution_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1800,
+      "default": 60
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "session"
+        }
+      },
+      "additionalProperties": false,
+      "default": { "mode": "session" }
     },
     "run_immediately": {
       "type": "boolean",

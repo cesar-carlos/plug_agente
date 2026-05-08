@@ -217,6 +217,9 @@ class RpcContractValidator {
     if (sequence == null || sequence < 1) {
       return _invalid('Field "sequence" must be >= 1');
     }
+    if (!_isNonEmptyString(data['notification_id'])) {
+      return _invalid('Field "notification_id" must be a non-empty string');
+    }
     for (final key in ['triggered_at', 'started_at', 'finished_at']) {
       final value = data[key];
       if (value is! String || DateTime.tryParse(value) == null) {
@@ -228,8 +231,34 @@ class RpcContractValidator {
       return _invalid('Field "interval_seconds" must be >= 1');
     }
     final condition = data['condition'];
-    if (condition is! Map<String, dynamic> || condition['type'] != 'rows_present') {
-      return _invalid('Field "condition.type" must be rows_present');
+    if (condition is! Map<String, dynamic>) {
+      return _invalid('Field "condition" must be an object');
+    }
+    final conditionType = condition['type'];
+    if (conditionType != 'rows_present' && conditionType != 'row_count_gt') {
+      return _invalid('Field "condition.type" must be rows_present or row_count_gt');
+    }
+    if (conditionType == 'row_count_gt') {
+      final minRows = _toInt(condition['min_rows']);
+      if (minRows == null || minRows < 0) {
+        return _invalid('Field "condition.min_rows" must be >= 0');
+      }
+    }
+    final notificationPolicy = data['notification_policy'];
+    if (notificationPolicy is! Map<String, dynamic>) {
+      return _invalid('Field "notification_policy" must be an object');
+    }
+    final executionTimeout = _toInt(data['execution_timeout_seconds']);
+    if (executionTimeout == null || executionTimeout < 1) {
+      return _invalid('Field "execution_timeout_seconds" must be >= 1');
+    }
+    final persistence = data['persistence'];
+    if (persistence is! Map<String, dynamic> || persistence['mode'] != 'session') {
+      return _invalid('Field "persistence.mode" must be session');
+    }
+    final delivery = data['delivery'];
+    if (delivery != null && delivery is! Map<String, dynamic>) {
+      return _invalid('Field "delivery" must be an object');
     }
     for (final key in ['row_count', 'returned_rows']) {
       final value = _toInt(data[key]);
@@ -276,6 +305,9 @@ class RpcContractValidator {
     final sequence = _toInt(data['sequence']);
     if (sequence == null || sequence < 1) {
       return _invalid('Field "sequence" must be >= 1');
+    }
+    if (!_isNonEmptyString(data['notification_id'])) {
+      return _invalid('Field "notification_id" must be a non-empty string');
     }
     final consecutiveFailures = _toInt(data['consecutive_failures']);
     if (consecutiveFailures == null || consecutiveFailures < 1) {

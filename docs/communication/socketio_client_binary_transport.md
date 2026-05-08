@@ -35,6 +35,11 @@ O padrao abaixo se aplica a todos os eventos de aplicacao:
 - `observer:notification`
 - `observer:error`
 
+Os eventos `observer:notification` e `observer:error` tambem usam este mesmo
+envelope fisico. Quando `enableSocketDeliveryGuarantees` esta ativo no agente,
+eles podem ser emitidos com ack/retry de Socket.IO; quando a flag esta inativa,
+permanecem fire-and-forget, mas ainda sempre dentro de `PayloadFrame`.
+
 Eventos internos do proprio Socket.IO, como `connect`, `disconnect`,
 `connect_error` e `error`, nao usam este envelope.
 

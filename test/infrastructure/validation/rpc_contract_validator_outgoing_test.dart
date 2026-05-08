@@ -188,12 +188,16 @@ void main() {
     test('should accept observer notification payload', () {
       final result = validator.validateObserverNotification(<String, dynamic>{
         'observer_id': 'obs-1',
+        'notification_id': 'obs-1_1',
         'sequence': 1,
         'triggered_at': '2026-01-01T00:00:00Z',
         'started_at': '2026-01-01T00:00:00Z',
         'finished_at': '2026-01-01T00:00:01Z',
         'interval_seconds': 300,
-        'condition': {'type': 'rows_present'},
+        'condition': {'type': 'row_count_gt', 'min_rows': 0},
+        'notification_policy': {'mode': 'every_tick'},
+        'execution_timeout_seconds': 60,
+        'persistence': {'mode': 'session'},
         'row_count': 1,
         'returned_rows': 1,
         'rows': [
@@ -207,6 +211,7 @@ void main() {
     test('should accept observer error payload', () {
       final result = validator.validateObserverError(<String, dynamic>{
         'observer_id': 'obs-1',
+        'notification_id': 'obs-1_1',
         'sequence': 1,
         'occurred_at': '2026-01-01T00:00:00Z',
         'consecutive_failures': 1,

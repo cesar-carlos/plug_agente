@@ -638,6 +638,66 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _socket!.emit(event, outgoingPayload);
   }
 
+  Future<void> _emitEventWithAckRetryAsync(
+    String event,
+    Map<String, dynamic> logicalPayload,
+  ) async {
+    if (_socket == null) {
+      return;
+    }
+    if (!_featureFlags.enableSocketDeliveryGuarantees) {
+      final outgoingPayload = await _prepareOutgoingPayloadAsync(
+        event,
+        logicalPayload,
+      );
+      if (outgoingPayload == null) {
+        return;
+      }
+      _logMessage('SENT', event, logicalPayload);
+      _socket!.emit(event, outgoingPayload);
+      return;
+    }
+
+    const maxRetries = DeliveryGuaranteeConfig.maxResponseRetries;
+    final timeoutMs = DeliveryGuaranteeConfig.responseAckTimeout.inMilliseconds;
+    const totalAttempts = maxRetries + 1;
+    for (var attempt = 0; attempt < totalAttempts; attempt++) {
+      final attemptPayload = {
+        ...logicalPayload,
+        'delivery': {
+          ...(logicalPayload['delivery'] as Map<String, dynamic>? ?? const {}),
+          'attempt': attempt + 1,
+        },
+      };
+      final outgoingPayload = await _prepareOutgoingPayloadAsync(
+        event,
+        attemptPayload,
+      );
+      if (outgoingPayload == null) {
+        return;
+      }
+      try {
+        _logMessage('SENT', event, attemptPayload);
+        await _socket!.timeout(timeoutMs).emitWithAckAsync(event, outgoingPayload);
+        return;
+      } on Exception catch (error) {
+        final remaining = totalAttempts - attempt - 1;
+        if (remaining > 0) {
+          AppLogger.warning(
+            '$event ack timeout, retrying (${attempt + 1}/$maxRetries)',
+            error,
+          );
+        } else {
+          AppLogger.warning(
+            '$event ack failed after $maxRetries retries, sending without ack',
+            error,
+          );
+          _socket?.emit(event, outgoingPayload);
+        }
+      }
+    }
+  }
+
   Future<dynamic> _prepareOutgoingPayloadAsync(
     String event,
     dynamic logicalPayload,
@@ -975,7 +1035,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       }
     }
 
-    await _emitEventAsync(event, payload);
+    await _emitEventWithAckRetryAsync(event, payload);
   }
 
   Future<void> _emitValidatedObserverEvent(

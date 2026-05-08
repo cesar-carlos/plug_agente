@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "observer_id",
+    "notification_id",
     "sequence",
     "occurred_at",
     "consecutive_failures",
@@ -13,6 +14,7 @@
   ],
   "properties": {
     "observer_id": { "type": "string" },
+    "notification_id": { "type": "string" },
     "sequence": { "type": "integer", "minimum": 1 },
     "occurred_at": { "type": "string", "format": "date-time" },
     "consecutive_failures": { "type": "integer", "minimum": 1 },

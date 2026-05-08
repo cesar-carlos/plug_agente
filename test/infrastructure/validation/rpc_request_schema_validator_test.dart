@@ -31,7 +31,10 @@ void main() {
           'params': {
             'sql': 'SELECT * FROM users WHERE active = 1',
             'interval_seconds': 300,
-            'condition': {'type': 'rows_present'},
+            'condition': {'type': 'row_count_gt', 'min_rows': 0},
+            'notification_policy': {'mode': 'on_change'},
+            'execution_timeout_seconds': 60,
+            'persistence': {'mode': 'session'},
             'run_immediately': true,
           },
         };

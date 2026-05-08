@@ -60,6 +60,16 @@ class ProtocolCapabilities {
       'errorFormat': 'structured-error-data',
       'sqlObservers': true,
       'sqlObserverNotifications': true,
+      'sqlObserverConditions': ['rows_present', 'row_count_gt'],
+      'sqlObserverNotificationPolicies': ['every_tick', 'once_until_empty', 'on_change'],
+      'sqlObserverPersistenceModes': ['session'],
+      'sqlObserverDefaultIntervalSeconds': ConnectionConstants.sqlObserverDefaultInterval.inSeconds,
+      'sqlObserverMinIntervalSeconds': ConnectionConstants.sqlObserverMinInterval.inSeconds,
+      'sqlObserverMaxIntervalSeconds': ConnectionConstants.sqlObserverMaxInterval.inSeconds,
+      'sqlObserverMaxPerSession': ConnectionConstants.maxSqlObserversPerSession,
+      'sqlObserverDefaultExecutionTimeoutSeconds': ConnectionConstants.sqlObserverDefaultExecutionTimeout.inSeconds,
+      'sqlObserverMinExecutionTimeoutSeconds': ConnectionConstants.sqlObserverMinExecutionTimeout.inSeconds,
+      'sqlObserverMaxExecutionTimeoutSeconds': ConnectionConstants.sqlObserverMaxExecutionTimeout.inSeconds,
       // Backpressure window hints communicate the agent's preferred and maximum
       // pull window sizes to the hub. The hub may pick a value <= max and
       // SHOULD start with `recommended`. See socket_communication_standard.md.

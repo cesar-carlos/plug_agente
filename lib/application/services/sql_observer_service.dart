@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -49,6 +51,8 @@ final class SqlObserverService {
 
   final Map<String, _SqlObserverRegistration> _observers = {};
   SqlObserverEventEmitter? _emitEvent;
+  int _registeredTotal = 0;
+  int _unregisteredTotal = 0;
 
   void setEventEmitter(SqlObserverEventEmitter? emitEvent) {
     _emitEvent = emitEvent;
@@ -93,6 +97,9 @@ final class SqlObserverService {
       database: command.database,
       clientToken: command.clientToken,
       interval: interval,
+      condition: command.condition,
+      notificationPolicy: command.notificationPolicy,
+      executionTimeout: command.executionTimeout,
       maxRows: command.limits.maxRows,
       sqlHandlingMode: command.sqlHandlingMode,
       expectMultipleResults: command.expectMultipleResults,
@@ -104,13 +111,17 @@ final class SqlObserverService {
     );
 
     _observers[observerId] = observer;
+    _registeredTotal++;
     observer.start(runImmediately: command.runImmediately);
 
     return Success(
       SqlObserverRegisterResult(
         observerId: observerId,
         intervalSeconds: command.intervalSeconds,
-        condition: SqlObserverCondition.rowsPresent,
+        condition: command.condition,
+        notificationPolicy: command.notificationPolicy,
+        executionTimeout: command.executionTimeout,
+        persistenceMode: command.persistenceMode,
         createdAt: createdAt,
         nextRunAt: nextRunAt,
       ),
@@ -128,6 +139,7 @@ final class SqlObserverService {
       );
     }
     observer.cancel();
+    _unregisteredTotal++;
     return Success(
       SqlObserverUnregisterResult(
         observerId: observerId,
@@ -138,6 +150,55 @@ final class SqlObserverService {
 
   List<SqlObserverSnapshot> list() {
     return _observers.values.map((observer) => observer.snapshot()).toList(growable: false);
+  }
+
+  Future<Result<void>> runOnce(String observerId) async {
+    final observer = _observers[observerId];
+    if (observer == null) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'observer_id was not found',
+          context: {
+            'reason': 'observer_not_found',
+            'observer_id': observerId,
+          },
+        ),
+      );
+    }
+    await observer.runOnce();
+    return const Success(unit);
+  }
+
+  SqlObserverMetricsSnapshot metricsSnapshot() {
+    var ticksTotal = 0;
+    var notificationsTotal = 0;
+    var errorsTotal = 0;
+    var skippedOverlapTotal = 0;
+    var totalLatencyMs = 0;
+    var latencySamples = 0;
+
+    for (final observer in _observers.values) {
+      ticksTotal += observer.ticksTotal;
+      notificationsTotal += observer.notificationsTotal;
+      errorsTotal += observer.errorsTotal;
+      skippedOverlapTotal += observer.skippedOverlapTotal;
+      final avgLatency = observer.averageLatencyMs;
+      if (avgLatency != null) {
+        totalLatencyMs += avgLatency;
+        latencySamples++;
+      }
+    }
+
+    return SqlObserverMetricsSnapshot(
+      active: _observers.length,
+      registeredTotal: _registeredTotal,
+      unregisteredTotal: _unregisteredTotal,
+      ticksTotal: ticksTotal,
+      notificationsTotal: notificationsTotal,
+      errorsTotal: errorsTotal,
+      skippedOverlapTotal: skippedOverlapTotal,
+      averageLatencyMs: latencySamples == 0 ? 0 : totalLatencyMs ~/ latencySamples,
+    );
   }
 
   void clearSession() {
@@ -177,11 +238,32 @@ final class SqlObserverService {
         ),
       );
     }
-    if (command.condition != SqlObserverCondition.rowsPresent) {
+    final conditionValidation = command.condition.validate();
+    if (conditionValidation.isError()) {
+      return conditionValidation;
+    }
+    final policyValidation = command.notificationPolicy.validate();
+    if (policyValidation.isError()) {
+      return policyValidation;
+    }
+    if (command.persistenceMode != SqlObserverPersistenceMode.session) {
       return Failure(
         domain.ValidationFailure.withContext(
-          message: 'condition.type must be rows_present',
-          context: {'reason': 'unsupported_observer_condition'},
+          message: 'Only session persistence is supported for SQL observers',
+          context: {'reason': 'unsupported_observer_persistence'},
+        ),
+      );
+    }
+    if (command.executionTimeout < ConnectionConstants.sqlObserverMinExecutionTimeout ||
+        command.executionTimeout > ConnectionConstants.sqlObserverMaxExecutionTimeout) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'execution_timeout_seconds is outside the supported range',
+          context: {
+            'reason': 'invalid_execution_timeout_seconds',
+            'min_execution_timeout_seconds': ConnectionConstants.sqlObserverMinExecutionTimeout.inSeconds,
+            'max_execution_timeout_seconds': ConnectionConstants.sqlObserverMaxExecutionTimeout.inSeconds,
+          },
         ),
       );
     }
@@ -253,15 +335,18 @@ final class SqlObserverService {
         sqlHandlingMode: observer.sqlHandlingMode,
         sourceRpcRequestId: 'observer:${observer.observerId}',
       );
-      final result = await _databaseGateway.executeQuery(
-        request,
-        database: observer.database,
-      );
+      final result = await _databaseGateway
+          .executeQuery(
+            request,
+            timeout: observer.executionTimeout,
+            database: observer.database,
+          )
+          .timeout(observer.executionTimeout);
       return result.fold(
         (response) {
           final normalized = _normalizerService.normalize(response);
           return _SqlObserverExecutionResult.success(
-            _buildNotificationPayload(
+            _buildNotificationCandidate(
               observer: observer,
               response: normalized,
               startedAt: startedAt,
@@ -270,6 +355,26 @@ final class SqlObserverService {
           );
         },
         (failure) => _SqlObserverExecutionResult.failure(failure as domain.Failure),
+      );
+    } on TimeoutException catch (error, stackTrace) {
+      AppLogger.warning(
+        'SQL observer execution timed out',
+        error,
+        stackTrace,
+      );
+      return _SqlObserverExecutionResult.failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL observer execution timeout',
+          cause: error,
+          context: {
+            'operation': 'sql_observer_execute',
+            'observer_id': observer.observerId,
+            'timeout': true,
+            'timeout_stage': 'sql',
+            'reason': 'sql_observer_timeout',
+            'timeout_seconds': observer.executionTimeout.inSeconds,
+          },
+        ),
       );
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
@@ -290,7 +395,7 @@ final class SqlObserverService {
     }
   }
 
-  Map<String, dynamic>? _buildNotificationPayload({
+  _SqlObserverExecutionSuccess _buildNotificationCandidate({
     required _SqlObserverRegistration observer,
     required QueryResponse response,
     required DateTime startedAt,
@@ -327,24 +432,25 @@ final class SqlObserverService {
       );
     }
 
+    final actualRowCount = _actualRowCount(normalized);
     final limitedRows = normalized.resultSets.isNotEmpty
         ? normalized.data
         : truncateSqlResultRows(normalized.data, observer.maxRows);
-    if (!_hasRows(normalized, limitedRows)) {
-      return null;
-    }
+    final conditionMet = observer.condition.evaluate(actualRowCount);
 
     final wasTruncated =
         multiResultSetsTruncated || (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
     final payload = <String, dynamic>{
       'observer_id': observer.observerId,
-      'sequence': observer.nextSequence(),
       'triggered_at': finishedAt.toIso8601String(),
       'started_at': startedAt.toIso8601String(),
       'finished_at': finishedAt.toIso8601String(),
       'interval_seconds': observer.interval.inSeconds,
-      'condition': SqlObserverCondition.rowsPresent.toJson(),
-      'row_count': limitedRows.length,
+      'condition': observer.condition.toJson(),
+      'notification_policy': observer.notificationPolicy.toJson(),
+      'execution_timeout_seconds': observer.executionTimeout.inSeconds,
+      'persistence': observer.persistenceMode.toJson(),
+      'row_count': actualRowCount,
       'returned_rows': limitedRows.length,
       'rows': limitedRows,
       if (observer.database != null) 'database': observer.database,
@@ -366,14 +472,36 @@ final class SqlObserverService {
           .toList(growable: false);
     }
 
-    return payload;
+    return _SqlObserverExecutionSuccess(
+      payload: conditionMet ? payload : null,
+      rowCount: actualRowCount,
+      returnedRows: limitedRows.length,
+      conditionMet: conditionMet,
+      resultSignature: _stableResultSignature(normalized, limitedRows),
+      elapsed: finishedAt.difference(startedAt),
+    );
   }
 
-  bool _hasRows(QueryResponse response, List<Map<String, dynamic>> limitedRows) {
-    if (limitedRows.isNotEmpty) {
-      return true;
+  int _actualRowCount(QueryResponse response) {
+    if (response.resultSets.isNotEmpty) {
+      return response.resultSets.fold<int>(0, (total, set) => total + set.rows.length);
     }
-    return response.resultSets.any((set) => set.rows.isNotEmpty);
+    return response.data.length;
+  }
+
+  String _stableResultSignature(QueryResponse response, List<Map<String, dynamic>> limitedRows) {
+    final data = response.resultSets.isNotEmpty
+        ? response.resultSets
+              .map(
+                (set) => {
+                  'index': set.index,
+                  'rows': set.rows,
+                  'affected_rows': set.affectedRows,
+                },
+              )
+              .toList(growable: false)
+        : limitedRows;
+    return sha256.convert(utf8.encode(jsonEncode(data))).toString();
   }
 
   Future<void> _emitObserverEvent(
@@ -389,9 +517,19 @@ final class SqlObserverService {
   }
 }
 
-enum SqlObserverCondition {
-  rowsPresent
-  ;
+final class SqlObserverCondition {
+  const SqlObserverCondition._({
+    required this.type,
+    this.minRows,
+  });
+
+  const SqlObserverCondition.rowCountGreaterThan(int minRows)
+    : this._(
+        type: 'row_count_gt',
+        minRows: minRows,
+      );
+
+  static const rowsPresent = SqlObserverCondition._(type: 'rows_present');
 
   static SqlObserverCondition? fromJson(dynamic value) {
     if (value == null) {
@@ -401,10 +539,155 @@ enum SqlObserverCondition {
       return null;
     }
     final type = value['type'];
-    return type == 'rows_present' ? rowsPresent : null;
+    return switch (type) {
+      'rows_present' => rowsPresent,
+      'row_count_gt' =>
+        value['min_rows'] is int
+            ? SqlObserverCondition._(
+                type: 'row_count_gt',
+                minRows: value['min_rows'] as int,
+              )
+            : null,
+      _ => null,
+    };
   }
 
-  Map<String, dynamic> toJson() => const {'type': 'rows_present'};
+  final String type;
+  final int? minRows;
+
+  bool evaluate(int rowCount) {
+    return switch (type) {
+      'rows_present' => rowCount > 0,
+      'row_count_gt' => rowCount > (minRows ?? 0),
+      _ => false,
+    };
+  }
+
+  Result<void> validate() {
+    if (type == 'rows_present') {
+      return const Success(unit);
+    }
+    if (type == 'row_count_gt' && minRows != null && minRows! >= 0) {
+      return const Success(unit);
+    }
+    return Failure(
+      domain.ValidationFailure.withContext(
+        message: 'Unsupported SQL observer condition',
+        context: {'reason': 'unsupported_observer_condition'},
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'type': type,
+    if (minRows != null) 'min_rows': minRows,
+  };
+}
+
+enum SqlObserverNotificationMode {
+  everyTick('every_tick'),
+  onceUntilEmpty('once_until_empty'),
+  onChange('on_change')
+  ;
+
+  const SqlObserverNotificationMode(this.wireName);
+
+  final String wireName;
+
+  static SqlObserverNotificationMode? fromJson(dynamic value) {
+    if (value == null) {
+      return everyTick;
+    }
+    if (value is! String) {
+      return null;
+    }
+    for (final mode in values) {
+      if (mode.wireName == value) {
+        return mode;
+      }
+    }
+    return null;
+  }
+}
+
+final class SqlObserverNotificationPolicy {
+  const SqlObserverNotificationPolicy({
+    this.mode = SqlObserverNotificationMode.everyTick,
+    this.minInterval,
+  });
+
+  static const defaults = SqlObserverNotificationPolicy();
+
+  static SqlObserverNotificationPolicy? fromJson(dynamic value) {
+    if (value == null) {
+      return defaults;
+    }
+    if (value is! Map<String, dynamic>) {
+      return null;
+    }
+    final mode = SqlObserverNotificationMode.fromJson(value['mode']);
+    if (mode == null) {
+      return null;
+    }
+    final rawMinInterval = value['min_interval_seconds'];
+    if (rawMinInterval != null && rawMinInterval is! int) {
+      return null;
+    }
+    return SqlObserverNotificationPolicy(
+      mode: mode,
+      minInterval: rawMinInterval == null ? null : Duration(seconds: rawMinInterval as int),
+    );
+  }
+
+  final SqlObserverNotificationMode mode;
+  final Duration? minInterval;
+
+  Result<void> validate() {
+    final minInterval = this.minInterval;
+    if (minInterval != null && minInterval.isNegative) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'notification_policy.min_interval_seconds must be non-negative',
+          context: {'reason': 'invalid_notification_min_interval'},
+        ),
+      );
+    }
+    return const Success(unit);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'mode': mode.wireName,
+    if (minInterval != null) 'min_interval_seconds': minInterval!.inSeconds,
+  };
+}
+
+enum SqlObserverPersistenceMode {
+  session('session')
+  ;
+
+  const SqlObserverPersistenceMode(this.wireName);
+
+  final String wireName;
+
+  static SqlObserverPersistenceMode? fromJson(dynamic value) {
+    if (value == null) {
+      return session;
+    }
+    if (value is String) {
+      for (final mode in values) {
+        if (mode.wireName == value) {
+          return mode;
+        }
+      }
+      return null;
+    }
+    if (value is Map<String, dynamic>) {
+      return fromJson(value['mode']);
+    }
+    return null;
+  }
+
+  Map<String, dynamic> toJson() => {'mode': wireName};
 }
 
 final class SqlObserverRegisterCommand {
@@ -414,6 +697,9 @@ final class SqlObserverRegisterCommand {
     required this.intervalSeconds,
     required this.limits,
     required this.condition,
+    this.notificationPolicy = SqlObserverNotificationPolicy.defaults,
+    this.executionTimeout = ConnectionConstants.sqlObserverDefaultExecutionTimeout,
+    this.persistenceMode = SqlObserverPersistenceMode.session,
     this.parameters,
     this.database,
     this.clientToken,
@@ -434,6 +720,9 @@ final class SqlObserverRegisterCommand {
   final int intervalSeconds;
   final TransportLimits limits;
   final SqlObserverCondition condition;
+  final SqlObserverNotificationPolicy notificationPolicy;
+  final Duration executionTimeout;
+  final SqlObserverPersistenceMode persistenceMode;
   final SqlHandlingMode sqlHandlingMode;
   final bool expectMultipleResults;
   final String? sourceRpcRequestId;
@@ -444,6 +733,9 @@ final class SqlObserverRegisterResult {
     required this.observerId,
     required this.intervalSeconds,
     required this.condition,
+    required this.notificationPolicy,
+    required this.executionTimeout,
+    required this.persistenceMode,
     required this.createdAt,
     required this.nextRunAt,
   });
@@ -451,6 +743,9 @@ final class SqlObserverRegisterResult {
   final String observerId;
   final int intervalSeconds;
   final SqlObserverCondition condition;
+  final SqlObserverNotificationPolicy notificationPolicy;
+  final Duration executionTimeout;
+  final SqlObserverPersistenceMode persistenceMode;
   final DateTime createdAt;
   final DateTime nextRunAt;
 
@@ -458,6 +753,9 @@ final class SqlObserverRegisterResult {
     'observer_id': observerId,
     'interval_seconds': intervalSeconds,
     'condition': condition.toJson(),
+    'notification_policy': notificationPolicy.toJson(),
+    'execution_timeout_seconds': executionTimeout.inSeconds,
+    'persistence': persistenceMode.toJson(),
     'created_at': createdAt.toIso8601String(),
     'next_run_at': nextRunAt.toIso8601String(),
   };
@@ -483,9 +781,23 @@ final class SqlObserverSnapshot {
     required this.observerId,
     required this.intervalSeconds,
     required this.condition,
+    required this.notificationPolicy,
+    required this.executionTimeout,
+    required this.persistenceMode,
     required this.createdAt,
     required this.nextRunAt,
     required this.consecutiveFailures,
+    required this.sequence,
+    required this.ticksTotal,
+    required this.notificationsTotal,
+    required this.errorsTotal,
+    required this.skippedOverlapTotal,
+    this.lastNotificationAt,
+    this.lastRowCount,
+    this.lastReturnedRows,
+    this.lastLatencyMs,
+    this.averageLatencyMs,
+    this.lastError,
     this.lastRunAt,
     this.lastStatus,
   });
@@ -493,21 +805,82 @@ final class SqlObserverSnapshot {
   final String observerId;
   final int intervalSeconds;
   final SqlObserverCondition condition;
+  final SqlObserverNotificationPolicy notificationPolicy;
+  final Duration executionTimeout;
+  final SqlObserverPersistenceMode persistenceMode;
   final DateTime createdAt;
   final DateTime nextRunAt;
   final DateTime? lastRunAt;
+  final DateTime? lastNotificationAt;
   final String? lastStatus;
   final int consecutiveFailures;
+  final int sequence;
+  final int ticksTotal;
+  final int notificationsTotal;
+  final int errorsTotal;
+  final int skippedOverlapTotal;
+  final int? lastRowCount;
+  final int? lastReturnedRows;
+  final int? lastLatencyMs;
+  final int? averageLatencyMs;
+  final Map<String, dynamic>? lastError;
 
   Map<String, dynamic> toJson() => {
     'observer_id': observerId,
     'interval_seconds': intervalSeconds,
     'condition': condition.toJson(),
+    'notification_policy': notificationPolicy.toJson(),
+    'execution_timeout_seconds': executionTimeout.inSeconds,
+    'persistence': persistenceMode.toJson(),
     'created_at': createdAt.toIso8601String(),
     'next_run_at': nextRunAt.toIso8601String(),
     if (lastRunAt != null) 'last_run_at': lastRunAt!.toIso8601String(),
+    if (lastNotificationAt != null) 'last_notification_at': lastNotificationAt!.toIso8601String(),
     if (lastStatus != null) 'last_status': lastStatus,
     'consecutive_failures': consecutiveFailures,
+    'sequence': sequence,
+    'ticks_total': ticksTotal,
+    'notifications_total': notificationsTotal,
+    'errors_total': errorsTotal,
+    'skipped_overlap_total': skippedOverlapTotal,
+    if (lastRowCount != null) 'last_row_count': lastRowCount,
+    if (lastReturnedRows != null) 'last_returned_rows': lastReturnedRows,
+    if (lastLatencyMs != null) 'last_latency_ms': lastLatencyMs,
+    if (averageLatencyMs != null) 'average_latency_ms': averageLatencyMs,
+    if (lastError != null) 'last_error': lastError,
+  };
+}
+
+final class SqlObserverMetricsSnapshot {
+  const SqlObserverMetricsSnapshot({
+    required this.active,
+    required this.registeredTotal,
+    required this.unregisteredTotal,
+    required this.ticksTotal,
+    required this.notificationsTotal,
+    required this.errorsTotal,
+    required this.skippedOverlapTotal,
+    required this.averageLatencyMs,
+  });
+
+  final int active;
+  final int registeredTotal;
+  final int unregisteredTotal;
+  final int ticksTotal;
+  final int notificationsTotal;
+  final int errorsTotal;
+  final int skippedOverlapTotal;
+  final int averageLatencyMs;
+
+  Map<String, Object?> toJson() => {
+    'active': active,
+    'registered_total': registeredTotal,
+    'unregistered_total': unregisteredTotal,
+    'ticks_total': ticksTotal,
+    'notifications_total': notificationsTotal,
+    'errors_total': errorsTotal,
+    'skipped_overlap_total': skippedOverlapTotal,
+    'avg_latency_ms': averageLatencyMs,
   };
 }
 
@@ -517,6 +890,9 @@ final class _SqlObserverRegistration {
     required this.agentId,
     required this.sql,
     required this.interval,
+    required this.condition,
+    required this.notificationPolicy,
+    required this.executionTimeout,
     required this.maxRows,
     required this.sqlHandlingMode,
     required this.expectMultipleResults,
@@ -537,6 +913,10 @@ final class _SqlObserverRegistration {
   final String? database;
   final String? clientToken;
   final Duration interval;
+  final SqlObserverCondition condition;
+  final SqlObserverNotificationPolicy notificationPolicy;
+  final Duration executionTimeout;
+  final SqlObserverPersistenceMode persistenceMode = SqlObserverPersistenceMode.session;
   final int maxRows;
   final SqlHandlingMode sqlHandlingMode;
   final bool expectMultipleResults;
@@ -548,10 +928,25 @@ final class _SqlObserverRegistration {
   Timer? _timer;
   bool _isRunning = false;
   int _sequence = 0;
+  int ticksTotal = 0;
+  int _latencySamples = 0;
+  int notificationsTotal = 0;
+  int errorsTotal = 0;
+  int skippedOverlapTotal = 0;
+  int _totalLatencyMs = 0;
   DateTime nextRunAt;
   DateTime? lastRunAt;
+  DateTime? lastNotificationAt;
   String? lastStatus;
+  int? lastRowCount;
+  int? lastReturnedRows;
+  int? lastLatencyMs;
+  String? _lastNotifiedSignature;
+  bool _wasConditionMet = false;
+  Map<String, dynamic>? lastError;
   int consecutiveFailures = 0;
+
+  int? get averageLatencyMs => _latencySamples == 0 ? null : _totalLatencyMs ~/ _latencySamples;
 
   void start({required bool runImmediately}) {
     if (runImmediately) {
@@ -566,30 +961,81 @@ final class _SqlObserverRegistration {
   Future<void> runOnce() async {
     if (_isRunning) {
       lastStatus = 'skipped_overlap';
+      skippedOverlapTotal++;
       return;
     }
     _isRunning = true;
+    ticksTotal++;
     lastRunAt = now();
     try {
       final result = await execute(this);
       if (result.failure != null) {
         consecutiveFailures++;
+        errorsTotal++;
         lastStatus = 'error';
-        await emitEvent(
-          'observer:error',
-          _buildErrorPayload(result.failure!),
-        );
+        final errorPayload = _buildErrorPayload(result.failure!);
+        lastError = errorPayload['error'] as Map<String, dynamic>?;
+        await emitEvent('observer:error', errorPayload);
         return;
       }
-      final payload = result.notificationPayload;
+      final success = result.success!;
+      lastRowCount = success.rowCount;
+      lastReturnedRows = success.returnedRows;
+      lastLatencyMs = success.elapsed.inMilliseconds;
+      _totalLatencyMs += success.elapsed.inMilliseconds;
+      _latencySamples++;
       consecutiveFailures = 0;
-      lastStatus = payload == null ? 'empty' : 'notified';
-      if (payload != null) {
-        await emitEvent('observer:notification', payload);
+      lastError = null;
+
+      final payload = success.payload;
+      if (payload == null) {
+        _wasConditionMet = false;
+        lastStatus = success.conditionMet ? 'suppressed' : 'condition_not_met';
+        return;
       }
+
+      if (!_shouldNotify(success)) {
+        _wasConditionMet = success.conditionMet;
+        lastStatus = 'suppressed';
+        return;
+      }
+
+      _wasConditionMet = success.conditionMet;
+      _lastNotifiedSignature = success.resultSignature;
+      final sequence = nextSequence();
+      final notificationId = '${observerId}_$sequence';
+      lastNotificationAt = now();
+      notificationsTotal++;
+      lastStatus = 'notified';
+      await emitEvent(
+        'observer:notification',
+        {
+          ...payload,
+          'notification_id': notificationId,
+          'sequence': sequence,
+          'delivery': {
+            'mode': 'ack_retry',
+            'attempt': 1,
+          },
+        },
+      );
     } finally {
       _isRunning = false;
     }
+  }
+
+  bool _shouldNotify(_SqlObserverExecutionSuccess success) {
+    final minInterval = notificationPolicy.minInterval;
+    final lastNotificationAt = this.lastNotificationAt;
+    if (minInterval != null && lastNotificationAt != null && now().difference(lastNotificationAt) < minInterval) {
+      return false;
+    }
+
+    return switch (notificationPolicy.mode) {
+      SqlObserverNotificationMode.everyTick => true,
+      SqlObserverNotificationMode.onceUntilEmpty => !_wasConditionMet,
+      SqlObserverNotificationMode.onChange => _lastNotifiedSignature != success.resultSignature,
+    };
   }
 
   int nextSequence() {
@@ -605,12 +1051,26 @@ final class _SqlObserverRegistration {
     return SqlObserverSnapshot(
       observerId: observerId,
       intervalSeconds: interval.inSeconds,
-      condition: SqlObserverCondition.rowsPresent,
+      condition: condition,
+      notificationPolicy: notificationPolicy,
+      executionTimeout: executionTimeout,
+      persistenceMode: persistenceMode,
       createdAt: createdAt,
       nextRunAt: nextRunAt,
       lastRunAt: lastRunAt,
+      lastNotificationAt: lastNotificationAt,
       lastStatus: lastStatus,
       consecutiveFailures: consecutiveFailures,
+      sequence: _sequence,
+      ticksTotal: ticksTotal,
+      notificationsTotal: notificationsTotal,
+      errorsTotal: errorsTotal,
+      skippedOverlapTotal: skippedOverlapTotal,
+      lastRowCount: lastRowCount,
+      lastReturnedRows: lastReturnedRows,
+      lastLatencyMs: lastLatencyMs,
+      averageLatencyMs: averageLatencyMs,
+      lastError: lastError,
     );
   }
 
@@ -622,9 +1082,11 @@ final class _SqlObserverRegistration {
     );
     final errorData = rpcError.data;
     final reason = errorData is Map<String, dynamic> ? errorData['reason'] as String? : null;
+    final sequence = nextSequence();
     return {
       'observer_id': observerId,
-      'sequence': nextSequence(),
+      'sequence': sequence,
+      'notification_id': '${observerId}_$sequence',
       'occurred_at': occurredAt.toIso8601String(),
       'consecutive_failures': consecutiveFailures,
       'retry_at': occurredAt.add(interval).toIso8601String(),
@@ -636,17 +1098,35 @@ final class _SqlObserverRegistration {
 
 final class _SqlObserverExecutionResult {
   const _SqlObserverExecutionResult._({
-    this.notificationPayload,
+    this.success,
     this.failure,
   });
 
   factory _SqlObserverExecutionResult.success(
-    Map<String, dynamic>? notificationPayload,
-  ) => _SqlObserverExecutionResult._(notificationPayload: notificationPayload);
+    _SqlObserverExecutionSuccess success,
+  ) => _SqlObserverExecutionResult._(success: success);
 
   factory _SqlObserverExecutionResult.failure(domain.Failure failure) =>
       _SqlObserverExecutionResult._(failure: failure);
 
-  final Map<String, dynamic>? notificationPayload;
+  final _SqlObserverExecutionSuccess? success;
   final domain.Failure? failure;
+}
+
+final class _SqlObserverExecutionSuccess {
+  const _SqlObserverExecutionSuccess({
+    required this.payload,
+    required this.rowCount,
+    required this.returnedRows,
+    required this.conditionMet,
+    required this.resultSignature,
+    required this.elapsed,
+  });
+
+  final Map<String, dynamic>? payload;
+  final int rowCount;
+  final int returnedRows;
+  final bool conditionMet;
+  final String resultSignature;
+  final Duration elapsed;
 }

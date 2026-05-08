@@ -135,8 +135,8 @@ handshake.
 | `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
 | `rpc:complete`         | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
 | `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
-| `observer:notification` | agente -> hub | `PayloadFrame<{ observer_id, sequence, rows, row_count, ... }>`         | best effort; enviado quando a execucao periodica retorna rows                                                                                              |
-| `observer:error`        | agente -> hub | `PayloadFrame<{ observer_id, sequence, error, retry_at, ... }>`         | best effort; enviado quando uma execucao periodica falha                                                                                                   |
+| `observer:notification` | agente -> hub | `PayloadFrame<{ observer_id, notification_id, sequence, rows, row_count, ... }>` | enviado quando a condicao do observer e satisfeita; usa ack/retry quando `enableSocketDeliveryGuarantees` esta ativo                                      |
+| `observer:error`        | agente -> hub | `PayloadFrame<{ observer_id, notification_id, sequence, error, retry_at, ... }>` | enviado quando uma execucao periodica falha; usa ack/retry quando `enableSocketDeliveryGuarantees` esta ativo                                             |
 
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
@@ -233,6 +233,7 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 | Tipo de evento                 | Garantia                   | Mecanismo                                                      |
 | ------------------------------ | -------------------------- | -------------------------------------------------------------- |
 | Telemetria/notification        | best effort                | sem ack                                                        |
+| Observer notification/error    | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack                 |
 | Request critico hub -> agente  | at least once              | `rpc:request_ack` / `rpc:batch_ack` + retry hub + idempotencia |
 | Response critico agente -> hub | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack                 |
 
@@ -906,6 +907,19 @@ objeto vazio.
 - **Erro esperado:** quando nao houver configuracao carregada, o metodo retorna
 erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
 
+## Metodo `agent.getHealth`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
+- **Objetivo:** retornar saude operacional do processo para diagnostico do hub,
+incluindo pool ODBC, fila SQL, agregados de consultas, uptime e observers SQL.
+- **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`)
+quando a autorizacao agent-side estiver ativa; fora isso, pode ser ausente ou
+objeto vazio.
+- **Result:** inclui `status`, `timestamp`, `version`, `pool`, `sql_queue`,
+`queries`, `sql_observers` e `uptime_seconds`. O bloco `sql_observers` resume
+quantidade ativa, registros/cancelamentos, ticks, notificacoes, erros, skips por
+overlap e latencia media das execucoes periodicas.
+
 ## Metodo `client_token.getPolicy`
 
 - **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
@@ -966,28 +980,45 @@ app, todos sao cancelados e o hub deve registrar novamente.
 - **Params:** mesmos campos principais de `sql.execute` (`sql`, `params`,
 `database`, aliases de `client_token`, `options`) mais:
   - `interval_seconds`: default 300, minimo 30, maximo 86400.
-  - `condition`: default `{ "type": "rows_present" }`; v1 aceita apenas
-  `rows_present`.
+  - `condition`: default `{ "type": "rows_present" }`; aceita
+  `rows_present` e `row_count_gt` com `min_rows`.
+  - `notification_policy`: default `{ "mode": "every_tick" }`; aceita
+  `every_tick`, `once_until_empty` e `on_change`, com
+  `min_interval_seconds` opcional para reduzir frequencia de envio.
+  - `execution_timeout_seconds`: default 60, minimo 1, maximo 1800.
+  - `persistence`: default `{ "mode": "session" }`. O runtime atual aceita
+  apenas persistencia de sessao; observers duraveis ficam fora do contrato
+  atual porque exigem decisao explicita de seguranca para SQL, tokens e
+  credenciais armazenadas.
   - `run_immediately`: default `false`.
 - **Idempotencia:** `idempotency_key` e rejeitado. Observers executam consultas
 periodicas reais e nao devem reutilizar resposta cacheada.
 - **SQL e autorizacao:** segue a politica de validacao/autorizacao de
 `sql.execute`; `options.multi_result` tambem e aceito com a mesma restricao de
 parametros nomeados.
-- **Resultado:** retorna `observer_id`, intervalo efetivo, condicao, `created_at`
-e `next_run_at`.
+- **Resultado:** retorna `observer_id`, intervalo efetivo, condicao, politica de
+notificacao, timeout efetivo, persistencia, `created_at` e `next_run_at`.
 
 ### Execucao periodica e notificacao
 
 - O agente nunca executa duas instancias simultaneas do mesmo observer; se um
 tick ainda esta em andamento, o proximo e marcado como `skipped_overlap`.
-- Quando a consulta retorna uma ou mais rows, o agente emite
-`observer:notification` em `PayloadFrame`.
-- Quando a consulta nao retorna rows, nada e emitido.
+- Quando a consulta satisfaz a `condition`, o agente emite
+`observer:notification` em `PayloadFrame`. O payload inclui `notification_id`
+para identificar a entrega logica e `sequence` monotonicamente crescente por
+observer.
+- Quando a consulta nao satisfaz a `condition`, nada e emitido. Para
+`rows_present`, isso equivale a resultado sem rows; para `row_count_gt`, o
+`row_count` precisa ser maior que `min_rows`.
 - Se uma execucao falhar, o agente emite `observer:error`, incrementa
 `consecutive_failures` e tenta novamente no proximo intervalo.
-- `observer:notification` e `observer:error` sao best effort e nao usam ack/retry
-dedicado.
+- `notification_policy.mode` controla a recorrencia de notificacao:
+  `every_tick` notifica todo tick que satisfizer a condicao;
+  `once_until_empty` notifica uma vez e so reativa quando a condicao deixar de
+  ser satisfeita; `on_change` notifica quando a assinatura do resultado mudar.
+- `observer:notification` e `observer:error` usam `emitWithAck` com retry quando
+`enableSocketDeliveryGuarantees` esta ativo. Sem a feature flag, continuam
+fire-and-forget sobre `PayloadFrame`.
 - O payload de notificacao respeita `max_rows`/limites negociados e o pipeline
 de `PayloadFrame` (JSON UTF-8, compressao opcional, assinatura quando exigida).
 
@@ -996,7 +1027,10 @@ de `PayloadFrame` (JSON UTF-8, compressao opcional, assinatura quando exigida).
 - `observer.unregister` recebe `observer_id` e retorna `{ observer_id,
 cancelled }`. `cancelled: false` indica que o observer nao existia na sessao.
 - `observer.list` retorna os observers ativos com `next_run_at`, `last_run_at`,
-`last_status` e `consecutive_failures`.
+`last_status`, `consecutive_failures`, politica de notificacao, timeout,
+persistencia, ultimos contadores de rows/latencia, ultimo erro e acumuladores
+operacionais (`ticks_total`, `notifications_total`, `errors_total`,
+`skipped_overlap_total`).
 - O limite por sessao e `maxSqlObserversPerSession` (default 16).
 
 ## Metodo `rpc.discover`
@@ -1200,19 +1234,31 @@ Exemplo de capacidades anunciadas (alinhado a
     "batchSupport": true,
     "binaryPayload": true,
     "transportFrame": "payload-frame/1.0",
-    "compressionThreshold": 1024,
+    "compressionThreshold": 4096,
     "protocolReadyAck": true,
-    "maxInflationRatio": 20,
+    "maxInflationRatio": 10,
     "signatureRequired": false,
     "signatureScope": "transport-frame",
     "signatureAlgorithms": ["hmac-sha256"],
     "streamingResults": false,
-    "plugProfile": "plug-jsonrpc-profile/2.5",
+    "plugProfile": "plug-jsonrpc-profile/2.10",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset", "cursor-offset"],
     "traceContext": ["w3c-trace-context", "legacy-trace-id"],
-    "errorFormat": "structured-error-data"
+    "errorFormat": "structured-error-data",
+    "sqlObservers": true,
+    "sqlObserverNotifications": true,
+    "sqlObserverConditions": ["rows_present", "row_count_gt"],
+    "sqlObserverNotificationPolicies": ["every_tick", "once_until_empty", "on_change"],
+    "sqlObserverPersistenceModes": ["session"],
+    "sqlObserverDefaultIntervalSeconds": 300,
+    "sqlObserverMinIntervalSeconds": 30,
+    "sqlObserverMaxIntervalSeconds": 86400,
+    "sqlObserverMaxPerSession": 16,
+    "sqlObserverDefaultExecutionTimeoutSeconds": 60,
+    "sqlObserverMinExecutionTimeoutSeconds": 1,
+    "sqlObserverMaxExecutionTimeoutSeconds": 1800
   }
 }
 ```
@@ -1323,8 +1369,8 @@ grandes ou gzip pesado.
 | `2.6`  | Cadastro do agente no handshake e metodo `agent.getProfile`                                                           | stable |
 | `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
 | `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
-| `2.9`  | Metodo `agent.getHealth` para saude do processo, pool ODBC, fila SQL e metricas                                       | stable |
-| `2.10` | SQL observers session-scoped via `observer.*` e eventos `observer:notification` / `observer:error`                    | stable |
+| `2.9`  | Metodo `agent.getHealth` para saude do processo, pool ODBC, fila SQL, observers e metricas                           | stable |
+| `2.10` | SQL observers session-scoped via `observer.*`, condicoes/politicas de notificacao e eventos assincronos               | stable |
 
 
 ### Regras de versionamento

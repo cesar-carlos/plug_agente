@@ -1174,10 +1174,36 @@ class RpcMethodDispatcher {
     if (condition == null) {
       return _invalidParams(
         request,
-        'condition.type must be rows_present',
+        'condition.type must be rows_present or row_count_gt',
         rpcReason: 'unsupported_observer_condition',
       );
     }
+    final notificationPolicy = SqlObserverNotificationPolicy.fromJson(params['notification_policy']);
+    if (notificationPolicy == null) {
+      return _invalidParams(
+        request,
+        'notification_policy is invalid',
+        rpcReason: 'invalid_observer_notification_policy',
+      );
+    }
+    final persistenceMode = SqlObserverPersistenceMode.fromJson(params['persistence']);
+    if (persistenceMode == null) {
+      return _invalidParams(
+        request,
+        'persistence.mode must be session',
+        rpcReason: 'unsupported_observer_persistence',
+      );
+    }
+    final rawExecutionTimeout = params['execution_timeout_seconds'];
+    if (rawExecutionTimeout != null && rawExecutionTimeout is! int) {
+      return _invalidParams(
+        request,
+        'execution_timeout_seconds must be an integer',
+      );
+    }
+    final executionTimeout = Duration(
+      seconds: rawExecutionTimeout as int? ?? ConnectionConstants.sqlObserverDefaultExecutionTimeout.inSeconds,
+    );
     final sqlHandlingModeResolution = _resolveSqlHandlingMode(params);
     if (sqlHandlingModeResolution.hasError) {
       return _invalidParams(
@@ -1215,6 +1241,9 @@ class RpcMethodDispatcher {
         intervalSeconds: intervalSeconds,
         limits: effectiveLimits,
         condition: condition,
+        notificationPolicy: notificationPolicy,
+        executionTimeout: executionTimeout,
+        persistenceMode: persistenceMode,
         sqlHandlingMode: sqlHandlingModeResolution.sqlHandlingMode!,
         expectMultipleResults: multiResultRequested,
         sourceRpcRequestId: request.id?.toString(),

@@ -31,13 +31,18 @@ void main() {
     int intervalSeconds = 30,
     bool runImmediately = false,
     String? idempotencyKey,
+    SqlObserverCondition condition = SqlObserverCondition.rowsPresent,
+    SqlObserverNotificationPolicy notificationPolicy = SqlObserverNotificationPolicy.defaults,
+    Duration executionTimeout = ConnectionConstants.sqlObserverDefaultExecutionTimeout,
   }) {
     return SqlObserverRegisterCommand(
       agentId: 'agent-1',
       sql: sql,
       intervalSeconds: intervalSeconds,
       limits: const TransportLimits(maxRows: 50),
-      condition: SqlObserverCondition.rowsPresent,
+      condition: condition,
+      notificationPolicy: notificationPolicy,
+      executionTimeout: executionTimeout,
       idempotencyKey: idempotencyKey,
       runImmediately: runImmediately,
     );
@@ -143,6 +148,7 @@ void main() {
       expect(emitted, hasLength(1));
       expect(emitted.single.event, 'observer:notification');
       expect(emitted.single.payload['observer_id'], result.getOrThrow().observerId);
+      expect(emitted.single.payload['notification_id'], isA<String>());
       expect(emitted.single.payload['row_count'], 1);
       expect(emitted.single.payload['rows'], [
         {'id': 1, 'name': 'Alice'},
@@ -178,8 +184,109 @@ void main() {
       expect(service.activeCount, 1);
       expect(emitted, hasLength(1));
       expect(emitted.single.event, 'observer:error');
+      expect(emitted.single.payload['notification_id'], isA<String>());
       expect(emitted.single.payload['consecutive_failures'], 1);
       expect(emitted.single.payload['error'], isA<Map<String, dynamic>>());
+    });
+
+    test('should support row_count_gt condition', () async {
+      gateway.nextResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'ID': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      final result = await service.register(
+        command(
+          runImmediately: true,
+          condition: const SqlObserverCondition.rowCountGreaterThan(1),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(result.isSuccess(), isTrue);
+      expect(emitted, isEmpty);
+      final snapshot = service.list().single.toJson();
+      expect(snapshot['last_status'], 'condition_not_met');
+      expect(snapshot['last_row_count'], 1);
+    });
+
+    test('should suppress repeated notifications with once_until_empty policy', () async {
+      gateway.nextResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'ID': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      final registered = await service.register(
+        command(
+          runImmediately: true,
+          notificationPolicy: const SqlObserverNotificationPolicy(
+            mode: SqlObserverNotificationMode.onceUntilEmpty,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await service.runOnce(registered.getOrThrow().observerId);
+
+      expect(registered.isSuccess(), isTrue);
+      expect(emitted, hasLength(1));
+      final snapshot = service.list().single.toJson();
+      expect(snapshot['notifications_total'], 1);
+      expect(snapshot['last_status'], 'suppressed');
+    });
+
+    test('should pass execution timeout to database gateway', () async {
+      const timeout = Duration(seconds: 7);
+      gateway.nextResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'ID': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      final result = await service.register(
+        command(
+          runImmediately: true,
+          executionTimeout: timeout,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(result.isSuccess(), isTrue);
+      expect(gateway.lastTimeout, timeout);
+    });
+
+    test('should expose aggregate metrics snapshot', () async {
+      gateway.nextResponse = QueryResponse(
+        id: 'exec-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [
+          {'ID': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+
+      await service.register(command(runImmediately: true));
+      await Future<void>.delayed(Duration.zero);
+
+      final metrics = service.metricsSnapshot().toJson();
+      expect(metrics['active'], 1);
+      expect(metrics['registered_total'], 1);
+      expect(metrics['ticks_total'], 1);
+      expect(metrics['notifications_total'], 1);
     });
 
     test('should unregister observer and clear session', () async {
@@ -198,6 +305,7 @@ void main() {
 final class _FakeDatabaseGateway implements IDatabaseGateway {
   QueryResponse? nextResponse;
   domain.Failure? nextFailure;
+  Duration? lastTimeout;
 
   @override
   Future<Result<QueryResponse>> executeQuery(
@@ -205,6 +313,7 @@ final class _FakeDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     String? database,
   }) async {
+    lastTimeout = timeout;
     final failure = nextFailure;
     if (failure != null) {
       return Failure(failure);

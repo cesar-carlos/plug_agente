@@ -14,9 +14,17 @@
           "observer_id",
           "interval_seconds",
           "condition",
+          "notification_policy",
+          "execution_timeout_seconds",
+          "persistence",
           "created_at",
           "next_run_at",
-          "consecutive_failures"
+          "consecutive_failures",
+          "sequence",
+          "ticks_total",
+          "notifications_total",
+          "errors_total",
+          "skipped_overlap_total"
         ],
         "properties": {
           "observer_id": { "type": "string" },
@@ -24,19 +32,65 @@
           "condition": {
             "type": "object",
             "required": ["type"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": { "const": "row_count_gt" }
+                  },
+                  "required": ["type"]
+                },
+                "then": {
+                  "required": ["min_rows"]
+                }
+              }
+            ],
             "properties": {
-              "type": { "type": "string", "const": "rows_present" }
+              "type": { "type": "string", "enum": ["rows_present", "row_count_gt"] },
+              "min_rows": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "notification_policy": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": { "type": "string", "enum": ["every_tick", "once_until_empty", "on_change"] },
+              "min_interval_seconds": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "execution_timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 1800 },
+          "persistence": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": { "type": "string", "const": "session" }
             },
             "additionalProperties": false
           },
           "created_at": { "type": "string", "format": "date-time" },
           "next_run_at": { "type": "string", "format": "date-time" },
           "last_run_at": { "type": "string", "format": "date-time" },
+          "last_notification_at": { "type": "string", "format": "date-time" },
           "last_status": {
             "type": "string",
-            "enum": ["empty", "notified", "error", "skipped_overlap"]
+            "enum": ["condition_not_met", "suppressed", "notified", "error", "skipped_overlap"]
           },
-          "consecutive_failures": { "type": "integer", "minimum": 0 }
+          "consecutive_failures": { "type": "integer", "minimum": 0 },
+          "sequence": { "type": "integer", "minimum": 0 },
+          "ticks_total": { "type": "integer", "minimum": 0 },
+          "notifications_total": { "type": "integer", "minimum": 0 },
+          "errors_total": { "type": "integer", "minimum": 0 },
+          "skipped_overlap_total": { "type": "integer", "minimum": 0 },
+          "last_row_count": { "type": "integer", "minimum": 0 },
+          "last_returned_rows": { "type": "integer", "minimum": 0 },
+          "last_latency_ms": { "type": "integer", "minimum": 0 },
+          "average_latency_ms": { "type": "integer", "minimum": 0 },
+          "last_error": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
         "additionalProperties": false
       }

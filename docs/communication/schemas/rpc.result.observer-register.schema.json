@@ -3,7 +3,16 @@
   "$id": "https://plugagente.dev/schemas/rpc.result.observer-register.v1.json",
   "title": "observer.register result",
   "type": "object",
-  "required": ["observer_id", "interval_seconds", "condition", "created_at", "next_run_at"],
+  "required": [
+    "observer_id",
+    "interval_seconds",
+    "condition",
+    "notification_policy",
+    "execution_timeout_seconds",
+    "persistence",
+    "created_at",
+    "next_run_at"
+  ],
   "properties": {
     "observer_id": {
       "type": "string"
@@ -16,11 +25,43 @@
     "condition": {
       "type": "object",
       "required": ["type"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "row_count_gt" }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["min_rows"]
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "const": "rows_present"
-        }
+          "enum": ["rows_present", "row_count_gt"]
+        },
+        "min_rows": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "notification_policy": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["every_tick", "once_until_empty", "on_change"] },
+        "min_interval_seconds": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "execution_timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 1800 },
+    "persistence": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "const": "session" }
       },
       "additionalProperties": false
     },

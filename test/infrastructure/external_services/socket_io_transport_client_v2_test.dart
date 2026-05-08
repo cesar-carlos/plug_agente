@@ -321,6 +321,7 @@ void main() {
       when(
         () => observerGateway.executeQuery(
           any(),
+          timeout: any(named: 'timeout'),
           database: any(named: 'database'),
         ),
       ).thenAnswer((_) async => Success(response));
@@ -351,6 +352,8 @@ void main() {
       expect(notification.data, isA<Map<String, dynamic>>());
       final decoded = decodeWirePayload(notification.data) as Map<String, dynamic>;
       expect(decoded['observer_id'], registered.getOrThrow().observerId);
+      expect(decoded['notification_id'], isA<String>());
+      expect(decoded['delivery'], isA<Map<String, dynamic>>());
       expect(decoded['rows'], [
         {'id': 1},
       ]);

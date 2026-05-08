@@ -3,7 +3,16 @@
   "$id": "https://plugagente.dev/schemas/rpc.result.agent-get-health.v1.json",
   "title": "agent.getHealth result",
   "type": "object",
-  "required": ["status", "timestamp", "version", "pool", "sql_queue", "queries", "uptime_seconds"],
+  "required": [
+    "status",
+    "timestamp",
+    "version",
+    "pool",
+    "sql_queue",
+    "queries",
+    "sql_observers",
+    "uptime_seconds"
+  ],
   "properties": {
     "status": {
       "type": "string",
@@ -64,7 +73,13 @@
             "max_workers": { "type": "integer", "minimum": 0 },
             "rejections_total": { "type": "integer", "minimum": 0 },
             "timeouts_total": { "type": "integer", "minimum": 0 },
-            "avg_wait_time_ms": { "type": "integer", "minimum": 0 }
+            "avg_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "p95_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "max_recent_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "pool_wait_avg_time_ms": { "type": "integer", "minimum": 0 },
+            "pool_wait_p95_time_ms": { "type": "integer", "minimum": 0 },
+            "connect_avg_time_ms": { "type": "integer", "minimum": 0 },
+            "sql_execution_avg_time_ms": { "type": "integer", "minimum": 0 }
           },
           "additionalProperties": false
         }
@@ -85,6 +100,30 @@
         "avg_latency_ms": { "type": "integer", "minimum": 0 },
         "p95_latency_ms": { "type": "integer", "minimum": 0 },
         "p99_latency_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "sql_observers": {
+      "type": "object",
+      "required": [
+        "active",
+        "registered_total",
+        "unregistered_total",
+        "ticks_total",
+        "notifications_total",
+        "errors_total",
+        "skipped_overlap_total",
+        "avg_latency_ms"
+      ],
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "registered_total": { "type": "integer", "minimum": 0 },
+        "unregistered_total": { "type": "integer", "minimum": 0 },
+        "ticks_total": { "type": "integer", "minimum": 0 },
+        "notifications_total": { "type": "integer", "minimum": 0 },
+        "errors_total": { "type": "integer", "minimum": 0 },
+        "skipped_overlap_total": { "type": "integer", "minimum": 0 },
+        "avg_latency_ms": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
