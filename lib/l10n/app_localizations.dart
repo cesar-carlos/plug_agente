@@ -1442,6 +1442,12 @@ abstract class AppLocalizations {
   /// **'Last check: '**
   String get configLastUpdatePrefix;
 
+  /// No description provided for @configLastBackgroundUpdatePrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Last background check: '**
+  String get configLastBackgroundUpdatePrefix;
+
   /// No description provided for @configUpdatesAvailable.
   ///
   /// In en, this message translates to:
@@ -1489,6 +1495,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Technical details'**
   String get configUpdateTechnicalTitle;
+
+  /// No description provided for @configUpdateTechnicalBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Background technical details'**
+  String get configUpdateTechnicalBackgroundTitle;
 
   /// No description provided for @configUpdateTechnicalCurrentVersion.
   ///

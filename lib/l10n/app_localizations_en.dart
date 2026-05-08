@@ -716,6 +716,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configLastUpdatePrefix => 'Last check: ';
 
   @override
+  String get configLastBackgroundUpdatePrefix => 'Last background check: ';
+
+  @override
   String get configUpdatesAvailable => 'A new version is available. Follow the instructions to update.';
 
   @override
@@ -742,6 +745,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdateTechnicalTitle => 'Technical details';
+
+  @override
+  String get configUpdateTechnicalBackgroundTitle => 'Background technical details';
 
   @override
   String get configUpdateTechnicalCurrentVersion => 'Current version';

@@ -26,7 +26,6 @@ jobs:
       asset_url: ${{ steps.asset.outputs.url }}
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
-      dsa_signature: ${{ steps.sign.outputs.signature }}
     permissions:
       contents: write
       actions: write
@@ -42,6 +41,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
+      - name: Run appcast manager unit tests
+        run: python3 -m unittest tool.test_appcast_manager -v
 
       - name: Load release context
         id: ctx
@@ -113,9 +115,9 @@ jobs:
             echo "Error: setup.iss version ($SETUP_VERSION) does not match tag version ($VERSION_SHORT)"
             exit 1
           fi
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION_SHORT" >> $GITHUB_OUTPUT
-          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+          echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -125,29 +127,6 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
-
-      - name: Prepare DSA private key
-        id: dsa_key
-        env:
-          AUTO_UPDATE_DSA_PRIVATE_KEY_PEM: ${{ secrets.AUTO_UPDATE_DSA_PRIVATE_KEY_PEM }}
-        run: |
-          if [ -z "${AUTO_UPDATE_DSA_PRIVATE_KEY_PEM}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          KEY_PATH="${RUNNER_TEMP}/auto_update_dsa_priv.pem"
-          python3 << 'PYEOF'
-          import os
-          from pathlib import Path
-
-          key_path = Path(os.environ["RUNNER_TEMP"]) / "auto_update_dsa_priv.pem"
-          key_path.write_text(
-              os.environ["AUTO_UPDATE_DSA_PRIVATE_KEY_PEM"],
-              encoding="utf-8",
-          )
-          PYEOF
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-          echo "path=$KEY_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Get asset info
         id: asset
@@ -176,41 +155,10 @@ jobs:
             exit 1
           fi
 
-          echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
-          echo "api_url=$ASSET_API_URL" >> $GITHUB_OUTPUT
-          echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
-          echo "name=$ASSET_NAME" >> $GITHUB_OUTPUT
-
-      - name: Download release asset for DSA signature
-        if: steps.dsa_key.outputs.enabled == 'true'
-        env:
-          ASSET_URL: ${{ steps.asset.outputs.url }}
-          ASSET_NAME: ${{ steps.asset.outputs.name }}
-        run: |
-          curl -L --fail "$ASSET_URL" --output "${RUNNER_TEMP}/${ASSET_NAME}"
-
-      - name: Sign release asset for appcast
-        if: steps.dsa_key.outputs.enabled == 'true'
-        id: sign
-        env:
-          ASSET_NAME: ${{ steps.asset.outputs.name }}
-          DSA_PRIVATE_KEY_PATH: ${{ steps.dsa_key.outputs.path }}
-        run: |
-          SIGNATURE_OUTPUT=$(dart run auto_updater:sign_update "${RUNNER_TEMP}/${ASSET_NAME}" "$DSA_PRIVATE_KEY_PATH")
-          echo "$SIGNATURE_OUTPUT"
-          SIGNATURE_OUTPUT="$SIGNATURE_OUTPUT" python3 << 'PYEOF'
-          import os
-          import re
-          import sys
-
-          output = os.environ.get("SIGNATURE_OUTPUT", "").strip()
-          match = re.search(r'sparkle:dsaSignature="([^"]+)"', output)
-          if match is None:
-              print("Error: DSA signature output is invalid.", file=sys.stderr)
-              sys.exit(1)
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"signature={match.group(1)}\n")
-          PYEOF
+          echo "url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+          echo "api_url=$ASSET_API_URL" >> "$GITHUB_OUTPUT"
+          echo "size=$ASSET_SIZE" >> "$GITHUB_OUTPUT"
+          echo "name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Validate release consistency
         env:
@@ -265,206 +213,32 @@ jobs:
       - name: Update appcast.xml
         env:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
-          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
         run: |
-          python3 << PYEOF
-          import re
-          import xml.etree.ElementTree as ET
-          from datetime import datetime, timezone
-          import os
-          import sys
-          from xml.sax.saxutils import escape
-
-          def appcast_description_body(raw: str, max_len: int = 2000) -> str:
-              """Release notes as safe XML character data (Sparkle/RSS description)."""
-              cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", raw)
-              return escape(cleaned[:max_len])
-
-          TAG_NAME = "${{ steps.release.outputs.tag }}"
-          VERSION_SHORT = "${{ steps.release.outputs.version }}"
-          FULL_VERSION = "${{ steps.release.outputs.full_version }}"
-          VERSION = FULL_VERSION if FULL_VERSION else VERSION_SHORT
-          ASSET_URL = "${{ steps.asset.outputs.url }}"
-          ASSET_SIZE = "${{ steps.asset.outputs.size }}"
-          DSA_SIGNATURE = os.environ.get("DSA_SIGNATURE", "").strip()
-          MAX_APPCAST_ITEMS = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
-          with open("release_body.txt", encoding="utf-8") as _bf:
-              RELEASE_BODY = _bf.read().strip()
-
-          if not ASSET_URL or not ASSET_SIZE:
-              print("Error: Asset URL or size not found")
-              sys.exit(1)
-
-          SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
-
-          if os.path.exists("appcast.xml"):
-              tree = ET.parse("appcast.xml")
-              root = tree.getroot()
-              channel = root.find("channel")
-              for item in list(channel.findall("item")):
-                  enclosure = item.find("enclosure")
-                  if enclosure is not None:
-                      sparkle_version = enclosure.get(f"{{{SPARKLE_NS}}}version") or enclosure.get("sparkle:version")
-                      if sparkle_version in (VERSION, VERSION_SHORT):
-                          channel.remove(item)
-          else:
-              root = ET.Element("rss")
-              root.set("version", "2.0")
-              root.set("xmlns:sparkle", SPARKLE_NS)
-              channel = ET.SubElement(root, "channel")
-              ET.SubElement(channel, "title").text = "Plug Agente Updates"
-              ET.SubElement(channel, "link").text = "https://github.com/cesar-carlos/plug_agente/releases"
-              ET.SubElement(channel, "description").text = "Atualizações do Plug Agente"
-
-          ET.register_namespace("sparkle", SPARKLE_NS)
-
-          item = ET.Element("item")
-          ET.SubElement(item, "title").text = f"Version {VERSION}"
-          ET.SubElement(item, "pubDate").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
-          desc = ET.SubElement(item, "description")
-          if RELEASE_BODY:
-              desc.text = appcast_description_body(RELEASE_BODY)
-          else:
-              desc.text = f"Nova Versão {VERSION} - Atualização automática via GitHub Release."
-
-          enclosure = ET.SubElement(item, "enclosure")
-          enclosure.set("url", ASSET_URL)
-          enclosure.set(f"{{{SPARKLE_NS}}}version", VERSION)
-          enclosure.set(f"{{{SPARKLE_NS}}}os", "windows")
-          if DSA_SIGNATURE:
-              enclosure.set(f"{{{SPARKLE_NS}}}dsaSignature", DSA_SIGNATURE)
-          enclosure.set("length", str(ASSET_SIZE))
-          enclosure.set("type", "application/octet-stream")
-
-          channel.insert(0, item)
-
-          items = [c for c in channel if c.tag == "item"]
-          items = items[:MAX_APPCAST_ITEMS]
-          title_el = channel.find("title")
-          link_el = channel.find("link")
-          desc_el = channel.find("description")
-          for child in list(channel):
-              channel.remove(child)
-          if title_el is not None:
-              channel.append(title_el)
-          else:
-              el = ET.SubElement(channel, "title")
-              el.text = "Plug Agente Updates"
-          if link_el is not None:
-              channel.append(link_el)
-          else:
-              el = ET.SubElement(channel, "link")
-              el.text = "https://github.com/cesar-carlos/plug_agente/releases"
-          if desc_el is not None:
-              channel.append(desc_el)
-          else:
-              el = ET.SubElement(channel, "description")
-              el.text = "Atualizações do Plug Agente"
-          for i in items:
-              channel.append(i)
-
-          tree = ET.ElementTree(root)
-          ET.indent(tree, space=" ")
-          with open("appcast.xml", "wb") as f:
-              f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
-              tree.write(f, encoding="utf-8")
-
-          print(f"Successfully updated appcast.xml with version {VERSION}")
-          PYEOF
+          python3 tool/appcast_manager.py update \
+            --appcast appcast.xml \
+            --version-short "${{ steps.release.outputs.version }}" \
+            --full-version "${{ steps.release.outputs.full_version }}" \
+            --asset-url "${{ steps.asset.outputs.url }}" \
+            --asset-size "${{ steps.asset.outputs.size }}" \
+            --asset-name "${{ steps.asset.outputs.name }}" \
+            --release-body-file release_body.txt \
+            --max-items "${MAX_APPCAST_ITEMS}"
 
       - name: Validate appcast.xml
         env:
           FULL_VERSION: ${{ steps.release.outputs.full_version }}
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           VERSION_SHORT: ${{ steps.release.outputs.version }}
-          DSA_SIGNATURE: ${{ steps.sign.outputs.signature }}
         run: |
-          python3 << 'PYEOF'
-          import os
-          import sys
-          import xml.etree.ElementTree as ET
-
-          version = (os.environ.get("FULL_VERSION") or os.environ.get("VERSION_SHORT", "")).strip()
-          max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
-          dsa_signature = os.environ.get("DSA_SIGNATURE", "").strip()
-          sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
-
-          tree = ET.parse("appcast.xml")
-          root = tree.getroot()
-          channel = root.find("channel")
-          if channel is None:
-              print("Error: appcast.xml missing <channel>.")
-              sys.exit(1)
-
-          matched_item = None
-          matched_enclosure = None
-          for item in channel.findall("item"):
-              enclosure = item.find("enclosure")
-              if enclosure is None:
-                  continue
-              sparkle_version = enclosure.get(f"{{{sparkle_ns}}}version") or enclosure.get("sparkle:version")
-              if sparkle_version == version:
-                  matched_item = item
-                  matched_enclosure = enclosure
-                  break
-
-          if matched_item is None or matched_enclosure is None:
-              print(f"Error: appcast.xml missing item for version {version}.")
-              sys.exit(1)
-
-          url = (matched_enclosure.get("url") or "").strip()
-          length = (matched_enclosure.get("length") or "").strip()
-          mime_type = (matched_enclosure.get("type") or "").strip()
-          os_name = (
-              matched_enclosure.get(f"{{{sparkle_ns}}}os")
-              or matched_enclosure.get("sparkle:os")
-              or ""
-          ).strip()
-          current_signature = (
-              matched_enclosure.get(f"{{{sparkle_ns}}}dsaSignature")
-              or matched_enclosure.get("sparkle:dsaSignature")
-              or ""
-          ).strip()
-
-          if not (url.startswith("https://") and url.lower().endswith(".exe")):
-              print(f"Error: invalid enclosure url: {url!r}")
-              sys.exit(1)
-
-          try:
-              if int(length) <= 0:
-                  raise ValueError
-          except ValueError:
-              print(f"Error: invalid enclosure length: {length!r}")
-              sys.exit(1)
-
-          if mime_type != "application/octet-stream":
-              print(f"Error: invalid enclosure type: {mime_type!r}")
-              sys.exit(1)
-
-          if os_name != "windows":
-              print(f"Error: invalid sparkle:os value: {os_name!r}")
-              sys.exit(1)
-
-          if dsa_signature and current_signature != dsa_signature:
-              print(
-                  "Error: invalid sparkle:dsaSignature value. "
-                  f"expected={dsa_signature!r}, actual={current_signature!r}"
-              )
-              sys.exit(1)
-
-          item_count = len(channel.findall("item"))
-          if item_count < 1 or item_count > max_items:
-              print(
-                  f"Error: invalid item count in appcast.xml: {item_count} "
-                  f"(expected between 1 and {max_items})."
-              )
-              sys.exit(1)
-
-          print(
-              "appcast.xml validation passed "
-              f"(version={version}, item_count={item_count})"
-          )
-          PYEOF
+          python3 tool/appcast_manager.py validate-file \
+            --appcast appcast.xml \
+            --version-short "${VERSION_SHORT}" \
+            --full-version "${FULL_VERSION}" \
+            --asset-url "${{ steps.asset.outputs.url }}" \
+            --asset-size "${{ steps.asset.outputs.size }}" \
+            --asset-name "${{ steps.asset.outputs.name }}" \
+            --release-body-file release_body.txt \
+            --max-items "${MAX_APPCAST_ITEMS}"
 
       - name: Commit and push
         run: |
@@ -485,6 +259,17 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Download release body artifact
         uses: actions/download-artifact@v7
         with:
@@ -496,111 +281,16 @@ jobs:
           ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
           ASSET_URL: ${{ needs.update-appcast.outputs.asset_url }}
           FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
-          DSA_SIGNATURE: ${{ needs.update-appcast.outputs.dsa_signature }}
+          VERSION_SHORT: ${{ needs.update-appcast.outputs.version }}
         run: |
-          python3 << 'PYEOF'
-          import os
-          import re
-          import sys
-          import time
-          import urllib.request
-          import xml.etree.ElementTree as ET
-          def sanitize_release_notes(raw: str, max_len: int = 2000) -> str:
-              cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", raw)
-              return cleaned[:max_len]
-
-          feed_url = os.environ["OFFICIAL_FEED_URL"].strip()
-          full_version = os.environ["FULL_VERSION"].strip()
-          asset_url = os.environ["ASSET_URL"].strip()
-          asset_name = os.environ["ASSET_NAME"].strip()
-          asset_size = os.environ["ASSET_SIZE"].strip()
-          dsa_signature = os.environ.get("DSA_SIGNATURE", "").strip()
-          with open("release_body.txt", encoding="utf-8") as _bf:
-              release_body = _bf.read().strip()
-          max_items = int(os.environ.get("MAX_APPCAST_ITEMS", "10"))
-          sparkle_ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
-          expected_description = (
-              sanitize_release_notes(release_body)
-              if release_body
-              else f"Nova Versão {full_version} - Atualização automática via GitHub Release."
-          )
-          expected_title = f"Version {full_version}"
-
-          last_error = None
-          for attempt in range(1, 7):
-              request = urllib.request.Request(
-                  f"{feed_url}?cb={int(time.time())}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              try:
-                  with urllib.request.urlopen(request, timeout=15) as response:
-                      body = response.read()
-                  root = ET.fromstring(body)
-                  channel = root.find("channel")
-                  if channel is None:
-                      raise ValueError("missing <channel>")
-
-                  items = channel.findall("item")
-                  if not items:
-                      raise ValueError("missing <item>")
-                  if len(items) > max_items:
-                      raise ValueError(
-                          f"item count {len(items)} exceeds limit {max_items}"
-                      )
-
-                  latest_item = items[0]
-                  title = (latest_item.findtext("title") or "").strip()
-                  description = (latest_item.findtext("description") or "").strip()
-                  enclosure = latest_item.find("enclosure")
-                  if enclosure is None:
-                      raise ValueError("missing <enclosure> in latest item")
-
-                  version = (
-                      enclosure.get(f"{{{sparkle_ns}}}version")
-                      or enclosure.get("sparkle:version")
-                      or ""
-                  ).strip()
-                  latest_url = (enclosure.get("url") or "").strip()
-                  latest_size = (enclosure.get("length") or "").strip()
-                  latest_signature = (
-                      enclosure.get(f"{{{sparkle_ns}}}dsaSignature")
-                      or enclosure.get("sparkle:dsaSignature")
-                      or ""
-                  ).strip()
-
-                  if title != expected_title:
-                      raise ValueError(
-                          f"unexpected title {title!r}, expected {expected_title!r}"
-                      )
-                  if description != expected_description:
-                      raise ValueError("latest item description does not match release body")
-                  if version != full_version:
-                      raise ValueError(
-                          f"unexpected version {version!r}, expected {full_version!r}"
-                      )
-                  if latest_url != asset_url:
-                      raise ValueError("latest enclosure URL does not match release asset URL")
-                  if latest_size != asset_size:
-                      raise ValueError("latest enclosure length does not match release asset size")
-                  if asset_name not in latest_url:
-                      raise ValueError("latest enclosure URL does not include expected asset name")
-                  if dsa_signature and latest_signature != dsa_signature:
-                      raise ValueError("latest enclosure signature does not match expected DSA signature")
-
-                  print(
-                      "Published appcast smoke validation passed "
-                      f"(version={version}, items={len(items)}, feed={feed_url})."
-                  )
-                  sys.exit(0)
-              except Exception as error:
-                  last_error = error
-                  if attempt < 6:
-                      print(
-                          f"Attempt {attempt}/6 failed while checking published appcast: {error}. "
-                          "Retrying in 5 seconds..."
-                      )
-                      time.sleep(5)
-
-          print(f"Error: published appcast smoke validation failed: {last_error}")
-          sys.exit(1)
-          PYEOF
+          python3 tool/appcast_manager.py smoke-validate-url \
+            --feed-url "${OFFICIAL_FEED_URL}" \
+            --version-short "${VERSION_SHORT}" \
+            --full-version "${FULL_VERSION}" \
+            --asset-url "${ASSET_URL}" \
+            --asset-size "${ASSET_SIZE}" \
+            --asset-name "${ASSET_NAME}" \
+            --release-body-file release_body.txt \
+            --max-items "${MAX_APPCAST_ITEMS}" \
+            --attempts 6 \
+            --delay-seconds 5

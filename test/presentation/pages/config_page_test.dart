@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -20,6 +22,7 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     required this.isAvailable,
     this.onCheckManual,
     this.lastManualDiagnostics,
+    this.lastBackgroundDiagnostics,
   });
 
   @override
@@ -27,6 +30,9 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   UpdateCheckDiagnostics? lastManualDiagnostics;
+
+  @override
+  UpdateCheckDiagnostics? lastBackgroundDiagnostics;
 
   Future<Result<bool>> Function()? onCheckManual;
 
@@ -55,10 +61,12 @@ void main() {
 
   setUp(() async {
     settingsStore = InMemoryAppSettingsStore();
+    dotenv.clean();
     await getIt.reset();
   });
 
   tearDown(() async {
+    dotenv.clean();
     await getIt.reset();
   });
 
@@ -155,11 +163,62 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining('${ptL10n.configUpdateTechnicalCompletionSource}: ${ptL10n.configUpdateCompletionSourceCompletionTimeout}'),
+      find.textContaining(
+        '${ptL10n.configUpdateTechnicalCompletionSource}: ${ptL10n.configUpdateCompletionSourceCompletionTimeout}',
+      ),
       findsOneWidget,
     );
     expect(
       find.textContaining('${ptL10n.configUpdateTechnicalProbeRequestUrl}: https://example.com/appcast.xml?cb=1'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows invalid override guidance when auto update feed is not xml', (tester) async {
+    dotenv.loadFromString(
+      envString: 'AUTO_UPDATE_FEED_URL=https://example.com/check',
+    );
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: false);
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(ptL10n.configAutoUpdateNotConfigured), findsOneWidget);
+    expect(
+      find.textContaining(
+        ptL10n.configAutoUpdateOfficialFeedExpected(officialAutoUpdateFeedUrl),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows latest automatic check details when only background diagnostics exist', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      lastBackgroundDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 8, 9, 15),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.0+1',
+        completedAt: DateTime(2026, 5, 8, 9, 15, 2),
+        completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+        updateAvailable: false,
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastUpdatePrefix}08/05/2026 09:15'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('${ptL10n.configLastBackgroundUpdatePrefix}08/05/2026 09:15'),
       findsOneWidget,
     );
   });

@@ -1,6 +1,6 @@
 const String officialAutoUpdateFeedUrl = 'https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml';
 
-String resolveAutoUpdateFeedUrl({
+String? resolveAutoUpdateFeedOverride({
   required Map<String, String> environment,
   String? fromDefine,
 }) {
@@ -8,9 +8,25 @@ String resolveAutoUpdateFeedUrl({
   if (normalizedFromDefine.isNotEmpty) {
     return normalizedFromDefine;
   }
+
   final normalizedFromEnvironment = environment['AUTO_UPDATE_FEED_URL']?.trim() ?? '';
   if (normalizedFromEnvironment.isNotEmpty) {
     return normalizedFromEnvironment;
+  }
+
+  return null;
+}
+
+String resolveAutoUpdateFeedUrl({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final override = resolveAutoUpdateFeedOverride(
+    environment: environment,
+    fromDefine: fromDefine,
+  );
+  if (override != null) {
+    return override;
   }
   return officialAutoUpdateFeedUrl;
 }
@@ -31,6 +47,20 @@ bool isOfficialAutoUpdateFeedUrl(String url) {
       uri.host.toLowerCase() == officialUri.host.toLowerCase() &&
       uri.port == officialUri.port &&
       uri.path == officialUri.path;
+}
+
+bool hasInvalidAutoUpdateFeedOverride({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final override = resolveAutoUpdateFeedOverride(
+    environment: environment,
+    fromDefine: fromDefine,
+  );
+  if (override == null) {
+    return false;
+  }
+  return !isSparkleFeedUrl(override);
 }
 
 const int _defaultCheckIntervalSeconds = 3600;

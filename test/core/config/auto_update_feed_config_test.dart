@@ -2,6 +2,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 
 void main() {
+  group('resolveAutoUpdateFeedOverride', () {
+    test('returns null when no source is configured', () {
+      final result = resolveAutoUpdateFeedOverride(
+        environment: const {},
+        fromDefine: '',
+      );
+
+      expect(result, isNull);
+    });
+
+    test('prefers define over environment', () {
+      final result = resolveAutoUpdateFeedOverride(
+        environment: {
+          'AUTO_UPDATE_FEED_URL': 'https://env.example.com/feed.xml',
+        },
+        fromDefine: 'https://define.example.com/feed.xml',
+      );
+
+      expect(result, 'https://define.example.com/feed.xml');
+    });
+  });
+
   group('resolveAutoUpdateFeedUrl', () {
     test('returns value from define when present', () {
       final result = resolveAutoUpdateFeedUrl(
@@ -63,6 +85,37 @@ void main() {
         isOfficialAutoUpdateFeedUrl('https://example.com/appcast.xml'),
         isFalse,
       );
+    });
+  });
+
+  group('hasInvalidAutoUpdateFeedOverride', () {
+    test('returns false when there is no override', () {
+      final result = hasInvalidAutoUpdateFeedOverride(
+        environment: const {},
+        fromDefine: '',
+      );
+
+      expect(result, isFalse);
+    });
+
+    test('returns true when override is not xml', () {
+      final result = hasInvalidAutoUpdateFeedOverride(
+        environment: const {
+          'AUTO_UPDATE_FEED_URL': 'https://example.com/check',
+        },
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('returns false when override is a sparkle xml feed', () {
+      final result = hasInvalidAutoUpdateFeedOverride(
+        environment: const {
+          'AUTO_UPDATE_FEED_URL': 'https://example.com/appcast.xml?cb=1',
+        },
+      );
+
+      expect(result, isFalse);
     });
   });
 

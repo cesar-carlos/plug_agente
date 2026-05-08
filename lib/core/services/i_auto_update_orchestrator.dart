@@ -4,6 +4,7 @@ import 'package:result_dart/result_dart.dart';
 abstract class IAutoUpdateOrchestrator {
   bool get isAvailable;
   UpdateCheckDiagnostics? get lastManualDiagnostics;
+  UpdateCheckDiagnostics? get lastBackgroundDiagnostics;
 
   Future<void> initialize();
 

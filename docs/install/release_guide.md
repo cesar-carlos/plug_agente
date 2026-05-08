@@ -37,20 +37,8 @@ O script executa:
 3. `ISCC installer/setup.iss`
 
 Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
-`--dart-define=AUTO_UPDATE_FEED_URL=...`.
-
-Se `.env` tambem definir `AUTO_UPDATE_DSA_PRIVATE_KEY_PATH`, o script assina o
-instalador com `dart run auto_updater:sign_update` e salva um sidecar:
-
-```text
-installer/dist/PlugAgente-Setup-{MAJOR.MINOR.PATCH}.signature.txt
-```
-
-Para tornar essa assinatura obrigatoria no build local, defina:
-
-```env
-AUTO_UPDATE_REQUIRE_DSA_SIGNATURE=true
-```
+`--dart-define=AUTO_UPDATE_FEED_URL=...` como override. Sem essa variavel, o
+app usa o feed oficial padrao embutido.
 
 Saida esperada:
 
@@ -84,9 +72,8 @@ git push origin v1.2.7
 ### 6. Validar automacao
 
 Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
-Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e,
-quando a secret `AUTO_UPDATE_DSA_PRIVATE_KEY_PEM` estiver configurada no
-GitHub, publica tambem `sparkle:dsaSignature` no feed.
+Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e roda
+o smoke check do feed publicado usando `tool/appcast_manager.py`.
 
 Feed oficial:
 
@@ -96,6 +83,21 @@ https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 
 Validacoes detalhadas do feed e do update ficam em
 [auto_update_setup.md](auto_update_setup.md).
+
+## Fonte de Verdade do Appcast
+
+O arquivo `tool/appcast_manager.py` concentra:
+
+- geracao do item mais recente do `appcast.xml`;
+- validacao estrutural do feed;
+- smoke check do feed publicado;
+- testes Python do fluxo de appcast.
+
+Antes de mexer no workflow de update, atualize primeiro esse script e rode:
+
+```bash
+python -m unittest tool.test_appcast_manager -v
+```
 
 ## Fluxo Manual para Depuracao
 
@@ -109,9 +111,6 @@ ISCC installer/setup.iss
 
 ## Seguranca Operacional
 
-- Embuta `dsa_pub.pem` no app Windows via `windows/runner/Runner.rc`.
-- Para incluir `sparkle:dsaSignature` no feed oficial, configure a secret
-  `AUTO_UPDATE_DSA_PRIVATE_KEY_PEM` no GitHub Actions.
 - Para distribuicao ampla, priorize tambem assinatura de codigo do executavel e
   do instalador para reduzir alertas de SmartScreen e aumentar confianca no
   update.

@@ -326,8 +326,7 @@ void main() {
       });
 
       test('returns Failure when check trigger throws', () async {
-        final fakeGateway = FakeAutoUpdaterGateway()
-          ..checkError = Exception('boom');
+        final fakeGateway = FakeAutoUpdaterGateway()..checkError = Exception('boom');
         final fakeProbe = FakeAppcastProbeService();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
@@ -384,10 +383,8 @@ void main() {
         expect(orchestrator.lastManualDiagnostics?.probeErrorMessage, 'HTTP 500');
         expect(fakeGateway.lastInBackground, isFalse);
       });
-
       test('returns Failure with notInitialized completion source when initialize does not finish', () async {
-        final fakeGateway = FakeAutoUpdaterGateway()
-          ..setFeedError = Exception('init failed');
+        final fakeGateway = FakeAutoUpdaterGateway()..setFeedError = Exception('init failed');
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
@@ -483,6 +480,76 @@ void main() {
         );
         expect(metricsCollector.autoUpdateCircuitOpenedCount, 1);
         expect(metricsCollector.autoUpdateCircuitOpenRejectedCount, 1);
+      });
+    });
+
+    group('checkInBackground', () {
+      test('persists background diagnostics and hydrates them in a new orchestrator instance', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        fakeGateway.onCheckForUpdates = () async {
+          fakeGateway.listener?.onUpdaterCheckingForUpdate(null);
+          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        };
+
+        await orchestrator.checkInBackground();
+
+        expect(fakeGateway.lastInBackground, isTrue);
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateNotAvailable,
+        );
+        expect(orchestrator.lastBackgroundDiagnostics?.updateAvailable, isFalse);
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.configuredFeedUrl,
+          'https://example.com/appcast.xml',
+        );
+
+        final restored = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: MetricsCollector(),
+        );
+
+        expect(
+          restored.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateNotAvailable,
+        );
+        expect(restored.lastBackgroundDiagnostics?.updateAvailable, isFalse);
+      });
+
+      test('captures trigger failure diagnostics when background check throws', () async {
+        final fakeGateway = FakeAutoUpdaterGateway()..checkError = Exception('background boom');
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          backgroundRetryLimit: 1,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.triggerFailure,
+        );
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.errorMessage,
+          contains('background boom'),
+        );
       });
     });
   });

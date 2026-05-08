@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:xml/xml.dart';
+
 class AppcastProbeResult {
   const AppcastProbeResult({
     required this.requestUrl,
@@ -26,14 +28,7 @@ class AppcastProbeService implements IAppcastProbeService {
   const AppcastProbeService();
 
   static const int _maxAppcastBytes = 1024 * 1024;
-  static final RegExp _versionRegex = RegExp(
-    r'''sparkle:version\s*=\s*["']([^"']+)["']''',
-    caseSensitive: false,
-  );
-  static final RegExp _itemRegex = RegExp(
-    r'<item(?:\s|>)',
-    caseSensitive: false,
-  );
+  static const String _sparkleNamespace = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
 
   @override
   Future<AppcastProbeResult> probeLatest({
@@ -77,13 +72,47 @@ class AppcastProbeService implements IAppcastProbeService {
       }
 
       final body = utf8.decode(bytes, allowMalformed: true);
-      final latestVersion = _versionRegex.firstMatch(body)?.group(1);
-      final itemCount = _itemRegex.allMatches(body).length;
+      final document = XmlDocument.parse(body);
+      final channel = _firstChildElementByName(document.rootElement, 'channel');
+      if (channel == null) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          errorMessage: 'Appcast missing channel element',
+        );
+      }
+
+      final items = channel.childElements.where((element) => _matchesLocalName(element, 'item')).toList();
+      if (items.isEmpty) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          itemCount: 0,
+          errorMessage: 'Appcast missing item element',
+        );
+      }
+
+      final latestItem = items.first;
+      final enclosure = _firstChildElementByName(latestItem, 'enclosure');
+      if (enclosure == null) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          itemCount: items.length,
+          errorMessage: 'Latest appcast item is missing enclosure',
+        );
+      }
+
+      final latestVersion = _sparkleVersionFromEnclosure(enclosure);
+      if (latestVersion == null || latestVersion.isEmpty) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          itemCount: items.length,
+          errorMessage: 'Latest appcast item is missing sparkle:version',
+        );
+      }
 
       return AppcastProbeResult(
         requestUrl: feedUrl,
         latestVersion: latestVersion,
-        itemCount: itemCount,
+        itemCount: items.length,
       );
     } on Exception catch (e) {
       return AppcastProbeResult(
@@ -93,5 +122,38 @@ class AppcastProbeService implements IAppcastProbeService {
     } finally {
       client.close(force: true);
     }
+  }
+
+  static XmlElement? _firstChildElementByName(XmlElement parent, String name) {
+    for (final child in parent.childElements) {
+      if (_matchesLocalName(child, name)) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  static bool _matchesLocalName(XmlElement element, String expected) {
+    return element.name.local.toLowerCase() == expected.toLowerCase();
+  }
+
+  static String? _sparkleVersionFromEnclosure(XmlElement enclosure) {
+    for (final attribute in enclosure.attributes) {
+      final localName = attribute.name.local.toLowerCase();
+      final prefix = attribute.name.prefix?.toLowerCase();
+      final namespaceUri = attribute.name.namespaceUri;
+      final qualified = attribute.name.qualified.toLowerCase();
+      final isSparkleVersion =
+          localName == 'version' &&
+          (namespaceUri == _sparkleNamespace || prefix == 'sparkle' || qualified == 'sparkle:version');
+      if (!isSparkleVersion) {
+        continue;
+      }
+      final value = attribute.value.trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
   }
 }

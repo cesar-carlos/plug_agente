@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -59,54 +60,102 @@ class _ConfigPageState extends State<ConfigPage> {
     UpdateCheckCompletionSource? source,
   ) {
     return switch (source) {
-      UpdateCheckCompletionSource.updateAvailable =>
-        l10n.configUpdateCompletionSourceUpdateAvailable,
-      UpdateCheckCompletionSource.updateNotAvailable =>
-        l10n.configUpdateCompletionSourceUpdateNotAvailable,
-      UpdateCheckCompletionSource.updaterError =>
-        l10n.configUpdateCompletionSourceUpdaterError,
-      UpdateCheckCompletionSource.triggerTimeout =>
-        l10n.configUpdateCompletionSourceTriggerTimeout,
-      UpdateCheckCompletionSource.completionTimeout =>
-        l10n.configUpdateCompletionSourceCompletionTimeout,
-      UpdateCheckCompletionSource.triggerFailure =>
-        l10n.configUpdateCompletionSourceTriggerFailure,
-      UpdateCheckCompletionSource.notInitialized =>
-        l10n.configUpdateCompletionSourceNotInitialized,
-      UpdateCheckCompletionSource.circuitOpen =>
-        l10n.configUpdateCompletionSourceCircuitOpen,
+      UpdateCheckCompletionSource.updateAvailable => l10n.configUpdateCompletionSourceUpdateAvailable,
+      UpdateCheckCompletionSource.updateNotAvailable => l10n.configUpdateCompletionSourceUpdateNotAvailable,
+      UpdateCheckCompletionSource.updaterError => l10n.configUpdateCompletionSourceUpdaterError,
+      UpdateCheckCompletionSource.triggerTimeout => l10n.configUpdateCompletionSourceTriggerTimeout,
+      UpdateCheckCompletionSource.completionTimeout => l10n.configUpdateCompletionSourceCompletionTimeout,
+      UpdateCheckCompletionSource.triggerFailure => l10n.configUpdateCompletionSourceTriggerFailure,
+      UpdateCheckCompletionSource.notInitialized => l10n.configUpdateCompletionSourceNotInitialized,
+      UpdateCheckCompletionSource.circuitOpen => l10n.configUpdateCompletionSourceCircuitOpen,
       null => '-',
     };
   }
 
   String _getUpdateUnavailableMessage(AppLocalizations l10n) {
     final capabilities = getIt<RuntimeCapabilities>();
-    return capabilities.supportsAutoUpdate
-        ? '${l10n.configAutoUpdateNotConfigured}\n${l10n.configAutoUpdateOfficialFeedExpected(officialAutoUpdateFeedUrl)}'
-        : l10n.configAutoUpdateNotSupported;
+    if (!capabilities.supportsAutoUpdate) {
+      return l10n.configAutoUpdateNotSupported;
+    }
+
+    if (hasInvalidAutoUpdateFeedOverride(environment: dotenv.env)) {
+      return '${l10n.configAutoUpdateNotConfigured}\n${l10n.configAutoUpdateOfficialFeedExpected(officialAutoUpdateFeedUrl)}';
+    }
+
+    return l10n.configAutoUpdateNotSupported;
+  }
+
+  String _buildBackgroundUpdateLabel(
+    AppLocalizations l10n,
+    UpdateCheckDiagnostics? diagnostics,
+  ) {
+    if (diagnostics == null) {
+      return '';
+    }
+
+    final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
+    final completion = diagnostics.completionSource == null
+        ? ''
+        : ' - ${_formatCompletionSource(l10n, diagnostics.completionSource)}';
+    return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt$completion';
   }
 
   String _formatTechnicalDetails(
     AppLocalizations l10n,
     UpdateCheckDiagnostics? diagnostics,
+    UpdateCheckDiagnostics? backgroundDiagnostics,
   ) {
-    if (diagnostics == null) {
+    if (diagnostics == null && backgroundDiagnostics == null) {
       return l10n.configUpdateTechnicalNoData;
     }
 
-    final lines = <String>[
-      l10n.configUpdateTechnicalTitle,
+    final lines = <String>[];
+    if (diagnostics != null) {
+      _appendDiagnosticsSection(
+        lines,
+        l10n: l10n,
+        title: l10n.configUpdateTechnicalTitle,
+        diagnostics: diagnostics,
+      );
+    }
+    if (backgroundDiagnostics != null) {
+      if (lines.isNotEmpty) {
+        lines.add('');
+      }
+      _appendDiagnosticsSection(
+        lines,
+        l10n: l10n,
+        title: l10n.configUpdateTechnicalBackgroundTitle,
+        diagnostics: backgroundDiagnostics,
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  void _appendDiagnosticsSection(
+    List<String> lines, {
+    required AppLocalizations l10n,
+    required String title,
+    required UpdateCheckDiagnostics diagnostics,
+  }) {
+    lines.add(title);
+    lines.addAll(<String>[
       '${l10n.configUpdateTechnicalCurrentVersion}: ${diagnostics.currentVersion ?? _appVersion}',
       '${l10n.configUpdateTechnicalCheckedAt}: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
       '${l10n.configUpdateTechnicalConfiguredFeed}: ${diagnostics.configuredFeedUrl}',
       '${l10n.configUpdateTechnicalRequestedFeed}: ${diagnostics.requestedFeedUrl}',
       '${l10n.configUpdateTechnicalOfficialFeed}: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
       '${l10n.configUpdateTechnicalProbeRequestUrl}: ${diagnostics.probeRequestUrl ?? diagnostics.requestedFeedUrl}',
-      '${l10n.configUpdateTechnicalProbeSucceeded}: ${diagnostics.probeSucceeded == null ? '-' : diagnostics.probeSucceeded! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      '${l10n.configUpdateTechnicalProbeSucceeded}: ${diagnostics.probeSucceeded == null
+          ? '-'
+          : diagnostics.probeSucceeded!
+          ? l10n.configUpdateTechnicalOfficialFeedYes
+          : l10n.configUpdateTechnicalOfficialFeedNo}',
       '${l10n.configUpdateTechnicalCompletionSource}: ${_formatCompletionSource(l10n, diagnostics.completionSource)}',
       '${l10n.configUpdateTechnicalTriggerDurationMs}: ${_formatDurationMs(diagnostics.triggerStartedAt, diagnostics.triggerCompletedAt)}',
       '${l10n.configUpdateTechnicalTotalDurationMs}: ${_formatDurationMs(diagnostics.checkedAt, diagnostics.completedAt)}',
-    ];
+    ]);
 
     if (diagnostics.appcastProbeItemCount != null) {
       lines.add(
@@ -133,8 +182,26 @@ class _ConfigPageState extends State<ConfigPage> {
         '${l10n.configUpdateTechnicalAppcastError}: ${diagnostics.probeErrorMessage}',
       );
     }
+  }
 
-    return lines.join('\n');
+  String _resolveLastUpdateLabel(
+    AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator,
+  ) {
+    if (_lastUpdateCheck.isNotEmpty) {
+      return _lastUpdateCheck;
+    }
+
+    final manual = orchestrator.lastManualDiagnostics;
+    final background = orchestrator.lastBackgroundDiagnostics;
+    final latest = background == null || (manual != null && manual.checkedAt.isAfter(background.checkedAt))
+        ? manual
+        : background;
+    if (latest == null) {
+      return '';
+    }
+
+    return '${l10n.configLastUpdatePrefix}${_formatLastUpdateCheck(latest.checkedAt)}';
   }
 
   Future<void> _checkUpdates() async {
@@ -177,6 +244,7 @@ class _ConfigPageState extends State<ConfigPage> {
         final technicalDetails = _formatTechnicalDetails(
           l10n,
           orchestrator.lastManualDiagnostics,
+          orchestrator.lastBackgroundDiagnostics,
         );
         return SettingsFeedback.showInfo(
           context: context,
@@ -188,6 +256,7 @@ class _ConfigPageState extends State<ConfigPage> {
         final technicalDetails = _formatTechnicalDetails(
           l10n,
           orchestrator.lastManualDiagnostics,
+          orchestrator.lastBackgroundDiagnostics,
         );
         return SettingsFeedback.showError(
           context: context,
@@ -226,8 +295,14 @@ class _ConfigPageState extends State<ConfigPage> {
     final themeProvider = context.watch<ThemeProvider>();
     final systemSettingsProvider = context.watch<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
-    final capabilities = getIt<RuntimeCapabilities>();
-    final supportsAutoUpdate = capabilities.supportsAutoUpdate;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final isAutoUpdateAvailable = orchestrator.isAvailable;
+    final lastUpdateLabel = _resolveLastUpdateLabel(l10n, orchestrator);
+    final lastBackgroundUpdateLabel = _buildBackgroundUpdateLabel(
+      l10n,
+      orchestrator.lastBackgroundDiagnostics,
+    );
+    final autoUpdateUnavailableMessage = isAutoUpdateAvailable ? null : _getUpdateUnavailableMessage(l10n);
 
     return ScaffoldPage(
       header: PageHeader(
@@ -246,11 +321,13 @@ class _ConfigPageState extends State<ConfigPage> {
             startMinimized: systemSettingsProvider.startMinimized,
             minimizeToTray: systemSettingsProvider.minimizeToTray,
             closeToTray: systemSettingsProvider.closeToTray,
-            lastUpdateCheck: _lastUpdateCheck,
+            lastUpdateCheck: lastUpdateLabel,
+            lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             isCheckingUpdates: _isCheckingUpdates,
             startupSupported: startupSupported,
             startupError: systemSettingsProvider.lastError,
-            supportsAutoUpdate: supportsAutoUpdate,
+            isAutoUpdateAvailable: isAutoUpdateAvailable,
+            autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
             onStartWithWindowsChanged: (bool value) => _onStartWithWindowsChanged(
               systemSettingsProvider,
@@ -277,10 +354,12 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.minimizeToTray,
     required this.closeToTray,
     required this.lastUpdateCheck,
+    required this.lastBackgroundUpdateCheck,
     required this.isCheckingUpdates,
     required this.startupSupported,
     required this.startupError,
-    required this.supportsAutoUpdate,
+    required this.isAutoUpdateAvailable,
+    required this.autoUpdateUnavailableMessage,
     required this.onDarkThemeChanged,
     required this.onStartWithWindowsChanged,
     required this.onStartMinimizedChanged,
@@ -297,10 +376,12 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool minimizeToTray;
   final bool closeToTray;
   final String lastUpdateCheck;
+  final String lastBackgroundUpdateCheck;
   final bool isCheckingUpdates;
   final bool startupSupported;
   final SystemSettingsErrorState? startupError;
-  final bool supportsAutoUpdate;
+  final bool isAutoUpdateAvailable;
+  final String? autoUpdateUnavailableMessage;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
   final ValueChanged<bool> onStartMinimizedChanged;
@@ -354,8 +435,10 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
           body: UpdatesAboutConfigSection(
             appVersion: widget.appVersion,
             lastUpdateCheck: widget.lastUpdateCheck,
+            lastBackgroundUpdateCheck: widget.lastBackgroundUpdateCheck,
             isCheckingUpdates: widget.isCheckingUpdates,
-            supportsAutoUpdate: widget.supportsAutoUpdate,
+            isAutoUpdateAvailable: widget.isAutoUpdateAvailable,
+            unavailableMessage: widget.autoUpdateUnavailableMessage,
             onCheckUpdates: widget.onCheckUpdates,
           ),
         ),

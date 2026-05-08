@@ -108,6 +108,7 @@ dependencies:
   win32: ^5.15.0
   ffi: ^2.1.5
   collection: ^1.19.1
+  xml: ^6.5.0
 
   # HTTP Client
   dio: ^5.4.0

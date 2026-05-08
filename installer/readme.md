@@ -1,77 +1,36 @@
 # Instalador - Plug Agente
 
-Scripts para gerar o instalador Windows (Inno Setup) do Plug Agente.
+Este diretorio contem os artefatos e scripts locais para gerar o instalador
+Windows.
 
-## Estrutura
-
-```text
-installer/
-├── readme.md          # Este arquivo
-├── constants.iss      # Constantes compartilhadas (autostart)
-├── setup.iss          # Script Inno Setup (versão via update_version.py)
-├── update_version.py  # Sincroniza versão em setup.iss
-├── build_installer.py # Fluxo completo: update_version → flutter build → ISCC
-└── dist/              # Saída do instalador (PlugAgente-Setup-{versão}.exe)
-```
-
-## Requisitos
-
-- **Flutter** no PATH
-- **Inno Setup 6** (ISCC no PATH ou em `C:\Program Files (x86)\Inno Setup 6\`)
-- **Python 3.8+**
-- **Microsoft Visual C++ Redistributable x64** no ambiente de destino
-
-## Uso
-
-### Fluxo rápido (recomendado)
+## Fluxo recomendado
 
 ```bash
 python installer/build_installer.py
 ```
 
-Executa automaticamente: `update_version.py` → `flutter build windows --release`
-(com `--dart-define=AUTO_UPDATE_FEED_URL=...` quando disponível no `.env`) →
-compilação Inno Setup.
+Esse comando executa:
 
-### Fluxo manual/depuração
+1. `python installer/update_version.py`
+2. `flutter build windows --release`
+3. `ISCC installer/setup.iss`
 
-```bash
-# 1. Sincronizar versão (pubspec.yaml → setup.iss + app_version.g.dart)
-python installer/update_version.py
+Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
+`--dart-define=AUTO_UPDATE_FEED_URL=...`. Sem override, o app usa o feed
+oficial padrao.
 
-# 2. Build Flutter
-flutter build windows --release
-
-# 3. Compilar instalador diretamente
-ISCC installer/setup.iss
-```
-
-## Scripts
-
-| Script | Descrição |
-|--------|-----------|
-| `update_version.py` | Lê `version` do `pubspec.yaml` e atualiza `setup.iss` e `app_version.g.dart` |
-| `build_installer.py` | Orquestra: update_version → flutter build (com `--dart-define` do feed) → Inno Setup |
-
-## Saída
-
-O instalador é gerado em:
+## Saida
 
 ```text
-installer/dist/PlugAgente-Setup-{versão}.exe
+installer/dist/PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
 ```
 
-O nome segue o padrão esperado pelo workflow **Update Appcast on Release** (`.github/workflows/update-appcast.yml`), que prioriza assets `PlugAgente-Setup-*.exe` no release.
+Esse nome precisa bater com a tag da release para o workflow de appcast.
 
-## Integração com release e auto-update
+## Fonte operacional
 
-O processo de versão, tag, publicação e validação do feed fica em
-[docs/install/release_guide.md](../docs/install/release_guide.md) e
-[docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md).
-Este diretório mantém apenas os scripts e o arquivo Inno Setup.
+Para processo completo de versionamento, release, appcast e auto-update, use:
 
-## Documentação relacionada
-
-- [docs/install/readme.md](../docs/install/readme.md) - índice de instalação e release
-- [docs/install/release_guide.md](../docs/install/release_guide.md) - processo completo de release
-- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md) - feed oficial, appcast e validações
+- [docs/install/readme.md](../docs/install/readme.md)
+- [docs/install/release_guide.md](../docs/install/release_guide.md)
+- [docs/install/auto_update_setup.md](../docs/install/auto_update_setup.md)

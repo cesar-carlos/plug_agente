@@ -13,8 +13,10 @@ void main() {
   Future<void> pumpSection(
     WidgetTester tester, {
     String lastUpdateCheck = '',
+    String lastBackgroundUpdateCheck = '',
     bool isCheckingUpdates = false,
-    bool supportsAutoUpdate = true,
+    bool isAutoUpdateAvailable = true,
+    String? unavailableMessage,
     String appVersion = '1.2.6+1',
     Locale locale = const Locale('pt'),
     VoidCallback? onCheckUpdates,
@@ -30,8 +32,10 @@ void main() {
             content: UpdatesAboutConfigSection(
               appVersion: appVersion,
               lastUpdateCheck: lastUpdateCheck,
+              lastBackgroundUpdateCheck: lastBackgroundUpdateCheck,
               isCheckingUpdates: isCheckingUpdates,
-              supportsAutoUpdate: supportsAutoUpdate,
+              isAutoUpdateAvailable: isAutoUpdateAvailable,
+              unavailableMessage: unavailableMessage,
               onCheckUpdates: onCheckUpdates ?? () {},
             ),
           ),
@@ -79,9 +83,13 @@ void main() {
     });
 
     testWidgets(
-      'shows configAutoUpdateNotSupported when supportsAutoUpdate is false',
+      'shows configAutoUpdateNotSupported when update is unavailable',
       (tester) async {
-        await pumpSection(tester, supportsAutoUpdate: false);
+        await pumpSection(
+          tester,
+          isAutoUpdateAvailable: false,
+          unavailableMessage: ptL10n.configAutoUpdateNotSupported,
+        );
 
         expect(find.text(ptL10n.configAutoUpdateNotSupported), findsOneWidget);
         expect(find.byKey(const ValueKey('updates_refresh_button')), findsNothing);
@@ -105,6 +113,19 @@ void main() {
         await pumpSection(tester, lastUpdateCheck: last);
 
         expect(find.textContaining(last), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'shows background update label when provided',
+      (tester) async {
+        const background = 'Última verificação automática: 08/05/2026 09:15 - Sem atualização disponível';
+        await pumpSection(
+          tester,
+          lastBackgroundUpdateCheck: background,
+        );
+
+        expect(find.textContaining(background), findsOneWidget);
       },
     );
 

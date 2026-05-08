@@ -58,6 +58,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     Duration manualCompletionTimeout = _defaultManualCompletionTimeout,
     int timeoutCircuitThreshold = _defaultTimeoutCircuitThreshold,
     Duration timeoutCircuitCooldown = _defaultTimeoutCircuitCooldown,
+    int backgroundRetryLimit = _defaultBackgroundRetryLimit,
+    Duration backgroundRetryBaseDelay = _defaultBackgroundRetryBaseDelay,
   }) : _updaterGateway = updaterGateway,
        _appcastProbeService = appcastProbeService,
        _settingsStore = settingsStore,
@@ -65,7 +67,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
        _manualTriggerTimeout = manualTriggerTimeout,
        _manualCompletionTimeout = manualCompletionTimeout,
        _timeoutCircuitThreshold = timeoutCircuitThreshold,
-       _timeoutCircuitCooldown = timeoutCircuitCooldown {
+       _timeoutCircuitCooldown = timeoutCircuitCooldown,
+       _backgroundRetryLimit = backgroundRetryLimit,
+       _backgroundRetryBaseDelay = backgroundRetryBaseDelay {
     _hydratePersistedDiagnostics();
   }
 
@@ -78,15 +82,19 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   final Duration _manualCompletionTimeout;
   final int _timeoutCircuitThreshold;
   final Duration _timeoutCircuitCooldown;
+  final int _backgroundRetryLimit;
+  final Duration _backgroundRetryBaseDelay;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
   bool _isManualCheck = false;
   UpdateCheckDiagnostics? _activeManualDiagnostics;
   UpdateCheckDiagnostics? _lastManualDiagnostics;
+  UpdateCheckDiagnostics? _lastBackgroundDiagnostics;
   String? _activeCheckId;
 
   static const String _lastDiagnosticsKey = 'auto_update.last_manual_diagnostics';
+  static const String _lastBackgroundDiagnosticsKey = 'auto_update.last_background_diagnostics';
   static const String _timeoutConsecutiveCountKey = 'auto_update.timeout_consecutive_count';
   static const String _timeoutCooldownUntilKey = 'auto_update.timeout_cooldown_until_ms';
   static const int _defaultTimeoutCircuitThreshold = 3;
@@ -160,9 +168,13 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   @override
   UpdateCheckDiagnostics? get lastManualDiagnostics => _lastManualDiagnostics;
 
+  @override
+  UpdateCheckDiagnostics? get lastBackgroundDiagnostics => _lastBackgroundDiagnostics;
+
   void _hydratePersistedDiagnostics() {
     final raw = _settingsStore?.getString(_lastDiagnosticsKey);
     if (raw == null || raw.isEmpty) {
+      _hydratePersistedBackgroundDiagnostics();
       return;
     }
     try {
@@ -173,6 +185,28 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     } on FormatException catch (error, stackTrace) {
       developer.log(
         'Failed to parse persisted auto-update diagnostics',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    _hydratePersistedBackgroundDiagnostics();
+  }
+
+  void _hydratePersistedBackgroundDiagnostics() {
+    final raw = _settingsStore?.getString(_lastBackgroundDiagnosticsKey);
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        _lastBackgroundDiagnostics = UpdateCheckDiagnostics.fromJson(decoded);
+      }
+    } on FormatException catch (error, stackTrace) {
+      developer.log(
+        'Failed to parse persisted background auto-update diagnostics',
         name: 'auto_update_orchestrator',
         level: 900,
         error: error,
@@ -203,8 +237,29 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
-  int _consecutiveTimeoutCount() =>
-      _settingsStore?.getInt(_timeoutConsecutiveCountKey) ?? 0;
+  Future<void> _persistLastBackgroundDiagnostics() async {
+    final settingsStore = _settingsStore;
+    final diagnostics = _lastBackgroundDiagnostics;
+    if (settingsStore == null || diagnostics == null) {
+      return;
+    }
+    try {
+      await settingsStore.setString(
+        _lastBackgroundDiagnosticsKey,
+        jsonEncode(diagnostics.toJson()),
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to persist background auto-update diagnostics',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  int _consecutiveTimeoutCount() => _settingsStore?.getInt(_timeoutConsecutiveCountKey) ?? 0;
 
   DateTime? _timeoutCooldownUntil() {
     final timestamp = _settingsStore?.getInt(_timeoutCooldownUntilKey);
@@ -282,9 +337,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
 
     final minutesRemaining = remaining.inMinutes;
-    final humanRemaining = minutesRemaining >= 1
-        ? '$minutesRemaining min'
-        : '${remaining.inSeconds}s';
+    final humanRemaining = minutesRemaining >= 1 ? '$minutesRemaining min' : '${remaining.inSeconds}s';
     final now = DateTime.now();
     final failure = Failure<bool, Exception>(
       _buildManualFailure(
@@ -338,12 +391,34 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
+  UpdateCheckDiagnostics _buildBackgroundDiagnostics(String feedUrl) {
+    final now = DateTime.now();
+    return UpdateCheckDiagnostics(
+      checkedAt: now,
+      configuredFeedUrl: feedUrl,
+      requestedFeedUrl: feedUrl,
+      currentVersion: AppConstants.appVersion,
+      triggerStartedAt: now,
+    );
+  }
+
+  UpdateCheckDiagnostics _backgroundDiagnosticsOrDefault() {
+    final feedUrl = _feedUrl ?? officialAutoUpdateFeedUrl;
+    return _lastBackgroundDiagnostics ??
+        UpdateCheckDiagnostics(
+          checkedAt: DateTime.now(),
+          configuredFeedUrl: feedUrl,
+          requestedFeedUrl: feedUrl,
+          currentVersion: AppConstants.appVersion,
+        );
+  }
+
   @override
   Future<void> initialize() async {
     final feedUrl = _feedUrl;
     if (feedUrl == null) {
       developer.log(
-        'Auto-update skipped: AUTO_UPDATE_FEED_URL not configured or not a Sparkle feed',
+        'Auto-update skipped: configured feed override is not a Sparkle feed (.xml)',
         name: 'auto_update_orchestrator',
         level: 800,
       );
@@ -384,26 +459,43 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
-  static const int _maxBackgroundRetries = 3;
-  static const Duration _retryBaseDelay = Duration(seconds: 30);
+  static const int _defaultBackgroundRetryLimit = 3;
+  static const Duration _defaultBackgroundRetryBaseDelay = Duration(seconds: 30);
 
   @override
   Future<void> checkInBackground() async {
     if (!isAvailable) return;
-    for (var attempt = 1; attempt <= _maxBackgroundRetries; attempt++) {
+    final feedUrl = _feedUrl;
+    if (feedUrl == null) {
+      return;
+    }
+    for (var attempt = 1; attempt <= _backgroundRetryLimit; attempt++) {
+      _lastBackgroundDiagnostics = _buildBackgroundDiagnostics(feedUrl);
       try {
         await _updaterGateway.checkForUpdates(inBackground: true);
+        _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
+          triggerCompletedAt: DateTime.now(),
+        );
+        unawaited(_persistLastBackgroundDiagnostics());
         return;
       } on Exception catch (e, s) {
+        final completedAt = DateTime.now();
+        _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
+          triggerCompletedAt: completedAt,
+          completedAt: completedAt,
+          completionSource: UpdateCheckCompletionSource.triggerFailure,
+          errorMessage: e.toString(),
+        );
+        unawaited(_persistLastBackgroundDiagnostics());
         developer.log(
-          'Background update check failed (attempt $attempt/$_maxBackgroundRetries)',
+          'Background update check failed (attempt $attempt/$_backgroundRetryLimit)',
           name: 'auto_update_orchestrator',
           level: 900,
           error: e,
           stackTrace: s,
         );
-        if (attempt < _maxBackgroundRetries) {
-          final delay = _retryBaseDelay * attempt;
+        if (attempt < _backgroundRetryLimit) {
+          final delay = _backgroundRetryBaseDelay * attempt;
           developer.log(
             'Retrying in ${delay.inSeconds}s',
             name: 'auto_update_orchestrator',
@@ -508,9 +600,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerStartedAt: triggerStartedAt,
       );
-      await _updaterGateway
-          .checkForUpdates(inBackground: false)
-          .timeout(_manualTriggerTimeout);
+      await _updaterGateway.checkForUpdates(inBackground: false).timeout(_manualTriggerTimeout);
       final triggerCompletedAt = DateTime.now();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerCompletedAt: triggerCompletedAt,
@@ -572,8 +662,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       if (completionSource == UpdateCheckCompletionSource.triggerTimeout ||
           completionSource == UpdateCheckCompletionSource.completionTimeout) {
         await _recordTimeoutOutcome();
-      } else if (completionSource != null &&
-          completionSource != UpdateCheckCompletionSource.circuitOpen) {
+      } else if (completionSource != null && completionSource != UpdateCheckCompletionSource.circuitOpen) {
         await _resetTimeoutCircuitIfNeeded();
       }
       await _persistLastManualDiagnostics();
@@ -607,8 +696,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         }
       },
       (error) {
-        final resolvedCompletionSource =
-            completionSource ?? UpdateCheckCompletionSource.updaterError;
+        final resolvedCompletionSource = completionSource ?? UpdateCheckCompletionSource.updaterError;
         _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
           completedAt: completedAt,
           completionSource: resolvedCompletionSource,
@@ -620,14 +708,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       },
     );
     final diagnostics = _activeManualDiagnostics;
-    if (diagnostics != null &&
-        diagnostics.triggerStartedAt != null &&
-        diagnostics.triggerCompletedAt != null) {
-      final triggerDuration = diagnostics.triggerCompletedAt!
-          .difference(diagnostics.triggerStartedAt!)
-          .inMilliseconds;
-      final totalDuration =
-          completedAt.difference(diagnostics.checkedAt).inMilliseconds;
+    if (diagnostics != null && diagnostics.triggerStartedAt != null && diagnostics.triggerCompletedAt != null) {
+      final triggerDuration = diagnostics.triggerCompletedAt!.difference(diagnostics.triggerStartedAt!).inMilliseconds;
+      final totalDuration = completedAt.difference(diagnostics.checkedAt).inMilliseconds;
       _logManualCheck(
         'Manual update check completed '
         '(trigger_duration_ms=$triggerDuration, total_duration_ms=$totalDuration)',
@@ -646,6 +729,20 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   void onUpdaterError(UpdaterError? error) {
+    if (!_isManualCheck) {
+      _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
+        completedAt: DateTime.now(),
+        completionSource: UpdateCheckCompletionSource.updaterError,
+        errorMessage: error?.toString() ?? 'Update check failed',
+      );
+      unawaited(_persistLastBackgroundDiagnostics());
+      developer.log(
+        'Background auto-updater error: $error',
+        name: 'auto_update_orchestrator',
+        level: 900,
+      );
+      return;
+    }
     _logManualCheck(
       'Auto-updater error: $error',
       checkId: _activeCheckId,
@@ -665,6 +762,19 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   void onUpdaterCheckingForUpdate(Appcast? appcast) {
+    if (!_isManualCheck) {
+      final diagnostics = _backgroundDiagnosticsOrDefault();
+      _lastBackgroundDiagnostics = diagnostics.copyWith(
+        triggerStartedAt: diagnostics.triggerStartedAt ?? DateTime.now(),
+      );
+      unawaited(_persistLastBackgroundDiagnostics());
+      developer.log(
+        'Background check for updates... (items: ${appcast?.items.length ?? 0})',
+        name: 'auto_update_orchestrator',
+        level: 800,
+      );
+      return;
+    }
     _logManualCheck(
       'Checking for updates... (items: ${appcast?.items.length ?? 0})',
       checkId: _activeCheckId,
@@ -673,6 +783,23 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
+    if (!_isManualCheck) {
+      _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
+        completedAt: DateTime.now(),
+        completionSource: UpdateCheckCompletionSource.updateAvailable,
+        updateAvailable: true,
+        remoteVersion: appcastItem?.versionString,
+        remoteDisplayVersion: appcastItem?.displayVersionString,
+      );
+      unawaited(_persistLastBackgroundDiagnostics());
+      developer.log(
+        'Background update available: ${appcastItem?.versionString} '
+        '(display: ${appcastItem?.displayVersionString})',
+        name: 'auto_update_orchestrator',
+        level: 800,
+      );
+      return;
+    }
     _logManualCheck(
       'Update available: ${appcastItem?.versionString} '
       '(display: ${appcastItem?.displayVersionString})',
@@ -690,6 +817,21 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   void onUpdaterUpdateNotAvailable(UpdaterError? error) {
+    if (!_isManualCheck) {
+      _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
+        completedAt: DateTime.now(),
+        completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+        updateAvailable: false,
+        errorMessage: error?.message,
+      );
+      unawaited(_persistLastBackgroundDiagnostics());
+      developer.log(
+        'No background update available (error: $error)',
+        name: 'auto_update_orchestrator',
+        level: 800,
+      );
+      return;
+    }
     _logManualCheck(
       'No update available (manual: $_isManualCheck, error: $error)',
       checkId: _activeCheckId,

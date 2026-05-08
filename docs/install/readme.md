@@ -1,13 +1,14 @@
-# Instalação - Plug Agente
+# Instalacao - Plug Agente
 
-Índice canônico da documentação de instalação, empacotamento Windows e
-atualização automática.
+Indice canonico da documentacao de instalacao, empacotamento Windows e
+atualizacao automatica.
 
 ## Compatibilidade
 
 - **Windows 10/11**: suporte completo
-- **Windows Server 2016+**: suporte com possíveis recursos degradados
-- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: não suportado pelo instalador
+- **Windows Server 2016+**: suporte com possiveis recursos degradados
+- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: nao suportado
+  pelo instalador
 
 Checklist e matriz detalhada em [requirements.md](requirements.md).
 
@@ -16,36 +17,37 @@ Checklist e matriz detalhada em [requirements.md](requirements.md).
 ### Instalar no cliente
 
 1. Validar ambiente em [requirements.md](requirements.md)
-2. Executar os passos de [installation_guide.md](installation_guide.md)
+2. Executar [installation_guide.md](installation_guide.md)
 3. Usar [install_monitor.bat](../../install_monitor.bat) apenas se houver
    necessidade de PlugPortMon
 
-### Gerar instalador para release
+### Gerar instalador e publicar release
 
 1. Revisar versionamento em [release_guide.md](release_guide.md)
 2. Executar `python installer/build_installer.py`
-3. Publicar conforme [release_guide.md](release_guide.md)
+3. Publicar a release no GitHub
+4. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
 
-Saída esperada: `installer/dist/PlugAgente-Setup-{versão}.exe`.
+Saida esperada:
+
+```text
+installer/dist/PlugAgente-Setup-{versao}.exe
+```
 
 ## Documentos operacionais
 
-| Documento                                      | Quando usar                                                    |
-| ---------------------------------------------- | -------------------------------------------------------------- |
-| [installation_guide.md](installation_guide.md) | Instalação, desinstalação e validação básica no Windows        |
-| [requirements.md](requirements.md)             | Pré-requisitos, compatibilidade e notas opcionais de ODBC/PATH |
+- [installation_guide.md](installation_guide.md): instalacao, desinstalacao e
+  validacao basica no Windows
+- [requirements.md](requirements.md): pre-requisitos, compatibilidade e notas
+  opcionais de ODBC/PATH
+- [release_guide.md](release_guide.md): versionamento, build, tag, release e
+  pos-release
+- [auto_update_setup.md](auto_update_setup.md): feed oficial, appcast, smoke
+  checks, diagnostico e testes
 
-## Documentos de release e update
+## Scripts uteis
 
-| Documento                                        | Quando usar                                          |
-| ------------------------------------------------ | ---------------------------------------------------- |
-| [release_guide.md](release_guide.md)             | Versionamento, build, tag, publicação e pós-release  |
-| [auto_update_setup.md](auto_update_setup.md)     | Feed oficial, appcast, smoke checks e testes         |
-
-## Scripts úteis
-
-| Script                                           | Uso                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `python installer/build_installer.py`            | Fluxo recomendado: sincroniza versão, faz build Flutter e compila o Inno Setup |
-| `python installer/update_version.py`             | Fluxo manual/avançado para sincronizar versão sem gerar instalador             |
-| [install_monitor.bat](../../install_monitor.bat) | Instalar PlugPortMon como administrador                                        |
+- `python installer/build_installer.py`: fluxo recomendado de build Windows
+- `python installer/update_version.py`: sincroniza versao sem gerar instalador
+- [install_monitor.bat](../../install_monitor.bat): instala PlugPortMon como
+  administrador

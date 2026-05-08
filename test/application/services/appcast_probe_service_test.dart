@@ -93,5 +93,37 @@ void main() {
       expect(result.latestVersion, '2.0.0+9');
       expect(result.itemCount, 1);
     });
+
+    test('returns explicit error when latest item has no sparkle version', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+
+      server.listen((request) async {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType('application', 'rss+xml', charset: 'utf-8')
+          ..write('''
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <enclosure url="https://example.com/latest.exe" />
+    </item>
+  </channel>
+</rss>''');
+        await request.response.close();
+      });
+
+      const service = AppcastProbeService();
+      final result = await service.probeLatest(
+        feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
+      );
+
+      expect(result.latestVersion, isNull);
+      expect(result.itemCount, 1);
+      expect(result.errorMessage, 'Latest appcast item is missing sparkle:version');
+    });
   });
 }

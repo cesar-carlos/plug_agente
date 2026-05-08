@@ -7,22 +7,27 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   const UpdatesAboutConfigSection({
     required this.appVersion,
     required this.lastUpdateCheck,
+    required this.lastBackgroundUpdateCheck,
     required this.onCheckUpdates,
-    this.supportsAutoUpdate = true,
+    this.isAutoUpdateAvailable = true,
+    this.unavailableMessage,
     this.isCheckingUpdates = false,
     super.key,
   });
 
   final String appVersion;
   final String lastUpdateCheck;
+  final String lastBackgroundUpdateCheck;
   final VoidCallback onCheckUpdates;
-  final bool supportsAutoUpdate;
+  final bool isAutoUpdateAvailable;
+  final String? unavailableMessage;
   final bool isCheckingUpdates;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
+    final hasBackgroundUpdate = lastBackgroundUpdateCheck.trim().isNotEmpty;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -30,33 +35,45 @@ class UpdatesAboutConfigSection extends StatelessWidget {
           children: [
             SettingsSectionTitle(title: l10n.gsSectionUpdates),
             const SizedBox(height: AppSpacing.md),
-            if (supportsAutoUpdate)
-              Row(
+            if (isAutoUpdateAvailable)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
-                      style: context.bodyText,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
+                          style: context.bodyText,
+                        ),
+                      ),
+                      if (isCheckingUpdates)
+                        const SizedBox(
+                          key: ValueKey('updates_progress_ring'),
+                          width: 20,
+                          height: 20,
+                          child: ProgressRing(strokeWidth: 2),
+                        )
+                      else
+                        IconButton(
+                          key: const ValueKey('updates_refresh_button'),
+                          icon: const Icon(FluentIcons.refresh),
+                          onPressed: onCheckUpdates,
+                        ),
+                    ],
                   ),
-                  if (isCheckingUpdates)
-                    const SizedBox(
-                      key: ValueKey('updates_progress_ring'),
-                      width: 20,
-                      height: 20,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  else
-                    IconButton(
-                      key: const ValueKey('updates_refresh_button'),
-                      icon: const Icon(FluentIcons.refresh),
-                      onPressed: onCheckUpdates,
+                  if (hasBackgroundUpdate) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      lastBackgroundUpdateCheck,
+                      style: context.captionText,
                     ),
+                  ],
                 ],
               )
             else
               Text(
-                l10n.configAutoUpdateNotSupported,
+                unavailableMessage ?? l10n.configAutoUpdateNotSupported,
                 style: context.captionText,
               ),
             const SizedBox(height: AppSpacing.lg),
