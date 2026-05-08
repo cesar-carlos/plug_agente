@@ -20,9 +20,10 @@ class DirectOdbcConnectionLimiter {
 
   Future<Result<DirectOdbcConnectionLease>> acquire({
     required String operation,
+    Duration? acquireTimeout,
   }) async {
     try {
-      await _semaphore.acquire(timeout: _acquireTimeout);
+      await _semaphore.acquire(timeout: acquireTimeout ?? _acquireTimeout);
     } on TimeoutException catch (error) {
       _metrics?.recordDirectConnectionAcquireTimeout();
       return Failure(
@@ -31,7 +32,13 @@ class DirectOdbcConnectionLimiter {
             'Direct ODBC connection limit exhausted while waiting for $operation: ${error.message}',
           ),
           operation: 'direct_connection_acquire',
-          context: {'direct_operation': operation},
+          context: {
+            'direct_operation': operation,
+            'timeout': true,
+            'timeout_stage': 'pool',
+            'reason': 'direct_connection_limit_timeout',
+            'retryable': true,
+          },
         ),
       );
     }

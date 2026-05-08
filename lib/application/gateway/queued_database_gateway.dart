@@ -13,8 +13,8 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
   QueuedDatabaseGateway({
     required IDatabaseGateway delegate,
     required SqlExecutionQueue queue,
-  })  : _delegate = delegate,
-        _queue = queue;
+  }) : _delegate = delegate,
+       _queue = queue;
 
   final IDatabaseGateway _delegate;
   final SqlExecutionQueue _queue;
@@ -57,7 +57,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     String? sourceRpcRequestId,
   }) {
-    // Route through queue (no requestId for batch)
+    // Route through queue with source RPC id for tracking when available.
     return _queue.submit(
       () => _delegate.executeBatch(
         agentId,
@@ -67,6 +67,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         timeout: timeout,
         sourceRpcRequestId: sourceRpcRequestId,
       ),
+      requestId: sourceRpcRequestId,
     );
   }
 

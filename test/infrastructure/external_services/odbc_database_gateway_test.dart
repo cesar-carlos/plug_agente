@@ -166,7 +166,7 @@ void main() {
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -253,7 +253,7 @@ void main() {
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -311,7 +311,7 @@ void main() {
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -393,7 +393,7 @@ void main() {
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -478,7 +478,7 @@ void main() {
           timestamp: DateTime.now(),
         );
         final capturedAcquireBuffers = <int>[];
-        var plainAcquireCount = 0;
+        var acquireCount = 0;
 
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
@@ -492,16 +492,17 @@ void main() {
             options: any(named: 'options'),
           ),
         ).thenAnswer((invocation) async {
+          acquireCount++;
           final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          if (acquireCount == 1) {
+            return const Success(firstPooledId);
+          }
           if (options == null) {
-            plainAcquireCount++;
-            return plainAcquireCount == 1
-                ? const Success(firstPooledId)
-                : Failure(domain.ConnectionFailure('unexpected plain acquire'));
+            return Failure(domain.ConnectionFailure('unexpected pooled acquire without options'));
           }
           capturedAcquireBuffers.add(options.maxResultBufferBytes ?? 0);
           return Success(
-            capturedAcquireBuffers.length == 1 ? retryPooledId : hintedPooledId,
+            acquireCount == 2 ? retryPooledId : hintedPooledId,
           );
         });
         when(
@@ -535,7 +536,7 @@ void main() {
 
         expect(first.isSuccess(), isTrue);
         expect(second.isSuccess(), isTrue);
-        expect(plainAcquireCount, 1);
+        expect(acquireCount, 3);
         expect(capturedAcquireBuffers, hasLength(2));
         expect(capturedAcquireBuffers[0], greaterThan(32 * 1024 * 1024));
         expect(capturedAcquireBuffers[1], equals(capturedAcquireBuffers[0]));
@@ -561,7 +562,7 @@ void main() {
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -622,7 +623,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -684,7 +685,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -744,15 +745,20 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return Success(config);
         });
         final capturedRetryBuffers = <int>[];
+        var acquireCount = 0;
         when(
           () => mockConnectionPool.acquire(
             any(),
             options: any(named: 'options'),
           ),
         ).thenAnswer((invocation) async {
+          acquireCount++;
           final options = invocation.namedArguments[#options] as ConnectionOptions?;
-          if (options == null) {
+          if (acquireCount == 1) {
             return const Success(pooledConnectionId);
+          }
+          if (options == null) {
+            return Failure(domain.ConnectionFailure('unexpected pooled acquire without options'));
           }
           capturedRetryBuffers.add(options.maxResultBufferBytes ?? 0);
           return const Success(retriedPooledId);
@@ -818,15 +824,20 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return Success(config);
         });
         final capturedRetryBuffers = <int>[];
+        var acquireCount = 0;
         when(
           () => mockConnectionPool.acquire(
             any(),
             options: any(named: 'options'),
           ),
         ).thenAnswer((invocation) async {
+          acquireCount++;
           final options = invocation.namedArguments[#options] as ConnectionOptions?;
-          if (options == null) {
+          if (acquireCount == 1) {
             return const Success(pooledConnectionId);
+          }
+          if (options == null) {
+            return Failure(domain.ConnectionFailure('unexpected pooled acquire without options'));
           }
           capturedRetryBuffers.add(options.maxResultBufferBytes ?? 0);
           return const Success(retriedPooledId);
@@ -902,7 +913,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -987,7 +998,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -1069,7 +1080,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         } else {
           fail('Expected ValidationFailure');
         }
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
       },
     );
 
@@ -1114,7 +1125,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         } else {
           fail('Expected ValidationFailure');
         }
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
       },
     );
 
@@ -1162,7 +1173,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         } else {
           fail('Expected ValidationFailure');
         }
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
       },
     );
 
@@ -1198,7 +1209,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -1267,7 +1278,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -1345,7 +1356,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         } else {
           fail('Expected ValidationFailure');
         }
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
       },
     );
 
@@ -1369,7 +1380,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success('pool-1');
         });
         when(
@@ -1396,7 +1407,10 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
 
         expect(result.isSuccess(), isTrue);
         verify(
-          () => mockConnectionPool.acquire(persistedConnectionString),
+          () => mockConnectionPool.acquire(
+            persistedConnectionString,
+            options: any(named: 'options'),
+          ),
         ).called(1);
       },
     );
@@ -1431,7 +1445,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -1512,7 +1526,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -1576,7 +1590,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
         return Success(config);
       });
-      when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
         return const Success(pooledConnectionId);
       });
       when(
@@ -1660,7 +1674,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -1767,7 +1781,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -1891,7 +1905,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         expect(result.isSuccess(), isTrue);
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
         verify(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).called(1);
@@ -1998,7 +2012,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         expect(result.isSuccess(), isTrue);
-        verifyNever(() => mockConnectionPool.acquire(any()));
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
         verify(
           () => mockService.beginTransaction(
             firstOwnedId,
@@ -2149,7 +2163,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(connectionString)).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
           acquireCount++;
           return Success(acquireCount == 1 ? firstConnectionId : secondConnectionId);
         });
@@ -2203,7 +2217,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final items = result.getOrNull()!;
         expect(items, hasLength(1));
         expect(items.single.ok, isTrue);
-        verify(() => mockConnectionPool.acquire(connectionString)).called(2);
+        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(2);
         verify(() => mockConnectionPool.discard(firstConnectionId)).called(1);
         verify(() => mockConnectionPool.recycle(connectionString)).called(1);
         verify(() => mockConnectionPool.release(secondConnectionId)).called(1);
@@ -2242,7 +2256,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(connectionString)).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2589,7 +2603,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2666,7 +2680,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2728,7 +2742,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2792,7 +2806,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2859,7 +2873,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           return const Success(pooledConnectionId);
         });
         when(
@@ -2918,7 +2932,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any())).thenAnswer((_) async {
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
           acquireCount++;
           final id = 'pool-concurrent-$acquireCount';
           pooledIds.add(id);

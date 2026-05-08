@@ -553,17 +553,92 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     DatabaseConfig databaseConfig, {
     Duration? timeout,
   }) async {
-    return _retryManager.execute(
-      () => _executeQueryInternal(
+    return _executeWithRetryBudget<QueryResponse>(
+      (remainingTimeout) => _executeQueryInternal(
         request,
         connectionString,
         databaseConfig,
-        timeout: timeout,
+        timeout: remainingTimeout,
       ),
       maxAttempts: 3,
       initialDelayMs: 500,
       backoffMultiplier: 2,
+      timeout: timeout,
+      stage: 'query',
     );
+  }
+
+  Future<Result<T>> _executeWithRetryBudget<T extends Object>(
+    Future<Result<T>> Function(Duration? remainingTimeout) operation, {
+    required int maxAttempts,
+    required int initialDelayMs,
+    required double backoffMultiplier,
+    required Duration? timeout,
+    required String stage,
+  }) async {
+    if (timeout == null) {
+      return _retryManager.execute(
+        () => operation(null),
+        maxAttempts: maxAttempts,
+        initialDelayMs: initialDelayMs,
+        backoffMultiplier: backoffMultiplier,
+      );
+    }
+
+    final deadline = DateTime.now().add(timeout);
+    var attempts = 0;
+    var delayMs = initialDelayMs;
+    Result<T>? lastResult;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      final remaining = _remainingTimeoutFromDeadline(deadline);
+      if (remaining == null || remaining <= Duration.zero) {
+        return Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'SQL execution budget exhausted before retry attempt',
+            context: {
+              'timeout': true,
+              'timeout_stage': 'sql',
+              'stage': stage,
+              'reason': '${stage}_budget_exhausted',
+            },
+          ),
+        );
+      }
+
+      final result = await operation(remaining);
+      if (result.isSuccess()) {
+        return result;
+      }
+
+      lastResult = result;
+      final exception = result.exceptionOrNull();
+      if (exception == null || !_retryManager.isTransientFailure(exception) || attempts >= maxAttempts) {
+        return result;
+      }
+
+      final remainingBeforeDelay = _remainingTimeoutFromDeadline(deadline);
+      if (remainingBeforeDelay == null || remainingBeforeDelay <= Duration.zero) {
+        return result;
+      }
+
+      final requestedDelay = Duration(milliseconds: delayMs);
+      final boundedDelay = requestedDelay < remainingBeforeDelay ? requestedDelay : remainingBeforeDelay;
+      await Future<void>.delayed(boundedDelay);
+      delayMs = (delayMs * backoffMultiplier).toInt();
+    }
+
+    return lastResult ??
+        Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'SQL execution failed before retry could start',
+            context: {
+              'reason': '${stage}_retry_failed',
+              'stage': stage,
+            },
+          ),
+        );
   }
 
   Future<Result<QueryResponse>> _executeQueryInternal(
@@ -644,17 +719,31 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required Duration? timeout,
     ConnectionOptions? acquireOptions,
     bool allowAdaptiveRetry = true,
+    DateTime? deadline,
   }) async {
-    final poolResult = acquireOptions == null
-        ? await _connectionPool.acquire(connectionString)
-        : await _connectionPool.acquire(
-            connectionString,
-            options: acquireOptions,
-          );
+    final effectiveDeadline = deadline ?? _deadlineFor(timeout);
+    final poolAcquireOptions =
+        acquireOptions ??
+        _connectionOptionsForTimeout(
+          _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+        );
+    final poolResult = await _acquirePooledConnection(
+      connectionString,
+      options: poolAcquireOptions,
+      deadline: effectiveDeadline,
+      context: {'query_id': request.id},
+    );
 
     if (poolResult.isError()) {
       stopwatch.stop();
       final error = poolResult.exceptionOrNull()!;
+      final failure = error is domain.Failure
+          ? error
+          : OdbcFailureMapper.mapPoolError(
+              error,
+              operation: 'acquire_connection',
+              context: {'query_id': request.id},
+            );
 
       developer.log(
         'Failed to acquire connection for query ${request.id}',
@@ -678,17 +767,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
 
       return Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: 'acquire_connection',
-          context: {'query_id': request.id},
-        ),
+        failure,
       );
     }
 
     final connId = poolResult.getOrThrow();
     var releasedConnectionEarly = false;
-    final effectiveOptions = acquireOptions ?? _connectionOptionsForTimeout(timeout);
+    final effectiveOptions = poolAcquireOptions;
 
     try {
       final outcome = await _runQueryExecutionWithTimeout(
@@ -696,7 +781,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         request: request,
         preparedExecution: preparedExecution,
         connectionString: connectionString,
-        timeout: timeout,
+        timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
       );
 
       if (!outcome.isSuccess) {
@@ -750,6 +835,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               currentBufferBytes: currentBufferBytes,
             ),
             allowAdaptiveRetry: false,
+            deadline: effectiveDeadline,
           );
         }
 
@@ -798,6 +884,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           level: 800,
         );
         _metrics.recordDirectConnectionFallback();
+        await _releaseConnectionSafely(connId);
+        releasedConnectionEarly = true;
         return _executeQueryWithoutPool(
           request,
           connectionString,
@@ -805,6 +893,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           preparedExecution: preparedExecution,
           timeout: timeout,
           afterVacuousPooledMulti: true,
+          deadline: effectiveDeadline,
         );
       }
 
@@ -1068,8 +1157,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
 
     if (useOwnedConnection) {
-      final leaseResult = await _directConnectionLimiter.acquire(
+      final leaseResult = await _acquireDirectLease(
         operation: 'batch_transaction',
+        deadline: deadline,
       );
       if (leaseResult.isError()) {
         final err = leaseResult.exceptionOrNull()!;
@@ -1083,7 +1173,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       final directLease = leaseResult.getOrThrow();
       final connectResult = await _connectSafely(
         connectionString,
-        options: _connectionOptionsForTimeout(timeout),
+        options: _connectionOptionsForTimeout(
+          _remainingTimeoutFromDeadline(deadline) ?? timeout,
+        ),
       );
       return connectResult.fold(
         (connection) {
@@ -1118,20 +1210,30 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final poolResult = await _connectionPool.acquire(connectionString);
+    final poolResult = await _acquirePooledConnection(
+      connectionString,
+      options: _connectionOptionsForTimeout(
+        _remainingTimeoutFromDeadline(deadline) ?? timeout,
+      ),
+      deadline: deadline,
+      context: {'operation': 'batch_execute'},
+    );
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
+      final failure = error is domain.Failure
+          ? error
+          : OdbcFailureMapper.mapPoolError(
+              error,
+              operation: 'acquire_connection',
+              context: {'operation': 'batch_execute'},
+            );
       _recordSqlInvestigationBatchInfrastructureFailure(
         originalSql: batchSqlPreview,
         errorMessage: _odbcErrorMessage(error),
         rpcRequestId: sourceRpcRequestId,
       );
       return Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: 'acquire_connection',
-          context: {'operation': 'batch_execute'},
-        ),
+        failure,
       );
     }
 
@@ -1495,8 +1597,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       await _tryRecoverPoolAfterInvalidConnectionId(context.connectionString);
     }
 
-    final reacquireResult = await _connectionPool.acquire(
+    final reacquireResult = await _acquirePooledConnection(
       context.connectionString,
+      options: _connectionOptionsForTimeout(
+        _remainingTimeoutFromDeadline(context.deadline),
+      ),
+      deadline: context.deadline,
+      context: {'operation': 'batch_reacquire_connection'},
     );
     if (reacquireResult.isError()) {
       return _QueryExecutionOutcome.failure(
@@ -1563,16 +1670,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString, {
     Duration? timeout,
   }) async {
-    return _retryManager.execute(
-      () => _executeNonQueryInternal(
+    return _executeWithRetryBudget<int>(
+      (remainingTimeout) => _executeNonQueryInternal(
         query,
         parameters,
         connectionString,
-        timeout: timeout,
+        timeout: remainingTimeout,
       ),
       maxAttempts: 3,
       initialDelayMs: 500,
       backoffMultiplier: 2,
+      timeout: timeout,
+      stage: 'query',
     );
   }
 
@@ -1582,14 +1691,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString, {
     Duration? timeout,
   }) async {
-    final poolResult = await _connectionPool.acquire(connectionString);
+    final deadline = _deadlineFor(timeout);
+    final poolResult = await _acquirePooledConnection(
+      connectionString,
+      options: _connectionOptionsForTimeout(timeout),
+      deadline: deadline,
+    );
 
     if (poolResult.isError()) {
+      final error = poolResult.exceptionOrNull()!;
       return Failure(
-        OdbcFailureMapper.mapPoolError(
-          poolResult.exceptionOrNull()!,
-          operation: 'acquire_connection',
-        ),
+        error is domain.Failure
+            ? error
+            : OdbcFailureMapper.mapPoolError(
+                error,
+                operation: 'acquire_connection',
+              ),
       );
     }
 
@@ -1602,7 +1719,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionId: connId,
         query: query,
         parameters: parameters,
-        timeout: timeout,
+        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
       );
 
       if (result.isError()) {
@@ -1623,6 +1740,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             parameters,
             connectionString,
             timeout: timeout,
+            deadline: deadline,
           );
         }
       }
@@ -1665,25 +1783,28 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     bool preferPreparedTimeout = true,
   }) async {
-    if (timeout != null &&
+    final stopwatch = Stopwatch()..start();
+    final usesPreparedTimeout =
+        timeout != null &&
         preferPreparedTimeout &&
         !OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
           request,
           preparedExecution,
-        )) {
-      return _runPreparedQueryExecution(
-        connectionId: connId,
-        request: request,
-        preparedExecution: preparedExecution,
-        timeout: timeout,
-      );
-    }
-
-    if (timeout == null) {
-      return _runQueryExecution(connId, request, preparedExecution);
-    }
-
+        );
     try {
+      if (usesPreparedTimeout) {
+        return await _runPreparedQueryExecution(
+          connectionId: connId,
+          request: request,
+          preparedExecution: preparedExecution,
+          timeout: timeout,
+        );
+      }
+
+      if (timeout == null) {
+        return await _runQueryExecution(connId, request, preparedExecution);
+      }
+
       return await _runQueryExecution(
         connId,
         request,
@@ -1691,7 +1812,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       ).timeout(timeout);
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
-      await _cancelConnectionForTimeout(connId, connectionString);
+      if (!usesPreparedTimeout) {
+        await _cancelConnectionForTimeout(connId, connectionString);
+      }
       developer.log(
         'SQL query timed out before completion',
         name: 'database_gateway',
@@ -1699,6 +1822,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         error: error,
       );
       rethrow;
+    } finally {
+      stopwatch.stop();
+      _metrics.recordSqlExecutionTime(stopwatch.elapsed);
     }
   }
 
@@ -1737,12 +1863,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String statementKey,
     Duration? timeout,
   }) async {
+    final deadline = _deadlineFor(timeout);
     final stmtId = await _getOrPrepareStatement(
       connectionId: connectionId,
       preparedExecution: preparedExecution,
       preparedStatements: preparedStatements,
       statementKey: statementKey,
-      timeout: timeout,
+      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
     );
     if (stmtId.isError()) {
       return _QueryExecutionOutcome.failure(
@@ -1755,7 +1882,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       connectionId: connectionId,
       preparedExecution: preparedExecution,
       statementId: preparedStatementId,
-      timeout: timeout,
+      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
     );
     return result.fold(
       (queryResult) => _QueryExecutionOutcome.success(
@@ -1771,6 +1898,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required OdbcPreparedQueryExecution preparedExecution,
     Duration? timeout,
   }) async {
+    final deadline = _deadlineFor(timeout);
     final preparedStatements = <String, int>{};
     final statementKey = _preparedStatementKeyFor(preparedExecution);
     try {
@@ -1779,7 +1907,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         preparedExecution: preparedExecution,
         preparedStatements: preparedStatements,
         statementKey: statementKey,
-        timeout: timeout,
+        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
       );
       if (stmtId.isError()) {
         return _QueryExecutionOutcome.failure(
@@ -1791,7 +1919,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionId: connectionId,
         preparedExecution: preparedExecution,
         statementId: stmtId.getOrThrow(),
-        timeout: timeout,
+        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
       );
       return result.fold(
         (queryResult) => _QueryExecutionOutcome.success(
@@ -1821,6 +1949,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final timeoutMs = timeout?.inMilliseconds ?? 0;
+    final prepareStopwatch = Stopwatch()..start();
     final prepareResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
         ? await _service.prepareNamed(
             connectionId,
@@ -1832,6 +1961,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             preparedExecution.sql,
             timeoutMs: timeoutMs,
           );
+    prepareStopwatch.stop();
+    _metrics.recordPreparedPrepareTime(prepareStopwatch.elapsed);
 
     return prepareResult.fold(
       (stmtId) {
@@ -1922,21 +2053,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Map<String, dynamic>? parameters,
     Duration? timeout,
   }) async {
-    if (timeout == null) {
-      if (parameters != null && parameters.isNotEmpty) {
-        return _service.executeQueryNamed(
-          connectionId,
+    final stopwatch = Stopwatch()..start();
+    try {
+      if (timeout == null) {
+        if (parameters != null && parameters.isNotEmpty) {
+          return await _service.executeQueryNamed(
+            connectionId,
+            query,
+            parameters,
+          );
+        }
+        return await _service.executeQuery(
           query,
-          parameters,
+          connectionId: connectionId,
         );
       }
-      return _service.executeQuery(
-        query,
-        connectionId: connectionId,
-      );
-    }
 
-    try {
       if (parameters == null || parameters.isEmpty) {
         final asyncResult = await _runNativeAsyncQueryWithTimeout(
           connectionId: connectionId,
@@ -1999,6 +2131,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         error: error,
       );
       rethrow;
+    } finally {
+      stopwatch.stop();
+      _metrics.recordSqlExecutionTime(stopwatch.elapsed);
     }
   }
 
@@ -2163,6 +2298,92 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return timeout ?? _timeoutFromSqlExecutionOptions(options);
   }
 
+  DateTime? _deadlineFor(Duration? timeout) {
+    return timeout == null ? null : DateTime.now().add(timeout);
+  }
+
+  Duration? _remainingTimeoutFromDeadline(DateTime? deadline) {
+    if (deadline == null) {
+      return null;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    return remaining <= Duration.zero ? Duration.zero : remaining;
+  }
+
+  domain.Failure _poolBudgetExhaustedFailure({
+    required String operation,
+    Map<String, dynamic> context = const {},
+  }) {
+    return OdbcFailureMapper.mapPoolError(
+      TimeoutException('Pool acquire budget exhausted'),
+      operation: operation,
+      context: {
+        ...context,
+        'timeout': true,
+        'timeout_stage': 'pool',
+        'reason': 'pool_wait_timeout',
+        'retryable': true,
+      },
+    );
+  }
+
+  Future<Result<String>> _acquirePooledConnection(
+    String connectionString, {
+    ConnectionOptions? options,
+    DateTime? deadline,
+    Map<String, dynamic> context = const {},
+  }) async {
+    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
+      return Failure(
+        _poolBudgetExhaustedFailure(
+          operation: 'pool_acquire',
+          context: context,
+        ),
+      );
+    }
+
+    final stopwatch = Stopwatch()..start();
+    try {
+      final pool = _connectionPool;
+      if (pool is ITimedConnectionPoolAcquire) {
+        final timedPool = pool as ITimedConnectionPoolAcquire;
+        return await timedPool.acquireWithin(
+          connectionString,
+          options: options,
+          acquireTimeout: acquireTimeout,
+        );
+      }
+      return await pool.acquire(connectionString, options: options);
+    } finally {
+      stopwatch.stop();
+      _metrics.recordPoolWaitTime(stopwatch.elapsed);
+    }
+  }
+
+  Future<Result<DirectOdbcConnectionLease>> _acquireDirectLease({
+    required String operation,
+    required DateTime? deadline,
+  }) async {
+    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
+      return Failure(
+        _poolBudgetExhaustedFailure(
+          operation: 'direct_connection_acquire',
+          context: {
+            'direct_operation': operation,
+            'reason': 'direct_connection_limit_timeout',
+            'retryable': true,
+          },
+        ),
+      );
+    }
+    return _directConnectionLimiter.acquire(
+      operation: operation,
+      acquireTimeout: acquireTimeout,
+    );
+  }
+
   Future<void> _rollbackTransactionIfNeeded(
     String connectionId,
     int? transactionId,
@@ -2195,9 +2416,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     bool afterVacuousPooledMulti = false,
     bool allowAdaptiveRetry = true,
+    DateTime? deadline,
   }) async {
-    final leaseResult = await _directConnectionLimiter.acquire(
+    final effectiveDeadline = deadline ?? _deadlineFor(timeout);
+    final leaseResult = await _acquireDirectLease(
       operation: 'query_direct',
+      deadline: effectiveDeadline,
     );
     if (leaseResult.isError()) {
       stopwatch.stop();
@@ -2220,7 +2444,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       directLease.release();
     }
 
-    final effectiveOptions = options ?? _connectionOptionsForTimeout(timeout);
+    final effectiveOptions =
+        options ??
+        _connectionOptionsForTimeout(
+          _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+        );
 
     try {
       final connectResult = await _connectSafely(
@@ -2249,7 +2477,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               request: request,
               preparedExecution: preparedExecution,
               connectionString: connectionString,
-              timeout: timeout,
+              timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
             );
             if (!outcome.isSuccess) {
               final error = outcome.error!;
@@ -2284,6 +2512,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                     timeout: timeout,
                     afterVacuousPooledMulti: afterVacuousPooledMulti,
                     allowAdaptiveRetry: false,
+                    deadline: effectiveDeadline,
                   );
                 }
               }
@@ -2396,9 +2625,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Map<String, dynamic>? parameters,
     String connectionString, {
     Duration? timeout,
+    DateTime? deadline,
   }) async {
-    final leaseResult = await _directConnectionLimiter.acquire(
+    final effectiveDeadline = deadline ?? _deadlineFor(timeout);
+    final leaseResult = await _acquireDirectLease(
       operation: 'non_query_direct',
+      deadline: effectiveDeadline,
     );
     if (leaseResult.isError()) {
       return Failure(leaseResult.exceptionOrNull()!);
@@ -2416,7 +2648,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     try {
       final connectResult = await _connectSafely(
         connectionString,
-        options: _connectionOptionsForTimeout(timeout),
+        options: _connectionOptionsForTimeout(
+          _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+        ),
       );
       return await connectResult.fold(
         (connection) async {
@@ -2425,7 +2659,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               connectionId: connection.id,
               query: query,
               parameters: parameters,
-              timeout: timeout,
+              timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
             );
 
             return result.fold(
@@ -2621,12 +2855,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString, {
     required ConnectionOptions options,
   }) async {
+    final stopwatch = Stopwatch()..start();
     try {
       return await _service.connect(connectionString, options: options);
     } on Object catch (error) {
       return Failure(
         error is Exception ? error : Exception(error.toString()),
       );
+    } finally {
+      stopwatch.stop();
+      _metrics.recordConnectTime(stopwatch.elapsed);
     }
   }
 

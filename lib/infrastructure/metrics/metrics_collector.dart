@@ -67,27 +67,18 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
   static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
   static const String _autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
-  static const String _autoUpdateManualCheckSuccessAvailableCounter =
-      'auto_update_manual_check_success_available';
+  static const String _autoUpdateManualCheckSuccessAvailableCounter = 'auto_update_manual_check_success_available';
   static const String _autoUpdateManualCheckSuccessNotAvailableCounter =
       'auto_update_manual_check_success_not_available';
-  static const String _autoUpdateManualCheckUpdaterErrorCounter =
-      'auto_update_manual_check_updater_error';
-  static const String _autoUpdateManualCheckTriggerTimeoutCounter =
-      'auto_update_manual_check_trigger_timeout';
-  static const String _autoUpdateManualCheckCompletionTimeoutCounter =
-      'auto_update_manual_check_completion_timeout';
-  static const String _autoUpdateManualCheckTriggerFailureCounter =
-      'auto_update_manual_check_trigger_failure';
-  static const String _autoUpdateManualCheckNotInitializedCounter =
-      'auto_update_manual_check_not_initialized';
+  static const String _autoUpdateManualCheckUpdaterErrorCounter = 'auto_update_manual_check_updater_error';
+  static const String _autoUpdateManualCheckTriggerTimeoutCounter = 'auto_update_manual_check_trigger_timeout';
+  static const String _autoUpdateManualCheckCompletionTimeoutCounter = 'auto_update_manual_check_completion_timeout';
+  static const String _autoUpdateManualCheckTriggerFailureCounter = 'auto_update_manual_check_trigger_failure';
+  static const String _autoUpdateManualCheckNotInitializedCounter = 'auto_update_manual_check_not_initialized';
   static const String _autoUpdateCircuitOpenedCounter = 'auto_update_circuit_opened';
-  static const String _autoUpdateCircuitOpenRejectedCounter =
-      'auto_update_circuit_open_rejected';
-  static const String _autoUpdateBackgroundCheckTriggerFailureCounter =
-      'auto_update_background_check_trigger_failure';
-  static const String _autoUpdateBackgroundCheckUpdaterErrorCounter =
-      'auto_update_background_check_updater_error';
+  static const String _autoUpdateCircuitOpenRejectedCounter = 'auto_update_circuit_open_rejected';
+  static const String _autoUpdateBackgroundCheckTriggerFailureCounter = 'auto_update_background_check_trigger_failure';
+  static const String _autoUpdateBackgroundCheckUpdaterErrorCounter = 'auto_update_background_check_updater_error';
 
   static const int _maxMetrics = 10000;
 
@@ -101,6 +92,10 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int _currentActiveWorkers = 0;
   int _maxActiveWorkers = 0;
   final List<Duration> _queueWaitTimes = [];
+  final List<Duration> _poolWaitTimes = [];
+  final List<Duration> _connectTimes = [];
+  final List<Duration> _sqlExecutionTimes = [];
+  final List<Duration> _preparedPrepareTimes = [];
   static const int _maxWaitTimeSamples = 1000;
 
   @override
@@ -152,26 +147,19 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
   int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
   int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
-  int get autoUpdateManualCheckStartedCount =>
-      _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
+  int get autoUpdateManualCheckStartedCount => _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
   int get autoUpdateManualCheckSuccessAvailableCount =>
       _eventCounters[_autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
   int get autoUpdateManualCheckSuccessNotAvailableCount =>
       _eventCounters[_autoUpdateManualCheckSuccessNotAvailableCounter] ?? 0;
-  int get autoUpdateManualCheckUpdaterErrorCount =>
-      _eventCounters[_autoUpdateManualCheckUpdaterErrorCounter] ?? 0;
-  int get autoUpdateManualCheckTriggerTimeoutCount =>
-      _eventCounters[_autoUpdateManualCheckTriggerTimeoutCounter] ?? 0;
+  int get autoUpdateManualCheckUpdaterErrorCount => _eventCounters[_autoUpdateManualCheckUpdaterErrorCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerTimeoutCount => _eventCounters[_autoUpdateManualCheckTriggerTimeoutCounter] ?? 0;
   int get autoUpdateManualCheckCompletionTimeoutCount =>
       _eventCounters[_autoUpdateManualCheckCompletionTimeoutCounter] ?? 0;
-  int get autoUpdateManualCheckTriggerFailureCount =>
-      _eventCounters[_autoUpdateManualCheckTriggerFailureCounter] ?? 0;
-  int get autoUpdateManualCheckNotInitializedCount =>
-      _eventCounters[_autoUpdateManualCheckNotInitializedCounter] ?? 0;
-  int get autoUpdateCircuitOpenedCount =>
-      _eventCounters[_autoUpdateCircuitOpenedCounter] ?? 0;
-  int get autoUpdateCircuitOpenRejectedCount =>
-      _eventCounters[_autoUpdateCircuitOpenRejectedCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerFailureCount => _eventCounters[_autoUpdateManualCheckTriggerFailureCounter] ?? 0;
+  int get autoUpdateManualCheckNotInitializedCount => _eventCounters[_autoUpdateManualCheckNotInitializedCounter] ?? 0;
+  int get autoUpdateCircuitOpenedCount => _eventCounters[_autoUpdateCircuitOpenedCounter] ?? 0;
+  int get autoUpdateCircuitOpenRejectedCount => _eventCounters[_autoUpdateCircuitOpenRejectedCounter] ?? 0;
   int get autoUpdateBackgroundCheckTriggerFailureCount =>
       _eventCounters[_autoUpdateBackgroundCheckTriggerFailureCounter] ?? 0;
   int get autoUpdateBackgroundCheckUpdaterErrorCount =>
@@ -180,12 +168,24 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int get maxQueueSize => _maxQueueSize;
   int get currentActiveWorkers => _currentActiveWorkers;
   int get maxActiveWorkers => _maxActiveWorkers;
-  
+
   /// Average queue wait time across recent samples.
   Duration? get averageQueueWaitTime {
     if (_queueWaitTimes.isEmpty) return null;
     final totalMs = _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds);
     return Duration(milliseconds: totalMs ~/ _queueWaitTimes.length);
+  }
+
+  Duration? get p95QueueWaitTime {
+    if (_queueWaitTimes.isEmpty) return null;
+    final waitTimes = _sortedQueueWaitTimesMs();
+    return Duration(milliseconds: waitTimes[(waitTimes.length * 0.95).floor()]);
+  }
+
+  Duration? get maxRecentQueueWaitTime {
+    if (_queueWaitTimes.isEmpty) return null;
+    final waitTimes = _sortedQueueWaitTimesMs();
+    return Duration(milliseconds: waitTimes.last);
   }
 
   Map<String, int> get eventCounters => UnmodifiableMapView<String, int>(_eventCounters);
@@ -201,12 +201,21 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _currentActiveWorkers = 0;
     _maxActiveWorkers = 0;
     _queueWaitTimes.clear();
+    _poolWaitTimes.clear();
+    _connectTimes.clear();
+    _sqlExecutionTimes.clear();
+    _preparedPrepareTimes.clear();
   }
 
   // SQL Execution Queue metrics implementation
 
   @override
   void recordQueueAdded(int currentSize) {
+    recordQueueSizeChanged(currentSize);
+  }
+
+  @override
+  void recordQueueSizeChanged(int currentSize) {
     _currentQueueSize = currentSize;
     if (currentSize > _maxQueueSize) {
       _maxQueueSize = currentSize;
@@ -225,11 +234,16 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
 
   @override
   void recordQueueWaitTime(Duration waitTime) {
-    _queueWaitTimes.add(waitTime);
-    if (_queueWaitTimes.length > _maxWaitTimeSamples) {
-      _queueWaitTimes.removeAt(0);
-    }
+    _recordDurationSample(_queueWaitTimes, waitTime);
   }
+
+  void recordPoolWaitTime(Duration waitTime) => _recordDurationSample(_poolWaitTimes, waitTime);
+
+  void recordConnectTime(Duration connectTime) => _recordDurationSample(_connectTimes, connectTime);
+
+  void recordSqlExecutionTime(Duration executionTime) => _recordDurationSample(_sqlExecutionTimes, executionTime);
+
+  void recordPreparedPrepareTime(Duration prepareTime) => _recordDurationSample(_preparedPrepareTimes, prepareTime);
 
   @override
   void recordWorkerStarted(int activeCount) {
@@ -345,8 +359,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
 
   void recordStreamCancelDisconnectTimeout() => _incrementEventCounter(_streamCancelDisconnectTimeoutCounter);
 
-  void recordAutoUpdateManualCheckStarted() =>
-      _incrementEventCounter(_autoUpdateManualCheckStartedCounter);
+  void recordAutoUpdateManualCheckStarted() => _incrementEventCounter(_autoUpdateManualCheckStartedCounter);
 
   void recordAutoUpdateManualCheckSuccessAvailable() =>
       _incrementEventCounter(_autoUpdateManualCheckSuccessAvailableCounter);
@@ -354,8 +367,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   void recordAutoUpdateManualCheckSuccessNotAvailable() =>
       _incrementEventCounter(_autoUpdateManualCheckSuccessNotAvailableCounter);
 
-  void recordAutoUpdateManualCheckUpdaterError() =>
-      _incrementEventCounter(_autoUpdateManualCheckUpdaterErrorCounter);
+  void recordAutoUpdateManualCheckUpdaterError() => _incrementEventCounter(_autoUpdateManualCheckUpdaterErrorCounter);
 
   void recordAutoUpdateManualCheckTriggerTimeout() =>
       _incrementEventCounter(_autoUpdateManualCheckTriggerTimeoutCounter);
@@ -369,11 +381,9 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   void recordAutoUpdateManualCheckNotInitialized() =>
       _incrementEventCounter(_autoUpdateManualCheckNotInitializedCounter);
 
-  void recordAutoUpdateCircuitOpened() =>
-      _incrementEventCounter(_autoUpdateCircuitOpenedCounter);
+  void recordAutoUpdateCircuitOpened() => _incrementEventCounter(_autoUpdateCircuitOpenedCounter);
 
-  void recordAutoUpdateCircuitOpenRejected() =>
-      _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
+  void recordAutoUpdateCircuitOpenRejected() => _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
 
   void recordAutoUpdateBackgroundCheckTriggerFailure() =>
       _incrementEventCounter(_autoUpdateBackgroundCheckTriggerFailureCounter);
@@ -473,27 +483,17 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   Map<String, Object> getSnapshot() {
     final queryMetrics = _metrics.isNotEmpty ? _metrics : <QueryMetrics>[];
     final totalQueries = queryMetrics.length;
-    final successfulQueries =
-        queryMetrics.where((m) => m.success).length;
+    final successfulQueries = queryMetrics.where((m) => m.success).length;
     final errorQueries = totalQueries - successfulQueries;
 
     // Calculate latencies
-    final latencies = queryMetrics
-        .map((m) => m.executionDuration.inMilliseconds)
-        .toList()
-      ..sort();
+    final latencies = queryMetrics.map((m) => m.executionDuration.inMilliseconds).toList()..sort();
 
-    final avgLatency = latencies.isNotEmpty
-        ? latencies.reduce((a, b) => a + b) / latencies.length
-        : 0.0;
+    final avgLatency = latencies.isNotEmpty ? latencies.reduce((a, b) => a + b) / latencies.length : 0.0;
 
-    final p95Latency = latencies.isNotEmpty
-        ? latencies[(latencies.length * 0.95).floor()]
-        : 0;
+    final p95Latency = latencies.isNotEmpty ? latencies[(latencies.length * 0.95).floor()] : 0;
 
-    final p99Latency = latencies.isNotEmpty
-        ? latencies[(latencies.length * 0.99).floor()]
-        : 0;
+    final p99Latency = latencies.isNotEmpty ? latencies[(latencies.length * 0.99).floor()] : 0;
 
     return {
       'query_count': totalQueries,
@@ -501,17 +501,54 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       'query_avg_latency_ms': avgLatency,
       'query_p95_latency_ms': p95Latency,
       'query_p99_latency_ms': p99Latency,
-      'sql_queue_rejection_count': _sqlQueueRejectionCounter,
-      'sql_queue_timeout_count': _sqlQueueTimeoutCounter,
+      'sql_queue_rejection_count': sqlQueueRejectionCount,
+      'sql_queue_timeout_count': sqlQueueTimeoutCount,
       'sql_queue_current_size': _currentQueueSize,
       'sql_queue_max_size': _maxQueueSize,
       'sql_queue_current_workers': _currentActiveWorkers,
       'sql_queue_max_workers': _maxActiveWorkers,
       'sql_queue_avg_wait_time_ms': _queueWaitTimes.isEmpty
           ? 0.0
-          : _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) /
-              _queueWaitTimes.length,
+          : _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) / _queueWaitTimes.length,
+      'sql_queue_p95_wait_time_ms': p95QueueWaitTime?.inMilliseconds ?? 0,
+      'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
+      ..._durationStatsSnapshot('pool_wait', _poolWaitTimes),
+      ..._durationStatsSnapshot('connect', _connectTimes),
+      ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
+      ..._durationStatsSnapshot('prepared_prepare', _preparedPrepareTimes),
       ..._eventCounters,
+    };
+  }
+
+  List<int> _sortedQueueWaitTimesMs() {
+    return _queueWaitTimes.map((d) => d.inMilliseconds).toList()..sort();
+  }
+
+  void _recordDurationSample(List<Duration> samples, Duration value) {
+    samples.add(value);
+    if (samples.length > _maxWaitTimeSamples) {
+      samples.removeAt(0);
+    }
+  }
+
+  Map<String, Object> _durationStatsSnapshot(
+    String prefix,
+    List<Duration> samples,
+  ) {
+    if (samples.isEmpty) {
+      return {
+        '${prefix}_avg_time_ms': 0.0,
+        '${prefix}_p95_time_ms': 0,
+        '${prefix}_max_recent_time_ms': 0,
+      };
+    }
+
+    final sorted = samples.map((d) => d.inMilliseconds).toList()..sort();
+    final total = sorted.fold<int>(0, (sum, value) => sum + value);
+    return {
+      '${prefix}_avg_time_ms': total / sorted.length,
+      '${prefix}_p95_time_ms': sorted[(sorted.length * 0.95).floor()],
+      '${prefix}_max_recent_time_ms': sorted.last,
     };
   }
 

@@ -80,7 +80,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'connectionFailed': true,
           'timeout': true,
-          'timeout_stage': 'sql',
+          'timeout_stage': 'connect',
           'reason': 'connection_timeout',
           'user_message':
               'A conexao com o banco demorou mais do que o esperado. '
@@ -307,6 +307,9 @@ class OdbcFailureMapper {
     final detail = _extractDetail(error);
     final baseContext = _buildBaseContext(error, operation, context);
     final isExhausted = error is ResourceLimitReachedError || _isPoolExhausted(detail);
+    final contextReason = context['reason']?.toString();
+    final contextRetryable = context['retryable'];
+    final contextUserMessage = context['user_message']?.toString();
 
     return ConnectionFailure.withContext(
       message: isExhausted ? 'Pool de conexoes ODBC esgotado' : 'Falha ao obter conexao do pool ODBC',
@@ -314,12 +317,14 @@ class OdbcFailureMapper {
       context: {
         ...baseContext,
         'poolExhausted': isExhausted,
-        'retryable': isExhausted,
-        'reason': isExhausted ? 'pool_exhausted' : 'pool_error',
-        'user_message': isExhausted
-            ? 'O agente esta sem conexoes livres no momento. '
-                  'Tente novamente em alguns instantes.'
-            : 'Nao foi possivel obter uma conexao ODBC disponivel.',
+        'retryable': contextRetryable is bool ? contextRetryable : isExhausted,
+        'reason': contextReason ?? (isExhausted ? 'pool_exhausted' : 'pool_error'),
+        'user_message':
+            contextUserMessage ??
+            (isExhausted
+                ? 'O agente esta sem conexoes livres no momento. '
+                      'Tente novamente em alguns instantes.'
+                : 'Nao foi possivel obter uma conexao ODBC disponivel.'),
       },
     );
   }

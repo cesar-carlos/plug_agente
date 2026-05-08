@@ -273,6 +273,57 @@ void main() {
       },
     );
 
+    test('should map sql_queue_full to rateLimited with subreason', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'SQL execution queue is full; system is under heavy load',
+        context: {
+          'rpc_error_code': RpcErrorCode.rateLimited,
+          'reason': 'sql_queue_full',
+          'retryable': true,
+          'user_message': 'O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.rateLimited));
+      expect(data['reason'], equals('rate_limited'));
+      expect(data['subreason'], equals('sql_queue_full'));
+      expect(data.containsKey('odbc_reason'), isFalse);
+      expect(
+        data['user_message'],
+        equals('O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.'),
+      );
+    });
+
+    test('should map queue_wait_timeout to rateLimited with subreason', () {
+      final failure = QueryExecutionFailure.withContext(
+        message: 'SQL request timed out waiting in queue',
+        context: {
+          'rpc_error_code': RpcErrorCode.rateLimited,
+          'reason': 'queue_wait_timeout',
+          'timeout': true,
+          'timeout_stage': 'queue',
+          'retryable': true,
+          'user_message': 'O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.rateLimited));
+      expect(data['reason'], equals('rate_limited'));
+      expect(data['subreason'], equals('queue_wait_timeout'));
+      expect(data.containsKey('odbc_reason'), isFalse);
+      expect(data['timeout_stage'], equals('queue'));
+      expect(
+        data['user_message'],
+        equals('O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.'),
+      );
+    });
+
     test(
       'should map ConnectionFailure ODBC to databaseConnectionFailed with odbc_reason',
       () {

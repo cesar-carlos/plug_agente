@@ -150,7 +150,7 @@ class FailureToRpcErrorMapper {
     final safeContext = _sanitizeContext(failure.context);
     final contextForExtra = Map<String, dynamic>.from(safeContext);
     final rawContextReason = contextForExtra.remove('reason');
-    final odbcReason = _stringifyOptionalReason(rawContextReason);
+    final domainReason = _stringifyOptionalReason(rawContextReason);
     final timeoutReason = _getTimeoutReasonOverride(
       failure,
       code,
@@ -158,7 +158,8 @@ class FailureToRpcErrorMapper {
     );
     final customReason = _getCustomReasonOverride(failure, code);
     final resolvedReason = timeoutReason ?? customReason ?? RpcErrorCode.getReason(code);
-    final odbcReasonForPayload = _odbcReasonIfDistinct(odbcReason, resolvedReason);
+    final subreasonForPayload = _subreasonIfDistinct(domainReason, resolvedReason);
+    final odbcReasonForPayload = _odbcReasonIfDistinct(domainReason, resolvedReason);
     final extra = <String, dynamic>{
       'type': _getTypeUri(failure, code),
       'title': RpcErrorCode.getMessage(code),
@@ -168,6 +169,7 @@ class FailureToRpcErrorMapper {
       'recoverable': RpcErrorCode.isRecoverable(code),
       'failure_code': failure.code,
       ...contextForExtra,
+      if (subreasonForPayload case final String r) 'subreason': r,
       if (odbcReasonForPayload case final String r) 'odbc_reason': r,
       'reason': resolvedReason,
     };
@@ -199,7 +201,24 @@ class FailureToRpcErrorMapper {
     if (odbcReason == null) {
       return null;
     }
+    if (_isQueueOrBackpressureReason(odbcReason)) {
+      return null;
+    }
     return odbcReason == resolvedReason ? null : odbcReason;
+  }
+
+  static String? _subreasonIfDistinct(String? domainReason, String resolvedReason) {
+    if (domainReason == null || !_isQueueOrBackpressureReason(domainReason)) {
+      return null;
+    }
+    return domainReason == resolvedReason ? null : domainReason;
+  }
+
+  static bool _isQueueOrBackpressureReason(String reason) {
+    return switch (reason) {
+      'sql_queue_full' || 'queue_wait_timeout' || 'queue_disposed' || 'backpressure_overflow' => true,
+      _ => false,
+    };
   }
 
   static String _getTypeUri(Failure failure, int code) {

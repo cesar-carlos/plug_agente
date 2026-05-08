@@ -7,6 +7,7 @@ import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart' as res;
 
@@ -206,6 +207,119 @@ void main() {
       );
 
       expect(result.isError(), isTrue);
+      final error = result.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      if (error is! ConfigurationFailure) {
+        fail('expected ConfigurationFailure');
+      }
+      expect(error.context['reason'], equals('sql_queue_full'));
+    });
+
+    test('should preserve queue disposal failure for executeBatch', () async {
+      final delegate = _MockDatabaseGateway();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: queue,
+      );
+      queue.dispose();
+
+      final result = await gateway.executeBatch(
+        'agent-1',
+        [const SqlCommand(sql: 'SELECT 1')],
+      );
+
+      expect(result.isError(), isTrue);
+      final error = result.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      if (error is! ConfigurationFailure) {
+        fail('expected ConfigurationFailure');
+      }
+      expect(error.context['reason'], equals('queue_disposed'));
+    });
+
+    test('should include source RPC request id in batch queue failures', () async {
+      final delegate = _MockDatabaseGateway();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 1,
+        maxConcurrentWorkers: 1,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: queue,
+      );
+
+      when(
+        () => delegate.executeBatch(
+          any(),
+          any(),
+          database: any(named: 'database'),
+          options: any(named: 'options'),
+          timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+        ),
+      ).thenAnswer((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return const res.Success(<SqlCommandResult>[]);
+      });
+
+      unawaited(
+        gateway.executeBatch(
+          'agent-1',
+          [const SqlCommand(sql: 'SELECT 1')],
+          sourceRpcRequestId: 'batch-1',
+        ),
+      );
+      unawaited(
+        gateway.executeBatch(
+          'agent-1',
+          [const SqlCommand(sql: 'SELECT 2')],
+          sourceRpcRequestId: 'batch-2',
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final result = await gateway.executeBatch(
+        'agent-1',
+        [const SqlCommand(sql: 'SELECT 3')],
+        sourceRpcRequestId: 'batch-3',
+      );
+
+      expect(result.isError(), isTrue);
+      final error = result.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      if (error is! ConfigurationFailure) {
+        fail('expected ConfigurationFailure');
+      }
+      expect(error.context['reason'], equals('sql_queue_full'));
+      expect(error.context['request_id'], equals('batch-3'));
+    });
+
+    test('should preserve queue disposal failure for executeNonQuery', () async {
+      final delegate = _MockDatabaseGateway();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: queue,
+      );
+      queue.dispose();
+
+      final result = await gateway.executeNonQuery('UPDATE test SET value = 1', null);
+
+      expect(result.isError(), isTrue);
+      final error = result.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      if (error is! ConfigurationFailure) {
+        fail('expected ConfigurationFailure');
+      }
+      expect(error.context['reason'], equals('queue_disposed'));
     });
   });
 }

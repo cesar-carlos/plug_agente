@@ -18,7 +18,7 @@ import 'package:result_dart/result_dart.dart';
 /// Evita falha `Buffer too small` em `poolReleaseConnection` do pool nativo
 /// do `odbc_fast`, que não associa `maxResultBufferBytes` a conexões alugadas
 /// do pool (caindo em buffer pequeno no worker).
-class OdbcConnectionPool implements IConnectionPool {
+class OdbcConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire {
   OdbcConnectionPool(
     this._service,
     this._settings, {
@@ -50,10 +50,20 @@ class OdbcConnectionPool implements IConnectionPool {
   Future<Result<String>> acquire(
     String connectionString, {
     ConnectionOptions? options,
+  }) {
+    return acquireWithin(connectionString, options: options);
+  }
+
+  @override
+  Future<Result<String>> acquireWithin(
+    String connectionString, {
+    ConnectionOptions? options,
+    Duration? acquireTimeout,
   }) async {
+    final effectiveAcquireTimeout = acquireTimeout ?? _acquireTimeout;
     try {
       await _semaphore.acquire(
-        timeout: _acquireTimeout,
+        timeout: effectiveAcquireTimeout,
       );
     } on TimeoutException catch (error) {
       _metrics?.recordPoolAcquireTimeout();
@@ -64,12 +74,18 @@ class OdbcConnectionPool implements IConnectionPool {
             '${error.message}',
           ),
           operation: 'pool_acquire',
+          context: {
+            'timeout': true,
+            'timeout_stage': 'pool',
+            'reason': 'pool_wait_timeout',
+            'retryable': true,
+          },
         ),
       );
     }
 
     try {
-      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+      await _nativeHandshakeSemaphore.acquire(timeout: effectiveAcquireTimeout);
     } on TimeoutException catch (error) {
       _semaphore.release();
       _metrics?.recordPoolAcquireTimeout();
@@ -79,6 +95,12 @@ class OdbcConnectionPool implements IConnectionPool {
             'ODBC worker busy (connect): ${error.message}',
           ),
           operation: 'pool_acquire',
+          context: {
+            'timeout': true,
+            'timeout_stage': 'pool',
+            'reason': 'odbc_worker_busy_connect',
+            'retryable': true,
+          },
         ),
       );
     }
@@ -87,10 +109,16 @@ class OdbcConnectionPool implements IConnectionPool {
     late Result<Connection> connectResult;
     try {
       try {
-        connectResult = await _service.connect(
-          connectionString,
-          options: resolvedOptions,
-        );
+        final connectStopwatch = Stopwatch()..start();
+        try {
+          connectResult = await _service.connect(
+            connectionString,
+            options: resolvedOptions,
+          );
+        } finally {
+          connectStopwatch.stop();
+          _metrics?.recordConnectTime(connectStopwatch.elapsed);
+        }
       } on Object catch (error) {
         _semaphore.release();
         return Failure(

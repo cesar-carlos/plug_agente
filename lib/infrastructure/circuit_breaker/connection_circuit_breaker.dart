@@ -38,8 +38,8 @@ class ConnectionCircuitBreaker {
   ConnectionCircuitBreaker({
     required int failureThreshold,
     required Duration resetTimeout,
-  })  : _failureThreshold = failureThreshold,
-        _resetTimeout = resetTimeout;
+  }) : _failureThreshold = failureThreshold,
+       _resetTimeout = resetTimeout;
 
   final int _failureThreshold;
   final Duration _resetTimeout;
@@ -84,8 +84,7 @@ class ConnectionCircuitBreaker {
 
         return Failure(
           domain.ConnectionFailure.withContext(
-            message:
-                'Circuit breaker open for database connection (${elapsed.inSeconds}s/${_resetTimeout.inSeconds}s)',
+            message: 'Circuit breaker open for database connection (${elapsed.inSeconds}s/${_resetTimeout.inSeconds}s)',
             context: {
               'reason': 'circuit_breaker_open',
               'consecutive_failures': _consecutiveFailures,
@@ -117,12 +116,23 @@ class ConnectionCircuitBreaker {
         return Success(success);
       },
       (failure) {
-        if (failure is domain.ConnectionFailure) {
+        if (failure is domain.ConnectionFailure && !_isLocalPressureFailure(failure)) {
           _onFailure(connectionString, failure);
         }
         return Failure(failure);
       },
     );
+  }
+
+  bool _isLocalPressureFailure(domain.ConnectionFailure failure) {
+    final reason = failure.context['reason']?.toString();
+    return failure.context['poolExhausted'] == true ||
+        reason == 'pool_exhausted' ||
+        reason == 'pool_wait_timeout' ||
+        reason == 'odbc_worker_busy_connect' ||
+        reason == 'direct_connection_limit_timeout' ||
+        reason == 'sql_queue_full' ||
+        reason == 'queue_wait_timeout';
   }
 
   void _onSuccess(String connectionString) {
@@ -156,8 +166,7 @@ class ConnectionCircuitBreaker {
   void _onFailure(String connectionString, domain.ConnectionFailure failure) {
     _consecutiveFailures++;
 
-    if (_consecutiveFailures >= _failureThreshold &&
-        _state != CircuitState.open) {
+    if (_consecutiveFailures >= _failureThreshold && _state != CircuitState.open) {
       _state = CircuitState.open;
       _openedAt = DateTime.now();
 

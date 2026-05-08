@@ -9,6 +9,7 @@ alwaysApply: true
 ## Behavioral Guardrails
 
 - Never commit, push, or create new documentation unless explicitly requested
+- Never create git branches unless explicitly requested
 - Prefer self-explanatory code via naming, structure, and focused abstractions
 - Never swallow errors silently
 - Prefer clear, actionable failures over generic error messages

@@ -10,8 +10,8 @@ class HealthService {
   HealthService({
     required MetricsCollector metricsCollector,
     required IDatabaseGateway gateway,
-  })  : _metrics = metricsCollector,
-        _gateway = gateway;
+  }) : _metrics = metricsCollector,
+       _gateway = gateway;
 
   final MetricsCollector _metrics;
   final IDatabaseGateway _gateway;
@@ -19,8 +19,7 @@ class HealthService {
   /// Gets current health status with system metrics.
   Map<String, Object?> getHealthStatus() {
     final metrics = _metrics.getSnapshot();
-    final queuedGateway =
-        _gateway is QueuedDatabaseGateway ? _gateway : null;
+    final queuedGateway = _gateway is QueuedDatabaseGateway ? _gateway : null;
 
     return {
       'status': 'healthy',
@@ -39,6 +38,12 @@ class HealthService {
               'rejections_total': metrics['sql_queue_rejection_count'] ?? 0,
               'timeouts_total': metrics['sql_queue_timeout_count'] ?? 0,
               'avg_wait_time_ms': (metrics['sql_queue_avg_wait_time_ms'] as num?)?.toInt() ?? 0,
+              'p95_wait_time_ms': (metrics['sql_queue_p95_wait_time_ms'] as num?)?.toInt() ?? 0,
+              'max_recent_wait_time_ms': (metrics['sql_queue_max_recent_wait_time_ms'] as num?)?.toInt() ?? 0,
+              'pool_wait_avg_time_ms': (metrics['pool_wait_avg_time_ms'] as num?)?.toInt() ?? 0,
+              'pool_wait_p95_time_ms': (metrics['pool_wait_p95_time_ms'] as num?)?.toInt() ?? 0,
+              'connect_avg_time_ms': (metrics['connect_avg_time_ms'] as num?)?.toInt() ?? 0,
+              'sql_execution_avg_time_ms': (metrics['sql_execution_avg_time_ms'] as num?)?.toInt() ?? 0,
             }
           : {
               'enabled': false,

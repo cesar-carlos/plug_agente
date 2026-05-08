@@ -35,3 +35,12 @@ abstract class IConnectionPool {
   /// Executa health check em todos os pools.
   Future<Result<void>> healthCheckAll();
 }
+
+/// Optional capability for pools that can bound acquire wait time per request.
+abstract class ITimedConnectionPoolAcquire {
+  Future<Result<String>> acquireWithin(
+    String connectionString, {
+    ConnectionOptions? options,
+    Duration? acquireTimeout,
+  });
+}

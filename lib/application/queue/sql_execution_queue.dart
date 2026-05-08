@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Bounded FIFO queue for SQL execution requests to prevent pool overload.
@@ -83,12 +84,9 @@ class SqlExecutionQueue {
         error: {'request_id': requestId},
       );
       return Failure(
-        domain.ConfigurationFailure.withContext(
+        _queueDisposedFailure(
           message: 'SQL execution queue is disposed',
-          context: {
-            'reason': 'queue_disposed',
-            'request_id': ?requestId,
-          },
+          requestId: requestId,
         ),
       );
     }
@@ -109,14 +107,10 @@ class SqlExecutionQueue {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'SQL execution queue is full; system is under heavy load',
-          context: {
-            'reason': 'sql_queue_full',
-            'queue_size': _queue.length,
-            'max_queue_size': _maxQueueSize,
-            'active_workers': _activeWorkers,
-            'max_workers': _maxConcurrentWorkers,
-            'request_id': ?requestId,
-          },
+          context: _queueBackpressureContext(
+            reason: 'sql_queue_full',
+            requestId: requestId,
+          ),
         ),
       );
     }
@@ -158,6 +152,7 @@ class SqlExecutionQueue {
       request.isCancelled = true;
       if (!request.hasStarted) {
         _queue.remove(request);
+        _metricsCollector?.recordQueueSizeChanged(_queue.length);
       }
       _metricsCollector?.recordQueueTimeout();
       developer.log(
@@ -177,11 +172,13 @@ class SqlExecutionQueue {
           message: 'SQL request timed out waiting in queue',
           cause: error,
           context: {
-            'reason': 'queue_wait_timeout',
+            ..._queueBackpressureContext(
+              reason: 'queue_wait_timeout',
+              requestId: requestId,
+            ),
+            'timeout': true,
+            'timeout_stage': 'queue',
             'timeout_seconds': timeout.inSeconds,
-            'queue_size': _queue.length,
-            'active_workers': _activeWorkers,
-            'request_id': ?requestId,
           },
         ),
       );
@@ -191,6 +188,7 @@ class SqlExecutionQueue {
   Future<void> _processQueue() async {
     while (_activeWorkers < _maxConcurrentWorkers && _queue.isNotEmpty) {
       final request = _queue.removeFirst();
+      _metricsCollector?.recordQueueSizeChanged(_queue.length);
       if (request.isCancelled || request.completer.isCompleted) {
         continue;
       }
@@ -221,7 +219,7 @@ class SqlExecutionQueue {
         stackTrace: stackTrace,
       );
       if (!request.completer.isCompleted) {
-        final failure = domain.QueryExecutionFailure.withContext(
+        final failure = domain.ServerFailure.withContext(
           message: 'SQL execution task failed with unexpected error',
           cause: error is Exception ? error : null,
           context: {
@@ -229,8 +227,7 @@ class SqlExecutionQueue {
             'request_id': ?request.requestId,
           },
         );
-        // Use completeError since we can't properly type Failure generics at runtime
-        request.completer.completeError(failure, stackTrace);
+        request.completeFailure(failure);
       }
     } finally {
       _activeWorkers--;
@@ -245,6 +242,7 @@ class SqlExecutionQueue {
     // Need to process each request with its own type
     while (_queue.isNotEmpty) {
       final request = _queue.removeFirst();
+      _metricsCollector?.recordQueueSizeChanged(_queue.length);
       if (!request.completer.isCompleted) {
         _completeWithDisposalFailure(request);
       }
@@ -252,17 +250,45 @@ class SqlExecutionQueue {
   }
 
   void _completeWithDisposalFailure<T extends Object>(_QueuedRequest<T> request) {
-    final failure = domain.ConfigurationFailure.withContext(
+    final failure = _queueDisposedFailure(
       message: 'SQL execution queue disposed before request could be processed',
-      context: {
-        'reason': 'queue_disposed',
-        'request_id': ?request.requestId,
-      },
+      requestId: request.requestId,
     );
     if (!request.startedCompleter.isCompleted && !request.hasStarted) {
       request.startedCompleter.complete();
     }
-    request.completer.completeError(failure);
+    request.completeFailure(failure);
+  }
+
+  Map<String, dynamic> _queueBackpressureContext({
+    required String reason,
+    required String? requestId,
+  }) {
+    return {
+      'reason': reason,
+      'rpc_error_code': RpcErrorCode.rateLimited,
+      'retryable': true,
+      'queue_size': _queue.length,
+      'max_queue_size': _maxQueueSize,
+      'active_workers': _activeWorkers,
+      'max_workers': _maxConcurrentWorkers,
+      'request_id': ?requestId,
+      'user_message': 'O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.',
+    };
+  }
+
+  domain.ConfigurationFailure _queueDisposedFailure({
+    required String message,
+    required String? requestId,
+  }) {
+    return domain.ConfigurationFailure.withContext(
+      message: message,
+      context: {
+        'reason': 'queue_disposed',
+        'request_id': ?requestId,
+        'user_message': 'A fila de execucao SQL foi encerrada. Reconecte o agente e tente novamente.',
+      },
+    );
   }
 }
 
@@ -281,11 +307,18 @@ class _QueuedRequest<T extends Object> {
   DateTime? startedAt;
   final Completer<void> startedCompleter = Completer<void>();
   final Completer<Result<T>> completer = Completer<Result<T>>();
+
+  void completeFailure(Exception failure) {
+    if (!completer.isCompleted) {
+      completer.complete(Failure<T, Exception>(failure));
+    }
+  }
 }
 
 /// Metrics collector interface for SQL execution queue.
 abstract class SqlExecutionQueueMetricsCollector {
   void recordQueueAdded(int currentSize);
+  void recordQueueSizeChanged(int currentSize);
   void recordQueueRejection();
   void recordQueueTimeout();
   void recordQueueWaitTime(Duration waitTime);

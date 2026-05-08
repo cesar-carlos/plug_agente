@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:result_dart/result_dart.dart' as res;
 
 class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
@@ -18,6 +19,11 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   @override
   void recordQueueAdded(int currentSize) {
     queueAddedCount++;
+    queueSizes.add(currentSize);
+  }
+
+  @override
+  void recordQueueSizeChanged(int currentSize) {
     queueSizes.add(currentSize);
   }
 
@@ -139,6 +145,9 @@ void main() {
       }
       expect(exc.message, contains('SQL execution queue is full'));
       expect(exc.context['reason'], equals('sql_queue_full'));
+      expect(exc.context['rpc_error_code'], equals(RpcErrorCode.rateLimited));
+      expect(exc.context['retryable'], isTrue);
+      expect((exc.context['user_message'] as String?)?.isNotEmpty, isTrue);
       expect(metrics.queueRejectionCount, equals(1));
     });
 
@@ -204,6 +213,11 @@ void main() {
       }
       expect(excTimeout.message, contains('timed out waiting in queue'));
       expect(excTimeout.context['reason'], equals('queue_wait_timeout'));
+      expect(excTimeout.context['rpc_error_code'], equals(RpcErrorCode.rateLimited));
+      expect(excTimeout.context['timeout'], isTrue);
+      expect(excTimeout.context['timeout_stage'], equals('queue'));
+      expect(excTimeout.context['retryable'], isTrue);
+      expect((excTimeout.context['user_message'] as String?)?.isNotEmpty, isTrue);
       expect(metrics.queueTimeoutCount, equals(1));
     });
 
@@ -272,6 +286,22 @@ void main() {
       expect(metrics.waitTimes, hasLength(1));
     });
 
+    test('should update current queue size metrics when requests are dequeued', () async {
+      final metrics = _MockMetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+
+      await queue.submit<int>(() async {
+        return const res.Success(1);
+      });
+
+      expect(metrics.queueSizes, contains(1));
+      expect(metrics.queueSizes.last, equals(0));
+    });
+
     test('should handle task failures gracefully', () async {
       final queue = SqlExecutionQueue(
         maxQueueSize: 10,
@@ -297,18 +327,18 @@ void main() {
         maxConcurrentWorkers: 2,
       );
 
-      try {
-        await queue.submit<String>(() async {
-          throw Exception('Unexpected error');
-        });
-        fail('Should have thrown an exception');
-      } on Object catch (error) {
-        expect(error, isA<QueryExecutionFailure>());
-        if (error is! QueryExecutionFailure) {
-          fail('expected QueryExecutionFailure');
-        }
-        expect(error.message, contains('unexpected error'));
+      final result = await queue.submit<String>(() async {
+        throw Exception('Unexpected error');
+      });
+
+      expect(result.isError(), isTrue);
+      final Object? error = result.exceptionOrNull();
+      expect(error, isA<ServerFailure>());
+      if (error is! ServerFailure) {
+        fail('expected ServerFailure');
       }
+      expect(error.message, contains('unexpected error'));
+      expect(error.context['reason'], equals('unexpected_task_error'));
     });
 
     test('should report queue size and active workers correctly', () async {
@@ -383,16 +413,17 @@ void main() {
 
       queue.dispose();
 
-      try {
-        await pendingTask;
-        fail('Should have thrown an exception');
-      } on Object catch (error) {
-        expect(error, isA<ConfigurationFailure>());
-        if (error is! ConfigurationFailure) {
-          fail('expected ConfigurationFailure');
-        }
-        expect(error.message, contains('disposed before request could be processed'));
+      final result = await pendingTask;
+
+      expect(result.isError(), isTrue);
+      final Object? error = result.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      if (error is! ConfigurationFailure) {
+        fail('expected ConfigurationFailure');
       }
+      expect(error.message, contains('disposed before request could be processed'));
+      expect(error.context['reason'], equals('queue_disposed'));
+      expect((error.context['user_message'] as String?)?.isNotEmpty, isTrue);
     });
 
     test('should process multiple tasks concurrently up to worker limit', () async {

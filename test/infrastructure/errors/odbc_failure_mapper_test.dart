@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
@@ -76,6 +78,21 @@ void main() {
       },
     );
 
+    test('maps connection timeout with connect timeout stage', () {
+      final failure = OdbcFailureMapper.mapConnectionError(
+        const ConnectionError(
+          message: 'Login timeout expired',
+          sqlState: 'HYT00',
+        ),
+        operation: 'connect',
+      );
+
+      expect(failure, isA<ConnectionFailure>());
+      expect(failure.context['reason'], 'connection_timeout');
+      expect(failure.context['timeout'], isTrue);
+      expect(failure.context['timeout_stage'], 'connect');
+    });
+
     test('maps pool exhaustion to transient connection failure', () {
       final failure = OdbcFailureMapper.mapPoolError(
         Exception('Pool exhausted: no connections available'),
@@ -86,6 +103,25 @@ void main() {
       expect(failure.context['poolExhausted'], isTrue);
       expect(failure.context['retryable'], isTrue);
       expect(failure.context['reason'], 'pool_exhausted');
+    });
+
+    test('preserves explicit pool timeout reason and stage', () {
+      final failure = OdbcFailureMapper.mapPoolError(
+        TimeoutException('Pool acquire budget exhausted'),
+        operation: 'pool_acquire',
+        context: {
+          'timeout': true,
+          'timeout_stage': 'pool',
+          'reason': 'pool_wait_timeout',
+          'retryable': true,
+        },
+      );
+
+      expect(failure, isA<ConnectionFailure>());
+      expect(failure.context['reason'], 'pool_wait_timeout');
+      expect(failure.context['timeout'], isTrue);
+      expect(failure.context['timeout_stage'], 'pool');
+      expect(failure.context['retryable'], isTrue);
     });
 
     test('maps structured resource limit errors to pool exhaustion', () {

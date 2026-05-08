@@ -386,6 +386,38 @@ void main() {
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 2);
       });
 
+      test('should expose numeric SQL queue counters and wait times in snapshot', () {
+        collector.recordQueueRejection();
+        collector.recordQueueRejection();
+        collector.recordQueueTimeout();
+        collector.recordQueueAdded(3);
+        collector.recordWorkerStarted(2);
+        collector.recordQueueWaitTime(const Duration(milliseconds: 10));
+        collector.recordQueueWaitTime(const Duration(milliseconds: 30));
+        collector.recordPoolWaitTime(const Duration(milliseconds: 5));
+        collector.recordPoolWaitTime(const Duration(milliseconds: 15));
+        collector.recordConnectTime(const Duration(milliseconds: 20));
+        collector.recordSqlExecutionTime(const Duration(milliseconds: 40));
+        collector.recordPreparedPrepareTime(const Duration(milliseconds: 8));
+
+        final snapshot = collector.getSnapshot();
+
+        expect(snapshot['sql_queue_rejection_count'], 2);
+        expect(snapshot['sql_queue_timeout_count'], 1);
+        expect(snapshot['sql_queue_current_size'], 3);
+        expect(snapshot['sql_queue_max_size'], 3);
+        expect(snapshot['sql_queue_current_workers'], 2);
+        expect(snapshot['sql_queue_max_workers'], 2);
+        expect(snapshot['sql_queue_avg_wait_time_ms'], 20.0);
+        expect(snapshot['sql_queue_p95_wait_time_ms'], 30);
+        expect(snapshot['sql_queue_max_recent_wait_time_ms'], 30);
+        expect(snapshot['pool_wait_avg_time_ms'], 10.0);
+        expect(snapshot['pool_wait_p95_time_ms'], 15);
+        expect(snapshot['connect_avg_time_ms'], 20.0);
+        expect(snapshot['sql_execution_avg_time_ms'], 40.0);
+        expect(snapshot['prepared_prepare_avg_time_ms'], 8.0);
+      });
+
       test('should increment auto-update counters', () {
         collector.recordAutoUpdateManualCheckStarted();
         collector.recordAutoUpdateManualCheckSuccessAvailable();

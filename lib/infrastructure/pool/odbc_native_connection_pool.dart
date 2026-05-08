@@ -15,7 +15,7 @@ import 'package:result_dart/result_dart.dart';
 /// Pool ODBC usando pool nativo do `odbc_fast` (conexões do pool não recebem
 /// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
 /// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
-class OdbcNativeConnectionPool implements IConnectionPool {
+class OdbcNativeConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire {
   OdbcNativeConnectionPool(
     this._service,
     this._settings, {
@@ -167,6 +167,15 @@ class OdbcNativeConnectionPool implements IConnectionPool {
   Future<Result<String>> acquire(
     String connectionString, {
     ConnectionOptions? options,
+  }) {
+    return acquireWithin(connectionString, options: options);
+  }
+
+  @override
+  Future<Result<String>> acquireWithin(
+    String connectionString, {
+    ConnectionOptions? options,
+    Duration? acquireTimeout,
   }) async {
     if (options != null) {
       return Failure(
@@ -186,7 +195,7 @@ class OdbcNativeConnectionPool implements IConnectionPool {
       (poolId) async {
         try {
           await _nativeHandshakeSemaphore.acquire(
-            timeout: ConnectionConstants.defaultPoolAcquireTimeout,
+            timeout: acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
           );
         } on TimeoutException catch (error) {
           return Failure(
@@ -195,6 +204,12 @@ class OdbcNativeConnectionPool implements IConnectionPool {
                 'ODBC worker busy (native pool_get_connection): ${error.message}',
               ),
               operation: 'pool_acquire',
+              context: {
+                'timeout': true,
+                'timeout_stage': 'pool',
+                'reason': 'odbc_worker_busy_connect',
+                'retryable': true,
+              },
             ),
           );
         }
