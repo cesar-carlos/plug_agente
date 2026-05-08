@@ -20,6 +20,7 @@ binario esta documentado em
   - `observer.unregister`
   - `observer.list`
   - `agent.getProfile`
+  - `agent.getHealth`
   - `client_token.getPolicy`
   - `rpc.discover`
 - Catalogo padronizado de erros RPC
@@ -35,6 +36,7 @@ binario esta documentado em
 | Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
 | Metodos `observer.register` / `observer.unregister` / `observer.list` | implemented (session-scoped, memoria local, notificacoes por Socket.IO)                                                    |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
+| Metodo `agent.getHealth`                                             | implemented                                                                                                                |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
@@ -1804,6 +1806,7 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.params.agent-get-health.schema.json`
 - `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
 - `docs/communication/schemas/rpc.params.observer-register.schema.json`
 - `docs/communication/schemas/rpc.params.observer-unregister.schema.json`
@@ -1814,6 +1817,7 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.result.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.result.agent-get-health.schema.json`
 - `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`
 - `docs/communication/schemas/rpc.result.observer-register.schema.json`
 - `docs/communication/schemas/rpc.result.observer-unregister.schema.json`
