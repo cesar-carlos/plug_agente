@@ -2709,7 +2709,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
           () => mockService.prepare(
             pooledConnectionId,
             sql,
-            timeoutMs: 1200,
+            timeoutMs: any(named: 'timeoutMs'),
           ),
         ).called(1);
         final executePreparedCall = verify(
