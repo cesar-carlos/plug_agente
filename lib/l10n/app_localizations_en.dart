@@ -730,7 +730,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configAutoUpdateNotConfigured =>
-      'Auto-update is not configured. Set AUTO_UPDATE_FEED_URL to a Sparkle feed (.xml).';
+      'Auto-update is unavailable because the configured feed is invalid. Remove AUTO_UPDATE_FEED_URL to use the official feed, or set it to a Sparkle feed (.xml).';
 
   @override
   String configAutoUpdateOfficialFeedExpected(String url) {
@@ -1323,6 +1323,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctInfoClientTokenCopied => 'Client token copied';
+
+  @override
+  String get ctInfoClientTokenLoadFailed => 'Could not load this token secret';
 
   @override
   String get ctInfoClientTokenUnavailable =>

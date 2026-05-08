@@ -28,6 +28,7 @@ import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
@@ -557,6 +558,9 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton(
       () => ListClientTokens(getIt<IClientTokenRepository>()),
+    )
+    ..registerLazySingleton(
+      () => GetClientTokenSecret(getIt<IClientTokenRepository>()),
     )
     ..registerLazySingleton(
       () => UpdateClientToken(

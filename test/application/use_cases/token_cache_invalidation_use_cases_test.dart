@@ -6,7 +6,7 @@ import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
-import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
@@ -60,8 +60,10 @@ void main() {
       'revoke should invalidate caches for credential hash when secret known',
       () async {
         when(
-          () => repository.getTokenById('token-1'),
-        ).thenAnswer((_) async => _summary(tokenValue: 'secret-a'));
+          () => repository.getTokenSecret('token-1'),
+        ).thenAnswer(
+          (_) async => const Success(ClientTokenSecretLookup(tokenValue: 'secret-a')),
+        );
         when(
           () => repository.revokeToken('token-1'),
         ).thenAnswer((_) async => const Success(unit));
@@ -92,9 +94,11 @@ void main() {
     test(
       'revoke should flush all caches when token secret unavailable',
       () async {
-        when(() => repository.getTokenById('token-1')).thenAnswer((_) async {
-          return _summary(tokenValue: null);
-        });
+        when(
+          () => repository.getTokenSecret('token-1'),
+        ).thenAnswer(
+          (_) async => const Success(ClientTokenSecretLookup(tokenValue: null)),
+        );
         when(
           () => repository.revokeToken('token-1'),
         ).thenAnswer((_) async => const Success(unit));
@@ -119,8 +123,10 @@ void main() {
       'delete should invalidate caches for credential hash when secret known',
       () async {
         when(
-          () => repository.getTokenById('token-1'),
-        ).thenAnswer((_) async => _summary(tokenValue: 'secret-b'));
+          () => repository.getTokenSecret('token-1'),
+        ).thenAnswer(
+          (_) async => const Success(ClientTokenSecretLookup(tokenValue: 'secret-b')),
+        );
         when(
           () => repository.deleteToken('token-1'),
         ).thenAnswer((_) async => const Success(unit));
@@ -149,8 +155,10 @@ void main() {
 
     test('update should invalidate old and new credential hashes', () async {
       when(
-        () => repository.getTokenById('token-1'),
-      ).thenAnswer((_) async => _summary(tokenValue: 'old-secret'));
+        () => repository.getTokenSecret('token-1'),
+      ).thenAnswer(
+        (_) async => const Success(ClientTokenSecretLookup(tokenValue: 'old-secret')),
+      );
       when(
         () => repository.updateToken(
           'token-1',
@@ -222,19 +230,5 @@ ClientTokenCreateRequest _request() {
         effect: ClientTokenRuleEffect.allow,
       ),
     ],
-  );
-}
-
-ClientTokenSummary _summary({required String? tokenValue}) {
-  return ClientTokenSummary(
-    id: 'token-1',
-    clientId: 'client-1',
-    createdAt: DateTime.utc(2026),
-    isRevoked: false,
-    allTables: false,
-    allViews: false,
-    allPermissions: true,
-    rules: const [],
-    tokenValue: tokenValue,
   );
 }

@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -189,7 +194,8 @@ void main() {
       final listed = await ds.listTokens();
       expect(listed.length, 1);
       expect(listed.single.clientId, 'remote');
-      expect(listed.single.tokenValue, 'deadbeef');
+      expect(listed.single.tokenValue, isNull);
+      expect(await ds.getTokenSecret('imported-1'), equals('deadbeef'));
     });
 
     test('replaceTokens supports multiple imported tokens with unique lookup hashes', () async {
@@ -257,11 +263,80 @@ void main() {
       ]);
 
       final listed = await ds.listTokens();
-      expect(listed.single.tokenValue, equals('secure-deadbeef'));
+      expect(listed.single.tokenValue, isNull);
+      expect(await ds.getTokenSecret('secure-1'), equals('secure-deadbeef'));
       expect(
-        secretStore.readSecretSync('secure-1'),
+        secretStore.readSecretSync(ds.hashTokenForLookup('secure-deadbeef')),
         equals('secure-deadbeef'),
       );
+    });
+
+    test('listTokens does not hydrate token values or consult secure storage', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      await ds.createToken(baseRequest());
+      secretStore.resetCounters();
+
+      final listed = await ds.listTokens();
+
+      expect(listed, hasLength(1));
+      expect(listed.single.tokenValue, isNull);
+      expect(secretStore.readCallCount, equals(0));
+    });
+
+    test('getTokenSecret migrates legacy tokenId secret to tokenHash key', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      const tokenId = 'legacy-1';
+      const tokenValue = 'legacy-secret';
+      final tokenHash = ds.hashTokenForLookup(tokenValue);
+      final now = DateTime.utc(2026, 3, 18);
+
+      await db
+          .into(db.clientTokenCacheTable)
+          .insert(
+            ClientTokenCacheTableCompanion.insert(
+              id: tokenId,
+              clientId: 'legacy-client',
+              name: const Value(''),
+              isRevoked: const Value(false),
+              createdAt: now,
+              updatedAt: Value(now),
+              version: const Value(1),
+              payloadJson: const Value('{}'),
+              allTables: const Value(false),
+              allViews: const Value(false),
+              allPermissions: const Value(false),
+              globalPermissionsJson: Value(jsonEncode(ClientPermissionSet.none.toJson())),
+              rulesJson: const Value('[]'),
+              syncedAt: now,
+              tokenHash: Value(tokenHash),
+              tokenValue: const Value('__secure_storage__'),
+            ),
+          );
+      await secretStore.saveSecret(tokenId, tokenValue);
+
+      expect(await ds.getTokenSecret(tokenId), equals(tokenValue));
+      expect(secretStore.readSecretSync(tokenId), isNull);
+      expect(secretStore.readSecretSync(tokenHash), equals(tokenValue));
+    });
+
+    test('createToken cleans up secret when database persistence fails', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      await db.customStatement('DROP TABLE client_token_cache_table');
+
+      await expectLater(ds.createToken(baseRequest()), throwsA(isA<Exception>()));
+      expect(secretStore.storedKeys, isEmpty);
     });
 
     test('deleteToken removes row', () async {
@@ -324,6 +399,73 @@ void main() {
       );
     });
 
+    test('concurrent updates clean up temporary secret for the losing write', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      await ds.createToken(baseRequest());
+      final id = (await ds.listTokens()).single.id;
+
+      final releaseConcurrentSaves = Completer<void>();
+      final bothUpdatesReachedSave = Completer<void>();
+      var concurrentSaveCount = 0;
+      secretStore.onSave = (secretKey, tokenValue) async {
+        concurrentSaveCount++;
+        if (concurrentSaveCount >= 2 && !bothUpdatesReachedSave.isCompleted) {
+          bothUpdatesReachedSave.complete();
+        }
+        if (concurrentSaveCount <= 2) {
+          await releaseConcurrentSaves.future;
+        }
+      };
+
+      Future<Object?> capture(Future<Object?> future) async {
+        try {
+          return await future;
+        } on Object catch (error) {
+          return error;
+        }
+      }
+
+      final updateA = capture(
+        ds.updateToken(
+          id,
+          baseRequest(clientId: 'updated-a'),
+          expectedVersion: 1,
+        ),
+      );
+      final updateB = capture(
+        ds.updateToken(
+          id,
+          baseRequest(clientId: 'updated-b'),
+          expectedVersion: 1,
+        ),
+      );
+
+      await bothUpdatesReachedSave.future;
+      releaseConcurrentSaves.complete();
+
+      final outcomes = await Future.wait(<Future<Object?>>[updateA, updateB]);
+      final successes = outcomes.whereType<ClientTokenUpdateResult>().toList();
+      final conflicts = outcomes.whereType<ClientTokenVersionConflictException>().toList();
+
+      expect(successes, hasLength(1));
+      expect(conflicts, hasLength(1));
+
+      final stored = await ds.getTokenById(id);
+      expect(stored, isNotNull);
+      expect(stored!.tokenValue, equals(successes.single.tokenValue));
+      expect(secretStore.storedKeys, hasLength(1));
+      expect(
+        secretStore.readSecretSync(
+          ds.hashTokenForLookup(successes.single.tokenValue),
+        ),
+        equals(successes.single.tokenValue),
+      );
+    });
+
     test('markTokenRevoked returns false when id missing', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
@@ -336,19 +478,34 @@ void main() {
 
 class _FakeTokenSecretStore implements ITokenSecretStore {
   final Map<String, String> _secrets = <String, String>{};
+  int readCallCount = 0;
+  Future<void> Function(String secretKey, String tokenValue)? onSave;
 
   @override
-  Future<void> deleteSecret(String tokenId) async {
-    _secrets.remove(tokenId);
+  Future<void> deleteSecret(String secretKey) async {
+    _secrets.remove(secretKey);
   }
 
   @override
-  Future<String?> readSecret(String tokenId) async => _secrets[tokenId];
+  Future<String?> readSecret(String secretKey) async {
+    readCallCount++;
+    return _secrets[secretKey];
+  }
 
-  String? readSecretSync(String tokenId) => _secrets[tokenId];
+  String? readSecretSync(String secretKey) => _secrets[secretKey];
+
+  Iterable<String> get storedKeys => _secrets.keys;
+
+  void resetCounters() {
+    readCallCount = 0;
+  }
 
   @override
-  Future<void> saveSecret(String tokenId, String tokenValue) async {
-    _secrets[tokenId] = tokenValue;
+  Future<void> saveSecret(String secretKey, String tokenValue) async {
+    final saveHook = onSave;
+    if (saveHook != null) {
+      await saveHook(secretKey, tokenValue);
+    }
+    _secrets[secretKey] = tokenValue;
   }
 }

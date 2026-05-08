@@ -1469,7 +1469,7 @@ abstract class AppLocalizations {
   /// No description provided for @configAutoUpdateNotConfigured.
   ///
   /// In en, this message translates to:
-  /// **'Auto-update is not configured. Set AUTO_UPDATE_FEED_URL to a Sparkle feed (.xml).'**
+  /// **'Auto-update is unavailable because the configured feed is invalid. Remove AUTO_UPDATE_FEED_URL to use the official feed, or set it to a Sparkle feed (.xml).'**
   String get configAutoUpdateNotConfigured;
 
   /// No description provided for @configAutoUpdateOfficialFeedExpected.
@@ -2617,6 +2617,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Client token copied'**
   String get ctInfoClientTokenCopied;
+
+  /// No description provided for @ctInfoClientTokenLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this token secret'**
+  String get ctInfoClientTokenLoadFailed;
 
   /// No description provided for @ctInfoClientTokenUnavailable.
   ///

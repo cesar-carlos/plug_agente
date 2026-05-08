@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -30,6 +31,25 @@ class ClientTokenRepository implements IClientTokenRepository {
         level: 1000,
       );
       return null;
+    }
+  }
+
+  @override
+  Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId) async {
+    try {
+      final tokenSecret = await _localDataSource.getTokenSecret(tokenId);
+      return Success(ClientTokenSecretLookup(tokenValue: tokenSecret));
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to load local client token secret',
+          cause: error,
+          context: {
+            'operation': 'get_local_client_token_secret',
+            'token_id': tokenId,
+          },
+        ),
+      );
     }
   }
 

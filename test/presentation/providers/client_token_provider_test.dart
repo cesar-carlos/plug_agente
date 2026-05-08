@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -21,6 +25,8 @@ class MockCreateClientToken extends Mock implements CreateClientToken {}
 class MockListClientTokens extends Mock implements ListClientTokens {}
 
 class MockUpdateClientToken extends Mock implements UpdateClientToken {}
+
+class MockGetClientTokenSecret extends Mock implements GetClientTokenSecret {}
 
 class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 
@@ -36,6 +42,7 @@ void main() {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
     late MockUpdateClientToken mockUpdateClientToken;
+    late MockGetClientTokenSecret mockGetClientTokenSecret;
     late MockRevokeClientToken mockRevokeClientToken;
     late MockDeleteClientToken mockDeleteClientToken;
     late ClientTokenProvider provider;
@@ -44,14 +51,21 @@ void main() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
       mockUpdateClientToken = MockUpdateClientToken();
+      mockGetClientTokenSecret = MockGetClientTokenSecret();
       mockRevokeClientToken = MockRevokeClientToken();
       mockDeleteClientToken = MockDeleteClientToken();
       provider = ClientTokenProvider(
         mockCreateClientToken,
         mockUpdateClientToken,
         mockListClientTokens,
+        mockGetClientTokenSecret,
         mockRevokeClientToken,
         mockDeleteClientToken,
+      );
+      when(
+        () => mockGetClientTokenSecret(any()),
+      ).thenAnswer(
+        (_) async => const Success(ClientTokenSecretLookup(tokenValue: null)),
       );
     });
 
@@ -79,6 +93,77 @@ void main() {
       expect(provider.tokens.first.id, equals('token-1'));
       expect(provider.error, isEmpty);
       expect(provider.hasLoaded, isTrue);
+    });
+
+    test('should expose latest load result when requests finish out of order', () async {
+      final firstLoad = Completer<Result<List<ClientTokenSummary>>>();
+      final secondLoad = Completer<Result<List<ClientTokenSummary>>>();
+      var invocationCount = 0;
+
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) {
+        invocationCount++;
+        return invocationCount == 1 ? firstLoad.future : secondLoad.future;
+      });
+
+      final staleFuture = provider.loadTokens(
+        query: const ClientTokenListQuery(clientIdContains: 'old'),
+      );
+      final latestFuture = provider.loadTokens(
+        query: const ClientTokenListQuery(clientIdContains: 'new'),
+      );
+
+      secondLoad.complete(
+        Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-new',
+            clientId: 'client-new',
+            createdAt: DateTime(2026, 3, 12),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: const <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      expect(await latestFuture, isTrue);
+
+      firstLoad.complete(
+        Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-old',
+            clientId: 'client-old',
+            createdAt: DateTime(2026, 3, 11),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: const <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      expect(await staleFuture, isFalse);
+
+      expect(provider.tokens, hasLength(1));
+      expect(provider.tokens.single.id, equals('token-new'));
+      expect(provider.error, isEmpty);
+    });
+
+    test('should expose failure message on initial load', () async {
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Failure(domain.ServerFailure('failed to load tokens')),
+      );
+
+      final success = await provider.loadTokens();
+
+      expect(success, isFalse);
+      expect(provider.tokens, isEmpty);
+      expect(provider.error, contains('failed to load tokens'));
+      expect(provider.hasLoaded, isFalse);
     });
 
     test('should create token and refresh list', () async {
@@ -187,6 +272,7 @@ void main() {
       expect(success, isTrue);
       expect(provider.lastCreatedToken, equals('rotated-token-value'));
       expect(provider.tokens.single.name, equals('New name'));
+      expect(provider.tokens.single.tokenValue, isNull);
       expect(provider.error, isEmpty);
     });
 
@@ -222,6 +308,43 @@ void main() {
       expect(success, isTrue);
       expect(provider.tokens, isEmpty);
       expect(provider.error, isEmpty);
+    });
+
+    test('should ignore delete while revoke is in progress', () async {
+      final revokeCompleter = Completer<Result<void>>();
+      when(
+        () => mockRevokeClientToken('token-1'),
+      ).thenAnswer((_) => revokeCompleter.future);
+
+      final revokeFuture = provider.revokeToken('token-1');
+
+      expect(provider.isListMutationInProgress, isTrue);
+      expect(await provider.deleteToken('token-2'), isFalse);
+      verifyNever(() => mockDeleteClientToken(any()));
+
+      revokeCompleter.complete(const Success(unit));
+      expect(await revokeFuture, isTrue);
+    });
+
+    test('should expose copying state while token secret is loading', () async {
+      final secretCompleter = Completer<Result<ClientTokenSecretLookup>>();
+      when(
+        () => mockGetClientTokenSecret('token-1'),
+      ).thenAnswer((_) => secretCompleter.future);
+
+      final secretFuture = provider.getTokenSecret('token-1');
+
+      expect(provider.isCopyingTokenSecret, isTrue);
+      expect(provider.isCopyingTokenSecretFor('token-1'), isTrue);
+
+      secretCompleter.complete(
+        const Success(ClientTokenSecretLookup(tokenValue: 'secret')),
+      );
+      final result = await secretFuture;
+
+      expect(result.isSuccess(), isTrue);
+      expect(provider.isCopyingTokenSecret, isFalse);
+      expect(provider.isCopyingTokenSecretFor('token-1'), isFalse);
     });
   });
 }

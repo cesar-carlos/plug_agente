@@ -104,11 +104,13 @@ class ClientTokenRulesGrid extends StatelessWidget {
           );
         }
 
-        return AppDataGrid<ClientTokenRuleDraft>(
+        final indexedRules = rules.indexed.toList(growable: false);
+        return AppDataGrid<(int, ClientTokenRuleDraft)>(
           columns: _gridColumns(l10n),
-          rows: rules,
-          rowCells: (rule) {
-            final index = rules.indexWhere((r) => identical(r, rule));
+          rows: indexedRules,
+          rowCells: (entry) {
+            final index = entry.$1;
+            final rule = entry.$2;
             return [
               Text(rule.resourceType.name),
               SelectableText(rule.resource),

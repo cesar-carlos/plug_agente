@@ -1,11 +1,13 @@
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract class IClientTokenRepository {
   Future<ClientTokenSummary?> getTokenById(String tokenId);
+  Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId);
 
   Future<Result<String>> createToken(ClientTokenCreateRequest request);
   Future<Result<ClientTokenUpdateResult>> updateToken(

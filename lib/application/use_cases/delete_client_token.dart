@@ -29,11 +29,15 @@ class DeleteClientToken {
       return Failure(domain.ValidationFailure('tokenId is required'));
     }
 
-    final existing = await _repository.getTokenById(tokenId);
+    final tokenValue = await loadClientTokenSecretForCacheInvalidation(
+      repository: _repository,
+      tokenId: tokenId,
+      logName: 'delete_client_token_use_case',
+    );
     final result = await _repository.deleteToken(tokenId);
     if (result.isSuccess()) {
       invalidateAuthCachesForClientCredential(
-        tokenValue: existing?.tokenValue,
+        tokenValue: tokenValue,
         decisionCache: _decisionCache,
         policyCache: _policyCache,
       );

@@ -6,16 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -24,6 +28,8 @@ class MockCreateClientToken extends Mock implements CreateClientToken {}
 class MockListClientTokens extends Mock implements ListClientTokens {}
 
 class MockUpdateClientToken extends Mock implements UpdateClientToken {}
+
+class MockGetClientTokenSecret extends Mock implements GetClientTokenSecret {}
 
 class MockRevokeClientToken extends Mock implements RevokeClientToken {}
 
@@ -50,6 +56,7 @@ void main() {
     late MockCreateClientToken mockCreateClientToken;
     late MockListClientTokens mockListClientTokens;
     late MockUpdateClientToken mockUpdateClientToken;
+    late MockGetClientTokenSecret mockGetClientTokenSecret;
     late MockRevokeClientToken mockRevokeClientToken;
     late MockDeleteClientToken mockDeleteClientToken;
     late ClientTokenProvider provider;
@@ -58,6 +65,7 @@ void main() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
       mockUpdateClientToken = MockUpdateClientToken();
+      mockGetClientTokenSecret = MockGetClientTokenSecret();
       mockRevokeClientToken = MockRevokeClientToken();
       mockDeleteClientToken = MockDeleteClientToken();
 
@@ -69,10 +77,34 @@ void main() {
         mockCreateClientToken,
         mockUpdateClientToken,
         mockListClientTokens,
+        mockGetClientTokenSecret,
         mockRevokeClientToken,
         mockDeleteClientToken,
       );
+      when(
+        () => mockGetClientTokenSecret(any()),
+      ).thenAnswer(
+        (_) async => const Success(ClientTokenSecretLookup(tokenValue: null)),
+      );
     });
+
+    testWidgets(
+      'initial load failure shows inline error and retry instead of empty state',
+      (tester) async {
+        when(
+          () => mockListClientTokens(query: any(named: 'query')),
+        ).thenAnswer(
+          (_) async => Failure(domain.ValidationFailure('falha ao carregar tokens')),
+        );
+
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        expect(find.text('falha ao carregar tokens'), findsOneWidget);
+        expect(find.text(ptL10n.btnRetry), findsOneWidget);
+        expect(find.text(ptL10n.ctMsgNoTokenFound), findsNothing);
+      },
+    );
 
     testWidgets('should add rule and render it in rules grid', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 1200));
@@ -294,6 +326,131 @@ void main() {
       },
     );
 
+    testWidgets('copy token loads secret on demand', (tester) async {
+      final token = ClientTokenSummary(
+        id: 't1',
+        clientId: 'c1',
+        createdAt: DateTime.utc(2025),
+        isRevoked: false,
+        allTables: false,
+        allViews: false,
+        allPermissions: true,
+        rules: const <ClientTokenRule>[],
+      );
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => Success(<ClientTokenSummary>[token]));
+      final secretCompleter = Completer<Result<ClientTokenSecretLookup>>();
+      when(
+        () => mockGetClientTokenSecret('t1'),
+      ).thenAnswer((_) => secretCompleter.future);
+
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(FluentIcons.copy).first);
+      await tester.pump();
+
+      expect(provider.isCopyingTokenSecretFor('t1'), isTrue);
+      expect(find.byType(ProgressRing), findsWidgets);
+
+      secretCompleter.complete(
+        const Success(
+          ClientTokenSecretLookup(tokenValue: 'copied-secret'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      verify(() => mockGetClientTokenSecret('t1')).called(1);
+      expect(find.text(ptL10n.ctInfoClientTokenCopied), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('copy token shows a specific error when secret loading fails', (tester) async {
+      final token = ClientTokenSummary(
+        id: 't1',
+        clientId: 'c1',
+        createdAt: DateTime.utc(2025),
+        isRevoked: false,
+        allTables: false,
+        allViews: false,
+        allPermissions: true,
+        rules: const <ClientTokenRule>[],
+      );
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => Success(<ClientTokenSummary>[token]));
+      when(
+        () => mockGetClientTokenSecret('t1'),
+      ).thenAnswer(
+        (_) async => Failure(domain.ServerFailure('storage offline')),
+      );
+
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(FluentIcons.copy).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      verify(() => mockGetClientTokenSecret('t1')).called(1);
+      expect(find.text(ptL10n.ctInfoClientTokenLoadFailed), findsOneWidget);
+      expect(find.textContaining('storage offline'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'list controls stay disabled while revoke is in progress',
+      (tester) async {
+        final token = ClientTokenSummary(
+          id: 't1',
+          clientId: 'c1',
+          createdAt: DateTime.utc(2025),
+          isRevoked: false,
+          allTables: false,
+          allViews: false,
+          allPermissions: true,
+          rules: const <ClientTokenRule>[],
+        );
+        final revokeCompleter = Completer<Result<void>>();
+        when(
+          () => mockListClientTokens(query: any(named: 'query')),
+        ).thenAnswer((_) async => Success(<ClientTokenSummary>[token]));
+        when(
+          () => mockRevokeClientToken('t1'),
+        ).thenAnswer((_) => revokeCompleter.future);
+
+        await tester.pumpWidget(_buildWidget(provider));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(FluentIcons.block_contact).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(ptL10n.ctButtonRevoke).last);
+        await tester.pump();
+
+        final newTokenButton = tester.widget<AppButton>(
+          find.byWidgetPredicate(
+            (widget) => widget is AppButton && widget.label == ptL10n.ctButtonNewToken,
+          ),
+        );
+        final refreshButton = tester.widget<AppButton>(
+          find.byWidgetPredicate(
+            (widget) => widget is AppButton && widget.label == ptL10n.ctButtonRefreshList,
+          ),
+        );
+
+        expect(newTokenButton.onPressed, isNull);
+        expect(refreshButton.onPressed, isNull);
+        expect(find.byType(ProgressRing), findsWidgets);
+
+        revokeCompleter.complete(const Success(unit));
+        await tester.pumpAndSettle();
+      },
+    );
+
     testWidgets('escape closes create token dialog', (tester) async {
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
@@ -329,6 +486,13 @@ void main() {
 
         await tester.tap(find.text(ptL10n.ctButtonCreateToken));
         await tester.pump();
+
+        final newTokenButton = tester.widget<AppButton>(
+          find.byWidgetPredicate(
+            (widget) => widget is AppButton && widget.label == ptL10n.ctButtonNewToken,
+          ),
+        );
+        expect(newTokenButton.onPressed, isNull);
 
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pump();

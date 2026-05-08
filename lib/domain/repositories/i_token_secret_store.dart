@@ -1,7 +1,7 @@
 abstract class ITokenSecretStore {
-  Future<void> saveSecret(String tokenId, String tokenValue);
+  Future<void> saveSecret(String secretKey, String tokenValue);
 
-  Future<String?> readSecret(String tokenId);
+  Future<String?> readSecret(String secretKey);
 
-  Future<void> deleteSecret(String tokenId);
+  Future<void> deleteSecret(String secretKey);
 }

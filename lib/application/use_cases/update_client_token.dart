@@ -45,10 +45,8 @@ class UpdateClientToken {
       return Failure(
         domain.ValidationFailure(
           switch (payloadValidationError) {
-            ClientTokenPayloadValidationError.databaseMustBeString =>
-              'payload.database must be a string',
-            ClientTokenPayloadValidationError.databaseCannotBeEmpty =>
-              'payload.database must not be empty',
+            ClientTokenPayloadValidationError.databaseMustBeString => 'payload.database must be a string',
+            ClientTokenPayloadValidationError.databaseCannotBeEmpty => 'payload.database must not be empty',
           },
         ),
       );
@@ -70,7 +68,11 @@ class UpdateClientToken {
       );
     }
 
-    final existing = await _repository.getTokenById(tokenId);
+    final currentTokenValue = await loadClientTokenSecretForCacheInvalidation(
+      repository: _repository,
+      tokenId: tokenId,
+      logName: 'update_client_token_use_case',
+    );
     final result = await _repository.updateToken(
       tokenId,
       request,
@@ -78,7 +80,7 @@ class UpdateClientToken {
     );
     if (result.isSuccess()) {
       invalidateAuthCachesForClientCredential(
-        tokenValue: existing?.tokenValue,
+        tokenValue: currentTokenValue,
         decisionCache: _decisionCache,
         policyCache: _policyCache,
       );

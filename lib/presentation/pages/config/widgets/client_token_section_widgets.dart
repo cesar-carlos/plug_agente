@@ -314,6 +314,7 @@ class _TokenListFilters extends StatelessWidget {
     required this.clientFilterController,
     required this.tokenStatusFilter,
     required this.tokenSortOption,
+    required this.isEnabled,
     required this.onClientFilterChanged,
     required this.statusLabelBuilder,
     required this.sortLabelBuilder,
@@ -325,6 +326,7 @@ class _TokenListFilters extends StatelessWidget {
   final TextEditingController clientFilterController;
   final ClientTokenStatusFilter tokenStatusFilter;
   final ClientTokenSortOption tokenSortOption;
+  final bool isEnabled;
   final ValueChanged<String> onClientFilterChanged;
   final String Function(ClientTokenStatusFilter) statusLabelBuilder;
   final String Function(ClientTokenSortOption) sortLabelBuilder;
@@ -344,7 +346,8 @@ class _TokenListFilters extends StatelessWidget {
             label: l10n.ctFilterClientId,
             controller: clientFilterController,
             hint: l10n.ctHintClientId,
-            onChanged: onClientFilterChanged,
+            enabled: isEnabled,
+            onChanged: isEnabled ? onClientFilterChanged : null,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -361,11 +364,13 @@ class _TokenListFilters extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onStatusChanged(value);
-              }
-            },
+            onChanged: isEnabled
+                ? (value) {
+                    if (value != null) {
+                      onStatusChanged(value);
+                    }
+                  }
+                : null,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -382,11 +387,13 @@ class _TokenListFilters extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onSortChanged(value);
-              }
-            },
+            onChanged: isEnabled
+                ? (value) {
+                    if (value != null) {
+                      onSortChanged(value);
+                    }
+                  }
+                : null,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -394,7 +401,7 @@ class _TokenListFilters extends StatelessWidget {
           label: l10n.ctButtonClearFilters,
           isPrimary: false,
           icon: FluentIcons.clear_filter,
-          onPressed: onClearFilters,
+          onPressed: isEnabled ? onClearFilters : null,
         ),
       ],
     );
@@ -582,6 +589,8 @@ class _TokenSummaryGrid extends StatelessWidget {
     required this.tokens,
     required this.isRevokingToken,
     required this.isDeletingToken,
+    required this.isCopyingTokenSecret,
+    required this.actionsEnabled,
     required this.onViewDetails,
     required this.onCopyClientToken,
     required this.onEdit,
@@ -594,6 +603,8 @@ class _TokenSummaryGrid extends StatelessWidget {
   final ScrollController? scrollController;
   final bool Function(String tokenId) isRevokingToken;
   final bool Function(String tokenId) isDeletingToken;
+  final bool Function(String tokenId) isCopyingTokenSecret;
+  final bool actionsEnabled;
   final ValueChanged<ClientTokenSummary> onViewDetails;
   final ValueChanged<ClientTokenSummary> onCopyClientToken;
   final ValueChanged<ClientTokenSummary> onEdit;
@@ -658,6 +669,8 @@ class _TokenSummaryGrid extends StatelessWidget {
           token: token,
           isRevoking: isRevokingToken(token.id),
           isDeleting: isDeletingToken(token.id),
+          isCopyingTokenSecret: isCopyingTokenSecret(token.id),
+          actionsEnabled: actionsEnabled,
           onViewDetails: () => onViewDetails(token),
           onCopyClientToken: () => onCopyClientToken(token),
           onEdit: () => onEdit(token),
@@ -675,6 +688,8 @@ class _TokenRowActions extends StatelessWidget {
     required this.token,
     required this.isRevoking,
     required this.isDeleting,
+    required this.isCopyingTokenSecret,
+    required this.actionsEnabled,
     required this.onViewDetails,
     required this.onCopyClientToken,
     required this.onEdit,
@@ -686,6 +701,8 @@ class _TokenRowActions extends StatelessWidget {
   final ClientTokenSummary token;
   final bool isRevoking;
   final bool isDeleting;
+  final bool isCopyingTokenSecret;
+  final bool actionsEnabled;
   final VoidCallback onViewDetails;
   final VoidCallback onCopyClientToken;
   final VoidCallback onEdit;
@@ -707,7 +724,7 @@ class _TokenRowActions extends StatelessWidget {
             label: l10n.ctButtonEdit,
             child: IconButton(
               icon: const Icon(FluentIcons.edit),
-              onPressed: onEdit,
+              onPressed: actionsEnabled ? onEdit : null,
             ),
           ),
         ),
@@ -718,7 +735,7 @@ class _TokenRowActions extends StatelessWidget {
             label: l10n.ctButtonViewDetails,
             child: IconButton(
               icon: const Icon(FluentIcons.view),
-              onPressed: onViewDetails,
+              onPressed: actionsEnabled ? onViewDetails : null,
             ),
           ),
         ),
@@ -727,10 +744,22 @@ class _TokenRowActions extends StatelessWidget {
           child: Semantics(
             button: true,
             label: l10n.ctButtonCopyClientToken,
-            child: IconButton(
-              icon: const Icon(FluentIcons.copy),
-              onPressed: onCopyClientToken,
-            ),
+            child: isCopyingTokenSecret
+                ? const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: ProgressRing(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(FluentIcons.copy),
+                    onPressed: actionsEnabled ? onCopyClientToken : null,
+                  ),
           ),
         ),
         Tooltip(
@@ -752,7 +781,7 @@ class _TokenRowActions extends StatelessWidget {
                   )
                 : IconButton(
                     icon: const Icon(FluentIcons.block_contact),
-                    onPressed: onRevoke,
+                    onPressed: actionsEnabled ? onRevoke : null,
                   ),
           ),
         ),
@@ -775,7 +804,7 @@ class _TokenRowActions extends StatelessWidget {
                   )
                 : IconButton(
                     icon: const Icon(FluentIcons.delete),
-                    onPressed: onDelete,
+                    onPressed: actionsEnabled ? onDelete : null,
                   ),
           ),
         ),

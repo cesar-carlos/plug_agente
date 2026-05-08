@@ -329,7 +329,7 @@
   "configUpdatesAvailable": "A new version is available. Follow the instructions to update.",
   "configUpdatesNotAvailable": "You are already on the latest version.",
   "configUpdatesNotAvailableHint": "If you just published a new version, wait up to 5 minutes and try again.",
-  "configAutoUpdateNotConfigured": "Auto-update is not configured. Set AUTO_UPDATE_FEED_URL to a Sparkle feed (.xml).",
+  "configAutoUpdateNotConfigured": "Auto-update is unavailable because the configured feed is invalid. Remove AUTO_UPDATE_FEED_URL to use the official feed, or set it to a Sparkle feed (.xml).",
   "configAutoUpdateOfficialFeedExpected": "Official feed expected: {url}",
   "@configAutoUpdateOfficialFeedExpected": {
     "placeholders": {
@@ -535,6 +535,7 @@
   "ctButtonCopyClientToken": "Copy token",
   "ctTooltipCopyClientToken": "Copy client token",
   "ctInfoClientTokenCopied": "Client token copied",
+  "ctInfoClientTokenLoadFailed": "Could not load this token secret",
   "ctInfoClientTokenUnavailable": "Token unavailable for this record. Create a new token to copy the secret value.",
   "ctButtonEdit": "Edit",
   "ctButtonClearFilters": "Clear filters",

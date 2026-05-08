@@ -3,21 +3,26 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
+import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:result_dart/result_dart.dart';
 
 class ClientTokenProvider extends ChangeNotifier {
   ClientTokenProvider(
     this._createClientToken,
     this._updateClientToken,
     this._listClientTokens,
+    this._getClientTokenSecret,
     this._revokeClientToken,
     this._deleteClientToken, {
     ITokenAuditStore? tokenAuditStore,
@@ -26,6 +31,7 @@ class ClientTokenProvider extends ChangeNotifier {
   final CreateClientToken _createClientToken;
   final UpdateClientToken _updateClientToken;
   final ListClientTokens _listClientTokens;
+  final GetClientTokenSecret _getClientTokenSecret;
   final RevokeClientToken _revokeClientToken;
   final DeleteClientToken _deleteClientToken;
   final ITokenAuditStore? _tokenAuditStore;
@@ -35,23 +41,30 @@ class ClientTokenProvider extends ChangeNotifier {
   bool _isCreating = false;
   bool _isRevoking = false;
   bool _isDeleting = false;
+  bool _isCopyingTokenSecret = false;
   String? _revokingTokenId;
   String? _deletingTokenId;
+  String? _copyingTokenSecretId;
   String _error = '';
   String? _lastCreatedToken;
   bool _hasLoaded = false;
   ClientTokenListQuery _lastListQuery = const ClientTokenListQuery();
+  int _loadGeneration = 0;
 
   List<ClientTokenSummary> get tokens => _tokens;
   bool get isLoading => _isLoading;
   bool get isCreating => _isCreating;
   bool get isRevoking => _isRevoking;
   bool get isDeleting => _isDeleting;
+  bool get isCopyingTokenSecret => _isCopyingTokenSecret;
   String? get revokingTokenId => _revokingTokenId;
   String? get deletingTokenId => _deletingTokenId;
+  String? get copyingTokenSecretId => _copyingTokenSecretId;
   String get error => _error;
   String? get lastCreatedToken => _lastCreatedToken;
   bool get hasLoaded => _hasLoaded;
+  bool get isListMutationInProgress => _isRevoking || _isDeleting;
+  bool get isTokenMutationInProgress => _isCreating || _isRevoking || _isDeleting;
 
   Future<bool> loadTokens({
     bool silent = false,
@@ -59,14 +72,19 @@ class ClientTokenProvider extends ChangeNotifier {
   }) async {
     final effectiveQuery = query ?? _lastListQuery;
     _lastListQuery = effectiveQuery;
+    final generation = ++_loadGeneration;
 
     if (!silent) {
       _isLoading = true;
-      _error = '';
-      notifyListeners();
     }
+    _error = '';
+    notifyListeners();
 
     final result = await _listClientTokens(query: effectiveQuery);
+
+    if (generation != _loadGeneration) {
+      return false;
+    }
 
     var isSuccess = false;
     result.fold(
@@ -77,15 +95,11 @@ class ClientTokenProvider extends ChangeNotifier {
         isSuccess = true;
       },
       (failure) {
-        if (!silent) {
-          _error = failure.toDisplayMessage();
-        }
+        _error = failure.toDisplayMessage();
       },
     );
 
-    if (!silent) {
-      _isLoading = false;
-    }
+    _isLoading = false;
     notifyListeners();
 
     return isSuccess;
@@ -123,6 +137,9 @@ class ClientTokenProvider extends ChangeNotifier {
   }
 
   Future<bool> revokeToken(String tokenId) async {
+    if (isListMutationInProgress) {
+      return false;
+    }
     _isRevoking = true;
     _revokingTokenId = tokenId;
     _error = '';
@@ -176,7 +193,6 @@ class ClientTokenProvider extends ChangeNotifier {
           request: request,
           nextVersion: updateResult.version,
           updatedAt: updateResult.updatedAt,
-          rotatedToken: updateResult.tokenValue,
         );
         if (refreshTokens && !patched) {
           await loadTokens(silent: true);
@@ -197,6 +213,9 @@ class ClientTokenProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteToken(String tokenId) async {
+    if (isListMutationInProgress) {
+      return false;
+    }
     _isDeleting = true;
     _deletingTokenId = tokenId;
     _error = '';
@@ -224,6 +243,30 @@ class ClientTokenProvider extends ChangeNotifier {
 
   bool isDeletingToken(String tokenId) {
     return _isDeleting && _deletingTokenId == tokenId;
+  }
+
+  bool isCopyingTokenSecretFor(String tokenId) {
+    return _isCopyingTokenSecret && _copyingTokenSecretId == tokenId;
+  }
+
+  Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId) async {
+    if (_isCopyingTokenSecret) {
+      return Failure(
+        domain.ValidationFailure('Client token secret copy is already in progress'),
+      );
+    }
+
+    _isCopyingTokenSecret = true;
+    _copyingTokenSecretId = tokenId;
+    notifyListeners();
+
+    try {
+      return await _getClientTokenSecret(tokenId);
+    } finally {
+      _isCopyingTokenSecret = false;
+      _copyingTokenSecretId = null;
+      notifyListeners();
+    }
   }
 
   void clearError() {
@@ -274,7 +317,6 @@ class ClientTokenProvider extends ChangeNotifier {
     required ClientTokenCreateRequest request,
     required int nextVersion,
     required DateTime updatedAt,
-    required String rotatedToken,
   }) {
     final index = _tokens.indexWhere((token) => token.id == tokenId);
     if (index < 0) {
@@ -292,7 +334,7 @@ class ClientTokenProvider extends ChangeNotifier {
       allViews: request.allViews,
       globalPermissions: request.effectiveGlobalPermissions,
       rules: request.effectiveRules,
-      tokenValue: rotatedToken,
+      tokenValue: null,
       version: nextVersion,
       updatedAt: updatedAt,
     );

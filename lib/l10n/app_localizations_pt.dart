@@ -735,7 +735,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configAutoUpdateNotConfigured =>
-      'Auto-update não está configurado. Defina AUTO_UPDATE_FEED_URL com um feed Sparkle (.xml).';
+      'Auto-update está indisponível porque o feed configurado é inválido. Remova AUTO_UPDATE_FEED_URL para usar o feed oficial ou informe um feed Sparkle (.xml).';
 
   @override
   String configAutoUpdateOfficialFeedExpected(String url) {
@@ -1329,6 +1329,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctInfoClientTokenCopied => 'Token do cliente copiado';
+
+  @override
+  String get ctInfoClientTokenLoadFailed => 'Nao foi possivel carregar o segredo deste token';
 
   @override
   String get ctInfoClientTokenUnavailable =>

@@ -10,6 +10,7 @@ import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
+import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
@@ -108,6 +109,7 @@ class AppRoot extends StatelessWidget {
             getIt<CreateClientToken>(),
             getIt<UpdateClientToken>(),
             getIt<ListClientTokens>(),
+            getIt<GetClientTokenSecret>(),
             getIt<RevokeClientToken>(),
             getIt<DeleteClientToken>(),
             tokenAuditStore: getIt<ITokenAuditStore>(),

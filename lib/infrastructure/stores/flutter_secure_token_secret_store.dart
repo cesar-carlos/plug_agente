@@ -10,20 +10,20 @@ class FlutterSecureTokenSecretStore implements ITokenSecretStore {
   final FlutterSecureStorage _secureStorage;
   final String keyPrefix;
 
-  String _keyFor(String tokenId) => '$keyPrefix$tokenId';
+  String _keyFor(String secretKey) => '$keyPrefix$secretKey';
 
   @override
-  Future<void> saveSecret(String tokenId, String tokenValue) async {
-    await _secureStorage.write(key: _keyFor(tokenId), value: tokenValue);
+  Future<void> saveSecret(String secretKey, String tokenValue) async {
+    await _secureStorage.write(key: _keyFor(secretKey), value: tokenValue);
   }
 
   @override
-  Future<String?> readSecret(String tokenId) async {
-    return _secureStorage.read(key: _keyFor(tokenId));
+  Future<String?> readSecret(String secretKey) async {
+    return _secureStorage.read(key: _keyFor(secretKey));
   }
 
   @override
-  Future<void> deleteSecret(String tokenId) async {
-    await _secureStorage.delete(key: _keyFor(tokenId));
+  Future<void> deleteSecret(String secretKey) async {
+    await _secureStorage.delete(key: _keyFor(secretKey));
   }
 }

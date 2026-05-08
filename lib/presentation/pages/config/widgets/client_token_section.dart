@@ -19,6 +19,7 @@ import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -96,7 +97,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
     final provider = context.read<ClientTokenProvider>();
     if (!provider.hasLoaded) {
-      await provider.loadTokens(silent: true, query: _buildListQuery());
+      await provider.loadTokens(query: _buildListQuery());
     }
   }
 
@@ -817,6 +818,57 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     });
   }
 
+  Future<void> _handleCopyToken(
+    BuildContext context,
+    ClientTokenProvider provider,
+    ClientTokenSummary token,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await provider.getTokenSecret(token.id);
+    if (!context.mounted) {
+      return;
+    }
+
+    result.fold(
+      (lookup) {
+        final tokenValue = lookup.tokenValue;
+        if (!lookup.isAvailable) {
+          displayInfoBar(
+            context,
+            builder: (context, close) => InfoBar(
+              title: Text(l10n.ctInfoClientTokenUnavailable),
+              severity: InfoBarSeverity.warning,
+            ),
+          );
+          return;
+        }
+
+        Clipboard.setData(ClipboardData(text: tokenValue!));
+        provider.recordCopiedToken(
+          tokenId: token.id,
+          clientId: token.clientId,
+        );
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctInfoClientTokenCopied),
+            severity: InfoBarSeverity.success,
+          ),
+        );
+      },
+      (failure) {
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctInfoClientTokenLoadFailed),
+            content: Text(failure.toDisplayMessage()),
+            severity: InfoBarSeverity.error,
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleRevoke(
     BuildContext context,
     ClientTokenProvider provider,
@@ -913,6 +965,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       builder: (context, provider, _) {
         final l10n = AppLocalizations.of(context)!;
         final listedTokens = provider.tokens;
+        final isInitialLoading = provider.isLoading && !provider.hasLoaded;
+        final isListInteractionLocked = provider.isTokenMutationInProgress;
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -928,7 +982,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     label: l10n.ctButtonNewToken,
                     isPrimary: false,
                     icon: FluentIcons.add,
-                    onPressed: _openCreateTokenModal,
+                    onPressed: isListInteractionLocked ? null : _openCreateTokenModal,
                   ),
                 ],
               ),
@@ -949,19 +1003,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     icon: FluentIcons.refresh,
                     isPrimary: false,
                     isLoading: provider.isLoading,
-                    onPressed: () => provider.loadTokens(query: _buildListQuery()),
+                    onPressed: isListInteractionLocked ? null : () => provider.loadTokens(query: _buildListQuery()),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     label: _autoRefreshAfterCreate ? l10n.ctButtonAutoRefreshOn : l10n.ctButtonAutoRefreshOff,
                     icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
                     isPrimary: false,
-                    onPressed: () {
-                      setState(() {
-                        _autoRefreshAfterCreate = !_autoRefreshAfterCreate;
-                      });
-                      _saveTokenListPreferences();
-                    },
+                    onPressed: isListInteractionLocked
+                        ? null
+                        : () {
+                            setState(() {
+                              _autoRefreshAfterCreate = !_autoRefreshAfterCreate;
+                            });
+                            _saveTokenListPreferences();
+                          },
                   ),
                 ],
               ),
@@ -974,6 +1030,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 clientFilterController: _listClientFilterController,
                 tokenStatusFilter: _tokenStatusFilter,
                 tokenSortOption: _tokenSortOption,
+                isEnabled: !isListInteractionLocked,
                 onClientFilterChanged: _handleClientFilterChanged,
                 statusLabelBuilder: _statusFilterLabel,
                 sortLabelBuilder: _sortFilterLabel,
@@ -994,7 +1051,24 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 onClearFilters: _clearTokenFilters,
               ),
               const SizedBox(height: AppSpacing.sm),
-              if (listedTokens.isEmpty && !provider.isLoading)
+              if (isInitialLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                  child: Center(
+                    child: ProgressRing(),
+                  ),
+                ),
+              if (!provider.hasLoaded && provider.error.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton(
+                    label: l10n.btnRetry,
+                    isPrimary: false,
+                    icon: FluentIcons.refresh,
+                    onPressed: () => provider.loadTokens(query: _buildListQuery()),
+                  ),
+                ),
+              if (provider.hasLoaded && listedTokens.isEmpty && !provider.isLoading)
                 Text(
                   _hasActiveFilters() ? l10n.ctMsgNoTokenMatchFilter : l10n.ctMsgNoTokenFound,
                 ),
@@ -1006,37 +1080,14 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     scrollController: widget.scrollController,
                     isRevokingToken: provider.isRevokingToken,
                     isDeletingToken: provider.isDeletingToken,
+                    isCopyingTokenSecret: provider.isCopyingTokenSecretFor,
                     onViewDetails: (token) => showClientTokenDetailsDialog(
                       context: context,
                       token: token,
                     ),
+                    actionsEnabled: !isListInteractionLocked,
                     onCopyClientToken: (token) {
-                      final tokenValue = token.tokenValue;
-                      if (tokenValue == null || tokenValue.trim().isEmpty) {
-                        displayInfoBar(
-                          context,
-                          builder: (context, close) => InfoBar(
-                            title: Text(
-                              l10n.ctInfoClientTokenUnavailable,
-                            ),
-                            severity: InfoBarSeverity.warning,
-                          ),
-                        );
-                        return;
-                      }
-
-                      Clipboard.setData(ClipboardData(text: tokenValue));
-                      provider.recordCopiedToken(
-                        tokenId: token.id,
-                        clientId: token.clientId,
-                      );
-                      displayInfoBar(
-                        context,
-                        builder: (context, close) => InfoBar(
-                          title: Text(l10n.ctInfoClientTokenCopied),
-                          severity: InfoBarSeverity.success,
-                        ),
-                      );
+                      unawaited(_handleCopyToken(context, provider, token));
                     },
                     onEdit: _openCreateTokenModal,
                     onRevoke: (token) {
