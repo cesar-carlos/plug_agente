@@ -486,6 +486,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           completionSource: UpdateCheckCompletionSource.triggerFailure,
           errorMessage: e.toString(),
         );
+        _metricsCollector?.recordAutoUpdateBackgroundCheckTriggerFailure();
         unawaited(_persistLastBackgroundDiagnostics());
         developer.log(
           'Background update check failed (attempt $attempt/$_backgroundRetryLimit)',
@@ -735,6 +736,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         completionSource: UpdateCheckCompletionSource.updaterError,
         errorMessage: error?.toString() ?? 'Update check failed',
       );
+      _metricsCollector?.recordAutoUpdateBackgroundCheckUpdaterError();
       unawaited(_persistLastBackgroundDiagnostics());
       developer.log(
         'Background auto-updater error: $error',

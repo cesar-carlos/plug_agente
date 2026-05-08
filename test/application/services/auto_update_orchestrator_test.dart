@@ -550,6 +550,31 @@ void main() {
           orchestrator.lastBackgroundDiagnostics?.errorMessage,
           contains('background boom'),
         );
+        expect(metricsCollector.autoUpdateBackgroundCheckTriggerFailureCount, 1);
+      });
+
+      test('records updater error metric when background listener reports failure', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        fakeGateway.onCheckForUpdates = () async {
+          fakeGateway.listener?.onUpdaterError(null);
+        };
+
+        await orchestrator.checkInBackground();
+
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updaterError,
+        );
+        expect(metricsCollector.autoUpdateBackgroundCheckUpdaterErrorCount, 1);
       });
     });
   });

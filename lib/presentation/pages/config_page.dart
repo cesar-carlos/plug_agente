@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -131,6 +132,23 @@ class _ConfigPageState extends State<ConfigPage> {
     }
 
     return lines.join('\n');
+  }
+
+  String _buildUpdateSupportDiagnostics(
+    AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator,
+  ) {
+    final technicalDetails = _formatTechnicalDetails(
+      l10n,
+      orchestrator.lastManualDiagnostics,
+      orchestrator.lastBackgroundDiagnostics,
+    );
+    return <String>[
+      'Plug Agente Auto-Update',
+      '${l10n.gsLabelVersion}: $_appVersion',
+      '',
+      technicalDetails,
+    ].join('\n');
   }
 
   void _appendDiagnosticsSection(
@@ -267,6 +285,24 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
+  Future<void> _copyUpdateDiagnostics() async {
+    final l10n = AppLocalizations.of(context)!;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final diagnostics = _buildUpdateSupportDiagnostics(l10n, orchestrator);
+    await Clipboard.setData(ClipboardData(text: diagnostics));
+    if (!mounted) {
+      return;
+    }
+    displayInfoBar(
+      context,
+      builder: (context, close) => InfoBar(
+        title: Text(l10n.configUpdateDiagnosticsCopied),
+        severity: InfoBarSeverity.success,
+        onClose: close,
+      ),
+    );
+  }
+
   Future<void> _onStartWithWindowsChanged(
     SystemSettingsProvider provider,
     bool value,
@@ -338,6 +374,7 @@ class _ConfigPageState extends State<ConfigPage> {
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
             onCheckUpdates: _checkUpdates,
+            onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
           ),
         ),
       ),
@@ -367,6 +404,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
     required this.onCheckUpdates,
+    required this.onCopyUpdateDiagnostics,
   });
 
   final String appVersion;
@@ -389,6 +427,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
   final VoidCallback onCheckUpdates;
+  final VoidCallback onCopyUpdateDiagnostics;
 
   @override
   State<_ConfigTabbedContent> createState() => _ConfigTabbedContentState();
@@ -440,6 +479,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             isAutoUpdateAvailable: widget.isAutoUpdateAvailable,
             unavailableMessage: widget.autoUpdateUnavailableMessage,
             onCheckUpdates: widget.onCheckUpdates,
+            onCopyUpdateDiagnostics: widget.onCopyUpdateDiagnostics,
           ),
         ),
         AppFluentTabItem(

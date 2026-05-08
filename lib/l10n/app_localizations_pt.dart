@@ -827,6 +827,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateCompletionSourceCircuitOpen => 'Checagens pausadas por timeouts repetidos';
 
   @override
+  String get configCopyUpdateDiagnostics => 'Copiar diagnóstico de update';
+
+  @override
+  String get configUpdateDiagnosticsCopied => 'Diagnóstico de update copiado.';
+
+  @override
   String get gsSectionAppearance => 'Aparência';
 
   @override

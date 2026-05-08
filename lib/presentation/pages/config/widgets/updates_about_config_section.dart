@@ -9,6 +9,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.lastUpdateCheck,
     required this.lastBackgroundUpdateCheck,
     required this.onCheckUpdates,
+    required this.onCopyUpdateDiagnostics,
     this.isAutoUpdateAvailable = true,
     this.unavailableMessage,
     this.isCheckingUpdates = false,
@@ -19,6 +20,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String lastUpdateCheck;
   final String lastBackgroundUpdateCheck;
   final VoidCallback onCheckUpdates;
+  final VoidCallback onCopyUpdateDiagnostics;
   final bool isAutoUpdateAvailable;
   final String? unavailableMessage;
   final bool isCheckingUpdates;
@@ -76,6 +78,19 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                 unavailableMessage ?? l10n.configAutoUpdateNotSupported,
                 style: context.captionText,
               ),
+            const SizedBox(height: AppSpacing.md),
+            Button(
+              key: const ValueKey('updates_copy_diagnostics_button'),
+              onPressed: onCopyUpdateDiagnostics,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(FluentIcons.copy),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(l10n.configCopyUpdateDiagnostics),
+                ],
+              ),
+            ),
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),

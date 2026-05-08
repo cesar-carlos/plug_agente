@@ -20,6 +20,7 @@ void main() {
     String appVersion = '1.2.6+1',
     Locale locale = const Locale('pt'),
     VoidCallback? onCheckUpdates,
+    VoidCallback? onCopyUpdateDiagnostics,
     bool settle = true,
   }) async {
     await tester.pumpWidget(
@@ -37,6 +38,7 @@ void main() {
               isAutoUpdateAvailable: isAutoUpdateAvailable,
               unavailableMessage: unavailableMessage,
               onCheckUpdates: onCheckUpdates ?? () {},
+              onCopyUpdateDiagnostics: onCopyUpdateDiagnostics ?? () {},
             ),
           ),
         ),
@@ -137,6 +139,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(tapped, isTrue);
+    });
+
+    testWidgets('copy diagnostics button triggers callback', (tester) async {
+      var copied = false;
+      await pumpSection(
+        tester,
+        onCopyUpdateDiagnostics: () => copied = true,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('updates_copy_diagnostics_button')));
+      await tester.pumpAndSettle();
+
+      expect(copied, isTrue);
     });
   });
 }

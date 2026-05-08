@@ -1,0 +1,67 @@
+name: Validate Current Appcast
+
+on:
+  workflow_dispatch:
+    inputs:
+      feed_url:
+        description: "Sparkle feed URL to validate."
+        required: false
+        type: string
+        default: "https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml"
+      max_items:
+        description: "Maximum items allowed in the feed."
+        required: false
+        type: string
+        default: "10"
+
+jobs:
+  validate-appcast:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Run appcast manager unit tests
+        run: python3 -m unittest tool.test_appcast_manager -v
+
+      - name: Inspect current appcast
+        env:
+          FEED_URL: ${{ inputs.feed_url }}
+          MAX_APPCAST_ITEMS: ${{ inputs.max_items }}
+        run: |
+          python3 tool/appcast_manager.py inspect-url \
+            --feed-url "${FEED_URL}" \
+            --env-file appcast.env \
+            --release-body-file release_body.txt \
+            --max-items "${MAX_APPCAST_ITEMS}"
+
+      - name: Smoke validate current appcast
+        env:
+          FEED_URL: ${{ inputs.feed_url }}
+          MAX_APPCAST_ITEMS: ${{ inputs.max_items }}
+        run: |
+          source appcast.env
+          python3 tool/appcast_manager.py smoke-validate-url \
+            --feed-url "${FEED_URL}" \
+            --version-short "${VERSION_SHORT}" \
+            --full-version "${FULL_VERSION}" \
+            --asset-url "${ASSET_URL}" \
+            --asset-size "${ASSET_SIZE}" \
+            --asset-name "${ASSET_NAME}" \
+            --release-body-file release_body.txt \
+            --max-items "${MAX_APPCAST_ITEMS}" \
+            --attempts 3 \
+            --delay-seconds 5

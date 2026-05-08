@@ -84,6 +84,10 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _autoUpdateCircuitOpenedCounter = 'auto_update_circuit_opened';
   static const String _autoUpdateCircuitOpenRejectedCounter =
       'auto_update_circuit_open_rejected';
+  static const String _autoUpdateBackgroundCheckTriggerFailureCounter =
+      'auto_update_background_check_trigger_failure';
+  static const String _autoUpdateBackgroundCheckUpdaterErrorCounter =
+      'auto_update_background_check_updater_error';
 
   static const int _maxMetrics = 10000;
 
@@ -168,6 +172,10 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       _eventCounters[_autoUpdateCircuitOpenedCounter] ?? 0;
   int get autoUpdateCircuitOpenRejectedCount =>
       _eventCounters[_autoUpdateCircuitOpenRejectedCounter] ?? 0;
+  int get autoUpdateBackgroundCheckTriggerFailureCount =>
+      _eventCounters[_autoUpdateBackgroundCheckTriggerFailureCounter] ?? 0;
+  int get autoUpdateBackgroundCheckUpdaterErrorCount =>
+      _eventCounters[_autoUpdateBackgroundCheckUpdaterErrorCounter] ?? 0;
   int get currentQueueSize => _currentQueueSize;
   int get maxQueueSize => _maxQueueSize;
   int get currentActiveWorkers => _currentActiveWorkers;
@@ -366,6 +374,12 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
 
   void recordAutoUpdateCircuitOpenRejected() =>
       _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
+
+  void recordAutoUpdateBackgroundCheckTriggerFailure() =>
+      _incrementEventCounter(_autoUpdateBackgroundCheckTriggerFailureCounter);
+
+  void recordAutoUpdateBackgroundCheckUpdaterError() =>
+      _incrementEventCounter(_autoUpdateBackgroundCheckUpdaterErrorCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

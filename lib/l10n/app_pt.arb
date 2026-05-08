@@ -318,6 +318,8 @@
   "configUpdateCompletionSourceTriggerFailure": "Falha ao iniciar a checagem",
   "configUpdateCompletionSourceNotInitialized": "Auto-update não inicializado",
   "configUpdateCompletionSourceCircuitOpen": "Checagens pausadas por timeouts repetidos",
+  "configCopyUpdateDiagnostics": "Copiar diagnóstico de update",
+  "configUpdateDiagnosticsCopied": "Diagnóstico de update copiado.",
   "gsSectionAppearance": "Aparência",
   "gsToggleDarkTheme": "Tema escuro",
   "gsSectionSystem": "Sistema",

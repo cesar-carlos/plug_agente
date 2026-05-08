@@ -366,6 +366,8 @@
   "configUpdateCompletionSourceTriggerFailure": "Failed to start the update check",
   "configUpdateCompletionSourceNotInitialized": "Auto-update not initialized",
   "configUpdateCompletionSourceCircuitOpen": "Checks paused after repeated timeouts",
+  "configCopyUpdateDiagnostics": "Copy update diagnostics",
+  "configUpdateDiagnosticsCopied": "Update diagnostics copied.",
   "gsSectionAppearance": "Appearance",
   "gsToggleDarkTheme": "Dark theme",
   "gsSectionSystem": "System",

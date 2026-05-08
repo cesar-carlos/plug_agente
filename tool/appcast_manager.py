@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as et
 from dataclasses import dataclass
@@ -72,6 +74,13 @@ def _sparkle_os(enclosure: et.Element | None) -> str:
     if enclosure is None:
         return ""
     return (enclosure.get(_sparkle_attr("os")) or enclosure.get("sparkle:os") or "").strip()
+
+
+def _cache_busted_url(feed_url: str) -> str:
+    parsed = urllib.parse.urlparse(feed_url)
+    query = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+    query["cb"] = str(int(time.time()))
+    return urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(query)))
 
 
 def _ensure_channel(root: et.Element) -> et.Element:
@@ -219,6 +228,71 @@ def validate_item(item: et.Element, context: AppcastContext) -> None:
         raise ValueError(f"invalid enclosure length: {latest_size!r}") from exc
 
 
+def fetch_feed_root(feed_url: str) -> et.Element:
+    request = urllib.request.Request(
+        _cache_busted_url(feed_url),
+        headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        body = response.read()
+    return et.fromstring(body)
+
+
+def context_from_latest_item(item: et.Element, *, max_items: int = 10) -> AppcastContext:
+    description = (item.findtext("description") or "").strip()
+    enclosure = item.find("enclosure")
+    if enclosure is None:
+        raise ValueError("missing <enclosure> in latest item")
+
+    version = _sparkle_version(enclosure)
+    if not version:
+        raise ValueError("latest item missing sparkle:version")
+
+    asset_url = (enclosure.get("url") or "").strip()
+    asset_size = (enclosure.get("length") or "").strip()
+    asset_name = Path(urllib.parse.urlparse(asset_url).path).name
+    context = AppcastContext(
+        version_short=version.split("+", 1)[0],
+        full_version=version,
+        asset_url=asset_url,
+        asset_size=asset_size,
+        asset_name=asset_name,
+        release_body=description,
+        max_items=max_items,
+    )
+    validate_item(item, context)
+    return context
+
+
+def inspect_feed_url(feed_url: str, *, max_items: int = 10) -> AppcastContext:
+    root = fetch_feed_root(feed_url)
+    channel = root.find("channel")
+    if channel is None:
+        raise ValueError("missing <channel>")
+
+    items = channel.findall("item")
+    if not items:
+        raise ValueError("missing <item>")
+    if len(items) > max_items:
+        raise ValueError(f"item count {len(items)} exceeds limit {max_items}")
+
+    return context_from_latest_item(items[0], max_items=max_items)
+
+
+def write_shell_env(path: Path, context: AppcastContext) -> None:
+    values = {
+        "VERSION_SHORT": context.version_short,
+        "FULL_VERSION": context.full_version,
+        "ASSET_URL": context.asset_url,
+        "ASSET_SIZE": context.asset_size,
+        "ASSET_NAME": context.expected_asset_name,
+    }
+    path.write_text(
+        "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items()),
+        encoding="utf-8",
+    )
+
+
 def smoke_validate_feed(
     feed_url: str,
     context: AppcastContext,
@@ -228,14 +302,8 @@ def smoke_validate_feed(
 ) -> None:
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
-        request = urllib.request.Request(
-            f"{feed_url}?cb={int(time.time())}",
-            headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-        )
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                body = response.read()
-            root = et.fromstring(body)
+            root = fetch_feed_root(feed_url)
             channel = root.find("channel")
             if channel is None:
                 raise ValueError("missing <channel>")
@@ -310,6 +378,17 @@ def command_smoke_validate_url(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_inspect_url(args: argparse.Namespace) -> int:
+    context = inspect_feed_url(args.feed_url, max_items=args.max_items)
+    write_shell_env(args.env_file, context)
+    args.release_body_file.write_text(context.release_body, encoding="utf-8")
+    print(
+        "Current appcast inspection passed "
+        f"(version={context.version}, asset={context.expected_asset_name})."
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage and validate appcast.xml")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -339,6 +418,13 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_parser.add_argument("--delay-seconds", type=int, default=5)
     add_shared_arguments(smoke_parser)
     smoke_parser.set_defaults(func=command_smoke_validate_url)
+
+    inspect_parser = subparsers.add_parser("inspect-url")
+    inspect_parser.add_argument("--feed-url", required=True)
+    inspect_parser.add_argument("--env-file", type=Path, required=True)
+    inspect_parser.add_argument("--release-body-file", type=Path, required=True)
+    inspect_parser.add_argument("--max-items", type=int, default=10)
+    inspect_parser.set_defaults(func=command_inspect_url)
 
     return parser
 

@@ -1646,6 +1646,18 @@ abstract class AppLocalizations {
   /// **'Checks paused after repeated timeouts'**
   String get configUpdateCompletionSourceCircuitOpen;
 
+  /// No description provided for @configCopyUpdateDiagnostics.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy update diagnostics'**
+  String get configCopyUpdateDiagnostics;
+
+  /// No description provided for @configUpdateDiagnosticsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Update diagnostics copied.'**
+  String get configUpdateDiagnosticsCopied;
+
   /// No description provided for @gsSectionAppearance.
   ///
   /// In en, this message translates to:

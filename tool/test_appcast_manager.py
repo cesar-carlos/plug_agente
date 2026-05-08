@@ -130,6 +130,49 @@ class AppcastManagerTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_inspect_feed_url_writes_context_for_smoke_validate_url(self) -> None:
+        context = self.build_context()
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            appcast_path = Path(tmpdir) / "appcast.xml"
+            env_path = Path(tmpdir) / "appcast.env"
+            release_body_path = Path(tmpdir) / "release_body.txt"
+            appcast_manager.write_appcast_tree(tree, appcast_path)
+            body = appcast_path.read_bytes()
+
+            class Handler(BaseHTTPRequestHandler):
+                def do_GET(self) -> None:  # noqa: N802
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/rss+xml; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(body)
+
+                def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+                    return
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                inspected = appcast_manager.inspect_feed_url(
+                    f"http://127.0.0.1:{server.server_port}/appcast.xml",
+                    max_items=context.max_items,
+                )
+                appcast_manager.write_shell_env(env_path, inspected)
+                release_body_path.write_text(inspected.release_body, encoding="utf-8")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            env_content = env_path.read_text(encoding="utf-8")
+            self.assertIn("FULL_VERSION=1.6.0+1", env_content)
+            self.assertIn("ASSET_NAME=PlugAgente-Setup-1.6.0.exe", env_content)
+            self.assertEqual(release_body_path.read_text(encoding="utf-8"), context.release_body)
+
 
 if __name__ == "__main__":
     unittest.main()

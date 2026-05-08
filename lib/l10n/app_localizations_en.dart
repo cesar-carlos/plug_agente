@@ -822,6 +822,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configUpdateCompletionSourceCircuitOpen => 'Checks paused after repeated timeouts';
 
   @override
+  String get configCopyUpdateDiagnostics => 'Copy update diagnostics';
+
+  @override
+  String get configUpdateDiagnosticsCopied => 'Update diagnostics copied.';
+
+  @override
   String get gsSectionAppearance => 'Appearance';
 
   @override
