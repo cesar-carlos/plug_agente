@@ -252,6 +252,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
     }
     if (connectionProvider.isConnected ||
         connectionProvider.status == ConnectionStatus.connecting ||
+        connectionProvider.status == ConnectionStatus.negotiating ||
         connectionProvider.status == ConnectionStatus.reconnecting) {
       _markStartupFlowHandled();
       return;
@@ -317,6 +318,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
       );
       if (connectionProvider.status == ConnectionStatus.connected ||
           connectionProvider.status == ConnectionStatus.connecting ||
+          connectionProvider.status == ConnectionStatus.negotiating ||
           connectionProvider.status == ConnectionStatus.reconnecting) {
         _markStartupFlowHandled();
       }

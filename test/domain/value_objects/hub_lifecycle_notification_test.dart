@@ -13,4 +13,16 @@ void main() {
       expect(isHubIoServerInitiatedDisconnect(null), isFalse);
     });
   });
+
+  group('HubLifecycleNotification', () {
+    test('should model protocol readiness separately from reconnect success', () {
+      const notifications = <HubLifecycleNotification>[
+        HubProtocolReady(),
+        HubTransportAutoReconnectSucceeded(),
+      ];
+
+      expect(notifications.whereType<HubProtocolReady>(), hasLength(1));
+      expect(notifications.whereType<HubTransportAutoReconnectSucceeded>(), hasLength(1));
+    });
+  });
 }

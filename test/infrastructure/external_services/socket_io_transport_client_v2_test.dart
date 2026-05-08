@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -358,6 +359,99 @@ void main() {
       expect(readyPayload['agent_id'], 'agent-1');
       expect(readyPayload['protocol'], 'jsonrpc-v2');
       expect(readyPayload['timestamp'], isA<String>());
+    });
+
+    test('should notify lifecycle when initial protocol negotiation is ready', () async {
+      final notifications = <HubLifecycleNotification>[];
+      client.setOnHubLifecycle(notifications.add);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifications.whereType<HubProtocolReady>(), hasLength(1));
+      expect(notifications.whereType<HubTransportAutoReconnectSucceeded>(), isEmpty);
+    });
+
+    test('should fail fast when binary PayloadFrame transport is disabled', () async {
+      when(() => mockFeatureFlags.enableBinaryPayload).thenReturn(false);
+
+      final result = await client.connect('https://hub.test', 'agent-1');
+
+      expect(result.isError(), isTrue);
+      verifyNever(
+        () => mockDataSource.createSocket(
+          any(),
+          authToken: any(named: 'authToken'),
+        ),
+      );
+    });
+
+    test('should fail connect when local agent:register validation fails', () async {
+      when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
+      var reconnectionRequested = false;
+      client.setOnReconnectionNeeded(() {
+        reconnectionRequested = true;
+      });
+
+      final connectFuture = client.connect('https://hub.test', '');
+      emitEvent('connect');
+      final result = await connectFuture;
+
+      expect(result.isError(), isTrue);
+      expect(reconnectionRequested, isTrue);
+      expect(emitted.any((item) => item.event == 'agent:register'), isFalse);
+      verify(() => mockSocket.disconnect()).called(1);
+      verify(() => mockSocket.dispose()).called(1);
+    });
+
+    test('should close current socket when register error is non-recoverable', () async {
+      var reconnectionRequested = false;
+      client.setOnReconnectionNeeded(() {
+        reconnectionRequested = true;
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent('agent:register_error', {
+        'code': 'unsupported_protocol',
+        'message': 'no compatible protocol',
+      });
+
+      expect(reconnectionRequested, isTrue);
+      verify(() => mockSocket.disconnect()).called(1);
+      verify(() => mockSocket.dispose()).called(1);
+    });
+
+    test('should keep socket open when dynamic register error is recoverable', () async {
+      var reconnectionRequested = false;
+      client.setOnReconnectionNeeded(() {
+        reconnectionRequested = true;
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitEvent('agent:register_error', <dynamic, dynamic>{
+        'code': 'transient_failure',
+        'message': 'try again',
+      });
+
+      expect(reconnectionRequested, isFalse);
+      verifyNever(() => mockSocket.disconnect());
+      verifyNever(() => mockSocket.dispose());
     });
 
     test('should record protocol metrics for framed send and receive paths', () async {
@@ -749,6 +843,47 @@ void main() {
         (responsePayload['error'] as Map<String, dynamic>)['code'],
         RpcErrorCode.invalidPayload,
       );
+    });
+
+    test('should emit fallback internal errors as PayloadFrame', () async {
+      when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(id: 'req-invalid-response', result: 'invalid-result'),
+      );
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-invalid-response',
+          'params': {'sql': 'SELECT 1'},
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final response = emitted.firstWhere((item) => item.event == 'rpc:response');
+      expect(response.data, isA<Map<String, dynamic>>());
+      expect((response.data as Map<String, dynamic>)['schemaVersion'], '1.0');
+      final responsePayload = decodeWirePayload(response.data) as Map<String, dynamic>;
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.internalError);
     });
 
     group('execution_mode', () {

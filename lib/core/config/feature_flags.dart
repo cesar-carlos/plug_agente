@@ -38,11 +38,11 @@ class FeatureFlags {
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
   static const _keyHubHardReloginFailureThreshold = 'feature_hub_hard_relogin_failure_threshold';
 
-  /// Whether binary payload is enabled.
-  bool get enableBinaryPayload => _prefs.getBool(_keyEnableBinaryPayload) ?? true;
+  /// Binary PayloadFrame transport is mandatory in the current socket contract.
+  bool get enableBinaryPayload => true;
 
   Future<void> setEnableBinaryPayload(bool value) async {
-    await _prefs.setBool(_keyEnableBinaryPayload, value);
+    await _prefs.setBool(_keyEnableBinaryPayload, true);
   }
 
   /// Whether outbound compression is enabled (any mode other than `none`).
@@ -247,8 +247,7 @@ class FeatureFlags {
   }
 
   /// When false, SQL investigation feed is not recorded or shown (reduces exposure of SQL text).
-  bool get enableDashboardSqlInvestigationFeed =>
-      _prefs.getBool(_keyEnableDashboardSqlInvestigationFeed) ?? true;
+  bool get enableDashboardSqlInvestigationFeed => _prefs.getBool(_keyEnableDashboardSqlInvestigationFeed) ?? true;
 
   Future<void> setEnableDashboardSqlInvestigationFeed(bool value) async {
     await _prefs.setBool(_keyEnableDashboardSqlInvestigationFeed, value);

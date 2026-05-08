@@ -42,13 +42,14 @@ void main() {
 
   CapabilitiesNegotiator buildNegotiator({
     dynamic Function(dynamic, {String? sourceEvent})? decode,
+    String Function()? agentIdProvider,
   }) {
     return CapabilitiesNegotiator(
       negotiator: negotiator,
       featureFlags: featureFlags,
       contractValidator: const RpcContractValidator(),
       localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
-      agentIdProvider: () => 'agent-1',
+      agentIdProvider: agentIdProvider ?? () => 'agent-1',
       emit: (event, payload) async {
         emitted.add((event: event, payload: payload));
       },
@@ -60,14 +61,27 @@ void main() {
   group('sendRegisterAndStartTimeout', () {
     test('emits agent:register frame with capabilities envelope', () async {
       final neg = buildNegotiator();
+      addTearDown(neg.reset);
 
-      await neg.sendRegisterAndStartTimeout();
+      final sent = await neg.sendRegisterAndStartTimeout();
 
+      expect(sent, isTrue);
       expect(emitted, hasLength(1));
       expect(emitted.single.event, 'agent:register');
       final payload = emitted.single.payload as Map<String, dynamic>;
       expect(payload['agentId'], 'agent-1');
       expect(payload['capabilities'], isA<Map<String, dynamic>>());
+    });
+
+    test('returns false and requests reconnect when local register validation fails', () async {
+      when(() => featureFlags.enableSocketSchemaValidation).thenReturn(true);
+      final neg = buildNegotiator(agentIdProvider: () => '');
+
+      final sent = await neg.sendRegisterAndStartTimeout();
+
+      expect(sent, isFalse);
+      expect(emitted, isEmpty);
+      expect(reconnectCalls, 1);
     });
   });
 
@@ -105,6 +119,33 @@ void main() {
 
       expect(outcome, isA<CapabilitiesNegotiationSuccess>());
       expect((outcome as CapabilitiesNegotiationSuccess).wasPostReconnect, isTrue);
+    });
+  });
+
+  group('handleRegisterError', () {
+    test('returns false and keeps socket open for recoverable register errors', () {
+      final neg = buildNegotiator();
+      addTearDown(neg.reset);
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': 'transient_failure',
+        'message': 'try again',
+      });
+
+      expect(shouldReconnect, isFalse);
+      expect(reconnectCalls, 0);
+    });
+
+    test('returns true and requests reconnect for non-recoverable register errors', () {
+      final neg = buildNegotiator();
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': 'unsupported_protocol',
+        'message': 'no compatible protocol',
+      });
+
+      expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
     });
   });
 

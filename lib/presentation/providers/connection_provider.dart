@@ -25,6 +25,7 @@ import 'package:result_dart/result_dart.dart';
 enum ConnectionStatus {
   disconnected,
   connecting,
+  negotiating,
   connected,
   reconnecting,
   error,
@@ -241,6 +242,8 @@ class ConnectionProvider extends ChangeNotifier {
   /// True while an internal recovery handler runs, or when the hub link is in a
   /// reconnecting state (including Socket.IO lifecycle).
   bool get isReconnecting => _isReconnecting || _status == ConnectionStatus.reconnecting;
+  bool get isConnectingOrNegotiating =>
+      _status == ConnectionStatus.connecting || _status == ConnectionStatus.negotiating;
   bool get isCheckingDriver => _isCheckingDriver;
 
   String _resilienceLogPrefix() {
@@ -318,15 +321,21 @@ class ConnectionProvider extends ChangeNotifier {
       (_) {
         if (_isDisconnectRequested) return;
         _cancelPersistentRetryTimer();
-        _clearResilienceRecovery();
         _clearHubRecoveryUiHint();
-        _status = ConnectionStatus.connected;
+        _status = ConnectionStatus.negotiating;
         _error = '';
-        AppLogger.info('Connected to hub successfully');
+        AppLogger.info('Connected to hub transport; waiting for protocol negotiation');
       },
       (failure) {
         if (_isDisconnectRequested) {
           _status = ConnectionStatus.disconnected;
+          return;
+        }
+        if (_isReconnecting || _status == ConnectionStatus.reconnecting) {
+          AppLogger.warning(
+            'Initial connect failure ignored because hub recovery is already in progress: ${failure.toDisplayMessage()}',
+            failure.toTechnicalMessage(),
+          );
           return;
         }
         _status = ConnectionStatus.error;
@@ -431,7 +440,7 @@ class ConnectionProvider extends ChangeNotifier {
     }
 
     // During hub recovery burst/persistent retry, `_isReconnecting` is true but we still
-    // need to refresh — otherwise `_handleConnectionError` fires `_onTokenExpired` and we
+    // need to refresh - otherwise `_handleConnectionError` fires `_onTokenExpired` and we
     // never rotate JWT until user logs out/in manually.
     if (_isReconnecting) {
       final context = _resolveConnectionContext();
@@ -598,8 +607,8 @@ class ConnectionProvider extends ChangeNotifier {
 
   Future<void> _disconnectTransportForRecovery() async {
     try {
-      final client = _transportClientOverride ??
-          (getIt.isRegistered<ITransportClient>() ? getIt<ITransportClient>() : null);
+      final client =
+          _transportClientOverride ?? (getIt.isRegistered<ITransportClient>() ? getIt<ITransportClient>() : null);
       if (client == null) {
         return;
       }
@@ -820,7 +829,7 @@ class ConnectionProvider extends ChangeNotifier {
         _consecutiveReconnectFailures = 0;
         _sessionAuthInvalid = false;
         _reconnectQuietFailureLogCount = 0;
-        _status = ConnectionStatus.connected;
+        _status = ConnectionStatus.negotiating;
         _error = '';
         _lastServerUrl = serverUrl;
         _lastAgentId = agentId;
@@ -828,9 +837,8 @@ class ConnectionProvider extends ChangeNotifier {
           _lastAuthToken = authToken.trim();
         }
         AppLogger.info(
-          'resilience: ${_resilienceLogPrefix()}hub_connect event=succeeded agent_id=$agentId',
+          'resilience: ${_resilienceLogPrefix()}hub_connect event=transport_succeeded agent_id=$agentId',
         );
-        _clearResilienceRecovery();
         _clearHubRecoveryUiHint();
         return true;
       },
@@ -929,12 +937,41 @@ class ConnectionProvider extends ChangeNotifier {
           'resilience: ${_resilienceLogPrefix()}hub_socket_reconnect_attempt attempt=$attemptNumber '
           'status=${_status.name}',
         );
-        if (_status == ConnectionStatus.connected) {
+        if (_status == ConnectionStatus.connected || _status == ConnectionStatus.negotiating) {
           _status = ConnectionStatus.reconnecting;
           _error = '';
           notifyListeners();
         }
+      case HubProtocolReady():
+        if (_status != ConnectionStatus.negotiating &&
+            _status != ConnectionStatus.reconnecting &&
+            _status != ConnectionStatus.connected) {
+          AppLogger.debug(
+            'resilience: ${_resilienceLogPrefix()}hub_transport event=protocol_ready_ignored '
+            'status=${_status.name} agent_id=${_lastAgentId ?? "?"}',
+          );
+          return;
+        }
+        AppLogger.info(
+          'resilience: ${_resilienceLogPrefix()}hub_transport event=protocol_ready '
+          'agent_id=${_lastAgentId ?? "?"}',
+        );
+        _clearResilienceRecovery();
+        _cancelPersistentRetryTimer();
+        _clearHubRecoveryUiHint();
+        _status = ConnectionStatus.connected;
+        _error = '';
+        notifyListeners();
       case HubTransportAutoReconnectSucceeded():
+        if (_status != ConnectionStatus.negotiating &&
+            _status != ConnectionStatus.reconnecting &&
+            _status != ConnectionStatus.connected) {
+          AppLogger.debug(
+            'resilience: ${_resilienceLogPrefix()}hub_transport event=auto_reconnect_capabilities_ok_ignored '
+            'status=${_status.name} agent_id=${_lastAgentId ?? "?"}',
+          );
+          return;
+        }
         AppLogger.info(
           'resilience: ${_resilienceLogPrefix()}hub_transport event=auto_reconnect_capabilities_ok '
           'agent_id=${_lastAgentId ?? "?"}',
@@ -1068,9 +1105,7 @@ class ConnectionProvider extends ChangeNotifier {
 
     final minGap = _effectiveHubTokenRefreshMinInterval;
     final last = _lastHubRefreshHttpCompletedAt;
-    if (minGap > Duration.zero &&
-        last != null &&
-        DateTime.now().difference(last) < minGap) {
+    if (minGap > Duration.zero && last != null && DateTime.now().difference(last) < minGap) {
       AppLogger.debug(
         'resilience: ${_resilienceLogPrefix()}token_refresh event=skipped_min_interval '
         'min_interval_ms=${minGap.inMilliseconds} '

@@ -34,7 +34,7 @@ binario esta documentado em
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
-| Transporte binario em `PayloadFrame`                                 | implemented (default com `enableBinaryPayload`)                                                                            |
+| Transporte binario em `PayloadFrame`                                 | implemented (obrigatorio; sem fallback para JSON cru)                                                                      |
 | Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                                                                          |
 | Compatibilidade de leitura para payload JSON cru                     | not supported in current runtime                                                                                           |
 | `sql.cancel`                                                         | implemented (via feature flag)                                                                                             |

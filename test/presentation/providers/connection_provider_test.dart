@@ -67,6 +67,8 @@ class _FakeTransport implements ITransportClient {
 
   @override
   void setResilienceLogContext(String? recoveryId) {}
+
+  void triggerProtocolReady() => onHubLifecycle?.call(const HubProtocolReady());
 }
 
 Future<void> _waitForStatus(
@@ -109,7 +111,7 @@ void main() {
   });
 
   group('ConnectionProvider.connect', () {
-    test('marks status connected on success', () async {
+    test('marks status negotiating after transport success and connected after protocol ready', () async {
       when(
         () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).thenAnswer((_) async => const Success(unit));
@@ -123,6 +125,11 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+
+      expect(provider.status, ConnectionStatus.negotiating);
+      expect(provider.error, isEmpty);
+
+      transport.triggerProtocolReady();
 
       expect(provider.status, ConnectionStatus.connected);
       expect(provider.error, isEmpty);
@@ -145,6 +152,46 @@ void main() {
 
       expect(provider.status, ConnectionStatus.error);
       expect(provider.error, isNotEmpty);
+
+      transport.triggerProtocolReady();
+
+      expect(provider.status, ConnectionStatus.error);
+    });
+
+    test('keeps reconnecting state when token recovery starts before connect failure is folded', () async {
+      final refreshCompleter = Completer<Result<AuthToken>>();
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async {
+        transport.onTokenExpired?.call();
+        return Failure(domain_failures.ConfigurationFailure('Authentication failed'));
+      });
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentToken).thenReturn(
+        const AuthToken(token: 'tok-1', refreshToken: 'refresh-1'),
+      );
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer((_) => refreshCompleter.future);
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+
+      expect(provider.status, ConnectionStatus.reconnecting);
+      expect(provider.error, isEmpty);
     });
 
     test('rejects construction with invalid tuning parameters', () {
@@ -193,6 +240,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       await provider.disconnect();
 
       expect(provider.status, ConnectionStatus.disconnected);
@@ -215,6 +263,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onHubLifecycle?.call(const HubTransportDisconnected());
 
       expect(provider.status, ConnectionStatus.reconnecting);
@@ -234,10 +283,33 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onHubLifecycle?.call(const HubTransportDisconnected());
       transport.onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
 
       expect(provider.status, ConnectionStatus.connected);
+    });
+
+    test('late HubTransportAutoReconnectSucceeded is ignored after connect error', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => Failure(Exception('boom')));
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        configProvider: configProvider,
+        transportClient: transport,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+
+      expect(provider.status, ConnectionStatus.error);
+
+      transport.onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
+
+      expect(provider.status, ConnectionStatus.error);
     });
   });
 
@@ -282,6 +354,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onTokenExpired?.call();
 
       await _waitForStatus(provider, ConnectionStatus.error);
@@ -342,6 +415,7 @@ void main() {
         );
 
         await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
         transport.onReconnectionNeeded?.call();
 
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -382,6 +456,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -475,8 +550,11 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
+      await _waitForStatus(provider, ConnectionStatus.negotiating);
+      transport.triggerProtocolReady();
       await _waitForStatus(provider, ConnectionStatus.connected);
 
       verify(
@@ -535,6 +613,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await Future<void>.delayed(const Duration(milliseconds: 120));
@@ -581,6 +660,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await Future<void>.delayed(const Duration(milliseconds: 120));
@@ -592,9 +672,16 @@ void main() {
 
     test('rate-limits HTTP refresh during recovery burst when min interval is set', () async {
       var refreshCalls = 0;
+      var connectCalls = 0;
       when(
         () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
-      ).thenAnswer((_) async => Failure(Exception('hub down')));
+      ).thenAnswer((_) async {
+        connectCalls++;
+        if (connectCalls == 1) {
+          return const Success(unit);
+        }
+        return Failure(Exception('hub down'));
+      });
       when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
@@ -630,6 +717,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -723,6 +811,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -758,6 +847,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
       await _waitForStatus(provider, ConnectionStatus.error, timeout: const Duration(seconds: 4));

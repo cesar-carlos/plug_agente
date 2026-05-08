@@ -286,7 +286,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         : _responsePreparer.prepareForSend(responseData as RpcResponse);
     final validatedPayload = _responsePreparer.validateOutgoing(prepared);
     if (validatedPayload == null) {
-      AppLogger.warning('rpc:response outgoing validation returned null — emitting internal error');
+      AppLogger.warning('rpc:response outgoing validation returned null - emitting internal error');
       final requestId = _extractResponseId(responseData);
       await _emitInternalErrorResponse(requestId);
       return;
@@ -296,7 +296,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       validatedPayload,
     );
     if (outgoingPayload == null) {
-      AppLogger.warning('rpc:response pipeline encoding returned null — emitting internal error');
+      AppLogger.warning('rpc:response pipeline encoding returned null - emitting internal error');
       final requestId = _extractResponseId(responseData);
       await _emitInternalErrorResponse(requestId);
       return;
@@ -351,6 +351,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
     String? authToken,
   }) async {
     try {
+      if (!_featureFlags.enableBinaryPayload) {
+        return Failure(
+          domain.ConfigurationFailure.withContext(
+            message: 'Binary PayloadFrame transport is required by the current socket contract.',
+            context: {'operation': 'connect', 'feature': 'enableBinaryPayload'},
+          ),
+        );
+      }
+
       _heartbeat.stop();
 
       _closeSocket();
@@ -376,7 +385,27 @@ class SocketIOTransportClientV2 implements ITransportClient {
         );
         _authorizationDecisionLogger.resetSessionState();
         _heartbeat.resetTransientState();
-        await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
+        final registerSent = await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
+        if (!registerSent) {
+          _heartbeat.stop();
+          _socket?.disconnect();
+          _socket?.dispose();
+          _socket = null;
+          if (!completer.isCompleted) {
+            completer.complete(
+              Failure(
+                domain.ConfigurationFailure.withContext(
+                  message: 'Failed to send agent registration to hub.',
+                  context: {
+                    'operation': 'agent_register',
+                    'agent_id': _agentId,
+                  },
+                ),
+              ),
+            );
+          }
+          return;
+        }
 
         if (!completer.isCompleted) {
           completer.complete(const Success<Object, Exception>(Object()));
@@ -407,7 +436,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         _logMessage('ERROR', 'reconnect_failed', null);
         AppLogger.error(
           'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_exhausted '
-          'agent_id=$_agentId — Socket.IO gave up after repeated transport reconnects; '
+          'agent_id=$_agentId - Socket.IO gave up after repeated transport reconnects; '
           'escalating to application-level hub recovery',
         );
         _onReconnectionNeeded?.call();
@@ -455,8 +484,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
       // Hub-side rejection of agent:register (e.g. unsupported protocol).
       _socket!.on('agent:register_error', (data) {
         _logMessage('RECEIVED', 'agent:register_error', data);
-        final map = data is Map<String, dynamic> ? data : <String, dynamic>{};
-        _capabilitiesNegotiator.handleRegisterError(map);
+        final map = data is Map ? data.map((key, value) => MapEntry(key.toString(), value)) : <String, dynamic>{};
+        final shouldReconnect = _capabilitiesNegotiator.handleRegisterError(map);
+        if (shouldReconnect) {
+          _heartbeat.stop();
+          _socket?.disconnect();
+          _socket?.dispose();
+          _socket = null;
+        }
       });
 
       _socket!.on('hub:heartbeat_ack', _handleHeartbeatAck);
@@ -555,11 +590,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
             'protocol=${_currentProtocol.protocol} agent_id=$_agentId',
           );
           _onHubLifecycle?.call(const HubTransportAutoReconnectSucceeded());
+        } else {
+          _onHubLifecycle?.call(const HubProtocolReady());
         }
       case CapabilitiesNegotiationFailure(:final error, :final stackTrace):
         AppLogger.error(
           'resilience: ${_resilienceLogPrefix()}socket_transport event=capabilities_negotiation_failed '
-          'agent_id=$_agentId — mandatory transport contract rejected',
+          'agent_id=$_agentId - mandatory transport contract rejected',
           error,
           stackTrace,
         );
@@ -955,8 +992,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
           message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
         ),
       );
-      final raw = errorResponse.toJson();
-      _socket!.emit('rpc:response', jsonEncode(raw));
+      final prepared = _responsePreparer.prepareForSend(errorResponse);
+      final validatedPayload = _responsePreparer.validateOutgoing(prepared);
+      if (validatedPayload == null) {
+        AppLogger.warning('Fallback rpc:response failed contract validation');
+        return;
+      }
+      final outgoingPayload = await _prepareOutgoingPayloadAsync(
+        'rpc:response',
+        validatedPayload,
+      );
+      if (outgoingPayload == null) {
+        AppLogger.warning('Fallback rpc:response could not be framed as PayloadFrame');
+        return;
+      }
+      _logMessage('SENT', 'rpc:response', validatedPayload);
+      _socket!.emit('rpc:response', outgoingPayload);
     } on Object catch (e, st) {
       AppLogger.warning('Failed to emit fallback internal error response', e, st);
     }

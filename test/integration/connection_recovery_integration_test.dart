@@ -79,6 +79,7 @@ class FakeTransportClient implements ITransportClient {
 
   void triggerReconnectionNeeded() => onReconnectionNeeded?.call();
   void triggerTokenExpired() => onTokenExpired?.call();
+  void triggerProtocolReady() => onHubLifecycle?.call(const HubProtocolReady());
 
   void triggerHubDisconnected() => onHubLifecycle?.call(const HubTransportDisconnected());
 
@@ -162,11 +163,14 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 
       fakeTransport.triggerReconnectionNeeded();
 
       await waitForStatus(provider, ConnectionStatus.reconnecting);
+      await waitForStatus(provider, ConnectionStatus.negotiating);
+      fakeTransport.triggerProtocolReady();
       await waitForStatus(provider, ConnectionStatus.connected);
       verify(
         () => mockConnectToHub(any(), any(), authToken: any(named: 'authToken')),
@@ -241,7 +245,10 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1', authToken: 't');
+      fakeTransport.triggerProtocolReady();
       fakeTransport.triggerReconnectionNeeded();
+      await waitForStatus(provider, ConnectionStatus.negotiating);
+      fakeTransport.triggerProtocolReady();
       await waitForStatus(provider, ConnectionStatus.connected);
 
       final d = events.indexOf('disconnect');
@@ -282,6 +289,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 
       fakeTransport.triggerReconnectionNeeded();
@@ -315,6 +323,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 
       fakeTransport.triggerHubDisconnected();
@@ -354,6 +363,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 
       fakeTransport.triggerReconnectionNeeded();
@@ -383,6 +393,7 @@ void main() {
       );
 
       await provider.connect('https://hub.test', 'agent-1');
+      fakeTransport.triggerProtocolReady();
       fakeTransport.triggerHubDisconnected();
       expect(provider.status, ConnectionStatus.reconnecting);
 
@@ -430,9 +441,12 @@ void main() {
         );
 
         await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        fakeTransport.triggerProtocolReady();
         expect(provider.status, ConnectionStatus.connected);
 
         fakeTransport.triggerReconnectionNeeded();
+        await waitForStatus(provider, ConnectionStatus.negotiating);
+        fakeTransport.triggerProtocolReady();
         await waitForStatus(provider, ConnectionStatus.connected);
 
         // Default interval=2 + maxAttempts=3 → refresh fires inside the burst.
@@ -515,6 +529,7 @@ void main() {
         );
 
         await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        fakeTransport.triggerProtocolReady();
         expect(provider.status, ConnectionStatus.connected);
 
         fakeTransport.triggerTokenExpired();
@@ -525,9 +540,11 @@ void main() {
         // Allow burst recovery + a couple persistent retry ticks to land the success.
         await waitForStatus(
           provider,
-          ConnectionStatus.connected,
+          ConnectionStatus.negotiating,
           timeout: const Duration(seconds: 5),
         );
+        fakeTransport.triggerProtocolReady();
+        await waitForStatus(provider, ConnectionStatus.connected);
 
         // Initial + at least the failures from the escalation path + the eventual success.
         expect(connectCallCount, greaterThanOrEqualTo(6));

@@ -29,6 +29,10 @@ class ConnectionStatusWidget extends StatelessWidget {
             icon = FluentIcons.sync;
             color = colors.warning;
             statusText = l10n.connectionStatusHubConnecting;
+          case ConnectionStatus.negotiating:
+            icon = FluentIcons.sync;
+            color = colors.warning;
+            statusText = l10n.connectionStatusHubConnecting;
           case ConnectionStatus.reconnecting:
             icon = FluentIcons.sync;
             color = colors.warning;

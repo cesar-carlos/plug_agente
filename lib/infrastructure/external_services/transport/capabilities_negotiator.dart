@@ -107,8 +107,9 @@ class CapabilitiesNegotiator {
   /// timeout watchdog, logs the structured error, and triggers a forced
   /// reconnect when the error is non-recoverable. Recoverable errors (e.g.
   /// `transient_failure`) are logged and left for the next periodic re-register
-  /// timer to retry.
-  void handleRegisterError(Map<String, dynamic> error) {
+  /// timer to retry. Returns `true` when the transport should close the current
+  /// socket and start a forced reconnect.
+  bool handleRegisterError(Map<String, dynamic> error) {
     final code = error['code']?.toString();
     final reason = error['reason']?.toString();
     final message = error['message']?.toString() ?? 'agent:register rejected by hub';
@@ -123,10 +124,11 @@ class CapabilitiesNegotiator {
     if (_isRecoverableRegisterError(code, reason)) {
       // Schedule another attempt via the standard timeout/re-register loop.
       _startTimeoutTimer();
-      return;
+      return false;
     }
 
     _onTimeoutReconnect();
+    return true;
   }
 
   static bool _isRecoverableRegisterError(String? code, String? reason) {
@@ -140,13 +142,15 @@ class CapabilitiesNegotiator {
   /// If local validation rejects the register payload, the timer is not
   /// started and a reconnect is triggered instead, so the transport never
   /// reports a successful connect while the hub was never notified.
-  Future<void> sendRegisterAndStartTimeout() async {
+  Future<bool> sendRegisterAndStartTimeout() async {
     _reRegisterCount = 0;
     final sent = await _sendAgentRegister();
     if (sent) {
       _startTimeoutTimer();
+      return true;
     } else {
       _onTimeoutReconnect();
+      return false;
     }
   }
 
@@ -248,13 +252,15 @@ class CapabilitiesNegotiator {
             'resilience: capabilities_timeout re_register_count=$_reRegisterCount '
             'max=${ConnectionConstants.capabilitiesMaxReRegisterAttempts}',
           );
-          unawaited(_sendAgentRegister().then((sent) {
-            if (sent) {
-              _startTimeoutTimer();
-            } else {
-              _onTimeoutReconnect();
-            }
-          }));
+          unawaited(
+            _sendAgentRegister().then((sent) {
+              if (sent) {
+                _startTimeoutTimer();
+              } else {
+                _onTimeoutReconnect();
+              }
+            }),
+          );
         } else {
           AppLogger.warning(
             'resilience: capabilities_timeout forcing_reconnect after_max_attempts',

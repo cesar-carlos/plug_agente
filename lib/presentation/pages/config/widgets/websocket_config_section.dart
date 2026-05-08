@@ -176,6 +176,7 @@ class _ServerSection extends StatelessWidget {
                         final isAuthenticating = authProvider.status == AuthStatus.authenticating;
                         final isConnectionBusy =
                             connectionProvider.status == ConnectionStatus.connecting ||
+                            connectionProvider.status == ConnectionStatus.negotiating ||
                             connectionProvider.isReconnecting;
                         final canSubmit = authProvider.isAuthenticated || (!isAuthenticating && !isConnectionBusy);
                         return AppButton(
@@ -342,8 +343,9 @@ class _WebSocketActionButtons extends StatelessWidget {
         return Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
             final isConnecting = connectionProvider.status == ConnectionStatus.connecting;
+            final isNegotiating = connectionProvider.status == ConnectionStatus.negotiating;
             final isReconnecting = connectionProvider.status == ConnectionStatus.reconnecting;
-            final isConnectionBusy = isConnecting || isReconnecting;
+            final isConnectionBusy = isConnecting || isNegotiating || isReconnecting;
             return SettingsActionRow(
               leading: AppButton(
                 label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
@@ -372,6 +374,7 @@ class _WebSocketActionButtons extends StatelessWidget {
     AuthProvider authProvider,
   ) {
     if (connectionProvider.status == ConnectionStatus.connecting ||
+        connectionProvider.status == ConnectionStatus.negotiating ||
         connectionProvider.status == ConnectionStatus.reconnecting) {
       return;
     }
