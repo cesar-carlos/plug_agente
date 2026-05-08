@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.3+1</title>
+   <pubDate>Fri, 08 May 2026 17:24:38 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.3...v1.6.3</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.3/PlugAgente-Setup-1.6.3.exe" sparkle:version="1.6.3+1" sparkle:os="windows" length="36862787" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.6.2+1</title>
    <pubDate>Fri, 08 May 2026 15:43:48 +0000</pubDate>
    <description>Nova Versao 1.6.2+1 - Atualizacao automatica via GitHub Release.</description>
@@ -83,12 +89,6 @@ Build the Windows installer after \lutter build windows --release\ using Inno Se
    <pubDate>Mon, 27 Apr 2026 22:12:54 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.3.1...v1.3.2</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.3.2/PlugAgente-Setup-1.3.2.exe" sparkle:version="1.3.2+1" sparkle:os="windows" length="36802179" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.3.1+1</title>
-   <pubDate>Mon, 27 Apr 2026 21:00:00 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.3.0...v1.3.1</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.3.1/PlugAgente-Setup-1.3.1.exe" sparkle:version="1.3.1+1" sparkle:os="windows" length="36795614" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
