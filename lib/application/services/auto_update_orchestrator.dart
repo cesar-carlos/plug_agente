@@ -601,7 +601,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerStartedAt: triggerStartedAt,
       );
-      await _updaterGateway.checkForUpdates(inBackground: false).timeout(_manualTriggerTimeout);
+      // Use WinSparkle check without UI so the Settings dialog is the only user-facing
+      // result for "no update" / errors; native "up to date" duplicates Fluent feedback.
+      await _updaterGateway.checkForUpdates(inBackground: true).timeout(_manualTriggerTimeout);
       final triggerCompletedAt = DateTime.now();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerCompletedAt: triggerCompletedAt,

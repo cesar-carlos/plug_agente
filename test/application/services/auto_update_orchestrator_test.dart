@@ -185,7 +185,7 @@ void main() {
           (isUpdateAvailable) => expect(isUpdateAvailable, isTrue),
           (_) => fail('Expected success'),
         );
-        expect(fakeGateway.lastInBackground, isFalse);
+        expect(fakeGateway.lastInBackground, isTrue);
         expect(fakeGateway.feedUrls, <String>['https://example.com/appcast.xml']);
         expect(fakeProbe.lastProbeUrl, contains('cb='));
         expect(orchestrator.lastManualDiagnostics?.configuredFeedUrl, 'https://example.com/appcast.xml');
@@ -250,7 +250,7 @@ void main() {
           (isUpdateAvailable) => expect(isUpdateAvailable, isFalse),
           (_) => fail('Expected success'),
         );
-        expect(fakeGateway.lastInBackground, isFalse);
+        expect(fakeGateway.lastInBackground, isTrue);
         expect(orchestrator.lastManualDiagnostics?.updateAvailable, isFalse);
         expect(orchestrator.lastManualDiagnostics?.appcastProbeVersion, '1.0.13+14');
         expect(
@@ -381,7 +381,7 @@ void main() {
         expect(result.isSuccess(), isTrue);
         expect(orchestrator.lastManualDiagnostics?.probeSucceeded, isFalse);
         expect(orchestrator.lastManualDiagnostics?.probeErrorMessage, 'HTTP 500');
-        expect(fakeGateway.lastInBackground, isFalse);
+        expect(fakeGateway.lastInBackground, isTrue);
       });
       test('returns Failure with notInitialized completion source when initialize does not finish', () async {
         final fakeGateway = FakeAutoUpdaterGateway()..setFeedError = Exception('init failed');

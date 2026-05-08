@@ -138,10 +138,13 @@ class _ConfigPageState extends State<ConfigPage> {
     AppLocalizations l10n,
     IAutoUpdateOrchestrator orchestrator,
   ) {
+    final manual = orchestrator.lastManualDiagnostics;
+    final background = orchestrator.lastBackgroundDiagnostics;
+    final primaryDiagnostics = manual ?? background;
     final technicalDetails = _formatTechnicalDetails(
       l10n,
-      orchestrator.lastManualDiagnostics,
-      orchestrator.lastBackgroundDiagnostics,
+      primaryDiagnostics,
+      null,
     );
     return <String>[
       'Plug Agente Auto-Update',
@@ -262,7 +265,7 @@ class _ConfigPageState extends State<ConfigPage> {
         final technicalDetails = _formatTechnicalDetails(
           l10n,
           orchestrator.lastManualDiagnostics,
-          orchestrator.lastBackgroundDiagnostics,
+          null,
         );
         return SettingsFeedback.showInfo(
           context: context,
@@ -274,7 +277,7 @@ class _ConfigPageState extends State<ConfigPage> {
         final technicalDetails = _formatTechnicalDetails(
           l10n,
           orchestrator.lastManualDiagnostics,
-          orchestrator.lastBackgroundDiagnostics,
+          null,
         );
         return SettingsFeedback.showError(
           context: context,
