@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.observer-register.v1.json",
+  "title": "observer.register params",
+  "description": "Registers a session-scoped SQL observer that periodically executes SQL and emits observer notifications when rows are returned.",
+  "type": "object",
+  "required": ["sql"],
+  "properties": {
+    "sql": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "client_token": {
+      "type": "string"
+    },
+    "clientToken": {
+      "type": "string"
+    },
+    "auth": {
+      "type": "string"
+    },
+    "database": {
+      "type": "string"
+    },
+    "interval_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 86400,
+      "default": 300
+    },
+    "condition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rows_present"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "default": { "type": "rows_present" }
+    },
+    "run_immediately": {
+      "type": "boolean",
+      "default": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "execution_mode": {
+          "type": "string",
+          "enum": ["managed", "preserve"]
+        },
+        "preserve_sql": {
+          "type": "boolean"
+        },
+        "multi_result": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "idempotency_key": {
+      "not": {},
+      "description": "observer.register rejects idempotency_key because periodic executions must never reuse cached SQL results."
+    }
+  },
+  "additionalProperties": false
+}

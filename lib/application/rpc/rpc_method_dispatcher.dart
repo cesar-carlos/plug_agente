@@ -8,12 +8,14 @@ import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/services/sql_observer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
@@ -59,6 +61,7 @@ class RpcMethodDispatcher {
     IRpcDispatchMetricsCollector? dispatchMetrics,
     void Function()? onIdempotencyFingerprintMismatch,
     ISqlInvestigationCollector? sqlInvestigation,
+    SqlObserverService? sqlObserverService,
     IStreamingDatabaseGateway? streamingGateway,
     OdbcNativeMetricsService? odbcNativeMetricsService,
     TransportLimits defaultLimits = const TransportLimits(),
@@ -82,6 +85,7 @@ class RpcMethodDispatcher {
        _dispatchMetrics = dispatchMetrics,
        _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
        _sqlInvestigation = sqlInvestigation,
+       _sqlObserverService = sqlObserverService,
        _streamingGateway = streamingGateway,
        _odbcNativeMetricsService = odbcNativeMetricsService,
        _defaultLimits = defaultLimits,
@@ -111,6 +115,7 @@ class RpcMethodDispatcher {
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final void Function()? _onIdempotencyFingerprintMismatch;
   final ISqlInvestigationCollector? _sqlInvestigation;
+  final SqlObserverService? _sqlObserverService;
   final IStreamingDatabaseGateway? _streamingGateway;
   final OdbcNativeMetricsService? _odbcNativeMetricsService;
   final TransportLimits _defaultLimits;
@@ -172,6 +177,14 @@ class RpcMethodDispatcher {
         agentId,
         clientToken,
       ),
+      'observer.register' => await _handleObserverRegister(
+        request,
+        agentId,
+        clientToken,
+        limits: effectiveLimits,
+      ),
+      'observer.unregister' => _handleObserverUnregister(request),
+      'observer.list' => _handleObserverList(request),
       _ => _methodNotFound(request),
     };
   }
@@ -1127,6 +1140,137 @@ class RpcMethodDispatcher {
         ),
       );
     }
+  }
+
+  Future<RpcResponse> _handleObserverRegister(
+    RpcRequest request,
+    String agentId,
+    String? clientToken, {
+    required TransportLimits limits,
+  }) async {
+    final service = _sqlObserverService;
+    if (service == null) {
+      return _methodNotFound(request);
+    }
+    if (request.params is! Map<String, dynamic>) {
+      return _invalidParams(request, 'params must be an object');
+    }
+    final params = request.params as Map<String, dynamic>;
+    final paramReader = SqlExecuteParamsReader(params);
+    final sql = paramReader.sql;
+    if (sql == null || sql.trim().isEmpty) {
+      return _invalidParams(request, 'sql is required');
+    }
+
+    final rawIntervalSeconds = params['interval_seconds'];
+    if (rawIntervalSeconds != null && rawIntervalSeconds is! int) {
+      return _invalidParams(
+        request,
+        'interval_seconds must be an integer',
+      );
+    }
+    final intervalSeconds = rawIntervalSeconds as int? ?? ConnectionConstants.sqlObserverDefaultInterval.inSeconds;
+    final condition = SqlObserverCondition.fromJson(params['condition']);
+    if (condition == null) {
+      return _invalidParams(
+        request,
+        'condition.type must be rows_present',
+        rpcReason: 'unsupported_observer_condition',
+      );
+    }
+    final sqlHandlingModeResolution = _resolveSqlHandlingMode(params);
+    if (sqlHandlingModeResolution.hasError) {
+      return _invalidParams(
+        request,
+        sqlHandlingModeResolution.errorMessage!,
+      );
+    }
+    final multiResultRequested = _resolveMultiResult(params);
+    final effectiveLimits = TransportLimits(
+      maxCompressedPayloadBytes: limits.maxCompressedPayloadBytes,
+      maxDecodedPayloadBytes: limits.maxDecodedPayloadBytes,
+      maxRows: _resolveMaxRows(params, limits.maxRows),
+      maxBatchSize: limits.maxBatchSize,
+      maxConcurrentStreams: limits.maxConcurrentStreams,
+      streamingChunkSize: limits.streamingChunkSize,
+      streamingRowThreshold: limits.streamingRowThreshold,
+    );
+    final rawRunImmediately = params['run_immediately'];
+    if (rawRunImmediately != null && rawRunImmediately is! bool) {
+      return _invalidParams(
+        request,
+        'run_immediately must be a boolean',
+      );
+    }
+    final runImmediately = rawRunImmediately as bool? ?? false;
+    final registerResult = await service.register(
+      SqlObserverRegisterCommand(
+        agentId: agentId,
+        sql: sql,
+        parameters: paramReader.boundParams,
+        database: paramReader.database,
+        clientToken: clientToken,
+        idempotencyKey: paramReader.idempotencyKey,
+        runImmediately: runImmediately,
+        intervalSeconds: intervalSeconds,
+        limits: effectiveLimits,
+        condition: condition,
+        sqlHandlingMode: sqlHandlingModeResolution.sqlHandlingMode!,
+        expectMultipleResults: multiResultRequested,
+        sourceRpcRequestId: request.id?.toString(),
+      ),
+    );
+
+    return registerResult.fold(
+      (result) => RpcResponse.success(id: request.id, result: result.toJson()),
+      (failure) {
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure as domain.Failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
+  }
+
+  RpcResponse _handleObserverUnregister(RpcRequest request) {
+    final service = _sqlObserverService;
+    if (service == null) {
+      return _methodNotFound(request);
+    }
+    if (request.params is! Map<String, dynamic>) {
+      return _invalidParams(request, 'params must be an object');
+    }
+    final params = request.params as Map<String, dynamic>;
+    final observerId = params['observer_id'] as String?;
+    if (observerId == null || observerId.trim().isEmpty) {
+      return _invalidParams(request, 'observer_id is required');
+    }
+    final result = service.unregister(observerId);
+    return result.fold(
+      (value) => RpcResponse.success(id: request.id, result: value.toJson()),
+      (failure) {
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure as domain.Failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
+  }
+
+  RpcResponse _handleObserverList(RpcRequest request) {
+    final service = _sqlObserverService;
+    if (service == null) {
+      return _methodNotFound(request);
+    }
+    final observers = service.list().map((observer) => observer.toJson()).toList(growable: false);
+    return RpcResponse.success(
+      id: request.id,
+      result: {'observers': observers},
+    );
   }
 
   Future<Result<List<SqlCommandResult>>> _executeSqlBatchWithBudget(

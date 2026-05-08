@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.observer-unregister.v1.json",
+  "title": "observer.unregister params",
+  "type": "object",
+  "required": ["observer_id"],
+  "properties": {
+    "observer_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

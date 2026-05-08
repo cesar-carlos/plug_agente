@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/observer.notification.v1.json",
+  "title": "observer:notification event payload",
+  "type": "object",
+  "required": [
+    "observer_id",
+    "sequence",
+    "triggered_at",
+    "started_at",
+    "finished_at",
+    "interval_seconds",
+    "condition",
+    "row_count",
+    "returned_rows",
+    "rows"
+  ],
+  "properties": {
+    "observer_id": { "type": "string" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "triggered_at": { "type": "string", "format": "date-time" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "interval_seconds": { "type": "integer", "minimum": 30, "maximum": 86400 },
+    "condition": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "const": "rows_present" }
+      },
+      "additionalProperties": false
+    },
+    "row_count": { "type": "integer", "minimum": 0 },
+    "returned_rows": { "type": "integer", "minimum": 0 },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "database": { "type": "string" },
+    "column_metadata": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "result_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "rows", "row_count"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "row_count": { "type": "integer", "minimum": 0 },
+          "affected_rows": { "type": "integer", "minimum": 0 },
+          "column_metadata": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "truncated": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

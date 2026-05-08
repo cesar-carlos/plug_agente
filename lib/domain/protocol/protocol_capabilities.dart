@@ -58,6 +58,8 @@ class ProtocolCapabilities {
       'paginationModes': ['page-offset', 'cursor-keyset', 'cursor-offset'],
       'traceContext': ['w3c-trace-context', 'legacy-trace-id'],
       'errorFormat': 'structured-error-data',
+      'sqlObservers': true,
+      'sqlObserverNotifications': true,
       // Backpressure window hints communicate the agent's preferred and maximum
       // pull window sizes to the hub. The hub may pick a value <= max and
       // SHOULD start with `recommended`. See socket_communication_standard.md.

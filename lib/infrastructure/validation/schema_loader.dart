@@ -29,11 +29,19 @@ class TransportSchemaIds {
   static const String paramsAgentGetProfile = 'rpc.params.agent-get-profile.schema.json';
   static const String paramsAgentGetHealth = 'rpc.params.agent-get-health.schema.json';
   static const String paramsClientTokenGetPolicy = 'rpc.params.client-token-get-policy.schema.json';
+  static const String paramsObserverRegister = 'rpc.params.observer-register.schema.json';
+  static const String paramsObserverUnregister = 'rpc.params.observer-unregister.schema.json';
+  static const String paramsObserverList = 'rpc.params.observer-list.schema.json';
   static const String resultSqlExecute = 'rpc.result.sql-execute.schema.json';
   static const String resultSqlExecuteBatch = 'rpc.result.sql-execute-batch.schema.json';
   static const String resultAgentGetProfile = 'rpc.result.agent-get-profile.schema.json';
   static const String resultAgentGetHealth = 'rpc.result.agent-get-health.schema.json';
   static const String resultClientTokenGetPolicy = 'rpc.result.client-token-get-policy.schema.json';
+  static const String resultObserverRegister = 'rpc.result.observer-register.schema.json';
+  static const String resultObserverUnregister = 'rpc.result.observer-unregister.schema.json';
+  static const String resultObserverList = 'rpc.result.observer-list.schema.json';
+  static const String observerNotification = 'observer.notification.schema.json';
+  static const String observerError = 'observer.error.schema.json';
   static const String streamChunk = 'rpc.stream.chunk.schema.json';
   static const String streamComplete = 'rpc.stream.complete.schema.json';
   static const String streamPull = 'rpc.stream.pull.schema.json';
@@ -55,11 +63,19 @@ class TransportSchemaIds {
     paramsAgentGetProfile,
     paramsAgentGetHealth,
     paramsClientTokenGetPolicy,
+    paramsObserverRegister,
+    paramsObserverUnregister,
+    paramsObserverList,
     resultSqlExecute,
     resultSqlExecuteBatch,
     resultAgentGetProfile,
     resultAgentGetHealth,
     resultClientTokenGetPolicy,
+    resultObserverRegister,
+    resultObserverUnregister,
+    resultObserverList,
+    observerNotification,
+    observerError,
     streamChunk,
     streamComplete,
     streamPull,

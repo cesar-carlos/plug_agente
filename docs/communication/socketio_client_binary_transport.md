@@ -32,6 +32,8 @@ O padrao abaixo se aplica a todos os eventos de aplicacao:
 - `rpc:chunk`
 - `rpc:complete`
 - `rpc:stream.pull`
+- `observer:notification`
+- `observer:error`
 
 Eventos internos do proprio Socket.IO, como `connect`, `disconnect`,
 `connect_error` e `error`, nao usam este envelope.

@@ -209,6 +209,100 @@ class RpcContractValidator {
     return const Success(unit);
   }
 
+  Result<void> validateObserverNotification(Map<String, dynamic> data) {
+    if (!_isNonEmptyString(data['observer_id'])) {
+      return _invalid('Field "observer_id" must be a non-empty string');
+    }
+    final sequence = _toInt(data['sequence']);
+    if (sequence == null || sequence < 1) {
+      return _invalid('Field "sequence" must be >= 1');
+    }
+    for (final key in ['triggered_at', 'started_at', 'finished_at']) {
+      final value = data[key];
+      if (value is! String || DateTime.tryParse(value) == null) {
+        return _invalid('Field "$key" must be ISO-8601');
+      }
+    }
+    final intervalSeconds = _toInt(data['interval_seconds']);
+    if (intervalSeconds == null || intervalSeconds < 1) {
+      return _invalid('Field "interval_seconds" must be >= 1');
+    }
+    final condition = data['condition'];
+    if (condition is! Map<String, dynamic> || condition['type'] != 'rows_present') {
+      return _invalid('Field "condition.type" must be rows_present');
+    }
+    for (final key in ['row_count', 'returned_rows']) {
+      final value = _toInt(data[key]);
+      if (value == null || value < 0) {
+        return _invalid('Field "$key" must be >= 0');
+      }
+    }
+    final rows = data['rows'];
+    if (rows is! List<dynamic> || rows.any((row) => row is! Map<String, dynamic>)) {
+      return _invalid('Field "rows" must be an array of objects');
+    }
+    final columnMetadata = data['column_metadata'];
+    if (columnMetadata != null &&
+        (columnMetadata is! List<dynamic> || columnMetadata.any((entry) => entry is! Map<String, dynamic>))) {
+      return _invalid('Field "column_metadata" must be an array of objects');
+    }
+    final resultSets = data['result_sets'];
+    if (resultSets != null) {
+      if (resultSets is! List<dynamic>) {
+        return _invalid('Field "result_sets" must be an array');
+      }
+      for (final item in resultSets) {
+        final validation = _validateResultSetItem(item);
+        if (validation.isError()) {
+          return validation;
+        }
+      }
+    }
+    final truncated = data['truncated'];
+    if (truncated != null && truncated is! bool) {
+      return _invalid('Field "truncated" must be a boolean');
+    }
+    final database = data['database'];
+    if (database != null && database is! String) {
+      return _invalid('Field "database" must be a string');
+    }
+    return const Success(unit);
+  }
+
+  Result<void> validateObserverError(Map<String, dynamic> data) {
+    if (!_isNonEmptyString(data['observer_id'])) {
+      return _invalid('Field "observer_id" must be a non-empty string');
+    }
+    final sequence = _toInt(data['sequence']);
+    if (sequence == null || sequence < 1) {
+      return _invalid('Field "sequence" must be >= 1');
+    }
+    final consecutiveFailures = _toInt(data['consecutive_failures']);
+    if (consecutiveFailures == null || consecutiveFailures < 1) {
+      return _invalid('Field "consecutive_failures" must be >= 1');
+    }
+    for (final key in ['occurred_at', 'retry_at']) {
+      final value = data[key];
+      if (value is! String || DateTime.tryParse(value) == null) {
+        return _invalid('Field "$key" must be ISO-8601');
+      }
+    }
+    final error = data['error'];
+    if (error is! Map<String, dynamic>) {
+      return _invalid('Field "error" must be an object');
+    }
+    final code = error['code'];
+    final message = error['message'];
+    if (code is! int || message is! String || message.trim().isEmpty) {
+      return _invalid('Field "error" must contain integer code and message');
+    }
+    final reason = data['reason'];
+    if (reason != null && reason is! String) {
+      return _invalid('Field "reason" must be a string');
+    }
+    return const Success(unit);
+  }
+
   Result<void> _validateCapabilities(Map<String, dynamic> data) {
     try {
       final capabilities = ProtocolCapabilities.fromJson(data);

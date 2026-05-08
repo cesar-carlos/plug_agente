@@ -183,4 +183,42 @@ void main() {
       expect(result.isError(), isTrue);
     });
   });
+
+  group('RpcContractValidator observer events', () {
+    test('should accept observer notification payload', () {
+      final result = validator.validateObserverNotification(<String, dynamic>{
+        'observer_id': 'obs-1',
+        'sequence': 1,
+        'triggered_at': '2026-01-01T00:00:00Z',
+        'started_at': '2026-01-01T00:00:00Z',
+        'finished_at': '2026-01-01T00:00:01Z',
+        'interval_seconds': 300,
+        'condition': {'type': 'rows_present'},
+        'row_count': 1,
+        'returned_rows': 1,
+        'rows': [
+          {'id': 1},
+        ],
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should accept observer error payload', () {
+      final result = validator.validateObserverError(<String, dynamic>{
+        'observer_id': 'obs-1',
+        'sequence': 1,
+        'occurred_at': '2026-01-01T00:00:00Z',
+        'consecutive_failures': 1,
+        'retry_at': '2026-01-01T00:05:00Z',
+        'error': {
+          'code': -32102,
+          'message': 'SQL execution failed',
+        },
+        'reason': 'sql_execution_failed',
+      });
+
+      expect(result.isSuccess(), isTrue);
+    });
+  });
 }

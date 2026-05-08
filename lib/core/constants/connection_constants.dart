@@ -124,6 +124,18 @@ class ConnectionConstants {
   /// the cap protects memory if streams never receive a final pull/complete.
   static const int maxConcurrentRpcStreams = 64;
 
+  /// Default polling interval for SQL observers registered by the hub.
+  static const Duration sqlObserverDefaultInterval = Duration(seconds: 300);
+
+  /// Minimum accepted polling interval for SQL observers.
+  static const Duration sqlObserverMinInterval = Duration(seconds: 30);
+
+  /// Maximum accepted polling interval for SQL observers.
+  static const Duration sqlObserverMaxInterval = Duration(seconds: 86400);
+
+  /// Max active SQL observers kept in memory for a single socket session.
+  static const int maxSqlObserversPerSession = 16;
+
   /// Idle timeout for an RPC streaming emitter. If the hub does not call
   /// `rpc:stream.pull` within this window after the last activity, the emitter
   /// is unregistered defensively to avoid leaks across long-lived sockets.

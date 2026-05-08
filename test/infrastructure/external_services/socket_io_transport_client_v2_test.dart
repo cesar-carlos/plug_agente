@@ -5,6 +5,7 @@ import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/services/sql_observer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -90,6 +91,10 @@ void main() {
     late MockSocket mockSocket;
     late ProtocolMetricsCollector metricsCollector;
     late SocketIOTransportClientV2 client;
+    late SqlObserverService observerService;
+    late MockDatabaseGateway observerGateway;
+    late MockQueryNormalizerService observerNormalizer;
+    late MockAuthorizeSqlOperation observerAuthorize;
     late Map<String, Function> handlers;
     late List<({String event, dynamic data})> emitted;
 
@@ -156,6 +161,9 @@ void main() {
       mockFeatureFlags = MockFeatureFlags();
       mockSocket = MockSocket();
       metricsCollector = ProtocolMetricsCollector();
+      observerGateway = MockDatabaseGateway();
+      observerNormalizer = MockQueryNormalizerService();
+      observerAuthorize = MockAuthorizeSqlOperation();
       handlers = <String, Function>{};
       emitted = <({String event, dynamic data})>[];
 
@@ -241,6 +249,14 @@ void main() {
         ),
       ).thenReturn(defaultNegotiatedConfig);
 
+      observerService = SqlObserverService(
+        databaseGateway: observerGateway,
+        normalizerService: observerNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: observerAuthorize,
+        featureFlags: mockFeatureFlags,
+      );
+
       when(
         () => mockDispatcher.dispatch(
           any(),
@@ -263,7 +279,12 @@ void main() {
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
         protocolMetricsCollector: metricsCollector,
+        sqlObserverService: observerService,
       );
+    });
+
+    tearDown(() {
+      observerService.clearSession();
     });
 
     test('should emit agent:register on connect with capabilities', () async {
@@ -285,6 +306,54 @@ void main() {
         (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
         isA<Map<String, dynamic>>(),
       );
+    });
+
+    test('should emit observer notification as PayloadFrame', () async {
+      final response = QueryResponse(
+        id: 'exec-1',
+        requestId: 'obs-req',
+        agentId: 'agent-1',
+        data: const [
+          {'id': 1},
+        ],
+        timestamp: DateTime.now(),
+      );
+      when(
+        () => observerGateway.executeQuery(
+          any(),
+          database: any(named: 'database'),
+        ),
+      ).thenAnswer((_) async => Success(response));
+      when(() => observerNormalizer.normalize(any())).thenReturn(response);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      final registered = await observerService.register(
+        const SqlObserverRegisterCommand(
+          agentId: 'agent-1',
+          sql: 'SELECT 1 AS id',
+          intervalSeconds: 30,
+          limits: TransportLimits(),
+          condition: SqlObserverCondition.rowsPresent,
+          runImmediately: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(registered.isSuccess(), isTrue);
+      final notification = emitted.singleWhere(
+        (item) => item.event == 'observer:notification',
+      );
+      expect(notification.data, isA<Map<String, dynamic>>());
+      final decoded = decodeWirePayload(notification.data) as Map<String, dynamic>;
+      expect(decoded['observer_id'], registered.getOrThrow().observerId);
+      expect(decoded['rows'], [
+        {'id': 1},
+      ]);
     });
 
     test('should request fresh reconnect after server-side disconnect', () async {

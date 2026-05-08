@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.observer-list.v1.json",
+  "title": "observer.list result",
+  "type": "object",
+  "required": ["observers"],
+  "properties": {
+    "observers": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "required": [
+          "observer_id",
+          "interval_seconds",
+          "condition",
+          "created_at",
+          "next_run_at",
+          "consecutive_failures"
+        ],
+        "properties": {
+          "observer_id": { "type": "string" },
+          "interval_seconds": { "type": "integer", "minimum": 30, "maximum": 86400 },
+          "condition": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "const": "rows_present" }
+            },
+            "additionalProperties": false
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "next_run_at": { "type": "string", "format": "date-time" },
+          "last_run_at": { "type": "string", "format": "date-time" },
+          "last_status": {
+            "type": "string",
+            "enum": ["empty", "notified", "error", "skipped_overlap"]
+          },
+          "consecutive_failures": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

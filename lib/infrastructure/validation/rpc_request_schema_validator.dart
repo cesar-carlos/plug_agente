@@ -63,6 +63,12 @@ class RpcRequestSchemaValidator {
       'agent.getProfile' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getProfile'),
       'agent.getHealth' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getHealth'),
       'client_token.getPolicy' => _validateOptionalClientTokenAliasParams(data['params'], 'client_token.getPolicy'),
+      'observer.register' => _validateObserverRegisterParams(
+        data['params'],
+        limits.maxRows,
+      ),
+      'observer.unregister' => _validateObserverUnregisterParams(data['params']),
+      'observer.list' => _validateObserverListParams(data['params']),
       _ => const Success(unit),
     };
   }
@@ -386,6 +392,150 @@ class RpcRequestSchemaValidator {
     }
 
     return const Success(unit);
+  }
+
+  Result<void> _validateObserverRegisterParams(
+    dynamic params,
+    int maxRowsLimit,
+  ) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method observer.register',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams('Field "params" must be an object');
+    }
+
+    const allowedKeys = {
+      'sql',
+      'params',
+      'client_token',
+      'clientToken',
+      'auth',
+      'options',
+      'database',
+      'interval_seconds',
+      'condition',
+      'run_immediately',
+      'idempotency_key',
+    };
+    final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+
+    final sql = params['sql'];
+    if (sql is! String || sql.trim().isEmpty) {
+      return _invalidParams('Field "params.sql" must be a non-empty string');
+    }
+    final parameters = params['params'];
+    if (parameters != null && parameters is! Map<String, dynamic>) {
+      return _invalidParams('Field "params.params" must be an object');
+    }
+    final tokenValidation = _validateTokenAliases(params);
+    if (tokenValidation.isError()) {
+      return tokenValidation;
+    }
+
+    final intervalSeconds = params['interval_seconds'];
+    if (intervalSeconds != null && intervalSeconds is! int) {
+      return _invalidParams(
+        'Field "params.interval_seconds" must be an integer',
+      );
+    }
+
+    final condition = params['condition'];
+    if (condition != null) {
+      if (condition is! Map<String, dynamic>) {
+        return _invalidParams('Field "params.condition" must be an object');
+      }
+      const conditionKeys = {'type'};
+      final extraConditionKeys = condition.keys.where(
+        (key) => !conditionKeys.contains(key),
+      );
+      if (extraConditionKeys.isNotEmpty) {
+        return _invalidParams(
+          'Field "params.condition" contains unsupported properties: '
+          '${extraConditionKeys.join(", ")}',
+        );
+      }
+      if (condition['type'] != 'rows_present') {
+        return _invalidParams(
+          'Field "params.condition.type" must be "rows_present"',
+        );
+      }
+    }
+
+    final runImmediately = params['run_immediately'];
+    if (runImmediately != null && runImmediately is! bool) {
+      return _invalidParams(
+        'Field "params.run_immediately" must be a boolean',
+      );
+    }
+
+    final idempotencyKey = params['idempotency_key'];
+    if (idempotencyKey != null) {
+      return _invalidParams(
+        'Field "params.idempotency_key" is not supported for observer.register',
+      );
+    }
+
+    final options = params['options'];
+    if (options != null) {
+      final optionsValidation = _validateOptions(
+        options,
+        allowTransaction: false,
+        maxRowsLimit: maxRowsLimit,
+        allowPreserveSql: true,
+      );
+      if (optionsValidation.isError()) {
+        return optionsValidation;
+      }
+    }
+
+    final database = params['database'];
+    if (database != null && database is! String) {
+      return _invalidParams('Field "params.database" must be a string');
+    }
+
+    return const Success(unit);
+  }
+
+  Result<void> _validateObserverUnregisterParams(dynamic params) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method observer.unregister',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams('Field "params" must be an object');
+    }
+    const allowedKeys = {'observer_id'};
+    final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    final observerId = params['observer_id'];
+    if (observerId is! String || observerId.trim().isEmpty) {
+      return _invalidParams(
+        'Field "params.observer_id" must be a non-empty string',
+      );
+    }
+    return const Success(unit);
+  }
+
+  Result<void> _validateObserverListParams(dynamic params) {
+    if (params == null) {
+      return const Success(unit);
+    }
+    return _validateOptionalClientTokenAliasParams(params, 'observer.list');
   }
 
   Result<void> _validateOptionalClientTokenAliasParams(dynamic params, String method) {

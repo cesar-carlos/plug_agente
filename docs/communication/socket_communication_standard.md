@@ -16,6 +16,9 @@ binario esta documentado em
   - `sql.execute`
   - `sql.executeBatch`
   - `sql.cancel` (feature flag `enableSocketCancelMethod`)
+  - `observer.register`
+  - `observer.unregister`
+  - `observer.list`
   - `agent.getProfile`
   - `client_token.getPolicy`
   - `rpc.discover`
@@ -30,6 +33,7 @@ binario esta documentado em
 | JSON-RPC 2.0 (`rpc:request`/`rpc:response`)                          | implemented                                                                                                                |
 | Metodo `sql.execute`                                                 | implemented                                                                                                                |
 | Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
+| Metodos `observer.register` / `observer.unregister` / `observer.list` | implemented (session-scoped, memoria local, notificacoes por Socket.IO)                                                    |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
@@ -131,6 +135,8 @@ handshake.
 | `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
 | `rpc:complete`         | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
 | `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
+| `observer:notification` | agente -> hub | `PayloadFrame<{ observer_id, sequence, rows, row_count, ... }>`         | best effort; enviado quando a execucao periodica retorna rows                                                                                              |
+| `observer:error`        | agente -> hub | `PayloadFrame<{ observer_id, sequence, error, retry_at, ... }>`         | best effort; enviado quando uma execucao periodica falha                                                                                                   |
 
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
@@ -948,6 +954,51 @@ falha de autenticacao pode solicitar refresh da credencial).
 `MetricsCollector` (sucesso, falha de resolucao agregada, falhas por tipo de
 `Failure`, rate limit).
 
+## Metodos `observer.*`
+
+Os metodos `observer.register`, `observer.unregister` e `observer.list` permitem
+que o hub registre observadores SQL da sessao Socket.IO atual. O agente mantem
+os observers apenas em memoria; ao desconectar, fechar o socket ou reiniciar o
+app, todos sao cancelados e o hub deve registrar novamente.
+
+### `observer.register`
+
+- **Params:** mesmos campos principais de `sql.execute` (`sql`, `params`,
+`database`, aliases de `client_token`, `options`) mais:
+  - `interval_seconds`: default 300, minimo 30, maximo 86400.
+  - `condition`: default `{ "type": "rows_present" }`; v1 aceita apenas
+  `rows_present`.
+  - `run_immediately`: default `false`.
+- **Idempotencia:** `idempotency_key` e rejeitado. Observers executam consultas
+periodicas reais e nao devem reutilizar resposta cacheada.
+- **SQL e autorizacao:** segue a politica de validacao/autorizacao de
+`sql.execute`; `options.multi_result` tambem e aceito com a mesma restricao de
+parametros nomeados.
+- **Resultado:** retorna `observer_id`, intervalo efetivo, condicao, `created_at`
+e `next_run_at`.
+
+### Execucao periodica e notificacao
+
+- O agente nunca executa duas instancias simultaneas do mesmo observer; se um
+tick ainda esta em andamento, o proximo e marcado como `skipped_overlap`.
+- Quando a consulta retorna uma ou mais rows, o agente emite
+`observer:notification` em `PayloadFrame`.
+- Quando a consulta nao retorna rows, nada e emitido.
+- Se uma execucao falhar, o agente emite `observer:error`, incrementa
+`consecutive_failures` e tenta novamente no proximo intervalo.
+- `observer:notification` e `observer:error` sao best effort e nao usam ack/retry
+dedicado.
+- O payload de notificacao respeita `max_rows`/limites negociados e o pipeline
+de `PayloadFrame` (JSON UTF-8, compressao opcional, assinatura quando exigida).
+
+### `observer.unregister` e `observer.list`
+
+- `observer.unregister` recebe `observer_id` e retorna `{ observer_id,
+cancelled }`. `cancelled: false` indica que o observer nao existia na sessao.
+- `observer.list` retorna os observers ativos com `next_run_at`, `last_run_at`,
+`last_status` e `consecutive_failures`.
+- O limite por sessao e `maxSqlObserversPerSession` (default 16).
+
 ## Metodo `rpc.discover`
 
 - **Onde roda:** tratado no transporte (`SocketIOTransportClientV2`) **antes** do
@@ -1272,6 +1323,8 @@ grandes ou gzip pesado.
 | `2.6`  | Cadastro do agente no handshake e metodo `agent.getProfile`                                                           | stable |
 | `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
 | `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
+| `2.9`  | Metodo `agent.getHealth` para saude do processo, pool ODBC, fila SQL e metricas                                       | stable |
+| `2.10` | SQL observers session-scoped via `observer.*` e eventos `observer:notification` / `observer:error`                    | stable |
 
 
 ### Regras de versionamento
@@ -1706,6 +1759,9 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
+- `docs/communication/schemas/rpc.params.observer-register.schema.json`
+- `docs/communication/schemas/rpc.params.observer-unregister.schema.json`
+- `docs/communication/schemas/rpc.params.observer-list.schema.json`
 
 ### Result por metodo
 
@@ -1713,6 +1769,14 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`
+- `docs/communication/schemas/rpc.result.observer-register.schema.json`
+- `docs/communication/schemas/rpc.result.observer-unregister.schema.json`
+- `docs/communication/schemas/rpc.result.observer-list.schema.json`
+
+### Observers
+
+- `docs/communication/schemas/observer.notification.schema.json`
+- `docs/communication/schemas/observer.error.schema.json`
 
 ### Streaming
 

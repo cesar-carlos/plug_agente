@@ -23,6 +23,56 @@ void main() {
         check(result.isSuccess()).isTrue();
       });
 
+      test('should succeed for valid observer.register request', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'observer.register',
+          'id': 'obs-1',
+          'params': {
+            'sql': 'SELECT * FROM users WHERE active = 1',
+            'interval_seconds': 300,
+            'condition': {'type': 'rows_present'},
+            'run_immediately': true,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject observer.register idempotency_key', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'observer.register',
+          'id': 'obs-1',
+          'params': {
+            'sql': 'SELECT 1',
+            'idempotency_key': 'not-allowed',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull();
+        expect(err, isA<domain.ValidationFailure>());
+        expect((err! as domain.ValidationFailure).message, contains('idempotency_key'));
+      });
+
+      test('should succeed for observer.unregister request', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'observer.unregister',
+          'id': 'obs-2',
+          'params': {'observer_id': 'observer-1'},
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
       test('should succeed for notification (null id)', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.observer-unregister.v1.json",
+  "title": "observer.unregister result",
+  "type": "object",
+  "required": ["observer_id", "cancelled"],
+  "properties": {
+    "observer_id": {
+      "type": "string"
+    },
+    "cancelled": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

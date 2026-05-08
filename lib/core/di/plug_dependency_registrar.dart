@@ -16,6 +16,7 @@ import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/services/sql_observer_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
@@ -298,6 +299,15 @@ void registerPlugDependencyGraph(
       () => getIt<FeatureFlags>().enableTokenAudit ? FileTokenAuditStore() : NoopTokenAuditStore(),
     )
     ..registerLazySingleton(
+      () => SqlObserverService(
+        databaseGateway: getIt<IDatabaseGateway>(),
+        normalizerService: getIt<QueryNormalizerService>(),
+        uuid: getIt<Uuid>(),
+        authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
+        featureFlags: getIt<FeatureFlags>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
         healthService: getIt<HealthService>(),
@@ -314,6 +324,7 @@ void registerPlugDependencyGraph(
         dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
         onIdempotencyFingerprintMismatch: getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
         sqlInvestigation: getIt<ISqlInvestigationCollector>(),
+        sqlObserverService: getIt<SqlObserverService>(),
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         odbcNativeMetricsService: getIt<OdbcNativeMetricsService>(),
       ),
@@ -333,6 +344,7 @@ void registerPlugDependencyGraph(
           featureFlags: getIt<FeatureFlags>(),
           payloadSigner: payloadSigner,
           protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
+          sqlObserverService: getIt<SqlObserverService>(),
         );
       },
     )

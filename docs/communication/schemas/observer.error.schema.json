@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/observer.error.v1.json",
+  "title": "observer:error event payload",
+  "type": "object",
+  "required": [
+    "observer_id",
+    "sequence",
+    "occurred_at",
+    "consecutive_failures",
+    "retry_at",
+    "error"
+  ],
+  "properties": {
+    "observer_id": { "type": "string" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "consecutive_failures": { "type": "integer", "minimum": 1 },
+    "retry_at": { "type": "string", "format": "date-time" },
+    "error": { "$ref": "./rpc.error.schema.json" },
+    "reason": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.observer-list.v1.json",
+  "title": "observer.list params",
+  "type": "object",
+  "properties": {
+    "client_token": {
+      "type": "string"
+    },
+    "clientToken": {
+      "type": "string"
+    },
+    "auth": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

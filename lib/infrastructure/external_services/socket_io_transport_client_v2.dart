@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
+import 'package:plug_agente/application/services/sql_observer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -47,6 +48,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     ProtocolMetricsCollector? protocolMetricsCollector,
     OpenRpcDocumentLoader? openRpcDocumentLoader,
     PayloadLogSummarizer? logSummarizer,
+    SqlObserverService? sqlObserverService,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
@@ -54,6 +56,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
        _payloadSigner = payloadSigner,
        _protocolMetricsCollector = protocolMetricsCollector,
        _openRpcDocumentLoader = openRpcDocumentLoader ?? OpenRpcDocumentLoader(),
+       _sqlObserverService = sqlObserverService,
        _logSummarizer =
            logSummarizer ??
            PayloadLogSummarizer(
@@ -116,6 +119,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       emitEvent: _emitEventAsync,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
     );
+    _sqlObserverService?.setEventEmitter(_emitValidatedObserverEvent);
   }
 
   final SocketDataSource _dataSource;
@@ -125,6 +129,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final PayloadSigner? _payloadSigner;
   final ProtocolMetricsCollector? _protocolMetricsCollector;
   final OpenRpcDocumentLoader _openRpcDocumentLoader;
+  final SqlObserverService? _sqlObserverService;
   final PayloadLogSummarizer _logSummarizer;
   late final TransportPipelineCache _pipelineCache;
   late final PayloadFrameCodec _frameCodec;
@@ -388,6 +393,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         final registerSent = await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
         if (!registerSent) {
           _heartbeat.stop();
+          _sqlObserverService?.clearSession();
           _socket?.disconnect();
           _socket?.dispose();
           _socket = null;
@@ -456,6 +462,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       _socket!.on('disconnect', (dynamic reason) {
         _logMessage('RECEIVED', 'disconnect', reason);
         _heartbeat.stop();
+        _sqlObserverService?.clearSession();
         unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
         final asString = reason is String ? reason : reason?.toString();
         final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
@@ -488,6 +495,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         final shouldReconnect = _capabilitiesNegotiator.handleRegisterError(map);
         if (shouldReconnect) {
           _heartbeat.stop();
+          _sqlObserverService?.clearSession();
           _socket?.disconnect();
           _socket?.dispose();
           _socket = null;
@@ -530,6 +538,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
               'timeout_ms=${ConnectionConstants.socketConnectionTimeoutMs} '
               'agent_id=$_agentId',
             );
+            _sqlObserverService?.clearSession();
             _socket?.dispose();
             _socket = null;
             completer.complete(
@@ -550,6 +559,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_exception agent_id=$_agentId',
         e,
       );
+      _sqlObserverService?.clearSession();
       _socket?.dispose();
       _socket = null;
       return Failure(
@@ -601,6 +611,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
           stackTrace,
         );
         _heartbeat.stop();
+        _sqlObserverService?.clearSession();
         _socket?.disconnect();
         _socket?.dispose();
         _socket = null;
@@ -664,6 +675,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     );
 
     if (!completer.isCompleted) {
+      _sqlObserverService?.clearSession();
       _socket?.dispose();
       _socket = null;
     }
@@ -769,6 +781,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   void _closeSocket() {
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();
+    _sqlObserverService?.clearSession();
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
@@ -963,6 +976,37 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
 
     await _emitEventAsync(event, payload);
+  }
+
+  Future<void> _emitValidatedObserverEvent(
+    String event,
+    Map<String, dynamic> payload,
+  ) async {
+    if (_socket == null) {
+      return;
+    }
+
+    if (_featureFlags.enableSocketSchemaValidation) {
+      final validation = _validateObserverPayload(event, payload);
+      if (validation.isError()) {
+        final failure = validation.exceptionOrNull()! as domain.Failure;
+        AppLogger.error('Invalid $event payload: ${failure.message}');
+        return;
+      }
+    }
+
+    await _emitEventAsync(event, payload);
+  }
+
+  Result<void> _validateObserverPayload(
+    String event,
+    Map<String, dynamic> payload,
+  ) {
+    return switch (event) {
+      'observer:notification' => _contractValidator.validateObserverNotification(payload),
+      'observer:error' => _contractValidator.validateObserverError(payload),
+      _ => const Success(unit),
+    };
   }
 
   bool _supportsProtocolReadyAck() {

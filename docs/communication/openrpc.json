@@ -2,8 +2,8 @@
   "openrpc": "1.3.2",
   "info": {
     "title": "Plug Agente Socket RPC",
-    "version": "2.9.0",
-    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. Application events are transported only inside PayloadFrame envelopes after agent:capabilities negotiation; requests sent earlier are rejected with invalid_request / protocol_not_ready. The logical RPC payload inside the frame remains JSON UTF-8, with gzip/none negotiated at the transport layer; the current runtime does not negotiate a separate binary codec such as MessagePack. After negotiation the agent may emit optional agent:ready for hubs that use explicit readiness when extensions.protocolReadyAck is negotiated. sql.execute results include effective_max_rows when applicable, and managed pagination requires an explicit ORDER BY for both page/page_size and cursor flows; generated SQL shape still depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Agent capabilities may also advertise recommendedStreamPullWindowSize / maxStreamPullWindowSize to guide rpc:stream.pull sizing. From profile 2.6, the agent may publish registration metadata in agent:register.profile and exposes method agent.getProfile for centralized registration flows; this method also accepts the same client_token aliases used by authorized SQL methods when agent-side authorization is enabled. Profile 2.7 adds client_token.getPolicy for resolved client-token policy introspection without executing SQL. Profile 2.9 adds agent.getHealth for process health, ODBC pool and SQL queue metrics, and query latency aggregates. The sql.cancel method is only available when the runtime enables it via feature flag and applies to tracked in-flight streaming executions. See docs/communication/socket_communication_standard.md."
+    "version": "2.10.0",
+    "description": "OpenRPC document for the Plug JSON-RPC profile over Socket.IO. Application events are transported only inside PayloadFrame envelopes after agent:capabilities negotiation; requests sent earlier are rejected with invalid_request / protocol_not_ready. The logical RPC payload inside the frame remains JSON UTF-8, with gzip/none negotiated at the transport layer; the current runtime does not negotiate a separate binary codec such as MessagePack. After negotiation the agent may emit optional agent:ready for hubs that use explicit readiness when extensions.protocolReadyAck is negotiated. sql.execute results include effective_max_rows when applicable, and managed pagination requires an explicit ORDER BY for both page/page_size and cursor flows; generated SQL shape still depends on DB dialect (SQL Server OFFSET/FETCH, SQL Anywhere TOP/START AT, PostgreSQL LIMIT/OFFSET). Agent capabilities may also advertise recommendedStreamPullWindowSize / maxStreamPullWindowSize to guide rpc:stream.pull sizing. From profile 2.6, the agent may publish registration metadata in agent:register.profile and exposes method agent.getProfile for centralized registration flows; this method also accepts the same client_token aliases used by authorized SQL methods when agent-side authorization is enabled. Profile 2.7 adds client_token.getPolicy for resolved client-token policy introspection without executing SQL. Profile 2.9 adds agent.getHealth for process health, ODBC pool and SQL queue metrics, and query latency aggregates. Profile 2.10 adds session-scoped SQL observers via observer.register, observer.unregister and observer.list, with asynchronous observer:notification / observer:error Socket.IO events. The sql.cancel method is only available when the runtime enables it via feature flag and applies to tracked in-flight streaming executions. See docs/communication/socket_communication_standard.md."
   },
   "servers": [
     {
@@ -77,6 +77,65 @@
           },
           "required": ["cancelled"],
           "additionalProperties": false
+        }
+      }
+    },
+    {
+      "name": "observer.register",
+      "summary": "Register a session-scoped SQL observer that periodically executes SQL and emits observer:notification when rows are returned",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.observer-register.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.observer-register.schema.json"
+        }
+      }
+    },
+    {
+      "name": "observer.unregister",
+      "summary": "Cancel a session-scoped SQL observer by observer_id",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.observer-unregister.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.observer-unregister.schema.json"
+        }
+      }
+    },
+    {
+      "name": "observer.list",
+      "summary": "List active SQL observers in the current Socket.IO session",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "./schemas/rpc.params.observer-list.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.observer-list.schema.json"
         }
       }
     },
