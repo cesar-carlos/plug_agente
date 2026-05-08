@@ -432,26 +432,27 @@ void main() {
         maxConcurrentWorkers: 4,
       );
 
-      final startTime = DateTime.now();
+      var peakConcurrent = 0;
+      var currentConcurrent = 0;
       final tasks = <Future<res.Result<int>>>[];
 
-      // Submit 8 tasks that each take 50ms
       for (var i = 0; i < 8; i++) {
         tasks.add(
           queue.submit<int>(() async {
+            currentConcurrent++;
+            if (currentConcurrent > peakConcurrent) {
+              peakConcurrent = currentConcurrent;
+            }
             await Future<void>.delayed(const Duration(milliseconds: 50));
+            currentConcurrent--;
             return const res.Success(1);
           }),
         );
       }
 
       await Future.wait(tasks);
-      final elapsed = DateTime.now().difference(startTime);
 
-      // With 4 workers, 8 tasks should complete in ~100ms (2 batches)
-      // Allow some overhead for scheduling
-      expect(elapsed.inMilliseconds, lessThan(200));
-      expect(elapsed.inMilliseconds, greaterThan(80));
+      expect(peakConcurrent, equals(4));
     });
 
     test('should handle requestId in context', () async {
