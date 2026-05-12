@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.6+1</title>
+   <pubDate>Tue, 12 May 2026 14:13:52 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.5...v1.6.6</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.6/PlugAgente-Setup-1.6.6.exe" sparkle:version="1.6.6+1" sparkle:os="windows" length="36932386" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.6.5+1</title>
    <pubDate>Tue, 12 May 2026 13:00:24 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.4...v1.6.5</description>
@@ -72,18 +78,6 @@
 
 **Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.5.0...v1.5.1</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.1/PlugAgente-Setup-1.5.1.exe" sparkle:version="1.5.1+1" sparkle:os="windows" length="17816378" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.5.0+1</title>
-   <pubDate>Fri, 01 May 2026 16:46:54 +0000</pubDate>
-   <description>## Plug Agente 1.5.0
-
-- Application version **1.5.0+1** (`pubspec.yaml`, Windows build, installer).
-- Includes hardened hub reconnect and session recovery, SQL investigation feed and ODBC batch context improvements, and client token flow updates already merged to `main`.
-- Ships the Windows installer with the official auto-update feed embedded.
-
-**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.4.0...v1.5.0</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.0/PlugAgente-Setup-1.5.0.exe" sparkle:version="1.5.0+1" sparkle:os="windows" length="17815433" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
