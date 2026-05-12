@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.5+1</title>
+   <pubDate>Tue, 12 May 2026 13:00:24 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.4...v1.6.5</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.5/PlugAgente-Setup-1.6.5.exe" sparkle:version="1.6.5+1" sparkle:os="windows" length="36926319" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.6.4+1</title>
    <pubDate>Fri, 08 May 2026 20:47:02 +0000</pubDate>
    <description>Nova Versao 1.6.4+1 - Atualizacao automatica via GitHub Release.</description>
@@ -78,17 +84,6 @@
 
 **Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.4.0...v1.5.0</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.0/PlugAgente-Setup-1.5.0.exe" sparkle:version="1.5.0+1" sparkle:os="windows" length="17815433" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.4.0+1</title>
-   <pubDate>Tue, 28 Apr 2026 20:36:03 +0000</pubDate>
-   <description>## Plug Agente 1.4.0
-
-- Application version **1.4.0+1** (\pubspec.yaml\, Windows build, installer).
-- Includes **JSON-RPC profile 2.9** with \^Ggent.getHealth\, SQL queue metrics, and related contract updates from prior commits on \main\.
-
-Build the Windows installer after \lutter build windows --release\ using Inno Setup with \installer/setup.iss\ (output: \installer/dist/PlugAgente-Setup-1.4.0.exe\).</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.4.0/PlugAgente-Setup-1.4.0.exe" sparkle:version="1.4.0+1" sparkle:os="windows" length="36822118" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
