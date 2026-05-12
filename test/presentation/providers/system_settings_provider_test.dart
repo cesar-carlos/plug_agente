@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
@@ -12,6 +13,15 @@ import 'package:result_dart/result_dart.dart';
 class MockWindowManagerService extends Mock implements IWindowManagerService {}
 
 class MockStartupService extends Mock implements IStartupService {}
+
+class FailingAppSettingsStore extends InMemoryAppSettingsStore {
+  FailingAppSettingsStore([super.initialValues]);
+
+  @override
+  Future<void> setValue(String key, Object value) {
+    throw StateError('settings write failed');
+  }
+}
 
 void main() {
   late InMemoryAppSettingsStore prefs;
@@ -29,6 +39,9 @@ void main() {
     when(
       () => mockStartupService.openSystemSettings(),
     ).thenAnswer((_) async => const Success(unit));
+    when(
+      () => mockStartupService.ensureLaunchConfiguration(),
+    ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
   });
 
   group('SystemSettingsProvider', () {
@@ -42,10 +55,10 @@ void main() {
     });
 
     test('should load saved values from settings store', () async {
-      await prefs.setBool('settings.start_with_windows', true);
-      await prefs.setBool('settings.start_minimized', true);
-      await prefs.setBool('settings.minimize_to_tray', false);
-      await prefs.setBool('settings.close_to_tray', false);
+      await prefs.setBool(AppSettingsKeys.startWithWindows, true);
+      await prefs.setBool(AppSettingsKeys.startMinimized, true);
+      await prefs.setBool(AppSettingsKeys.minimizeToTray, false);
+      await prefs.setBool(AppSettingsKeys.closeToTray, false);
 
       final provider = SystemSettingsProvider(prefs);
 
@@ -71,7 +84,7 @@ void main() {
 
         check(outcome).equals(StartupChangeOutcome.enabled);
         check(provider.startWithWindows).equals(true);
-        check(prefs.getBool('settings.start_with_windows')).equals(true);
+        check(prefs.getBool(AppSettingsKeys.startWithWindows)).equals(true);
         verify(() => mockStartupService.enable()).called(1);
       },
     );
@@ -81,7 +94,7 @@ void main() {
         () => mockStartupService.disable(),
       ).thenAnswer((_) async => const Success(unit));
 
-      await prefs.setBool('settings.start_with_windows', true);
+      await prefs.setBool(AppSettingsKeys.startWithWindows, true);
       final provider = SystemSettingsProvider(
         prefs,
         startupService: mockStartupService,
@@ -91,7 +104,7 @@ void main() {
 
       check(outcome).equals(StartupChangeOutcome.disabled);
       check(provider.startWithWindows).equals(false);
-      check(prefs.getBool('settings.start_with_windows')).equals(false);
+      check(prefs.getBool(AppSettingsKeys.startWithWindows)).equals(false);
       verify(() => mockStartupService.disable()).called(1);
     });
 
@@ -126,7 +139,7 @@ void main() {
 
       check(outcome).isNull();
       check(provider.startWithWindows).equals(false);
-      check(prefs.getBool('settings.start_with_windows')).isNull();
+      check(prefs.getBool(AppSettingsKeys.startWithWindows)).isNull();
     });
 
     test(
@@ -137,7 +150,7 @@ void main() {
         await provider.setStartMinimized(true);
 
         check(provider.startMinimized).equals(true);
-        check(prefs.getBool('settings.start_minimized')).equals(true);
+        check(prefs.getBool(AppSettingsKeys.startMinimized)).equals(true);
       },
     );
 
@@ -152,7 +165,7 @@ void main() {
         await provider.setMinimizeToTray(false);
 
         check(provider.minimizeToTray).equals(false);
-        check(prefs.getBool('settings.minimize_to_tray')).equals(false);
+        check(prefs.getBool(AppSettingsKeys.minimizeToTray)).equals(false);
         verify(
           () => mockWindowManager.setMinimizeToTray(value: false),
         ).called(1);
@@ -170,7 +183,7 @@ void main() {
         await provider.setCloseToTray(false);
 
         check(provider.closeToTray).equals(false);
-        check(prefs.getBool('settings.close_to_tray')).equals(false);
+        check(prefs.getBool(AppSettingsKeys.closeToTray)).equals(false);
         verify(() => mockWindowManager.setCloseToTray(value: false)).called(1);
       },
     );
@@ -198,7 +211,23 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       check(provider.startWithWindows).equals(true);
-      check(prefs.getBool('settings.start_with_windows')).equals(true);
+      check(prefs.getBool(AppSettingsKeys.startWithWindows)).equals(true);
+      verify(() => mockStartupService.ensureLaunchConfiguration()).called(1);
+    });
+
+    test('should repair startup launch configuration when startup is enabled', () async {
+      when(
+        () => mockStartupService.isEnabled(),
+      ).thenAnswer((_) async => const Success(true));
+
+      SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      verify(() => mockStartupService.ensureLaunchConfiguration()).called(1);
     });
 
     test(
@@ -245,6 +274,101 @@ void main() {
       check(provider.startWithWindows).equals(false);
     });
 
+    test('should expose warning notice when automatic startup launch repair fails', () async {
+      when(
+        () => mockStartupService.isEnabled(),
+      ).thenAnswer((_) async => const Success(true));
+      when(() => mockStartupService.ensureLaunchConfiguration()).thenAnswer(
+        (_) async => const Failure(
+          StartupServiceFailure(message: 'Missing launch argument'),
+        ),
+      );
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      check(provider.lastError).isNull();
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
+      check(provider.startupNotice!.detail).equals('Missing launch argument');
+    });
+
+    test('should expose repaired notice when automatic startup launch repair succeeds', () async {
+      when(
+        () => mockStartupService.isEnabled(),
+      ).thenAnswer((_) async => const Success(true));
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
+    });
+
+    test('should repair startup launch configuration on demand', () async {
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.repairStartupLaunchConfiguration();
+
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
+    });
+
+    test('should expose ready notice when startup launch repair is already valid', () async {
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.repairStartupLaunchConfiguration();
+
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationReady);
+    });
+
+    test('should keep startMinimized unchanged when persistence fails', () async {
+      final failingPrefs = FailingAppSettingsStore();
+      final provider = SystemSettingsProvider(failingPrefs);
+
+      await provider.setStartMinimized(true);
+
+      check(provider.startMinimized).equals(false);
+      check(provider.preferenceError).isNotNull();
+      check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
+    });
+
+    test('should not apply minimizeToTray runtime change when persistence fails', () async {
+      final failingPrefs = FailingAppSettingsStore();
+      final provider = SystemSettingsProvider(
+        failingPrefs,
+        windowManagerService: mockWindowManager,
+      );
+
+      await provider.setMinimizeToTray(false);
+
+      check(provider.minimizeToTray).equals(true);
+      verifyNever(() => mockWindowManager.setMinimizeToTray(value: false));
+      check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
+    });
+
     test('should expose detail=null when failure is not StartupServiceFailure', () async {
       when(() => mockStartupService.enable()).thenAnswer(
         (_) async => Failure(Exception('generic')),
@@ -258,6 +382,7 @@ void main() {
       await provider.setStartWithWindows(true);
 
       check(provider.lastError).isNotNull();
+      check(provider.startupError).isNotNull();
       check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
       check(provider.lastError!.detail).isNull();
     });
@@ -287,6 +412,7 @@ void main() {
       await provider.openStartupSettings();
 
       check(provider.lastError).isNotNull();
+      check(provider.startupError).isNotNull();
       check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupServiceUnavailable);
     });
 
@@ -305,6 +431,7 @@ void main() {
       await provider.openStartupSettings();
 
       check(provider.lastError).isNotNull();
+      check(provider.startupError).isNotNull();
       check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupOpenSystemSettingsFailed);
       check(provider.lastError!.detail!).equals('Cannot launch shell');
     });

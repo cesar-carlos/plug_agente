@@ -15,6 +15,15 @@ enum SystemSettingsErrorCode {
 
   /// Falha ao abrir o painel de configurações do sistema operacional.
   startupOpenSystemSettingsFailed,
+
+  /// Falha ao persistir uma preferência local.
+  settingsPersistenceFailed,
+}
+
+enum SystemSettingsNoticeCode {
+  startupLaunchConfigurationReady,
+  startupLaunchConfigurationRepaired,
+  startupLaunchConfigurationRepairFailed,
 }
 
 /// Estado de erro estruturado exposto pelo `SystemSettingsProvider`.
@@ -43,4 +52,27 @@ class SystemSettingsErrorState {
 
   @override
   String toString() => 'SystemSettingsErrorState(code: $code, detail: $detail)';
+}
+
+@immutable
+class SystemSettingsNoticeState {
+  const SystemSettingsNoticeState({
+    required this.code,
+    this.detail,
+  });
+
+  final SystemSettingsNoticeCode code;
+  final String? detail;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SystemSettingsNoticeState && other.code == code && other.detail == detail;
+  }
+
+  @override
+  int get hashCode => Object.hash(code, detail);
+
+  @override
+  String toString() => 'SystemSettingsNoticeState(code: $code, detail: $detail)';
 }

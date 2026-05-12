@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 void main() {
@@ -43,9 +44,9 @@ void main() {
           .toList();
       expect(quarantinedFiles, isNotEmpty);
 
-      await store.setBool('settings.start_with_windows', true);
+      await store.setBool(AppSettingsKeys.startWithWindows, true);
       expect(File(settingsPath).existsSync(), isTrue);
-      expect(store.getBool('settings.start_with_windows'), isTrue);
+      expect(store.getBool(AppSettingsKeys.startWithWindows), isTrue);
     });
 
     test('should quarantine invalid root type and continue', () async {

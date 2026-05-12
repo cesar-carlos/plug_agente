@@ -848,6 +848,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsToggleStartMinimized => 'Iniciar minimizado';
 
   @override
+  String get gsToggleStartMinimizedNextLaunchHint => 'Aplicado na próxima inicialização do Windows.';
+
+  @override
+  String get gsToggleStartMinimizedRequiresTray => 'Requer suporte à bandeja neste ambiente.';
+
+  @override
   String get gsToggleMinimizeToTray => 'Minimizar para bandeja';
 
   @override
@@ -875,6 +881,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsButtonOpenSettings => 'Abrir configurações';
 
   @override
+  String get gsButtonRepairStartup => 'Reparar';
+
+  @override
+  String get gsStartupLaunchConfigurationReady => 'Entrada de inicialização pronta.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepaired => 'Entrada de inicialização reparada.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepairFailed => 'Entrada de inicialização precisa de reparo';
+
+  @override
   String get gsErrorStartupToggleFailed => 'Falha ao alterar configuração de inicialização';
 
   @override
@@ -882,6 +900,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsErrorStartupOpenSystemSettingsFailed => 'Falha ao abrir configurações do sistema';
+
+  @override
+  String get gsErrorSettingsPersistenceFailed => 'Falha ao salvar preferência local';
 
   @override
   String gsErrorWithDetail(String message, String detail) {

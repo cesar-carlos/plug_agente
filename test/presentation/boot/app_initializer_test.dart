@@ -1,5 +1,6 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
 
@@ -17,9 +18,9 @@ void main() {
 
     test('should return saved values from settings store', () async {
       final prefs = InMemoryAppSettingsStore();
-      await prefs.setBool('settings.start_minimized', true);
-      await prefs.setBool('settings.minimize_to_tray', false);
-      await prefs.setBool('settings.close_to_tray', false);
+      await prefs.setBool(AppSettingsKeys.startMinimized, true);
+      await prefs.setBool(AppSettingsKeys.minimizeToTray, false);
+      await prefs.setBool(AppSettingsKeys.closeToTray, false);
 
       final preferences = resolveStartupWindowPreferences(prefs);
 
@@ -30,7 +31,7 @@ void main() {
 
     test('should disable start minimized when tray restore is unavailable', () async {
       final prefs = InMemoryAppSettingsStore();
-      await prefs.setBool('settings.start_minimized', true);
+      await prefs.setBool(AppSettingsKeys.startMinimized, true);
 
       final preferences = resolveStartupWindowPreferences(
         prefs,

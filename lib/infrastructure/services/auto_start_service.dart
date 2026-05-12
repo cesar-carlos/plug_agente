@@ -72,6 +72,55 @@ class AutoStartService implements IStartupService {
   }
 
   @override
+  Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration() async {
+    if (!Platform.isWindows) {
+      return const Success(StartupLaunchConfigurationStatus.unchanged);
+    }
+
+    try {
+      final result = await _runRegCommand(<String>[
+        'query',
+        _runKeyPath,
+        '/v',
+        _runValueName,
+      ]);
+
+      if (result.exitCode != 0) {
+        return const Success(StartupLaunchConfigurationStatus.unchanged);
+      }
+
+      if (_hasAutostartArgument(result)) {
+        return const Success(StartupLaunchConfigurationStatus.unchanged);
+      }
+
+      developer.log(
+        'Global auto-start entry is missing launch arguments. Repairing.',
+        name: 'startup_service',
+        level: 800,
+      );
+      final repairResult = await enable();
+      return repairResult.fold(
+        (_) => const Success(StartupLaunchConfigurationStatus.repaired),
+        Failure.new,
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to validate global auto-start launch configuration',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        StartupServiceFailure(
+          message: 'Falha ao validar configuracao de inicializacao automatica',
+          cause: error,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<Result<Unit>> enable() async {
     if (!Platform.isWindows) {
       return const Failure(
@@ -305,5 +354,10 @@ class AutoStartService implements IStartupService {
           'unable to find the specified registry key or value',
         ) ||
         output.contains('nao e possivel localizar a chave ou valor');
+  }
+
+  bool _hasAutostartArgument(ProcessResult result) {
+    final output = '${result.stdout}\n${result.stderr}';
+    return output.contains(AppStrings.singleInstanceArgAutostart);
   }
 }

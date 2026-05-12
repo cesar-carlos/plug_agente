@@ -15,6 +15,7 @@ import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -34,9 +35,9 @@ StartupWindowPreferences resolveStartupWindowPreferences(
   bool canStartMinimized = true,
 }) {
   return (
-    startMinimized: canStartMinimized && (settingsStore.getBool('settings.start_minimized') ?? false),
-    minimizeToTray: settingsStore.getBool('settings.minimize_to_tray') ?? true,
-    closeToTray: settingsStore.getBool('settings.close_to_tray') ?? true,
+    startMinimized: canStartMinimized && (settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false),
+    minimizeToTray: settingsStore.getBool(AppSettingsKeys.minimizeToTray) ?? true,
+    closeToTray: settingsStore.getBool(AppSettingsKeys.closeToTray) ?? true,
   );
 }
 

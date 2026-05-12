@@ -843,6 +843,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsToggleStartMinimized => 'Start minimized';
 
   @override
+  String get gsToggleStartMinimizedNextLaunchHint => 'Applies on the next Windows startup.';
+
+  @override
+  String get gsToggleStartMinimizedRequiresTray => 'Requires tray support in this environment.';
+
+  @override
   String get gsToggleMinimizeToTray => 'Minimize to tray';
 
   @override
@@ -870,6 +876,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsButtonOpenSettings => 'Open settings';
 
   @override
+  String get gsButtonRepairStartup => 'Repair';
+
+  @override
+  String get gsStartupLaunchConfigurationReady => 'Startup entry is ready.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepaired => 'Startup entry repaired.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepairFailed => 'Startup entry needs repair';
+
+  @override
   String get gsErrorStartupToggleFailed => 'Failed to change startup configuration';
 
   @override
@@ -877,6 +895,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gsErrorStartupOpenSystemSettingsFailed => 'Failed to open system settings';
+
+  @override
+  String get gsErrorSettingsPersistenceFailed => 'Failed to save local preference';
 
   @override
   String gsErrorWithDetail(String message, String detail) {

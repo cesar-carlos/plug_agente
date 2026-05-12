@@ -331,6 +331,7 @@ class _ConfigPageState extends State<ConfigPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final capabilities = getIt<RuntimeCapabilities>();
     final themeProvider = context.watch<ThemeProvider>();
     final systemSettingsProvider = context.watch<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
@@ -364,7 +365,10 @@ class _ConfigPageState extends State<ConfigPage> {
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             isCheckingUpdates: _isCheckingUpdates,
             startupSupported: startupSupported,
-            startupError: systemSettingsProvider.lastError,
+            startMinimizedSupported: capabilities.supportsTray,
+            startupError: systemSettingsProvider.startupError,
+            preferenceError: systemSettingsProvider.preferenceError,
+            startupNotice: systemSettingsProvider.startupNotice,
             isAutoUpdateAvailable: isAutoUpdateAvailable,
             autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
@@ -376,6 +380,7 @@ class _ConfigPageState extends State<ConfigPage> {
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
+            onRepairStartupLaunchConfiguration: systemSettingsProvider.repairStartupLaunchConfiguration,
             onCheckUpdates: _checkUpdates,
             onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
           ),
@@ -397,7 +402,10 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.lastBackgroundUpdateCheck,
     required this.isCheckingUpdates,
     required this.startupSupported,
+    required this.startMinimizedSupported,
     required this.startupError,
+    required this.preferenceError,
+    required this.startupNotice,
     required this.isAutoUpdateAvailable,
     required this.autoUpdateUnavailableMessage,
     required this.onDarkThemeChanged,
@@ -406,6 +414,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
+    required this.onRepairStartupLaunchConfiguration,
     required this.onCheckUpdates,
     required this.onCopyUpdateDiagnostics,
   });
@@ -420,7 +429,10 @@ class _ConfigTabbedContent extends StatefulWidget {
   final String lastBackgroundUpdateCheck;
   final bool isCheckingUpdates;
   final bool startupSupported;
+  final bool startMinimizedSupported;
   final SystemSettingsErrorState? startupError;
+  final SystemSettingsErrorState? preferenceError;
+  final SystemSettingsNoticeState? startupNotice;
   final bool isAutoUpdateAvailable;
   final String? autoUpdateUnavailableMessage;
   final ValueChanged<bool> onDarkThemeChanged;
@@ -429,6 +441,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
+  final VoidCallback onRepairStartupLaunchConfiguration;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
 
@@ -462,13 +475,17 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             minimizeToTray: widget.minimizeToTray,
             closeToTray: widget.closeToTray,
             startupSupported: widget.startupSupported,
+            startMinimizedSupported: widget.startMinimizedSupported,
             startupError: widget.startupError,
+            preferenceError: widget.preferenceError,
+            startupNotice: widget.startupNotice,
             onDarkThemeChanged: widget.onDarkThemeChanged,
             onStartWithWindowsChanged: widget.onStartWithWindowsChanged,
             onStartMinimizedChanged: widget.onStartMinimizedChanged,
             onMinimizeToTrayChanged: widget.onMinimizeToTrayChanged,
             onCloseToTrayChanged: widget.onCloseToTrayChanged,
             onOpenStartupSettings: widget.onOpenStartupSettings,
+            onRepairStartupLaunchConfiguration: widget.onRepairStartupLaunchConfiguration,
           ),
         ),
         AppFluentTabItem(

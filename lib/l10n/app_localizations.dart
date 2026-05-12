@@ -1688,6 +1688,18 @@ abstract class AppLocalizations {
   /// **'Start minimized'**
   String get gsToggleStartMinimized;
 
+  /// No description provided for @gsToggleStartMinimizedNextLaunchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies on the next Windows startup.'**
+  String get gsToggleStartMinimizedNextLaunchHint;
+
+  /// No description provided for @gsToggleStartMinimizedRequiresTray.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires tray support in this environment.'**
+  String get gsToggleStartMinimizedRequiresTray;
+
   /// No description provided for @gsToggleMinimizeToTray.
   ///
   /// In en, this message translates to:
@@ -1742,6 +1754,30 @@ abstract class AppLocalizations {
   /// **'Open settings'**
   String get gsButtonOpenSettings;
 
+  /// No description provided for @gsButtonRepairStartup.
+  ///
+  /// In en, this message translates to:
+  /// **'Repair'**
+  String get gsButtonRepairStartup;
+
+  /// No description provided for @gsStartupLaunchConfigurationReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup entry is ready.'**
+  String get gsStartupLaunchConfigurationReady;
+
+  /// No description provided for @gsStartupLaunchConfigurationRepaired.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup entry repaired.'**
+  String get gsStartupLaunchConfigurationRepaired;
+
+  /// No description provided for @gsStartupLaunchConfigurationRepairFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup entry needs repair'**
+  String get gsStartupLaunchConfigurationRepairFailed;
+
   /// No description provided for @gsErrorStartupToggleFailed.
   ///
   /// In en, this message translates to:
@@ -1759,6 +1795,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to open system settings'**
   String get gsErrorStartupOpenSystemSettingsFailed;
+
+  /// No description provided for @gsErrorSettingsPersistenceFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save local preference'**
+  String get gsErrorSettingsPersistenceFailed;
 
   /// Combines the translated error message with an optional technical detail.
   ///

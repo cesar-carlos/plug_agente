@@ -77,20 +77,43 @@ class SettingsToggleTile extends StatelessWidget {
     required this.value,
     required this.onChanged,
     super.key,
+    this.description,
   });
 
   final String label;
+  final String? description;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    final isEnabled = onChanged != null;
+    final labelStyle = context.bodyStrong.copyWith(
+      color: isEnabled ? null : theme.inactiveColor,
+    );
+    final description = this.description;
+
     return Row(
       children: [
         Expanded(
-          child: Text(
-            label,
-            style: context.bodyStrong,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: labelStyle,
+              ),
+              if (description != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  description,
+                  style: context.captionText.copyWith(
+                    color: theme.inactiveColor,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         ToggleSwitch(checked: value, onChanged: onChanged),

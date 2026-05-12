@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 
@@ -141,6 +143,91 @@ void main() {
       check(result.isSuccess()).isTrue();
       check(calls.length).equals(1);
       check(calls.single.executable).equals('reg');
+    });
+
+    test('should repair enabled registry entry missing autostart argument', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final calls = <_ProcessInvocation>[];
+      final results = Queue<ProcessResult>.from(<ProcessResult>[
+        ProcessResult(
+          1,
+          0,
+          r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run Plug Agente REG_SZ "C:\Program Files\PlugAgente\plug_agente.exe"',
+          '',
+        ),
+        ProcessResult(
+          2,
+          0,
+          '',
+          '',
+        ),
+      ]);
+
+      Future<ProcessResult> processRunner(
+        String executable,
+        List<String> arguments,
+      ) async {
+        calls.add(
+          _ProcessInvocation(
+            executable: executable,
+            arguments: arguments,
+          ),
+        );
+        return results.removeFirst();
+      }
+
+      final service = AutoStartService(processRunner: processRunner);
+      final result = await service.ensureLaunchConfiguration();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
+        (_) => fail('Expected success'),
+      );
+      check(calls.length).equals(2);
+      check(calls[0].arguments).contains('query');
+      check(calls[1].arguments).contains('add');
+      check(calls[1].arguments.join(' ')).contains(AppStrings.singleInstanceArgAutostart);
+    });
+
+    test('should not repair registry entry that already has autostart argument', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final calls = <_ProcessInvocation>[];
+
+      Future<ProcessResult> processRunner(
+        String executable,
+        List<String> arguments,
+      ) async {
+        calls.add(
+          _ProcessInvocation(
+            executable: executable,
+            arguments: arguments,
+          ),
+        );
+        return ProcessResult(
+          1,
+          0,
+          'Plug Agente REG_SZ "plug_agente.exe" "${AppStrings.singleInstanceArgAutostart}"',
+          '',
+        );
+      }
+
+      final service = AutoStartService(processRunner: processRunner);
+      final result = await service.ensureLaunchConfiguration();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
+        (_) => fail('Expected success'),
+      );
+      check(calls.length).equals(1);
+      check(calls.single.arguments).contains('query');
     });
   });
 }

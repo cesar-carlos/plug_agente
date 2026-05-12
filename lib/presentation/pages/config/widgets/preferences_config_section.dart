@@ -18,8 +18,12 @@ class PreferencesConfigSection extends StatelessWidget {
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
+    required this.onRepairStartupLaunchConfiguration,
     this.startupSupported = true,
+    this.startMinimizedSupported = true,
     this.startupError,
+    this.preferenceError,
+    this.startupNotice,
     super.key,
   });
 
@@ -34,8 +38,12 @@ class PreferencesConfigSection extends StatelessWidget {
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
+  final VoidCallback onRepairStartupLaunchConfiguration;
   final bool startupSupported;
+  final bool startMinimizedSupported;
   final SystemSettingsErrorState? startupError;
+  final SystemSettingsErrorState? preferenceError;
+  final SystemSettingsNoticeState? startupNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -64,16 +72,35 @@ class PreferencesConfigSection extends StatelessWidget {
             ),
             if (startupError != null) ...[
               const SizedBox(height: AppSpacing.sm),
-              _StartupErrorMessage(
-                error: startupError!,
-                onOpenSettings: onOpenStartupSettings,
+              _SystemSettingsFeedbackMessage(
+                message: _translateError(l10n, startupError!),
+                tone: AppFeedbackTone.error,
+                icon: FluentIcons.error_badge,
+                actionLabel: l10n.gsButtonOpenSettings,
+                onAction: onOpenStartupSettings,
+              ),
+            ] else if (startupNotice != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _SystemSettingsFeedbackMessage(
+                message: _translateNotice(l10n, startupNotice!),
+                tone: _noticeTone(startupNotice!),
+                icon: _noticeIcon(startupNotice!),
+                actionLabel: startupNotice!.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed
+                    ? l10n.gsButtonRepairStartup
+                    : null,
+                onAction: startupNotice!.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed
+                    ? onRepairStartupLaunchConfiguration
+                    : null,
               ),
             ],
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleStartMinimized,
+              description: startMinimizedSupported
+                  ? l10n.gsToggleStartMinimizedNextLaunchHint
+                  : l10n.gsToggleStartMinimizedRequiresTray,
               value: startMinimized,
-              onChanged: onStartMinimizedChanged,
+              onChanged: startMinimizedSupported ? onStartMinimizedChanged : null,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
@@ -87,6 +114,14 @@ class PreferencesConfigSection extends StatelessWidget {
               value: closeToTray,
               onChanged: onCloseToTrayChanged,
             ),
+            if (preferenceError != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _SystemSettingsFeedbackMessage(
+                message: _translateError(l10n, preferenceError!),
+                tone: AppFeedbackTone.error,
+                icon: FluentIcons.error_badge,
+              ),
+            ],
           ],
         ),
       ),
@@ -94,20 +129,26 @@ class PreferencesConfigSection extends StatelessWidget {
   }
 }
 
-class _StartupErrorMessage extends StatelessWidget {
-  const _StartupErrorMessage({
-    required this.error,
-    required this.onOpenSettings,
+class _SystemSettingsFeedbackMessage extends StatelessWidget {
+  const _SystemSettingsFeedbackMessage({
+    required this.message,
+    required this.tone,
+    required this.icon,
+    this.actionLabel,
+    this.onAction,
   });
 
-  final SystemSettingsErrorState error;
-  final VoidCallback onOpenSettings;
+  final String message;
+  final AppFeedbackTone tone;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final feedbackColors = context.appColors.feedback(AppFeedbackTone.error);
-    final translated = _translate(l10n, error);
+    final feedbackColors = context.appColors.feedback(tone);
+    final actionLabel = this.actionLabel;
+    final onAction = this.onAction;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -121,41 +162,73 @@ class _StartupErrorMessage extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            FluentIcons.error_badge,
+            icon,
             color: feedbackColors.accent,
             size: 16,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              translated,
+              message,
               style: context.captionText.copyWith(
                 color: feedbackColors.accent,
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          AppButton(
-            label: l10n.gsButtonOpenSettings,
-            filledBackgroundColor: feedbackColors.background,
-            filledForegroundColor: feedbackColors.accent,
-            onPressed: onOpenSettings,
-          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            AppButton(
+              label: actionLabel,
+              filledBackgroundColor: feedbackColors.background,
+              filledForegroundColor: feedbackColors.accent,
+              onPressed: onAction,
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-String _translate(AppLocalizations l10n, SystemSettingsErrorState error) {
+String _translateError(AppLocalizations l10n, SystemSettingsErrorState error) {
   final base = switch (error.code) {
     SystemSettingsErrorCode.startupToggleFailed => l10n.gsErrorStartupToggleFailed,
     SystemSettingsErrorCode.startupServiceUnavailable => l10n.gsErrorStartupServiceUnavailable,
     SystemSettingsErrorCode.startupOpenSystemSettingsFailed => l10n.gsErrorStartupOpenSystemSettingsFailed,
+    SystemSettingsErrorCode.settingsPersistenceFailed => l10n.gsErrorSettingsPersistenceFailed,
   };
   final detail = error.detail;
   if (detail == null || detail.trim().isEmpty) {
     return base;
   }
   return l10n.gsErrorWithDetail(base, detail);
+}
+
+String _translateNotice(AppLocalizations l10n, SystemSettingsNoticeState notice) {
+  final base = switch (notice.code) {
+    SystemSettingsNoticeCode.startupLaunchConfigurationReady => l10n.gsStartupLaunchConfigurationReady,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => l10n.gsStartupLaunchConfigurationRepaired,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => l10n.gsStartupLaunchConfigurationRepairFailed,
+  };
+  final detail = notice.detail;
+  if (detail == null || detail.trim().isEmpty) {
+    return base;
+  }
+  return l10n.gsErrorWithDetail(base, detail);
+}
+
+AppFeedbackTone _noticeTone(SystemSettingsNoticeState notice) {
+  return switch (notice.code) {
+    SystemSettingsNoticeCode.startupLaunchConfigurationReady => AppFeedbackTone.info,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => AppFeedbackTone.success,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => AppFeedbackTone.warning,
+  };
+}
+
+IconData _noticeIcon(SystemSettingsNoticeState notice) {
+  return switch (notice.code) {
+    SystemSettingsNoticeCode.startupLaunchConfigurationReady => FluentIcons.info,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => FluentIcons.completed,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => FluentIcons.warning,
+  };
 }
