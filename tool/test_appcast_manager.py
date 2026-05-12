@@ -130,6 +130,42 @@ class AppcastManagerTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_inspect_feed_url_adds_cache_buster_by_default(self) -> None:
+        context = self.build_context()
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+        )
+        requested_paths: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            appcast_path = Path(tmpdir) / "appcast.xml"
+            appcast_manager.write_appcast_tree(tree, appcast_path)
+            body = appcast_path.read_bytes()
+
+            class Handler(BaseHTTPRequestHandler):
+                def do_GET(self) -> None:  # noqa: N802
+                    requested_paths.append(self.path)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/rss+xml; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(body)
+
+                def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+                    return
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                appcast_manager.inspect_feed_url(f"http://127.0.0.1:{server.server_port}/appcast.xml")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+        self.assertEqual(len(requested_paths), 1)
+        self.assertIn("cb=", requested_paths[0])
+
     def test_inspect_feed_url_writes_context_for_smoke_validate_url(self) -> None:
         context = self.build_context()
         tree = appcast_manager.update_appcast_tree(

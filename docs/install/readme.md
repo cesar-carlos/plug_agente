@@ -24,8 +24,8 @@ Checklist e matriz detalhada em [requirements.md](requirements.md).
 ### Gerar instalador e publicar release
 
 1. Revisar versionamento em [release_guide.md](release_guide.md)
-2. Executar `python installer/build_installer.py`
-3. Publicar a release no GitHub
+2. Executar o workflow manual **Publish Windows Release** no GitHub Actions
+3. Confirmar o workflow **Update Appcast on Release**
 4. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
 
 Saida esperada:
@@ -49,5 +49,16 @@ installer/dist/PlugAgente-Setup-{versao}.exe
 
 - `python installer/build_installer.py`: fluxo recomendado de build Windows
 - `python installer/update_version.py`: sincroniza versao sem gerar instalador
+- `python tool/release_preflight.py`: valida sincronizacao, tag e ferramentas
+  antes da publicacao
+- `python tool/validate_release.py`: valida GitHub Release e appcast local ou
+  remoto
 - [install_monitor.bat](../../install_monitor.bat): instala PlugPortMon como
   administrador
+
+## Validacoes de CI
+
+- O workflow **Flutter CI** executa `actionlint` nos arquivos em
+  `.github/workflows/`.
+- O workflow **Publish Windows Release** tem modo `dry_run` para gerar o
+  instalador e validar o fluxo sem criar commit, tag ou GitHub Release.

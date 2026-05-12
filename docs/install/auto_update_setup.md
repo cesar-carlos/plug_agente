@@ -60,11 +60,16 @@ python -m unittest tool.test_appcast_manager -v
 
 ## Workflow de Publicacao
 
-1. Gere o instalador com `python installer/build_installer.py`.
-2. Publique uma release seguindo [release_guide.md](release_guide.md).
+1. Publique a versao pelo workflow manual **Publish Windows Release** seguindo
+   [release_guide.md](release_guide.md).
+2. O workflow cria a tag, gera o instalador e publica a GitHub Release.
 3. O workflow **Update Appcast on Release** valida tag, versao e asset.
 4. O workflow atualiza `appcast.xml` em `main`.
 5. O smoke check confirma que o feed publicado aponta para o asset esperado.
+
+Para ensaio sem publicacao, execute **Publish Windows Release** com
+`dry_run=true`. Esse modo gera e valida o instalador, mas nao cria tag, release
+nem atualiza o appcast.
 
 Nome esperado do asset:
 
@@ -87,6 +92,18 @@ O endpoint `raw.githubusercontent.com` pode ficar em cache por alguns minutos
 apos a publicacao. Ao validar manualmente o feed fora do app, prefira usar
 `?cb=<timestamp>`.
 
+Validacao manual recomendada:
+
+```bash
+python tool/validate_release.py \
+  --tag v1.2.7 \
+  --feed-url https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+```
+
+Os comandos `inspect-url` e `smoke-validate-url` de `tool/appcast_manager.py`
+adicionam `cb=` por padrao. Use `--no-cache-bust` apenas quando precisar
+reproduzir exatamente a URL original.
+
 ## Falhas Comuns
 
 ### Feed override invalido
@@ -104,6 +121,8 @@ apos a publicacao. Ao validar manualmente o feed fora do app, prefira usar
 - `pubspec.yaml`, `installer/setup.iss` e
   `lib/core/constants/app_version.g.dart` divergem.
 - Rode `python installer/update_version.py`, revise o diff e commite antes da tag.
+- Rode `python tool/release_preflight.py --version <versao> --require-iscc`
+  para checar sincronizacao, tag e ferramentas antes de publicar.
 
 ### Feed publicado nao reflete a release
 

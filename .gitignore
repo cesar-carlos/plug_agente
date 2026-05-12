@@ -34,6 +34,10 @@ migrate_working_dir/
 # Installer output
 /installer/dist/
 
+# Release validation scratch files
+/appcast.env
+/release_body.txt
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

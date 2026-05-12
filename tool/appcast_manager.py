@@ -228,9 +228,10 @@ def validate_item(item: et.Element, context: AppcastContext) -> None:
         raise ValueError(f"invalid enclosure length: {latest_size!r}") from exc
 
 
-def fetch_feed_root(feed_url: str) -> et.Element:
+def fetch_feed_root(feed_url: str, *, cache_bust: bool = True) -> et.Element:
+    request_url = _cache_busted_url(feed_url) if cache_bust else feed_url
     request = urllib.request.Request(
-        _cache_busted_url(feed_url),
+        request_url,
         headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
     )
     with urllib.request.urlopen(request, timeout=15) as response:
@@ -264,8 +265,8 @@ def context_from_latest_item(item: et.Element, *, max_items: int = 10) -> Appcas
     return context
 
 
-def inspect_feed_url(feed_url: str, *, max_items: int = 10) -> AppcastContext:
-    root = fetch_feed_root(feed_url)
+def inspect_feed_url(feed_url: str, *, max_items: int = 10, cache_bust: bool = True) -> AppcastContext:
+    root = fetch_feed_root(feed_url, cache_bust=cache_bust)
     channel = root.find("channel")
     if channel is None:
         raise ValueError("missing <channel>")
@@ -299,11 +300,12 @@ def smoke_validate_feed(
     *,
     attempts: int = 6,
     delay_seconds: int = 5,
+    cache_bust: bool = True,
 ) -> None:
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
-            root = fetch_feed_root(feed_url)
+            root = fetch_feed_root(feed_url, cache_bust=cache_bust)
             channel = root.find("channel")
             if channel is None:
                 raise ValueError("missing <channel>")
@@ -370,6 +372,7 @@ def command_smoke_validate_url(args: argparse.Namespace) -> int:
         context,
         attempts=args.attempts,
         delay_seconds=args.delay_seconds,
+        cache_bust=not args.no_cache_bust,
     )
     print(
         "Published appcast smoke validation passed "
@@ -379,7 +382,11 @@ def command_smoke_validate_url(args: argparse.Namespace) -> int:
 
 
 def command_inspect_url(args: argparse.Namespace) -> int:
-    context = inspect_feed_url(args.feed_url, max_items=args.max_items)
+    context = inspect_feed_url(
+        args.feed_url,
+        max_items=args.max_items,
+        cache_bust=not args.no_cache_bust,
+    )
     write_shell_env(args.env_file, context)
     args.release_body_file.write_text(context.release_body, encoding="utf-8")
     print(
@@ -416,6 +423,11 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_parser.add_argument("--feed-url", required=True)
     smoke_parser.add_argument("--attempts", type=int, default=6)
     smoke_parser.add_argument("--delay-seconds", type=int, default=5)
+    smoke_parser.add_argument(
+        "--no-cache-bust",
+        action="store_true",
+        help="Do not append a cb query parameter when fetching the feed.",
+    )
     add_shared_arguments(smoke_parser)
     smoke_parser.set_defaults(func=command_smoke_validate_url)
 
@@ -424,6 +436,11 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--env-file", type=Path, required=True)
     inspect_parser.add_argument("--release-body-file", type=Path, required=True)
     inspect_parser.add_argument("--max-items", type=int, default=10)
+    inspect_parser.add_argument(
+        "--no-cache-bust",
+        action="store_true",
+        help="Do not append a cb query parameter when fetching the feed.",
+    )
     inspect_parser.set_defaults(func=command_inspect_url)
 
     return parser

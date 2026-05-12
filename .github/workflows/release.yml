@@ -1,0 +1,192 @@
+name: Publish Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Short version, for example 1.6.6"
+        required: true
+        type: string
+      build_number:
+        description: "Build suffix used in pubspec.yaml"
+        required: true
+        type: string
+        default: "1"
+      run_tests:
+        description: "Run flutter analyze and flutter test before publishing"
+        required: true
+        type: boolean
+        default: true
+      require_signing:
+        description: "Fail if code signing certificate secrets are unavailable"
+        required: true
+        type: boolean
+        default: false
+      prerelease:
+        description: "Publish as a prerelease"
+        required: true
+        type: boolean
+        default: false
+      dry_run:
+        description: "Build and validate without committing, tagging, or publishing"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-windows-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    env:
+      VERSION_SHORT: ${{ inputs.version }}
+      FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
+      RELEASE_TAG: v${{ inputs.version }}
+      OFFICIAL_FEED_URL: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Update pubspec version
+        shell: python
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          full_version = os.environ["FULL_VERSION"]
+          if not re.fullmatch(r"\d+\.\d+\.\d+\+\d+", full_version):
+              raise SystemExit(f"Invalid FULL_VERSION: {full_version}")
+
+          pubspec = Path("pubspec.yaml")
+          content = pubspec.read_text(encoding="utf-8")
+          updated, replacements = re.subn(
+              r'^version:\s*["\']?\d+\.\d+\.\d+(?:\+\d+)?["\']?\s*(?:#|$)',
+              f"version: {full_version}",
+              content,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if replacements != 1:
+              raise SystemExit("Unable to update pubspec.yaml version.")
+          pubspec.write_text(updated, encoding="utf-8")
+
+      - name: Synchronize version files
+        run: python installer/update_version.py
+
+      - name: Release preflight
+        if: ${{ !inputs.dry_run }}
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --require-iscc
+
+      - name: Release preflight dry run
+        if: inputs.dry_run
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag --require-iscc
+
+      - name: Analyze
+        if: inputs.run_tests
+        run: flutter analyze
+
+      - name: Test
+        if: inputs.run_tests
+        run: flutter test
+
+      - name: Prepare signing certificate
+        id: signing
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+            "cert_path=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "plug-agente-code-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT_BASE64))
+          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build installer
+        env:
+          AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
+          WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
+          WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
+          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing }}
+        run: python installer/build_installer.py
+
+      - name: Validate generated installer
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag
+
+      - name: Commit version bump
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
+          git diff --staged --quiet && {
+            echo "No version changes to commit."
+            exit 1
+          }
+          git commit -m "chore: bump version to ${VERSION_SHORT}"
+          git push origin main
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          git tag "${RELEASE_TAG}"
+          git push origin "${RELEASE_TAG}"
+
+      - name: Publish GitHub Release
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE_FLAG=""
+          LATEST_FLAG="--latest"
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+            LATEST_FLAG="--latest=false"
+          fi
+          gh release create "${RELEASE_TAG}" \
+            "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" \
+            --title "Version ${VERSION_SHORT}" \
+            --generate-notes \
+            --verify-tag \
+            ${LATEST_FLAG} \
+            ${PRERELEASE_FLAG}
+
+      - name: Dry run summary
+        if: inputs.dry_run
+        shell: bash
+        run: |
+          echo "Dry run completed for ${FULL_VERSION}."
+          echo "Installer generated at installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe."
+          echo "No commit, tag, or GitHub Release was created."

@@ -16,6 +16,38 @@ Plug Agente.
 
 ## Processo Recomendado
 
+O caminho preferencial e o workflow manual **Publish Windows Release** em
+GitHub Actions. Ele atualiza a versao, valida sincronizacao, gera o instalador
+Windows, cria commit/tag/release e anexa o asset correto.
+
+1. Acesse `Actions` > `Publish Windows Release`.
+2. Execute `Run workflow` em `main`.
+3. Informe:
+   - `version`: versao curta, exemplo `1.6.6`;
+   - `build_number`: sufixo do `pubspec.yaml`, exemplo `1`;
+   - `run_tests`: mantenha ativo para release estavel;
+   - `require_signing`: ative apenas quando os secrets de assinatura estiverem
+     configurados;
+   - `prerelease`: use apenas para versoes de validacao;
+   - `dry_run`: gera e valida o instalador sem criar commit, tag ou release.
+4. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
+   terminou com sucesso.
+
+Use `dry_run=true` para validar uma versao antes de publica-la. O workflow
+continua atualizando a versao no workspace temporario do runner, rodando
+preflight e gerando o instalador, mas encerra antes dos passos destrutivos.
+
+Secrets opcionais para assinatura:
+
+- `WINDOWS_CODE_SIGNING_CERT_BASE64`: certificado PFX em Base64.
+- `WINDOWS_CODE_SIGNING_CERT_PASSWORD`: senha do PFX.
+
+Quando `require_signing=true`, a release falha se o certificado nao estiver
+disponivel. Quando `false`, a assinatura e aplicada apenas se os secrets
+existirem.
+
+## Processo Local Manual
+
 ### 1. Atualizar versao
 
 Edite `pubspec.yaml`:
@@ -27,6 +59,7 @@ version: 1.2.7+2
 ### 2. Gerar build Windows e instalador
 
 ```bash
+python tool/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc
 python installer/build_installer.py
 ```
 
@@ -53,6 +86,9 @@ git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
 git commit -m "chore: bump version to 1.2.7"
 git push origin main
 ```
+
+Mantenha alteracoes de runtime/runner Windows em commit separado do bump de
+versao. O commit de release deve conter apenas os artefatos versionados acima.
 
 ### 4. Criar tag
 
@@ -84,6 +120,22 @@ https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
 Validacoes detalhadas do feed e do update ficam em
 [auto_update_setup.md](auto_update_setup.md).
 
+Validacao manual da release publicada:
+
+```bash
+python tool/validate_release.py \
+  --tag v1.2.7 \
+  --appcast appcast.xml
+```
+
+Para validar o feed remoto publicado:
+
+```bash
+python tool/validate_release.py \
+  --tag v1.2.7 \
+  --feed-url https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+```
+
 ## Fonte de Verdade do Appcast
 
 O arquivo `tool/appcast_manager.py` concentra:
@@ -109,10 +161,22 @@ flutter build windows --release
 ISCC installer/setup.iss
 ```
 
+Preflight local completo antes de publicar manualmente:
+
+```bash
+python tool/release_preflight.py --version 1.2.7 --require-iscc --analyze --tests
+```
+
 ## Seguranca Operacional
 
 - Para distribuicao ampla, priorize tambem assinatura de codigo do executavel e
   do instalador para reduzir alertas de SmartScreen e aumentar confianca no
   update.
+- O script `installer/build_installer.py` assina `plug_agente.exe` e o
+  instalador quando `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um PFX. Use
+  `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar explicitamente quando a
+  assinatura nao estiver configurada.
 - A retencao do `appcast.xml` e limitada pelo workflow para evitar crescimento
   indefinido do feed.
+- O CI executa `actionlint` nos workflows para detectar problemas de sintaxe,
+  expressoes e scripts inline antes de usar o fluxo de release.
