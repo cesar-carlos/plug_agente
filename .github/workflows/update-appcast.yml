@@ -115,9 +115,11 @@ jobs:
             echo "Error: setup.iss version ($SETUP_VERSION) does not match tag version ($VERSION_SHORT)"
             exit 1
           fi
-          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
-          echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG_NAME"
+            echo "version=$VERSION_SHORT"
+            echo "full_version=$FULL_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -155,10 +157,12 @@ jobs:
             exit 1
           fi
 
-          echo "url=$ASSET_URL" >> "$GITHUB_OUTPUT"
-          echo "api_url=$ASSET_API_URL" >> "$GITHUB_OUTPUT"
-          echo "size=$ASSET_SIZE" >> "$GITHUB_OUTPUT"
-          echo "name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "url=$ASSET_URL"
+            echo "api_url=$ASSET_API_URL"
+            echo "size=$ASSET_SIZE"
+            echo "name=$ASSET_NAME"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate release consistency
         env:

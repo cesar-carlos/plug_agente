@@ -28,7 +28,7 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
       - name: Lint workflows
-        run: "$HOME/go/bin/actionlint"
+        run: '"$HOME/go/bin/actionlint"'
 
   analyze-and-test:
     runs-on: ubuntu-latest
