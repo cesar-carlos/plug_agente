@@ -99,7 +99,9 @@ Para qualquer evento de aplicacao:
 2. Serializar em JSON UTF-8.
 3. Avaliar GZIP quando o tamanho codificado atingir `compressionThreshold`
    (ou sempre que a politica local exigir); no modo automatico, usar GZIP apenas
-   se o resultado for menor que os bytes UTF-8.
+   se o resultado for menor que os bytes UTF-8. Em qualquer modo, nao emitir
+   gzip quando `originalSize / compressedSize` exceder `maxInflationRatio`; use
+   `cmp: none` nesse caso.
 4. Montar o `PayloadFrame`.
 5. Assinar o frame quando o contrato da sessao exigir assinatura.
 6. Emitir o evento Socket.IO com o frame contendo `payload` binario.
@@ -190,9 +192,20 @@ Perfis operacionais recomendados:
 
 Parametros atuais recomendados:
 
-- `compressionThreshold`: `1024`
+- `compressionThreshold`: `4096`
 - `gzipIsolateThresholdBytes`: `32 * 1024` (32 KiB)
 - `jsonPayloadIsolateEncodeThresholdBytes`: `384 * 1024` (384 KiB)
+
+Benchmark local recomendado antes de alterar esses valores:
+
+```bash
+dart run tool/benchmark_transport_pipeline.dart --iterations 20
+dart run tool/benchmark_transport_pipeline.dart --iterations 20 --json
+```
+
+O benchmark compara `none`, `auto` e `gzip` com payloads SQL sinteticos e
+exporta percentis de encode, compressao, decode e descompressao via
+`ProtocolMetricsSummary.toJson()`.
 
 Para clientes, a regra pratica permanece:
 
@@ -212,6 +225,23 @@ A assinatura possui duas camadas possiveis:
   `PayloadFrame` e os bytes do payload;
 - compatibilidade legada: assinatura no envelope logico JSON, usada apenas
   quando o modo binario estiver desativado.
+
+Canonicalizacao obrigatoria para `frame.signature`:
+
+- monte um objeto sem o campo `signature`;
+- inclua `schemaVersion`, `enc`, `cmp`, `contentType`, `originalSize`,
+  `compressedSize`, `traceId`, `requestId` e `payload`;
+- represente `payload` como base64 dos bytes efetivamente transmitidos;
+- serialize como JSON UTF-8 sem espacos, ordenando chaves de objetos
+  lexicograficamente em todos os niveis;
+- calcule HMAC-SHA256 sobre esses bytes canonicos e codifique o digest em
+  base64.
+
+Quando `signatureRequired` for negociado, todos os eventos de aplicacao da
+sessao devem trazer assinatura valida. Antes da negociacao obrigatoria, um
+frame sem assinatura pode ser aceito; um frame que traz `signature` deve ser
+verificavel pelo `key_id` informado. Vetores de contrato estao em
+`test/fixtures/payload_signing_test_vectors.json`.
 
 Ordem recomendada no recebimento:
 
@@ -275,16 +305,18 @@ Regras para clientes:
 ```js
 import { gzipSync, gunzipSync } from "node:zlib";
 
+const MAX_INFLATION_RATIO = 10;
+
 function encodeFrame(
   message,
-  { requestId, traceId, compressionThreshold = 1024 },
+  { requestId, traceId, compressionThreshold = 4096 },
 ) {
   const plainBytes = Buffer.from(JSON.stringify(message), "utf8");
   let cmp = "none";
   let wireBytes = plainBytes;
   if (plainBytes.length >= compressionThreshold) {
     const gz = gzipSync(plainBytes);
-    if (gz.length < plainBytes.length) {
+    if (gz.length < plainBytes.length && plainBytes.length / gz.length <= MAX_INFLATION_RATIO) {
       cmp = "gzip";
       wireBytes = gz;
     }
@@ -311,6 +343,9 @@ function decodeFrame(frame) {
 
   const binary = Buffer.from(frame.payload);
   const plainBytes = frame.cmp === "gzip" ? gunzipSync(binary) : binary;
+  if (binary.length > 0 && plainBytes.length / binary.length > MAX_INFLATION_RATIO) {
+    throw new Error("payload inflation ratio exceeded");
+  }
   return JSON.parse(plainBytes.toString("utf8"));
 }
 ```
@@ -323,7 +358,7 @@ O exemplo acima segue o modo **automatico** do contrato: acima do limiar, `gzip`
 final pipeline = TransportPipeline(
   encoding: 'json',
   compression: 'gzip',
-  compressionThreshold: 1024,
+  compressionThreshold: 4096,
 );
 
 final frame = pipeline.prepareSend(

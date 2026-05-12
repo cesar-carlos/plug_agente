@@ -128,6 +128,8 @@ void main() {
       expect(config.protocol, equals('jsonrpc-v2'));
       expect(config.encoding, equals('json'));
       expect(config.compression, equals('none'));
+      expect(config.compressionThreshold, equals(4096));
+      expect(config.maxInflationRatio, equals(10));
       expect(config.usesBinaryPayload, isTrue);
       expect(config.usesTransportFrame, isTrue);
     });

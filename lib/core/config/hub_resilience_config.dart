@@ -1,4 +1,4 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 
@@ -42,7 +42,7 @@ class HubResilienceConfig {
   }
 
   static int? _readOptionalNonNegativeIntEnv(String key) {
-    final raw = dotenv.env[key]?.trim();
+    final raw = AppEnvironment.get(key);
     if (raw == null || raw.isEmpty) {
       return null;
     }
@@ -54,7 +54,7 @@ class HubResilienceConfig {
   }
 
   static int? _readOptionalPositiveIntEnv(String key) {
-    final raw = dotenv.env[key]?.trim();
+    final raw = AppEnvironment.get(key);
     if (raw == null || raw.isEmpty) {
       return null;
     }

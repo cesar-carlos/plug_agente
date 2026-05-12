@@ -1,12 +1,12 @@
 import 'dart:developer' as developer;
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
@@ -43,7 +43,9 @@ import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -135,7 +137,7 @@ void registerPlugDependencyGraph(
   required odbc.ServiceLocator odbcWorkerLocator,
 }) {
   int readPositiveIntEnv(String key, int fallback) {
-    final raw = dotenv.env[key]?.trim();
+    final raw = AppEnvironment.get(key);
     if (raw == null || raw.isEmpty) {
       return fallback;
     }
@@ -147,7 +149,7 @@ void registerPlugDependencyGraph(
   }
 
   int readNonNegativeIntEnv(String key, int fallback) {
-    final raw = dotenv.env[key]?.trim();
+    final raw = AppEnvironment.get(key);
     if (raw == null || raw.isEmpty) {
       return fallback;
     }
@@ -222,6 +224,11 @@ void registerPlugDependencyGraph(
       () => AgentConfigRepository(
         getIt<AppDatabase>(),
         authSecretStore: getIt<IHubAuthSecretStore>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentRegisterProfileProvider(
+        configRepository: getIt<IAgentConfigRepository>(),
       ),
     )
     ..registerLazySingleton(() => const Uuid())
@@ -320,11 +327,41 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<ITransportClient>(
       () {
-        final signingKey = dotenv.env['PAYLOAD_SIGNING_KEY']?.trim();
-        final signingKeyId = dotenv.env['PAYLOAD_SIGNING_KEY_ID']?.trim();
+        PayloadSigningConfig environmentSigningConfig() {
+          final signingKey = AppEnvironment.get('PAYLOAD_SIGNING_KEY');
+          final signingKeyId = AppEnvironment.get('PAYLOAD_SIGNING_KEY_ID');
+          return PayloadSigningConfig(
+            activeKeyId: signingKeyId,
+            keys: {
+              if (signingKeyId != null && signingKey != null) signingKeyId: signingKey,
+            },
+            source: PayloadSigningConfigSource.environment,
+          );
+        }
+
+        final signingConfig = getIt.isRegistered<PayloadSigningConfig>()
+            ? getIt<PayloadSigningConfig>()
+            : environmentSigningConfig();
         PayloadSigner? payloadSigner;
-        if (signingKey != null && signingKey.isNotEmpty && signingKeyId != null && signingKeyId.isNotEmpty) {
-          payloadSigner = PayloadSigner(keys: {signingKeyId: signingKey});
+        if (signingConfig.hasConfiguredSigner) {
+          payloadSigner = PayloadSigner(
+            keys: signingConfig.keys,
+            activeKeyId: signingConfig.activeKeyId,
+          );
+          developer.log(
+            'PayloadFrame signer configured '
+            '(active_key_id=${payloadSigner.activeKeyId}, key_count=${payloadSigner.keyCount}, '
+            'source=${signingConfig.sourceName})',
+            name: 'plug_dependency_registrar',
+            level: 800,
+          );
+        }
+        for (final warning in signingConfig.warnings) {
+          developer.log(
+            'PayloadFrame signing configuration warning: $warning',
+            name: 'plug_dependency_registrar',
+            level: 900,
+          );
         }
         return SocketIOTransportClientV2(
           dataSource: getIt<SocketDataSource>(),
@@ -332,7 +369,9 @@ void registerPlugDependencyGraph(
           rpcDispatcher: getIt<RpcMethodDispatcher>(),
           featureFlags: getIt<FeatureFlags>(),
           payloadSigner: payloadSigner,
+          payloadSigningConfig: signingConfig,
           protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
+          registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
         );
       },
     )
@@ -402,7 +441,7 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<IHubAvailabilityProbe>(
       () {
-        final probePath = dotenv.env['HUB_AVAILABILITY_PROBE_PATH']?.trim();
+        final probePath = AppEnvironment.get('HUB_AVAILABILITY_PROBE_PATH');
         return HubAvailabilityProbe(
           probePath: (probePath != null && probePath.isNotEmpty)
               ? probePath
@@ -447,12 +486,12 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<JwtJwksVerifier>(
       () => JwtJwksVerifier(() async {
-        final jwksUrlOverride = dotenv.env['JWKS_URL']?.trim();
+        final jwksUrlOverride = AppEnvironment.get('JWKS_URL');
         if (jwksUrlOverride != null && jwksUrlOverride.isNotEmpty) {
           return JwksConfig(
             jwksUrl: jwksUrlOverride,
-            issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-            audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+            issuer: AppEnvironment.get('JWKS_ISSUER'),
+            audience: AppEnvironment.get('JWKS_AUDIENCE'),
           );
         }
         final configResult = await getIt<IAgentConfigRepository>().getCurrentConfig();
@@ -463,8 +502,8 @@ void registerPlugDependencyGraph(
             final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
             return JwksConfig(
               jwksUrl: '$normalized/.well-known/jwks.json',
-              issuer: dotenv.env['JWKS_ISSUER']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_ISSUER'] : null,
-              audience: dotenv.env['JWKS_AUDIENCE']?.trim().isNotEmpty ?? false ? dotenv.env['JWKS_AUDIENCE'] : null,
+              issuer: AppEnvironment.get('JWKS_ISSUER'),
+              audience: AppEnvironment.get('JWKS_AUDIENCE'),
             );
           },
           (_) => null,

@@ -36,6 +36,7 @@ Estado implementado atual:
 | Feature flags estaveis promovidas para mandatory                  | v2.2         |
 | Transporte binario em `PayloadFrame` para eventos de aplicacao    | v2.4         |
 | Compressao GZIP na borda de transporte com fallback por threshold | v2.4         |
+| Rotacao manual de chaves por `key_id` e diagnostico de assinatura | pos-v2.8     |
 
 
 ## Fase 5 - Hardening residual (concluida)
@@ -52,7 +53,7 @@ Objetivo:
 
 - Homologar clientes no fluxo encode/compress/decode/decompress.
 - Testes de integracao de ponta a ponta.
-- Rotacao de chaves de assinatura sem downtime.
+- Automatizar rotacao de chaves de assinatura sem downtime.
 - Alertas operacionais para falhas de assinatura.
 
 ## Criterio de rollout
@@ -68,4 +69,3 @@ Objetivo:
 - Testes de integracao executados.
 - Feature flag criada (quando aplicavel) e validada.
 - Metricas e logs de observabilidade adicionados.
-

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 void main() {
@@ -16,6 +17,27 @@ void main() {
 
       expect(flags.enableBinaryPayload, isTrue);
       expect(store.getBool('feature_enable_binary_payload'), isTrue);
+    });
+
+    test('keeps incoming payload signatures optional by default', () async {
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+
+      expect(flags.enablePayloadSigning, isFalse);
+      expect(flags.requireIncomingPayloadSignatures, isFalse);
+
+      await flags.setEnablePayloadSigning(true);
+
+      expect(flags.enablePayloadSigning, isTrue);
+      expect(flags.requireIncomingPayloadSignatures, isFalse);
+    });
+
+    test('uses balanced compression defaults for transport performance', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+
+      expect(flags.outboundCompressionMode, OutboundCompressionMode.auto);
+      expect(flags.enableCompression, isTrue);
+      expect(flags.compressionThreshold, 4096);
     });
   });
 }

@@ -193,15 +193,16 @@ class RpcResponsePreparer {
     );
   }
 
-  /// Verifies the optional HMAC signature attached to an inbound JSON-only
-  /// payload (legacy non-binary transport). Returns `true` when signing is
-  /// disabled, when there is no signature, or when verification succeeds.
+  /// Verifies the HMAC signature attached to an inbound JSON-only payload
+  /// (legacy non-binary transport). When signatures are not required, unsigned
+  /// payloads are accepted but signed payloads still must be verifiable.
   bool verifyIncomingSignature(Map<String, dynamic> payload) {
-    if (!_featureFlags.enablePayloadSigning || _payloadSigner == null) {
-      return true;
-    }
     final sigJson = payload['signature'] as Map<String, dynamic>?;
-    if (sigJson == null) return true;
+    final signatureRequired = _featureFlags.requireIncomingPayloadSignatures;
+    if (_payloadSigner == null) {
+      return sigJson == null && !signatureRequired;
+    }
+    if (sigJson == null) return !signatureRequired;
     final signature = PayloadSignature.fromJson(sigJson);
     return _payloadSigner.verify(payload, signature);
   }

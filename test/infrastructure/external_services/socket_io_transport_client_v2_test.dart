@@ -22,7 +22,6 @@ import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
-import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:uuid/uuid.dart';
@@ -215,6 +214,7 @@ void main() {
       ).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketApiVersionMeta).thenReturn(false);
       when(() => mockFeatureFlags.enablePayloadSigning).thenReturn(false);
+      when(() => mockFeatureFlags.requireIncomingPayloadSignatures).thenReturn(false);
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,
       ).thenReturn(false);
@@ -761,9 +761,8 @@ void main() {
     );
 
     test(
-      'should disconnect when mandatory transport signature is required and missing',
+      'should disconnect when hub requires transport signature and signer is missing',
       () async {
-        when(() => mockFeatureFlags.enablePayloadSigning).thenReturn(true);
         when(
           () => mockNegotiator.negotiate(
             agentCapabilities: any(named: 'agentCapabilities'),
@@ -792,7 +791,6 @@ void main() {
           negotiator: mockNegotiator,
           rpcDispatcher: mockDispatcher,
           featureFlags: mockFeatureFlags,
-          payloadSigner: PayloadSigner(keys: {'kid-1': 'secret'}),
         );
 
         var reconnectionRequested = false;

@@ -60,7 +60,7 @@ class RpcRequestSchemaValidator {
         limits.maxRows,
       ),
       'sql.cancel' => _validateSqlCancelParams(data['params']),
-      'agent.getProfile' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getProfile'),
+      'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       'agent.getHealth' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getHealth'),
       'client_token.getPolicy' => _validateOptionalClientTokenAliasParams(data['params'], 'client_token.getPolicy'),
       _ => const Success(unit),
@@ -406,6 +406,37 @@ class RpcRequestSchemaValidator {
         'Field "params" contains unsupported properties: '
         '${extraKeys.join(", ")}',
       );
+    }
+    return _validateTokenAliases(params);
+  }
+
+  Result<void> _validateAgentGetProfileParams(dynamic params) {
+    if (params == null) {
+      return const Success(unit);
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object when present for method agent.getProfile',
+      );
+    }
+    const allowedKeys = {
+      'client_token',
+      'clientToken',
+      'auth',
+      'include_diagnostics',
+    };
+    final extraKeys = params.keys.where(
+      (String key) => !allowedKeys.contains(key),
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    final includeDiagnostics = params['include_diagnostics'];
+    if (includeDiagnostics != null && includeDiagnostics is! bool) {
+      return _invalidParams('Field "params.include_diagnostics" must be a boolean');
     }
     return _validateTokenAliases(params);
   }

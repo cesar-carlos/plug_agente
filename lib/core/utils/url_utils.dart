@@ -1,4 +1,6 @@
 final RegExp _trailingSlashes = RegExp(r'/+$');
+const String _agentsNamespace = 'agents';
+const String _consumersNamespace = 'consumers';
 
 String normalizeServerUrl(String serverUrl) {
   final trimmedServerUrl = serverUrl.trim();
@@ -22,17 +24,26 @@ String ensureAgentsNamespaceUrl(String serverUrl) {
 
   final parsedUri = Uri.tryParse(normalizedServerUrl);
   if (parsedUri == null || (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
-    if (normalizedServerUrl.toLowerCase().endsWith('/agents')) {
+    final lowerUrl = normalizedServerUrl.toLowerCase();
+    if (lowerUrl.endsWith('/$_agentsNamespace')) {
       return normalizedServerUrl;
     }
-    return joinServerUrlAndPath(normalizedServerUrl, '/agents');
+    if (lowerUrl.endsWith('/$_consumersNamespace')) {
+      return normalizedServerUrl.substring(0, normalizedServerUrl.length - _consumersNamespace.length) +
+          _agentsNamespace;
+    }
+    return joinServerUrlAndPath(normalizedServerUrl, '/$_agentsNamespace');
   }
 
   final pathSegments = parsedUri.pathSegments.where((segment) => segment.isNotEmpty).toList();
-  if (pathSegments.isNotEmpty && pathSegments.last.toLowerCase() == 'agents') {
+  if (pathSegments.isNotEmpty && pathSegments.last.toLowerCase() == _agentsNamespace) {
     return normalizedServerUrl;
   }
 
-  pathSegments.add('agents');
+  if (pathSegments.isNotEmpty && pathSegments.last.toLowerCase() == _consumersNamespace) {
+    pathSegments[pathSegments.length - 1] = _agentsNamespace;
+  } else {
+    pathSegments.add(_agentsNamespace);
+  }
   return parsedUri.replace(pathSegments: pathSegments).toString();
 }

@@ -56,12 +56,14 @@ class CapabilitiesNegotiator {
     required Future<void> Function(String event, dynamic payload) emit,
     required dynamic Function(dynamic payload, {String? sourceEvent}) decodeIncoming,
     required void Function() onTimeoutReconnect,
+    Future<Map<String, dynamic>?> Function()? registerProfileProvider,
     PayloadSigner? payloadSigner,
   }) : _negotiator = negotiator,
        _featureFlags = featureFlags,
        _contractValidator = contractValidator,
        _localCapabilitiesProvider = localCapabilitiesProvider,
        _agentIdProvider = agentIdProvider,
+       _registerProfileProvider = registerProfileProvider,
        _emit = emit,
        _decodeIncoming = decodeIncoming,
        _onTimeoutReconnect = onTimeoutReconnect,
@@ -72,6 +74,7 @@ class CapabilitiesNegotiator {
   final RpcContractValidator _contractValidator;
   final ProtocolCapabilities Function() _localCapabilitiesProvider;
   final String Function() _agentIdProvider;
+  final Future<Map<String, dynamic>?> Function()? _registerProfileProvider;
   final Future<void> Function(String event, dynamic payload) _emit;
   final dynamic Function(dynamic payload, {String? sourceEvent}) _decodeIncoming;
   final void Function() _onTimeoutReconnect;
@@ -221,11 +224,15 @@ class CapabilitiesNegotiator {
   Future<bool> _sendAgentRegister() async {
     final agentCapabilities = _localCapabilitiesProvider();
 
-    final registerData = {
+    final registerData = <String, dynamic>{
       'agentId': _agentIdProvider(),
       'timestamp': DateTime.now().toIso8601String(),
       'capabilities': agentCapabilities.toJson(),
     };
+    final profileData = await _registerProfileProvider?.call();
+    if (profileData != null) {
+      registerData.addAll(profileData);
+    }
 
     if (_featureFlags.enableSocketSchemaValidation) {
       final validation = _contractValidator.validateAgentRegister(registerData);
@@ -299,6 +306,11 @@ class CapabilitiesNegotiator {
 
     final agentRequiresSignature = agentCapabilities.extensions['signatureRequired'] as bool? ?? false;
     final serverRequiresSignature = serverCapabilities.extensions['signatureRequired'] as bool? ?? false;
+    if ((agentRequiresSignature || serverRequiresSignature) && _payloadSigner == null) {
+      throw StateError(
+        'Negotiated protocol requires transport signing but no signer is configured',
+      );
+    }
     if ((agentRequiresSignature || serverRequiresSignature) && negotiatedProtocol.signatureAlgorithms.isEmpty) {
       throw StateError(
         'Negotiated protocol requires signature but no shared algorithm was found',

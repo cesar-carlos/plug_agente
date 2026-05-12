@@ -1,0 +1,32 @@
+{
+  "algorithm": "hmac-sha256",
+  "key_id": "shared-key-01",
+  "secret": "server-shared-secret",
+  "logical_payload": {
+    "canonical_input": "{\"id\":\"req-001\",\"method\":\"sql.execute\",\"params\":{\"limit\":1,\"sql\":\"SELECT 1\"}}",
+    "payload": {
+      "method": "sql.execute",
+      "id": "req-001",
+      "params": {
+        "sql": "SELECT 1",
+        "limit": 1
+      }
+    },
+    "signature": "4/Sc86SYz6shl/JPYoBzApNHQIp03OVbn1lmOGWXnv4="
+  },
+  "transport_frame": {
+    "canonical_input": "{\"cmp\":\"none\",\"compressedSize\":11,\"contentType\":\"application/json\",\"enc\":\"json\",\"originalSize\":11,\"payload\":\"eyJvayI6dHJ1ZX0=\",\"requestId\":\"req-001\",\"schemaVersion\":\"1.0\",\"traceId\":\"trace-001\"}",
+    "frame": {
+      "schemaVersion": "1.0",
+      "enc": "json",
+      "cmp": "none",
+      "contentType": "application/json",
+      "originalSize": 11,
+      "compressedSize": 11,
+      "payload": [123, 34, 111, 107, 34, 58, 116, 114, 117, 101, 125],
+      "traceId": "trace-001",
+      "requestId": "req-001"
+    },
+    "signature": "UpUVUNDM/kDYdffl79uJdmrE002MhtUdQ+KYLyiAYkE="
+  }
+}

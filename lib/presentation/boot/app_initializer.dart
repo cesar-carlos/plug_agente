@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
@@ -47,7 +47,7 @@ class AppInitializer {
 
   Future<AppBootstrapData> initialize(List<String> args) async {
     AppUptime.markStarted();
-    await dotenv.load(isOptional: true);
+    await AppEnvironment.loadOptional();
 
     final capabilities = await _resolveRuntimeCapabilities();
     await setupDependencies(capabilities: capabilities);

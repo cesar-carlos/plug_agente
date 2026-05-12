@@ -1,20 +1,10 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 
 /// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
   ConnectionConstants._();
 
-  /// Reads [key] from the map populated by `flutter_dotenv` after `load`.
-  ///
-  /// Returns null when dotenv is not initialized (common in unit tests), instead
-  /// of throwing.
-  static String? _optionalEnv(String key) {
-    try {
-      return dotenv.env[key];
-    } on Object {
-      return null;
-    }
-  }
+  static String? _optionalEnv(String key) => AppEnvironment.get(key);
 
   /// Hub `GET /api/v1/agents` during backup restore staging (duplicate-session check).
   static const Duration backupRestoreAgentsListTimeout = Duration(seconds: 15);

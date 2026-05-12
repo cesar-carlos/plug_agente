@@ -105,6 +105,27 @@ void main() {
       expect(collector.metrics.length, equals(1000));
     });
 
+    test('should use configured retention cap', () {
+      final smallCollector = ProtocolMetricsCollector(maxEntries: 3);
+      for (var i = 0; i < 5; i++) {
+        smallCollector.record(
+          ProtocolMetrics(
+            timestamp: DateTime.now(),
+            protocol: 'jsonrpc-v2',
+            encoding: 'json',
+            compression: 'none',
+            originalSize: i,
+            compressedSize: i,
+            direction: 'send',
+          ),
+        );
+      }
+
+      expect(smallCollector.metrics.length, equals(3));
+      expect(smallCollector.metrics.first.originalSize, equals(2));
+      expect(smallCollector.metrics.last.originalSize, equals(4));
+    });
+
     test('should return summary grouped by event', () {
       collector.record(
         ProtocolMetrics(
@@ -252,6 +273,38 @@ void main() {
       expect(summary.gzipCompressIsolateOperations, equals(1));
       expect(summary.jsonDecodeIsolateOperations, equals(1));
       expect(summary.successRate, equals(1));
+      expect(summary.totalDurationPercentiles.p50Us, equals(2000));
+      expect(summary.totalDurationPercentiles.p95Us, equals(2000));
+      expect(summary.encodeDurationPercentiles.p50Us, equals(500));
+      expect(summary.compressDurationPercentiles.p95Us, equals(1200));
+      expect(summary.decodeDurationPercentiles.p99Us, equals(700));
+    });
+
+    test('should export diagnostic json summary', () {
+      final summary = ProtocolMetricsSummary.fromList([
+        ProtocolMetrics(
+          timestamp: DateTime.now(),
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          requestedCompression: 'auto',
+          originalSize: 1000,
+          compressedSize: 400,
+          direction: 'send',
+          eventName: 'rpc:response',
+          totalDurationUs: 2000,
+          encodeDurationUs: 500,
+          compressDurationUs: 1200,
+        ),
+      ]);
+
+      final json = summary.toJson();
+
+      expect(json['total_messages'], equals(1));
+      expect(json['total_bytes_saved'], equals(600));
+      expect(json['compression_efficiency'], equals(0.6));
+      expect(json['total_duration_percentiles'], isA<Map<String, int>>());
+      expect(json['event_usage'], containsPair('rpc:response', 1));
     });
 
     test('should calculate error rate', () {

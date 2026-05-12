@@ -221,28 +221,95 @@ void main() {
       expect(data['correlation_id'], equals('req-1'));
     });
 
-    test(
-      'should require client token for agent.getProfile when auth is enabled',
-      () async {
-        when(
-          () => mockFeatureFlags.enableClientTokenAuthorization,
-        ).thenReturn(true);
+    test('should return methodNotFound for observer methods until published', () async {
+      const methods = [
+        'observer.register',
+        'observer.unregister',
+        'observer.list',
+      ];
 
-        const request = RpcRequest(
+      for (final method in methods) {
+        final request = RpcRequest(
           jsonrpc: '2.0',
-          method: 'agent.getProfile',
-          id: 'req-profile-auth',
+          method: method,
+          id: method,
         );
 
         final response = await dispatcher.dispatch(request, 'agent-1');
 
         expect(response.isError, isTrue);
-        expect(
-          response.error!.code,
-          equals(RpcErrorCode.authenticationFailed),
-        );
-      },
-    );
+        expect(response.error!.code, equals(RpcErrorCode.methodNotFound));
+        final data = response.error!.data as Map<String, dynamic>;
+        expect(data['reason'], equals('method_not_found'));
+        expect(data['category'], equals('validation'));
+        expect(data['correlation_id'], equals(method));
+      }
+    });
+
+    test('should allow agent.getProfile without client token when auth is enabled', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+
+      final mockConfigRepo = MockAgentConfigRepository();
+      final config = Config(
+        id: 'cfg-profile-auth',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17',
+        connectionString: 'DSN=Test',
+        username: 'u',
+        databaseName: 'db',
+        host: 'localhost',
+        port: 1433,
+        nome: 'Empresa Exemplo',
+        nomeFantasia: 'Fantasia Exemplo',
+        cnaeCnpjCpf: '529.982.247-25',
+        telefone: '(11) 3333-4444',
+        celular: '(11) 98888-7777',
+        email: 'CONTATO@EXEMPLO.COM',
+        endereco: 'Rua Central',
+        numeroEndereco: '123',
+        bairro: 'Centro',
+        cep: '01001-000',
+        nomeMunicipio: 'Sao Paulo',
+        ufMunicipio: 'sp',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+        featureFlags: mockFeatureFlags,
+        configRepository: mockConfigRepo,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'agent.getProfile',
+        id: 'req-profile-auth',
+      );
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      verifyNever(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      );
+    });
 
     test(
       'should require client token for agent.getHealth when auth is enabled',
@@ -475,6 +542,7 @@ void main() {
       ).thenAnswer((_) async => const Success(unit));
 
       final mockConfigRepo = MockAgentConfigRepository();
+      final configUpdatedAt = DateTime.utc(2026, 4, 8, 12);
       final config = Config(
         id: 'cfg-1',
         driverName: 'SQL Server',
@@ -497,8 +565,10 @@ void main() {
         nomeMunicipio: 'Sao Paulo',
         ufMunicipio: 'sp',
         observacao: 'Observacao',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        hubProfileVersion: 7,
+        hubProfileUpdatedAt: '2026-04-08T10:20:00.000Z',
+        createdAt: DateTime.utc(2026, 4, 8, 9),
+        updatedAt: configUpdatedAt,
       );
       when(
         mockConfigRepo.getCurrentConfig,
@@ -537,8 +607,10 @@ void main() {
       final result = response.result as Map<String, dynamic>;
       final profile = result['profile'] as Map<String, dynamic>;
       final address = profile['address'] as Map<String, dynamic>;
-      final odbc = result['odbc'] as Map<String, dynamic>;
       check(result['agent_id']).equals('agent-1');
+      check(result['profile_version']).equals(7);
+      check(result['updated_at']).equals('2026-04-08T10:20:00.000Z');
+      check(result.containsKey('odbc')).isFalse();
       check(profile['document']).equals('52998224725');
       check(profile['document_type']).equals('cpf');
       check(profile['phone']).equals('1133334444');
@@ -546,8 +618,6 @@ void main() {
       check(profile['email']).equals('contato@exemplo.com');
       check(address['postal_code']).equals('01001000');
       check(address['state']).equals('SP');
-      check(odbc['available']).equals(true);
-      check((odbc['snapshot'] as Map<String, dynamic>)['engine']).isNotNull();
       verify(
         () => mockAuthorize(
           token: any(named: 'token'),
@@ -556,6 +626,68 @@ void main() {
           method: any(named: 'method'),
         ),
       ).called(1);
+      verifyNever(() => mockOdbcNativeMetricsService.collectSnapshot());
+    });
+
+    test('should include cached ODBC diagnostics for agent.getProfile when requested', () async {
+      final mockConfigRepo = MockAgentConfigRepository();
+      final config = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17',
+        connectionString: 'DSN=Test',
+        username: 'u',
+        databaseName: 'db',
+        host: 'localhost',
+        port: 1433,
+        nome: 'Empresa Exemplo',
+        nomeFantasia: 'Fantasia Exemplo',
+        cnaeCnpjCpf: '529.982.247-25',
+        telefone: '(11) 3333-4444',
+        celular: '(11) 98888-7777',
+        email: 'CONTATO@EXEMPLO.COM',
+        endereco: 'Rua Central',
+        numeroEndereco: '123',
+        bairro: 'Centro',
+        cep: '01001-000',
+        nomeMunicipio: 'Sao Paulo',
+        ufMunicipio: 'sp',
+        createdAt: DateTime.utc(2026, 4, 8, 9),
+        updatedAt: DateTime.utc(2026, 4, 8, 12),
+      );
+      when(
+        mockConfigRepo.getCurrentConfig,
+      ).thenAnswer((_) async => Success(config));
+
+      dispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+        featureFlags: mockFeatureFlags,
+        configRepository: mockConfigRepo,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'agent.getProfile',
+        id: 'req-profile-diag',
+        params: {'include_diagnostics': true},
+      );
+
+      final first = await dispatcher.dispatch(request, 'agent-1');
+      final second = await dispatcher.dispatch(request, 'agent-1');
+
+      final firstOdbc = (first.result as Map<String, dynamic>)['odbc'] as Map<String, dynamic>;
+      final secondOdbc = (second.result as Map<String, dynamic>)['odbc'] as Map<String, dynamic>;
+      check(firstOdbc['available']).equals(true);
+      check((firstOdbc['snapshot'] as Map<String, dynamic>)['engine']).isNotNull();
+      check(secondOdbc).equals(firstOdbc);
       verify(() => mockOdbcNativeMetricsService.collectSnapshot()).called(1);
     });
 

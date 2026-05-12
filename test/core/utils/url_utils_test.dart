@@ -17,9 +17,23 @@ void main() {
       );
     });
 
+    test('replaces /consumers suffix with /agents', () {
+      expect(
+        ensureAgentsNamespaceUrl('https://hub.example.com/consumers'),
+        'https://hub.example.com/agents',
+      );
+    });
+
     test('preserves query parameters', () {
       expect(
         ensureAgentsNamespaceUrl('https://hub.example.com?env=dev'),
+        'https://hub.example.com/agents?env=dev',
+      );
+    });
+
+    test('replaces /consumers suffix and preserves query parameters', () {
+      expect(
+        ensureAgentsNamespaceUrl('https://hub.example.com/consumers?env=dev'),
         'https://hub.example.com/agents?env=dev',
       );
     });

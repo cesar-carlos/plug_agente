@@ -10,6 +10,16 @@
     "profile": {
       "$ref": "./agent.profile.schema.json"
     },
+    "profile_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional hub catalog profile version known by the agent for the included profile snapshot."
+    },
+    "profile_updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional hub profile timestamp known by the agent for the included profile snapshot."
+    },
     "capabilities": {
       "type": "object",
       "required": ["protocols", "encodings", "compressions", "extensions", "limits"],

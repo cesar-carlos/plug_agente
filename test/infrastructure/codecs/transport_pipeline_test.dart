@@ -36,6 +36,7 @@ void main() {
         encoding: 'json',
         compression: 'gzip',
         compressionThreshold: 50,
+        maxInflationRatio: 30,
       );
 
       final data = {'message': 'Hello World! ' * 100};
@@ -53,6 +54,7 @@ void main() {
         encoding: 'json',
         compression: 'auto',
         compressionThreshold: 50,
+        maxInflationRatio: 30,
       );
 
       final data = {'message': 'Hello World! ' * 100};
@@ -104,6 +106,7 @@ void main() {
         encoding: 'json',
         compression: 'gzip',
         compressionThreshold: 10,
+        maxInflationRatio: 30,
       );
 
       final originalData = {'message': 'Hello World! ' * 100};
@@ -122,6 +125,7 @@ void main() {
         encoding: 'json',
         compression: 'gzip',
         compressionThreshold: 50,
+        maxInflationRatio: 30,
       );
 
       final originalData = {
@@ -182,6 +186,7 @@ void main() {
         encoding: 'json',
         compression: 'gzip',
         compressionThreshold: 1,
+        maxInflationRatio: 30,
       );
 
       final originalData = {'message': 'Hello World! ' * 100};
@@ -195,6 +200,32 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
+    test('receiveProcess uses default max inflation ratio 10', () {
+      final senderPipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+        compressionThreshold: 1,
+        maxInflationRatio: 30,
+      );
+      final receiverPipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+        compressionThreshold: 1,
+      );
+
+      final originalData = {'message': 'Hello World! ' * 100};
+      final frame = senderPipeline.prepareSend(originalData).getOrThrow();
+
+      final result = receiverPipeline.receiveProcess(frame);
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ValidationFailure;
+      expect(
+        failure.context['maxInflationRatio'],
+        equals(defaultTransportMaxInflationRatio),
+      );
+    });
+
     test(
       'receiveProcessAsync should match receiveProcess for gzip frames',
       () async {
@@ -202,6 +233,7 @@ void main() {
           encoding: 'json',
           compression: 'gzip',
           compressionThreshold: 10,
+          maxInflationRatio: 30,
         );
 
         final originalData = {'message': 'Hello World! ' * 100};
@@ -276,6 +308,7 @@ void main() {
         encoding: 'json',
         compression: 'auto',
         compressionThreshold: 10,
+        maxInflationRatio: 30,
         metricsCollector: collector,
       );
 

@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/infrastructure/http/get_retry_interceptor.dart';
 
@@ -52,7 +52,7 @@ class DioFactory {
 
   static bool _shouldAcceptBadCertificates() {
     try {
-      final envValue = dotenv.env[_envKeyAcceptBadCertificates];
+      final envValue = AppEnvironment.get(_envKeyAcceptBadCertificates);
       return envValue?.toLowerCase() == 'true' || envValue == '1';
     } on Exception catch (e, stackTrace) {
       developer.log(

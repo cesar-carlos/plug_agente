@@ -1,7 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
+import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
 import '../helpers/e2e_env.dart';
 
@@ -21,6 +25,16 @@ void main() async {
       ? 'Set E2E_HUB_URL (hub base URL, e.g. https://host:port or wss://host/path).'
       : (tokenOrNull == null || tokenOrNull.isEmpty)
       ? 'Set E2E_HUB_TOKEN (agent token for the Socket.IO auth handshake).'
+      : null;
+
+  final signingSkipMessage = !E2EEnv.runLiveHubSigningTests
+      ? 'Set RUN_LIVE_HUB_SIGNING_TESTS=true in .env to run signed PayloadFrame hub tests.'
+      : (urlOrNull == null || urlOrNull.isEmpty)
+      ? 'Set E2E_HUB_URL (hub base URL, e.g. https://host:port or wss://host/path).'
+      : (tokenOrNull == null || tokenOrNull.isEmpty)
+      ? 'Set E2E_HUB_TOKEN (agent token for the Socket.IO auth handshake).'
+      : (E2EEnv.e2ePayloadSigningKeyId == null || E2EEnv.e2ePayloadSigningKey == null)
+      ? 'Set PAYLOAD_SIGNING_KEY_ID/PAYLOAD_SIGNING_KEY or PAYLOAD_SIGNING_ACTIVE_KEY_ID/PAYLOAD_SIGNING_KEY.'
       : null;
 
   group('Hub Socket.IO (live E2E)', () {
@@ -65,6 +79,100 @@ void main() async {
         }
       },
       skip: skipMessage,
+    );
+
+    test(
+      'should complete signed PayloadFrame capabilities handshake',
+      () async {
+        final hubUrl = E2EEnv.e2eHubUrl;
+        final hubToken = E2EEnv.e2eHubToken;
+        final keyId = E2EEnv.e2ePayloadSigningKeyId;
+        final key = E2EEnv.e2ePayloadSigningKey;
+        if (hubUrl == null ||
+            hubUrl.isEmpty ||
+            hubToken == null ||
+            hubToken.isEmpty ||
+            keyId == null ||
+            keyId.isEmpty ||
+            key == null ||
+            key.isEmpty) {
+          fail('E2E hub URL, token, and signing key env vars must be set when this test is not skipped');
+        }
+
+        final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'auto',
+        );
+        final registerPayload = <String, dynamic>{
+          'agentId': E2EEnv.e2eHubAgentId,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'capabilities': ProtocolCapabilities.defaultCapabilities(
+            signatureRequired: true,
+          ).toJson(),
+        };
+        final unsignedFrame = (await pipeline.prepareSendAsync(
+          registerPayload,
+          metricEventName: 'agent:register',
+        )).getOrThrow();
+        final signedFrame = unsignedFrame.copyWith(
+          signature: signer.signFrame(unsignedFrame).toJson(),
+        );
+
+        final ds = SocketDataSource();
+        final socket = ds.createSocket(hubUrl, authToken: hubToken);
+        final connected = Completer<void>();
+        final capabilities = Completer<PayloadFrame>();
+
+        socket
+          ..on('connect', (_) {
+            if (!connected.isCompleted) {
+              connected.complete();
+            }
+          })
+          ..on('connect_error', (dynamic data) {
+            if (!connected.isCompleted) {
+              connected.completeError(
+                StateError('connect_error from hub (check URL, token, and network): $data'),
+              );
+            }
+          })
+          ..on('agent:capabilities', (dynamic data) {
+            if (capabilities.isCompleted) {
+              return;
+            }
+            try {
+              if (data is! Map<String, dynamic>) {
+                throw StateError('agent:capabilities payload is not a map');
+              }
+              capabilities.complete(PayloadFrame.fromJson(data));
+            } on Object catch (error, stackTrace) {
+              capabilities.completeError(error, stackTrace);
+            }
+          });
+
+        socket.connect();
+        try {
+          await connected.future.timeout(const Duration(seconds: 25));
+          socket.emit('agent:register', signedFrame.toJson());
+          final responseFrame = await capabilities.future.timeout(
+            const Duration(seconds: 25),
+            onTimeout: () {
+              throw TimeoutException('agent:capabilities not received within 25s after signed register');
+            },
+          );
+          final signatureJson = responseFrame.signature;
+          expect(signatureJson, isNotNull, reason: 'Hub must sign agent:capabilities in this opt-in test');
+          expect(
+            signer.verifyFrame(responseFrame, PayloadSignature.fromJson(signatureJson!)),
+            isTrue,
+            reason: 'Hub agent:capabilities signature must verify with configured key id',
+          );
+        } finally {
+          socket.dispose();
+        }
+      },
+      skip: signingSkipMessage,
     );
   });
 }

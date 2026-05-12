@@ -8,6 +8,8 @@ import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -15,7 +17,10 @@ void main() {
   PayloadFrameCodec buildCodec({
     required ProtocolConfig protocol,
     bool hasCaps = true,
-    bool localSignatureRequired = false,
+    bool localShouldSignOutgoing = false,
+    bool localRequiresIncomingSignature = false,
+    PayloadSigner? payloadSigner,
+    ProtocolMetricsCollector? metricsCollector,
   }) {
     final flags = _MockFeatureFlags();
     when(() => flags.outboundCompressionMode).thenReturn(OutboundCompressionMode.auto);
@@ -24,13 +29,17 @@ void main() {
       protocolProvider: () => protocol,
       hasReceivedCapabilities: () => hasCaps,
       featureFlags: flags,
+      metricsCollector: metricsCollector,
     );
     return PayloadFrameCodec(
       pipelineCache: cache,
       protocolProvider: () => protocol,
       localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
       hasReceivedCapabilities: () => hasCaps,
-      localSignatureRequired: () => localSignatureRequired,
+      localShouldSignOutgoing: () => localShouldSignOutgoing,
+      localRequiresIncomingSignature: () => localRequiresIncomingSignature,
+      payloadSigner: payloadSigner,
+      metricsCollector: metricsCollector,
     );
   }
 
@@ -202,6 +211,200 @@ void main() {
         ),
       );
       expect(codec.shouldSignTransportFrames, isFalse);
+    });
+
+    test('signs outgoing frames after shared signature algorithm is negotiated', () async {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureAlgorithms: ['hmac-sha256'],
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+
+      final wire = await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-1', 'result': true},
+      );
+
+      expect(codec.shouldSignTransportFrames, isTrue);
+      expect(wire?['signature'], isA<Map<String, dynamic>>());
+    });
+
+    test('does not sign optional outgoing frames before capabilities are received', () async {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+        hasCaps: false,
+        localShouldSignOutgoing: true,
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+
+      final wire = await codec.prepareOutgoing(
+        event: 'agent:register',
+        logicalPayload: {'agentId': 'agent-1'},
+      );
+
+      expect(codec.shouldSignTransportFrames, isFalse);
+      expect(wire?['signature'], isNull);
+    });
+
+    test('does not sign optional outgoing frames when no signature algorithm is negotiated', () async {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+
+      final wire = await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-1', 'result': true},
+      );
+
+      expect(codec.shouldSignTransportFrames, isFalse);
+      expect(wire?['signature'], isNull);
+    });
+
+    test('signs before capabilities only when local inbound signatures are required', () async {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+        hasCaps: false,
+        localShouldSignOutgoing: true,
+        localRequiresIncomingSignature: true,
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+
+      final wire = await codec.prepareOutgoing(
+        event: 'agent:register',
+        logicalPayload: {'agentId': 'agent-1'},
+      );
+
+      expect(codec.shouldSignTransportFrames, isTrue);
+      expect(wire?['signature'], isA<Map<String, dynamic>>());
+    });
+
+    test('does not require inbound signature before negotiation when only outgoing signing is enabled', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+        hasCaps: false,
+        localShouldSignOutgoing: true,
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+      final frame = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+      ).prepareSend({'capabilities': ProtocolCapabilities.defaultCapabilities().toJson()}).getOrThrow();
+
+      final decoded = codec.decodeIncoming(frame.toJson());
+
+      expect(decoded, isA<Map<String, dynamic>>());
+    });
+
+    test('rejects unsigned inbound frames after negotiated signature is required', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureRequired: true,
+        ),
+        payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
+      );
+      final frame = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+      ).prepareSend({'id': 'req-1', 'method': 'sql.execute'}).getOrThrow();
+
+      expect(
+        () => codec.decodeIncoming(frame.toJson()),
+        throwsA(isA<domain.ValidationFailure>()),
+      );
+    });
+
+    test('rejects signed inbound frames when no signer is configured', () async {
+      final signer = PayloadSigner(keys: {'key-1': 'secret'});
+      final signedCodec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureAlgorithms: ['hmac-sha256'],
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: signer,
+      );
+      final verifyingCodec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+      );
+      final wire = await signedCodec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-1', 'result': true},
+      );
+
+      expect(
+        () => verifyingCodec.decodeIncoming(wire),
+        throwsA(isA<domain.ValidationFailure>()),
+      );
+    });
+
+    test('records runtime signing and verification metrics', () async {
+      final collector = ProtocolMetricsCollector();
+      final signer = PayloadSigner(keys: {'key-1': 'secret'});
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureAlgorithms: ['hmac-sha256'],
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: signer,
+        metricsCollector: collector,
+      );
+
+      final wire = await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-1', 'result': true},
+      );
+      final decoded = codec.decodeIncoming(wire, sourceEvent: 'rpc:request');
+
+      expect(decoded, {'id': 'req-1', 'result': true});
+      expect(
+        collector.metrics.map((ProtocolMetrics metric) => metric.direction),
+        containsAll(<String>['sign', 'verify']),
+      );
+      final signMetric = collector.metrics.firstWhere(
+        (ProtocolMetrics metric) => metric.direction == 'sign',
+      );
+      final verifyMetric = collector.metrics.firstWhere(
+        (ProtocolMetrics metric) => metric.direction == 'verify',
+      );
+      expect(signMetric.signDurationUs, isNotNull);
+      expect(signMetric.canonicalizeDurationUs, isNotNull);
+      expect(verifyMetric.verifyDurationUs, isNotNull);
+      expect(verifyMetric.canonicalizeDurationUs, isNotNull);
     });
   });
 }

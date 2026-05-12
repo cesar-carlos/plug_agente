@@ -17,6 +17,7 @@ binario esta documentado em
   - `sql.executeBatch`
   - `sql.cancel` (feature flag `enableSocketCancelMethod`)
   - `agent.getProfile`
+  - `agent.getHealth`
   - `client_token.getPolicy`
   - `rpc.discover`
 - Catalogo padronizado de erros RPC
@@ -31,6 +32,7 @@ binario esta documentado em
 | Metodo `sql.execute`                                                 | implemented                                                                                                                |
 | Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
+| Metodo `agent.getHealth`                                             | implemented                                                                                                                |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
@@ -121,7 +123,7 @@ handshake.
 
 | Evento                 | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
 | ---------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile? }>`          | `agent:capabilities` ou `agent:register_error`                                                                                                             |
+| `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile?, profile_version?, profile_updated_at? }>` | `agent:capabilities` ou `agent:register_error`                                                                                                             |
 | `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
 | `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. `code/reason` `transient_failure` ou `rate_limited` agendam novo registro; demais valores forçam reconexao.                  |
 | `agent:ready`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
@@ -165,7 +167,9 @@ Fluxo de saida implementado:
 3. aplicar compressao quando o tamanho atingir `compressionThreshold`;
 4. montar `PayloadFrame` com `originalSize`, `compressedSize`, `traceId` e
   `requestId`;
-5. assinar o frame quando `enablePayloadSigning` estiver ativo;
+5. assinar o frame quando a sessao negociada tiver algoritmo de assinatura
+compartilhado e `enablePayloadSigning` estiver ativo, ou quando a sessao
+negociada exigir assinatura;
 6. emitir via Socket.IO.
 
 Fluxo de entrada implementado:
@@ -893,12 +897,36 @@ resultado nao sao cancelaveis por este metodo.
 - **Objetivo:** retornar os dados cadastrais atuais do agente para fluxos de
 cadastro/conciliacao no servidor central, sem expor credenciais de auth ou
 detalhes de conexao ODBC.
-- **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`)
-quando a autorizacao agent-side estiver ativa; fora isso, pode ser ausente ou
-objeto vazio.
-- **Result:** inclui `agent_id`, bloco `profile` e `updated_at`.
+- **Params:** pode ser chamado sem `client_token` pelo hub autenticado na
+sessao `/agents`. Chamadores externos podem informar `client_token` (ou aliases
+`clientToken` / `auth`) para autorizacao agent-side adicional quando ativa.
+`include_diagnostics: true` inclui diagnosticos ODBC; o default e `false` para
+manter o sync de perfil barato.
+- **Result:** inclui `agent_id`, bloco `profile`, `updated_at` e,
+quando conhecido localmente, `profile_version` do catalogo no hub. Quando
+`profile_version` existe, `updated_at` usa o timestamp de perfil retornado pelo
+hub no ultimo sync, nao o timestamp local de persistencia de configuracao.
+O bloco `odbc` so aparece quando `include_diagnostics` e `true`.
 - **Erro esperado:** quando nao houver configuracao carregada, o metodo retorna
 erro mapeado para o catalogo RPC padrao (via `FailureToRpcErrorMapper`).
+
+## Metodo `agent.getHealth`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
+- **Objetivo:** retornar um snapshot operacional barato do processo do agente,
+pool ODBC, fila SQL, metricas de queries e uptime para conciliacao e
+observabilidade no hub.
+- **Params:** aceita apenas `client_token` (ou aliases `clientToken` / `auth`)
+quando a autorizacao por token esta ativa. Com auth ativa, token ausente ou
+invalido segue o mesmo mapeamento de erro do fluxo SQL. Params extras sao
+rejeitados pelo schema publicado.
+- **Result:** objeto alinhado a
+`docs/communication/schemas/rpc.result.agent-get-health.schema.json`, com
+`status`, `timestamp`, `version`, `pool`, `sql_queue`, `queries` e
+`uptime_seconds`.
+- **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao
+encontrado que o fluxo de autorizacao SQL, mapeados via
+`FailureToRpcErrorMapper`.
 
 ## Metodo `client_token.getPolicy`
 
@@ -1149,14 +1177,14 @@ Exemplo de capacidades anunciadas (alinhado a
     "batchSupport": true,
     "binaryPayload": true,
     "transportFrame": "payload-frame/1.0",
-    "compressionThreshold": 1024,
+    "compressionThreshold": 4096,
     "protocolReadyAck": true,
-    "maxInflationRatio": 20,
+    "maxInflationRatio": 10,
     "signatureRequired": false,
     "signatureScope": "transport-frame",
     "signatureAlgorithms": ["hmac-sha256"],
     "streamingResults": false,
-    "plugProfile": "plug-jsonrpc-profile/2.5",
+    "plugProfile": "plug-jsonrpc-profile/2.9",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset", "cursor-offset"],
@@ -1272,6 +1300,7 @@ grandes ou gzip pesado.
 | `2.6`  | Cadastro do agente no handshake e metodo `agent.getProfile`                                                           | stable |
 | `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
 | `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
+| `2.9`  | Metodo `agent.getHealth` para saude do processo, pool ODBC, fila SQL e metricas de queries                           | stable |
 
 
 ### Regras de versionamento
@@ -1380,27 +1409,65 @@ Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
 
 ### Regras
 
-- **Opcional**: o emissor pode omitir `signature`; o receptor aceita sem verificar.
+- **Opcional antes da negociacao obrigatoria**: o emissor pode omitir
+`signature`; o receptor aceita sem verificar enquanto a sessao nao exigir
+assinatura.
 - **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida,
 retorna `-32001` (`Authentication failed`) com `error.data.reason`:
 `invalid_signature` (frame de transporte ou assinatura legada no JSON logico).
+Se o frame vier assinado e o receptor nao tiver chave para verificar, o frame
+tambem e rejeitado como assinatura invalida.
+- **Politica negociada**: depois de `agent:capabilities`, o valor negociado
+`signatureRequired` e autoritativo. Se o hub exigir assinatura e o agente nao
+tiver signer configurado ou algoritmo comum, a negociacao falha explicitamente.
 - **Escopo principal**: a assinatura cobre `schemaVersion`, `enc`, `cmp`,
 `contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
+- **Canonicalizacao**: o HMAC usa JSON canonico UTF-8 sem espacos, com chaves de
+objetos ordenadas lexicograficamente em todos os niveis. No `PayloadFrame`, o
+campo `payload` entra na entrada canonica como base64 dos bytes transmitidos e
+o campo `signature` nunca participa da assinatura.
 - **Compatibilidade**: quando o modo binario estiver desativado por feature
 flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
 - **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
-- **Key management**: chaves compartilhadas configuradas no agente via settings. Rotacao por `key_id`.
+- **Key management**: chaves compartilhadas ficam no secure storage local. As
+variaveis `PAYLOAD_SIGNING_KEY`/`PAYLOAD_SIGNING_KEY_ID` continuam aceitas para
+bootstrap legado e sao migradas para storage seguro quando possivel.
+`PAYLOAD_SIGNING_KEYS_JSON` ou `PAYLOAD_SIGNING_KEYS` permitem multiplas chaves;
+`PAYLOAD_SIGNING_ACTIVE_KEY_ID` define a chave ativa de assinatura. O agente
+assina com a chave ativa e verifica com qualquer `key_id` configurado.
 
 ### Feature flag
 
-- `enablePayloadSigning`: quando ativo, o agente verifica assinaturas em requests recebidos e assina responses enviados.
+- `enablePayloadSigning`: quando ativo, o agente assina frames de saida apenas
+se houver signer configurado e algoritmo compartilhado negociado. Antes de
+`agent:capabilities`, assinatura outbound opcional fica desativada para evitar
+quebrar hubs sem chave; o agente so assina antes da negociacao quando a
+configuracao local exige assinaturas inbound.
+- `requireIncomingPayloadSignatures`: quando ativo, o agente exige assinatura em
+frames de entrada antes da negociacao. Apos `agent:capabilities`, prevalece
+`signatureRequired` negociado.
 
 ### Implementacao
 
 - Classe `PayloadSigner` em `infrastructure/security/payload_signer.dart`.
-- Chaves configuradas via `.env` (`PAYLOAD_SIGNING_KEY`, `PAYLOAD_SIGNING_KEY_ID`).
+- Canonicalizacao em `infrastructure/security/payload_signing_canonicalizer.dart`.
+- Chaves resolvidas por `PayloadSigningKeyResolver`: secure storage local,
+bootstrap por env legado e suporte a multiplas chaves para rotacao.
+- Rotacao controlada: `PayloadSigningConfig` oferece operacoes atomicas locais
+para adicionar chave, ativar `key_id` existente e remover chave antiga
+(`upsertKey`, `activateKey`, `removeKey`). Persistir o resultado via
+`PayloadSigningKeyStore.save()` antes de exigir a chave nova no hub.
 - Integrado ao `SocketIOTransportClientV2`: assina frames enviados e verifica
 frames recebidos.
+- Diagnostico visivel no tracer WebSocket: evento
+`payload_signing:diagnostic` com estado de signer, fonte da chave, `key_id`
+ativo, quantidade de chaves e politica negociada, sem expor segredos.
+- O diagnostico tambem inclui um bloco `health` derivado de
+`PayloadSigningDiagnostics`, com status (`ok`, `warning`, `error`), issues
+acionaveis, estado de rotacao (`rotation_ready`) e disponibilidade de secure
+storage. A UI de configuracao exibe esses alertas antes de conectar.
+- Vetores de contrato HMAC em `test/fixtures/payload_signing_test_vectors.json`
+para alinhamento com o hub.
 - Comparacao constant-time para prevenir timing attacks.
 - Feature flag `enablePayloadSigning` (default `false`).
 
@@ -1448,9 +1515,10 @@ de aplicacao.
 `compressionThreshold`. No modo **automatico** (`OutboundCompressionMode.auto`
 nas configuracoes do agente), o GZIP e aplicado apenas quando o bloco
 comprimido e **menor** que o JSON UTF-8 bruto; caso contrario o frame usa
-`cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o comportamento
-permanece o de sempre comprimir quando o tamanho atinge o limiar. Clientes
-devem aceitar `cmp: gzip` e `cmp: none` em qualquer frame recebido.
+`cmp: none` (mesmo acima do limiar). No modo **sempre GZIP**, o emissor prefere
+gzip quando o tamanho atinge o limiar, mas ainda cai para `cmp: none` quando o
+frame comprimido violaria `maxInflationRatio`. Clientes devem aceitar
+`cmp: gzip` e `cmp: none` em qualquer frame recebido.
 - O runtime atual **nao** suporta sobrescrever essa politica por request via
 `meta`; a negociacao `compressions: none` na sessao continua a impedir GZIP
 outbound.
@@ -1514,9 +1582,25 @@ nao seja resolvido por shape de payload ou por `gzip`.
 
 
 - Parametros atuais recomendados (com base em benchmark):
-  - `compressionThreshold`: `1024`
+  - `compressionThreshold`: `4096`
   - `gzipIsolateThresholdBytes`: `32 * 1024` (32 KiB)
   - `jsonPayloadIsolateEncodeThresholdBytes`: `384 * 1024` (384 KiB)
+- `ProtocolMetricsCollector` mantem janela rolante configuravel e resume
+  latencia por media e percentis `p50`/`p95`/`p99` para total, encode,
+  compressao, decode e descompressao. Use esses percentis para decidir entre
+  `none`, `auto` e `gzip` em producao.
+- A tela de logs WebSocket mostra um resumo de 15 minutos desses percentis,
+bytes economizados, uso de isolates e erros por protocolo. Isso e diagnostico
+local; nao altera o contrato no fio.
+- Benchmark reproduzivel do pipeline:
+  `dart run tool/benchmark_transport_pipeline.dart --iterations 20`.
+  Use `--json` para exportar os resultados e `--threshold 4096` para comparar
+  limiares.
+- Respostas `rpc:response` muito grandes geram evento local
+  `rpc:response:large_payload_advice` quando ainda nao ha streaming direto do
+  banco, chunks e backpressure habilitados em conjunto. O evento e rate-limited
+  e serve como recomendacao operacional para evitar materializacao de payloads
+  grandes em memoria.
 - OpenRPC publicado em `docs/communication/openrpc.json` para descoberta do
 profile RPC.
 - Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
@@ -1665,6 +1749,15 @@ default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
 - Toggle de introspecao em configuracao desktop (WebSocket / politica de client token).
 - OpenRPC `info.version` `2.8.0`.
 
+### `v2.9` (health introspection)
+
+- Metodo RPC `agent.getHealth` para snapshot de saude do processo, pool ODBC,
+fila SQL e metricas de queries.
+- Schemas JSON dedicados em `docs/communication/schemas/` para params e result.
+- OpenRPC `info.version` `2.9.0` e entrada do metodo em `methods`.
+- `observer.*` permanece fora do contrato publicado ate existir implementacao,
+schemas, OpenRPC e testes E2E.
+
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
@@ -1705,6 +1798,7 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.params.agent-get-health.schema.json`
 - `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
 
 ### Result por metodo
@@ -1712,6 +1806,7 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.result.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
+- `docs/communication/schemas/rpc.result.agent-get-health.schema.json`
 - `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`
 
 ### Streaming

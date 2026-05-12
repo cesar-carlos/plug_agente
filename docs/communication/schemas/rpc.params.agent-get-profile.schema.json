@@ -7,7 +7,7 @@
     "client_token": {
       "type": "string",
       "minLength": 1,
-      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+      "description": "Optional opaque token (hex) or JWT for extra agent-side authorization. Authenticated /agents server profile sync may omit it. When supplied and enableClientTokenAuthorization is active, the agent validates it. Aliases: clientToken, auth"
     },
     "clientToken": {
       "type": "string",
@@ -18,6 +18,11 @@
       "type": "string",
       "minLength": 1,
       "description": "Alias for client_token"
+    },
+    "include_diagnostics": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, include the optional ODBC diagnostics snapshot. Defaults to false so server profile sync stays cheap."
     }
   },
   "additionalProperties": false

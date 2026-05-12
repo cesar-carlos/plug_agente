@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -79,7 +79,7 @@ class _ConfigPageState extends State<ConfigPage> {
       return l10n.configAutoUpdateNotSupported;
     }
 
-    if (hasInvalidAutoUpdateFeedOverride(environment: dotenv.env)) {
+    if (hasInvalidAutoUpdateFeedOverride(environment: AppEnvironment.snapshot())) {
       return '${l10n.configAutoUpdateNotConfigured}\n${l10n.configAutoUpdateOfficialFeedExpected(officialAutoUpdateFeedUrl)}';
     }
 

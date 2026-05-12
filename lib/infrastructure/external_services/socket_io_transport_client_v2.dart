@@ -5,8 +5,12 @@ import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/config/payload_signing_config.dart';
+import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/logger/log_rate_limiter.dart';
+import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -44,14 +48,26 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required RpcMethodDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
     PayloadSigner? payloadSigner,
+    PayloadSigningConfig? payloadSigningConfig,
     ProtocolMetricsCollector? protocolMetricsCollector,
     OpenRpcDocumentLoader? openRpcDocumentLoader,
     PayloadLogSummarizer? logSummarizer,
+    Future<Map<String, dynamic>?> Function()? registerProfileProvider,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
        _payloadSigner = payloadSigner,
+       _payloadSigningConfig =
+           payloadSigningConfig ??
+           PayloadSigningConfig(
+             activeKeyId: payloadSigner?.activeKeyId,
+             keys: payloadSigner == null
+                 ? const <String, String>{}
+                 : {
+                     for (final keyId in payloadSigner.keyIds) keyId: '<configured>',
+                   },
+           ),
        _protocolMetricsCollector = protocolMetricsCollector,
        _openRpcDocumentLoader = openRpcDocumentLoader ?? OpenRpcDocumentLoader(),
        _logSummarizer =
@@ -70,8 +86,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       protocolProvider: () => _currentProtocol,
       localCapabilitiesProvider: _localCapabilities,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
-      localSignatureRequired: () => _localSignatureRequired,
+      localShouldSignOutgoing: () => _localShouldSignOutgoing,
+      localRequiresIncomingSignature: () => _localRequiresIncomingSignature,
       payloadSigner: _payloadSigner,
+      metricsCollector: _protocolMetricsCollector,
     );
     _responsePreparer = RpcResponsePreparer(
       featureFlags: _featureFlags,
@@ -88,6 +106,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       contractValidator: _contractValidator,
       localCapabilitiesProvider: _localCapabilities,
       agentIdProvider: () => _agentId,
+      registerProfileProvider: registerProfileProvider,
       emit: _emitEventAsync,
       decodeIncoming: _frameCodec.decodeIncoming,
       onTimeoutReconnect: () => _onReconnectionNeeded?.call(),
@@ -123,6 +142,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcMethodDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
   final PayloadSigner? _payloadSigner;
+  final PayloadSigningConfig _payloadSigningConfig;
   final ProtocolMetricsCollector? _protocolMetricsCollector;
   final OpenRpcDocumentLoader _openRpcDocumentLoader;
   final PayloadLogSummarizer _logSummarizer;
@@ -163,6 +183,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcRequestGuard _rpcRequestGuard = RpcRequestGuard();
   final RpcRequestSchemaValidator _schemaValidator = const RpcRequestSchemaValidator();
   final RpcContractValidator _contractValidator = const RpcContractValidator();
+  final LogRateLimiter _diagnosticLogLimiter = LogRateLimiter();
   late final StreamEmitterRegistry _streamEmitters = StreamEmitterRegistry(
     hardCeiling: ConnectionConstants.maxConcurrentRpcStreams,
     idleTtl: ConnectionConstants.rpcStreamEmitterMaxIdle,
@@ -211,12 +232,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
           ? const ['none']
           : const ['gzip', 'none'],
       compressionThreshold: _featureFlags.compressionThreshold,
-      signatureRequired: _localSignatureRequired,
+      signatureRequired: _localRequiresIncomingSignature,
       signatureAlgorithms: _localSignatureAlgorithms,
     );
   }
 
-  bool get _localSignatureRequired => _featureFlags.enablePayloadSigning && _payloadSigner != null;
+  bool get _localShouldSignOutgoing => _featureFlags.enablePayloadSigning && _payloadSigner != null;
+
+  bool get _localRequiresIncomingSignature => _featureFlags.requireIncomingPayloadSignatures && _payloadSigner != null;
 
   List<String> get _localSignatureAlgorithms =>
       _payloadSigner == null ? const [] : const [PayloadSigner.supportedAlgorithm];
@@ -291,6 +314,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       await _emitInternalErrorResponse(requestId);
       return;
     }
+    _publishLargeResponseAdvice(
+      event: 'rpc:response',
+      logicalPayload: validatedPayload,
+    );
     final outgoingPayload = await _prepareOutgoingPayloadAsync(
       'rpc:response',
       validatedPayload,
@@ -371,6 +398,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         encoding: 'json',
         compression: 'none',
       );
+      _publishPayloadSigningDiagnostic('connect_start');
 
       _socket = _dataSource.createSocket(serverUrl, authToken: authToken);
 
@@ -574,9 +602,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
           'Protocol negotiated: ${_currentProtocol.protocol}, '
           'encoding: ${_currentProtocol.encoding}, '
           'compression: ${_currentProtocol.compression}, '
+          'signature_required: ${_currentProtocol.signatureRequired}, '
+          'signature_algorithms: ${_currentProtocol.signatureAlgorithms}, '
           'limits: payload=${limits.maxPayloadBytes}B, '
           'rows=${limits.maxRows}, batch=${limits.maxBatchSize}',
         );
+        _publishPayloadSigningDiagnostic('protocol_negotiated');
 
         if (_supportsProtocolReadyAck()) {
           _emitAgentReady();
@@ -640,6 +671,46 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return _frameCodec.prepareOutgoing(
       event: event,
       logicalPayload: logicalPayload,
+    );
+  }
+
+  void _publishLargeResponseAdvice({
+    required String event,
+    required dynamic logicalPayload,
+  }) {
+    if (event != 'rpc:response') {
+      return;
+    }
+    if (!jsonTreeLikelyExceedsByteBudget(
+      logicalPayload,
+      ConnectionConstants.socketOutgoingContractValidationMaxBytes,
+    )) {
+      return;
+    }
+    final streamingChunks = _featureFlags.enableSocketStreamingChunks;
+    final streamingFromDb = _featureFlags.enableSocketStreamingFromDb;
+    final backpressure = _featureFlags.enableSocketBackpressure;
+    if (streamingChunks && streamingFromDb && backpressure) {
+      return;
+    }
+    const category = 'large_rpc_response_without_full_streaming';
+    if (!_diagnosticLogLimiter.shouldLog(category)) {
+      return;
+    }
+    final diagnostic = <String, dynamic>{
+      'event': event,
+      'threshold_bytes': ConnectionConstants.socketOutgoingContractValidationMaxBytes,
+      'streaming_chunks_enabled': streamingChunks,
+      'streaming_from_db_enabled': streamingFromDb,
+      'backpressure_enabled': backpressure,
+      'recommendation': 'Enable DB streaming, rpc:chunk, and rpc:stream.pull backpressure for large result sets.',
+      'count': _diagnosticLogLimiter.countFor(category),
+    };
+    _logMessage('PERFORMANCE', 'rpc:response:large_payload_advice', diagnostic);
+    AppLogger.warning(
+      'Large rpc:response is being materialized without the full streaming/backpressure path '
+      '(count=${_diagnosticLogLimiter.countFor(category)}, '
+      'streaming_chunks=$streamingChunks, streaming_from_db=$streamingFromDb, backpressure=$backpressure)',
     );
   }
 
@@ -968,6 +1039,39 @@ class SocketIOTransportClientV2 implements ITransportClient {
   bool _supportsProtocolReadyAck() {
     final extensionValue = _currentProtocol.negotiatedExtensions['protocolReadyAck'];
     return extensionValue is bool && extensionValue;
+  }
+
+  void _publishPayloadSigningDiagnostic(String stage) {
+    final signer = _payloadSigner;
+    final diagnostics = PayloadSigningDiagnostics.evaluate(
+      featureFlags: _featureFlags,
+      config: _payloadSigningConfig,
+    );
+    final diagnostic = <String, dynamic>{
+      'stage': stage,
+      'outgoing_signing_enabled': _featureFlags.enablePayloadSigning,
+      'incoming_signature_required_before_negotiation': _featureFlags.requireIncomingPayloadSignatures,
+      'signer_configured': signer != null,
+      'active_key_id': signer?.activeKeyId,
+      'key_count': signer?.keyCount ?? 0,
+      'key_source': _payloadSigningConfig.sourceName,
+      'secure_storage_available': _payloadSigningConfig.secureStorageAvailable,
+      'health': diagnostics.toJson(),
+      if (_hasReceivedCapabilities) ...{
+        'negotiated_signature_required': _currentProtocol.signatureRequired,
+        'negotiated_signature_algorithms': _currentProtocol.signatureAlgorithms,
+      },
+      if (diagnostics.issues.isNotEmpty) 'warnings': diagnostics.issues.map((issue) => issue.code).toList(),
+    };
+    _logMessage('SECURITY', 'payload_signing:diagnostic', diagnostic);
+    if (diagnostics.hasBlockingIssue && _diagnosticLogLimiter.shouldLog('payload_signing_blocking_issue')) {
+      AppLogger.warning(
+        'Payload signing configuration has blocking issues '
+        '(status=${diagnostics.status.name}, source=${diagnostics.keySource}, '
+        'secure_storage=${diagnostics.secureStorageAvailable}, '
+        'issues=${diagnostics.issues.map((issue) => issue.code).join(",")})',
+      );
+    }
   }
 
   /// Extracts the JSON-RPC `id` from a single [RpcResponse] or the first

@@ -6,6 +6,7 @@ import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
+import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
@@ -23,7 +24,9 @@ import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/stores/flutter_secure_payload_signing_key_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -135,6 +138,21 @@ Future<void> _primeReloadedOdbcRuntimeDependencies() async {
   getIt<IConnectionPool>();
   getIt<IStreamingDatabaseGateway>();
   getIt<IDatabaseGateway>();
+}
+
+PayloadSigningKeyStore _createPayloadSigningKeyStore() {
+  try {
+    return FlutterSecurePayloadSigningKeyStore();
+  } on Object catch (error, stackTrace) {
+    developer.log(
+      'FlutterSecurePayloadSigningKeyStore init failed, payload signing keys will use environment only',
+      name: 'service_locator',
+      level: 900,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return const NoopPayloadSigningKeyStore();
+  }
 }
 
 Future<void> _resetLazySingletonIfRegistered<T extends Object>() async {
@@ -250,6 +268,13 @@ Future<void> setupDependencies({
 
   final hubResilienceConfig = HubResilienceConfig(featureFlags);
   getIt.registerSingleton<HubResilienceConfig>(hubResilienceConfig);
+
+  final payloadSigningKeyStore = _createPayloadSigningKeyStore();
+  getIt.registerSingleton<PayloadSigningKeyStore>(payloadSigningKeyStore);
+  final payloadSigningConfig = await PayloadSigningKeyResolver(
+    keyStore: payloadSigningKeyStore,
+  ).resolve();
+  getIt.registerSingleton<PayloadSigningConfig>(payloadSigningConfig);
 
   registerPlugDependencyGraph(getIt, odbcWorkerLocator: _odbcLocator);
   registerPlugCapabilityServices(getIt, capabilities);

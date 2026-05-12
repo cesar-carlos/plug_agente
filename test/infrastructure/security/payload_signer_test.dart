@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
+import 'package:plug_agente/infrastructure/security/payload_signing_canonicalizer.dart';
 
 void main() {
   late PayloadSigner signer;
@@ -106,6 +110,25 @@ void main() {
       check(signer.sign(p1).value).not((s) => s.equals(signer.sign(p2).value));
     });
 
+    test('uses active key for signing and verifies previous keys for rotation', () {
+      final rotatingSigner = PayloadSigner(
+        activeKeyId: 'key-2',
+        keys: {
+          'key-1': 'previous-secret',
+          'key-2': 'current-secret',
+        },
+      );
+      final previousSigner = PayloadSigner(keys: {'key-1': 'previous-secret'});
+      final payload = {'method': 'sql.execute', 'id': 1};
+
+      final previousSignature = previousSigner.sign(payload);
+      final activeSignature = rotatingSigner.sign(payload);
+
+      check(activeSignature.keyId).equals('key-2');
+      check(rotatingSigner.verify(payload, previousSignature)).isTrue();
+      check(rotatingSigner.verify(payload, activeSignature)).isTrue();
+    });
+
     test('signFrame should verify transport metadata and binary payload', () {
       const frame = PayloadFrame(
         schemaVersion: '1.0',
@@ -128,6 +151,32 @@ void main() {
           signature,
         ),
       ).isFalse();
+    });
+
+    test('matches shared HMAC test vectors', () {
+      final fixture =
+          jsonDecode(
+                File('test/fixtures/payload_signing_test_vectors.json').readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final vectorSigner = PayloadSigner(
+        activeKeyId: fixture['key_id'] as String,
+        keys: {fixture['key_id'] as String: fixture['secret'] as String},
+      );
+
+      final logical = fixture['logical_payload'] as Map<String, dynamic>;
+      final logicalPayload = Map<String, dynamic>.from(logical['payload'] as Map<String, dynamic>);
+      check(
+        PayloadSigningCanonicalizer.canonicalLogicalPayloadString(logicalPayload),
+      ).equals(logical['canonical_input'] as String);
+      check(vectorSigner.sign(logicalPayload).value).equals(logical['signature'] as String);
+
+      final frameVector = fixture['transport_frame'] as Map<String, dynamic>;
+      final frame = PayloadFrame.fromJson(
+        Map<String, dynamic>.from(frameVector['frame'] as Map<String, dynamic>),
+      );
+      check(PayloadSigningCanonicalizer.canonicalFrameString(frame)).equals(frameVector['canonical_input'] as String);
+      check(vectorSigner.signFrame(frame).value).equals(frameVector['signature'] as String);
     });
   });
 

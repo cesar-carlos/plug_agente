@@ -9,10 +9,15 @@
     "profile": {
       "$ref": "./agent.profile.schema.json"
     },
+    "profile_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional hub catalog profile version last synchronized by the agent. Present when the local configuration has a known hub profile revision."
+    },
     "updated_at": { "type": "string", "format": "date-time" },
     "odbc": {
       "type": "object",
-      "description": "Optional ODBC diagnostics snapshot, attached when the agent runs on a host with ODBC native metrics collection enabled. Absent when the metrics service is not configured.",
+      "description": "Optional ODBC diagnostics snapshot, attached only when params.include_diagnostics is true. Absent by default in server profile sync.",
       "required": ["available"],
       "properties": {
         "available": {

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/config/payload_signing_config.dart';
+import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
@@ -51,6 +53,8 @@ class WebSocketConfigSection extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const _OutboundCompressionSection(),
+              const SizedBox(height: 24),
+              const _PayloadSigningSection(),
               const SizedBox(height: 24),
               const _ClientTokenPolicyIntrospectionSection(),
               const SizedBox(height: 24),
@@ -113,6 +117,152 @@ class WebSocketConfigSection extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+class _PayloadSigningSection extends StatefulWidget {
+  const _PayloadSigningSection();
+
+  @override
+  State<_PayloadSigningSection> createState() => _PayloadSigningSectionState();
+}
+
+class _PayloadSigningSectionState extends State<_PayloadSigningSection> {
+  late final FeatureFlags _flags = getIt<FeatureFlags>();
+  late bool _outgoingSigningEnabled;
+  late bool _incomingSignatureRequired;
+
+  PayloadSigningConfig get _config {
+    if (!getIt.isRegistered<PayloadSigningConfig>()) {
+      return PayloadSigningConfig.empty(
+        secureStorageAvailable: false,
+        warnings: const <String>['payload_signing_config_not_registered'],
+      );
+    }
+    return getIt<PayloadSigningConfig>();
+  }
+
+  PayloadSigningDiagnostics get _diagnostics {
+    return PayloadSigningDiagnostics.evaluate(
+      featureFlags: _flags,
+      config: _config,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _outgoingSigningEnabled = _flags.enablePayloadSigning;
+    _incomingSignatureRequired = _flags.requireIncomingPayloadSignatures;
+  }
+
+  Future<void> _setOutgoingSigning(bool value) async {
+    setState(() => _outgoingSigningEnabled = value);
+    await _flags.setEnablePayloadSigning(value);
+    if (mounted) {
+      setState(() => _outgoingSigningEnabled = _flags.enablePayloadSigning);
+    }
+  }
+
+  Future<void> _setIncomingSignatureRequired(bool value) async {
+    setState(() => _incomingSignatureRequired = value);
+    await _flags.setRequireIncomingPayloadSignatures(value);
+    if (mounted) {
+      setState(() => _incomingSignatureRequired = _flags.requireIncomingPayloadSignatures);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final diagnostics = _diagnostics;
+    return AppCard(
+      child: SettingsSectionBlock(
+        title: 'PayloadFrame signing',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (diagnostics.issues.isNotEmpty) ...[
+              InfoBar(
+                title: Text(_statusTitle(diagnostics.status)),
+                content: Text(diagnostics.issues.map((issue) => issue.message).join('\n')),
+                severity: _statusSeverity(diagnostics.status),
+                isLong: true,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _SigningMeta(label: 'Signer', value: diagnostics.signerConfigured ? 'configured' : 'missing'),
+                _SigningMeta(label: 'Active key', value: diagnostics.activeKeyId ?? 'not selected'),
+                _SigningMeta(label: 'Keys', value: diagnostics.keyCount.toString()),
+                _SigningMeta(label: 'Source', value: diagnostics.keySource),
+                _SigningMeta(label: 'Rotation', value: diagnostics.rotationReady ? 'ready' : 'single key'),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ToggleSwitch(
+              checked: _outgoingSigningEnabled,
+              onChanged: (bool value) => unawaited(_setOutgoingSigning(value)),
+              content: const Text('Sign outgoing transport frames when a key is configured'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ToggleSwitch(
+              checked: _incomingSignatureRequired,
+              onChanged: (bool value) => unawaited(_setIncomingSignatureRequired(value)),
+              content: const Text('Require signed incoming frames before negotiation'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Keys are read from secure storage and PAYLOAD_SIGNING_* environment variables. '
+              'Keep incoming signature enforcement off until the hub is confirmed to sign frames.',
+              style: context.captionText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _statusTitle(PayloadSigningHealthStatus status) {
+    return switch (status) {
+      PayloadSigningHealthStatus.ok => 'Payload signing ready',
+      PayloadSigningHealthStatus.warning => 'Payload signing needs attention',
+      PayloadSigningHealthStatus.error => 'Payload signing configuration is incomplete',
+    };
+  }
+
+  InfoBarSeverity _statusSeverity(PayloadSigningHealthStatus status) {
+    return switch (status) {
+      PayloadSigningHealthStatus.ok => InfoBarSeverity.success,
+      PayloadSigningHealthStatus.warning => InfoBarSeverity.warning,
+      PayloadSigningHealthStatus.error => InfoBarSeverity.error,
+    };
+  }
+}
+
+class _SigningMeta extends StatelessWidget {
+  const _SigningMeta({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$label: ', style: context.bodyMuted),
+        Text(
+          value,
+          style: context.bodyText.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
   }
 }
 
@@ -298,12 +448,12 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
                   child: Text(l10n.wsOutboundCompressionOff),
                 ),
                 ComboBoxItem<OutboundCompressionMode>(
-                  value: OutboundCompressionMode.gzip,
-                  child: Text(l10n.wsOutboundCompressionGzip),
-                ),
-                ComboBoxItem<OutboundCompressionMode>(
                   value: OutboundCompressionMode.auto,
                   child: Text(l10n.wsOutboundCompressionAuto),
+                ),
+                ComboBoxItem<OutboundCompressionMode>(
+                  value: OutboundCompressionMode.gzip,
+                  child: Text(l10n.wsOutboundCompressionGzip),
                 ),
               ],
               onChanged: (OutboundCompressionMode? value) {

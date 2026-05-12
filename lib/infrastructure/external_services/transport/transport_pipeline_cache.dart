@@ -59,7 +59,8 @@ class TransportPipelineCache {
       pipelineCompression = 'gzip';
     }
     final threshold = hasCaps ? protocol.compressionThreshold : _featureFlags.compressionThreshold;
-    final cacheKey = '${protocol.encoding}|$pipelineCompression|$threshold|$hasCaps';
+    final maxInflationRatio = hasCaps ? protocol.maxInflationRatio : defaultTransportMaxInflationRatio;
+    final cacheKey = '${protocol.encoding}|$pipelineCompression|$threshold|$maxInflationRatio|$hasCaps';
     final cached = _cachedSendPipeline;
     if (cached != null && _sendPipelineCacheKey == cacheKey) {
       return cached;
@@ -68,6 +69,7 @@ class TransportPipelineCache {
       encoding: protocol.encoding,
       compression: pipelineCompression,
       compressionThreshold: threshold,
+      maxInflationRatio: maxInflationRatio,
       protocol: protocol.protocol,
       metricsCollector: _metricsCollector,
     );
@@ -80,7 +82,7 @@ class TransportPipelineCache {
     final protocol = _protocolProvider();
     final key =
         '${frame.enc}|${frame.cmp}|${frame.schemaVersion}|'
-        '${protocol.compressionThreshold}';
+        '${protocol.compressionThreshold}|${protocol.maxInflationRatio}';
     final hit = _receivePipelineByKey.remove(key);
     if (hit != null) {
       _receivePipelineByKey[key] = hit;
@@ -103,6 +105,7 @@ class TransportPipelineCache {
       encoding: frame.enc,
       compression: frame.cmp,
       compressionThreshold: protocol.compressionThreshold,
+      maxInflationRatio: protocol.maxInflationRatio,
       schemaVersion: frame.schemaVersion,
       protocol: protocol.protocol,
       metricsCollector: _metricsCollector,

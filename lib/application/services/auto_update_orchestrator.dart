@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:auto_updater/auto_updater.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -101,7 +101,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   static const Duration _defaultTimeoutCircuitCooldown = Duration(minutes: 15);
 
   String? get _feedUrl {
-    final url = resolveAutoUpdateFeedUrl(environment: dotenv.env);
+    final url = resolveAutoUpdateFeedUrl(environment: AppEnvironment.snapshot());
     if (url.isEmpty) return null;
     return isSparkleFeedUrl(url) ? url : null;
   }
@@ -435,7 +435,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
 
     final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
-      environment: dotenv.env,
+      environment: AppEnvironment.snapshot(),
     );
 
     try {

@@ -19,6 +19,7 @@ void main() {
     when(() => featureFlags.enableSocketOutgoingContractValidation).thenReturn(true);
     when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(false);
     when(() => featureFlags.enablePayloadSigning).thenReturn(false);
+    when(() => featureFlags.requireIncomingPayloadSignatures).thenReturn(false);
     summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
     preparer = RpcResponsePreparer(
       featureFlags: featureFlags,

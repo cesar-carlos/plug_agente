@@ -49,6 +49,7 @@ void main() {
     when(() => featureFlags.enableClientTokenAuthorization).thenReturn(false);
     when(() => featureFlags.enableClientTokenPolicyIntrospection).thenReturn(false);
     when(() => featureFlags.enablePayloadSigning).thenReturn(false);
+    when(() => featureFlags.requireIncomingPayloadSignatures).thenReturn(false);
     when(() => featureFlags.outboundCompressionMode).thenReturn(OutboundCompressionMode.none);
     when(() => featureFlags.compressionThreshold).thenReturn(2048);
 
@@ -72,7 +73,8 @@ void main() {
       protocolProvider: () => protocol,
       localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
       hasReceivedCapabilities: () => true,
-      localSignatureRequired: () => false,
+      localShouldSignOutgoing: () => false,
+      localRequiresIncomingSignature: () => false,
     );
     final preparer = RpcResponsePreparer(
       featureFlags: featureFlags,
@@ -163,7 +165,8 @@ void main() {
         protocolProvider: () => protocol,
         localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
         hasReceivedCapabilities: () => true,
-        localSignatureRequired: () => false,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
       );
       final wire = await frameCodec.prepareOutgoing(
         event: 'rpc:request',
@@ -218,7 +221,8 @@ void main() {
         protocolProvider: () => protocol,
         localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
         hasReceivedCapabilities: () => false,
-        localSignatureRequired: () => false,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
       );
       final preparer = RpcResponsePreparer(
         featureFlags: featureFlags,

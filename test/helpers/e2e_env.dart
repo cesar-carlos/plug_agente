@@ -68,6 +68,9 @@ class E2EEnv {
   /// Whether live hub Socket.IO tests should run (RUN_LIVE_HUB_TESTS=true).
   static bool get runLiveHubTests => _get('RUN_LIVE_HUB_TESTS') == 'true';
 
+  /// Whether signed PayloadFrame hub tests should run (`RUN_LIVE_HUB_SIGNING_TESTS=true`).
+  static bool get runLiveHubSigningTests => _get('RUN_LIVE_HUB_SIGNING_TESTS') == 'true';
+
   /// Base URL for hub Socket smoke test (`E2E_HUB_URL`). `/agents` is appended when missing.
   static String? get e2eHubUrl {
     final v = _get('E2E_HUB_URL');
@@ -85,6 +88,15 @@ class E2EEnv {
     }
     return v.trim();
   }
+
+  /// Agent id used by live Socket.IO register/capabilities tests.
+  static String get e2eHubAgentId => _get('E2E_HUB_AGENT_ID') ?? 'codex-live-agent';
+
+  /// Active PayloadFrame signing key id for live hub signing tests.
+  static String? get e2ePayloadSigningKeyId => _get('PAYLOAD_SIGNING_ACTIVE_KEY_ID') ?? _get('PAYLOAD_SIGNING_KEY_ID');
+
+  /// Active PayloadFrame signing secret for live hub signing tests.
+  static String? get e2ePayloadSigningKey => _get('PAYLOAD_SIGNING_KEY');
 
   static const String _defaultApiBaseUrl = 'http://31.97.29.223:3000/';
   static const String _defaultTimeoutUrl = 'http://10.255.255.1:9999/';

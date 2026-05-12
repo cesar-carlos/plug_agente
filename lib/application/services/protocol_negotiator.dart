@@ -94,8 +94,8 @@ class ProtocolNegotiator {
       negotiatedExtensions: {
         'binaryPayload': true,
         'transportFrame': 'payload-frame/1.0',
-        'compressionThreshold': 1024,
-        'maxInflationRatio': 20,
+        'compressionThreshold': 4096,
+        'maxInflationRatio': 10,
         'signatureRequired': false,
         'signatureScope': 'transport-frame',
         'signatureAlgorithms': ['hmac-sha256'],
@@ -238,8 +238,8 @@ class ProtocolNegotiator {
   ) {
     final agentValue = agentExtensions['compressionThreshold'];
     final serverValue = serverExtensions['compressionThreshold'];
-    final agentThreshold = agentValue is int && agentValue > 0 ? agentValue : 1024;
-    final serverThreshold = serverValue is int && serverValue > 0 ? serverValue : 1024;
+    final agentThreshold = agentValue is int && agentValue > 0 ? agentValue : 4096;
+    final serverThreshold = serverValue is int && serverValue > 0 ? serverValue : 4096;
     return agentThreshold < serverThreshold ? agentThreshold : serverThreshold;
   }
 
@@ -249,8 +249,8 @@ class ProtocolNegotiator {
   ) {
     final agentValue = agentExtensions['maxInflationRatio'];
     final serverValue = serverExtensions['maxInflationRatio'];
-    final agentRatio = agentValue is num && agentValue >= 1 ? agentValue.toDouble() : 20;
-    final serverRatio = serverValue is num && serverValue >= 1 ? serverValue.toDouble() : 20;
+    final agentRatio = agentValue is num && agentValue >= 1 ? agentValue.toDouble() : 10;
+    final serverRatio = serverValue is num && serverValue >= 1 ? serverValue.toDouble() : 10;
     return (agentRatio < serverRatio ? agentRatio : serverRatio).toDouble();
   }
 

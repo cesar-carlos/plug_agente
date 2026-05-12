@@ -43,6 +43,7 @@ void main() {
   CapabilitiesNegotiator buildNegotiator({
     dynamic Function(dynamic, {String? sourceEvent})? decode,
     String Function()? agentIdProvider,
+    Future<Map<String, dynamic>?> Function()? registerProfileProvider,
   }) {
     return CapabilitiesNegotiator(
       negotiator: negotiator,
@@ -50,6 +51,7 @@ void main() {
       contractValidator: const RpcContractValidator(),
       localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
       agentIdProvider: agentIdProvider ?? () => 'agent-1',
+      registerProfileProvider: registerProfileProvider,
       emit: (event, payload) async {
         emitted.add((event: event, payload: payload));
       },
@@ -71,6 +73,40 @@ void main() {
       final payload = emitted.single.payload as Map<String, dynamic>;
       expect(payload['agentId'], 'agent-1');
       expect(payload['capabilities'], isA<Map<String, dynamic>>());
+    });
+
+    test('includes optional profile sync metadata when provider returns it', () async {
+      final neg = buildNegotiator(
+        registerProfileProvider: () async => <String, dynamic>{
+          'profile': {
+            'name': 'Empresa',
+            'trade_name': 'Fantasia',
+            'document': '52998224725',
+            'document_type': 'cpf',
+            'mobile': '11988887777',
+            'email': 'contato@example.com',
+            'address': {
+              'street': 'Rua',
+              'number': '1',
+              'district': 'Centro',
+              'postal_code': '01001000',
+              'city': 'Sao Paulo',
+              'state': 'SP',
+            },
+          },
+          'profile_version': 7,
+          'profile_updated_at': '2026-04-08T10:20:00.000Z',
+        },
+      );
+      addTearDown(neg.reset);
+
+      final sent = await neg.sendRegisterAndStartTimeout();
+
+      expect(sent, isTrue);
+      final payload = emitted.single.payload as Map<String, dynamic>;
+      expect(payload['profile'], isA<Map<String, dynamic>>());
+      expect(payload['profile_version'], 7);
+      expect(payload['profile_updated_at'], '2026-04-08T10:20:00.000Z');
     });
 
     test('returns false and requests reconnect when local register validation fails', () async {

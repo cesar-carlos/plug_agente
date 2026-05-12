@@ -13,6 +13,8 @@ import 'package:uuid/uuid.dart';
 
 /// Bytes above which compression runs in isolate to avoid jank.
 const int gzipIsolateThresholdBytes = 32 * 1024;
+const int defaultTransportCompressionThresholdBytes = 4096;
+const double defaultTransportMaxInflationRatio = 10;
 
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
   final jsonString = utf8.decode(bytes);
@@ -49,6 +51,14 @@ bool _shouldRunGzipCompression(
   return compressionMode == 'gzip' || compressionMode == 'auto';
 }
 
+bool _exceedsInflationRatio(
+  int originalSize,
+  int compressedSize,
+  double maxInflationRatio,
+) {
+  return compressedSize > 0 && originalSize / compressedSize > maxInflationRatio;
+}
+
 /// Transport pipeline for encoding/compressing and decoding/decompressing payloads.
 ///
 /// Handles the complete bidirectional flow:
@@ -58,7 +68,8 @@ class TransportPipeline {
   TransportPipeline({
     required this.encoding,
     required this.compression,
-    this.compressionThreshold = 1024,
+    this.compressionThreshold = defaultTransportCompressionThresholdBytes,
+    this.maxInflationRatio = defaultTransportMaxInflationRatio,
     this.schemaVersion = '1.0',
     this.protocol = 'jsonrpc-v2',
     this.metricsCollector,
@@ -73,6 +84,9 @@ class TransportPipeline {
 
   /// Minimum payload size (bytes) to trigger compression.
   final int compressionThreshold;
+
+  /// Maximum decoded/compressed ratio accepted by peers for gzip frames.
+  final double maxInflationRatio;
 
   /// Schema version for the payload frame.
   final String schemaVersion;
@@ -176,7 +190,12 @@ class TransportPipeline {
         final compressedBytes = compressResult.getOrThrow();
         compressStopwatch.stop();
         compressDurationUs = compressStopwatch.elapsedMicroseconds;
-        if (compression == 'auto' && compressedBytes.length >= originalSize) {
+        final exceedsInflationRatio = _exceedsInflationRatio(
+          originalSize,
+          compressedBytes.length,
+          maxInflationRatio,
+        );
+        if ((compression == 'auto' && compressedBytes.length >= originalSize) || exceedsInflationRatio) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
           compressedSize = originalSize;
@@ -300,7 +319,12 @@ class TransportPipeline {
         }
         compressStopwatch.stop();
         compressDurationUs = compressStopwatch.elapsedMicroseconds;
-        if (compression == 'auto' && compressedBytes.length >= originalSize) {
+        final exceedsInflationRatio = _exceedsInflationRatio(
+          originalSize,
+          compressedBytes.length,
+          maxInflationRatio,
+        );
+        if ((compression == 'auto' && compressedBytes.length >= originalSize) || exceedsInflationRatio) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
           compressedSize = originalSize;
@@ -363,11 +387,12 @@ class TransportPipeline {
     PayloadFrame frame, {
     int? maxCompressedBytes,
     int? maxOriginalBytes,
-    double maxInflationRatio = 30,
+    double? maxInflationRatio,
     String? metricEventName,
   }) {
     try {
       final totalStopwatch = Stopwatch()..start();
+      final inflationRatioLimit = maxInflationRatio ?? this.maxInflationRatio;
       // Validate frame encoding matches pipeline configuration
       if (frame.enc != encoding) {
         return Failure(
@@ -473,14 +498,14 @@ class TransportPipeline {
           ),
         );
       }
-      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > maxInflationRatio) {
+      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > inflationRatioLimit) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Payload inflation ratio exceeds allowed maximum',
             context: {
               'decodedSize': decodableBytes.length,
               'compressedSize': bytes.length,
-              'maxInflationRatio': maxInflationRatio,
+              'maxInflationRatio': inflationRatioLimit,
             },
           ),
         );
@@ -530,11 +555,12 @@ class TransportPipeline {
     PayloadFrame frame, {
     int? maxCompressedBytes,
     int? maxOriginalBytes,
-    double maxInflationRatio = 30,
+    double? maxInflationRatio,
     String? metricEventName,
   }) async {
     try {
       final totalStopwatch = Stopwatch()..start();
+      final inflationRatioLimit = maxInflationRatio ?? this.maxInflationRatio;
       if (frame.enc != encoding) {
         return Failure(
           domain.ValidationFailure.withContext(
@@ -653,14 +679,14 @@ class TransportPipeline {
           ),
         );
       }
-      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > maxInflationRatio) {
+      if (bytes.isNotEmpty && decodableBytes.length / bytes.length > inflationRatioLimit) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Payload inflation ratio exceeds allowed maximum',
             context: {
               'decodedSize': decodableBytes.length,
               'compressedSize': bytes.length,
-              'maxInflationRatio': maxInflationRatio,
+              'maxInflationRatio': inflationRatioLimit,
             },
           ),
         );

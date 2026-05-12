@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/entities/sql_investigation_event.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
@@ -175,6 +176,82 @@ class _AuthorizationSummaryCard extends StatelessWidget {
   }
 }
 
+class _ProtocolMetricsSummaryCard extends StatelessWidget {
+  const _ProtocolMetricsSummaryCard({
+    required this.summary,
+  });
+
+  final ProtocolMetricsSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = summary;
+    if (current == null || current.totalMessages == 0) {
+      return const SizedBox.shrink();
+    }
+
+    final colors = context.appColors;
+    final saved = _formatBytes(current.totalBytesSaved);
+    final efficiency = (current.compressionEfficiency * 100).toStringAsFixed(1);
+    final successRate = (current.successRate * 100).toStringAsFixed(1);
+    final p95Total = _formatMicros(current.totalDurationPercentiles.p95Us);
+    final p95Encode = _formatMicros(current.encodeDurationPercentiles.p95Us);
+    final p95Compress = _formatMicros(current.compressDurationPercentiles.p95Us);
+    final p95Decode = _formatMicros(current.decodeDurationPercentiles.p95Us);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(
+          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+        ),
+      ),
+      child: Wrap(
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.xs,
+        children: [
+          _SummaryChip(label: 'protocol messages', value: current.totalMessages.toString()),
+          _SummaryChip(label: 'success', value: '$successRate%'),
+          _SummaryChip(
+            label: 'errors',
+            value: current.errorCount.toString(),
+            valueColor: current.errorCount > 0 ? colors.error : null,
+          ),
+          _SummaryChip(label: 'saved', value: '$saved ($efficiency%)'),
+          _SummaryChip(label: 'p95 total', value: p95Total),
+          _SummaryChip(label: 'p95 encode', value: p95Encode),
+          _SummaryChip(label: 'p95 gzip', value: p95Compress),
+          _SummaryChip(label: 'p95 decode', value: p95Decode),
+          _SummaryChip(label: 'isolates', value: current.totalIsolateOperations.toString()),
+        ],
+      ),
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes.abs() >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+    }
+    if (bytes.abs() >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    }
+    return '${bytes}B';
+  }
+
+  String _formatMicros(int micros) {
+    if (micros <= 0) {
+      return 'n/a';
+    }
+    if (micros >= 1000) {
+      return '${(micros / 1000).toStringAsFixed(1)}ms';
+    }
+    return '${micros}us';
+  }
+}
+
 class _SummaryChip extends StatelessWidget {
   const _SummaryChip({
     required this.label,
@@ -221,8 +298,10 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
   int _tabIndex = 0;
   StreamSubscription<void>? _authMetricsSub;
   StreamSubscription<void>? _deprecationMetricsSub;
+  StreamSubscription<ProtocolMetrics>? _protocolMetricsSub;
   AuthorizationMetricsSummary? _authSummary;
   int? _deprecationCount;
+  ProtocolMetricsSummary? _protocolSummary;
 
   void _snapMetrics() {
     _authSummary = getIt.isRegistered<IAuthorizationMetricsCollector>()
@@ -230,6 +309,9 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
         : null;
     _deprecationCount = getIt.isRegistered<IDeprecationMetricsCollector>()
         ? getIt<IDeprecationMetricsCollector>().preserveSqlUsageCount
+        : null;
+    _protocolSummary = getIt.isRegistered<ProtocolMetricsCollector>()
+        ? getIt<ProtocolMetricsCollector>().getSummary(period: const Duration(minutes: 15))
         : null;
   }
 
@@ -251,12 +333,20 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
         }
       });
     }
+    if (getIt.isRegistered<ProtocolMetricsCollector>()) {
+      _protocolMetricsSub = getIt<ProtocolMetricsCollector>().metricsStream.listen((_) {
+        if (mounted) {
+          setState(_snapMetrics);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _authMetricsSub?.cancel();
     _deprecationMetricsSub?.cancel();
+    _protocolMetricsSub?.cancel();
     super.dispose();
   }
 
@@ -336,6 +426,10 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _AuthorizationSummaryCard(l10n: widget.l10n, summary: _authSummary),
+              if (_protocolSummary != null && _protocolSummary!.totalMessages > 0) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _ProtocolMetricsSummaryCard(summary: _protocolSummary),
+              ],
               if (_deprecationCount != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 _DeprecationSummaryCard(
@@ -724,6 +818,12 @@ class _MessageItem extends StatelessWidget {
       return colors.brand;
     }
     if (direction == 'AUTH') {
+      return colors.warning;
+    }
+    if (direction == 'SECURITY') {
+      return colors.warning;
+    }
+    if (direction == 'PERFORMANCE') {
       return colors.warning;
     }
     if (direction == 'ERROR') {

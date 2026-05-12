@@ -35,6 +35,20 @@ Smoke: abre WebSocket via `SocketDataSource` (mesmo código que o transporte), n
 | `RUN_LIVE_HUB_TESTS` | Sim         | `true` para executar este teste                          |
 | `E2E_HUB_URL`        | Sim         | URL base do hub (como na app; `ensureAgentsNamespaceUrl` acrescenta `/agents` se faltar) |
 | `E2E_HUB_TOKEN`      | Sim         | Token de agente enviado no auth do handshake Socket.IO  |
+| `E2E_HUB_AGENT_ID`   | Nao         | Agent id usado no teste de register/capabilities assinado (default: `codex-live-agent`) |
+
+O mesmo arquivo tambem contem um teste opt-in de `PayloadFrame` assinado. Ele
+faz `agent:register` com frame HMAC e exige `agent:capabilities` assinado pelo
+hub:
+
+| Variavel                         | Obrigatoria | Descricao |
+| -------------------------------- | ----------- | --------- |
+| `RUN_LIVE_HUB_SIGNING_TESTS`      | Sim         | `true` para executar o handshake assinado |
+| `PAYLOAD_SIGNING_KEY_ID`          | Sim*        | `key_id` ativo compartilhado com o hub |
+| `PAYLOAD_SIGNING_ACTIVE_KEY_ID`   | Sim*        | Alternativa para selecionar o `key_id` ativo |
+| `PAYLOAD_SIGNING_KEY`             | Sim         | Segredo HMAC compartilhado com o hub |
+
+\* Defina `PAYLOAD_SIGNING_ACTIVE_KEY_ID` ou `PAYLOAD_SIGNING_KEY_ID`.
 
 Não coloque o token em logs. Em CI, use *secrets* do repositório (ver job opcional `live-hub-e2e` no workflow Flutter).
 
@@ -145,6 +159,9 @@ flutter test test/integration/
 flutter test test/infrastructure/external_services/api_test.dart
 
 # Hub Socket.IO smoke (RUN_LIVE_HUB_TESTS, E2E_HUB_URL, E2E_HUB_TOKEN)
+flutter test test/integration/hub_socket_live_e2e_test.dart
+
+# Hub Socket.IO + PayloadFrame assinado (RUN_LIVE_HUB_SIGNING_TESTS + PAYLOAD_SIGNING_*)
 flutter test test/integration/hub_socket_live_e2e_test.dart
 
 # ODBC streaming

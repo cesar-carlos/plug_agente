@@ -10,7 +10,6 @@ void main() {
   test('builds a reproducible transport benchmark report', () async {
     final report = await benchmark.buildTransportPipelineBenchmarkReport(
       iterations: 4,
-      warmupIterations: 1,
     );
 
     stdout.writeln(report);
@@ -19,7 +18,7 @@ void main() {
     expect(report, contains('small_sql_repetitive'));
     expect(report, contains('large_sql_low_compressibility'));
     expect(report, contains('large_incompressible_blob'));
-    expect(report, contains('| async | auto |'));
+    expect(report, contains('| async | auto | true |'));
     expect(report, contains('stage-p50/p95/p99 (ms)'));
   }, timeout: Timeout.none);
 }

@@ -20,6 +20,7 @@ import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -119,8 +120,11 @@ class RpcMethodDispatcher {
   final Duration _authorizationStageBudgetDuration;
   final Duration _queryStageBudgetDuration;
   final Duration _batchExecutionStageBudgetDuration;
+  DateTime? _odbcDiagnosticsCacheExpiresAt;
+  Map<String, dynamic>? _odbcDiagnosticsCache;
 
   static const _idempotencyTtl = Duration(minutes: 5);
+  static const _odbcDiagnosticsCacheTtl = Duration(seconds: 10);
   static final RegExp _authorizationSqlWhitespaceCollapse = RegExp(r'\s+');
   static const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
   static const _defaultSqlBatchTotalBudget = Duration(seconds: 45);
@@ -1286,15 +1290,6 @@ class RpcMethodDispatcher {
         ? DateTime.now().add(_authorizationStageBudgetDuration)
         : null;
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
-      final rpcError = FailureToRpcErrorMapper.map(
-        _buildMissingClientTokenFailure(),
-        instance: request.id?.toString(),
-        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-      );
-      return RpcResponse.error(id: request.id, error: rpcError);
-    }
-
     if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
       final authResult = await _authorizeWithBudget(
         token: clientToken,
@@ -1347,16 +1342,41 @@ class RpcMethodDispatcher {
     }
 
     final profile = profileResult.getOrThrow();
+    final profileUpdatedAt = _resolveAgentProfileUpdatedAt(config);
+    final includeDiagnostics = _readBoolParam(
+      request.params,
+      'include_diagnostics',
+      defaultValue: false,
+    );
     final payload = <String, dynamic>{
       'agent_id': agentId,
       'profile': profile.toJson(),
-      'updated_at': config.updatedAt.toUtc().toIso8601String(),
-      if (_odbcNativeMetricsService != null) 'odbc': await _collectOdbcDiagnosticsPayload(),
+      if (config.hubProfileVersion != null) 'profile_version': config.hubProfileVersion,
+      'updated_at': profileUpdatedAt,
+      if (includeDiagnostics) 'odbc': await _collectOdbcDiagnosticsPayload(),
     };
     return RpcResponse.success(
       id: request.id,
       result: payload,
     );
+  }
+
+  String _resolveAgentProfileUpdatedAt(Config config) {
+    if (config.hubProfileVersion != null) {
+      final hubUpdatedAt = _normalizeIsoDateTime(config.hubProfileUpdatedAt);
+      if (hubUpdatedAt != null) {
+        return hubUpdatedAt;
+      }
+    }
+    return config.updatedAt.toUtc().toIso8601String();
+  }
+
+  String? _normalizeIsoDateTime(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(value.trim());
+    return parsed?.toUtc().toIso8601String();
   }
 
   Future<RpcResponse> _handleAgentGetHealth(
@@ -1516,8 +1536,15 @@ class RpcMethodDispatcher {
       return const <String, dynamic>{'available': false};
     }
 
+    final now = DateTime.now().toUtc();
+    final cached = _odbcDiagnosticsCache;
+    final expiresAt = _odbcDiagnosticsCacheExpiresAt;
+    if (cached != null && expiresAt != null && now.isBefore(expiresAt)) {
+      return cached;
+    }
+
     final snapshotResult = await metricsService.collectSnapshot();
-    return snapshotResult.fold(
+    final payload = snapshotResult.fold(
       (snapshot) => <String, dynamic>{
         'available': true,
         'snapshot': snapshot,
@@ -1527,6 +1554,21 @@ class RpcMethodDispatcher {
         'error': failure.toString(),
       },
     );
+    _odbcDiagnosticsCache = payload;
+    _odbcDiagnosticsCacheExpiresAt = now.add(_odbcDiagnosticsCacheTtl);
+    return payload;
+  }
+
+  bool _readBoolParam(
+    dynamic params,
+    String key, {
+    required bool defaultValue,
+  }) {
+    if (params is! Map<String, dynamic>) {
+      return defaultValue;
+    }
+    final value = params[key];
+    return value is bool ? value : defaultValue;
   }
 
   /// Returns execution not found error for sql.cancel.

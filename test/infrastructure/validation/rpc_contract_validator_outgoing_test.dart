@@ -136,6 +136,8 @@ void main() {
         'agentId': 'a1',
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'profile_version': 7,
+        'profile_updated_at': '2026-04-18T11:59:00.000Z',
         'profile': <String, dynamic>{
           'name': 'Empresa Exemplo',
           'trade_name': 'Fantasia Exemplo',
@@ -155,6 +157,18 @@ void main() {
       });
 
       expect(result.isSuccess(), isTrue);
+    });
+
+    test('should reject invalid profile sync metadata', () {
+      final result = validator.validateAgentRegister(<String, dynamic>{
+        'agentId': 'a1',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        'profile_version': -1,
+        'profile_updated_at': 'not-a-date',
+      });
+
+      expect(result.isError(), isTrue);
     });
 
     test('should reject profile payload when city is missing', () {

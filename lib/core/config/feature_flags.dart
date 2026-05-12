@@ -31,6 +31,7 @@ class FeatureFlags {
   static const _keyEnableSocketStreamingFromDb = 'feature_enable_socket_streaming_from_db';
   static const _keyEnableTokenAudit = 'feature_enable_token_audit';
   static const _keyEnablePayloadSigning = 'feature_enable_payload_signing';
+  static const _keyRequireIncomingPayloadSignatures = 'feature_require_incoming_payload_signatures';
   static const _keyEnableOdbcPaginatedSqlDebugLog = 'feature_enable_odbc_paginated_sql_debug_log';
   static const _keyEnableDashboardSqlInvestigationFeed = 'feature_enable_dashboard_sql_investigation_feed';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
@@ -61,7 +62,7 @@ class FeatureFlags {
       return OutboundCompressionMode.auto;
     }
     return (_prefs.getBool(_keyEnableCompression) ?? true)
-        ? OutboundCompressionMode.gzip
+        ? OutboundCompressionMode.auto
         : OutboundCompressionMode.none;
   }
 
@@ -80,7 +81,7 @@ class FeatureFlags {
       if (stored == null || stored == OutboundCompressionMode.none.storageName) {
         await _prefs.setString(
           _keyOutboundCompressionMode,
-          OutboundCompressionMode.gzip.storageName,
+          OutboundCompressionMode.auto.storageName,
         );
       }
     } else {
@@ -89,7 +90,7 @@ class FeatureFlags {
   }
 
   /// Compression threshold in bytes.
-  int get compressionThreshold => _prefs.getInt(_keyCompressionThreshold) ?? 1024;
+  int get compressionThreshold => _prefs.getInt(_keyCompressionThreshold) ?? 4096;
 
   Future<void> setCompressionThreshold(int value) async {
     await _prefs.setInt(_keyCompressionThreshold, value);
@@ -230,11 +231,20 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableTokenAudit, value);
   }
 
-  /// Whether to sign outgoing payloads and verify incoming signatures (HMAC-SHA256).
+  /// Whether to sign outgoing payloads when a signing key is configured.
   bool get enablePayloadSigning => _prefs.getBool(_keyEnablePayloadSigning) ?? false;
 
   Future<void> setEnablePayloadSigning(bool value) async {
     await _prefs.setBool(_keyEnablePayloadSigning, value);
+  }
+
+  /// Whether inbound transport frames must be signed before the hub negotiates
+  /// a mandatory signature policy. After negotiation, the protocol's
+  /// `signatureRequired` value is authoritative.
+  bool get requireIncomingPayloadSignatures => _prefs.getBool(_keyRequireIncomingPayloadSignatures) ?? false;
+
+  Future<void> setRequireIncomingPayloadSignatures(bool value) async {
+    await _prefs.setBool(_keyRequireIncomingPayloadSignatures, value);
   }
 
   /// Logs final paginated SQL at debug level when the agent rewrites queries
@@ -311,8 +321,8 @@ class FeatureFlags {
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
-    await setOutboundCompressionMode(OutboundCompressionMode.gzip);
-    await setCompressionThreshold(1024);
+    await setOutboundCompressionMode(OutboundCompressionMode.auto);
+    await setCompressionThreshold(4096);
     await setEnableClientTokenAuthorization(true);
     await setEnableClientTokenPolicyIntrospection(true);
     await setEnableSocketApiVersionMeta(true);
@@ -332,6 +342,7 @@ class FeatureFlags {
     await setEnableSocketStreamingFromDb(false);
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
+    await setRequireIncomingPayloadSignatures(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
     await setEnableDashboardSqlInvestigationFeed(true);
     await setEnableHubHardReloginRecovery(true);

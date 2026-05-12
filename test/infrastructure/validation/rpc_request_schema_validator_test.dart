@@ -258,6 +258,21 @@ void main() {
         expect(result.isSuccess(), isTrue);
       });
 
+      test('should accept agent.getProfile include_diagnostics flag', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'agent.getProfile',
+          'id': 'req-1',
+          'params': {
+            'include_diagnostics': true,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
       test('should reject unsupported agent.getProfile params', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',

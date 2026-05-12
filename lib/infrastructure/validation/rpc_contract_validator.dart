@@ -41,6 +41,19 @@ class RpcContractValidator {
       }
     }
 
+    final profileVersion = data['profile_version'];
+    if (profileVersion != null) {
+      final version = _toInt(profileVersion);
+      if (version == null || version < 0) {
+        return _invalid('Field "profile_version" must be an integer >= 0');
+      }
+    }
+
+    final profileUpdatedAt = data['profile_updated_at'];
+    if (profileUpdatedAt != null && (profileUpdatedAt is! String || DateTime.tryParse(profileUpdatedAt) == null)) {
+      return _invalid('Field "profile_updated_at" must be ISO-8601');
+    }
+
     return _validateCapabilities(capabilities);
   }
 

@@ -1,8 +1,10 @@
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
 /// Encodes outgoing logical payloads into [PayloadFrame] envelopes and decodes
@@ -19,21 +21,28 @@ class PayloadFrameCodec {
     required ProtocolConfig Function() protocolProvider,
     required ProtocolCapabilities Function() localCapabilitiesProvider,
     required bool Function() hasReceivedCapabilities,
-    required bool Function() localSignatureRequired,
+    required bool Function() localShouldSignOutgoing,
+    required bool Function() localRequiresIncomingSignature,
     PayloadSigner? payloadSigner,
+    ProtocolMetricsCollector? metricsCollector,
   }) : _pipelineCache = pipelineCache,
        _protocolProvider = protocolProvider,
        _localCapabilitiesProvider = localCapabilitiesProvider,
        _hasReceivedCapabilities = hasReceivedCapabilities,
-       _localSignatureRequired = localSignatureRequired,
-       _payloadSigner = payloadSigner;
+       _localShouldSignOutgoing = localShouldSignOutgoing,
+       _localRequiresIncomingSignature = localRequiresIncomingSignature,
+       _payloadSigner = payloadSigner,
+       _metricsCollector = metricsCollector;
 
   final TransportPipelineCache _pipelineCache;
   final ProtocolConfig Function() _protocolProvider;
   final ProtocolCapabilities Function() _localCapabilitiesProvider;
   final bool Function() _hasReceivedCapabilities;
-  final bool Function() _localSignatureRequired;
+  final bool Function() _localShouldSignOutgoing;
+  final bool Function() _localRequiresIncomingSignature;
   final PayloadSigner? _payloadSigner;
+  final ProtocolMetricsCollector? _metricsCollector;
+  final LogRateLimiter _warningLimiter = LogRateLimiter();
 
   /// Returns `true` when [payload] looks like a [PayloadFrame] envelope
   /// (cheap structural sniff, used to differentiate transport frames from
@@ -49,9 +58,17 @@ class PayloadFrameCodec {
   }
 
   /// Whether outgoing transport frames must carry an HMAC signature.
-  bool get shouldSignTransportFrames =>
-      _payloadSigner != null &&
-      (_localSignatureRequired() || (_hasReceivedCapabilities() && _protocolProvider().signatureRequired));
+  bool get shouldSignTransportFrames {
+    if (_payloadSigner == null) {
+      return false;
+    }
+    if (!_hasReceivedCapabilities()) {
+      return _localRequiresIncomingSignature();
+    }
+    final protocol = _protocolProvider();
+    return _supportsNegotiatedSignatureAlgorithm(protocol) &&
+        (_localShouldSignOutgoing() || protocol.signatureRequired);
+  }
 
   /// Frames [logicalPayload] for transport. Returns the wire `Map<String,dynamic>`
   /// (frame JSON) on success or `null` if the payload exceeds the negotiated
@@ -89,6 +106,12 @@ class PayloadFrameCodec {
       );
       return null;
     }
+    if (_hasReceivedCapabilities() && protocol.signatureRequired && !_supportsNegotiatedSignatureAlgorithm(protocol)) {
+      AppLogger.error(
+        'Cannot sign $event transport frame: no supported signature algorithm was negotiated',
+      );
+      return null;
+    }
     if (shouldSignTransportFrames) {
       final signer = _payloadSigner;
       if (signer == null) {
@@ -97,12 +120,23 @@ class PayloadFrameCodec {
         );
         return null;
       }
+      final signingResult = signer.signFrameWithMetrics(frame);
       frame = frame.copyWith(
-        signature: signer.signFrame(frame).toJson(),
+        signature: signingResult.signature.toJson(),
+      );
+      _recordSigningMetric(
+        frame: frame,
+        direction: 'sign',
+        eventName: event,
+        signDurationUs: signingResult.metrics.signDurationUs,
+        canonicalizeDurationUs: signingResult.metrics.canonicalizeDurationUs,
       );
     }
     return frame.toJson();
   }
+
+  bool _supportsNegotiatedSignatureAlgorithm(ProtocolConfig protocol) =>
+      protocol.signatureAlgorithms.contains(PayloadSigner.supportedAlgorithm);
 
   /// Synchronous decode used in hot paths (e.g. heartbeat ack). Throws
   /// [domain.ValidationFailure] when the envelope is malformed, the encoding/
@@ -113,7 +147,7 @@ class PayloadFrameCodec {
     final protocol = _protocolProvider();
     try {
       final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
-      _validateFrameAgainstLocalCapabilities(frame);
+      _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
       final processed = _pipelineCache
           .receive(frame)
           .receiveProcess(
@@ -148,7 +182,7 @@ class PayloadFrameCodec {
     final protocol = _protocolProvider();
     try {
       final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
-      _validateFrameAgainstLocalCapabilities(frame);
+      _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
       final processed = await _pipelineCache
           .receive(frame)
           .receiveProcessAsync(
@@ -182,7 +216,10 @@ class PayloadFrameCodec {
     }
   }
 
-  void _validateFrameAgainstLocalCapabilities(PayloadFrame frame) {
+  void _validateFrameAgainstLocalCapabilities(
+    PayloadFrame frame, {
+    String? sourceEvent,
+  }) {
     final localCapabilities = _localCapabilitiesProvider();
     if (!localCapabilities.supportsEncoding(frame.enc)) {
       throw domain.ValidationFailure.withContext(
@@ -196,7 +233,7 @@ class PayloadFrameCodec {
         context: {'compression': frame.cmp},
       );
     }
-    if (!_verifyFrameSignature(frame)) {
+    if (!_verifyFrameSignature(frame, sourceEvent: sourceEvent)) {
       throw domain.ValidationFailure.withContext(
         message: 'Invalid transport frame signature',
         context: {
@@ -207,19 +244,66 @@ class PayloadFrameCodec {
     }
   }
 
-  bool _verifyFrameSignature(PayloadFrame frame) {
+  bool _verifyFrameSignature(PayloadFrame frame, {String? sourceEvent}) {
     final signatureRequired = _hasReceivedCapabilities()
         ? _protocolProvider().signatureRequired
-        : _localSignatureRequired();
+        : _localRequiresIncomingSignature();
+    final sigJson = frame.signature;
     if (_payloadSigner == null) {
+      if (sigJson != null) {
+        if (_warningLimiter.shouldLog('signed_frame_without_signer')) {
+          AppLogger.warning(
+            'Received signed transport frame but no PayloadFrame signer is configured '
+            '(count=${_warningLimiter.countFor('signed_frame_without_signer')})',
+          );
+        }
+        return false;
+      }
       return !signatureRequired;
     }
-    final sigJson = frame.signature;
     if (sigJson == null) {
       return !signatureRequired;
     }
     final signature = PayloadSignature.fromJson(sigJson);
-    return _payloadSigner.verifyFrame(frame, signature);
+    final verificationResult = _payloadSigner.verifyFrameWithMetrics(frame, signature);
+    _recordSigningMetric(
+      frame: frame,
+      direction: 'verify',
+      eventName: sourceEvent,
+      success: verificationResult.isValid,
+      verifyDurationUs: verificationResult.metrics.verifyDurationUs,
+      canonicalizeDurationUs: verificationResult.metrics.canonicalizeDurationUs,
+    );
+    return verificationResult.isValid;
+  }
+
+  void _recordSigningMetric({
+    required PayloadFrame frame,
+    required String direction,
+    String? eventName,
+    bool success = true,
+    int? signDurationUs,
+    int? verifyDurationUs,
+    int? canonicalizeDurationUs,
+  }) {
+    final totalDurationUs = (signDurationUs ?? 0) + (verifyDurationUs ?? 0) + (canonicalizeDurationUs ?? 0);
+    _metricsCollector?.record(
+      ProtocolMetrics(
+        timestamp: DateTime.now().toUtc(),
+        protocol: _protocolProvider().protocol,
+        encoding: frame.enc,
+        compression: frame.cmp,
+        originalSize: frame.originalSize,
+        compressedSize: frame.compressedSize,
+        direction: direction,
+        eventName: eventName,
+        success: success,
+        totalDurationUs: totalDurationUs,
+        signDurationUs: signDurationUs,
+        verifyDurationUs: verifyDurationUs,
+        canonicalizeDurationUs: canonicalizeDurationUs,
+      ),
+    );
   }
 
   String? _extractTraceId(dynamic payload) {
