@@ -14,10 +14,15 @@ void main() {
   group('AgentRegisterProfileProvider', () {
     late _MockAgentConfigRepository repository;
     late AgentRegisterProfileProvider provider;
+    late DateTime now;
 
     setUp(() {
       repository = _MockAgentConfigRepository();
-      provider = AgentRegisterProfileProvider(configRepository: repository);
+      now = DateTime.utc(2026, 5, 12, 11);
+      provider = AgentRegisterProfileProvider(
+        configRepository: repository,
+        now: () => now,
+      );
     });
 
     test('should build register profile snapshot from current config', () async {
@@ -56,6 +61,36 @@ void main() {
 
       expect(await first, await second);
       verify(() => repository.getCurrentConfig()).called(1);
+    });
+
+    test('should reuse cached snapshot until TTL expires', () async {
+      when(() => repository.getCurrentConfig()).thenAnswer(
+        (_) async => Success(_validConfig()),
+      );
+
+      final first = await provider.loadSnapshot();
+      final second = await provider.loadSnapshot();
+
+      expect(identical(first, second), isTrue);
+      verify(() => repository.getCurrentConfig()).called(1);
+
+      now = now.add(const Duration(seconds: 3));
+      final third = await provider.loadSnapshot();
+
+      expect(third, isNotNull);
+      verify(() => repository.getCurrentConfig()).called(1);
+    });
+
+    test('should clear cached snapshot on demand', () async {
+      when(() => repository.getCurrentConfig()).thenAnswer(
+        (_) async => Success(_validConfig()),
+      );
+
+      await provider.loadSnapshot();
+      provider.clearCache();
+      await provider.loadSnapshot();
+
+      verify(() => repository.getCurrentConfig()).called(2);
     });
   });
 }

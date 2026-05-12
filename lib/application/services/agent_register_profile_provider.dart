@@ -4,15 +4,29 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 class AgentRegisterProfileProvider {
   AgentRegisterProfileProvider({
     required IAgentConfigRepository configRepository,
-  }) : _configRepository = configRepository;
+    Duration cacheTtl = const Duration(seconds: 2),
+    DateTime Function()? now,
+  }) : _configRepository = configRepository,
+       _cacheTtl = cacheTtl,
+       _now = now ?? DateTime.now;
 
   final IAgentConfigRepository _configRepository;
+  final Duration _cacheTtl;
+  final DateTime Function() _now;
   Future<Map<String, dynamic>?>? _pendingSnapshot;
+  Map<String, dynamic>? _cachedSnapshot;
+  DateTime? _cachedSnapshotExpiresAt;
 
   Future<Map<String, dynamic>?> loadSnapshot() {
     final pending = _pendingSnapshot;
     if (pending != null) {
       return pending;
+    }
+
+    final cachedSnapshot = _cachedSnapshot;
+    final cachedSnapshotExpiresAt = _cachedSnapshotExpiresAt;
+    if (cachedSnapshot != null && cachedSnapshotExpiresAt != null && cachedSnapshotExpiresAt.isAfter(_now())) {
+      return Future.value(cachedSnapshot);
     }
 
     final snapshot = _loadSnapshot();
@@ -39,10 +53,20 @@ class AgentRegisterProfileProvider {
     final hubUpdatedAt = config.hubProfileVersion != null
         ? DateTime.tryParse(config.hubProfileUpdatedAt ?? '')?.toUtc().toIso8601String()
         : null;
-    return <String, dynamic>{
+    final snapshot = <String, dynamic>{
       'profile': profileResult.getOrThrow().toJson(),
       'profile_version': ?config.hubProfileVersion,
       'profile_updated_at': ?hubUpdatedAt,
     };
+    if (_cacheTtl > Duration.zero) {
+      _cachedSnapshot = snapshot;
+      _cachedSnapshotExpiresAt = _now().add(_cacheTtl);
+    }
+    return snapshot;
+  }
+
+  void clearCache() {
+    _cachedSnapshot = null;
+    _cachedSnapshotExpiresAt = null;
   }
 }

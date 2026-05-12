@@ -60,6 +60,8 @@ class ProtocolMetrics {
 
   int get bytesSaved => originalSize - compressedSize;
 
+  bool get isTransportMessage => direction == 'send' || direction == 'receive';
+
   Map<String, dynamic> toJson() {
     return {
       'timestamp': timestamp.toIso8601String(),
@@ -259,50 +261,76 @@ class ProtocolMetricsSummary {
     final canonicalizeDurationValues = <int>[];
     final schemaValidateDurationValues = <int>[];
 
-    for (final metric in metrics) {
-      protocolCounts[metric.protocol] = (protocolCounts[metric.protocol] ?? 0) + 1;
-      compressionCounts[metric.compression] = (compressionCounts[metric.compression] ?? 0) + 1;
-      final requestedCompression = metric.requestedCompression;
-      if (requestedCompression != null) {
-        requestedCompressionCounts[requestedCompression] = (requestedCompressionCounts[requestedCompression] ?? 0) + 1;
-      }
-      final eventName = metric.eventName ?? 'unknown';
-      eventCounts[eventName] = (eventCounts[eventName] ?? 0) + 1;
+    var transportMessageCount = 0;
 
-      totalOriginal += metric.originalSize;
-      totalCompressed += metric.compressedSize;
-      if (metric.success) {
-        successCount++;
-      }
-      if (metric.totalDurationUs != null) {
-        final value = metric.totalDurationUs!;
-        totalDurationUs += value;
-        totalDurationSamples++;
-        totalDurationValues.add(value);
-      }
-      if (metric.encodeDurationUs != null) {
-        final value = metric.encodeDurationUs!;
-        encodeDurationUs += value;
-        encodeDurationSamples++;
-        encodeDurationValues.add(value);
-      }
-      if (metric.compressDurationUs != null) {
-        final value = metric.compressDurationUs!;
-        compressDurationUs += value;
-        compressDurationSamples++;
-        compressDurationValues.add(value);
-      }
-      if (metric.decodeDurationUs != null) {
-        final value = metric.decodeDurationUs!;
-        decodeDurationUs += value;
-        decodeDurationSamples++;
-        decodeDurationValues.add(value);
-      }
-      if (metric.decompressDurationUs != null) {
-        final value = metric.decompressDurationUs!;
-        decompressDurationUs += value;
-        decompressDurationSamples++;
-        decompressDurationValues.add(value);
+    for (final metric in metrics) {
+      if (metric.isTransportMessage) {
+        transportMessageCount++;
+        protocolCounts[metric.protocol] = (protocolCounts[metric.protocol] ?? 0) + 1;
+        compressionCounts[metric.compression] = (compressionCounts[metric.compression] ?? 0) + 1;
+        final requestedCompression = metric.requestedCompression;
+        if (requestedCompression != null) {
+          requestedCompressionCounts[requestedCompression] =
+              (requestedCompressionCounts[requestedCompression] ?? 0) + 1;
+        }
+        final eventName = metric.eventName ?? 'unknown';
+        eventCounts[eventName] = (eventCounts[eventName] ?? 0) + 1;
+
+        totalOriginal += metric.originalSize;
+        totalCompressed += metric.compressedSize;
+        if (metric.success) {
+          successCount++;
+        }
+        if (metric.totalDurationUs != null) {
+          final value = metric.totalDurationUs!;
+          totalDurationUs += value;
+          totalDurationSamples++;
+          totalDurationValues.add(value);
+        }
+        if (metric.encodeDurationUs != null) {
+          final value = metric.encodeDurationUs!;
+          encodeDurationUs += value;
+          encodeDurationSamples++;
+          encodeDurationValues.add(value);
+        }
+        if (metric.compressDurationUs != null) {
+          final value = metric.compressDurationUs!;
+          compressDurationUs += value;
+          compressDurationSamples++;
+          compressDurationValues.add(value);
+        }
+        if (metric.decodeDurationUs != null) {
+          final value = metric.decodeDurationUs!;
+          decodeDurationUs += value;
+          decodeDurationSamples++;
+          decodeDurationValues.add(value);
+        }
+        if (metric.decompressDurationUs != null) {
+          final value = metric.decompressDurationUs!;
+          decompressDurationUs += value;
+          decompressDurationSamples++;
+          decompressDurationValues.add(value);
+        }
+        if (metric.usedIsolate) {
+          totalIsolateOperations++;
+        }
+        if (metric.usedJsonEncodeIsolate) {
+          jsonEncodeIsolateOperations++;
+        }
+        if (metric.usedGzipCompressIsolate) {
+          gzipCompressIsolateOperations++;
+        }
+        if (metric.usedJsonDecodeIsolate) {
+          jsonDecodeIsolateOperations++;
+        }
+        if (metric.usedGzipDecompressIsolate) {
+          gzipDecompressIsolateOperations++;
+        }
+
+        if (metric.errorCode != null) {
+          errorCount++;
+          errorCounts[metric.errorCode!] = (errorCounts[metric.errorCode!] ?? 0) + 1;
+        }
       }
       if (metric.signDurationUs != null) {
         final value = metric.signDurationUs!;
@@ -328,32 +356,12 @@ class ProtocolMetricsSummary {
         schemaValidateDurationSamples++;
         schemaValidateDurationValues.add(value);
       }
-      if (metric.usedIsolate) {
-        totalIsolateOperations++;
-      }
-      if (metric.usedJsonEncodeIsolate) {
-        jsonEncodeIsolateOperations++;
-      }
-      if (metric.usedGzipCompressIsolate) {
-        gzipCompressIsolateOperations++;
-      }
-      if (metric.usedJsonDecodeIsolate) {
-        jsonDecodeIsolateOperations++;
-      }
-      if (metric.usedGzipDecompressIsolate) {
-        gzipDecompressIsolateOperations++;
-      }
-
-      if (metric.errorCode != null) {
-        errorCount++;
-        errorCounts[metric.errorCode!] = (errorCounts[metric.errorCode!] ?? 0) + 1;
-      }
     }
 
     final avgRatio = totalOriginal > 0 ? totalCompressed / totalOriginal : 1.0;
 
     return ProtocolMetricsSummary(
-      totalMessages: metrics.length,
+      totalMessages: transportMessageCount,
       protocolUsage: protocolCounts,
       compressionUsage: compressionCounts,
       requestedCompressionUsage: requestedCompressionCounts,

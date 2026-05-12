@@ -280,6 +280,57 @@ void main() {
       expect(summary.decodeDurationPercentiles.p99Us, equals(700));
     });
 
+    test('should keep signing stage metrics out of transport message totals', () {
+      final summary = ProtocolMetricsSummary.fromList([
+        ProtocolMetrics(
+          timestamp: DateTime.now(),
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          originalSize: 1000,
+          compressedSize: 400,
+          direction: 'send',
+          eventName: 'rpc:response',
+          totalDurationUs: 2000,
+        ),
+        ProtocolMetrics(
+          timestamp: DateTime.now(),
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          originalSize: 1000,
+          compressedSize: 400,
+          direction: 'sign',
+          eventName: 'rpc:response',
+          totalDurationUs: 60,
+          signDurationUs: 40,
+          canonicalizeDurationUs: 20,
+        ),
+        ProtocolMetrics(
+          timestamp: DateTime.now(),
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          originalSize: 1000,
+          compressedSize: 400,
+          direction: 'verify',
+          eventName: 'rpc:response',
+          totalDurationUs: 70,
+          verifyDurationUs: 45,
+          canonicalizeDurationUs: 25,
+        ),
+      ]);
+
+      expect(summary.totalMessages, equals(1));
+      expect(summary.totalOriginalBytes, equals(1000));
+      expect(summary.totalCompressedBytes, equals(400));
+      expect(summary.eventUsage['rpc:response'], equals(1));
+      expect(summary.averageTotalDurationUs, equals(2000));
+      expect(summary.averageSignDurationUs, equals(40));
+      expect(summary.averageVerifyDurationUs, equals(45));
+      expect(summary.averageCanonicalizeDurationUs, equals(22.5));
+    });
+
     test('should export diagnostic json summary', () {
       final summary = ProtocolMetricsSummary.fromList([
         ProtocolMetrics(

@@ -198,6 +198,9 @@ class _ProtocolMetricsSummaryCard extends StatelessWidget {
     final p95Encode = _formatMicros(current.encodeDurationPercentiles.p95Us);
     final p95Compress = _formatMicros(current.compressDurationPercentiles.p95Us);
     final p95Decode = _formatMicros(current.decodeDurationPercentiles.p95Us);
+    final p95Sign = _formatMicros(current.signDurationPercentiles.p95Us);
+    final p95Verify = _formatMicros(current.verifyDurationPercentiles.p95Us);
+    final p95Canonicalize = _formatMicros(current.canonicalizeDurationPercentiles.p95Us);
 
     return Container(
       width: double.infinity,
@@ -225,6 +228,10 @@ class _ProtocolMetricsSummaryCard extends StatelessWidget {
           _SummaryChip(label: 'p95 encode', value: p95Encode),
           _SummaryChip(label: 'p95 gzip', value: p95Compress),
           _SummaryChip(label: 'p95 decode', value: p95Decode),
+          if (current.signDurationPercentiles.p95Us > 0) _SummaryChip(label: 'p95 sign', value: p95Sign),
+          if (current.verifyDurationPercentiles.p95Us > 0) _SummaryChip(label: 'p95 verify', value: p95Verify),
+          if (current.canonicalizeDurationPercentiles.p95Us > 0)
+            _SummaryChip(label: 'p95 canonicalize', value: p95Canonicalize),
           _SummaryChip(label: 'isolates', value: current.totalIsolateOperations.toString()),
         ],
       ),
