@@ -492,6 +492,9 @@ flush completo desses caches. Contadores de evento no `MetricsCollector`:
 `auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
 `auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
 `rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
+`rpc_sql_execute_auto_streaming_from_db_response`,
+`rpc_sql_execute_prefer_db_streaming_response`,
+`rpc_sql_execute_allowlist_db_streaming_response`,
 `rpc_sql_execute_materialized_response`, `rpc_stream_terminal_complete_emitted`,
 `rpc_stream_terminal_complete_failed`, `rpc_response_ack_retry`,
 `rpc_response_ack_fallback_without_ack`.
@@ -1183,7 +1186,7 @@ Exemplo de capacidades anunciadas (alinhado a
     "signatureRequired": false,
     "signatureScope": "transport-frame",
     "signatureAlgorithms": ["hmac-sha256"],
-    "streamingResults": false,
+    "streamingResults": true,
     "plugProfile": "plug-jsonrpc-profile/2.9",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
@@ -1484,10 +1487,25 @@ falha com contexto de timeout/budget (sem executar esse comando).
 - `options.max_parallel_read_only_batch_items` suportado em `sql.executeBatch`
   para lotes nao transacionais compostos apenas por `SELECT`; e opt-in e o
   agente aplica cap interno de seguranca baseado no pool ODBC.
+- `ODBC_DIRECT_CONNECTION_MAX_CONCURRENT` pode sobrescrever o limite de
+  conexoes ODBC diretas usadas por streaming/fallback. Sem override, o agente
+  reserva metade do tamanho do pool para esses caminhos. Overrides maiores que
+  o pool ODBC sao capados no tamanho do pool e aparecem no health como
+  `direct_connections.override_exceeds_pool=true`. O health tambem expoe
+  `direct_connections.wait_avg_ms`, `wait_p95_ms` e `wait_p99_ms` para
+  diagnosticar saturacao desse limiter.
+- `ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST` permite habilitar o caminho
+  native-compatible experimental para SQLs simples e conhecidas, separadas por
+  `|`, por exemplo `select id from users|select name from departments`. O match
+  e exato apos normalizacao simples de whitespace/case; consultas com
+  `SELECT *` continuam fora desse caminho.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
 - `options.execution_mode` suportado em `sql.execute`.
 - `options.preserve_sql` suportado em `sql.execute` como alias legado.
+- `options.prefer_db_streaming` suportado em `sql.execute` para preferir
+  streaming direto do banco em `SELECT` sem paginacao quando o recurso esta
+  habilitado e negociado.
 - `sql.executeBatch` **nao** suporta `execution_mode`; todos os comandos rodam em
 modo managed implicito. Politica futura: evoluir em versao posterior (ex.:
 `options.execution_mode` no batch ou `commands[*].execution_mode` por comando).
@@ -1534,6 +1552,15 @@ cancelaveis).
 - Streaming chunked: ativo via `enableSocketStreamingChunks`; resultados
 acima de `streaming_row_threshold` negociado sao enviados em chunks
 (`rpc:chunk`, `rpc:complete`).
+- `capabilities.extensions.streamingResults` e negociado entre agente e hub.
+  Quando `enableSocketStreamingFromDb` esta ativo, o agente pode criar emissor
+  de stream para consultas `SELECT` elegiveis mesmo que o chunking materializado
+  geral esteja desligado. O roteamento automatico considera SQLs grandes,
+  sinais textuais de consulta pesada, `options.prefer_db_streaming` e allowlist
+  operacional `DB_STREAMING_AUTO_TABLE_ALLOWLIST`. A allowlist aceita `*`,
+  nomes simples (`users`) e nomes qualificados (`public.users`), separados por
+  virgula. CTEs, joins e subqueries exigem `options.prefer_db_streaming=true`
+  para evitar roteamento automatico por heuristica parcial.
 - Backpressure: implementado quando `enableSocketBackpressure`; o hub envia
 `rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
 envia por vez; credito inicial de 1 chunk.

@@ -130,6 +130,11 @@ class ProtocolNegotiator {
       negotiated['protocolReadyAck'] = true;
     }
 
+    final streamingResults =
+        (agentExtensions['streamingResults'] as bool? ?? false) &&
+        (serverExtensions['streamingResults'] as bool? ?? false);
+    negotiated['streamingResults'] = streamingResults;
+
     final binaryPayload =
         (agentExtensions['binaryPayload'] as bool? ?? false) && (serverExtensions['binaryPayload'] as bool? ?? false);
     if (binaryPayload) {

@@ -8,6 +8,10 @@ abstract class IRpcDispatchMetricsCollector {
 
   void recordSqlExecuteAutoStreamingFromDbResponse();
 
+  void recordSqlExecutePreferDbStreamingResponse();
+
+  void recordSqlExecuteAllowlistDbStreamingResponse();
+
   void recordSqlExecuteDbStreamingSkipped(String reason);
 
   void recordSqlExecuteMaterializedResponse();

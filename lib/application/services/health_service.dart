@@ -171,6 +171,8 @@ class HealthService {
               'max_batch_workers': queuedGateway.maxBatchWorkers,
               'active_long_query_workers': queuedGateway.activeLongQueryWorkers,
               'max_long_query_workers': queuedGateway.maxLongQueryWorkers,
+              'active_non_query_workers': queuedGateway.activeNonQueryWorkers,
+              'max_non_query_workers': queuedGateway.maxNonQueryWorkers,
               'enqueue_timeout_seconds': queuedGateway.enqueueTimeout.inSeconds,
               'rejections_total': metrics['sql_queue_rejection_count'] ?? 0,
               'timeouts_total': metrics['sql_queue_timeout_count'] ?? 0,
@@ -216,6 +218,12 @@ class HealthService {
         'p99_latency_ms': (metrics['query_p99_latency_ms'] as num?)?.toInt() ?? 0,
       },
       'sql_execution_by_mode': metrics['sql_execution_by_mode'] ?? const <String, Object>{},
+      'batch': {
+        'read_only_parallel_total': metrics['read_only_batch_parallel'] ?? 0,
+        'read_only_parallel_capped_total': metrics['read_only_batch_parallel_capped'] ?? 0,
+        'last_requested_parallelism': metrics['read_only_batch_parallel_last_requested'] ?? 0,
+        'last_effective_parallelism': metrics['read_only_batch_parallel_last_effective'] ?? 0,
+      },
       'diagnostics': {
         'top_recent_reasons': metrics['top_recent_diagnostic_reasons'] ?? const <String, int>{},
         'recent_reasons': metrics['recent_diagnostic_reasons'] ?? const <String>[],
@@ -265,8 +273,15 @@ class HealthService {
       'chunk_streaming_flag_enabled': chunkStreamingFlag,
       'auto_db_streaming_policy_enabled': dbStreamingFlag && !chunkStreamingFlag,
       'active_streams': diagnostics['active_streams'] ?? (gateway?.hasActiveStream ?? false ? 1 : 0),
+      'direct_limiter_active_count': diagnostics['direct_limiter_active_count'],
+      'direct_limiter_max_concurrent': diagnostics['direct_limiter_max_concurrent'],
+      'direct_limiter_saturated': diagnostics['direct_limiter_saturated'] ?? false,
       'from_db_responses_total': metrics['rpc_sql_execute_streaming_from_db_response'] ?? 0,
       'auto_from_db_responses_total': metrics['rpc_sql_execute_auto_streaming_from_db_response'] ?? 0,
+      'prefer_from_db_responses_total': metrics['rpc_sql_execute_prefer_db_streaming_response'] ?? 0,
+      'allowlist_from_db_responses_total': metrics['rpc_sql_execute_allowlist_db_streaming_response'] ?? 0,
+      'from_db_skip_total': metrics['rpc_sql_execute_db_streaming_skip'] ?? 0,
+      'from_db_skip_reasons': metrics['rpc_sql_execute_db_streaming_skip_reasons'] ?? const <String, int>{},
       'chunked_materialized_responses_total': metrics['rpc_sql_execute_streaming_chunks_response'] ?? 0,
       'materialized_responses_total': metrics['rpc_sql_execute_materialized_response'] ?? 0,
       'cancel_requests_total': metrics['stream_cancel_request'] ?? 0,
@@ -276,14 +291,25 @@ class HealthService {
 
   Map<String, Object?> _buildDirectConnectionHealth(Map<String, Object?> metrics) {
     final limiter = _directConnectionLimiter;
+    final poolSize = _odbcSettings?.poolSize;
 
     return {
       'active_count': limiter?.activeCount ?? metrics['direct_connection_active_count'] ?? 0,
       'max_concurrent': limiter?.maxConcurrent,
+      'effective_cap':
+          limiter?.maxConcurrent ??
+          (poolSize != null ? ConnectionConstants.directOdbcConnectionConcurrency(poolSize) : null),
+      'override_requested': ConnectionConstants.directOdbcConnectionMaxConcurrentOverride,
+      'override_exceeds_pool': ConnectionConstants.directOdbcConnectionOverrideExceedsPool(poolSize),
+      'capacity_strategy': ConnectionConstants.directOdbcConnectionCapacityStrategy(),
+      'pool_size_reference': poolSize,
       'is_saturated': limiter?.isSaturated ?? false,
       'opened_total': limiter?.openedTotal ?? metrics['direct_connection_opened'] ?? 0,
       'closed_total': limiter?.closedTotal ?? metrics['direct_connection_closed'] ?? 0,
       'acquire_timeouts_total': metrics['direct_connection_acquire_timeout'] ?? 0,
+      'wait_avg_ms': metrics['direct_connection_wait_avg_time_ms'] ?? 0.0,
+      'wait_p95_ms': metrics['direct_connection_wait_p95_time_ms'] ?? 0,
+      'wait_p99_ms': metrics['direct_connection_wait_p99_time_ms'] ?? 0,
     };
   }
 

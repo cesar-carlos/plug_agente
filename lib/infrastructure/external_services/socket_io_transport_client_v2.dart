@@ -234,6 +234,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       compressionThreshold: _featureFlags.compressionThreshold,
       signatureRequired: _localRequiresIncomingSignature,
       signatureAlgorithms: _localSignatureAlgorithms,
+      streamingResults: _featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb,
     );
   }
 

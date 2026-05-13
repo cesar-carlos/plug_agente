@@ -11,12 +11,10 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
     required int maxConcurrent,
     required Duration acquireTimeout,
     MetricsCollector? metricsCollector,
-  }) : _maxConcurrent = maxConcurrent,
-       _semaphore = PoolSemaphore(maxConcurrent),
+  }) : _semaphore = PoolSemaphore(maxConcurrent),
        _acquireTimeout = acquireTimeout,
        _metrics = metricsCollector;
 
-  final int _maxConcurrent;
   final PoolSemaphore _semaphore;
   final Duration _acquireTimeout;
   final MetricsCollector? _metrics;
@@ -28,7 +26,7 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
   int get activeCount => _activeCount;
 
   @override
-  int get maxConcurrent => _maxConcurrent;
+  int get maxConcurrent => _semaphore.maxConcurrent;
 
   @override
   int get openedTotal => _openedTotal;
@@ -37,12 +35,20 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
   int get closedTotal => _closedTotal;
 
   @override
-  bool get isSaturated => _activeCount >= _maxConcurrent;
+  bool get isSaturated => _activeCount >= maxConcurrent;
+
+  void reconfigureMaxConcurrent(int maxConcurrent) {
+    if (maxConcurrent == _semaphore.maxConcurrent) {
+      return;
+    }
+    _semaphore.resize(maxConcurrent);
+  }
 
   Future<Result<DirectOdbcConnectionLease>> acquire({
     required String operation,
     Duration? acquireTimeout,
   }) async {
+    final stopwatch = Stopwatch()..start();
     try {
       await _semaphore.acquire(timeout: acquireTimeout ?? _acquireTimeout);
     } on TimeoutException catch (error) {
@@ -62,6 +68,9 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
           },
         ),
       );
+    } finally {
+      stopwatch.stop();
+      _metrics?.recordDirectConnectionWaitTime(stopwatch.elapsed);
     }
 
     _activeCount++;

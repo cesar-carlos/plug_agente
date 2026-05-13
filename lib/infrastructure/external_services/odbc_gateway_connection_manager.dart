@@ -15,15 +15,18 @@ final class OdbcGatewayConnectionManager {
     required IConnectionPool connectionPool,
     required DirectOdbcConnectionLimiter directConnectionLimiter,
     required MetricsCollector metrics,
+    int Function()? directConnectionMaxProvider,
   }) : _service = service,
        _connectionPool = connectionPool,
        _directConnectionLimiter = directConnectionLimiter,
-       _metrics = metrics;
+       _metrics = metrics,
+       _directConnectionMaxProvider = directConnectionMaxProvider;
 
   final OdbcService _service;
   final IConnectionPool _connectionPool;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector _metrics;
+  final int Function()? _directConnectionMaxProvider;
   final Set<String> _connectionsToDiscard = <String>{};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
 
@@ -120,6 +123,10 @@ final class OdbcGatewayConnectionManager {
     required String operation,
     required DateTime? deadline,
   }) async {
+    final maxConcurrent = _directConnectionMaxProvider?.call();
+    if (maxConcurrent != null) {
+      _directConnectionLimiter.reconfigureMaxConcurrent(maxConcurrent);
+    }
     final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordDirectConnectionAcquireTimeout();

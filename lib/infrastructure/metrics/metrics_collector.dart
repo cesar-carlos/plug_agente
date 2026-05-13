@@ -27,6 +27,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _odbcNativeCompatibleAcquireAttemptCounter = 'odbc_native_compatible_acquire_attempt';
   static const String _odbcNativeCompatibleAcquireSuccessCounter = 'odbc_native_compatible_acquire_success';
   static const String _readOnlyBatchParallelCounter = 'read_only_batch_parallel';
+  static const String _readOnlyBatchParallelCappedCounter = 'read_only_batch_parallel_capped';
   static const String _directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
   static const String _poolReleaseFailureCounter = 'pool_release_failure';
   static const String _poolRecycleCounter = 'pool_recycle';
@@ -39,6 +40,9 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
   static const String _rpcSqlExecuteAutoStreamingFromDbResponseCounter =
       'rpc_sql_execute_auto_streaming_from_db_response';
+  static const String _rpcSqlExecutePreferDbStreamingResponseCounter = 'rpc_sql_execute_prefer_db_streaming_response';
+  static const String _rpcSqlExecuteAllowlistDbStreamingResponseCounter =
+      'rpc_sql_execute_allowlist_db_streaming_response';
   static const String _rpcSqlExecuteDbStreamingSkipCounter = 'rpc_sql_execute_db_streaming_skip';
   static const String _rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
   static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
@@ -106,10 +110,15 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int _maxActiveWorkers = 0;
   final List<Duration> _queueWaitTimes = [];
   final List<Duration> _poolWaitTimes = [];
+  final List<Duration> _directConnectionWaitTimes = [];
   final List<Duration> _connectTimes = [];
   final List<Duration> _sqlExecutionTimes = [];
   final Map<String, List<Duration>> _sqlExecutionTimesByMode = <String, List<Duration>>{};
+  final Map<String, List<DateTime>> _sqlExecutionTimestampsByMode = <String, List<DateTime>>{};
   final List<Duration> _preparedPrepareTimes = [];
+  final Map<String, int> _streamingSkipReasons = <String, int>{};
+  int _readOnlyBatchParallelLastRequested = 0;
+  int _readOnlyBatchParallelLastEffective = 0;
   final Queue<String> _recentDiagnosticReasons = Queue<String>();
   static const int _maxWaitTimeSamples = 1000;
   static const int _maxRecentDiagnosticReasons = 50;
@@ -136,6 +145,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int get odbcNativeCompatibleAcquireAttemptCount => _eventCounters[_odbcNativeCompatibleAcquireAttemptCounter] ?? 0;
   int get odbcNativeCompatibleAcquireSuccessCount => _eventCounters[_odbcNativeCompatibleAcquireSuccessCounter] ?? 0;
   int get readOnlyBatchParallelCount => _eventCounters[_readOnlyBatchParallelCounter] ?? 0;
+  int get readOnlyBatchParallelCappedCount => _eventCounters[_readOnlyBatchParallelCappedCounter] ?? 0;
   int get directConnectionAcquireTimeoutCount => _eventCounters[_directConnectionAcquireTimeoutCounter] ?? 0;
   int get activeDirectConnections => _activeDirectConnections;
   int get maxActiveDirectConnections => _maxActiveDirectConnections;
@@ -152,6 +162,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       _eventCounters[_rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
   int get rpcSqlExecuteAutoStreamingFromDbResponseCount =>
       _eventCounters[_rpcSqlExecuteAutoStreamingFromDbResponseCounter] ?? 0;
+  int get rpcSqlExecuteAllowlistDbStreamingResponseCount =>
+      _eventCounters[_rpcSqlExecuteAllowlistDbStreamingResponseCounter] ?? 0;
   int get rpcSqlExecuteMaterializedResponseCount => _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
   int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
   int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
@@ -230,10 +242,15 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _maxActiveWorkers = 0;
     _queueWaitTimes.clear();
     _poolWaitTimes.clear();
+    _directConnectionWaitTimes.clear();
     _connectTimes.clear();
     _sqlExecutionTimes.clear();
     _sqlExecutionTimesByMode.clear();
+    _sqlExecutionTimestampsByMode.clear();
     _preparedPrepareTimes.clear();
+    _streamingSkipReasons.clear();
+    _readOnlyBatchParallelLastRequested = 0;
+    _readOnlyBatchParallelLastEffective = 0;
     _recentDiagnosticReasons.clear();
   }
 
@@ -289,6 +306,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
 
   void recordPoolWaitTime(Duration waitTime) => _recordDurationSample(_poolWaitTimes, waitTime);
 
+  void recordDirectConnectionWaitTime(Duration waitTime) => _recordDurationSample(_directConnectionWaitTimes, waitTime);
+
   void recordConnectTime(Duration connectTime) => _recordDurationSample(_connectTimes, connectTime);
 
   void recordSqlExecutionTime(
@@ -298,6 +317,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _recordDurationSample(_sqlExecutionTimes, executionTime);
     final samples = _sqlExecutionTimesByMode.putIfAbsent(mode, () => <Duration>[]);
     _recordDurationSample(samples, executionTime);
+    final timestamps = _sqlExecutionTimestampsByMode.putIfAbsent(mode, () => <DateTime>[]);
+    _recordTimestampSample(timestamps, DateTime.now());
   }
 
   void recordPreparedPrepareTime(Duration prepareTime) => _recordDurationSample(_preparedPrepareTimes, prepareTime);
@@ -341,7 +362,25 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
 
   void recordOdbcNativeCompatibleAcquireSuccess() => _incrementEventCounter(_odbcNativeCompatibleAcquireSuccessCounter);
 
-  void recordReadOnlyBatchParallel() => _incrementEventCounter(_readOnlyBatchParallelCounter);
+  void recordReadOnlyBatchParallel({
+    int? requestedParallelism,
+    int? effectiveParallelism,
+  }) {
+    _incrementEventCounter(_readOnlyBatchParallelCounter);
+    if (requestedParallelism != null) {
+      _readOnlyBatchParallelLastRequested = requestedParallelism;
+    }
+    if (effectiveParallelism != null) {
+      _readOnlyBatchParallelLastEffective = effectiveParallelism;
+    }
+    if (requestedParallelism != null && effectiveParallelism != null && effectiveParallelism < requestedParallelism) {
+      _incrementEventCounter(_readOnlyBatchParallelCappedCounter);
+      recordDiagnosticReason(
+        category: 'batch',
+        reason: 'read_only_parallel_capped',
+      );
+    }
+  }
 
   void recordDirectConnectionAcquireTimeout() => _incrementEventCounter(_directConnectionAcquireTimeoutCounter);
 
@@ -388,8 +427,25 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     );
   }
 
+  void recordRpcSqlExecutePreferDbStreamingResponse() {
+    _incrementEventCounter(_rpcSqlExecutePreferDbStreamingResponseCounter);
+    recordDiagnosticReason(
+      category: 'streaming',
+      reason: 'prefer_db_streaming',
+    );
+  }
+
+  void recordRpcSqlExecuteAllowlistDbStreamingResponse() {
+    _incrementEventCounter(_rpcSqlExecuteAllowlistDbStreamingResponseCounter);
+    recordDiagnosticReason(
+      category: 'streaming',
+      reason: 'allowlist_db_streaming',
+    );
+  }
+
   void recordRpcSqlExecuteDbStreamingSkipped(String reason) {
     _incrementEventCounter(_rpcSqlExecuteDbStreamingSkipCounter);
+    _streamingSkipReasons[reason] = (_streamingSkipReasons[reason] ?? 0) + 1;
     recordDiagnosticReason(
       category: 'streaming_skip',
       reason: reason,
@@ -641,11 +697,15 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       'sql_queue_p95_wait_time_ms': p95QueueWaitTime?.inMilliseconds ?? 0,
       'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
       ..._durationStatsSnapshot('pool_wait', _poolWaitTimes),
+      ..._durationStatsSnapshot('direct_connection_wait', _directConnectionWaitTimes),
       ..._durationStatsSnapshot('connect', _connectTimes),
       ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
       ..._sqlExecutionModeStatsSnapshot(),
       'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(),
       ..._durationStatsSnapshot('prepared_prepare', _preparedPrepareTimes),
+      'rpc_sql_execute_db_streaming_skip_reasons': Map<String, int>.unmodifiable(_streamingSkipReasons),
+      'read_only_batch_parallel_last_requested': _readOnlyBatchParallelLastRequested,
+      'read_only_batch_parallel_last_effective': _readOnlyBatchParallelLastEffective,
       'recent_diagnostic_reasons': List<String>.unmodifiable(_recentDiagnosticReasons),
       'top_recent_diagnostic_reasons': _topRecentDiagnosticReasons(),
       ..._eventCounters,
@@ -663,6 +723,13 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     }
   }
 
+  void _recordTimestampSample(List<DateTime> samples, DateTime value) {
+    samples.add(value);
+    if (samples.length > _maxWaitTimeSamples) {
+      samples.removeAt(0);
+    }
+  }
+
   Map<String, Object> _durationStatsSnapshot(
     String prefix,
     List<Duration> samples,
@@ -671,6 +738,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       return {
         '${prefix}_avg_time_ms': 0.0,
         '${prefix}_p95_time_ms': 0,
+        '${prefix}_p99_time_ms': 0,
         '${prefix}_max_recent_time_ms': 0,
       };
     }
@@ -680,6 +748,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     return {
       '${prefix}_avg_time_ms': total / sorted.length,
       '${prefix}_p95_time_ms': sorted[(sorted.length * 0.95).floor()],
+      '${prefix}_p99_time_ms': sorted[(sorted.length * 0.99).floor()],
       '${prefix}_max_recent_time_ms': sorted.last,
     };
   }
@@ -704,10 +773,28 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       values[entry.key] = {
         'avg_time_ms': stats['_avg_time_ms'] ?? 0.0,
         'p95_time_ms': stats['_p95_time_ms'] ?? 0,
+        'p99_time_ms': stats['_p99_time_ms'] ?? 0,
         'max_recent_time_ms': stats['_max_recent_time_ms'] ?? 0,
+        'sample_count': entry.value.length,
+        'ops_per_second': _opsPerSecondForMode(entry.key),
       };
     }
     return values;
+  }
+
+  double _opsPerSecondForMode(String mode) {
+    final timestamps = _sqlExecutionTimestampsByMode[mode];
+    if (timestamps == null || timestamps.isEmpty) {
+      return 0;
+    }
+    if (timestamps.length == 1) {
+      return 1;
+    }
+    final windowSeconds = timestamps.last.difference(timestamps.first).inMilliseconds / 1000;
+    if (windowSeconds <= 0) {
+      return timestamps.length.toDouble();
+    }
+    return timestamps.length / windowSeconds;
   }
 
   Map<String, int> _topRecentDiagnosticReasons() {

@@ -275,6 +275,80 @@ void main() {
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(1);
     });
 
+    test('opens execution feedback circuit only for the failed connection string', () async {
+      when(() => configRepository.getCurrentConfig()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      var nativeCounter = 0;
+      when(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => Success(++nativeCounter));
+      when(() => service.poolGetConnection(any())).thenAnswer((invocation) async {
+        final poolId = invocation.positionalArguments.single as int;
+        return Success(
+          Connection(
+            id: 'native-$poolId',
+            connectionString: 'DSN=$poolId',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => service.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-after-dsn-a-circuit',
+            connectionString: 'DSN=A',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+        nativeCircuitBreakThreshold: 1,
+        nativeCircuitBreakDuration: const Duration(minutes: 5),
+      );
+
+      final dsnA = await pool.acquire('DSN=A');
+      final dsnB = await pool.acquire('DSN=B');
+      expect(dsnA.getOrNull(), 'native-1');
+      expect(dsnB.getOrNull(), 'native-2');
+
+      pool.recordExecutionFailure(
+        connectionString: 'DSN=A',
+        connectionId: 'native-1',
+        error: domain.QueryExecutionFailure.withContext(
+          message: 'Buffer too small',
+          context: {'reason': 'buffer_too_small'},
+        ),
+        stage: 'query',
+      );
+
+      final dsnBAfterFeedback = await pool.acquire('DSN=B');
+      expect(dsnBAfterFeedback.getOrNull(), 'native-2');
+      final dsnAAfterFeedback = await pool.acquire('DSN=A');
+      expect(dsnAAfterFeedback.getOrNull(), 'lease-after-dsn-a-circuit');
+
+      expect(metrics.odbcNativePoolFallbackCount, 1);
+      verify(() => service.poolGetConnection(any())).called(3);
+      verify(() => service.connect('DSN=A', options: any(named: 'options'))).called(1);
+    });
+
     test('falls back to lease pool on structured native timeout and records fallback metric', () async {
       when(() => configRepository.getCurrentConfig()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
@@ -534,6 +608,74 @@ void main() {
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
       verify(() => configRepository.getCurrentConfig()).called(1);
     });
+
+    test('invalidates cached driver info when configuration changes', () async {
+      var config = _sqlServerConfig();
+      when(() => configRepository.getCurrentConfig()).thenAnswer(
+        (_) async => Success(config),
+      );
+      when(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(41));
+      when(() => service.poolGetConnection(41)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'native-before-config-change',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(
+        () => service.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-after-config-change',
+            connectionString: 'DSN=SQLAnywhere',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.disconnect('lease-after-config-change')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+        driverInfoCacheTtl: Duration.zero,
+      );
+
+      final nativeAcquire = await pool.acquire('DSN=Prod');
+      expect(nativeAcquire.getOrNull(), 'native-before-config-change');
+
+      config = _sqlAnywhereConfig().copyWith(
+        updatedAt: DateTime(2024, 1, 2),
+      );
+      final leaseAcquire = await pool.acquire('DSN=SQLAnywhere');
+      expect(leaseAcquire.getOrNull(), 'lease-after-config-change');
+
+      final diagnostics = pool.getHealthDiagnostics();
+      expect(diagnostics['driver_type'], 'sybaseAnywhere');
+      expect(diagnostics['native_eligible'], isFalse);
+      verify(
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options')),
+      ).called(1);
+      verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
+    });
   });
 }
 
@@ -546,6 +688,7 @@ AdaptiveOdbcConnectionPool _buildPool({
   int nativeCircuitBreakThreshold = 3,
   Duration nativeCircuitBreakDuration = const Duration(minutes: 1),
   bool nativeWarmUpEnabled = false,
+  Duration driverInfoCacheTtl = const Duration(seconds: 10),
 }) {
   return AdaptiveOdbcConnectionPool(
     leasePool: OdbcConnectionPool(
@@ -564,6 +707,7 @@ AdaptiveOdbcConnectionPool _buildPool({
     nativeCircuitBreakThreshold: nativeCircuitBreakThreshold,
     nativeCircuitBreakDuration: nativeCircuitBreakDuration,
     nativeWarmUpEnabled: nativeWarmUpEnabled,
+    driverInfoCacheTtl: driverInfoCacheTtl,
   );
 }
 

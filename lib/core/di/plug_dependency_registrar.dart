@@ -259,7 +259,9 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton(
       () => DirectOdbcConnectionLimiter(
-        maxConcurrent: getIt<IOdbcConnectionSettings>().poolSize,
+        maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
+          getIt<IOdbcConnectionSettings>().poolSize,
+        ),
         acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
         metricsCollector: getIt<MetricsCollector>(),
       ),

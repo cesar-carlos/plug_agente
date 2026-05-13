@@ -86,6 +86,8 @@ class ConnectionConstants {
     return _positiveIntEnv('SQL_QUEUE_MAX_WORKERS') ?? (persistedPoolSize > 0 ? persistedPoolSize : defaultPoolSize);
   }
 
+  static int? get directOdbcConnectionMaxConcurrentOverride => _positiveIntEnv('ODBC_DIRECT_CONNECTION_MAX_CONCURRENT');
+
   /// SQL execution queue enqueue timeout in seconds (configurable via SQL_QUEUE_TIMEOUT_SEC env var).
   static Duration get sqlQueueEnqueueTimeout => Duration(
     seconds: int.tryParse(_optionalEnv('SQL_QUEUE_TIMEOUT_SEC') ?? '') ?? 5,
@@ -110,6 +112,27 @@ class ConnectionConstants {
       return 1;
     }
     return poolSize > 2 ? 2 : poolSize;
+  }
+
+  static int directOdbcConnectionConcurrency(int poolSize) {
+    final override = directOdbcConnectionMaxConcurrentOverride;
+    final effectivePoolSize = poolSize > 0 ? poolSize : 1;
+    if (override != null) {
+      return override > effectivePoolSize ? effectivePoolSize : override;
+    }
+    if (effectivePoolSize < 2) {
+      return 1;
+    }
+    return effectivePoolSize ~/ 2;
+  }
+
+  static String directOdbcConnectionCapacityStrategy() {
+    return directOdbcConnectionMaxConcurrentOverride == null ? 'half_pool_reserved' : 'env_override';
+  }
+
+  static bool directOdbcConnectionOverrideExceedsPool(int? poolSize) {
+    final override = directOdbcConnectionMaxConcurrentOverride;
+    return override != null && poolSize != null && poolSize > 0 && override > poolSize;
   }
 
   static const int socketConnectionTimeoutMs = 10000;

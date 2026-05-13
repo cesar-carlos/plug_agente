@@ -196,6 +196,65 @@ void main() {
     });
   });
 
+  group('stream emitter selection', () {
+    test('creates emitter for negotiated DB streaming even when materialized chunk flag is disabled', () async {
+      when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(true);
+      when(() => featureFlags.enableSocketStreamingChunks).thenReturn(false);
+      protocol = const ProtocolConfig(
+        protocol: 'jsonrpc-v2',
+        encoding: 'json',
+        compression: 'none',
+        negotiatedExtensions: {'streamingResults': true},
+      );
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((_) async => RpcResponse.success(id: 'req-stream', result: <String, dynamic>{}));
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: const {
+          'jsonrpc': '2.0',
+          'id': 'req-stream',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT * FROM users'},
+        },
+      );
+
+      await handler.handleRequest(wire);
+
+      final captured = verify(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: captureAny(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).captured;
+      expect(captured.single, isA<IRpcStreamEmitter>());
+    });
+  });
+
   group('handleBatchRequest', () {
     test('returns invalidRequest for empty batch', () async {
       await handler.handleBatchRequest([]);

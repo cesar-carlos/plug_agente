@@ -13,6 +13,7 @@ import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
@@ -42,6 +43,14 @@ import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
+
+enum _DbStreamingAutoReason {
+  none,
+  prefer,
+  sqlLength,
+  allowlist,
+  sqlSignal,
+}
 
 /// RPC method dispatcher for routing JSON-RPC requests to handlers.
 class RpcMethodDispatcher {
@@ -132,6 +141,8 @@ class RpcMethodDispatcher {
   static const _defaultQueryStageBudget = Duration(seconds: 30);
   static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
   static const int _dbStreamingAutoSqlLengthThreshold = 240;
+  static const String _dbStreamingAutoTableAllowlistEnv = 'DB_STREAMING_AUTO_TABLE_ALLOWLIST';
+  static const Duration _dbStreamingAutoTableAllowlistCacheTtl = Duration(seconds: 10);
   static const List<String> _dbStreamingAutoLargeSqlSignals = <String>[
     ' join ',
     ' union ',
@@ -141,6 +152,9 @@ class RpcMethodDispatcher {
   static const _agentProfileAuthorizationSql = 'SELECT * FROM agent_profile';
   final ExecuteSqlBatch _executeSqlBatch;
   _ActiveStreamExecution? _activeStreamExecution;
+  String? _cachedDbStreamingAutoTableAllowlistRaw;
+  Set<String> _cachedDbStreamingAutoTableAllowlist = const <String>{};
+  DateTime? _cachedDbStreamingAutoTableAllowlistExpiresAt;
 
   /// Dispatches an RPC request to the appropriate handler.
   Future<RpcResponse> dispatch(
@@ -352,6 +366,7 @@ class RpcMethodDispatcher {
       deadline: deadline,
       timeoutMs: requestedTimeoutMs,
       negotiatedExtensions: negotiatedExtensions,
+      preferDbStreaming: options?['prefer_db_streaming'] == true,
     );
     if (streamingFromDbResponse != null) {
       return streamingFromDbResponse;
@@ -524,12 +539,15 @@ class RpcMethodDispatcher {
     required DateTime? deadline,
     required int timeoutMs,
     required Map<String, dynamic> negotiatedExtensions,
+    required bool preferDbStreaming,
   }) async {
-    final autoStreaming = _shouldAutoEnableDbStreaming(
+    final autoStreamingReason = _dbStreamingAutoReason(
       queryRequest: queryRequest,
       sql: sql,
       negotiatedExtensions: negotiatedExtensions,
+      preferDbStreaming: preferDbStreaming,
     );
+    final autoStreaming = autoStreamingReason != _DbStreamingAutoReason.none;
     if (!_supportsStreamingChunks(negotiatedExtensions)) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('streaming_chunks_not_negotiated');
       return null;
@@ -552,6 +570,15 @@ class RpcMethodDispatcher {
     final gateway = _streamingGateway;
     if (configRepo == null || gateway == null) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('gateway_unavailable');
+      return null;
+    }
+    final streamingDiagnostics = gateway is IStreamingGatewayDiagnostics
+        ? gateway as IStreamingGatewayDiagnostics
+        : null;
+    if (!_featureFlags.enableSocketStreamingChunks &&
+        autoStreamingReason == _DbStreamingAutoReason.prefer &&
+        streamingDiagnostics?.getStreamingDiagnostics()['direct_limiter_saturated'] == true) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('direct_limiter_saturated_prefer_fallback');
       return null;
     }
     if (queryRequest.parameters?.isNotEmpty ?? false) {
@@ -694,7 +721,18 @@ class RpcMethodDispatcher {
         },
       );
       if (autoStreaming && !_featureFlags.enableSocketStreamingChunks) {
-        _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+        switch (autoStreamingReason) {
+          case _DbStreamingAutoReason.prefer:
+            _dispatchMetrics?.recordSqlExecutePreferDbStreamingResponse();
+          case _DbStreamingAutoReason.allowlist:
+            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+            _dispatchMetrics?.recordSqlExecuteAllowlistDbStreamingResponse();
+          case _DbStreamingAutoReason.sqlLength:
+          case _DbStreamingAutoReason.sqlSignal:
+            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+          case _DbStreamingAutoReason.none:
+            break;
+        }
       }
       _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
       return dbStreamResponse;
@@ -712,10 +750,11 @@ class RpcMethodDispatcher {
     };
   }
 
-  bool _shouldAutoEnableDbStreaming({
+  _DbStreamingAutoReason _dbStreamingAutoReason({
     required QueryRequest queryRequest,
     required String sql,
     required Map<String, dynamic> negotiatedExtensions,
+    required bool preferDbStreaming,
   }) {
     if (!_featureFlags.enableSocketStreamingFromDb ||
         _featureFlags.enableSocketStreamingChunks ||
@@ -723,20 +762,85 @@ class RpcMethodDispatcher {
         queryRequest.pagination != null ||
         queryRequest.expectMultipleResults ||
         (queryRequest.parameters?.isNotEmpty ?? false)) {
-      return false;
+      return _DbStreamingAutoReason.none;
     }
 
     final normalized = ' ${sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
     if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
-      return false;
+      return _DbStreamingAutoReason.none;
     }
     if (_containsExplicitRowLimit(normalized)) {
-      return false;
+      return _DbStreamingAutoReason.none;
+    }
+    if (preferDbStreaming) {
+      return _DbStreamingAutoReason.prefer;
+    }
+    if (_requiresExplicitDbStreamingPreference(normalized)) {
+      return _DbStreamingAutoReason.none;
     }
     if (normalized.length >= _dbStreamingAutoSqlLengthThreshold) {
+      return _DbStreamingAutoReason.sqlLength;
+    }
+    if (_matchesDbStreamingAutoTableAllowlist(normalized)) {
+      return _DbStreamingAutoReason.allowlist;
+    }
+    if (_dbStreamingAutoLargeSqlSignals.any(normalized.contains)) {
+      return _DbStreamingAutoReason.sqlSignal;
+    }
+    return _DbStreamingAutoReason.none;
+  }
+
+  bool _matchesDbStreamingAutoTableAllowlist(String normalizedSql) {
+    final allowlist = _dbStreamingAutoTableAllowlist();
+    if (allowlist.isEmpty) {
+      return false;
+    }
+    if (allowlist.contains('*')) {
       return true;
     }
-    return _dbStreamingAutoLargeSqlSignals.any(normalized.contains);
+
+    final tableName = _firstTableNameForDbStreaming(normalizedSql);
+    return tableName != null && allowlist.contains(tableName);
+  }
+
+  bool _requiresExplicitDbStreamingPreference(String normalizedSql) {
+    return normalizedSql.startsWith(' with ') ||
+        normalizedSql.contains(' join ') ||
+        RegExp(r'\bfrom\s*\(', caseSensitive: false).hasMatch(normalizedSql);
+  }
+
+  Set<String> _dbStreamingAutoTableAllowlist() {
+    final now = DateTime.now();
+    final expiresAt = _cachedDbStreamingAutoTableAllowlistExpiresAt;
+    final rawAllowlist = AppEnvironment.get(_dbStreamingAutoTableAllowlistEnv);
+    if (expiresAt != null && now.isBefore(expiresAt) && rawAllowlist == _cachedDbStreamingAutoTableAllowlistRaw) {
+      return _cachedDbStreamingAutoTableAllowlist;
+    }
+
+    _cachedDbStreamingAutoTableAllowlistRaw = rawAllowlist;
+    _cachedDbStreamingAutoTableAllowlistExpiresAt = now.add(_dbStreamingAutoTableAllowlistCacheTtl);
+    if (rawAllowlist == null) {
+      return _cachedDbStreamingAutoTableAllowlist = const <String>{};
+    }
+
+    return _cachedDbStreamingAutoTableAllowlist = rawAllowlist
+        .split(',')
+        .map(_normalizeDbStreamingTableName)
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  String? _firstTableNameForDbStreaming(String normalizedSql) {
+    final match = RegExp(r'\bfrom\s+([a-z0-9_\.\[\]"]+)', caseSensitive: false).firstMatch(normalizedSql);
+    final table = match?.group(1);
+    if (table == null) {
+      return null;
+    }
+    return _normalizeDbStreamingTableName(table);
+  }
+
+  String _normalizeDbStreamingTableName(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'^[\["]+|[\]"]+$'), '').replaceAll(RegExp(r'[\[\]"]'), '');
   }
 
   bool _containsExplicitRowLimit(String normalizedSql) {

@@ -29,7 +29,7 @@
           "description": "Configured ODBC connection pool size"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "sql_queue": {
       "oneOf": [
@@ -42,7 +42,7 @@
               "description": "SQL execution queue is not active for this gateway"
             }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         {
           "type": "object",
@@ -66,9 +66,74 @@
             "timeouts_total": { "type": "integer", "minimum": 0 },
             "avg_wait_time_ms": { "type": "integer", "minimum": 0 }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       ]
+    },
+    "streaming": {
+      "type": "object",
+      "description": "Socket/DB streaming diagnostics.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "gateway_available": { "type": "boolean" },
+        "db_streaming_flag_enabled": { "type": "boolean" },
+        "chunk_streaming_flag_enabled": { "type": "boolean" },
+        "auto_db_streaming_policy_enabled": { "type": "boolean" },
+        "active_streams": { "type": "integer", "minimum": 0 },
+        "direct_limiter_active_count": { "type": ["integer", "null"], "minimum": 0 },
+        "direct_limiter_max_concurrent": { "type": ["integer", "null"], "minimum": 0 },
+        "direct_limiter_saturated": { "type": "boolean" },
+        "from_db_responses_total": { "type": "integer", "minimum": 0 },
+        "auto_from_db_responses_total": { "type": "integer", "minimum": 0 },
+        "prefer_from_db_responses_total": { "type": "integer", "minimum": 0 },
+        "allowlist_from_db_responses_total": { "type": "integer", "minimum": 0 },
+        "from_db_skip_total": { "type": "integer", "minimum": 0 },
+        "from_db_skip_reasons": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "chunked_materialized_responses_total": { "type": "integer", "minimum": 0 },
+        "materialized_responses_total": { "type": "integer", "minimum": 0 },
+        "cancel_requests_total": { "type": "integer", "minimum": 0 },
+        "backpressure_cancels_total": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "direct_connections": {
+      "type": "object",
+      "description": "Direct ODBC connection limiter diagnostics used by streaming and fallback paths.",
+      "properties": {
+        "active_count": { "type": "integer", "minimum": 0 },
+        "max_concurrent": { "type": ["integer", "null"], "minimum": 0 },
+        "effective_cap": { "type": ["integer", "null"], "minimum": 0 },
+        "override_requested": { "type": ["integer", "null"], "minimum": 0 },
+        "override_exceeds_pool": { "type": "boolean" },
+        "capacity_strategy": {
+          "type": "string",
+          "enum": ["half_pool_reserved", "env_override"]
+        },
+        "pool_size_reference": { "type": ["integer", "null"], "minimum": 0 },
+        "is_saturated": { "type": "boolean" },
+        "opened_total": { "type": "integer", "minimum": 0 },
+        "closed_total": { "type": "integer", "minimum": 0 },
+        "acquire_timeouts_total": { "type": "integer", "minimum": 0 },
+        "wait_avg_ms": { "type": "number", "minimum": 0 },
+        "wait_p95_ms": { "type": "integer", "minimum": 0 },
+        "wait_p99_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "prepared": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true
     },
     "queries": {
       "type": "object",
@@ -96,10 +161,24 @@
         "properties": {
           "avg_time_ms": { "type": "number", "minimum": 0 },
           "p95_time_ms": { "type": "integer", "minimum": 0 },
-          "max_recent_time_ms": { "type": "integer", "minimum": 0 }
+          "p99_time_ms": { "type": "integer", "minimum": 0 },
+          "max_recent_time_ms": { "type": "integer", "minimum": 0 },
+          "sample_count": { "type": "integer", "minimum": 0 },
+          "ops_per_second": { "type": "number", "minimum": 0 }
         },
         "additionalProperties": false
       }
+    },
+    "batch": {
+      "type": "object",
+      "description": "Batch execution diagnostics.",
+      "properties": {
+        "read_only_parallel_total": { "type": "integer", "minimum": 0 },
+        "read_only_parallel_capped_total": { "type": "integer", "minimum": 0 },
+        "last_requested_parallelism": { "type": "integer", "minimum": 0 },
+        "last_effective_parallelism": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
     },
     "uptime_seconds": {
       "type": "integer",

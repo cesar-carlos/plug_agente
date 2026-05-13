@@ -439,6 +439,22 @@ void main() {
         expect(result.isSuccess(), isTrue);
       });
 
+      test('should succeed for sql.execute prefer_db_streaming option', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': 'sql.execute',
+          'id': 'req-1',
+          'params': {
+            'sql': 'SELECT * FROM users',
+            'options': {'prefer_db_streaming': true},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
       test('should succeed for sql.execute execution_mode preserve option', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',

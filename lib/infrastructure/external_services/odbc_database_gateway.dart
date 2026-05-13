@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
@@ -129,11 +130,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
          directConnectionLimiter:
              directConnectionLimiter ??
              DirectOdbcConnectionLimiter(
-               maxConcurrent: _settings.poolSize,
+               maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
+                 _settings.poolSize,
+               ),
                acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
                metricsCollector: _metrics,
              ),
          metrics: _metrics,
+         directConnectionMaxProvider: () => ConnectionConstants.directOdbcConnectionConcurrency(_settings.poolSize),
        ),
        _sqlInvestigation = sqlInvestigation,
        _uuid = const Uuid();
@@ -157,6 +161,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   static const int _asyncRequestErrorStatus = -1;
   static const int _asyncRequestCancelledStatus = -2;
   static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
+  static const String _nativeCompatibleSqlAllowlistEnv = 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST';
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
     RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
@@ -1013,7 +1018,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
       return false;
     }
-    final isSafeResultShape = request.pagination != null || _isNativeCompatibleProbeQuery(preparedExecution.sql);
+    final isSafeResultShape =
+        request.pagination != null ||
+        _isNativeCompatibleProbeQuery(preparedExecution.sql) ||
+        _isNativeCompatibleExplicitlyLimitedSelect(preparedExecution.sql) ||
+        _isNativeCompatibleAllowlistedSql(preparedExecution.sql);
     if (!isSafeResultShape) {
       return false;
     }
@@ -1030,6 +1039,64 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return RegExp(
       r'^select\s+(?:1|0|null|current_timestamp|getdate\(\)|@@version|version\(\))(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?$',
     ).hasMatch(normalized);
+  }
+
+  bool _isNativeCompatibleExplicitlyLimitedSelect(String sql) {
+    final normalized = SqlValidator.removeComments(
+      sql,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
+    if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
+      return false;
+    }
+    if (_hasNativeCompatibleWildcardProjection(normalized)) {
+      return false;
+    }
+    final limit = _extractExplicitRowLimit(normalized);
+    return limit != null && limit <= 100;
+  }
+
+  bool _hasNativeCompatibleWildcardProjection(String normalizedSql) {
+    return RegExp(
+      r'\bselect\s+(?:top\s*\(?\s*\d+\s*\)?\s+)?\*[\s,]',
+    ).hasMatch('$normalizedSql ');
+  }
+
+  int? _extractExplicitRowLimit(String normalizedSql) {
+    final match = RegExp(
+      r'(?:\btop\s*\(?\s*(\d+)\s*\)?|\blimit\s+(\d+)\b|\bfetch\s+first\s+(\d+)\s+rows?\s+only\b)',
+    ).firstMatch(normalizedSql);
+    if (match == null) {
+      return null;
+    }
+    for (var i = 1; i <= match.groupCount; i++) {
+      final value = match.group(i);
+      if (value != null) {
+        return int.tryParse(value);
+      }
+    }
+    return null;
+  }
+
+  bool _isNativeCompatibleAllowlistedSql(String sql) {
+    final allowlist = AppEnvironment.get(_nativeCompatibleSqlAllowlistEnv);
+    if (allowlist == null || allowlist.trim().isEmpty) {
+      return false;
+    }
+    final normalizedSql = _normalizeNativeCompatibleSql(sql);
+    if (_hasNativeCompatibleWildcardProjection(normalizedSql)) {
+      return false;
+    }
+    return allowlist
+        .split('|')
+        .map(_normalizeNativeCompatibleSql)
+        .where((value) => value.isNotEmpty)
+        .contains(normalizedSql);
+  }
+
+  String _normalizeNativeCompatibleSql(String sql) {
+    return SqlValidator.removeComments(
+      sql,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
   }
 
   @override
@@ -1243,7 +1310,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final results = List<SqlCommandResult?>.filled(commands.length, null);
     var cursor = 0;
 
-    _metrics.recordReadOnlyBatchParallel();
+    _metrics.recordReadOnlyBatchParallel(
+      requestedParallelism: options.maxParallelReadOnlyBatchItems,
+      effectiveParallelism: parallelism,
+    );
     developer.log(
       'Executing read-only batch with controlled parallelism',
       name: 'database_gateway',

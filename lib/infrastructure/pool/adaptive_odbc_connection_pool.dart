@@ -1,5 +1,9 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -34,6 +38,7 @@ final class AdaptiveOdbcConnectionPool
     int nativeCircuitBreakThreshold = 3,
     int nativeWarmUpCount = 1,
     bool nativeWarmUpEnabled = false,
+    Duration driverInfoCacheTtl = const Duration(seconds: 10),
   }) : _leasePool = leasePool,
        _nativePool = nativePool,
        _featureFlags = featureFlags,
@@ -42,7 +47,8 @@ final class AdaptiveOdbcConnectionPool
        _nativeCircuitBreakDuration = nativeCircuitBreakDuration,
        _nativeCircuitBreakThreshold = nativeCircuitBreakThreshold,
        _nativeWarmUpCount = nativeWarmUpCount,
-       _nativeWarmUpEnabled = nativeWarmUpEnabled;
+       _nativeWarmUpEnabled = nativeWarmUpEnabled,
+       _driverInfoCacheTtl = driverInfoCacheTtl;
 
   final OdbcConnectionPool _leasePool;
   final OdbcNativeConnectionPool _nativePool;
@@ -54,14 +60,17 @@ final class AdaptiveOdbcConnectionPool
   final int _nativeWarmUpCount;
   final bool _nativeWarmUpEnabled;
   final Map<String, _AdaptivePoolOwner> _connectionOwners = <String, _AdaptivePoolOwner>{};
+  final Map<String, String> _connectionCircuitKeys = <String, String>{};
   final Map<String, _NativeCircuitState> _nativeCircuits = <String, _NativeCircuitState>{};
   Future<_AdaptiveDriverInfo?>? _driverInfoFuture;
   _AdaptiveDriverInfo? _driverInfo;
+  DateTime? _driverInfoLoadedAt;
   String? _lastEffectiveStrategy;
   String? _lastCircuitKey;
   String? _lastNativeSkipReason;
   int _nativeOptionsSkipCount = 0;
   int _nativeExecutionFallbackCount = 0;
+  final Duration _driverInfoCacheTtl;
 
   @override
   Future<Result<String>> acquire(
@@ -128,6 +137,7 @@ final class AdaptiveOdbcConnectionPool
       if (nativeAcquire.isSuccess()) {
         final connectionId = nativeAcquire.getOrThrow();
         _connectionOwners[connectionId] = _AdaptivePoolOwner.native;
+        _connectionCircuitKeys[connectionId] = circuitKey;
         _lastEffectiveStrategy = allowNativeWithoutOptions ? 'native_compatible' : 'native';
         _recordNativeSuccess(circuitKey);
         if (allowNativeWithoutOptions) {
@@ -157,6 +167,7 @@ final class AdaptiveOdbcConnectionPool
     if (leaseAcquire.isSuccess()) {
       final connectionId = leaseAcquire.getOrThrow();
       _connectionOwners[connectionId] = _AdaptivePoolOwner.lease;
+      _connectionCircuitKeys.remove(connectionId);
       _lastEffectiveStrategy = 'lease';
       return Success(connectionId);
     }
@@ -176,12 +187,10 @@ final class AdaptiveOdbcConnectionPool
       return;
     }
 
-    final circuitKey =
-        _lastCircuitKey ??
-        _nativeCircuitKey(
-          connectionString: connectionString,
-          driverInfo: _driverInfo,
-        );
+    final circuitKey = _circuitKeyForExecutionFailure(
+      connectionString: connectionString,
+      connectionId: connectionId,
+    );
     _lastCircuitKey = circuitKey;
     _lastEffectiveStrategy = 'lease';
     _nativeExecutionFallbackCount++;
@@ -237,6 +246,7 @@ final class AdaptiveOdbcConnectionPool
   @override
   Future<Result<void>> release(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
+    _connectionCircuitKeys.remove(connectionId);
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.release(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.release(connectionId),
@@ -247,6 +257,7 @@ final class AdaptiveOdbcConnectionPool
   @override
   Future<Result<void>> discard(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
+    _connectionCircuitKeys.remove(connectionId);
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.discard(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.discard(connectionId),
@@ -268,6 +279,7 @@ final class AdaptiveOdbcConnectionPool
     }
 
     _connectionOwners.clear();
+    _connectionCircuitKeys.clear();
     if (errors.isNotEmpty) {
       return Failure(Exception(errors.join(', ')));
     }
@@ -387,7 +399,7 @@ final class AdaptiveOdbcConnectionPool
     required String connectionString,
     required _AdaptiveDriverInfo? driverInfo,
   }) {
-    return '${driverInfo?.driverType ?? 'unknown'}:${connectionString.hashCode}';
+    return '${driverInfo?.driverType ?? 'unknown'}:${_shortStableHash(connectionString)}';
   }
 
   bool _isNativeCircuitOpen(String key) {
@@ -451,9 +463,25 @@ final class AdaptiveOdbcConnectionPool
     return message.contains('pool') && message.contains('unhealthy');
   }
 
+  String _circuitKeyForExecutionFailure({
+    required String connectionString,
+    required String? connectionId,
+  }) {
+    final mappedKey = connectionId == null ? null : _connectionCircuitKeys[connectionId];
+    if (mappedKey != null) {
+      return mappedKey;
+    }
+
+    return _nativeCircuitKey(
+      connectionString: connectionString,
+      driverInfo: _driverInfo,
+    );
+  }
+
   Future<_AdaptiveDriverInfo?> _resolveDriverInfo() async {
     final cached = _driverInfo;
-    if (cached != null) {
+    final loadedAt = _driverInfoLoadedAt;
+    if (cached != null && loadedAt != null && DateTime.now().difference(loadedAt) < _driverInfoCacheTtl) {
       return cached;
     }
 
@@ -466,9 +494,20 @@ final class AdaptiveOdbcConnectionPool
     _driverInfoFuture = resolution;
     try {
       final resolved = await resolution;
-      if (resolved != null) {
-        _driverInfo = resolved;
+      final current = _driverInfo;
+      if (resolved == null) {
+        _driverInfo = null;
+        _driverInfoLoadedAt = null;
+        _lastCircuitKey = null;
+        return null;
       }
+      if (current != null && current.cacheKey != resolved.cacheKey) {
+        _nativeCircuits.clear();
+        _connectionCircuitKeys.clear();
+        _lastCircuitKey = null;
+      }
+      _driverInfo = resolved;
+      _driverInfoLoadedAt = DateTime.now();
       return resolved;
     } finally {
       _driverInfoFuture = null;
@@ -492,10 +531,25 @@ final class AdaptiveOdbcConnectionPool
         return _AdaptiveDriverInfo(
           databaseType: databaseType,
           driverType: _driverTypeName(databaseType),
+          cacheKey: _configCacheKey(config),
         );
       },
       (_) => null,
     );
+  }
+
+  String _configCacheKey(Config config) {
+    return [
+      config.id,
+      config.driverName,
+      config.odbcDriverName,
+      _shortStableHash(config.connectionString),
+      config.updatedAt.millisecondsSinceEpoch,
+    ].join('|');
+  }
+
+  String _shortStableHash(String value) {
+    return sha256.convert(utf8.encode(value)).toString().substring(0, 16);
   }
 
   app_db.DatabaseType? _mapDriverNameToDatabaseType(String driverName) {
@@ -545,10 +599,12 @@ final class _AdaptiveDriverInfo {
   const _AdaptiveDriverInfo({
     required this.databaseType,
     required this.driverType,
+    required this.cacheKey,
   });
 
   final app_db.DatabaseType databaseType;
   final String driverType;
+  final String cacheKey;
 }
 
 final class _NativeCircuitState {

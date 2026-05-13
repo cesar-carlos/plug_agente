@@ -30,6 +30,7 @@ class SqlExecutionQueue {
     required int maxConcurrentWorkers,
     int? maxConcurrentBatchWorkers,
     int? maxConcurrentLongQueryWorkers,
+    int? maxConcurrentNonQueryWorkers,
     SqlExecutionQueueMetricsCollector? metricsCollector,
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
   }) : assert(maxQueueSize > 0, 'maxQueueSize must be > 0'),
@@ -42,10 +43,15 @@ class SqlExecutionQueue {
          maxConcurrentLongQueryWorkers == null || maxConcurrentLongQueryWorkers > 0,
          'maxConcurrentLongQueryWorkers must be null or > 0',
        ),
+       assert(
+         maxConcurrentNonQueryWorkers == null || maxConcurrentNonQueryWorkers > 0,
+         'maxConcurrentNonQueryWorkers must be null or > 0',
+       ),
        _maxQueueSize = maxQueueSize,
        _maxConcurrentWorkers = maxConcurrentWorkers,
        _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
+       _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout;
 
@@ -53,6 +59,7 @@ class SqlExecutionQueue {
   final int _maxConcurrentWorkers;
   final int _maxConcurrentBatchWorkers;
   final int _maxConcurrentLongQueryWorkers;
+  final int _maxConcurrentNonQueryWorkers;
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
 
@@ -64,6 +71,7 @@ class SqlExecutionQueue {
   int _activeWorkers = 0;
   int _activeBatchWorkers = 0;
   int _activeLongQueryWorkers = 0;
+  int _activeNonQueryWorkers = 0;
   bool _disposed = false;
   bool _reportedSaturation70 = false;
   bool _reportedSaturation90 = false;
@@ -85,6 +93,10 @@ class SqlExecutionQueue {
   int get activeLongQueryWorkers => _activeLongQueryWorkers;
 
   int get maxConcurrentLongQueryWorkers => _maxConcurrentLongQueryWorkers;
+
+  int get activeNonQueryWorkers => _activeNonQueryWorkers;
+
+  int get maxConcurrentNonQueryWorkers => _maxConcurrentNonQueryWorkers;
 
   Duration get defaultEnqueueTimeout => _defaultEnqueueTimeout;
 
@@ -250,6 +262,9 @@ class SqlExecutionQueue {
       if (request.kind == SqlExecutionKind.longQuery) {
         _activeLongQueryWorkers++;
       }
+      if (request.kind == SqlExecutionKind.nonQuery) {
+        _activeNonQueryWorkers++;
+      }
       _metricsCollector?.recordWorkerStarted(_activeWorkers);
 
       unawaited(_executeTask(request));
@@ -289,6 +304,9 @@ class SqlExecutionQueue {
       if (request.kind == SqlExecutionKind.longQuery && _activeLongQueryWorkers > 0) {
         _activeLongQueryWorkers--;
       }
+      if (request.kind == SqlExecutionKind.nonQuery && _activeNonQueryWorkers > 0) {
+        _activeNonQueryWorkers--;
+      }
       _metricsCollector?.recordWorkerCompleted(_activeWorkers);
       unawaited(_processQueue());
     }
@@ -321,7 +339,8 @@ class SqlExecutionQueue {
     return switch (request.kind) {
       SqlExecutionKind.batch => _activeBatchWorkers < _maxConcurrentBatchWorkers,
       SqlExecutionKind.longQuery => _activeLongQueryWorkers < _maxConcurrentLongQueryWorkers,
-      SqlExecutionKind.shortQuery || SqlExecutionKind.query || SqlExecutionKind.nonQuery => true,
+      SqlExecutionKind.nonQuery => _activeNonQueryWorkers < _maxConcurrentNonQueryWorkers,
+      SqlExecutionKind.shortQuery || SqlExecutionKind.query => true,
     };
   }
 

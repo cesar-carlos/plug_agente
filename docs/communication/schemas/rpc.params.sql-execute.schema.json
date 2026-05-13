@@ -74,6 +74,11 @@
         "multi_result": {
           "type": "boolean",
           "description": "Enables multi-result execution for SQL scripts or procedures that can return multiple result sets. Cannot be combined with pagination or named parameters."
+        },
+        "prefer_db_streaming": {
+          "type": "boolean",
+          "default": false,
+          "description": "When DB streaming is enabled and negotiated, prefer direct DB streaming for an unpaginated SELECT response instead of materializing the full result first."
         }
       },
       "additionalProperties": false,

@@ -37,6 +37,10 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
   int get maxLongQueryWorkers => _queue.maxConcurrentLongQueryWorkers;
 
+  int get activeNonQueryWorkers => _queue.activeNonQueryWorkers;
+
+  int get maxNonQueryWorkers => _queue.maxConcurrentNonQueryWorkers;
+
   Duration get enqueueTimeout => _queue.defaultEnqueueTimeout;
 
   @override

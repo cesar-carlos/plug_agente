@@ -76,6 +76,7 @@ void main() {
       expect(sqlQueue['enabled'], isTrue);
       expect(sqlQueue['max_size'], 11);
       expect(sqlQueue['max_workers'], 7);
+      expect(sqlQueue['max_non_query_workers'], 3);
       expect(sqlQueue['enqueue_timeout_seconds'], 4);
       expect(sqlQueue['workers_equal_pool_total'], 1);
       expect(sqlQueue['pool_wait_timeouts_total'], 1);
@@ -84,6 +85,9 @@ void main() {
       expect(timeouts['sql_total'], 1);
       expect(timeouts['pool_total'], 1);
       expect(directConnections['active_count'], 0);
+      expect(directConnections['effective_cap'], 3);
+      expect(directConnections['override_requested'], isNull);
+      expect(directConnections['override_exceeds_pool'], isFalse);
       expect(streaming['active_streams'], 0);
     });
 
@@ -153,6 +157,9 @@ void main() {
         const {
           'enabled': true,
           'active_streams': 2,
+          'direct_limiter_active_count': 1,
+          'direct_limiter_max_concurrent': 2,
+          'direct_limiter_saturated': false,
         },
       );
       when(() => streamingGateway.hasActiveStream).thenReturn(true);
@@ -174,9 +181,17 @@ void main() {
       expect(streaming['db_streaming_flag_enabled'], isTrue);
       expect(streaming['chunk_streaming_flag_enabled'], isTrue);
       expect(streaming['active_streams'], 2);
+      expect(streaming['direct_limiter_active_count'], 1);
+      expect(streaming['direct_limiter_max_concurrent'], 2);
+      expect(streaming['direct_limiter_saturated'], isFalse);
       expect(directConnections['active_count'], 1);
       expect(directConnections['max_concurrent'], 2);
+      expect(directConnections['effective_cap'], 2);
+      expect(directConnections['override_exceeds_pool'], isFalse);
+      expect(directConnections['capacity_strategy'], 'half_pool_reserved');
       expect(directConnections['opened_total'], 1);
+      expect(directConnections['wait_avg_ms'], isA<double>());
+      expect(directConnections['wait_p95_ms'], isA<int>());
 
       lease.release();
     });
@@ -212,6 +227,10 @@ void main() {
         ..recordPreparedStatementCacheMiss()
         ..recordSqlExecutionTime(const Duration(milliseconds: 20), mode: 'pooled')
         ..recordSqlExecutionTime(const Duration(milliseconds: 8), mode: 'native_compatible')
+        ..recordReadOnlyBatchParallel(requestedParallelism: 4, effectiveParallelism: 2)
+        ..recordRpcSqlExecutePreferDbStreamingResponse()
+        ..recordRpcSqlExecuteAllowlistDbStreamingResponse()
+        ..recordRpcSqlExecuteDbStreamingSkipped('streaming_chunks_not_negotiated')
         ..recordDiagnosticReason(category: 'pool', reason: 'native_fallback')
         ..recordDiagnosticReason(category: 'pool', reason: 'native_fallback')
         ..recordDiagnosticReason(category: 'timeout', reason: 'query_timeout');
@@ -229,8 +248,21 @@ void main() {
       final topReasons = diagnostics['top_recent_reasons']! as Map<String, int>;
       expect(topReasons['pool:native_fallback'], 2);
       expect(topReasons['timeout:query_timeout'], 1);
+      final streaming = status['streaming']! as Map<String, Object?>;
+      expect(streaming['prefer_from_db_responses_total'], 1);
+      expect(streaming['allowlist_from_db_responses_total'], 1);
+      expect(streaming['from_db_skip_total'], 1);
+      expect(
+        streaming['from_db_skip_reasons'],
+        containsPair('streaming_chunks_not_negotiated', 1),
+      );
       final byMode = status['sql_execution_by_mode']! as Map<String, Object>;
       expect(byMode.keys, containsAll(['pooled', 'native_compatible']));
+      final batch = status['batch']! as Map<String, Object?>;
+      expect(batch['read_only_parallel_total'], 1);
+      expect(batch['read_only_parallel_capped_total'], 1);
+      expect(batch['last_requested_parallelism'], 4);
+      expect(batch['last_effective_parallelism'], 2);
     });
   });
 }

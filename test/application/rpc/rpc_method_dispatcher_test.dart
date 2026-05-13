@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:checks/checks.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
@@ -28,6 +29,7 @@ import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
+import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -43,7 +45,7 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class MockIdempotencyStore extends Mock implements IIdempotencyStore {}
 
-class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway {}
+class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {}
 
 class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
@@ -189,6 +191,14 @@ void main() {
           reason: any(named: 'reason'),
         ),
       ).thenAnswer((_) async => const Success(unit));
+      when(mockStreamingGateway.getStreamingDiagnostics).thenReturn(
+        const {
+          'enabled': true,
+          'active_streams': 0,
+          'direct_limiter_saturated': false,
+        },
+      );
+      when(() => mockStreamingGateway.activeStreamCount).thenReturn(0);
       when(() => mockNormalizer.normalizeRows(any())).thenAnswer(
         (invocation) => invocation.positionalArguments[0] as List<Map<String, dynamic>>,
       );
@@ -1567,6 +1577,7 @@ void main() {
           ]);
           return const Success(unit);
         });
+        final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
@@ -1578,6 +1589,7 @@ void main() {
           getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           configRepository: mockConfigRepo,
+          dispatchMetrics: RpcDispatchMetricsCollector(metrics),
           streamingGateway: mockStreamingGateway,
         );
 
@@ -1689,6 +1701,401 @@ void main() {
         expect(response.isSuccess, isTrue);
         expect(capturedTimeout, isNotNull);
         expect(capturedTimeout!.inMilliseconds, lessThanOrEqualTo(5000));
+      },
+    );
+
+    test(
+      'should use DB streaming for explicit prefer_db_streaming when chunk streaming is disabled',
+      () async {
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-explicit-stream',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        when(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
+          await onChunk([
+            {'id': 1},
+          ]);
+          return const Success(unit);
+        });
+        final metrics = MetricsCollector();
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          dispatchMetrics: RpcDispatchMetricsCollector(metrics),
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-explicit-db-stream',
+          params: {
+            'sql': 'SELECT * FROM users',
+            'options': {'prefer_db_streaming': true},
+          },
+        );
+        final emitter = _stubRpcStreamEmitter();
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: emitter,
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(metrics.getSnapshot()['rpc_sql_execute_prefer_db_streaming_response'], 1);
+        verify(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).called(1);
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should fall back to materialized execution when preferred DB streaming direct limiter is saturated',
+      () async {
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+        when(mockStreamingGateway.getStreamingDiagnostics).thenReturn(
+          const {
+            'enabled': true,
+            'active_streams': 1,
+            'direct_limiter_saturated': true,
+          },
+        );
+        final mockConfigRepo = MockAgentConfigRepository();
+        final metrics = MetricsCollector();
+        when(
+          () => mockGateway.executeQuery(any(), timeout: any(named: 'timeout')),
+        ).thenAnswer(
+          (_) async => Success(
+            QueryResponse(
+              id: 'exec-materialized',
+              requestId: 'req-prefer-saturated',
+              agentId: 'agent-1',
+              data: const [
+                {'id': 1},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          dispatchMetrics: RpcDispatchMetricsCollector(metrics),
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-prefer-saturated',
+          params: {
+            'sql': 'SELECT * FROM users',
+            'options': {'prefer_db_streaming': true},
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(
+          metrics.getSnapshot()['rpc_sql_execute_db_streaming_skip_reasons'],
+          containsPair('direct_limiter_saturated_prefer_fallback', 1),
+        );
+        verifyNever(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        );
+        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
+      },
+    );
+
+    test(
+      'should use DB streaming for allowlisted table when chunk streaming is disabled',
+      () async {
+        dotenv.loadFromString(envString: 'DB_STREAMING_AUTO_TABLE_ALLOWLIST=public.users');
+        addTearDown(dotenv.clean);
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-allowlist-stream',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        final metrics = MetricsCollector();
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          dispatchMetrics: RpcDispatchMetricsCollector(metrics),
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-allowlist-db-stream',
+          params: {'sql': 'SELECT * FROM public.users'},
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        final snapshot = metrics.getSnapshot();
+        expect(snapshot['rpc_sql_execute_streaming_from_db_response'], 1);
+        expect(snapshot['rpc_sql_execute_auto_streaming_from_db_response'], 1);
+        expect(snapshot['rpc_sql_execute_allowlist_db_streaming_response'], 1);
+        verify(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).called(1);
+        verifyNever(() => mockGateway.executeQuery(any()));
+      },
+    );
+
+    test(
+      'should reparse DB streaming allowlist when env value changes inside cache ttl',
+      () async {
+        dotenv.loadFromString(envString: 'DB_STREAMING_AUTO_TABLE_ALLOWLIST=orders');
+        addTearDown(dotenv.clean);
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-allowlist-cache',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        final metrics = MetricsCollector();
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          dispatchMetrics: RpcDispatchMetricsCollector(metrics),
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const firstRequest = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-allowlist-cache-1',
+          params: {'sql': 'SELECT * FROM orders'},
+        );
+        final firstResponse = await dispatcher.dispatch(
+          firstRequest,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+        dotenv.loadFromString(envString: 'DB_STREAMING_AUTO_TABLE_ALLOWLIST=*');
+
+        const secondRequest = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-allowlist-cache-2',
+          params: {'sql': 'SELECT * FROM invoices'},
+        );
+        final secondResponse = await dispatcher.dispatch(
+          secondRequest,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(firstResponse.isSuccess, isTrue);
+        expect(secondResponse.isSuccess, isTrue);
+        expect(metrics.getSnapshot()['rpc_sql_execute_allowlist_db_streaming_response'], 2);
+        verify(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        ).called(2);
+      },
+    );
+
+    test(
+      'should not auto stream complex allowlisted join without explicit preference',
+      () async {
+        dotenv.loadFromString(envString: 'DB_STREAMING_AUTO_TABLE_ALLOWLIST=users');
+        addTearDown(dotenv.clean);
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+        when(
+          () => mockGateway.executeQuery(any(), timeout: any(named: 'timeout')),
+        ).thenAnswer(
+          (_) async => Success(
+            QueryResponse(
+              id: 'exec-join-materialized',
+              requestId: 'req-join-allowlist',
+              agentId: 'agent-1',
+              data: const [
+                {'id': 1},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          dispatchMetrics: RpcDispatchMetricsCollector(MetricsCollector()),
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-join-allowlist',
+          params: {'sql': 'SELECT users.id FROM users JOIN orders ON orders.user_id = users.id'},
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        verifyNever(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        );
+        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
       },
     );
 

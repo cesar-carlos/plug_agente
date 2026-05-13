@@ -39,6 +39,7 @@ class ProtocolCapabilities {
     double maxInflationRatio = 10,
     bool signatureRequired = false,
     List<String> signatureAlgorithms = const ['hmac-sha256'],
+    bool streamingResults = false,
     int? recommendedStreamPullWindowSize,
     int? maxStreamPullWindowSize,
   }) {
@@ -51,7 +52,7 @@ class ProtocolCapabilities {
       'signatureRequired': signatureRequired,
       'signatureScope': 'transport-frame',
       'signatureAlgorithms': signatureAlgorithms,
-      'streamingResults': false,
+      'streamingResults': streamingResults,
       'plugProfile': ProtocolVersion.plugProfile,
       'orderedBatchResponses': true,
       'notificationNullIdCompatibility': true,

@@ -17,6 +17,12 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordSqlExecuteAutoStreamingFromDbResponse() => _metrics.recordRpcSqlExecuteAutoStreamingFromDbResponse();
 
   @override
+  void recordSqlExecutePreferDbStreamingResponse() => _metrics.recordRpcSqlExecutePreferDbStreamingResponse();
+
+  @override
+  void recordSqlExecuteAllowlistDbStreamingResponse() => _metrics.recordRpcSqlExecuteAllowlistDbStreamingResponse();
+
+  @override
   void recordSqlExecuteDbStreamingSkipped(String reason) => _metrics.recordRpcSqlExecuteDbStreamingSkipped(reason);
 
   @override

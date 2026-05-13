@@ -5,16 +5,19 @@ import 'dart:collection';
 class PoolSemaphore {
   PoolSemaphore(int maxConcurrent)
     : assert(maxConcurrent > 0, 'maxConcurrent must be greater than zero'),
-      _maxConcurrent = maxConcurrent,
-      _available = maxConcurrent;
+      _maxConcurrent = maxConcurrent;
 
-  final int _maxConcurrent;
-  int _available;
+  int _maxConcurrent;
+  int _activeCount = 0;
   final Queue<Completer<void>> _waitQueue = Queue<Completer<void>>();
 
+  int get maxConcurrent => _maxConcurrent;
+
+  int get activeCount => _activeCount;
+
   Future<void> acquire({Duration? timeout}) async {
-    if (_available > 0) {
-      _available--;
+    if (_activeCount < _maxConcurrent) {
+      _activeCount++;
       return;
     }
 
@@ -39,16 +42,31 @@ class PoolSemaphore {
   }
 
   void release() {
-    if (_waitQueue.isNotEmpty) {
+    if (_activeCount > 0) {
+      _activeCount--;
+    }
+    _drainWaiters();
+  }
+
+  void resize(int maxConcurrent) {
+    if (maxConcurrent < 1) {
+      throw ArgumentError.value(
+        maxConcurrent,
+        'maxConcurrent',
+        'must be greater than zero',
+      );
+    }
+    _maxConcurrent = maxConcurrent;
+    _drainWaiters();
+  }
+
+  void _drainWaiters() {
+    while (_activeCount < _maxConcurrent && _waitQueue.isNotEmpty) {
       final waiter = _waitQueue.removeFirst();
       if (!waiter.isCompleted) {
+        _activeCount++;
         waiter.complete();
       }
-      return;
-    }
-
-    if (_available < _maxConcurrent) {
-      _available++;
     }
   }
 }

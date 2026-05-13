@@ -476,6 +476,7 @@ class RpcRequestSchemaValidator {
             'cursor',
             'execution_mode',
             'multi_result',
+            'prefer_db_streaming',
             if (allowPreserveSql) 'preserve_sql',
           };
     final extraKeys = options.keys.where((key) => !allowedKeys.contains(key));
@@ -574,6 +575,13 @@ class RpcRequestSchemaValidator {
     if (multiResult != null && multiResult is! bool) {
       return _invalidParams(
         'Field "params.options.multi_result" must be a boolean',
+      );
+    }
+
+    final preferDbStreaming = options['prefer_db_streaming'];
+    if (preferDbStreaming != null && preferDbStreaming is! bool) {
+      return _invalidParams(
+        'Field "params.options.prefer_db_streaming" must be a boolean',
       );
     }
     if (multiResult == true && (page != null || pageSize != null || cursor != null)) {

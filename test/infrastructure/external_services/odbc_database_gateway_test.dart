@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -43,6 +44,7 @@ void main() {
     late OdbcDatabaseGateway gateway;
 
     setUp(() {
+      dotenv.clean();
       mockService = MockOdbcService();
       mockConfigRepository = MockAgentConfigRepository();
       mockConnectionPool = MockConnectionPool();
@@ -148,6 +150,8 @@ void main() {
         return const Success(unit);
       });
     });
+
+    tearDown(dotenv.clean);
 
     test(
       'should fallback to direct connection on invalid pooled connection id',
@@ -2378,6 +2382,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(result.isSuccess(), isTrue);
         expect(peakExecutions, 2);
         expect(metrics.readOnlyBatchParallelCount, 1);
+        expect(metrics.readOnlyBatchParallelCappedCount, 1);
         final items = result.getOrNull()!;
         expect(items.map((item) => item.rows?.single['sql']), ['SELECT 1', 'SELECT 2', 'SELECT 3']);
         verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(3);
@@ -2447,6 +2452,136 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ),
         ).called(1);
         verifyNever(() => nativePool.acquire(connectionString, options: any(named: 'options')));
+      },
+    );
+
+    test(
+      'should use native-compatible acquire for exact allowlisted small SQL',
+      () async {
+        dotenv.loadFromString(envString: 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST=select id from users');
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+        final request = QueryRequest(
+          id: 'req-native-allowlist',
+          agentId: config.agentId,
+          query: 'SELECT id FROM users',
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success('native-allowlist-1'));
+        when(() => nativePool.release('native-allowlist-1')).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.executeQuery(
+            'SELECT id FROM users',
+            connectionId: 'native-allowlist-1',
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+
+        final result = await nativeGateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).called(1);
+        verifyNever(() => nativePool.acquire(connectionString, options: any(named: 'options')));
+      },
+    );
+
+    test(
+      'should avoid native-compatible acquire for wildcard limited selects',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+        final request = QueryRequest(
+          id: 'req-native-wide',
+          agentId: config.agentId,
+          query: 'SELECT TOP 10 * FROM users',
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquire(
+            connectionString,
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((_) async => const Success('lease-1'));
+        when(() => nativePool.release('lease-1')).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.executeQuery(
+            'SELECT TOP 10 * FROM users',
+            connectionId: 'lease-1',
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+
+        final result = await nativeGateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        );
+        verify(() => nativePool.acquire(connectionString, options: any(named: 'options'))).called(1);
       },
     );
 

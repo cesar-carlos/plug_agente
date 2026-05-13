@@ -274,7 +274,12 @@ class RpcInboundHandler {
       }
 
       final clientToken = _extractClientTokenFromRpcParams(request.params);
-      final streamEmitter = !request.isNotification && _featureFlags.enableSocketStreamingChunks
+      final protocol = _protocolProvider();
+      final streamEmitter =
+          _shouldCreateStreamEmitter(
+            request: request,
+            negotiatedExtensions: protocol.negotiatedExtensions,
+          )
           ? _streamEmitterFactory()
           : null;
       final response = await _dispatcher.dispatch(
@@ -282,8 +287,8 @@ class RpcInboundHandler {
         _agentIdProvider(),
         clientToken: clientToken,
         streamEmitter: streamEmitter,
-        limits: _protocolProvider().effectiveLimits,
-        negotiatedExtensions: _protocolProvider().negotiatedExtensions,
+        limits: protocol.effectiveLimits,
+        negotiatedExtensions: protocol.negotiatedExtensions,
       );
       final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
       _authorizationDecisionLogger.log(
@@ -328,6 +333,18 @@ class RpcInboundHandler {
 
       await _emitRpcResponse(errorResponse);
     }
+  }
+
+  bool _shouldCreateStreamEmitter({
+    required RpcRequest request,
+    required Map<String, dynamic> negotiatedExtensions,
+  }) {
+    if (request.isNotification) {
+      return false;
+    }
+    final negotiatedStreaming = negotiatedExtensions['streamingResults'] as bool? ?? false;
+    return negotiatedStreaming &&
+        (_featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb);
   }
 
   /// Processes a JSON-RPC batch request. Validates the envelope, dispatches

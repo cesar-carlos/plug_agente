@@ -31,5 +31,25 @@ void main() {
         ConnectionConstants.defaultPoolSize,
       );
     });
+
+    test('should reserve half of pool for direct ODBC connections by default', () {
+      expect(ConnectionConstants.directOdbcConnectionConcurrency(7), 3);
+      expect(ConnectionConstants.directOdbcConnectionCapacityStrategy(), 'half_pool_reserved');
+    });
+
+    test('should use ODBC_DIRECT_CONNECTION_MAX_CONCURRENT when override is valid', () {
+      dotenv.loadFromString(envString: 'ODBC_DIRECT_CONNECTION_MAX_CONCURRENT=5');
+
+      expect(ConnectionConstants.directOdbcConnectionConcurrency(7), 5);
+      expect(ConnectionConstants.directOdbcConnectionCapacityStrategy(), 'env_override');
+      expect(ConnectionConstants.directOdbcConnectionOverrideExceedsPool(7), isFalse);
+    });
+
+    test('should cap direct ODBC override at pool size', () {
+      dotenv.loadFromString(envString: 'ODBC_DIRECT_CONNECTION_MAX_CONCURRENT=9');
+
+      expect(ConnectionConstants.directOdbcConnectionConcurrency(4), 4);
+      expect(ConnectionConstants.directOdbcConnectionOverrideExceedsPool(4), isTrue);
+    });
   });
 }

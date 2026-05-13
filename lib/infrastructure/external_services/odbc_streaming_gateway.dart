@@ -46,7 +46,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   }) : _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
-             maxConcurrent: _settings.poolSize,
+             maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
+               _settings.poolSize,
+             ),
              acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
              metricsCollector: metricsCollector,
            ),
@@ -71,6 +73,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     return {
       'enabled': true,
       'active_streams': activeStreamCount,
+      'direct_limiter_active_count': _directConnectionLimiter.activeCount,
+      'direct_limiter_max_concurrent': _directConnectionLimiter.maxConcurrent,
+      'direct_limiter_saturated': _directConnectionLimiter.isSaturated,
     };
   }
 
@@ -154,6 +159,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
       sql: query,
+    );
+    _directConnectionLimiter.reconfigureMaxConcurrent(
+      ConnectionConstants.directOdbcConnectionConcurrency(_settings.poolSize),
     );
     final leaseResult = await _directConnectionLimiter.acquire(
       operation: 'streaming_query',
@@ -277,8 +285,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
             ),
           );
         } finally {
-          activeStream.lease.release();
           await _disconnectActiveStream(activeStream);
+          activeStream.lease.release();
           _activeStreams.remove(streamExecutionId);
         }
       },

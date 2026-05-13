@@ -209,6 +209,51 @@ void main() {
       expect(queue.activeLongQueryWorkers, 0);
     });
 
+    test('should let short queries bypass queued non-queries when non-query worker limit is reached', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+        maxConcurrentNonQueryWorkers: 1,
+      );
+      final firstNonQueryBlocker = Completer<void>();
+      final executionOrder = <String>[];
+
+      final firstNonQuery = queue.submit<String>(
+        () async {
+          executionOrder.add('non-query-1-start');
+          await firstNonQueryBlocker.future;
+          executionOrder.add('non-query-1-end');
+          return const res.Success('non-query-1');
+        },
+        kind: SqlExecutionKind.nonQuery,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final secondNonQuery = queue.submit<String>(
+        () async {
+          executionOrder.add('non-query-2');
+          return const res.Success('non-query-2');
+        },
+        kind: SqlExecutionKind.nonQuery,
+      );
+      final shortQuery = queue.submit<String>(
+        () async {
+          executionOrder.add('short');
+          return const res.Success('short');
+        },
+        kind: SqlExecutionKind.shortQuery,
+      );
+
+      await shortQuery;
+      expect(executionOrder, containsAllInOrder(<String>['non-query-1-start', 'short']));
+      expect(executionOrder, isNot(contains('non-query-2')));
+
+      firstNonQueryBlocker.complete();
+      await Future.wait([firstNonQuery, secondNonQuery]);
+      expect(executionOrder, containsAllInOrder(<String>['short', 'non-query-1-end', 'non-query-2']));
+      expect(queue.activeNonQueryWorkers, 0);
+    });
+
     test('should reject new requests when queue is full', () async {
       final metrics = _MockMetricsCollector();
       final queue = SqlExecutionQueue(

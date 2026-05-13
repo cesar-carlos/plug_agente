@@ -169,6 +169,29 @@ void main() {
       );
     });
 
+    test('should negotiate streaming results only when both sides support it', () {
+      final agentCaps = ProtocolCapabilities.defaultCapabilities(
+        streamingResults: true,
+      );
+      final serverCaps = ProtocolCapabilities.defaultCapabilities(
+        streamingResults: true,
+      );
+
+      final enabled = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(enabled.negotiatedExtensions['streamingResults'], isTrue);
+
+      final disabled = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: ProtocolCapabilities.defaultCapabilities(),
+      );
+
+      expect(disabled.negotiatedExtensions['streamingResults'], isFalse);
+    });
+
     test('should negotiate signature policy and algorithms', () {
       const agentCaps = ProtocolCapabilities(
         protocols: ['jsonrpc-v2'],
