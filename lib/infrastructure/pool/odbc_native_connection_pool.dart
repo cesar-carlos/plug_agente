@@ -15,7 +15,8 @@ import 'package:result_dart/result_dart.dart';
 /// Pool ODBC usando pool nativo do `odbc_fast` (conexões do pool não recebem
 /// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
 /// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
-class OdbcNativeConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire {
+class OdbcNativeConnectionPool
+    implements IConnectionPool, ITimedConnectionPoolAcquire, IConnectionPoolDiagnostics, IConnectionPoolWarmUp {
   OdbcNativeConnectionPool(
     this._service,
     this._settings, {
@@ -425,6 +426,45 @@ class OdbcNativeConnectionPool implements IConnectionPool, ITimedConnectionPoolA
   }
 
   @override
+  Future<Result<void>> warmUp(
+    String connectionString, {
+    int? warmUpCount,
+  }) async {
+    final count = warmUpCount ?? (_settings.poolSize / 2).ceil();
+    final connectionIds = <String>[];
+    final errors = <String>[];
+
+    try {
+      for (var i = 0; i < count; i++) {
+        final result = await acquire(connectionString);
+        result.fold(
+          connectionIds.add,
+          (error) => errors.add('warmup_acquire_${i + 1}: $error'),
+        );
+      }
+    } finally {
+      for (final id in connectionIds) {
+        final cleanup = await release(id);
+        cleanup.fold(
+          (_) {},
+          (error) => errors.add('warmup_release_$id: $error'),
+        );
+      }
+    }
+
+    if (errors.isNotEmpty) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError(errors.join(', ')),
+          operation: 'pool_warm_up',
+        ),
+      );
+    }
+
+    return const Success(unit);
+  }
+
+  @override
   Future<Result<int>> getActiveCount({String? connectionString}) async {
     var totalActive = 0;
 
@@ -480,5 +520,13 @@ class OdbcNativeConnectionPool implements IConnectionPool, ITimedConnectionPoolA
     }
 
     return const Success(unit);
+  }
+
+  @override
+  Map<String, Object?> getHealthDiagnostics() {
+    return const {
+      'strategy': 'native',
+      'native_pool_exposed': true,
+    };
   }
 }

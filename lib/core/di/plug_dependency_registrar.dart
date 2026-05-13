@@ -237,6 +237,8 @@ void registerPlugDependencyGraph(
         getIt<odbc.OdbcService>(),
         getIt<IOdbcConnectionSettings>(),
         getIt<MetricsCollector>(),
+        getIt<FeatureFlags>(),
+        getIt<IAgentConfigRepository>(),
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
@@ -249,6 +251,10 @@ void registerPlugDependencyGraph(
         gateway: getIt<IDatabaseGateway>(),
         odbcSettings: getIt<IOdbcConnectionSettings>(),
         connectionPool: getIt<IConnectionPool>(),
+        configRepository: getIt<IAgentConfigRepository>(),
+        streamingGateway: getIt<IStreamingDatabaseGateway>(),
+        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        featureFlags: getIt<FeatureFlags>(),
       ),
     )
     ..registerLazySingleton(

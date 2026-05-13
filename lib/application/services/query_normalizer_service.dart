@@ -11,11 +11,17 @@ class QueryNormalizerService {
   /// Normalizes row maps and column names for RPC/hub consumption (sync CPU work).
   QueryResponse normalize(QueryResponse response) {
     final keyCache = <String, String>{};
-    final normalizedData = _normalizeRows(response.data, keyCache);
+    final normalizedData = normalizeRows(
+      response.data,
+      keyCache: keyCache,
+    );
     final normalizedResultSets = response.resultSets
         .map(
           (resultSet) => resultSet.copyWith(
-            rows: _normalizeRows(resultSet.rows, keyCache),
+            rows: normalizeRows(
+              resultSet.rows,
+              keyCache: keyCache,
+            ),
           ),
         )
         .toList(growable: false);
@@ -46,17 +52,19 @@ class QueryNormalizerService {
     );
   }
 
-  List<Map<String, dynamic>> _normalizeRows(
-    List<Map<String, dynamic>> rows,
-    Map<String, String> keyCache,
-  ) {
+  /// Normalizes a row-set without requiring a full [QueryResponse] wrapper.
+  List<Map<String, dynamic>> normalizeRows(
+    List<Map<String, dynamic>> rows, {
+    Map<String, String>? keyCache,
+  }) {
+    final normalizedKeyCache = keyCache ?? <String, String>{};
     final normalizedData = <Map<String, dynamic>>[];
 
     for (final row in rows) {
       final normalizedRow = <String, dynamic>{};
 
       for (final entry in row.entries) {
-        final key = keyCache.putIfAbsent(entry.key, () {
+        final key = normalizedKeyCache.putIfAbsent(entry.key, () {
           final sanitizedKey = _normalizer.sanitizeQuery(entry.key);
           return _normalizeColumnName(sanitizedKey);
         });

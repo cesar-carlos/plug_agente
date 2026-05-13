@@ -1,8 +1,12 @@
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 
 /// Builds the ODBC pool implementation for the current persisted settings.
 ///
@@ -16,7 +20,27 @@ IConnectionPool createOdbcConnectionPool(
   OdbcService service,
   IOdbcConnectionSettings settings,
   MetricsCollector metricsCollector,
+  FeatureFlags featureFlags,
+  IAgentConfigRepository? configRepository,
 ) {
+  if (featureFlags.enableOdbcExperimentalDriverAdaptivePooling) {
+    return AdaptiveOdbcConnectionPool(
+      leasePool: OdbcConnectionPool(
+        service,
+        settings,
+        metricsCollector: metricsCollector,
+      ),
+      nativePool: OdbcNativeConnectionPool(
+        service,
+        settings,
+        metricsCollector: metricsCollector,
+      ),
+      featureFlags: featureFlags,
+      metricsCollector: metricsCollector,
+      configRepository: configRepository,
+    );
+  }
+
   return OdbcConnectionPool(
     service,
     settings,

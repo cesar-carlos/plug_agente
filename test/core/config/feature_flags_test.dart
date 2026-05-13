@@ -39,5 +39,33 @@ void main() {
       expect(flags.enableCompression, isTrue);
       expect(flags.compressionThreshold, 4096);
     });
+
+    test('keeps experimental adaptive ODBC pooling disabled by default', () async {
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+
+      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isFalse);
+
+      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+
+      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isTrue);
+      expect(store.getBool('feature_enable_odbc_experimental_driver_adaptive_pooling'), isTrue);
+    });
+
+    test('resets experimental adaptive ODBC pooling to disabled default', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+
+      await flags.resetToDefaults();
+
+      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isFalse);
+    });
+
+    test('enables DB streaming path by default when socket chunking is enabled separately', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+
+      expect(flags.enableSocketStreamingFromDb, isTrue);
+      expect(flags.enableSocketStreamingChunks, isFalse);
+    });
   });
 }

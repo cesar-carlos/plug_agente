@@ -44,3 +44,37 @@ abstract class ITimedConnectionPoolAcquire {
     Duration? acquireTimeout,
   });
 }
+
+/// Optional capability for adaptive pools that can try an optionless native
+/// acquire for simple SQL while preserving full [ConnectionOptions] on fallback.
+abstract class INativeCompatibleConnectionPoolAcquire {
+  Future<Result<String>> acquireNativeCompatible(
+    String connectionString, {
+    required ConnectionOptions leaseFallbackOptions,
+    Duration? acquireTimeout,
+  });
+}
+
+/// Optional capability for pools that can proactively warm connections.
+abstract class IConnectionPoolWarmUp {
+  Future<Result<void>> warmUp(
+    String connectionString, {
+    int? warmUpCount,
+  });
+}
+
+/// Optional feedback surface for adaptive pools that need execution-stage
+/// failures to influence their strategy selection.
+abstract class IAdaptivePoolFeedback {
+  void recordExecutionFailure({
+    required String connectionString,
+    required Object error,
+    String? connectionId,
+    String? stage,
+  });
+}
+
+/// Optional diagnostics surface for health reporting.
+abstract class IConnectionPoolDiagnostics {
+  Map<String, Object?> getHealthDiagnostics();
+}

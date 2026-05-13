@@ -147,8 +147,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final Uuid _uuid;
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
+  final Map<String, ConnectionOptions> _connectionOptionsCache = <String, ConnectionOptions>{};
   final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
   static const int _multiResultSqlLogPreviewChars = 120;
+  static const int _maxPreparedStatementsPerBatchConnection = 64;
   static const int _asyncRequestPendingStatus = 0;
   static const int _asyncRequestReadyStatus = 1;
   static const int _asyncRequestErrorStatus = -1;
@@ -182,16 +184,26 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  ConnectionOptions get _connectionOptions => OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+  ConnectionOptions get _connectionOptions => _connectionOptionsForTimeout(null);
 
   ConnectionOptions _connectionOptionsForTimeout(Duration? timeout) {
-    if (timeout == null) {
-      return _connectionOptions;
-    }
-
-    return OdbcConnectionOptionsBuilder.forQueryExecutionWithTimeout(
-      _settings,
-      queryTimeout: timeout,
+    final key = [
+      timeout?.inMilliseconds ?? 0,
+      _settings.loginTimeoutSeconds,
+      _settings.maxResultBufferMb,
+      _settings.streamingChunkSizeKb,
+    ].join(':');
+    return _connectionOptionsCache.putIfAbsent(
+      key,
+      () {
+        if (timeout == null) {
+          return OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
+        }
+        return OdbcConnectionOptionsBuilder.forQueryExecutionWithTimeout(
+          _settings,
+          queryTimeout: timeout,
+        );
+      },
     );
   }
 
@@ -711,6 +723,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       stopwatch,
       preparedExecution: preparedExecution,
       timeout: timeout,
+      allowNativeCompatibleAcquire: _shouldUseNativeCompatibleAcquire(
+        databaseConfig: databaseConfig,
+        request: request,
+        preparedExecution: preparedExecution,
+        acquireOptions: null,
+      ),
     );
   }
 
@@ -722,6 +740,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required Duration? timeout,
     ConnectionOptions? acquireOptions,
     bool allowAdaptiveRetry = true,
+    bool allowNativeCompatibleAcquire = false,
     DateTime? deadline,
   }) async {
     final effectiveDeadline = deadline ?? _deadlineFor(timeout);
@@ -730,12 +749,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _connectionOptionsForTimeout(
           _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
         );
-    final poolResult = await _connectionManager.acquirePooledConnection(
-      connectionString,
-      options: poolAcquireOptions,
-      deadline: effectiveDeadline,
-      context: {'query_id': request.id},
-    );
+    final poolResult = allowNativeCompatibleAcquire
+        ? await _connectionManager.acquireNativeCompatiblePooledConnection(
+            connectionString,
+            leaseFallbackOptions: poolAcquireOptions,
+            deadline: effectiveDeadline,
+            context: {'query_id': request.id},
+          )
+        : await _connectionManager.acquirePooledConnection(
+            connectionString,
+            options: poolAcquireOptions,
+            deadline: effectiveDeadline,
+            context: {'query_id': request.id},
+          );
 
     if (poolResult.isError()) {
       stopwatch.stop();
@@ -785,11 +811,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         preparedExecution: preparedExecution,
         connectionString: connectionString,
         timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+        executionMode: allowNativeCompatibleAcquire ? 'native_compatible' : 'pooled',
       );
 
       if (!outcome.isSuccess) {
         final error = outcome.error!;
         if (_isInvalidConnectionIdError(error)) {
+          _connectionManager.recordPooledExecutionFailure(
+            connectionString: connectionString,
+            connectionId: connId,
+            error: error,
+            stage: 'query',
+          );
           _connectionManager.markConnectionForDiscard(connId);
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
@@ -810,6 +843,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         }
 
         if (allowAdaptiveRetry && _isBufferTooSmallError(error)) {
+          _metrics.recordDiagnosticReason(
+            category: 'query',
+            reason: 'buffer_too_small',
+          );
+          _connectionManager.recordPooledExecutionFailure(
+            connectionString: connectionString,
+            connectionId: connId,
+            error: error,
+            stage: 'query',
+          );
           final currentBufferBytes =
               effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
           _adaptiveBufferCache.rememberExpandedBuffer(
@@ -951,6 +994,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
   }
 
+  bool _shouldUseNativeCompatibleAcquire({
+    required DatabaseConfig databaseConfig,
+    required QueryRequest request,
+    required OdbcPreparedQueryExecution preparedExecution,
+    required ConnectionOptions? acquireOptions,
+  }) {
+    if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false)) {
+      return false;
+    }
+    if (acquireOptions != null ||
+        request.expectMultipleResults ||
+        request.pagination == null ||
+        _hasNamedParameters(preparedExecution)) {
+      return false;
+    }
+    return switch (databaseConfig.databaseType) {
+      DatabaseType.sqlServer || DatabaseType.postgresql => true,
+      DatabaseType.sybaseAnywhere => false,
+    };
+  }
+
   @override
   Future<Result<List<SqlCommandResult>>> executeBatch(
     String agentId,
@@ -965,6 +1029,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _timeoutFromSqlExecutionOptions(options) ??
         (options.transaction ? ConnectionConstants.defaultTransactionalBatchTimeout : null);
     final batchPreview = _previewBatchCommandsForInvestigation(commands);
+    if (_shouldUseParallelReadOnlyBatch(commands, options)) {
+      return _executeParallelReadOnlyBatch(
+        agentId: agentId,
+        commands: commands,
+        database: database,
+        options: options,
+        timeout: effectiveTimeout,
+        sourceRpcRequestId: sourceRpcRequestId,
+        batchSqlPreview: batchPreview,
+      );
+    }
+
     for (var attempt = 0; attempt < 2; attempt++) {
       final contextResult = await _prepareBatchExecutionContext(
         database: database,
@@ -1099,6 +1175,145 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           'operation': 'transaction_begin',
         },
       ),
+    );
+  }
+
+  bool _shouldUseParallelReadOnlyBatch(
+    List<SqlCommand> commands,
+    SqlExecutionOptions options,
+  ) {
+    if (options.transaction || options.maxParallelReadOnlyBatchItems <= 1 || commands.length < 2) {
+      return false;
+    }
+    return commands.every(
+      (command) => SqlValidator.validateSelectQuery(command.sql).isSuccess(),
+    );
+  }
+
+  Future<Result<List<SqlCommandResult>>> _executeParallelReadOnlyBatch({
+    required String agentId,
+    required List<SqlCommand> commands,
+    required String? database,
+    required SqlExecutionOptions options,
+    required Duration? timeout,
+    required String batchSqlPreview,
+    String? sourceRpcRequestId,
+  }) async {
+    final initResult = await _ensureInitialized();
+    if (initResult.isError()) {
+      return Failure(initResult.exceptionOrNull() ?? domain.ConnectionFailure('Failed to initialize ODBC for batch'));
+    }
+
+    final configResult = await _configRepository.getCurrentConfig();
+    if (configResult.isError()) {
+      return Failure(
+        domain.ConfigurationFailure(
+          'Failed to load database configuration for read-only batch execution',
+        ),
+      );
+    }
+
+    final config = configResult.getOrNull()!;
+    final localConfig = _buildDatabaseConfig(config);
+    final connectionString = _resolveConnectionString(
+      config,
+      localConfig,
+      databaseOverride: database,
+    );
+    final deadline = _deadlineFor(timeout);
+    final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, _settings.poolSize);
+    final results = List<SqlCommandResult?>.filled(commands.length, null);
+    var cursor = 0;
+
+    _metrics.recordReadOnlyBatchParallel();
+    developer.log(
+      'Executing read-only batch with controlled parallelism',
+      name: 'database_gateway',
+      level: 800,
+      error: {
+        'commands': commands.length,
+        'parallelism': parallelism,
+      },
+    );
+
+    Future<void> worker() async {
+      while (true) {
+        final index = cursor++;
+        if (index >= commands.length) {
+          return;
+        }
+
+        final command = commands[index];
+        final commandRequest = QueryRequest(
+          id: _uuid.v4(),
+          agentId: agentId,
+          query: command.sql,
+          parameters: command.params,
+          timestamp: DateTime.now(),
+          sourceRpcRequestId: sourceRpcRequestId,
+        );
+        final remainingTimeout = _remainingTimeoutFromDeadline(deadline);
+        if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
+          results[index] = SqlCommandResult.failure(
+            index: index,
+            error: 'Batch SQL execution timeout',
+          );
+          continue;
+        }
+
+        final queryResult = await _executeQueryWithRetry(
+          commandRequest,
+          connectionString,
+          localConfig,
+          timeout: remainingTimeout ?? timeout,
+        );
+        results[index] = queryResult.fold(
+          (response) {
+            final limitedRows = truncateSqlResultRows(
+              response.data,
+              options.maxRows,
+            );
+            return SqlCommandResult.success(
+              index: index,
+              rows: limitedRows,
+              rowCount: limitedRows.length,
+              affectedRows: response.affectedRows,
+              columnMetadata: response.columnMetadata,
+            );
+          },
+          (error) {
+            final message = error is domain.Failure ? error.message : error.toString();
+            _recordSqlInvestigationBatchInfrastructureFailure(
+              originalSql: command.sql.isEmpty ? batchSqlPreview : command.sql,
+              errorMessage: message,
+              rpcRequestId: sourceRpcRequestId,
+            );
+            return SqlCommandResult.failure(
+              index: index,
+              error: message,
+            );
+          },
+        );
+      }
+    }
+
+    await Future.wait(
+      List.generate(parallelism, (_) => worker()),
+    );
+
+    return Success(
+      results
+          .asMap()
+          .entries
+          .map(
+            (entry) =>
+                entry.value ??
+                SqlCommandResult.failure(
+                  index: entry.key,
+                  error: 'Read-only batch item did not complete',
+                ),
+          )
+          .toList(),
     );
   }
 
@@ -1400,6 +1615,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   connectionString: context.connectionString,
                   timeout: remainingTimeout,
                   preferPreparedTimeout: options.transaction,
+                  executionMode: options.transaction ? 'batch_transaction' : 'batch',
                 );
         }
 
@@ -1593,6 +1809,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     _connectionManager.markConnectionForDiscard(currentConnectionId);
+    _connectionManager.recordPooledExecutionFailure(
+      connectionString: context.connectionString,
+      connectionId: currentConnectionId,
+      error: failure,
+      stage: 'batch',
+    );
     await _connectionManager.releaseConnectionSafely(currentConnectionId);
     connectionState.connectionId = null;
 
@@ -1728,6 +1950,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       if (result.isError()) {
         final error = result.exceptionOrNull()!;
         if (_isInvalidConnectionIdError(error)) {
+          _connectionManager.recordPooledExecutionFailure(
+            connectionString: connectionString,
+            connectionId: connId,
+            error: error,
+            stage: 'non_query',
+          );
           _connectionManager.markConnectionForDiscard(connId);
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
@@ -1785,15 +2013,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String connectionString,
     Duration? timeout,
     bool preferPreparedTimeout = true,
+    String executionMode = 'pooled',
   }) async {
     final stopwatch = Stopwatch()..start();
-    final usesPreparedTimeout =
-        timeout != null &&
-        preferPreparedTimeout &&
-        !OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
-          request,
-          preparedExecution,
-        );
+    final usesMultiResultExecution = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
+      request,
+      preparedExecution,
+    );
+    final usesPreparedTimeout = _shouldUsePreparedTimeoutPath(
+      preparedExecution: preparedExecution,
+      timeout: timeout,
+      preferPreparedTimeout: preferPreparedTimeout,
+      usesMultiResultExecution: usesMultiResultExecution,
+    );
     try {
       if (usesPreparedTimeout) {
         return await _runPreparedQueryExecution(
@@ -1802,6 +2034,24 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           preparedExecution: preparedExecution,
           timeout: timeout,
         );
+      }
+
+      if (timeout != null && !usesMultiResultExecution && !_hasNamedParameters(preparedExecution)) {
+        final asyncResult = await _runNativeAsyncQueryWithTimeout(
+          connectionId: connId,
+          query: preparedExecution.sql,
+          timeout: timeout,
+        );
+        if (asyncResult.isSuccess()) {
+          return _QueryExecutionOutcome.success(
+            _createSuccessResponse(request, asyncResult.getOrThrow()),
+          );
+        }
+
+        final asyncError = asyncResult.exceptionOrNull();
+        if (asyncError is! UnsupportedFeatureError) {
+          return _QueryExecutionOutcome.failure(asyncError);
+        }
       }
 
       if (timeout == null) {
@@ -1815,6 +2065,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       ).timeout(timeout);
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
+      _metrics.recordDiagnosticReason(
+        category: 'timeout',
+        reason: 'query_timeout',
+      );
       if (!usesPreparedTimeout) {
         await _cancelConnectionForTimeout(connId, connectionString);
       }
@@ -1827,8 +2081,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       rethrow;
     } finally {
       stopwatch.stop();
-      _metrics.recordSqlExecutionTime(stopwatch.elapsed);
+      _metrics.recordSqlExecutionTime(
+        stopwatch.elapsed,
+        mode: executionMode,
+      );
     }
+  }
+
+  bool _shouldUsePreparedTimeoutPath({
+    required OdbcPreparedQueryExecution preparedExecution,
+    required Duration? timeout,
+    required bool preferPreparedTimeout,
+    required bool usesMultiResultExecution,
+  }) {
+    return timeout != null &&
+        preferPreparedTimeout &&
+        !usesMultiResultExecution &&
+        _hasNamedParameters(preparedExecution);
+  }
+
+  bool _hasNamedParameters(OdbcPreparedQueryExecution preparedExecution) {
+    return preparedExecution.parameters?.isNotEmpty ?? false;
   }
 
   Set<String> _collectRepeatedPreparedKeys(
@@ -1947,9 +2220,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }) async {
     final existingStmtId = preparedStatements[statementKey];
     if (existingStmtId != null) {
+      preparedStatements.remove(statementKey);
+      preparedStatements[statementKey] = existingStmtId;
       _metrics.recordPreparedStatementReuse();
       return Success(existingStmtId);
     }
+
+    _metrics.recordPreparedStatementCacheMiss();
 
     final timeoutMs = timeout?.inMilliseconds ?? 0;
     final prepareStopwatch = Stopwatch()..start();
@@ -1969,6 +2246,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return prepareResult.fold(
       (stmtId) {
+        if (preparedStatements.length >= _maxPreparedStatementsPerBatchConnection) {
+          final oldestKey = preparedStatements.keys.first;
+          final oldestStmtId = preparedStatements.remove(oldestKey);
+          if (oldestStmtId != null) {
+            unawaited(_closePreparedStatements(connectionId, <int>[oldestStmtId]));
+          }
+        }
         preparedStatements[statementKey] = stmtId;
         return Success(stmtId);
       },
@@ -2055,6 +2339,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String query,
     Map<String, dynamic>? parameters,
     Duration? timeout,
+    String executionMode = 'non_query',
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -2127,6 +2412,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
+      _metrics.recordDiagnosticReason(
+        category: 'timeout',
+        reason: 'query_timeout',
+      );
       developer.log(
         'SQL non-query timed out before completion',
         name: 'database_gateway',
@@ -2136,7 +2425,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       rethrow;
     } finally {
       stopwatch.stop();
-      _metrics.recordSqlExecutionTime(stopwatch.elapsed);
+      _metrics.recordSqlExecutionTime(
+        stopwatch.elapsed,
+        mode: executionMode,
+      );
     }
   }
 
@@ -2407,10 +2699,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               preparedExecution: preparedExecution,
               connectionString: connectionString,
               timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+              executionMode: 'direct',
             );
             if (!outcome.isSuccess) {
               final error = outcome.error!;
               if (_isBufferTooSmallError(error)) {
+                _metrics.recordDiagnosticReason(
+                  category: 'query',
+                  reason: 'buffer_too_small',
+                );
                 final currentBufferBytes =
                     effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
                 _adaptiveBufferCache.rememberExpandedBuffer(
@@ -2589,6 +2886,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               query: query,
               parameters: parameters,
               timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
+              executionMode: 'direct_non_query',
             );
 
             return result.fold(

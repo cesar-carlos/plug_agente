@@ -3,11 +3,10 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
-import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart' show SqlCommand, SqlCommandResult, SqlExecutionOptions;
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:uuid/uuid.dart';
 
 class _MockGateway extends Mock implements IDatabaseGateway {}
 
@@ -23,15 +22,6 @@ void main() {
         timestamp: DateTime.now(),
       ),
     );
-    registerFallbackValue(
-      QueryResponse(
-        id: 'fb',
-        requestId: 'r',
-        agentId: 'a',
-        data: const [],
-        timestamp: DateTime.now(),
-      ),
-    );
     registerFallbackValue(const SqlExecutionOptions());
     registerFallbackValue(const Duration(seconds: 7));
   });
@@ -40,25 +30,44 @@ void main() {
     test('should truncate rows per command using options.maxRows', () async {
       final gateway = _MockGateway();
       final normalizer = _MockNormalizer();
-      final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+      final batch = ExecuteSqlBatch(gateway, normalizer);
 
       final wideData = List<Map<String, dynamic>>.generate(
         5,
         (int i) => {'n': i},
       );
-      final response = QueryResponse(
-        id: 'q1',
-        requestId: 'r1',
-        agentId: 'agent',
-        data: wideData,
-        timestamp: DateTime.now(),
-      );
 
-      when(() => gateway.executeQuery(any())).thenAnswer(
-        (_) async => Success(response),
+      when(
+        () => gateway.executeBatch(
+          any(),
+          any(),
+          database: any(named: 'database'),
+          options: any(named: 'options'),
+          timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+        ),
+      ).thenAnswer(
+        (_) async => Success([
+          SqlCommandResult.success(
+            index: 0,
+            rows: wideData,
+            rowCount: wideData.length,
+          ),
+        ]),
       );
-      when(() => normalizer.normalize(any())).thenAnswer(
-        (invocation) => invocation.positionalArguments[0] as QueryResponse,
+      when(
+        () => normalizer.normalizeRows(
+          any(
+            that: isA<List<Map<String, dynamic>>>().having(
+              (rows) => rows.length,
+              'length',
+              2,
+            ),
+          ),
+          keyCache: any(named: 'keyCache'),
+        ),
+      ).thenAnswer(
+        (invocation) => invocation.positionalArguments.first as List<Map<String, dynamic>>,
       );
 
       final out = await batch.call(
@@ -72,12 +81,38 @@ void main() {
       expect(rows, hasLength(2));
       expect(rows[0]['n'], 0);
       expect(rows[1]['n'], 1);
+      verify(
+        () => gateway.executeBatch(
+          'agent',
+          any(
+            that: isA<List<SqlCommand>>().having(
+              (List<SqlCommand> c) => c.length,
+              'length',
+              1,
+            ),
+          ),
+          options: const SqlExecutionOptions(maxRows: 2),
+        ),
+      ).called(1);
+      verifyNever(() => gateway.executeQuery(any()));
+      verify(
+        () => normalizer.normalizeRows(
+          any(
+            that: isA<List<Map<String, dynamic>>>().having(
+              (rows) => rows.length,
+              'length',
+              2,
+            ),
+          ),
+          keyCache: any(named: 'keyCache'),
+        ),
+      ).called(1);
     });
 
     test('should delegate to gateway when transaction is true', () async {
       final gateway = _MockGateway();
       final normalizer = _MockNormalizer();
-      final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+      final batch = ExecuteSqlBatch(gateway, normalizer);
 
       when(
         () => gateway.executeBatch(
@@ -129,38 +164,24 @@ void main() {
     });
 
     test(
-      'should pass shrinking ODBC timeouts between non-transactional commands',
+      'should forward timeout to non-transactional batch execution',
       () async {
         final gateway = _MockGateway();
         final normalizer = _MockNormalizer();
-        final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+        final batch = ExecuteSqlBatch(gateway, normalizer);
 
-        final timeouts = <Duration?>[];
         when(
-          () => gateway.executeQuery(
+          () => gateway.executeBatch(
             any(),
-            timeout: any(named: 'timeout'),
+            any(),
             database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
           ),
         ).thenAnswer((invocation) async {
-          const sym = Symbol('timeout');
-          timeouts.add(
-            invocation.namedArguments.containsKey(sym) ? invocation.namedArguments[sym] as Duration? : null,
-          );
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-          return Success(
-            QueryResponse(
-              id: 'q',
-              requestId: 'r',
-              agentId: 'a',
-              data: const [],
-              timestamp: DateTime.now(),
-            ),
-          );
+          return const Success(<SqlCommandResult>[]);
         });
-        when(() => normalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
-        );
 
         await batch.call(
           'agent',
@@ -171,43 +192,41 @@ void main() {
           timeout: const Duration(seconds: 30),
         );
 
-        expect(timeouts, hasLength(2));
-        final t0 = timeouts[0];
-        final t1 = timeouts[1];
-        if (t0 == null || t1 == null) {
-          fail('expected non-null ODBC timeouts');
-        }
-        expect(t1, lessThan(t0));
+        verify(
+          () => gateway.executeBatch(
+            'agent',
+            any(
+              that: isA<List<SqlCommand>>().having(
+                (List<SqlCommand> c) => c.length,
+                'length',
+                2,
+              ),
+            ),
+            timeout: const Duration(seconds: 30),
+          ),
+        ).called(1);
+        verifyNever(() => gateway.executeQuery(any()));
       },
     );
 
     test(
-      'should fail when batch budget is exhausted before a command',
+      'should forward non-transactional batch failure from gateway',
       () async {
         final gateway = _MockGateway();
         final normalizer = _MockNormalizer();
-        final batch = ExecuteSqlBatch(gateway, normalizer, const Uuid());
+        final batch = ExecuteSqlBatch(gateway, normalizer);
 
         when(
-          () => gateway.executeQuery(
+          () => gateway.executeBatch(
             any(),
-            timeout: any(named: 'timeout'),
+            any(),
             database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
           ),
-        ).thenAnswer((_) async {
-          await Future<void>.delayed(const Duration(milliseconds: 150));
-          return Success(
-            QueryResponse(
-              id: 'q',
-              requestId: 'r',
-              agentId: 'a',
-              data: const [],
-              timestamp: DateTime.now(),
-            ),
-          );
-        });
-        when(() => normalizer.normalize(any())).thenAnswer(
-          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        ).thenAnswer(
+          (_) async => Failure(domain.QueryExecutionFailure('batch failed')),
         );
 
         final out = await batch.call(
@@ -220,13 +239,7 @@ void main() {
         );
 
         expect(out.isError(), isTrue);
-        verify(
-          () => gateway.executeQuery(
-            any(),
-            timeout: any(named: 'timeout'),
-            database: any(named: 'database'),
-          ),
-        ).called(1);
+        verifyNever(() => gateway.executeQuery(any()));
       },
     );
   });

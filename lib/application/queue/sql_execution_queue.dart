@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
+import 'dart:math';
 
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -27,22 +28,38 @@ class SqlExecutionQueue {
   SqlExecutionQueue({
     required int maxQueueSize,
     required int maxConcurrentWorkers,
+    int? maxConcurrentBatchWorkers,
+    int? maxConcurrentLongQueryWorkers,
     SqlExecutionQueueMetricsCollector? metricsCollector,
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
   }) : assert(maxQueueSize > 0, 'maxQueueSize must be > 0'),
        assert(maxConcurrentWorkers > 0, 'maxConcurrentWorkers must be > 0'),
+       assert(
+         maxConcurrentBatchWorkers == null || maxConcurrentBatchWorkers > 0,
+         'maxConcurrentBatchWorkers must be null or > 0',
+       ),
+       assert(
+         maxConcurrentLongQueryWorkers == null || maxConcurrentLongQueryWorkers > 0,
+         'maxConcurrentLongQueryWorkers must be null or > 0',
+       ),
        _maxQueueSize = maxQueueSize,
        _maxConcurrentWorkers = maxConcurrentWorkers,
+       _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
+       _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout;
 
   final int _maxQueueSize;
   final int _maxConcurrentWorkers;
+  final int _maxConcurrentBatchWorkers;
+  final int _maxConcurrentLongQueryWorkers;
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
 
   final Queue<_QueuedRequest> _queue = Queue<_QueuedRequest>();
   int _activeWorkers = 0;
+  int _activeBatchWorkers = 0;
+  int _activeLongQueryWorkers = 0;
   bool _disposed = false;
   bool _reportedSaturation70 = false;
   bool _reportedSaturation90 = false;
@@ -56,6 +73,14 @@ class SqlExecutionQueue {
   int get maxQueueSize => _maxQueueSize;
 
   int get maxConcurrentWorkers => _maxConcurrentWorkers;
+
+  int get activeBatchWorkers => _activeBatchWorkers;
+
+  int get maxConcurrentBatchWorkers => _maxConcurrentBatchWorkers;
+
+  int get activeLongQueryWorkers => _activeLongQueryWorkers;
+
+  int get maxConcurrentLongQueryWorkers => _maxConcurrentLongQueryWorkers;
 
   Duration get defaultEnqueueTimeout => _defaultEnqueueTimeout;
 
@@ -76,6 +101,7 @@ class SqlExecutionQueue {
     Future<Result<T>> Function() task, {
     Duration? enqueueTimeout,
     String? requestId,
+    SqlExecutionKind kind = SqlExecutionKind.query,
   }) async {
     developer.log(
       'SQL request submitted',
@@ -127,6 +153,7 @@ class SqlExecutionQueue {
       task: task,
       enqueuedAt: DateTime.now(),
       requestId: requestId,
+      kind: kind,
     );
 
     _queue.addLast(request);
@@ -197,7 +224,10 @@ class SqlExecutionQueue {
 
   Future<void> _processQueue() async {
     while (_activeWorkers < _maxConcurrentWorkers && _queue.isNotEmpty) {
-      final request = _queue.removeFirst();
+      final request = _takeNextEligibleRequest();
+      if (request == null) {
+        return;
+      }
       _metricsCollector?.recordQueueSizeChanged(_queue.length);
       _recordQueueSaturationIfNeeded();
       if (request.isCancelled || request.completer.isCompleted) {
@@ -209,6 +239,12 @@ class SqlExecutionQueue {
         request.startedCompleter.complete();
       }
       _activeWorkers++;
+      if (request.kind == SqlExecutionKind.batch) {
+        _activeBatchWorkers++;
+      }
+      if (request.kind == SqlExecutionKind.longQuery) {
+        _activeLongQueryWorkers++;
+      }
       _metricsCollector?.recordWorkerStarted(_activeWorkers);
 
       unawaited(_executeTask(request));
@@ -242,9 +278,38 @@ class SqlExecutionQueue {
       }
     } finally {
       _activeWorkers--;
+      if (request.kind == SqlExecutionKind.batch && _activeBatchWorkers > 0) {
+        _activeBatchWorkers--;
+      }
+      if (request.kind == SqlExecutionKind.longQuery && _activeLongQueryWorkers > 0) {
+        _activeLongQueryWorkers--;
+      }
       _metricsCollector?.recordWorkerCompleted(_activeWorkers);
       unawaited(_processQueue());
     }
+  }
+
+  _QueuedRequest? _takeNextEligibleRequest() {
+    final skippedRequests = <_QueuedRequest>[];
+    while (_queue.isNotEmpty) {
+      final request = _queue.removeFirst();
+      if (_canStartRequest(request)) {
+        skippedRequests.reversed.forEach(_queue.addFirst);
+        return request;
+      }
+      skippedRequests.add(request);
+    }
+
+    skippedRequests.reversed.forEach(_queue.addFirst);
+    return null;
+  }
+
+  bool _canStartRequest(_QueuedRequest request) {
+    return switch (request.kind) {
+      SqlExecutionKind.batch => _activeBatchWorkers < _maxConcurrentBatchWorkers,
+      SqlExecutionKind.longQuery => _activeLongQueryWorkers < _maxConcurrentLongQueryWorkers,
+      SqlExecutionKind.shortQuery || SqlExecutionKind.query || SqlExecutionKind.nonQuery => true,
+    };
   }
 
   /// Disposes the queue and prevents new requests.
@@ -341,11 +406,13 @@ class _QueuedRequest<T extends Object> {
   _QueuedRequest({
     required this.task,
     required this.enqueuedAt,
+    required this.kind,
     this.requestId,
   });
 
   final Future<Result<T>> Function() task;
   final DateTime enqueuedAt;
+  final SqlExecutionKind kind;
   final String? requestId;
   bool hasStarted = false;
   bool isCancelled = false;
@@ -358,6 +425,14 @@ class _QueuedRequest<T extends Object> {
       completer.complete(Failure<T, Exception>(failure));
     }
   }
+}
+
+enum SqlExecutionKind {
+  query,
+  shortQuery,
+  longQuery,
+  nonQuery,
+  batch,
 }
 
 /// Metrics collector interface for SQL execution queue.

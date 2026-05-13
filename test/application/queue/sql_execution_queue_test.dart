@@ -120,6 +120,95 @@ void main() {
       expect(results.every((r) => r.isSuccess()), isTrue);
     });
 
+    test('should let small queries bypass queued batches when batch worker limit is reached', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+        maxConcurrentBatchWorkers: 1,
+      );
+      final firstBatchBlocker = Completer<void>();
+      final executionOrder = <String>[];
+
+      final firstBatch = queue.submit<String>(
+        () async {
+          executionOrder.add('batch-1-start');
+          await firstBatchBlocker.future;
+          executionOrder.add('batch-1-end');
+          return const res.Success('batch-1');
+        },
+        kind: SqlExecutionKind.batch,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final secondBatch = queue.submit<String>(
+        () async {
+          executionOrder.add('batch-2');
+          return const res.Success('batch-2');
+        },
+        kind: SqlExecutionKind.batch,
+      );
+      final query = queue.submit<String>(
+        () async {
+          executionOrder.add('query');
+          return const res.Success('query');
+        },
+      );
+
+      await query;
+      expect(executionOrder, containsAllInOrder(<String>['batch-1-start', 'query']));
+      expect(executionOrder, isNot(contains('batch-2')));
+
+      firstBatchBlocker.complete();
+      await Future.wait([firstBatch, secondBatch]);
+      expect(executionOrder, containsAllInOrder(<String>['query', 'batch-1-end', 'batch-2']));
+      expect(queue.activeBatchWorkers, 0);
+    });
+
+    test('should let short queries bypass queued long queries when long query worker limit is reached', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+        maxConcurrentLongQueryWorkers: 1,
+      );
+      final firstLongBlocker = Completer<void>();
+      final executionOrder = <String>[];
+
+      final firstLong = queue.submit<String>(
+        () async {
+          executionOrder.add('long-1-start');
+          await firstLongBlocker.future;
+          executionOrder.add('long-1-end');
+          return const res.Success('long-1');
+        },
+        kind: SqlExecutionKind.longQuery,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final secondLong = queue.submit<String>(
+        () async {
+          executionOrder.add('long-2');
+          return const res.Success('long-2');
+        },
+        kind: SqlExecutionKind.longQuery,
+      );
+      final shortQuery = queue.submit<String>(
+        () async {
+          executionOrder.add('short');
+          return const res.Success('short');
+        },
+        kind: SqlExecutionKind.shortQuery,
+      );
+
+      await shortQuery;
+      expect(executionOrder, containsAllInOrder(<String>['long-1-start', 'short']));
+      expect(executionOrder, isNot(contains('long-2')));
+
+      firstLongBlocker.complete();
+      await Future.wait([firstLong, secondLong]);
+      expect(executionOrder, containsAllInOrder(<String>['short', 'long-1-end', 'long-2']));
+      expect(queue.activeLongQueryWorkers, 0);
+    });
+
     test('should reject new requests when queue is full', () async {
       final metrics = _MockMetricsCollector();
       final queue = SqlExecutionQueue(

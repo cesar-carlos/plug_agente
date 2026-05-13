@@ -14,6 +14,9 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordSqlExecuteStreamingFromDbResponse() => _metrics.recordRpcSqlExecuteStreamingFromDbResponse();
 
   @override
+  void recordSqlExecuteAutoStreamingFromDbResponse() => _metrics.recordRpcSqlExecuteAutoStreamingFromDbResponse();
+
+  @override
   void recordSqlExecuteMaterializedResponse() => _metrics.recordRpcSqlExecuteMaterializedResponse();
 
   @override

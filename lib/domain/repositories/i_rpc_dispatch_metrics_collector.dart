@@ -6,6 +6,8 @@ abstract class IRpcDispatchMetricsCollector {
 
   void recordSqlExecuteStreamingFromDbResponse();
 
+  void recordSqlExecuteAutoStreamingFromDbResponse();
+
   void recordSqlExecuteMaterializedResponse();
 
   /// Incremented each time an `rpc:complete` with `terminal_status` is emitted.

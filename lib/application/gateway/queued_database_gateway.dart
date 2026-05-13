@@ -29,6 +29,14 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
   int get maxWorkers => _queue.maxConcurrentWorkers;
 
+  int get activeBatchWorkers => _queue.activeBatchWorkers;
+
+  int get maxBatchWorkers => _queue.maxConcurrentBatchWorkers;
+
+  int get activeLongQueryWorkers => _queue.activeLongQueryWorkers;
+
+  int get maxLongQueryWorkers => _queue.maxConcurrentLongQueryWorkers;
+
   Duration get enqueueTimeout => _queue.defaultEnqueueTimeout;
 
   @override
@@ -51,6 +59,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         database: database,
       ),
       requestId: request.id,
+      kind: _classifyQuery(request, timeout),
     );
   }
 
@@ -74,6 +83,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         sourceRpcRequestId: sourceRpcRequestId,
       ),
       requestId: sourceRpcRequestId,
+      kind: SqlExecutionKind.batch,
     );
   }
 
@@ -92,7 +102,23 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         timeout: timeout,
         database: database,
       ),
+      kind: SqlExecutionKind.nonQuery,
     );
+  }
+
+  SqlExecutionKind _classifyQuery(
+    QueryRequest request,
+    Duration? timeout,
+  ) {
+    final normalizedSql = request.query.trim();
+    final timeoutMs = timeout?.inMilliseconds ?? 0;
+    if (request.expectMultipleResults ||
+        normalizedSql.length > 1200 ||
+        timeoutMs > 15000 ||
+        RegExp(r'\b(join|union|group\s+by|order\s+by)\b', caseSensitive: false).hasMatch(normalizedSql)) {
+      return SqlExecutionKind.longQuery;
+    }
+    return SqlExecutionKind.shortQuery;
   }
 
   /// Disposes the SQL execution queue.

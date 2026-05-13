@@ -34,6 +34,8 @@ class FeatureFlags {
   static const _keyRequireIncomingPayloadSignatures = 'feature_require_incoming_payload_signatures';
   static const _keyEnableOdbcPaginatedSqlDebugLog = 'feature_enable_odbc_paginated_sql_debug_log';
   static const _keyEnableDashboardSqlInvestigationFeed = 'feature_enable_dashboard_sql_investigation_feed';
+  static const _keyEnableOdbcExperimentalDriverAdaptivePooling =
+      'feature_enable_odbc_experimental_driver_adaptive_pooling';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
@@ -218,7 +220,7 @@ class FeatureFlags {
   }
 
   /// Whether to stream large results directly from DB (reduces memory).
-  bool get enableSocketStreamingFromDb => _prefs.getBool(_keyEnableSocketStreamingFromDb) ?? false;
+  bool get enableSocketStreamingFromDb => _prefs.getBool(_keyEnableSocketStreamingFromDb) ?? true;
 
   Future<void> setEnableSocketStreamingFromDb(bool value) async {
     await _prefs.setBool(_keyEnableSocketStreamingFromDb, value);
@@ -258,6 +260,14 @@ class FeatureFlags {
 
   /// When false, SQL investigation feed is not recorded or shown (reduces exposure of SQL text).
   bool get enableDashboardSqlInvestigationFeed => _prefs.getBool(_keyEnableDashboardSqlInvestigationFeed) ?? true;
+
+  /// Whether eligible drivers may use the experimental adaptive ODBC pool selector.
+  bool get enableOdbcExperimentalDriverAdaptivePooling =>
+      _prefs.getBool(_keyEnableOdbcExperimentalDriverAdaptivePooling) ?? false;
+
+  Future<void> setEnableOdbcExperimentalDriverAdaptivePooling(bool value) async {
+    await _prefs.setBool(_keyEnableOdbcExperimentalDriverAdaptivePooling, value);
+  }
 
   Future<void> setEnableDashboardSqlInvestigationFeed(bool value) async {
     await _prefs.setBool(_keyEnableDashboardSqlInvestigationFeed, value);
@@ -339,12 +349,13 @@ class FeatureFlags {
     await setEnableSocketRevokedTokenInSession(false);
     await setEnableSocketStreamingChunks(false);
     await setEnableSocketBackpressure(false);
-    await setEnableSocketStreamingFromDb(false);
+    await setEnableSocketStreamingFromDb(true);
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);
     await setRequireIncomingPayloadSignatures(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
     await setEnableDashboardSqlInvestigationFeed(true);
+    await setEnableOdbcExperimentalDriverAdaptivePooling(false);
     await setEnableHubHardReloginRecovery(true);
     await setHubHardReloginFailureThreshold(3);
     await resetHubResilienceOverrides();

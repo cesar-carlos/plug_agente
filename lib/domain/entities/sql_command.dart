@@ -126,6 +126,7 @@ class SqlExecutionOptions {
     this.timeoutMs = 30000,
     this.maxRows = 50000,
     this.transaction = false,
+    this.maxParallelReadOnlyBatchItems = 1,
   });
 
   factory SqlExecutionOptions.fromJson(Map<String, dynamic> json) {
@@ -133,6 +134,10 @@ class SqlExecutionOptions {
       timeoutMs: jsonNonNegativeIntWithDefault(json['timeout_ms'], 30000),
       maxRows: jsonPositiveIntWithDefault(json['max_rows'], 50000),
       transaction: json['transaction'] as bool? ?? false,
+      maxParallelReadOnlyBatchItems: jsonPositiveIntWithDefault(
+        json['max_parallel_read_only_batch_items'],
+        1,
+      ),
     );
   }
 
@@ -145,11 +150,15 @@ class SqlExecutionOptions {
   /// Whether to execute in a transaction (batch only).
   final bool transaction;
 
+  /// Opt-in parallelism for independent read-only batch commands.
+  final int maxParallelReadOnlyBatchItems;
+
   Map<String, dynamic> toJson() {
     return {
       'timeout_ms': timeoutMs,
       'max_rows': maxRows,
       'transaction': transaction,
+      'max_parallel_read_only_batch_items': maxParallelReadOnlyBatchItems,
     };
   }
 }

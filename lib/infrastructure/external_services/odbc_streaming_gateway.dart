@@ -37,7 +37,7 @@ class _ActiveStreamingConnection {
 ///
 /// Implementa streaming incremental usando streamQuery da odbc_fast,
 /// processando resultados em chunks sem carregar tudo em memória.
-class OdbcStreamingGateway implements IStreamingDatabaseGateway {
+class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {
   OdbcStreamingGateway(
     this._service,
     this._settings, {
@@ -62,6 +62,17 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway {
 
   @override
   bool get hasActiveStream => _activeStreams.isNotEmpty;
+
+  @override
+  int get activeStreamCount => _activeStreams.length;
+
+  @override
+  Map<String, Object?> getStreamingDiagnostics() {
+    return {
+      'enabled': true,
+      'active_streams': activeStreamCount,
+    };
+  }
 
   bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
 

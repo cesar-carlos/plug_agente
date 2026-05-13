@@ -33,3 +33,10 @@ abstract class IStreamingDatabaseGateway {
     StreamingCancelReason reason = StreamingCancelReason.user,
   });
 }
+
+/// Optional diagnostics surface for streaming gateway health reporting.
+abstract class IStreamingGatewayDiagnostics {
+  int get activeStreamCount;
+
+  Map<String, Object?> getStreamingDiagnostics();
+}

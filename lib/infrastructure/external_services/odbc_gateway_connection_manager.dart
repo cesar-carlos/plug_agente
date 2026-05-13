@@ -36,6 +36,10 @@ final class OdbcGatewayConnectionManager {
     final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordPoolAcquireTimeout();
+      _metrics.recordDiagnosticReason(
+        category: 'timeout',
+        reason: 'pool_wait_timeout',
+      );
       return Failure(
         _poolBudgetExhaustedFailure(
           operation: 'pool_acquire',
@@ -62,6 +66,56 @@ final class OdbcGatewayConnectionManager {
     }
   }
 
+  Future<Result<String>> acquireNativeCompatiblePooledConnection(
+    String connectionString, {
+    required ConnectionOptions leaseFallbackOptions,
+    DateTime? deadline,
+    Map<String, dynamic> context = const {},
+  }) async {
+    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
+      _metrics.recordPoolAcquireTimeout();
+      _metrics.recordDiagnosticReason(
+        category: 'timeout',
+        reason: 'pool_wait_timeout',
+      );
+      return Failure(
+        _poolBudgetExhaustedFailure(
+          operation: 'pool_acquire_native_compatible',
+          context: context,
+        ),
+      );
+    }
+
+    final stopwatch = Stopwatch()..start();
+    try {
+      final pool = _connectionPool;
+      if (pool is INativeCompatibleConnectionPoolAcquire) {
+        final nativeCompatiblePool = pool as INativeCompatibleConnectionPoolAcquire;
+        return await nativeCompatiblePool.acquireNativeCompatible(
+          connectionString,
+          leaseFallbackOptions: leaseFallbackOptions,
+          acquireTimeout: acquireTimeout,
+        );
+      }
+      if (pool is ITimedConnectionPoolAcquire) {
+        final timedPool = pool as ITimedConnectionPoolAcquire;
+        return await timedPool.acquireWithin(
+          connectionString,
+          options: leaseFallbackOptions,
+          acquireTimeout: acquireTimeout,
+        );
+      }
+      return await pool.acquire(
+        connectionString,
+        options: leaseFallbackOptions,
+      );
+    } finally {
+      stopwatch.stop();
+      _metrics.recordPoolWaitTime(stopwatch.elapsed);
+    }
+  }
+
   Future<Result<DirectOdbcConnectionLease>> acquireDirectLease({
     required String operation,
     required DateTime? deadline,
@@ -69,6 +123,10 @@ final class OdbcGatewayConnectionManager {
     final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordDirectConnectionAcquireTimeout();
+      _metrics.recordDiagnosticReason(
+        category: 'timeout',
+        reason: 'direct_connection_limit_timeout',
+      );
       return Failure(
         _poolBudgetExhaustedFailure(
           operation: 'direct_connection_acquire',
@@ -155,6 +213,23 @@ final class OdbcGatewayConnectionManager {
 
   void markConnectionForDiscard(String connectionId) {
     _connectionsToDiscard.add(connectionId);
+  }
+
+  void recordPooledExecutionFailure({
+    required String connectionString,
+    required Object error,
+    String? connectionId,
+    String? stage,
+  }) {
+    final pool = _connectionPool;
+    if (pool is IAdaptivePoolFeedback) {
+      (pool as IAdaptivePoolFeedback).recordExecutionFailure(
+        connectionString: connectionString,
+        error: error,
+        connectionId: connectionId,
+        stage: stage,
+      );
+    }
   }
 
   Future<Result<Connection>> connectSafely(

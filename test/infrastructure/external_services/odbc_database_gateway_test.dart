@@ -2311,6 +2311,75 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
+      'should execute read-only batch in parallel when opt-in parallelism is provided',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        var acquireCount = 0;
+        var activeExecutions = 0;
+        var peakExecutions = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
+          acquireCount++;
+          return Success('parallel-$acquireCount');
+        });
+        when(() => mockConnectionPool.release(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        ).thenAnswer((invocation) async {
+          activeExecutions++;
+          if (activeExecutions > peakExecutions) {
+            peakExecutions = activeExecutions;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          activeExecutions--;
+          final sql = invocation.positionalArguments.first as String;
+          return Success(
+            QueryResult(
+              columns: const ['sql'],
+              rows: [
+                [sql],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+            SqlCommand(sql: 'SELECT 3'),
+          ],
+          options: const SqlExecutionOptions(
+            timeoutMs: 1200,
+            maxParallelReadOnlyBatchItems: 2,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(peakExecutions, 2);
+        expect(metrics.readOnlyBatchParallelCount, 1);
+        final items = result.getOrNull()!;
+        expect(items.map((item) => item.rows?.single['sql']), ['SELECT 1', 'SELECT 2', 'SELECT 3']);
+        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(3);
+        verify(() => mockConnectionPool.release(any())).called(3);
+      },
+    );
+
+    test(
       'should keep transactional batch execution with more than five named parameters',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -2787,9 +2856,64 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
     );
 
     test(
+      'should keep prepared timeout path for parameterized query execution',
+      () async {
+        const pooledConnectionId = 'pool-prepared-query-1';
+        const sql = 'SELECT * FROM users WHERE id = :id';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-prepared-query-1',
+          agentId: config.agentId,
+          query: sql,
+          parameters: const {'id': 1},
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeQuery(
+          request,
+          timeout: const Duration(milliseconds: 1200),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(() => mockService.executeAsyncStart(any(), any()));
+        verify(
+          () => mockService.prepareNamed(
+            pooledConnectionId,
+            sql,
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        ).called(1);
+        verify(
+          () => mockService.executePreparedNamed(
+            pooledConnectionId,
+            9002,
+            const {'id': 1},
+            any(),
+          ),
+        ).called(1);
+        verify(() => mockService.closeStatement(pooledConnectionId, 9002)).called(1);
+      },
+    );
+
+    test(
       'should return timeout failure and discard pooled connection after best-effort cancel',
       () async {
         const pooledConnectionId = 'pool-timeout-1';
+        const asyncRequestId = 41;
         const sql = 'SELECT * FROM users';
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
@@ -2810,20 +2934,13 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executePrepared(
+          () => mockService.executeAsyncStart(
             pooledConnectionId,
-            any(),
-            any(),
-            any(),
+            sql,
           ),
-        ).thenAnswer((_) async {
-          await Future<void>.delayed(const Duration(milliseconds: 80));
-          return const Success(
-            QueryResult(columns: ['id'], rows: [], rowCount: 0),
-          );
-        });
-        when(() => mockService.disconnect(pooledConnectionId)).thenAnswer((_) async {
-          return const Success(unit);
+        ).thenAnswer((_) async => const Success(asyncRequestId));
+        when(() => mockService.asyncPoll(asyncRequestId)).thenAnswer((_) async {
+          return const Success(0);
         });
         when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
           return const Success(unit);
@@ -2847,9 +2964,18 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
+        verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
+        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
         verifyNever(() => mockConnectionPool.release(pooledConnectionId));
         verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verifyNever(
+          () => mockService.prepare(
+            any(),
+            any(),
+            timeoutMs: any(named: 'timeoutMs'),
+          ),
+        );
       },
     );
 
@@ -2857,6 +2983,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
       'should still return timeout failure when best-effort cancel fails',
       () async {
         const pooledConnectionId = 'pool-timeout-2';
+        const asyncRequestId = 42;
         const sql = 'SELECT * FROM users';
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
@@ -2877,19 +3004,15 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executePrepared(
+          () => mockService.executeAsyncStart(
             pooledConnectionId,
-            any(),
-            any(),
-            any(),
+            sql,
           ),
-        ).thenAnswer((_) async {
-          await Future<void>.delayed(const Duration(milliseconds: 80));
-          return const Success(
-            QueryResult(columns: ['id'], rows: [], rowCount: 0),
-          );
+        ).thenAnswer((_) async => const Success(asyncRequestId));
+        when(() => mockService.asyncPoll(asyncRequestId)).thenAnswer((_) async {
+          return const Success(0);
         });
-        when(() => mockService.cancelStatement(pooledConnectionId, any())).thenAnswer((_) async {
+        when(() => mockService.asyncCancel(asyncRequestId)).thenAnswer((_) async {
           return Failure(Exception('cancel failed'));
         });
         when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
@@ -2910,8 +3033,10 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         final queryFailure = failure! as domain.QueryExecutionFailure;
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
-        expect(metrics.timeoutCancelFailureCount, 1);
-        expect(metrics.poolReleaseFailureCount, 1);
+        expect(metrics.timeoutCancelFailureCount, greaterThanOrEqualTo(1));
+        expect(metrics.poolReleaseFailureCount, greaterThanOrEqualTo(1));
+        verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
+        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
         verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
       },

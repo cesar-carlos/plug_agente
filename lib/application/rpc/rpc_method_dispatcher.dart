@@ -38,6 +38,7 @@ import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.da
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
+import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -94,7 +95,6 @@ class RpcMethodDispatcher {
        _executeSqlBatch = ExecuteSqlBatch(
          databaseGateway,
          normalizerService,
-         uuid,
        );
 
   final IDatabaseGateway _databaseGateway;
@@ -131,6 +131,13 @@ class RpcMethodDispatcher {
   static const _defaultAuthorizationStageBudget = Duration(seconds: 3);
   static const _defaultQueryStageBudget = Duration(seconds: 30);
   static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
+  static const int _dbStreamingAutoSqlLengthThreshold = 240;
+  static const List<String> _dbStreamingAutoLargeSqlSignals = <String>[
+    ' join ',
+    ' union ',
+    ' group by ',
+    ' order by ',
+  ];
   static const _agentProfileAuthorizationSql = 'SELECT * FROM agent_profile';
   final ExecuteSqlBatch _executeSqlBatch;
   _ActiveStreamExecution? _activeStreamExecution;
@@ -516,8 +523,12 @@ class RpcMethodDispatcher {
     required DateTime? deadline,
     required int timeoutMs,
   }) async {
+    final autoStreaming = _shouldAutoEnableDbStreaming(
+      queryRequest: queryRequest,
+      sql: sql,
+    );
     if (!_featureFlags.enableSocketStreamingFromDb ||
-        !_featureFlags.enableSocketStreamingChunks ||
+        (!_featureFlags.enableSocketStreamingChunks && !autoStreaming) ||
         streamEmitter == null) {
       return null;
     }
@@ -542,6 +553,9 @@ class RpcMethodDispatcher {
     final configResult = await configRepo.getCurrentConfig();
     final config = configResult.getOrNull();
     if (config == null || config.resolveConnectionString().trim().isEmpty) {
+      return null;
+    }
+    if (!_isDbStreamingDriverAllowed(config.driverName)) {
       return null;
     }
 
@@ -664,11 +678,56 @@ class RpcMethodDispatcher {
           ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
         },
       );
+      if (autoStreaming && !_featureFlags.enableSocketStreamingChunks) {
+        _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+      }
       _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
       return dbStreamResponse;
     } finally {
       _activeStreamExecution = null;
     }
+  }
+
+  bool _isDbStreamingDriverAllowed(String driverName) {
+    return switch (DatabaseDriver.fromString(driverName)) {
+      DatabaseDriver.sqlServer => true,
+      DatabaseDriver.postgreSQL => true,
+      DatabaseDriver.sqlAnywhere => true,
+      DatabaseDriver.unknown => false,
+    };
+  }
+
+  bool _shouldAutoEnableDbStreaming({
+    required QueryRequest queryRequest,
+    required String sql,
+  }) {
+    if (!_featureFlags.enableSocketStreamingFromDb ||
+        _featureFlags.enableSocketStreamingChunks ||
+        queryRequest.pagination != null ||
+        queryRequest.expectMultipleResults ||
+        (queryRequest.parameters?.isNotEmpty ?? false)) {
+      return false;
+    }
+
+    final normalized = ' ${sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
+    if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
+      return false;
+    }
+    if (_containsExplicitRowLimit(normalized)) {
+      return false;
+    }
+    if (normalized.length >= _dbStreamingAutoSqlLengthThreshold) {
+      return true;
+    }
+    return _dbStreamingAutoLargeSqlSignals.any(normalized.contains);
+  }
+
+  bool _containsExplicitRowLimit(String normalizedSql) {
+    return normalizedSql.contains(' top ') ||
+        normalizedSql.contains(' limit ') ||
+        normalizedSql.contains(' fetch first ') ||
+        normalizedSql.contains(' offset ') ||
+        RegExp(r'\brownum\s*<=', caseSensitive: false).hasMatch(normalizedSql);
   }
 
   /// Handles sql.executeBatch method (multiple commands).

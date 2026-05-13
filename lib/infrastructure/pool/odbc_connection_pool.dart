@@ -18,7 +18,8 @@ import 'package:result_dart/result_dart.dart';
 /// Evita falha `Buffer too small` em `poolReleaseConnection` do pool nativo
 /// do `odbc_fast`, que não associa `maxResultBufferBytes` a conexões alugadas
 /// do pool (caindo em buffer pequeno no worker).
-class OdbcConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire {
+class OdbcConnectionPool
+    implements IConnectionPool, ITimedConnectionPoolAcquire, IConnectionPoolDiagnostics, IConnectionPoolWarmUp {
   OdbcConnectionPool(
     this._service,
     this._settings, {
@@ -213,6 +214,7 @@ class OdbcConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire
   /// cold-start latency.
   ///
   /// Returns aggregated failures when cleanup or acquisition cannot complete.
+  @override
   Future<Result<void>> warmUp(
     String connectionString, {
     int? warmUpCount,
@@ -437,5 +439,13 @@ class OdbcConnectionPool implements IConnectionPool, ITimedConnectionPoolAcquire
     }
     _leasedIdsByConnectionString.removeWhere((_, ids) => ids.isEmpty);
     return true;
+  }
+
+  @override
+  Map<String, Object?> getHealthDiagnostics() {
+    return const {
+      'strategy': 'lease',
+      'native_pool_exposed': false,
+    };
   }
 }

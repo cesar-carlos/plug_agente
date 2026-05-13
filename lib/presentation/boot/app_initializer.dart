@@ -20,7 +20,6 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
 
 typedef StartupWindowPreferences = ({
@@ -134,11 +133,12 @@ class AppInitializer {
           }
 
           final pool = getIt<IConnectionPool>();
-          if (pool is OdbcConnectionPool) {
-            final warmUpResult = await pool.warmUp(agentConfig.connectionString);
+          if (pool is IConnectionPoolWarmUp) {
+            final warmUpPool = pool as IConnectionPoolWarmUp;
+            final warmUpResult = await warmUpPool.warmUp(agentConfig.connectionString);
             warmUpResult.fold(
               (_) {},
-              (failure) {
+              (Object failure) {
                 developer.log(
                   'Pool warm-up cleanup failed (continuing without)',
                   name: 'app_initializer',
