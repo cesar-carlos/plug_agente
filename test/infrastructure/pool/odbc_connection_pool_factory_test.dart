@@ -17,7 +17,7 @@ void main() {
       service = _MockOdbcService();
     });
 
-    test('returns lease OdbcConnectionPool when native pool setting was persisted as true', () {
+    test('ignores legacy native pool setting and returns lease OdbcConnectionPool', () {
       final settings = MockOdbcConnectionSettings(useNativeOdbcPool: true);
       final pool = createOdbcConnectionPool(
         service,

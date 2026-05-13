@@ -247,6 +247,8 @@ void registerPlugDependencyGraph(
       () => HealthService(
         metricsCollector: getIt<MetricsCollector>(),
         gateway: getIt<IDatabaseGateway>(),
+        odbcSettings: getIt<IOdbcConnectionSettings>(),
+        connectionPool: getIt<IConnectionPool>(),
       ),
     )
     ..registerLazySingleton(
@@ -391,16 +393,26 @@ void registerPlugDependencyGraph(
         );
 
         // Wrap with SQL execution queue for backpressure control
+        final sqlQueueMaxWorkers = ConnectionConstants.sqlQueueMaxWorkersForPoolSize(
+          getIt<IOdbcConnectionSettings>().poolSize,
+        );
+        final persistedPoolSize = getIt<IOdbcConnectionSettings>().poolSize;
+        if (sqlQueueMaxWorkers == persistedPoolSize) {
+          getIt<MetricsCollector>().recordSqlQueueWorkersEqualPool(
+            workers: sqlQueueMaxWorkers,
+            poolSize: persistedPoolSize,
+          );
+        }
         final sqlQueue = SqlExecutionQueue(
           maxQueueSize: ConnectionConstants.sqlQueueMaxSize,
-          maxConcurrentWorkers: ConnectionConstants.sqlQueueMaxWorkers,
+          maxConcurrentWorkers: sqlQueueMaxWorkers,
           metricsCollector: getIt<MetricsCollector>(),
           defaultEnqueueTimeout: ConnectionConstants.sqlQueueEnqueueTimeout,
         );
 
         developer.log(
           'SQL queue initialized: maxSize=${ConnectionConstants.sqlQueueMaxSize}, '
-          'maxWorkers=${ConnectionConstants.sqlQueueMaxWorkers}',
+          'maxWorkers=$sqlQueueMaxWorkers',
           name: 'plug_dependency_registrar',
           level: 800,
         );

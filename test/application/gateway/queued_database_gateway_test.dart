@@ -127,11 +127,12 @@ void main() {
       verify(() => delegate.testConnection('DSN=test')).called(1);
     });
 
-    test('should expose queue metrics', () {
+    test('should expose queue metrics and limits', () {
       final delegate = _MockDatabaseGateway();
       final queue = SqlExecutionQueue(
         maxQueueSize: 10,
         maxConcurrentWorkers: 2,
+        defaultEnqueueTimeout: const Duration(seconds: 6),
       );
       final gateway = QueuedDatabaseGateway(
         delegate: delegate,
@@ -140,6 +141,9 @@ void main() {
 
       expect(gateway.queueSize, equals(0));
       expect(gateway.activeWorkers, equals(0));
+      expect(gateway.maxQueueSize, equals(10));
+      expect(gateway.maxWorkers, equals(2));
+      expect(gateway.enqueueTimeout, equals(const Duration(seconds: 6)));
     });
 
     test('should reject when queue is full', () async {

@@ -25,6 +25,12 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
   /// Active workers for monitoring.
   int get activeWorkers => _queue.activeWorkers;
 
+  int get maxQueueSize => _queue.maxQueueSize;
+
+  int get maxWorkers => _queue.maxConcurrentWorkers;
+
+  Duration get enqueueTimeout => _queue.defaultEnqueueTimeout;
+
   @override
   Future<Result<bool>> testConnection(String connectionString) {
     // Bypass queue for connection tests

@@ -14,7 +14,12 @@ import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class OdbcConnectionPoolSection extends StatefulWidget {
-  const OdbcConnectionPoolSection({super.key});
+  const OdbcConnectionPoolSection({
+    super.key,
+    this.reloadOdbcDependencies = reloadOdbcRuntimeDependencies,
+  });
+
+  final Future<bool> Function() reloadOdbcDependencies;
 
   @override
   State<OdbcConnectionPoolSection> createState() => _OdbcConnectionPoolSectionState();
@@ -27,9 +32,6 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   late final TextEditingController _streamingChunkSizeController;
   bool _isLoading = true;
   bool _isSaving = false;
-  bool _useNativeOdbcPool = false;
-  bool _useNativeOdbcPoolAtLoad = false;
-  bool _nativePoolTestOnCheckout = true;
 
   @override
   void initState() {
@@ -50,9 +52,6 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _loginTimeoutController.text = settings.loginTimeoutSeconds.toString();
       _maxResultBufferController.text = settings.maxResultBufferMb.toString();
       _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
-      _useNativeOdbcPool = settings.useNativeOdbcPool;
-      _useNativeOdbcPoolAtLoad = settings.useNativeOdbcPool;
-      _nativePoolTestOnCheckout = settings.nativePoolTestOnCheckout;
       _isLoading = false;
     });
     final healthResult = await getIt<IConnectionPool>().healthCheckAll();
@@ -94,24 +93,15 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     setState(() => _isSaving = true);
     try {
       final settings = getIt<IOdbcConnectionSettings>();
-      final poolModeChanged = _useNativeOdbcPool != _useNativeOdbcPoolAtLoad;
       await settings.setPoolSize(poolSize);
       await settings.setLoginTimeoutSeconds(loginTimeout);
       await settings.setMaxResultBufferMb(maxResultBuffer);
       await settings.setStreamingChunkSizeKb(streamingChunkSize);
-      await settings.setUseNativeOdbcPool(_useNativeOdbcPool);
-      await settings.setNativePoolTestOnCheckout(_nativePoolTestOnCheckout);
 
-      final settingsAppliedNow = await reloadOdbcRuntimeDependencies();
+      final settingsAppliedNow = await widget.reloadOdbcDependencies();
 
       if (!mounted) return;
-      _showSuccess(
-        settingsAppliedNow,
-        poolModeChanged: poolModeChanged,
-      );
-      if (poolModeChanged) {
-        setState(() => _useNativeOdbcPoolAtLoad = _useNativeOdbcPool);
-      }
+      _showSuccess(settingsAppliedNow);
     } on Object catch (error, stackTrace) {
       AppLogger.error(
         'Failed to save advanced ODBC settings',
@@ -129,8 +119,6 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   }
 
   Future<void> _restoreDefaults() async {
-    setState(() => _useNativeOdbcPool = false);
-    _nativePoolTestOnCheckout = true;
     _poolSizeController.text = ConnectionConstants.defaultPoolSize.toString();
     _loginTimeoutController.text = ConnectionConstants.defaultLoginTimeout.inSeconds.toString();
     _maxResultBufferController.text = (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024)).toString();
@@ -149,14 +137,10 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     );
   }
 
-  void _showSuccess(
-    bool settingsAppliedNow, {
-    required bool poolModeChanged,
-  }) {
+  void _showSuccess(bool settingsAppliedNow) {
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    final base = settingsAppliedNow ? l10n.odbcSuccessAppliedNow : l10n.odbcSuccessAppliedGradually;
-    final message = poolModeChanged ? '$base${l10n.odbcSuccessPoolModeRestartAppend}' : base;
+    final message = settingsAppliedNow ? l10n.odbcSuccessAppliedNow : l10n.odbcSuccessAppliedGradually;
 
     SettingsFeedback.showSuccess(
       context: context,
@@ -211,36 +195,6 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                         hint: l10n.odbcHintPoolSize,
                         minValue: 1,
                         maxValue: 20,
-                      ),
-                      const SizedBox(height: 16),
-                      SettingsToggleTile(
-                        label: l10n.odbcFieldNativePool,
-                        value: _useNativeOdbcPool,
-                        onChanged: _isSaving
-                            ? null
-                            : (bool value) {
-                                setState(() => _useNativeOdbcPool = value);
-                              },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        l10n.odbcTextNativePoolHelp,
-                        style: context.captionText,
-                      ),
-                      const SizedBox(height: 16),
-                      SettingsToggleTile(
-                        label: l10n.odbcFieldNativePoolCheckoutValidation,
-                        value: _nativePoolTestOnCheckout,
-                        onChanged: !_useNativeOdbcPool || _isSaving
-                            ? null
-                            : (bool value) {
-                                setState(() => _nativePoolTestOnCheckout = value);
-                              },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        l10n.odbcTextNativePoolCheckoutValidationHelp,
-                        style: context.captionText,
                       ),
                       const SizedBox(height: 24),
                       Text(

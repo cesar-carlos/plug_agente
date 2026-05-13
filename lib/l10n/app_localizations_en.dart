@@ -1196,9 +1196,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Pool, timeout and streaming settings were saved. New options apply gradually to new connections.';
 
   @override
-  String get odbcSuccessPoolModeRestartAppend => ' Restart the app for the ODBC pool mode change to take effect.';
-
-  @override
   String get odbcModalTitleSaved => 'Settings saved';
 
   @override
@@ -1216,20 +1213,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get odbcHintPoolSize => '4';
-
-  @override
-  String get odbcFieldNativePool => 'Native ODBC pool (experimental)';
-
-  @override
-  String get odbcTextNativePoolHelp =>
-      'Off by default: each query uses a dedicated connection with the configured buffer (more stable). Enable only to test performance or when the driver/package handles buffers in the native pool. Restart the app after changing for it to take effect.';
-
-  @override
-  String get odbcFieldNativePoolCheckoutValidation => 'Validate connection when checking out from native pool';
-
-  @override
-  String get odbcTextNativePoolCheckoutValidationHelp =>
-      'On by default. Disable only for benchmarks or advanced tuning when comparing native pool checkout validation cost.';
 
   @override
   String get odbcBlockTimeouts => 'Timeouts';

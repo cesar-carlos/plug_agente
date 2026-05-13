@@ -116,12 +116,30 @@ class ConnectionCircuitBreaker {
         return Success(success);
       },
       (failure) {
-        if (failure is domain.ConnectionFailure && !_isLocalPressureFailure(failure)) {
+        if (failure is domain.Failure && _shouldRecordFailure(failure)) {
           _onFailure(connectionString, failure);
         }
         return Failure(failure);
       },
     );
+  }
+
+  bool _shouldRecordFailure(domain.Failure failure) {
+    if (failure is domain.ConnectionFailure) {
+      return !_isLocalPressureFailure(failure);
+    }
+
+    if (failure is domain.QueryExecutionFailure) {
+      return _isConnectionQueryFailure(failure);
+    }
+
+    return false;
+  }
+
+  bool _isConnectionQueryFailure(domain.QueryExecutionFailure failure) {
+    final reason = failure.context['reason']?.toString();
+    return failure.context['connectionFailed'] == true &&
+        (reason == 'connection_lost_during_query' || reason == 'odbc_worker_crashed');
   }
 
   bool _isLocalPressureFailure(domain.ConnectionFailure failure) {
@@ -163,7 +181,7 @@ class ConnectionCircuitBreaker {
     }
   }
 
-  void _onFailure(String connectionString, domain.ConnectionFailure failure) {
+  void _onFailure(String connectionString, domain.Failure failure) {
     _consecutiveFailures++;
 
     if (_consecutiveFailures >= _failureThreshold && _state != CircuitState.open) {

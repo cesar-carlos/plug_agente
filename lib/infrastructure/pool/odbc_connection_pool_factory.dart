@@ -10,6 +10,8 @@ import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 /// connection). Native ODBC pooling is disabled here because persisted settings
 /// can otherwise reactivate the native pool, which returns invalid handles with
 /// some SQL Anywhere drivers and causes worker timeouts under concurrent load.
+/// Legacy `useNativeOdbcPool` settings remain readable for compatibility, but
+/// are intentionally ignored by this production factory.
 IConnectionPool createOdbcConnectionPool(
   OdbcService service,
   IOdbcConnectionSettings settings,

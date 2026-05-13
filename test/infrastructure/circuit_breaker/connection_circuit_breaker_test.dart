@@ -52,5 +52,54 @@ void main() {
       expect(breaker.state, CircuitState.open);
       expect(breaker.consecutiveFailures, 1);
     });
+
+    test('should open circuit for connection failures during query execution', () async {
+      final breaker = ConnectionCircuitBreaker(
+        failureThreshold: 1,
+        resetTimeout: const Duration(seconds: 30),
+      );
+
+      final result = await breaker.execute<int>(
+        'DSN=test',
+        () async => Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Connection lost while executing SQL',
+            context: {
+              'connectionFailed': true,
+              'reason': 'connection_lost_during_query',
+            },
+          ),
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(breaker.state, CircuitState.open);
+      expect(breaker.consecutiveFailures, 1);
+    });
+
+    test('should not open circuit for query timeout failures', () async {
+      final breaker = ConnectionCircuitBreaker(
+        failureThreshold: 1,
+        resetTimeout: const Duration(seconds: 30),
+      );
+
+      final result = await breaker.execute<int>(
+        'DSN=test',
+        () async => Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Tempo limite excedido durante a execucao da consulta',
+            context: {
+              'timeout': true,
+              'timeout_stage': 'sql',
+              'reason': 'query_timeout',
+            },
+          ),
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(breaker.state, CircuitState.closed);
+      expect(breaker.consecutiveFailures, 0);
+    });
   });
 }

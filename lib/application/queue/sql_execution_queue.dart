@@ -44,12 +44,20 @@ class SqlExecutionQueue {
   final Queue<_QueuedRequest> _queue = Queue<_QueuedRequest>();
   int _activeWorkers = 0;
   bool _disposed = false;
+  bool _reportedSaturation70 = false;
+  bool _reportedSaturation90 = false;
 
   /// Current number of requests waiting in the queue.
   int get queueSize => _queue.length;
 
   /// Current number of workers actively executing tasks.
   int get activeWorkers => _activeWorkers;
+
+  int get maxQueueSize => _maxQueueSize;
+
+  int get maxConcurrentWorkers => _maxConcurrentWorkers;
+
+  Duration get defaultEnqueueTimeout => _defaultEnqueueTimeout;
 
   /// Whether the queue is at capacity and will reject new requests.
   bool get isFull => _queue.length >= _maxQueueSize;
@@ -123,6 +131,7 @@ class SqlExecutionQueue {
 
     _queue.addLast(request);
     _metricsCollector?.recordQueueAdded(_queue.length);
+    _recordQueueSaturationIfNeeded();
 
     unawaited(_processQueue());
 
@@ -153,6 +162,7 @@ class SqlExecutionQueue {
       if (!request.hasStarted) {
         _queue.remove(request);
         _metricsCollector?.recordQueueSizeChanged(_queue.length);
+        _recordQueueSaturationIfNeeded();
       }
       _metricsCollector?.recordQueueTimeout();
       developer.log(
@@ -189,6 +199,7 @@ class SqlExecutionQueue {
     while (_activeWorkers < _maxConcurrentWorkers && _queue.isNotEmpty) {
       final request = _queue.removeFirst();
       _metricsCollector?.recordQueueSizeChanged(_queue.length);
+      _recordQueueSaturationIfNeeded();
       if (request.isCancelled || request.completer.isCompleted) {
         continue;
       }
@@ -243,6 +254,7 @@ class SqlExecutionQueue {
     while (_queue.isNotEmpty) {
       final request = _queue.removeFirst();
       _metricsCollector?.recordQueueSizeChanged(_queue.length);
+      _recordQueueSaturationIfNeeded();
       if (!request.completer.isCompleted) {
         _completeWithDisposalFailure(request);
       }
@@ -275,6 +287,39 @@ class SqlExecutionQueue {
       'request_id': ?requestId,
       'user_message': 'O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.',
     };
+  }
+
+  void _recordQueueSaturationIfNeeded() {
+    final saturationPercent = _queue.length / _maxQueueSize * 100;
+    _reportedSaturation70 = _recordThresholdCrossing(
+      isActive: _reportedSaturation70,
+      saturationPercent: saturationPercent,
+      thresholdPercent: 70,
+    );
+    _reportedSaturation90 = _recordThresholdCrossing(
+      isActive: _reportedSaturation90,
+      saturationPercent: saturationPercent,
+      thresholdPercent: 90,
+    );
+  }
+
+  bool _recordThresholdCrossing({
+    required bool isActive,
+    required double saturationPercent,
+    required int thresholdPercent,
+  }) {
+    if (saturationPercent < thresholdPercent) {
+      return false;
+    }
+    if (isActive) {
+      return true;
+    }
+    _metricsCollector?.recordQueueSaturation(
+      thresholdPercent: thresholdPercent,
+      currentSize: _queue.length,
+      maxSize: _maxQueueSize,
+    );
+    return true;
   }
 
   domain.ConfigurationFailure _queueDisposedFailure({
@@ -321,6 +366,11 @@ abstract class SqlExecutionQueueMetricsCollector {
   void recordQueueSizeChanged(int currentSize);
   void recordQueueRejection();
   void recordQueueTimeout();
+  void recordQueueSaturation({
+    required int thresholdPercent,
+    required int currentSize,
+    required int maxSize,
+  });
   void recordQueueWaitTime(Duration waitTime);
   void recordWorkerStarted(int activeCount);
   void recordWorkerCompleted(int activeCount);

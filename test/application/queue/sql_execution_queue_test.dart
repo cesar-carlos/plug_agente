@@ -12,6 +12,7 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   int queueTimeoutCount = 0;
   int workerStartedCount = 0;
   int workerCompletedCount = 0;
+  final List<int> saturationThresholds = [];
   final List<Duration> waitTimes = [];
   final List<int> queueSizes = [];
   final List<int> workerCounts = [];
@@ -35,6 +36,15 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   @override
   void recordQueueTimeout() {
     queueTimeoutCount++;
+  }
+
+  @override
+  void recordQueueSaturation({
+    required int thresholdPercent,
+    required int currentSize,
+    required int maxSize,
+  }) {
+    saturationThresholds.add(thresholdPercent);
   }
 
   @override
@@ -71,6 +81,18 @@ void main() {
       expect(executed, isTrue);
       expect(testResult.isSuccess(), isTrue);
       expect(testResult.getOrThrow(), equals('result'));
+    });
+
+    test('should expose configured limits', () {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 12,
+        maxConcurrentWorkers: 3,
+        defaultEnqueueTimeout: const Duration(seconds: 7),
+      );
+
+      expect(queue.maxQueueSize, 12);
+      expect(queue.maxConcurrentWorkers, 3);
+      expect(queue.defaultEnqueueTimeout, const Duration(seconds: 7));
     });
 
     test('should respect FIFO order when processing queued tasks', () async {
@@ -149,6 +171,37 @@ void main() {
       expect(exc.context['retryable'], isTrue);
       expect((exc.context['user_message'] as String?)?.isNotEmpty, isTrue);
       expect(metrics.queueRejectionCount, equals(1));
+    });
+
+    test('should record queue saturation threshold crossings', () async {
+      final metrics = _MockMetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+      final blocker = Completer<void>();
+      final futures = <Future<res.Result<String>>>[];
+
+      futures.add(
+        queue.submit<String>(() async {
+          await blocker.future;
+          return const res.Success('active');
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      for (var index = 0; index < 9; index++) {
+        futures.add(
+          queue.submit<String>(() async => const res.Success('queued')),
+        );
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      expect(metrics.saturationThresholds, containsAllInOrder(<int>[70, 90]));
+
+      blocker.complete();
+      await Future.wait(futures);
     });
 
     test('should enforce concurrent worker limit', () async {

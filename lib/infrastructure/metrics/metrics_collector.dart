@@ -66,6 +66,9 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
   static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
   static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
+  static const String _sqlQueueSaturation70Counter = 'sql_queue_saturation_70';
+  static const String _sqlQueueSaturation90Counter = 'sql_queue_saturation_90';
+  static const String _sqlQueueWorkersEqualPoolCounter = 'sql_queue_workers_equal_pool';
   static const String _autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
   static const String _autoUpdateManualCheckSuccessAvailableCounter = 'auto_update_manual_check_success_available';
   static const String _autoUpdateManualCheckSuccessNotAvailableCounter =
@@ -147,6 +150,9 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
   int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
   int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
+  int get sqlQueueSaturation70Count => _eventCounters[_sqlQueueSaturation70Counter] ?? 0;
+  int get sqlQueueSaturation90Count => _eventCounters[_sqlQueueSaturation90Counter] ?? 0;
+  int get sqlQueueWorkersEqualPoolCount => _eventCounters[_sqlQueueWorkersEqualPoolCounter] ?? 0;
   int get autoUpdateManualCheckStartedCount => _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
   int get autoUpdateManualCheckSuccessAvailableCount =>
       _eventCounters[_autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
@@ -230,6 +236,26 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   @override
   void recordQueueTimeout() {
     _incrementEventCounter(_sqlQueueTimeoutCounter);
+  }
+
+  @override
+  void recordQueueSaturation({required int thresholdPercent, required int currentSize, required int maxSize}) {
+    final counter = switch (thresholdPercent) {
+      70 => _sqlQueueSaturation70Counter,
+      90 => _sqlQueueSaturation90Counter,
+      _ => 'sql_queue_saturation_$thresholdPercent',
+    };
+    _incrementEventCounter(counter);
+    developer.log(
+      'SQL queue saturation crossed $thresholdPercent%',
+      name: 'metrics',
+      level: 900,
+      error: {
+        'current_size': currentSize,
+        'max_size': maxSize,
+        'threshold_percent': thresholdPercent,
+      },
+    );
   }
 
   @override
@@ -344,6 +370,22 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   void recordClientTokenGetPolicyRateLimited() => _incrementEventCounter(_rpcClientTokenGetPolicyRateLimitedCounter);
 
   void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
+
+  void recordSqlQueueWorkersEqualPool({
+    required int workers,
+    required int poolSize,
+  }) {
+    _incrementEventCounter(_sqlQueueWorkersEqualPoolCounter);
+    developer.log(
+      'SQL queue workers match ODBC pool size',
+      name: 'metrics',
+      level: 800,
+      error: {
+        'workers': workers,
+        'pool_size': poolSize,
+      },
+    );
+  }
 
   void recordConnectTimeout() => _incrementEventCounter(_connectTimeoutCounter);
 
@@ -503,6 +545,10 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       'query_p99_latency_ms': p99Latency,
       'sql_queue_rejection_count': sqlQueueRejectionCount,
       'sql_queue_timeout_count': sqlQueueTimeoutCount,
+      'sql_queue_saturation_70_count': sqlQueueSaturation70Count,
+      'sql_queue_saturation_90_count': sqlQueueSaturation90Count,
+      'sql_queue_workers_equal_pool_count': sqlQueueWorkersEqualPoolCount,
+      'pool_acquire_timeout_count': poolAcquireTimeoutCount,
       'sql_queue_current_size': _currentQueueSize,
       'sql_queue_max_size': _maxQueueSize,
       'sql_queue_current_workers': _currentActiveWorkers,

@@ -2372,12 +2372,6 @@ abstract class AppLocalizations {
   /// **'Pool, timeout and streaming settings were saved. New options apply gradually to new connections.'**
   String get odbcSuccessAppliedGradually;
 
-  /// No description provided for @odbcSuccessPoolModeRestartAppend.
-  ///
-  /// In en, this message translates to:
-  /// **' Restart the app for the ODBC pool mode change to take effect.'**
-  String get odbcSuccessPoolModeRestartAppend;
-
   /// No description provided for @odbcModalTitleSaved.
   ///
   /// In en, this message translates to:
@@ -2413,30 +2407,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'4'**
   String get odbcHintPoolSize;
-
-  /// No description provided for @odbcFieldNativePool.
-  ///
-  /// In en, this message translates to:
-  /// **'Native ODBC pool (experimental)'**
-  String get odbcFieldNativePool;
-
-  /// No description provided for @odbcTextNativePoolHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Off by default: each query uses a dedicated connection with the configured buffer (more stable). Enable only to test performance or when the driver/package handles buffers in the native pool. Restart the app after changing for it to take effect.'**
-  String get odbcTextNativePoolHelp;
-
-  /// No description provided for @odbcFieldNativePoolCheckoutValidation.
-  ///
-  /// In en, this message translates to:
-  /// **'Validate connection when checking out from native pool'**
-  String get odbcFieldNativePoolCheckoutValidation;
-
-  /// No description provided for @odbcTextNativePoolCheckoutValidationHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'On by default. Disable only for benchmarks or advanced tuning when comparing native pool checkout validation cost.'**
-  String get odbcTextNativePoolCheckoutValidationHelp;
 
   /// No description provided for @odbcBlockTimeouts.
   ///

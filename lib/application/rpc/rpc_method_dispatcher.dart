@@ -1416,7 +1416,7 @@ class RpcMethodDispatcher {
       }
     }
 
-    final raw = _healthService.getHealthStatus();
+    final raw = await _healthService.getHealthStatusAsync();
     final result = json.decode(json.encode(raw)) as Map<String, dynamic>;
     return RpcResponse.success(
       id: request.id,

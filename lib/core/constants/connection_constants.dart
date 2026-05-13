@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:plug_agente/core/config/app_environment.dart';
 
 /// Constantes para configuração de conexões ODBC e Socket.IO.
@@ -5,6 +7,7 @@ class ConnectionConstants {
   ConnectionConstants._();
 
   static String? _optionalEnv(String key) => AppEnvironment.get(key);
+  static final Set<String> _loggedInvalidPositiveIntEnvKeys = <String>{};
 
   /// Hub `GET /api/v1/agents` during backup restore staging (duplicate-session check).
   static const Duration backupRestoreAgentsListTimeout = Duration(seconds: 15);
@@ -47,14 +50,41 @@ class ConnectionConstants {
   static const Duration defaultNativePoolMaxLifetime = Duration(hours: 1);
   static const Duration defaultNativePoolConnectionTimeout = defaultPoolAcquireTimeout;
 
+  static int? _positiveIntEnv(String key) {
+    final raw = _optionalEnv(key);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final parsed = int.tryParse(raw);
+    if ((parsed == null || parsed <= 0) && _loggedInvalidPositiveIntEnvKeys.add(key)) {
+      developer.log(
+        'Ignoring invalid positive integer env override: $key',
+        name: 'connection_constants',
+        level: 900,
+        error: {
+          'key': key,
+          'value': raw,
+        },
+      );
+    }
+    return parsed != null && parsed > 0 ? parsed : null;
+  }
+
   /// ODBC pool size (configurable via ODBC_POOL_SIZE env var).
-  static int get poolSize => int.tryParse(_optionalEnv('ODBC_POOL_SIZE') ?? '') ?? defaultPoolSize;
+  static int get poolSize => _positiveIntEnv('ODBC_POOL_SIZE') ?? defaultPoolSize;
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
   static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;
 
-  /// SQL execution queue maximum concurrent workers (configurable via SQL_QUEUE_MAX_WORKERS env var).
-  static int get sqlQueueMaxWorkers => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_WORKERS') ?? '') ?? poolSize;
+  /// SQL execution queue maximum concurrent workers.
+  ///
+  /// Defaults to the persisted ODBC pool size used by the runtime dependency
+  /// graph. `SQL_QUEUE_MAX_WORKERS` remains an explicit operational override.
+  static int get sqlQueueMaxWorkers => sqlQueueMaxWorkersForPoolSize(poolSize);
+
+  static int sqlQueueMaxWorkersForPoolSize(int persistedPoolSize) {
+    return _positiveIntEnv('SQL_QUEUE_MAX_WORKERS') ?? (persistedPoolSize > 0 ? persistedPoolSize : defaultPoolSize);
+  }
 
   /// SQL execution queue enqueue timeout in seconds (configurable via SQL_QUEUE_TIMEOUT_SEC env var).
   static Duration get sqlQueueEnqueueTimeout => Duration(
