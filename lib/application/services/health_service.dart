@@ -215,6 +215,7 @@ class HealthService {
         'p95_latency_ms': (metrics['query_p95_latency_ms'] as num?)?.toInt() ?? 0,
         'p99_latency_ms': (metrics['query_p99_latency_ms'] as num?)?.toInt() ?? 0,
       },
+      'sql_execution_by_mode': metrics['sql_execution_by_mode'] ?? const <String, Object>{},
       'diagnostics': {
         'top_recent_reasons': metrics['top_recent_diagnostic_reasons'] ?? const <String, int>{},
         'recent_reasons': metrics['recent_diagnostic_reasons'] ?? const <String>[],

@@ -1693,6 +1693,66 @@ void main() {
     );
 
     test(
+      'should skip DB streaming when negotiated extensions do not support streaming chunks',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final queryResponse = QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [
+            {'id': 1},
+          ],
+          timestamp: DateTime.now(),
+        );
+        when(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((_) async => Success(queryResponse));
+        when(() => mockNormalizer.normalize(any())).thenAnswer(
+          (invocation) => invocation.positionalArguments[0] as QueryResponse,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-stream-negotiation',
+          params: {'sql': 'SELECT * FROM users'},
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': false},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        verifyNever(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+          ),
+        );
+        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
+      },
+    );
+
+    test(
       'should return resultTooLarge when DB streaming emitter rejects chunks',
       () async {
         when(
@@ -2113,6 +2173,49 @@ void main() {
         expect(first.inMilliseconds, lessThanOrEqualTo(8000));
       },
     );
+
+    test('should forward read-only batch parallelism option to gateway', () async {
+      SqlExecutionOptions? capturedOptions;
+      when(
+        () => mockGateway.executeBatch(
+          any(),
+          any(),
+          database: any(named: 'database'),
+          options: any(named: 'options'),
+          timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+        ),
+      ).thenAnswer((invocation) async {
+        capturedOptions = invocation.namedArguments[#options] as SqlExecutionOptions;
+        return Success(
+          <SqlCommandResult>[
+            SqlCommandResult.success(index: 0, rows: const <Map<String, dynamic>>[]),
+            SqlCommandResult.success(index: 1, rows: const <Map<String, dynamic>>[]),
+          ],
+        );
+      });
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.executeBatch',
+        id: 'req-parallel-batch',
+        params: {
+          'commands': [
+            {'sql': 'SELECT 1'},
+            {'sql': 'SELECT 2'},
+          ],
+          'options': {
+            'max_parallel_read_only_batch_items': 3,
+          },
+        },
+      );
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      expect(capturedOptions, isNotNull);
+      expect(capturedOptions!.maxParallelReadOnlyBatchItems, 3);
+    });
 
     test(
       'should deduplicate batch authorization checks for equivalent SQL commands',

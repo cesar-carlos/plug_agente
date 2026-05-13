@@ -70,6 +70,12 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to execute all commands in a single database transaction (begin/commit/rollback)"
+        },
+        "max_parallel_read_only_batch_items": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Opt-in maximum parallelism for non-transactional read-only SELECT batches. The agent applies an internal safety cap based on the ODBC pool size."
         }
       },
       "additionalProperties": false

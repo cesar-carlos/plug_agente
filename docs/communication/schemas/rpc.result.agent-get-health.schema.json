@@ -88,6 +88,19 @@
       },
       "additionalProperties": false
     },
+    "sql_execution_by_mode": {
+      "type": "object",
+      "description": "SQL execution timing grouped by gateway mode, for example pooled, native_compatible, direct, direct_non_query, and batch paths.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "avg_time_ms": { "type": "number", "minimum": 0 },
+          "p95_time_ms": { "type": "integer", "minimum": 0 },
+          "max_recent_time_ms": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "uptime_seconds": {
       "type": "integer",
       "minimum": 0,

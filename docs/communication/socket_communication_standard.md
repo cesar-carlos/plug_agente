@@ -1481,6 +1481,9 @@ batch e o **minimo** entre o orcamento do estagio SQL e `options.timeout_ms`
 comando em sequencia; se o orcamento esgotar antes de um comando, o batch
 falha com contexto de timeout/budget (sem executar esse comando).
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
+- `options.max_parallel_read_only_batch_items` suportado em `sql.executeBatch`
+  para lotes nao transacionais compostos apenas por `SELECT`; e opt-in e o
+  agente aplica cap interno de seguranca baseado no pool ODBC.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
 - `options.execution_mode` suportado em `sql.execute`.

@@ -351,6 +351,7 @@ class RpcMethodDispatcher {
       limits: limits,
       deadline: deadline,
       timeoutMs: requestedTimeoutMs,
+      negotiatedExtensions: negotiatedExtensions,
     );
     if (streamingFromDbResponse != null) {
       return streamingFromDbResponse;
@@ -522,40 +523,54 @@ class RpcMethodDispatcher {
     required TransportLimits limits,
     required DateTime? deadline,
     required int timeoutMs,
+    required Map<String, dynamic> negotiatedExtensions,
   }) async {
     final autoStreaming = _shouldAutoEnableDbStreaming(
       queryRequest: queryRequest,
       sql: sql,
+      negotiatedExtensions: negotiatedExtensions,
     );
+    if (!_supportsStreamingChunks(negotiatedExtensions)) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('streaming_chunks_not_negotiated');
+      return null;
+    }
     if (!_featureFlags.enableSocketStreamingFromDb ||
         (!_featureFlags.enableSocketStreamingChunks && !autoStreaming) ||
         streamEmitter == null) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('feature_or_emitter_unavailable');
       return null;
     }
     if (queryRequest.pagination != null) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('paginated_request');
       return null;
     }
     if (queryRequest.expectMultipleResults) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('multi_result_request');
       return null;
     }
     final configRepo = _configRepository;
     final gateway = _streamingGateway;
     if (configRepo == null || gateway == null) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('gateway_unavailable');
       return null;
     }
     if (queryRequest.parameters?.isNotEmpty ?? false) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('bound_parameters');
       return null;
     }
     if (SqlValidator.validateSelectQuery(sql).isError()) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('non_select_sql');
       return null;
     }
 
     final configResult = await configRepo.getCurrentConfig();
     final config = configResult.getOrNull();
     if (config == null || config.resolveConnectionString().trim().isEmpty) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('config_unavailable');
       return null;
     }
     if (!_isDbStreamingDriverAllowed(config.driverName)) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('driver_not_allowed');
       return null;
     }
 
@@ -700,9 +715,11 @@ class RpcMethodDispatcher {
   bool _shouldAutoEnableDbStreaming({
     required QueryRequest queryRequest,
     required String sql,
+    required Map<String, dynamic> negotiatedExtensions,
   }) {
     if (!_featureFlags.enableSocketStreamingFromDb ||
         _featureFlags.enableSocketStreamingChunks ||
+        !_supportsStreamingChunks(negotiatedExtensions) ||
         queryRequest.pagination != null ||
         queryRequest.expectMultipleResults ||
         (queryRequest.parameters?.isNotEmpty ?? false)) {
@@ -915,6 +932,7 @@ class RpcMethodDispatcher {
       timeoutMs: options.timeoutMs,
       maxRows: options.maxRows < limits.maxRows ? options.maxRows : limits.maxRows,
       transaction: options.transaction,
+      maxParallelReadOnlyBatchItems: options.maxParallelReadOnlyBatchItems,
     );
 
     // Execute batch
@@ -2165,6 +2183,14 @@ class RpcMethodDispatcher {
   ) {
     final modes = _negotiatedPaginationModes(negotiatedExtensions);
     return modes.contains('cursor-keyset') || modes.contains('cursor-offset');
+  }
+
+  bool _supportsStreamingChunks(Map<String, dynamic> negotiatedExtensions) {
+    final streamingResults = negotiatedExtensions['streamingResults'];
+    if (streamingResults is bool) {
+      return streamingResults;
+    }
+    return true;
   }
 
   Set<String> _negotiatedPaginationModes(

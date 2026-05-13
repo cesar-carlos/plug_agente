@@ -466,6 +466,7 @@ class RpcRequestSchemaValidator {
             'timeout_ms',
             'max_rows',
             'transaction',
+            'max_parallel_read_only_batch_items',
           }
         : <String>{
             'timeout_ms',
@@ -493,6 +494,14 @@ class RpcRequestSchemaValidator {
     final maxRows = options['max_rows'];
     if (maxRows != null && (maxRows is! int || maxRows < 1)) {
       return _invalidParams('Field "params.options.max_rows" must be >= 1');
+    }
+
+    final maxParallelReadOnlyBatchItems = options['max_parallel_read_only_batch_items'];
+    if (maxParallelReadOnlyBatchItems != null &&
+        (maxParallelReadOnlyBatchItems is! int || maxParallelReadOnlyBatchItems < 1)) {
+      return _invalidParams(
+        'Field "params.options.max_parallel_read_only_batch_items" must be >= 1',
+      );
     }
 
     final page = options['page'];

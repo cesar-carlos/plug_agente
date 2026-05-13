@@ -127,6 +127,43 @@ void main() {
       check(result.isSuccess()).isTrue();
     });
 
+    test('should accept sql.executeBatch with read-only parallelism option', () {
+      final data = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'sql.executeBatch',
+        'id': '1',
+        'params': {
+          'commands': [
+            {'sql': 'SELECT 1'},
+            {'sql': 'SELECT 2'},
+          ],
+          'options': {'max_parallel_read_only_batch_items': 2},
+        },
+      };
+
+      final result = validator.validateSingle(data);
+      check(result.isSuccess()).isTrue();
+    });
+
+    test('should reject invalid sql.executeBatch read-only parallelism option', () {
+      final data = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'sql.executeBatch',
+        'id': '1',
+        'params': {
+          'commands': [
+            {'sql': 'SELECT 1'},
+          ],
+          'options': {'max_parallel_read_only_batch_items': 0},
+        },
+      };
+
+      final result = validator.validateSingle(data);
+      check(result.isError()).isTrue();
+      final err = result.exceptionOrNull()! as domain.ValidationFailure;
+      check(err.message).contains('max_parallel_read_only_batch_items');
+    });
+
     test('should reject sql.executeBatch pagination options', () {
       final data = <String, dynamic>{
         'jsonrpc': '2.0',

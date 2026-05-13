@@ -56,7 +56,11 @@ class SqlExecutionQueue {
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
 
-  final Queue<_QueuedRequest> _queue = Queue<_QueuedRequest>();
+  final Map<SqlExecutionKind, Queue<_QueuedRequest>> _queues = {
+    for (final kind in SqlExecutionKind.values) kind: Queue<_QueuedRequest>(),
+  };
+  int _queuedCount = 0;
+  int _nextSequence = 0;
   int _activeWorkers = 0;
   int _activeBatchWorkers = 0;
   int _activeLongQueryWorkers = 0;
@@ -65,7 +69,7 @@ class SqlExecutionQueue {
   bool _reportedSaturation90 = false;
 
   /// Current number of requests waiting in the queue.
-  int get queueSize => _queue.length;
+  int get queueSize => _queuedCount;
 
   /// Current number of workers actively executing tasks.
   int get activeWorkers => _activeWorkers;
@@ -85,7 +89,7 @@ class SqlExecutionQueue {
   Duration get defaultEnqueueTimeout => _defaultEnqueueTimeout;
 
   /// Whether the queue is at capacity and will reject new requests.
-  bool get isFull => _queue.length >= _maxQueueSize;
+  bool get isFull => _queuedCount >= _maxQueueSize;
 
   /// Submits a SQL execution task to the queue.
   ///
@@ -107,7 +111,7 @@ class SqlExecutionQueue {
       'SQL request submitted',
       name: 'sql_execution_queue',
       level: 500,
-      error: {'request_id': requestId, 'queue_size': _queue.length, 'active_workers': _activeWorkers},
+      error: {'request_id': requestId, 'queue_size': _queuedCount, 'active_workers': _activeWorkers},
     );
 
     if (_disposed) {
@@ -133,7 +137,7 @@ class SqlExecutionQueue {
         level: 900,
         error: {
           'request_id': requestId,
-          'queue_size': _queue.length,
+          'queue_size': _queuedCount,
           'max_queue_size': _maxQueueSize,
           'active_workers': _activeWorkers,
         },
@@ -154,10 +158,11 @@ class SqlExecutionQueue {
       enqueuedAt: DateTime.now(),
       requestId: requestId,
       kind: kind,
+      sequence: _nextSequence++,
     );
 
-    _queue.addLast(request);
-    _metricsCollector?.recordQueueAdded(_queue.length);
+    _enqueue(request);
+    _metricsCollector?.recordQueueAdded(_queuedCount);
     _recordQueueSaturationIfNeeded();
 
     unawaited(_processQueue());
@@ -187,8 +192,8 @@ class SqlExecutionQueue {
     } on TimeoutException catch (error) {
       request.isCancelled = true;
       if (!request.hasStarted) {
-        _queue.remove(request);
-        _metricsCollector?.recordQueueSizeChanged(_queue.length);
+        _removeQueuedRequest(request);
+        _metricsCollector?.recordQueueSizeChanged(_queuedCount);
         _recordQueueSaturationIfNeeded();
       }
       _metricsCollector?.recordQueueTimeout();
@@ -199,7 +204,7 @@ class SqlExecutionQueue {
         error: {
           'request_id': requestId,
           'timeout_seconds': timeout.inSeconds,
-          'queue_size': _queue.length,
+          'queue_size': _queuedCount,
           'active_workers': _activeWorkers,
           'error': error,
         },
@@ -223,12 +228,12 @@ class SqlExecutionQueue {
   }
 
   Future<void> _processQueue() async {
-    while (_activeWorkers < _maxConcurrentWorkers && _queue.isNotEmpty) {
+    while (_activeWorkers < _maxConcurrentWorkers && _queuedCount > 0) {
       final request = _takeNextEligibleRequest();
       if (request == null) {
         return;
       }
-      _metricsCollector?.recordQueueSizeChanged(_queue.length);
+      _metricsCollector?.recordQueueSizeChanged(_queuedCount);
       _recordQueueSaturationIfNeeded();
       if (request.isCancelled || request.completer.isCompleted) {
         continue;
@@ -290,18 +295,26 @@ class SqlExecutionQueue {
   }
 
   _QueuedRequest? _takeNextEligibleRequest() {
-    final skippedRequests = <_QueuedRequest>[];
-    while (_queue.isNotEmpty) {
-      final request = _queue.removeFirst();
-      if (_canStartRequest(request)) {
-        skippedRequests.reversed.forEach(_queue.addFirst);
-        return request;
+    MapEntry<SqlExecutionKind, Queue<_QueuedRequest>>? selected;
+    for (final entry in _queues.entries) {
+      if (entry.value.isEmpty) {
+        continue;
       }
-      skippedRequests.add(request);
+      final candidate = entry.value.first;
+      if (!_canStartRequest(candidate)) {
+        continue;
+      }
+      final current = selected;
+      if (current == null || candidate.sequence < current.value.first.sequence) {
+        selected = entry;
+      }
     }
 
-    skippedRequests.reversed.forEach(_queue.addFirst);
-    return null;
+    if (selected == null) {
+      return null;
+    }
+    _queuedCount--;
+    return selected.value.removeFirst();
   }
 
   bool _canStartRequest(_QueuedRequest request) {
@@ -316,9 +329,12 @@ class SqlExecutionQueue {
   void dispose() {
     _disposed = true;
     // Need to process each request with its own type
-    while (_queue.isNotEmpty) {
-      final request = _queue.removeFirst();
-      _metricsCollector?.recordQueueSizeChanged(_queue.length);
+    while (_queuedCount > 0) {
+      final request = _takeNextQueuedRequest();
+      if (request == null) {
+        break;
+      }
+      _metricsCollector?.recordQueueSizeChanged(_queuedCount);
       _recordQueueSaturationIfNeeded();
       if (!request.completer.isCompleted) {
         _completeWithDisposalFailure(request);
@@ -345,7 +361,7 @@ class SqlExecutionQueue {
       'reason': reason,
       'rpc_error_code': RpcErrorCode.rateLimited,
       'retryable': true,
-      'queue_size': _queue.length,
+      'queue_size': _queuedCount,
       'max_queue_size': _maxQueueSize,
       'active_workers': _activeWorkers,
       'max_workers': _maxConcurrentWorkers,
@@ -355,7 +371,7 @@ class SqlExecutionQueue {
   }
 
   void _recordQueueSaturationIfNeeded() {
-    final saturationPercent = _queue.length / _maxQueueSize * 100;
+    final saturationPercent = _queuedCount / _maxQueueSize * 100;
     _reportedSaturation70 = _recordThresholdCrossing(
       isActive: _reportedSaturation70,
       saturationPercent: saturationPercent,
@@ -381,10 +397,41 @@ class SqlExecutionQueue {
     }
     _metricsCollector?.recordQueueSaturation(
       thresholdPercent: thresholdPercent,
-      currentSize: _queue.length,
+      currentSize: _queuedCount,
       maxSize: _maxQueueSize,
     );
     return true;
+  }
+
+  void _enqueue(_QueuedRequest request) {
+    _queues[request.kind]!.addLast(request);
+    _queuedCount++;
+  }
+
+  bool _removeQueuedRequest(_QueuedRequest request) {
+    final removed = _queues[request.kind]!.remove(request);
+    if (removed) {
+      _queuedCount--;
+    }
+    return removed;
+  }
+
+  _QueuedRequest? _takeNextQueuedRequest() {
+    MapEntry<SqlExecutionKind, Queue<_QueuedRequest>>? selected;
+    for (final entry in _queues.entries) {
+      if (entry.value.isEmpty) {
+        continue;
+      }
+      final current = selected;
+      if (current == null || entry.value.first.sequence < current.value.first.sequence) {
+        selected = entry;
+      }
+    }
+    if (selected == null) {
+      return null;
+    }
+    _queuedCount--;
+    return selected.value.removeFirst();
   }
 
   domain.ConfigurationFailure _queueDisposedFailure({
@@ -407,12 +454,14 @@ class _QueuedRequest<T extends Object> {
     required this.task,
     required this.enqueuedAt,
     required this.kind,
+    required this.sequence,
     this.requestId,
   });
 
   final Future<Result<T>> Function() task;
   final DateTime enqueuedAt;
   final SqlExecutionKind kind;
+  final int sequence;
   final String? requestId;
   bool hasStarted = false;
   bool isCancelled = false;

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/application/validation/sql_validator.dart';
@@ -567,6 +568,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
     DatabaseConfig databaseConfig, {
     Duration? timeout,
+    int maxAttempts = 3,
   }) async {
     return _executeWithRetryBudget<QueryResponse>(
       (remainingTimeout) => _executeQueryInternal(
@@ -575,7 +577,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         databaseConfig,
         timeout: remainingTimeout,
       ),
-      maxAttempts: 3,
+      maxAttempts: maxAttempts,
       initialDelayMs: 500,
       backoffMultiplier: 2,
       timeout: timeout,
@@ -728,6 +730,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         request: request,
         preparedExecution: preparedExecution,
         acquireOptions: null,
+        timeout: timeout,
       ),
     );
   }
@@ -999,20 +1002,34 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required QueryRequest request,
     required OdbcPreparedQueryExecution preparedExecution,
     required ConnectionOptions? acquireOptions,
+    required Duration? timeout,
   }) {
     if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false)) {
       return false;
     }
-    if (acquireOptions != null ||
-        request.expectMultipleResults ||
-        request.pagination == null ||
-        _hasNamedParameters(preparedExecution)) {
+    if (timeout != null) {
+      return false;
+    }
+    if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
+      return false;
+    }
+    final isSafeResultShape = request.pagination != null || _isNativeCompatibleProbeQuery(preparedExecution.sql);
+    if (!isSafeResultShape) {
       return false;
     }
     return switch (databaseConfig.databaseType) {
       DatabaseType.sqlServer || DatabaseType.postgresql => true,
       DatabaseType.sybaseAnywhere => false,
     };
+  }
+
+  bool _isNativeCompatibleProbeQuery(String sql) {
+    final normalized = SqlValidator.removeComments(
+      sql,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
+    return RegExp(
+      r'^select\s+(?:1|0|null|current_timestamp|getdate\(\)|@@version|version\(\))(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?$',
+    ).hasMatch(normalized);
   }
 
   @override
@@ -1221,7 +1238,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       databaseOverride: database,
     );
     final deadline = _deadlineFor(timeout);
-    final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, _settings.poolSize);
+    final safePoolParallelism = math.max(1, _settings.poolSize ~/ 2);
+    final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, safePoolParallelism);
     final results = List<SqlCommandResult?>.filled(commands.length, null);
     var cursor = 0;
 
@@ -1266,6 +1284,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           connectionString,
           localConfig,
           timeout: remainingTimeout ?? timeout,
+          maxAttempts: 1,
         );
         results[index] = queryResult.fold(
           (response) {

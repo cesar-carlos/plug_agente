@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -22,9 +24,13 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 
 class MockConnectionPool extends Mock implements IConnectionPool {}
 
+class MockNativeCompatibleConnectionPool extends Mock
+    implements IConnectionPool, INativeCompatibleConnectionPoolAcquire {}
+
 void main() {
   setUpAll(() {
     registerFallbackValue(const ConnectionOptions());
+    registerFallbackValue(Duration.zero);
   });
 
   group('OdbcDatabaseGateway', () {
@@ -2365,7 +2371,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ],
           options: const SqlExecutionOptions(
             timeoutMs: 1200,
-            maxParallelReadOnlyBatchItems: 2,
+            maxParallelReadOnlyBatchItems: 4,
           ),
         );
 
@@ -2376,6 +2382,71 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(items.map((item) => item.rows?.single['sql']), ['SELECT 1', 'SELECT 2', 'SELECT 3']);
         verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(3);
         verify(() => mockConnectionPool.release(any())).called(3);
+      },
+    );
+
+    test(
+      'should use native-compatible acquire for safe simple probe queries',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+        final request = QueryRequest(
+          id: 'req-native-probe',
+          agentId: config.agentId,
+          query: 'SELECT 1',
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success('native-1'));
+        when(() => nativePool.release('native-1')).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.executeQuery(
+            'SELECT 1',
+            connectionId: 'native-1',
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: ['value'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+
+        final result = await nativeGateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).called(1);
+        verifyNever(() => nativePool.acquire(connectionString, options: any(named: 'options')));
       },
     );
 

@@ -210,6 +210,8 @@ void main() {
       final metrics = MetricsCollector()
         ..recordPreparedStatementReuse()
         ..recordPreparedStatementCacheMiss()
+        ..recordSqlExecutionTime(const Duration(milliseconds: 20), mode: 'pooled')
+        ..recordSqlExecutionTime(const Duration(milliseconds: 8), mode: 'native_compatible')
         ..recordDiagnosticReason(category: 'pool', reason: 'native_fallback')
         ..recordDiagnosticReason(category: 'pool', reason: 'native_fallback')
         ..recordDiagnosticReason(category: 'timeout', reason: 'query_timeout');
@@ -227,6 +229,8 @@ void main() {
       final topReasons = diagnostics['top_recent_reasons']! as Map<String, int>;
       expect(topReasons['pool:native_fallback'], 2);
       expect(topReasons['timeout:query_timeout'], 1);
+      final byMode = status['sql_execution_by_mode']! as Map<String, Object>;
+      expect(byMode.keys, containsAll(['pooled', 'native_compatible']));
     });
   });
 }

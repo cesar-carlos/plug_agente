@@ -39,6 +39,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   static const String _rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
   static const String _rpcSqlExecuteAutoStreamingFromDbResponseCounter =
       'rpc_sql_execute_auto_streaming_from_db_response';
+  static const String _rpcSqlExecuteDbStreamingSkipCounter = 'rpc_sql_execute_db_streaming_skip';
   static const String _rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
   static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
   static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
@@ -387,6 +388,14 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     );
   }
 
+  void recordRpcSqlExecuteDbStreamingSkipped(String reason) {
+    _incrementEventCounter(_rpcSqlExecuteDbStreamingSkipCounter);
+    recordDiagnosticReason(
+      category: 'streaming_skip',
+      reason: reason,
+    );
+  }
+
   void recordRpcSqlExecuteMaterializedResponse() => _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
 
   void recordRpcStreamTerminalCompleteEmitted() => _incrementEventCounter(_rpcStreamTerminalCompleteEmittedCounter);
@@ -635,6 +644,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       ..._durationStatsSnapshot('connect', _connectTimes),
       ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
       ..._sqlExecutionModeStatsSnapshot(),
+      'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(),
       ..._durationStatsSnapshot('prepared_prepare', _preparedPrepareTimes),
       'recent_diagnostic_reasons': List<String>.unmodifiable(_recentDiagnosticReasons),
       'top_recent_diagnostic_reasons': _topRecentDiagnosticReasons(),
@@ -683,6 +693,19 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
           entry.value,
         ),
       );
+    }
+    return values;
+  }
+
+  Map<String, Object> _sqlExecutionModeNestedStatsSnapshot() {
+    final values = <String, Object>{};
+    for (final entry in _sqlExecutionTimesByMode.entries) {
+      final stats = _durationStatsSnapshot('', entry.value);
+      values[entry.key] = {
+        'avg_time_ms': stats['_avg_time_ms'] ?? 0.0,
+        'p95_time_ms': stats['_p95_time_ms'] ?? 0,
+        'max_recent_time_ms': stats['_max_recent_time_ms'] ?? 0,
+      };
     }
     return values;
   }
