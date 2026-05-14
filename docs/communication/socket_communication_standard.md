@@ -1486,19 +1486,24 @@ falha com contexto de timeout/budget (sem executar esse comando).
 - `options.max_rows` suportado em `sql.execute` e `sql.executeBatch`.
 - `options.max_parallel_read_only_batch_items` suportado em `sql.executeBatch`
   para lotes nao transacionais compostos apenas por `SELECT`; e opt-in e o
-  agente aplica cap interno de seguranca baseado no pool ODBC.
+  agente aplica cap interno de seguranca baseado no pool ODBC. Esse cap e
+  global por gateway, portanto batches simultaneos competem pelos mesmos tokens
+  e nao multiplicam o consumo de conexoes do pool. O health expoe
+  `batch.parallel_global_wait_avg_ms`, `parallel_global_wait_p95_ms`,
+  `parallel_global_wait_p99_ms` e `parallel_global_wait_sample_count`.
 - `ODBC_DIRECT_CONNECTION_MAX_CONCURRENT` pode sobrescrever o limite de
   conexoes ODBC diretas usadas por streaming/fallback. Sem override, o agente
   reserva metade do tamanho do pool para esses caminhos. Overrides maiores que
   o pool ODBC sao capados no tamanho do pool e aparecem no health como
   `direct_connections.override_exceeds_pool=true`. O health tambem expoe
-  `direct_connections.wait_avg_ms`, `wait_p95_ms` e `wait_p99_ms` para
-  diagnosticar saturacao desse limiter.
+  `direct_connections.wait_avg_ms`, `wait_p95_ms`, `wait_p99_ms` e
+  `wait_sample_count` para diagnosticar saturacao desse limiter.
 - `ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST` permite habilitar o caminho
   native-compatible experimental para SQLs simples e conhecidas, separadas por
   `|`, por exemplo `select id from users|select name from departments`. O match
   e exato apos normalizacao simples de whitespace/case; consultas com
-  `SELECT *` continuam fora desse caminho.
+  `SELECT *` continuam fora desse caminho. A allowlist e cacheada por curto TTL
+  e reprocessada quando o valor de ambiente muda.
 - `options.page` e `options.page_size` suportados em `sql.execute`.
 - `options.cursor` suportado em `sql.execute`.
 - `options.execution_mode` suportado em `sql.execute`.

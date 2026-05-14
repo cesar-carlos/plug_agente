@@ -119,7 +119,8 @@
         "acquire_timeouts_total": { "type": "integer", "minimum": 0 },
         "wait_avg_ms": { "type": "number", "minimum": 0 },
         "wait_p95_ms": { "type": "integer", "minimum": 0 },
-        "wait_p99_ms": { "type": "integer", "minimum": 0 }
+        "wait_p99_ms": { "type": "integer", "minimum": 0 },
+        "wait_sample_count": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": true
     },
@@ -176,7 +177,11 @@
         "read_only_parallel_total": { "type": "integer", "minimum": 0 },
         "read_only_parallel_capped_total": { "type": "integer", "minimum": 0 },
         "last_requested_parallelism": { "type": "integer", "minimum": 0 },
-        "last_effective_parallelism": { "type": "integer", "minimum": 0 }
+        "last_effective_parallelism": { "type": "integer", "minimum": 0 },
+        "parallel_global_wait_avg_ms": { "type": "number", "minimum": 0 },
+        "parallel_global_wait_p95_ms": { "type": "integer", "minimum": 0 },
+        "parallel_global_wait_p99_ms": { "type": "integer", "minimum": 0 },
+        "parallel_global_wait_sample_count": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

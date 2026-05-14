@@ -136,6 +136,11 @@ Future<void> main(List<String> args) async {
       iterations: iterations,
       concurrency: burstConcurrency,
     ),
+    _Workload.nativeCompatible(
+      name: 'native_compatible_simple',
+      iterations: iterations,
+      concurrency: concurrency,
+    ),
   ];
 
   if (!jsonOnlyOutput) {
@@ -249,6 +254,14 @@ Future<_ScenarioResult> _runScenario({
       iterations: workload.iterations,
       concurrency: workload.concurrency,
     ),
+    _WorkloadKind.nativeCompatible => _runNativeCompatibleSimpleScenario(
+      pool: pool,
+      service: service,
+      connectionString: connectionString,
+      query: query,
+      iterations: workload.iterations,
+      concurrency: workload.concurrency,
+    ),
     _WorkloadKind.batch => _runBatchScenario(
       pool: pool,
       service: service,
@@ -289,6 +302,49 @@ Future<_ScenarioResult> _runSimpleScenario({
       }
 
       final result = await _executeOne(
+        pool: pool,
+        service: service,
+        connectionString: connectionString,
+        query: query,
+      );
+      latenciesMs.add(result.elapsedMs);
+      if (result.ok) {
+        okCount++;
+      } else {
+        failCount++;
+        _recordErrorCategory(errorCategories, result.errorCategory);
+      }
+    }
+  }
+
+  await Future.wait(
+    List.generate(max(1, concurrency), (_) => worker()),
+  );
+  return _summarize(latenciesMs, okCount, failCount, errorCategories);
+}
+
+Future<_ScenarioResult> _runNativeCompatibleSimpleScenario({
+  required IConnectionPool pool,
+  required OdbcService service,
+  required String connectionString,
+  required String query,
+  required int iterations,
+  required int concurrency,
+}) async {
+  final latenciesMs = <double>[];
+  final errorCategories = <String, int>{};
+  var okCount = 0;
+  var failCount = 0;
+  var cursor = 0;
+
+  Future<void> worker() async {
+    while (true) {
+      final index = cursor++;
+      if (index >= iterations) {
+        return;
+      }
+
+      final result = await _executeOneNativeCompatible(
         pool: pool,
         service: service,
         connectionString: connectionString,
@@ -361,6 +417,47 @@ Future<_ScenarioResult> _runBatchScenario({
   }
 
   return _summarize(latenciesMs, okCount, failCount, errorCategories);
+}
+
+Future<_ExecutionResult> _executeOneNativeCompatible({
+  required IConnectionPool pool,
+  required OdbcService service,
+  required String connectionString,
+  required String query,
+}) async {
+  final stopwatch = Stopwatch()..start();
+  final acquired = switch (pool) {
+    final INativeCompatibleConnectionPoolAcquire nativeCompatiblePool =>
+      await nativeCompatiblePool.acquireNativeCompatible(
+        connectionString,
+        leaseFallbackOptions: const ConnectionOptions(),
+      ),
+    _ => await pool.acquire(connectionString),
+  };
+  if (acquired.isError()) {
+    stopwatch.stop();
+    return _ExecutionResult(
+      elapsedMs: stopwatch.elapsedMicroseconds / 1000,
+      ok: false,
+      errorCategory: acquired.exceptionOrNull(),
+    );
+  }
+
+  final connectionId = acquired.getOrThrow();
+  try {
+    final result = await service.executeQuery(
+      query,
+      connectionId: connectionId,
+    );
+    stopwatch.stop();
+    return _ExecutionResult(
+      elapsedMs: stopwatch.elapsedMicroseconds / 1000,
+      ok: result.isSuccess(),
+      errorCategory: result.exceptionOrNull(),
+    );
+  } finally {
+    await pool.release(connectionId);
+  }
 }
 
 Future<_ExecutionResult> _executeOne({
@@ -455,7 +552,7 @@ int? _readIntArg(List<String> args, String name) {
 
 bool _hasFlag(List<String> args, String name) => args.contains(name);
 
-enum _WorkloadKind { simple, batch }
+enum _WorkloadKind { simple, nativeCompatible, batch }
 
 class _Workload {
   const _Workload.simple({
@@ -463,6 +560,13 @@ class _Workload {
     required this.iterations,
     required this.concurrency,
   }) : kind = _WorkloadKind.simple,
+       batchSize = 1;
+
+  const _Workload.nativeCompatible({
+    required this.name,
+    required this.iterations,
+    required this.concurrency,
+  }) : kind = _WorkloadKind.nativeCompatible,
        batchSize = 1;
 
   const _Workload.batch({

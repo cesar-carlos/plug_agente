@@ -7,6 +7,7 @@ import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -139,6 +140,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
          metrics: _metrics,
          directConnectionMaxProvider: () => ConnectionConstants.directOdbcConnectionConcurrency(_settings.poolSize),
        ),
+       _readOnlyBatchParallelSemaphore = PoolSemaphore(_safeReadOnlyBatchParallelism(_settings.poolSize)),
        _sqlInvestigation = sqlInvestigation,
        _uuid = const Uuid();
   final OdbcService _service;
@@ -150,10 +152,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final FeatureFlags? _featureFlags;
   final ISqlInvestigationCollector? _sqlInvestigation;
   final Uuid _uuid;
+  final PoolSemaphore _readOnlyBatchParallelSemaphore;
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
   final Map<String, ConnectionOptions> _connectionOptionsCache = <String, ConnectionOptions>{};
   final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
+  String? _cachedNativeCompatibleSqlAllowlistRaw;
+  Set<String> _cachedNativeCompatibleSqlAllowlist = const <String>{};
+  DateTime? _cachedNativeCompatibleSqlAllowlistExpiresAt;
   static const int _multiResultSqlLogPreviewChars = 120;
   static const int _maxPreparedStatementsPerBatchConnection = 64;
   static const int _asyncRequestPendingStatus = 0;
@@ -162,6 +168,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   static const int _asyncRequestCancelledStatus = -2;
   static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
   static const String _nativeCompatibleSqlAllowlistEnv = 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST';
+  static const Duration _nativeCompatibleSqlAllowlistCacheTtl = Duration(seconds: 10);
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
     RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
@@ -175,6 +182,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return collapsed;
     }
     return '${collapsed.substring(0, _multiResultSqlLogPreviewChars)}…';
+  }
+
+  static int _safeReadOnlyBatchParallelism(int poolSize) {
+    return math.max(1, poolSize ~/ 2);
   }
 
   bool _looksLikeTimeoutError(Object error) => OdbcErrorInspector.isTimeout(error);
@@ -1078,19 +1089,36 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _isNativeCompatibleAllowlistedSql(String sql) {
-    final allowlist = AppEnvironment.get(_nativeCompatibleSqlAllowlistEnv);
-    if (allowlist == null || allowlist.trim().isEmpty) {
+    final allowlist = _nativeCompatibleSqlAllowlist();
+    if (allowlist.isEmpty) {
       return false;
     }
     final normalizedSql = _normalizeNativeCompatibleSql(sql);
     if (_hasNativeCompatibleWildcardProjection(normalizedSql)) {
       return false;
     }
-    return allowlist
+    return allowlist.contains(normalizedSql);
+  }
+
+  Set<String> _nativeCompatibleSqlAllowlist() {
+    final now = DateTime.now();
+    final expiresAt = _cachedNativeCompatibleSqlAllowlistExpiresAt;
+    final rawAllowlist = AppEnvironment.get(_nativeCompatibleSqlAllowlistEnv);
+    if (expiresAt != null && now.isBefore(expiresAt) && rawAllowlist == _cachedNativeCompatibleSqlAllowlistRaw) {
+      return _cachedNativeCompatibleSqlAllowlist;
+    }
+
+    _cachedNativeCompatibleSqlAllowlistRaw = rawAllowlist;
+    _cachedNativeCompatibleSqlAllowlistExpiresAt = now.add(_nativeCompatibleSqlAllowlistCacheTtl);
+    if (rawAllowlist == null || rawAllowlist.trim().isEmpty) {
+      return _cachedNativeCompatibleSqlAllowlist = const <String>{};
+    }
+
+    return _cachedNativeCompatibleSqlAllowlist = rawAllowlist
         .split('|')
         .map(_normalizeNativeCompatibleSql)
         .where((value) => value.isNotEmpty)
-        .contains(normalizedSql);
+        .toSet();
   }
 
   String _normalizeNativeCompatibleSql(String sql) {
@@ -1305,7 +1333,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       databaseOverride: database,
     );
     final deadline = _deadlineFor(timeout);
-    final safePoolParallelism = math.max(1, _settings.poolSize ~/ 2);
+    final safePoolParallelism = _safeReadOnlyBatchParallelism(_settings.poolSize);
+    _readOnlyBatchParallelSemaphore.resize(safePoolParallelism);
     final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, safePoolParallelism);
     final results = List<SqlCommandResult?>.filled(commands.length, null);
     var cursor = 0;
@@ -1349,13 +1378,45 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           continue;
         }
 
-        final queryResult = await _executeQueryWithRetry(
-          commandRequest,
-          connectionString,
-          localConfig,
-          timeout: remainingTimeout ?? timeout,
-          maxAttempts: 1,
-        );
+        final waitStopwatch = Stopwatch()..start();
+        try {
+          await _readOnlyBatchParallelSemaphore.acquire(timeout: remainingTimeout ?? timeout);
+        } on TimeoutException {
+          waitStopwatch.stop();
+          _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
+          _metrics.recordDiagnosticReason(
+            category: 'batch',
+            reason: 'read_only_parallel_global_wait_timeout',
+          );
+          results[index] = SqlCommandResult.failure(
+            index: index,
+            error: 'Batch SQL execution timeout while waiting for read-only parallel capacity',
+          );
+          continue;
+        }
+        waitStopwatch.stop();
+        _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
+
+        late Result<QueryResponse> queryResult;
+        try {
+          final executionTimeout = _remainingTimeoutFromDeadline(deadline);
+          if (executionTimeout != null && executionTimeout <= Duration.zero) {
+            results[index] = SqlCommandResult.failure(
+              index: index,
+              error: 'Batch SQL execution timeout before read-only item execution',
+            );
+            continue;
+          }
+          queryResult = await _executeQueryWithRetry(
+            commandRequest,
+            connectionString,
+            localConfig,
+            timeout: executionTimeout ?? timeout,
+            maxAttempts: 1,
+          );
+        } finally {
+          _readOnlyBatchParallelSemaphore.release();
+        }
         results[index] = queryResult.fold(
           (response) {
             final limitedRows = truncateSqlResultRows(

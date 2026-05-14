@@ -163,14 +163,16 @@ class SqlOperationClassifier {
       sql,
       objectKeyword.index + objectKeyword.keyword.length,
     );
-    nextIndex = _skipOptionalKeywordSequence(
+    nextIndex =
+        _skipOptionalKeywordSequence(
           lowerSql,
           sql,
           nextIndex,
           const ['if', 'exists'],
         ) ??
         nextIndex;
-    nextIndex = _skipOptionalKeywordSequence(
+    nextIndex =
+        _skipOptionalKeywordSequence(
           lowerSql,
           sql,
           nextIndex,
@@ -184,9 +186,7 @@ class SqlOperationClassifier {
     }
 
     return DatabaseResource(
-      resourceType: objectKeyword.keyword == 'view'
-          ? DatabaseResourceType.view
-          : DatabaseResourceType.table,
+      resourceType: objectKeyword.keyword == 'view' ? DatabaseResourceType.view : DatabaseResourceType.table,
       name: identifier.value,
     );
   }

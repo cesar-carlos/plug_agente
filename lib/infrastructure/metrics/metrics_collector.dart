@@ -111,6 +111,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   final List<Duration> _queueWaitTimes = [];
   final List<Duration> _poolWaitTimes = [];
   final List<Duration> _directConnectionWaitTimes = [];
+  final List<Duration> _readOnlyBatchParallelWaitTimes = [];
   final List<Duration> _connectTimes = [];
   final List<Duration> _sqlExecutionTimes = [];
   final Map<String, List<Duration>> _sqlExecutionTimesByMode = <String, List<Duration>>{};
@@ -243,6 +244,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _queueWaitTimes.clear();
     _poolWaitTimes.clear();
     _directConnectionWaitTimes.clear();
+    _readOnlyBatchParallelWaitTimes.clear();
     _connectTimes.clear();
     _sqlExecutionTimes.clear();
     _sqlExecutionTimesByMode.clear();
@@ -307,6 +309,9 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   void recordPoolWaitTime(Duration waitTime) => _recordDurationSample(_poolWaitTimes, waitTime);
 
   void recordDirectConnectionWaitTime(Duration waitTime) => _recordDurationSample(_directConnectionWaitTimes, waitTime);
+
+  void recordReadOnlyBatchParallelWaitTime(Duration waitTime) =>
+      _recordDurationSample(_readOnlyBatchParallelWaitTimes, waitTime);
 
   void recordConnectTime(Duration connectTime) => _recordDurationSample(_connectTimes, connectTime);
 
@@ -698,6 +703,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
       ..._durationStatsSnapshot('pool_wait', _poolWaitTimes),
       ..._durationStatsSnapshot('direct_connection_wait', _directConnectionWaitTimes),
+      ..._durationStatsSnapshot('read_only_batch_parallel_wait', _readOnlyBatchParallelWaitTimes),
       ..._durationStatsSnapshot('connect', _connectTimes),
       ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
       ..._sqlExecutionModeStatsSnapshot(),
@@ -740,6 +746,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
         '${prefix}_p95_time_ms': 0,
         '${prefix}_p99_time_ms': 0,
         '${prefix}_max_recent_time_ms': 0,
+        '${prefix}_sample_count': 0,
       };
     }
 
@@ -750,6 +757,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       '${prefix}_p95_time_ms': sorted[(sorted.length * 0.95).floor()],
       '${prefix}_p99_time_ms': sorted[(sorted.length * 0.99).floor()],
       '${prefix}_max_recent_time_ms': sorted.last,
+      '${prefix}_sample_count': sorted.length,
     };
   }
 

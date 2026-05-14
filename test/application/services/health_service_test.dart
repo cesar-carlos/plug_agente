@@ -192,6 +192,7 @@ void main() {
       expect(directConnections['opened_total'], 1);
       expect(directConnections['wait_avg_ms'], isA<double>());
       expect(directConnections['wait_p95_ms'], isA<int>());
+      expect(directConnections['wait_sample_count'], 1);
 
       lease.release();
     });
@@ -263,6 +264,7 @@ void main() {
       expect(batch['read_only_parallel_capped_total'], 1);
       expect(batch['last_requested_parallelism'], 4);
       expect(batch['last_effective_parallelism'], 2);
+      expect(batch['parallel_global_wait_sample_count'], 0);
     });
   });
 }

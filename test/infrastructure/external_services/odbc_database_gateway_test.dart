@@ -2391,6 +2391,75 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
+      'should cap read-only batch parallelism globally across concurrent batches',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        var acquireCount = 0;
+        var activeExecutions = 0;
+        var peakExecutions = 0;
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
+          acquireCount++;
+          return Success('global-parallel-$acquireCount');
+        });
+        when(() => mockConnectionPool.release(any())).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        ).thenAnswer((invocation) async {
+          activeExecutions++;
+          peakExecutions = peakExecutions < activeExecutions ? activeExecutions : peakExecutions;
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+          activeExecutions--;
+          final sql = invocation.positionalArguments.first as String;
+          return Success(
+            QueryResult(
+              columns: const ['sql'],
+              rows: [
+                [sql],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+
+        final batchA = gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+            SqlCommand(sql: 'SELECT 3'),
+            SqlCommand(sql: 'SELECT 4'),
+          ],
+          options: const SqlExecutionOptions(maxParallelReadOnlyBatchItems: 4),
+        );
+        final batchB = gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(sql: 'SELECT 5'),
+            SqlCommand(sql: 'SELECT 6'),
+            SqlCommand(sql: 'SELECT 7'),
+            SqlCommand(sql: 'SELECT 8'),
+          ],
+          options: const SqlExecutionOptions(maxParallelReadOnlyBatchItems: 4),
+        );
+
+        final results = await Future.wait([batchA, batchB]);
+
+        expect(results.every((result) => result.isSuccess()), isTrue);
+        expect(peakExecutions, 2);
+        expect(metrics.readOnlyBatchParallelCount, 2);
+        expect(metrics.readOnlyBatchParallelCappedCount, 2);
+        expect(metrics.getSnapshot()['read_only_batch_parallel_wait_sample_count'], 8);
+      },
+    );
+
+    test(
       'should use native-compatible acquire for safe simple probe queries',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -2518,6 +2587,84 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ),
         ).called(1);
         verifyNever(() => nativePool.acquire(connectionString, options: any(named: 'options')));
+      },
+    );
+
+    test(
+      'should reparse native-compatible SQL allowlist when env value changes inside cache ttl',
+      () async {
+        dotenv.loadFromString(envString: 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST=select id from users');
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          return Success('native-cache-${DateTime.now().microsecondsSinceEpoch}');
+        });
+        when(() => nativePool.release(any())).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: any(named: 'connectionId'),
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
+        );
+
+        final first = await nativeGateway.executeQuery(
+          QueryRequest(
+            id: 'req-native-cache-1',
+            agentId: config.agentId,
+            query: 'SELECT id FROM users',
+            timestamp: DateTime.now(),
+          ),
+        );
+        dotenv.loadFromString(envString: 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST=select id from departments');
+        final second = await nativeGateway.executeQuery(
+          QueryRequest(
+            id: 'req-native-cache-2',
+            agentId: config.agentId,
+            query: 'SELECT id FROM departments',
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        expect(first.isSuccess(), isTrue);
+        expect(second.isSuccess(), isTrue);
+        verify(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).called(2);
       },
     );
 

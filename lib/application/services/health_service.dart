@@ -223,6 +223,10 @@ class HealthService {
         'read_only_parallel_capped_total': metrics['read_only_batch_parallel_capped'] ?? 0,
         'last_requested_parallelism': metrics['read_only_batch_parallel_last_requested'] ?? 0,
         'last_effective_parallelism': metrics['read_only_batch_parallel_last_effective'] ?? 0,
+        'parallel_global_wait_avg_ms': metrics['read_only_batch_parallel_wait_avg_time_ms'] ?? 0.0,
+        'parallel_global_wait_p95_ms': metrics['read_only_batch_parallel_wait_p95_time_ms'] ?? 0,
+        'parallel_global_wait_p99_ms': metrics['read_only_batch_parallel_wait_p99_time_ms'] ?? 0,
+        'parallel_global_wait_sample_count': metrics['read_only_batch_parallel_wait_sample_count'] ?? 0,
       },
       'diagnostics': {
         'top_recent_reasons': metrics['top_recent_diagnostic_reasons'] ?? const <String, int>{},
@@ -310,6 +314,7 @@ class HealthService {
       'wait_avg_ms': metrics['direct_connection_wait_avg_time_ms'] ?? 0.0,
       'wait_p95_ms': metrics['direct_connection_wait_p95_time_ms'] ?? 0,
       'wait_p99_ms': metrics['direct_connection_wait_p99_time_ms'] ?? 0,
+      'wait_sample_count': metrics['direct_connection_wait_sample_count'] ?? 0,
     };
   }
 
