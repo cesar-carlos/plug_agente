@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.7+1</title>
+   <pubDate>Thu, 14 May 2026 20:58:16 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.6...v1.6.7</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.7/PlugAgente-Setup-1.6.7.exe" sparkle:version="1.6.7+1" sparkle:os="windows" length="17983164" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.6.6+1</title>
    <pubDate>Tue, 12 May 2026 14:13:52 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.5...v1.6.6</description>
@@ -66,18 +72,6 @@
 - Added regression coverage for provider recovery behavior and live bulk DML execution.
 - Release includes Windows installer asset PlugAgente-Setup-1.5.2.exe.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.2/PlugAgente-Setup-1.5.2.exe" sparkle:version="1.5.2+1" sparkle:os="windows" length="36873558" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.5.1+1</title>
-   <pubDate>Fri, 01 May 2026 17:03:03 +0000</pubDate>
-   <description>## Plug Agente 1.5.1
-
-- Application version **1.5.1+1** (`pubspec.yaml`, Windows build, installer).
-- Fixes the auto-update flow by falling back to the official appcast feed when `AUTO_UPDATE_FEED_URL` is not explicitly configured.
-- Updates GitHub artifact actions to Node 24-compatible versions to remove Node 20 deprecation warnings from CI and release automation.
-
-**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.5.0...v1.5.1</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.1/PlugAgente-Setup-1.5.1.exe" sparkle:version="1.5.1+1" sparkle:os="windows" length="17816378" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
