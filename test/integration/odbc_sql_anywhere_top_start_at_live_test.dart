@@ -79,6 +79,7 @@ ORDER BY table_id ASC
           : !looksLikeSqlAnywhere
           ? 'DSN nao parece SQL Anywhere; use driver SQL Anywhere ou ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY'
           : false,
+      tags: const ['live'],
     );
   });
 }

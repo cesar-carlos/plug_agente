@@ -32,48 +32,59 @@ void main() async {
         }
       },
       skip: !E2EEnv.runLiveApiTests,
+      tags: const ['live'],
     );
 
-    test('should handle connection timeout gracefully', () async {
-      // Arrange - use URL that never responds (non-routable IP)
-      final url = E2EEnv.apiTestTimeoutUrl;
-      final dioWithTimeout = Dio(
-        BaseOptions(connectTimeout: const Duration(seconds: 1)),
-      );
-
-      // Act & Assert
-      try {
-        await dioWithTimeout.get<String>(url);
-        fail('Should have thrown DioException');
-      } on DioException catch (e) {
-        expect(e.type, DioExceptionType.connectionTimeout);
-      } catch (e, st) {
-        fail('Expected DioException.connectionTimeout, got $e\n$st');
-      }
-    }, skip: !E2EEnv.runLiveApiTests);
-
-    test('should include proper headers in request', () async {
-      // Arrange
-      final url = baseUrl;
-      final headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Plug Database/1.0.0 (Windows)',
-      };
-
-      // Act
-      try {
-        final response = await dio.get<String>(
-          url,
-          options: Options(headers: headers),
+    test(
+      'should handle connection timeout gracefully',
+      () async {
+        // Arrange - use URL that never responds (non-routable IP)
+        final url = E2EEnv.apiTestTimeoutUrl;
+        final dioWithTimeout = Dio(
+          BaseOptions(connectTimeout: const Duration(seconds: 1)),
         );
 
-        // Assert
-        expect(response.statusCode, isNotNull);
-      } on Exception {
-        // Request failed, but we're just testing the configuration
-      }
-    }, skip: !E2EEnv.runLiveApiTests);
+        // Act & Assert
+        try {
+          await dioWithTimeout.get<String>(url);
+          fail('Should have thrown DioException');
+        } on DioException catch (e) {
+          expect(e.type, DioExceptionType.connectionTimeout);
+        } catch (e, st) {
+          fail('Expected DioException.connectionTimeout, got $e\n$st');
+        }
+      },
+      skip: !E2EEnv.runLiveApiTests,
+      tags: const ['live'],
+    );
+
+    test(
+      'should include proper headers in request',
+      () async {
+        // Arrange
+        final url = baseUrl;
+        final headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Plug Database/1.0.0 (Windows)',
+        };
+
+        // Act
+        try {
+          final response = await dio.get<String>(
+            url,
+            options: Options(headers: headers),
+          );
+
+          // Assert
+          expect(response.statusCode, isNotNull);
+        } on Exception {
+          // Request failed, but we're just testing the configuration
+        }
+      },
+      skip: !E2EEnv.runLiveApiTests,
+      tags: const ['live'],
+    );
 
     test(
       'should handle different endpoints correctly',
@@ -92,6 +103,7 @@ void main() async {
       },
       timeout: const Timeout(Duration(seconds: 15)),
       skip: !E2EEnv.runLiveApiTests,
+      tags: const ['live'],
     );
   });
 }

@@ -59,6 +59,10 @@ class RpcRequestSchemaValidator {
         limits.maxBatchSize,
         limits.maxRows,
       ),
+      'sql.bulkInsert' => _validateSqlBulkInsertParams(
+        data['params'],
+        limits.maxRows,
+      ),
       'sql.cancel' => _validateSqlCancelParams(data['params']),
       'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       'agent.getHealth' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getHealth'),
@@ -341,6 +345,160 @@ class RpcRequestSchemaValidator {
       );
       if (optionsValidation.isError()) {
         return optionsValidation;
+      }
+    }
+
+    final database = params['database'];
+    if (database != null && database is! String) {
+      return _invalidParams('Field "params.database" must be a string');
+    }
+
+    return const Success(unit);
+  }
+
+  Result<void> _validateSqlBulkInsertParams(
+    dynamic params,
+    int maxRowsLimit,
+  ) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method sql.bulkInsert',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams('Field "params" must be an object');
+    }
+
+    const allowedKeys = {
+      'table',
+      'columns',
+      'rows',
+      'client_token',
+      'clientToken',
+      'auth',
+      'idempotency_key',
+      'options',
+      'database',
+    };
+    final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+
+    final table = params['table'];
+    if (table is! String || table.trim().isEmpty) {
+      return _invalidParams('Field "params.table" must be a non-empty string');
+    }
+
+    final columns = params['columns'];
+    if (columns is! List<dynamic> || columns.isEmpty) {
+      return _invalidParams(
+        'Field "params.columns" must be a non-empty array',
+      );
+    }
+    const allowedColumnTypes = {
+      'i32',
+      'i64',
+      'text',
+      'decimal',
+      'binary',
+      'timestamp',
+    };
+    for (var i = 0; i < columns.length; i++) {
+      final column = columns[i];
+      if (column is! Map<String, dynamic>) {
+        return _invalidParams(
+          'Field "params.columns[$i]" must be an object',
+        );
+      }
+      const allowedColumnKeys = {'name', 'type', 'nullable', 'max_len', 'maxLen'};
+      final extraColumnKeys = column.keys.where((key) => !allowedColumnKeys.contains(key));
+      if (extraColumnKeys.isNotEmpty) {
+        return _invalidParams(
+          'Field "params.columns[$i]" contains unsupported properties: '
+          '${extraColumnKeys.join(", ")}',
+        );
+      }
+      final name = column['name'];
+      if (name is! String || name.trim().isEmpty) {
+        return _invalidParams(
+          'Field "params.columns[$i].name" must be a non-empty string',
+        );
+      }
+      final type = column['type'];
+      if (type is! String || !allowedColumnTypes.contains(type)) {
+        return _invalidParams(
+          'Field "params.columns[$i].type" must be one of ${allowedColumnTypes.join(", ")}',
+        );
+      }
+      final nullable = column['nullable'];
+      if (nullable != null && nullable is! bool) {
+        return _invalidParams(
+          'Field "params.columns[$i].nullable" must be a boolean',
+        );
+      }
+      final maxLen = column['max_len'] ?? column['maxLen'];
+      if (maxLen != null && (maxLen is! int || maxLen < 0)) {
+        return _invalidParams(
+          'Field "params.columns[$i].max_len" must be an integer >= 0',
+        );
+      }
+    }
+
+    final rows = params['rows'];
+    if (rows is! List<dynamic> || rows.isEmpty) {
+      return _invalidParams('Field "params.rows" must be a non-empty array');
+    }
+    if (rows.length > maxRowsLimit) {
+      return _invalidParams(
+        'Field "params.rows" exceeds limit: ${rows.length} > $maxRowsLimit',
+      );
+    }
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      if (row is! List<dynamic>) {
+        return _invalidParams('Field "params.rows[$i]" must be an array');
+      }
+      if (row.length != columns.length) {
+        return _invalidParams(
+          'Field "params.rows[$i]" length must match columns length',
+        );
+      }
+    }
+
+    final tokenValidation = _validateTokenAliases(params);
+    if (tokenValidation.isError()) {
+      return tokenValidation;
+    }
+
+    final idempotencyKey = params['idempotency_key'];
+    if (idempotencyKey != null && (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
+      return _invalidParams(
+        'Field "params.idempotency_key" must be a non-empty string',
+      );
+    }
+
+    final options = params['options'];
+    if (options != null) {
+      if (options is! Map<String, dynamic>) {
+        return _invalidParams('Field "params.options" must be an object');
+      }
+      const allowedOptions = {'timeout_ms'};
+      final extraOptionKeys = options.keys.where((key) => !allowedOptions.contains(key));
+      if (extraOptionKeys.isNotEmpty) {
+        return _invalidParams(
+          'Field "params.options" contains unsupported properties: '
+          '${extraOptionKeys.join(", ")}',
+        );
+      }
+      final timeout = options['timeout_ms'];
+      if (timeout != null && (timeout is! int || timeout < 1)) {
+        return _invalidParams(
+          'Field "params.options.timeout_ms" must be an integer >= 1',
+        );
       }
     }
 

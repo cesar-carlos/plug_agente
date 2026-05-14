@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -21,6 +22,11 @@ abstract class IDatabaseGateway {
   Future<Result<int>> executeNonQuery(
     String query,
     Map<String, dynamic>? parameters, {
+    Duration? timeout,
+    String? database,
+  });
+  Future<Result<int>> executeBulkInsert(
+    BulkInsertRequest request, {
     Duration? timeout,
     String? database,
   });

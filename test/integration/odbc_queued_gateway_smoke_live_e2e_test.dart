@@ -79,6 +79,7 @@ void main() async {
         expect(activeCount.getOrThrow(), equals(0));
       },
       skip: skipUnlessDsn,
+      tags: const ['live'],
     );
   });
 }

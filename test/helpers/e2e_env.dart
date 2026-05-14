@@ -166,6 +166,18 @@ class E2EEnv {
   /// `sql_queue_burst_test` (queue/backpressure burst scenarios; opt-in).
   static bool get odbcRunBurstTests => _get('RUN_ODBC_BURST_TESTS') == 'true';
 
+  static int get odbcBurstQueueSize => (_parsePositiveInt('ODBC_BURST_QUEUE_SIZE') ?? 8).clamp(4, 100);
+
+  static int get odbcBurstWorkers => (_parsePositiveInt('ODBC_BURST_WORKERS') ?? 4).clamp(1, 32);
+
+  static int get odbcBurstRequestCount => (_parsePositiveInt('ODBC_BURST_REQUEST_COUNT') ?? 24).clamp(8, 200);
+
+  static int get odbcBurstEnqueueTimeoutMs =>
+      (_parsePositiveInt('ODBC_BURST_ENQUEUE_TIMEOUT_MS') ?? 5000).clamp(500, 30000);
+
+  static int get odbcBurstMaxMsPerTest =>
+      (_parsePositiveInt('ODBC_BURST_MAX_MS_PER_TEST') ?? 45000).clamp(1000, 300000);
+
   /// When true (`ODBC_E2E_DML_PERF_TESTS=true`), runs `odbc_dml_perf_live_e2e_test` (insert/update/delete timing).
   static bool get odbcE2eDmlPerfTests => _get('ODBC_E2E_DML_PERF_TESTS') == 'true';
 
@@ -217,6 +229,9 @@ class E2EEnv {
   static int? get odbcE2eDmlBulkMaxMsCreate => _parsePositiveInt('ODBC_E2E_DML_BULK_MAX_MS_CREATE');
 
   static int? get odbcE2eDmlBulkMaxMsInsert => _parsePositiveInt('ODBC_E2E_DML_BULK_MAX_MS_INSERT');
+
+  static int get odbcE2eDmlBulkMaxMsInsertOrDefault =>
+      (_parsePositiveInt('ODBC_E2E_DML_BULK_MAX_MS_INSERT') ?? 30000).clamp(1000, 1800000);
 
   static int? get odbcE2eDmlBulkMaxMsUpdate => _parsePositiveInt('ODBC_E2E_DML_BULK_MAX_MS_UPDATE');
 

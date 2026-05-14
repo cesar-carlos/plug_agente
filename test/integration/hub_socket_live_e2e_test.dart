@@ -79,6 +79,7 @@ void main() async {
         }
       },
       skip: skipMessage,
+      tags: const ['live'],
     );
 
     test(
@@ -173,6 +174,7 @@ void main() async {
         }
       },
       skip: signingSkipMessage,
+      tags: const ['live'],
     );
   });
 }

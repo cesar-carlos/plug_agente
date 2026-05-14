@@ -25,8 +25,8 @@ void main() async {
       ? 'Defina ODBC_E2E_RPC_DSN ou ODBC_TEST_DSN / ODBC_DSN, ODBC_TEST_DSN_SQL_SERVER '
             'ou ODBC_TEST_DSN_POSTGRESQL no .env.'
       : !enabled
-          ? 'Defina ODBC_E2E_DML_PERF_TESTS=true no .env para este teste de desempenho DML.'
-          : null;
+      ? 'Defina ODBC_E2E_DML_PERF_TESTS=true no .env para este teste de desempenho DML.'
+      : null;
 
   group('ODBC DML performance (live E2E)', () {
     OdbcE2eRpcHarness? harness;
@@ -194,6 +194,7 @@ void main() async {
         }
       },
       skip: skipMessage,
+      tags: const ['live', 'perf'],
     );
   });
 }

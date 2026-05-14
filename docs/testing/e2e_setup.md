@@ -106,30 +106,42 @@ Os limites de ms são opcionais (úteis em máquinas conhecidas ou CI com DSN es
 
 ### ODBC DML carga em massa (`odbc_dml_bulk_load_live_e2e_test.dart`)
 
-Cria tabela, insere muitas linhas (default **50 000**) com vários `sql.executeBatch` (cada lote com até `ODBC_E2E_DML_BULK_CHUNK_SIZE` comandos, default 1000) — o dispatcher exige `TransportLimits.maxBatchSize` alinhado ao tamanho do lote. Depois: `SELECT COUNT(*)`; **UPDATE** em todas as linhas; **DELETE** de todas; **DROP** da tabela. **Opt-in** — pode demorar muitos minutos.
+Cria tabela, insere muitas linhas (default **50 000**) via `sql.bulkInsert`
+(bulk insert nativo do `odbc_fast`), depois: `SELECT COUNT(*)`; **UPDATE** em
+todas as linhas; **DELETE** de todas; **DROP** da tabela. **Opt-in**.
 
 | Variável | Obrigatória | Descrição |
 | -------- | ----------- | --------- |
 | `ODBC_E2E_DML_BULK_TESTS` | Sim | `true` para correr |
 | `ODBC_E2E_DML_BULK_ROW_COUNT` | Não | Total de linhas (default 50000, limite 10k–200k) |
-| `ODBC_E2E_DML_BULK_CHUNK_SIZE` | Não | Linhas por `executeBatch` (default 1000, limite 32–2000) |
 | `ODBC_E2E_DML_BULK_MAX_MS_CREATE` | Não | Teto (ms) para CREATE (opcional) |
-| `ODBC_E2E_DML_BULK_MAX_MS_INSERT` | Não | Teto (ms) para toda a fase de insert |
+| `ODBC_E2E_DML_BULK_MAX_MS_INSERT` | Não | Teto (ms) para toda a fase de insert (default interno: 30000) |
 | `ODBC_E2E_DML_BULK_MAX_MS_UPDATE` | Não | Teto (ms) para UPDATE em massa |
 | `ODBC_E2E_DML_BULK_MAX_MS_DELETE` | Não | Teto (ms) para DELETE em massa |
 | `ODBC_E2E_DML_BULK_MAX_MS_DROP` | Não | Teto (ms) para DROP no fim do teste |
 
-Tempos registados no log com nome `e2e.odbc_dml_bulk`. O teste utiliza `timeout` de 30 minutos; aumente o timeout do runner se 200k linhas for insuficiente.
+Tempos tambem sao emitidos no log `e2e.odbc_dml_bulk` como
+`E2E_DML_BULK_PHASE_TIMINGS` com JSON estruturado por fase. O teste utiliza
+`timeout` de 30 minutos; aumente o
+timeout do runner se 200k linhas for insuficiente.
 
 ### SQL queue burst (`sql_queue_burst_test.dart`)
 
-Dispara **50** pedidos `executeQuery` em paralelo (`Future.wait`) contra um `QueuedDatabaseGateway` com fila pequena (**20**) e **4** workers, usando uma **query lenta** para saturar a fila (rejeições `sql_queue_full`) e validar recuperação sem fugas de leases no pool. Usa o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`). **Opt-in.**
+Dispara pedidos `executeQuery` em paralelo (`Future.wait`) contra um
+`QueuedDatabaseGateway` com fila pequena e query lenta para saturar a fila
+(rejeições `sql_queue_full`) e validar recuperação sem fugas de leases no pool.
+Usa o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`). **Opt-in.**
 
 | Variável | Obrigatória | Descrição |
 | -------- | ----------- | --------- |
 | `RUN_ODBC_BURST_TESTS` | Sim | `true` para não ignorar este ficheiro |
 | DSN RPC | Sim | `ODBC_E2E_RPC_DSN` ou fallback na ordem habitual (Anywhere → SQL Server → PostgreSQL) |
 | Query longa | Sim | `E2EEnv.odbcLongQuery` deve estar definido (variáveis por motor em **ODBC** acima, ou `ODBC_INTEGRATION_LONG_QUERY`) — o teste precisa de SQL que demore o suficiente para encher a fila de propósito |
+| `ODBC_BURST_REQUEST_COUNT` | Não | Total de requests no burst (default 24, limite 8–200) |
+| `ODBC_BURST_QUEUE_SIZE` | Não | Tamanho da fila (default 8, limite 4–100) |
+| `ODBC_BURST_WORKERS` | Não | Workers concorrentes (default 4, limite 1–32) |
+| `ODBC_BURST_ENQUEUE_TIMEOUT_MS` | Não | Timeout de enfileiramento (default 5000ms) |
+| `ODBC_BURST_MAX_MS_PER_TEST` | Não | Teto por caso de burst (default 45000ms) |
 
 ### ODBC lock contention (`odbc_lock_contention_live_integration_test.dart`)
 
@@ -152,8 +164,14 @@ O script exibe quais variáveis estão definidas e quais testes serão executado
 ## Executar Testes
 
 ```bash
+# Suíte rápida: exclui testes marcados como live/slow/perf
+flutter test --exclude-tags "live || slow || perf"
+
+# Suíte completa, incluindo testes marcados
+flutter test
+
 # Todos os testes de integração
-flutter test test/integration/
+flutter test --tags live test/integration/
 
 # API tests
 flutter test test/infrastructure/external_services/api_test.dart
@@ -176,8 +194,8 @@ flutter test test/integration/odbc_rpc_execute_coverage_live_e2e_test.dart
 # ODBC DML performance — insert/update/delete em lote (opt-in: ODBC_E2E_DML_PERF_TESTS=true e DSN RPC)
 flutter test test/integration/odbc_dml_perf_live_e2e_test.dart
 
-# ODBC DML carga massiva (~50k, chunked batches; opt-in: ODBC_E2E_DML_BULK_TESTS=true)
-flutter test test/integration/odbc_dml_bulk_load_live_e2e_test.dart
+# ODBC DML carga massiva (~50k via sql.bulkInsert; opt-in: ODBC_E2E_DML_BULK_TESTS=true)
+flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
 
 # Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
 flutter test test/integration/sql_queue_burst_test.dart

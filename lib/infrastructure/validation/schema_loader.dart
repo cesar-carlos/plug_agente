@@ -25,12 +25,14 @@ class TransportSchemaIds {
   static const String agentProfile = 'agent.profile.schema.json';
   static const String paramsSqlExecute = 'rpc.params.sql-execute.schema.json';
   static const String paramsSqlExecuteBatch = 'rpc.params.sql-execute-batch.schema.json';
+  static const String paramsSqlBulkInsert = 'rpc.params.sql-bulk-insert.schema.json';
   static const String paramsSqlCancel = 'rpc.params.sql-cancel.schema.json';
   static const String paramsAgentGetProfile = 'rpc.params.agent-get-profile.schema.json';
   static const String paramsAgentGetHealth = 'rpc.params.agent-get-health.schema.json';
   static const String paramsClientTokenGetPolicy = 'rpc.params.client-token-get-policy.schema.json';
   static const String resultSqlExecute = 'rpc.result.sql-execute.schema.json';
   static const String resultSqlExecuteBatch = 'rpc.result.sql-execute-batch.schema.json';
+  static const String resultSqlBulkInsert = 'rpc.result.sql-bulk-insert.schema.json';
   static const String resultAgentGetProfile = 'rpc.result.agent-get-profile.schema.json';
   static const String resultAgentGetHealth = 'rpc.result.agent-get-health.schema.json';
   static const String resultClientTokenGetPolicy = 'rpc.result.client-token-get-policy.schema.json';
@@ -51,12 +53,14 @@ class TransportSchemaIds {
     agentProfile,
     paramsSqlExecute,
     paramsSqlExecuteBatch,
+    paramsSqlBulkInsert,
     paramsSqlCancel,
     paramsAgentGetProfile,
     paramsAgentGetHealth,
     paramsClientTokenGetPolicy,
     resultSqlExecute,
     resultSqlExecuteBatch,
+    resultSqlBulkInsert,
     resultAgentGetProfile,
     resultAgentGetHealth,
     resultClientTokenGetPolicy,

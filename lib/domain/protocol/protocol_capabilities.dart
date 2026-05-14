@@ -45,6 +45,7 @@ class ProtocolCapabilities {
   }) {
     final extensions = <String, dynamic>{
       'batchSupport': true,
+      'bulkInsert': true,
       'binaryPayload': binaryPayload,
       'compressionThreshold': compressionThreshold,
       'protocolReadyAck': true,

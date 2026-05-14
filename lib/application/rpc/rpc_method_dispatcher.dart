@@ -20,6 +20,7 @@ import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -143,6 +144,7 @@ class RpcMethodDispatcher {
   static const int _dbStreamingAutoSqlLengthThreshold = 240;
   static const String _dbStreamingAutoTableAllowlistEnv = 'DB_STREAMING_AUTO_TABLE_ALLOWLIST';
   static const Duration _dbStreamingAutoTableAllowlistCacheTtl = Duration(seconds: 10);
+  static final RegExp _bulkIdentifierPath = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$');
   static const List<String> _dbStreamingAutoLargeSqlSignals = <String>[
     ' join ',
     ' union ',
@@ -181,6 +183,11 @@ class RpcMethodDispatcher {
         clientToken,
         limits: effectiveLimits,
         negotiatedExtensions: negotiatedExtensions,
+      ),
+      'sql.bulkInsert' => await _handleSqlBulkInsert(
+        request,
+        clientToken,
+        limits: effectiveLimits,
       ),
       'sql.cancel' => await _handleSqlCancel(request),
       'agent.getProfile' => await _handleAgentGetProfile(
@@ -1106,6 +1113,253 @@ class RpcMethodDispatcher {
     );
   }
 
+  Future<RpcResponse> _handleSqlBulkInsert(
+    RpcRequest request,
+    String? clientToken, {
+    required TransportLimits limits,
+  }) async {
+    if (request.params is! Map<String, dynamic>) {
+      return _invalidParams(request, 'params must be an object');
+    }
+
+    final params = request.params as Map<String, dynamic>;
+    final bulkRequestResult = _parseBulkInsertRequest(request, params, limits);
+    if (bulkRequestResult.isError()) {
+      final failure = bulkRequestResult.exceptionOrNull()! as domain.Failure;
+      return _invalidParams(request, failure.message);
+    }
+    final bulkRequest = bulkRequestResult.getOrThrow();
+    final database = params['database'] as String?;
+    final authorizationSql = _bulkInsertAuthorizationSql(bulkRequest);
+    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_sqlBatchTotalBudgetDuration) : null;
+
+    final idempotencyKey = params['idempotency_key'] as String?;
+    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
+      request.method,
+      params,
+    );
+    final idempotentEarly = _consumeIdempotentCacheIfAny(
+      request,
+      idempotencyKey,
+      idempotencyFingerprint,
+    );
+    if (idempotentEarly != null) {
+      return idempotentEarly;
+    }
+
+    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+      _authMetrics?.recordDenied(
+        requestId: request.id?.toString(),
+        method: request.method,
+        reason: 'missing_client_token',
+      );
+      _recordAuthSqlDenied(
+        request,
+        sql: authorizationSql,
+        explicitReason: 'missing_client_token',
+      );
+      final rpcError = FailureToRpcErrorMapper.map(
+        _buildMissingClientTokenFailure(),
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
+      final authStopwatch = Stopwatch()..start();
+      final authResult = await _authorizeWithBudget(
+        token: clientToken,
+        sql: authorizationSql,
+        requestDatabase: database,
+        requestId: request.id?.toString(),
+        method: request.method,
+        deadline: deadline,
+      );
+      authStopwatch.stop();
+      if (authResult.isError()) {
+        final failure = authResult.exceptionOrNull()! as domain.Failure;
+        final ctx = failure.context;
+        _authMetrics?.recordDenied(
+          requestId: request.id?.toString(),
+          method: request.method,
+          latencyMs: authStopwatch.elapsedMilliseconds,
+          clientId: ctx['client_id'] as String?,
+          operation: ctx['operation'] as String?,
+          resource: ctx['resource'] as String?,
+          reason: ctx['reason'] as String?,
+        );
+        _recordAuthSqlDenied(
+          request,
+          sql: authorizationSql,
+          failure: failure,
+        );
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      }
+      _authMetrics?.recordAuthorized(
+        requestId: request.id?.toString(),
+        method: request.method,
+        latencyMs: authStopwatch.elapsedMilliseconds,
+      );
+    }
+
+    final options = params['options'] as Map<String, dynamic>?;
+    final timeoutMs = jsonPositiveInt(options?['timeout_ms']) ?? 0;
+    final startedAt = DateTime.now().toUtc();
+    final result = await _executeBulkInsertWithBudget(
+      bulkRequest,
+      database: database,
+      timeoutMs: timeoutMs,
+      requestId: request.id?.toString(),
+      deadline: deadline,
+    );
+
+    return result.fold(
+      (insertedRows) {
+        final finishedAt = DateTime.now().toUtc();
+        final response = RpcResponse.success(
+          id: request.id,
+          result: {
+            'execution_id': _uuid.v4(),
+            'started_at': startedAt.toIso8601String(),
+            'finished_at': finishedAt.toIso8601String(),
+            'table': bulkRequest.table,
+            'row_count': bulkRequest.rowCount,
+            'inserted_rows': insertedRows,
+          },
+        );
+        _storeIdempotentSuccessIfApplicable(
+          request: request,
+          idempotencyKey: idempotencyKey,
+          idempotencyFingerprint: idempotencyFingerprint,
+          response: response,
+        );
+        return response;
+      },
+      (Exception failure) {
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure as domain.Failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
+  }
+
+  Result<BulkInsertRequest> _parseBulkInsertRequest(
+    RpcRequest request,
+    Map<String, dynamic> params,
+    TransportLimits limits,
+  ) {
+    const allowedKeys = {
+      'table',
+      'columns',
+      'rows',
+      'client_token',
+      'clientToken',
+      'auth',
+      'idempotency_key',
+      'options',
+      'database',
+    };
+    final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
+    if (extraKeys.isNotEmpty) {
+      return Failure(
+        domain.ValidationFailure(
+          'Field "params" contains unsupported properties: ${extraKeys.join(", ")}',
+        ),
+      );
+    }
+    try {
+      final bulkRequest = BulkInsertRequest.fromJson(params);
+      final identifierFailure = _validateBulkInsertIdentifiers(bulkRequest);
+      if (identifierFailure != null) {
+        return Failure(identifierFailure);
+      }
+      if (bulkRequest.rows.length > limits.maxRows) {
+        return Failure(
+          domain.ValidationFailure(
+            'Field "params.rows" exceeds negotiated limit: ${bulkRequest.rows.length} > ${limits.maxRows}',
+          ),
+        );
+      }
+      final options = params['options'];
+      if (options != null && options is! Map<String, dynamic>) {
+        return Failure(domain.ValidationFailure('Field "params.options" must be an object'));
+      }
+      if (options is Map<String, dynamic>) {
+        final extraOptionKeys = options.keys.where((key) => key != 'timeout_ms');
+        if (extraOptionKeys.isNotEmpty) {
+          return Failure(
+            domain.ValidationFailure(
+              'Field "params.options" contains unsupported properties: ${extraOptionKeys.join(", ")}',
+            ),
+          );
+        }
+        final timeout = options['timeout_ms'];
+        if (timeout != null && jsonPositiveInt(timeout) == null) {
+          return Failure(domain.ValidationFailure('Field "params.options.timeout_ms" must be an integer >= 1'));
+        }
+      }
+      final tokenValidation = _validateBulkInsertTokenAliases(params);
+      if (tokenValidation != null) {
+        return Failure(tokenValidation);
+      }
+      final idempotencyKey = params['idempotency_key'];
+      if (idempotencyKey != null && (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
+        return Failure(domain.ValidationFailure('Field "params.idempotency_key" must be a non-empty string'));
+      }
+      final database = params['database'];
+      if (database != null && database is! String) {
+        return Failure(domain.ValidationFailure('Field "params.database" must be a string'));
+      }
+      return Success(bulkRequest);
+    } on Object catch (error) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Invalid sql.bulkInsert params',
+          cause: error,
+          context: {'request_id': ?request.id?.toString()},
+        ),
+      );
+    }
+  }
+
+  domain.ValidationFailure? _validateBulkInsertIdentifiers(
+    BulkInsertRequest request,
+  ) {
+    if (!_bulkIdentifierPath.hasMatch(request.table)) {
+      return domain.ValidationFailure('Field "params.table" must be a simple identifier path');
+    }
+    for (final column in request.columns) {
+      if (!_bulkIdentifierPath.hasMatch(column.name)) {
+        return domain.ValidationFailure('Field "params.columns[].name" must be a simple identifier');
+      }
+    }
+    return null;
+  }
+
+  domain.ValidationFailure? _validateBulkInsertTokenAliases(Map<String, dynamic> params) {
+    for (final key in ['client_token', 'clientToken', 'auth']) {
+      final value = params[key];
+      if (value != null && (value is! String || value.trim().isEmpty)) {
+        return domain.ValidationFailure('Field "params.$key" must be a non-empty string');
+      }
+    }
+    return null;
+  }
+
+  String _bulkInsertAuthorizationSql(BulkInsertRequest request) {
+    final columns = request.columns.map((column) => column.name).join(', ');
+    return 'INSERT INTO ${request.table} ($columns) VALUES (...)';
+  }
+
   /// When [multiResultRequested] and the script contains several statements,
   /// authorizes each fragment separately (aligned with `sql.executeBatch`).
   ///
@@ -1370,6 +1624,65 @@ class RpcMethodDispatcher {
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'Batch SQL execution timeout',
+          cause: error,
+          context: context,
+        ),
+      );
+    }
+  }
+
+  Future<Result<int>> _executeBulkInsertWithBudget(
+    BulkInsertRequest request, {
+    required String? database,
+    required int timeoutMs,
+    required String? requestId,
+    required DateTime? deadline,
+  }) async {
+    final stageTimeout = _effectiveStageTimeout(
+      deadline: deadline,
+      stageBudget: _batchExecutionStageBudgetDuration,
+    );
+    final timeout = mergeBatchOdbcTimeout(
+      stageTimeout: stageTimeout,
+      timeoutMs: timeoutMs,
+    );
+    if (timeout != null && timeout <= Duration.zero) {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'bulk_insert',
+        'reason': 'bulk_insert_budget_exhausted',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Bulk insert budget exhausted before database call',
+          context: context,
+        ),
+      );
+    }
+
+    try {
+      return await _databaseGateway.executeBulkInsert(
+        request,
+        database: database,
+        timeout: timeout,
+      );
+    } on TimeoutException catch (error) {
+      final context = <String, dynamic>{
+        'timeout': true,
+        'timeout_stage': 'sql',
+        'stage': 'bulk_insert',
+        'reason': 'query_timeout',
+      };
+      if (requestId != null) {
+        context['request_id'] = requestId;
+      }
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Bulk insert execution timeout',
           cause: error,
           context: context,
         ),

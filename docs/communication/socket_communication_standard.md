@@ -15,6 +15,7 @@ binario esta documentado em
 - Metodos RPC:
   - `sql.execute`
   - `sql.executeBatch`
+  - `sql.bulkInsert`
   - `sql.cancel` (feature flag `enableSocketCancelMethod`)
   - `agent.getProfile`
   - `agent.getHealth`
@@ -31,6 +32,7 @@ binario esta documentado em
 | JSON-RPC 2.0 (`rpc:request`/`rpc:response`)                          | implemented                                                                                                                |
 | Metodo `sql.execute`                                                 | implemented                                                                                                                |
 | Metodo `sql.executeBatch`                                            | implemented                                                                                                                |
+| Metodo `sql.bulkInsert`                                              | implemented                                                                                                                |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
 | Metodo `agent.getHealth`                                             | implemented                                                                                                                |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
@@ -755,6 +757,61 @@ para evitar crescimento sem limite.
     "total_commands": 2,
     "successful_commands": 2,
     "failed_commands": 0
+  }
+}
+```
+
+## Bulk insert nativo (implementado)
+
+### Request (`sql.bulkInsert`)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sql.bulkInsert",
+  "id": "bulk-001",
+  "params": {
+    "table": "sales.orders",
+    "columns": [
+      { "name": "id", "type": "i32" },
+      { "name": "code", "type": "text", "max_len": 40 },
+      { "name": "created_at", "type": "timestamp" }
+    ],
+    "rows": [
+      [1, "A001", "2026-05-14T10:00:00Z"],
+      [2, "A002", "2026-05-14T10:00:01Z"]
+    ],
+    "options": {
+      "timeout_ms": 30000
+    }
+  }
+}
+```
+
+- Usa o bulk insert nativo do `odbc_fast`, indicado para cargas grandes que
+  seriam ineficientes como milhares de comandos em `sql.executeBatch`.
+- `table` e `columns[*].name` aceitam caminhos simples de identificador
+  (`tabela` ou `schema.tabela`); nomes com quoting especial devem continuar no
+  caminho SQL tradicional ate haver contrato explicito para quoting.
+- `columns[*].type`: `i32`, `i64`, `text`, `decimal`, `binary`, `timestamp`.
+- `rows.length` respeita o limite negociado `max_rows`.
+- Autorizacao por `client_token` usa um SQL representativo
+  `INSERT INTO <table> (...) VALUES (...)`, preservando a mesma politica por
+  tabela do restante do protocolo.
+
+### Response (`sql.bulkInsert`)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "bulk-001",
+  "result": {
+    "execution_id": "bulk-789",
+    "started_at": "2026-05-14T10:00:00Z",
+    "finished_at": "2026-05-14T10:00:01Z",
+    "table": "sales.orders",
+    "row_count": 2,
+    "inserted_rows": 2
   }
 }
 ```
@@ -1793,6 +1850,12 @@ fila SQL e metricas de queries.
 - `observer.*` permanece fora do contrato publicado ate existir implementacao,
 schemas, OpenRPC e testes E2E.
 
+### `v2.10` (bulk insert nativo)
+
+- Metodo RPC `sql.bulkInsert` para cargas grandes via bulk insert nativo ODBC.
+- Schemas JSON dedicados para params e result.
+- OpenRPC `info.version` `2.10.0` e entrada do metodo em `methods`.
+
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
@@ -1831,6 +1894,7 @@ de idempotencia para cargas grandes.
 
 - `docs/communication/schemas/rpc.params.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
+- `docs/communication/schemas/rpc.params.sql-bulk-insert.schema.json`
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-health.schema.json`
@@ -1840,6 +1904,7 @@ de idempotencia para cargas grandes.
 
 - `docs/communication/schemas/rpc.result.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`
+- `docs/communication/schemas/rpc.result.sql-bulk-insert.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-health.schema.json`
 - `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`

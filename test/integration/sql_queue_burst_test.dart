@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
@@ -7,10 +10,6 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import '../helpers/e2e_env.dart';
 import '../helpers/odbc_e2e_coverage_sql.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
-
-const _burstQueueSize = 20;
-const _burstWorkers = 4;
-const _burstRequestCount = 50;
 
 void main() async {
   await E2EEnv.load();
@@ -55,10 +54,12 @@ void main() async {
       final localHarness = harness!;
       localHarness.metrics.clear();
       final queue = SqlExecutionQueue(
-        maxQueueSize: _burstQueueSize,
-        maxConcurrentWorkers: _burstWorkers,
+        maxQueueSize: E2EEnv.odbcBurstQueueSize,
+        maxConcurrentWorkers: E2EEnv.odbcBurstWorkers,
         metricsCollector: localHarness.metrics,
-        defaultEnqueueTimeout: const Duration(seconds: 30),
+        defaultEnqueueTimeout: Duration(
+          milliseconds: E2EEnv.odbcBurstEnqueueTimeoutMs,
+        ),
       );
       return QueuedDatabaseGateway(
         delegate: localHarness.gateway,
@@ -82,9 +83,10 @@ void main() async {
         final localHarness = harness!;
         final burstQuery = slowQuery ?? '';
         final queuedGateway = createQueuedGateway();
+        final elapsed = Stopwatch()..start();
 
         try {
-          final futures = List.generate(_burstRequestCount, (index) {
+          final futures = List.generate(E2EEnv.odbcBurstRequestCount, (index) {
             return queuedGateway.executeQuery(
               buildRequest('burst-$index', burstQuery),
             );
@@ -107,6 +109,26 @@ void main() async {
           final active = await localHarness.connectionPool.getActiveCount();
           expect(active.isSuccess(), isTrue, reason: '$active');
           expect(active.getOrThrow(), 0);
+          elapsed.stop();
+          final maxMs = E2EEnv.odbcBurstMaxMsPerTest;
+          developer.log(
+            'E2E_SQL_QUEUE_BURST_TIMING '
+            '${jsonEncode({
+              'test': 'overflow',
+              'elapsed_ms': elapsed.elapsedMilliseconds,
+              'request_count': E2EEnv.odbcBurstRequestCount,
+              'queue_size': E2EEnv.odbcBurstQueueSize,
+              'workers': E2EEnv.odbcBurstWorkers,
+              'rejected': rejected,
+              'succeeded': succeeded,
+            })}',
+            name: 'e2e.sql_queue_burst',
+          );
+          expect(
+            elapsed.elapsedMilliseconds,
+            lessThanOrEqualTo(maxMs),
+            reason: 'burst overflow test exceeded ODBC_BURST_MAX_MS_PER_TEST=$maxMs',
+          );
         } finally {
           queuedGateway.dispose();
         }
@@ -117,6 +139,7 @@ void main() async {
           : skipUnlessOptIn != false
           ? skipUnlessOptIn
           : skipUnlessSlowQuery,
+      tags: const ['live', 'slow'],
     );
 
     test(
@@ -126,9 +149,10 @@ void main() async {
         final localHarness = harness!;
         final burstQuery = slowQuery ?? '';
         final queuedGateway = createQueuedGateway();
+        final elapsed = Stopwatch()..start();
 
         try {
-          final burst = List.generate(_burstRequestCount, (index) {
+          final burst = List.generate(E2EEnv.odbcBurstRequestCount, (index) {
             return queuedGateway.executeQuery(
               buildRequest('burst-recovery-$index', burstQuery),
             );
@@ -150,6 +174,24 @@ void main() async {
           final active = await localHarness.connectionPool.getActiveCount();
           expect(active.isSuccess(), isTrue, reason: '$active');
           expect(active.getOrThrow(), 0);
+          elapsed.stop();
+          final maxMs = E2EEnv.odbcBurstMaxMsPerTest;
+          developer.log(
+            'E2E_SQL_QUEUE_BURST_TIMING '
+            '${jsonEncode({
+              'test': 'recovery',
+              'elapsed_ms': elapsed.elapsedMilliseconds,
+              'request_count': E2EEnv.odbcBurstRequestCount,
+              'queue_size': E2EEnv.odbcBurstQueueSize,
+              'workers': E2EEnv.odbcBurstWorkers,
+            })}',
+            name: 'e2e.sql_queue_burst',
+          );
+          expect(
+            elapsed.elapsedMilliseconds,
+            lessThanOrEqualTo(maxMs),
+            reason: 'burst recovery test exceeded ODBC_BURST_MAX_MS_PER_TEST=$maxMs',
+          );
         } finally {
           queuedGateway.dispose();
         }
@@ -160,6 +202,7 @@ void main() async {
           : skipUnlessOptIn != false
           ? skipUnlessOptIn
           : skipUnlessSlowQuery,
+      tags: const ['live', 'slow'],
     );
   });
 }

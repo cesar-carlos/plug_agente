@@ -66,6 +66,7 @@ void main() async {
       skip: !connectionStringValid
           ? 'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env'
           : false,
+      tags: const ['live'],
     );
 
     test(
@@ -94,8 +95,7 @@ void main() async {
         expect(
           gateway.hasActiveStream,
           isTrue,
-          reason:
-              'Streaming did not become active before cancel (check DSN, long query, or connect latency)',
+          reason: 'Streaming did not become active before cancel (check DSN, long query, or connect latency)',
         );
 
         final cancelResult = await gateway.cancelActiveStream();
@@ -107,6 +107,7 @@ void main() async {
       skip: !connectionStringValid || !longQueryValid
           ? 'Defina um DSN e ODBC_INTEGRATION_LONG_QUERY* (query longa) no .env'
           : false,
+      tags: const ['live', 'slow'],
     );
   });
 }

@@ -1,4 +1,5 @@
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -219,5 +220,19 @@ class MockDatabaseGateway implements IDatabaseGateway {
     }
 
     return Success(affectedRows);
+  }
+
+  @override
+  Future<Result<int>> executeBulkInsert(
+    BulkInsertRequest request, {
+    Duration? timeout,
+    String? database,
+  }) async {
+    if (request.table.toLowerCase().contains('error')) {
+      return Failure(
+        domain.QueryExecutionFailure('Failed to execute bulk insert'),
+      );
+    }
+    return Success(request.rowCount);
   }
 }

@@ -43,6 +43,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     this._settings, {
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     MetricsCollector? metricsCollector,
+    Duration cancelDisconnectTimeout = _defaultCancelDisconnectTimeout,
   }) : _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
@@ -52,14 +53,16 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
              acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
              metricsCollector: metricsCollector,
            ),
-       _metrics = metricsCollector;
+       _metrics = metricsCollector,
+       _cancelDisconnectTimeout = cancelDisconnectTimeout;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector? _metrics;
+  final Duration _cancelDisconnectTimeout;
   final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
   bool _initialized = false;
-  static const Duration _cancelDisconnectTimeout = Duration(seconds: 8);
+  static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
   @override

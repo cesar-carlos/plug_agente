@@ -12,6 +12,7 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -128,6 +129,17 @@ void main() {
         ),
       );
       registerFallbackValue(const SqlExecutionOptions());
+      registerFallbackValue(
+        const BulkInsertRequest(
+          table: 'users',
+          columns: [
+            BulkInsertColumn(name: 'id', type: BulkInsertColumnType.i32),
+          ],
+          rows: [
+            [1],
+          ],
+        ),
+      );
     });
 
     late MockAuthorizeSqlOperation mockAuthorize;
@@ -228,6 +240,16 @@ void main() {
               )
               .toList(),
         );
+      });
+      when(
+        () => mockGateway.executeBulkInsert(
+          any(),
+          database: any(named: 'database'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as BulkInsertRequest;
+        return Success(request.rowCount);
       });
 
       dispatcher = RpcMethodDispatcher(
@@ -2446,6 +2468,95 @@ void main() {
       final result = response.result as Map<String, dynamic>;
       expect(result['items'], hasLength(2));
       expect(result['total_commands'], equals(2));
+    });
+
+    test('should execute sql.bulkInsert successfully', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.bulkInsert',
+        id: 'bulk-1',
+        params: {
+          'table': 'users',
+          'columns': [
+            {'name': 'id', 'type': 'i32'},
+            {'name': 'name', 'type': 'text', 'max_len': 100},
+          ],
+          'rows': [
+            [1, 'Ada'],
+            [2, 'Linus'],
+          ],
+        },
+      );
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isSuccess, isTrue);
+      final result = response.result as Map<String, dynamic>;
+      expect(result['inserted_rows'], equals(2));
+      expect(result['row_count'], equals(2));
+      expect(result['table'], equals('users'));
+      final captured =
+          verify(
+                () => mockGateway.executeBulkInsert(
+                  captureAny(),
+                  database: any(named: 'database'),
+                  timeout: any(named: 'timeout'),
+                ),
+              ).captured.single
+              as BulkInsertRequest;
+      expect(captured.columns, hasLength(2));
+      expect(captured.rows, hasLength(2));
+    });
+
+    test('should authorize sql.bulkInsert using INSERT preview', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestDatabase: any(named: 'requestDatabase'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.bulkInsert',
+        id: 'bulk-auth',
+        params: {
+          'database': 'erp_main',
+          'table': 'sales.orders',
+          'columns': [
+            {'name': 'id', 'type': 'i32'},
+          ],
+          'rows': [
+            [1],
+          ],
+        },
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'token',
+      );
+
+      expect(response.isSuccess, isTrue);
+      final captured =
+          verify(
+                () => mockAuthorize(
+                  token: 'token',
+                  sql: captureAny(named: 'sql'),
+                  requestDatabase: 'erp_main',
+                  requestId: 'bulk-auth',
+                  method: 'sql.bulkInsert',
+                ),
+              ).captured.single
+              as String;
+      expect(captured, equals('INSERT INTO sales.orders (id) VALUES (...)'));
     });
 
     test('should forward request database to authorization for sql.executeBatch', () async {

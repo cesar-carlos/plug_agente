@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.sql-bulk-insert.v1.json",
+  "title": "sql.bulkInsert params",
+  "description": "Parameters for native ODBC bulk insert through the Plug RPC profile",
+  "type": "object",
+  "required": ["table", "columns", "rows"],
+  "properties": {
+    "table": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target table identifier. Runtime accepts simple identifier paths such as table or schema.table."
+    },
+    "columns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "enum": ["i32", "i64", "text", "decimal", "binary", "timestamp"]
+          },
+          "nullable": { "type": "boolean", "default": false },
+          "max_len": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum length for variable-size types when needed by the driver."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array rows. Each row must have the same length and order as columns.",
+      "items": {
+        "type": "array"
+      }
+    },
+    "client_token": {
+      "type": "string",
+      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Unique key for request deduplication (TTL 5min). Reusing the same key with a different request payload is rejected."
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000,
+          "description": "Maximum ODBC bulk insert time in milliseconds. Effective timeout is the minimum between this value and any active internal stage budget."
+        }
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "string",
+      "description": "Optional target database override for this bulk insert request. When the resolved client token payload contains payload.database, this field becomes required and must match it exactly after trim + case-insensitive normalization."
+    }
+  },
+  "additionalProperties": false
+}

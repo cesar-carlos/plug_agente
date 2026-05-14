@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.sql-bulk-insert.v1.json",
+  "title": "sql.bulkInsert result",
+  "description": "Result payload for successful sql.bulkInsert responses",
+  "type": "object",
+  "required": [
+    "execution_id",
+    "started_at",
+    "finished_at",
+    "table",
+    "row_count",
+    "inserted_rows"
+  ],
+  "properties": {
+    "execution_id": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "table": { "type": "string" },
+    "row_count": { "type": "integer", "minimum": 0 },
+    "inserted_rows": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

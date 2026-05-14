@@ -29,6 +29,7 @@ void main() {
         mockService,
         mockSettings,
         metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
       );
     });
 
@@ -327,6 +328,7 @@ void main() {
           mockSettings,
           directConnectionLimiter: limiter,
           metricsCollector: metrics,
+          cancelDisconnectTimeout: const Duration(milliseconds: 20),
         );
 
         var connectionCounter = 0;

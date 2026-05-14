@@ -146,6 +146,7 @@ void main() async {
       },
       timeout: const Timeout(Duration(minutes: 2)),
       skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
+      tags: const ['live', 'slow'],
     );
 
     test(
@@ -173,6 +174,7 @@ void main() async {
       },
       timeout: const Timeout(Duration(minutes: 2)),
       skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
+      tags: const ['live'],
     );
   });
 }

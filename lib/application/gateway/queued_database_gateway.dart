@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -107,6 +108,22 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         database: database,
       ),
       kind: SqlExecutionKind.nonQuery,
+    );
+  }
+
+  @override
+  Future<Result<int>> executeBulkInsert(
+    BulkInsertRequest request, {
+    Duration? timeout,
+    String? database,
+  }) {
+    return _queue.submit(
+      () => _delegate.executeBulkInsert(
+        request,
+        timeout: timeout,
+        database: database,
+      ),
+      kind: SqlExecutionKind.batch,
     );
   }
 

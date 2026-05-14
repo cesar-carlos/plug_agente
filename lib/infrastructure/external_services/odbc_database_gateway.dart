@@ -9,6 +9,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -2037,6 +2038,220 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       },
       Failure.new,
     );
+  }
+
+  @override
+  Future<Result<int>> executeBulkInsert(
+    BulkInsertRequest request, {
+    Duration? timeout,
+    String? database,
+  }) async {
+    final validationFailure = _validateBulkInsertRequest(request);
+    if (validationFailure != null) {
+      return Failure(validationFailure);
+    }
+
+    final initResult = await _ensureInitialized();
+    return initResult.fold(
+      (_) async {
+        final configResult = await _configRepository.getCurrentConfig();
+        return configResult.fold(
+          (config) async {
+            final localConfig = _buildDatabaseConfig(config);
+            final connectionString = _resolveConnectionString(
+              config,
+              localConfig,
+              databaseOverride: database,
+            );
+            return _executeBulkInsertDirect(
+              request,
+              connectionString,
+              timeout: timeout,
+            );
+          },
+          (domainFailure) => Failure(
+            domain.ConfigurationFailure(
+              'Failed to get config: $domainFailure',
+            ),
+          ),
+        );
+      },
+      Failure.new,
+    );
+  }
+
+  domain.Failure? _validateBulkInsertRequest(BulkInsertRequest request) {
+    if (request.table.trim().isEmpty) {
+      return domain.ValidationFailure('Bulk insert table is required');
+    }
+    if (request.columns.isEmpty) {
+      return domain.ValidationFailure('Bulk insert requires at least one column');
+    }
+    if (request.rows.isEmpty) {
+      return domain.ValidationFailure('Bulk insert requires at least one row');
+    }
+    for (final column in request.columns) {
+      if (column.name.trim().isEmpty) {
+        return domain.ValidationFailure('Bulk insert column names must not be empty');
+      }
+    }
+    for (var i = 0; i < request.rows.length; i++) {
+      if (request.rows[i].length != request.columns.length) {
+        return domain.ValidationFailure.withContext(
+          message: 'Bulk insert row length does not match column count',
+          context: {
+            'row_index': i,
+            'row_length': request.rows[i].length,
+            'column_count': request.columns.length,
+          },
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<Result<int>> _executeBulkInsertDirect(
+    BulkInsertRequest request,
+    String connectionString, {
+    Duration? timeout,
+  }) async {
+    final deadline = _deadlineFor(timeout);
+    final leaseResult = await _connectionManager.acquireDirectLease(
+      operation: 'bulk_insert_direct',
+      deadline: deadline,
+    );
+    if (leaseResult.isError()) {
+      return Failure(leaseResult.exceptionOrNull()!);
+    }
+    final directLease = leaseResult.getOrThrow();
+    var directLeaseReleased = false;
+    void releaseDirectLease() {
+      if (directLeaseReleased) {
+        return;
+      }
+      directLeaseReleased = true;
+      directLease.release();
+    }
+
+    try {
+      final connectResult = await _connectionManager.connectSafely(
+        connectionString,
+        options: _connectionOptionsForTimeout(
+          _remainingTimeoutFromDeadline(deadline) ?? timeout,
+        ),
+      );
+      return await connectResult.fold(
+        (connection) async {
+          try {
+            final builder = _buildNativeBulkInsert(request);
+            final operation = _service.bulkInsert(
+              connection.id,
+              builder.tableName,
+              builder.columnNames,
+              builder.build(),
+              builder.rowCount,
+            );
+            final remaining = _remainingTimeoutFromDeadline(deadline) ?? timeout;
+            final result = remaining == null ? await operation : await operation.timeout(remaining);
+            return result.fold(
+              Success.new,
+              (error) => Failure(
+                OdbcFailureMapper.mapQueryError(
+                  error,
+                  operation: 'bulk_insert_direct',
+                ),
+              ),
+            );
+          } on TimeoutException catch (error) {
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: 'Bulk insert execution timeout',
+                cause: error,
+                context: {
+                  'timeout': true,
+                  'timeout_stage': 'sql',
+                  'stage': 'bulk_insert',
+                  'reason': 'query_timeout',
+                  if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+                },
+              ),
+            );
+          } finally {
+            await _connectionManager.disconnectOwnedConnectionAndReleaseLease(
+              connectionId: connection.id,
+              directLease: directLease,
+              operation: 'bulk_insert_direct_disconnect',
+            );
+          }
+        },
+        (error) {
+          if (_looksLikeTimeoutError(error)) {
+            _metrics.recordConnectTimeout();
+          }
+          return Failure(
+            OdbcFailureMapper.mapConnectionError(
+              error,
+              operation: 'connect_direct',
+            ),
+          );
+        },
+      );
+    } finally {
+      releaseDirectLease();
+    }
+  }
+
+  BulkInsertBuilder _buildNativeBulkInsert(BulkInsertRequest request) {
+    final builder = BulkInsertBuilder()..table(request.table);
+    for (final column in request.columns) {
+      builder.addColumn(
+        column.name,
+        _toNativeBulkColumnType(column.type),
+        nullable: column.nullable,
+        maxLen: column.maxLen,
+      );
+    }
+    for (final row in request.rows) {
+      builder.addRow(_coerceBulkInsertRow(row, request.columns));
+    }
+    return builder;
+  }
+
+  BulkColumnType _toNativeBulkColumnType(BulkInsertColumnType type) {
+    return switch (type) {
+      BulkInsertColumnType.i32 => BulkColumnType.i32,
+      BulkInsertColumnType.i64 => BulkColumnType.i64,
+      BulkInsertColumnType.text => BulkColumnType.text,
+      BulkInsertColumnType.decimal => BulkColumnType.decimal,
+      BulkInsertColumnType.binary => BulkColumnType.binary,
+      BulkInsertColumnType.timestamp => BulkColumnType.timestamp,
+    };
+  }
+
+  List<dynamic> _coerceBulkInsertRow(
+    List<dynamic> row,
+    List<BulkInsertColumn> columns,
+  ) {
+    return List<dynamic>.generate(row.length, (index) {
+      final value = row[index];
+      final column = columns[index];
+      if (value == null || column.type != BulkInsertColumnType.timestamp) {
+        return value;
+      }
+      if (value is BulkTimestamp) {
+        return value;
+      }
+      if (value is DateTime) {
+        return BulkTimestamp.fromDateTime(value);
+      }
+      if (value is String) {
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return BulkTimestamp.fromDateTime(parsed);
+        }
+      }
+      return value;
+    });
   }
 
   Future<Result<int>> _executeNonQueryWithRetry(

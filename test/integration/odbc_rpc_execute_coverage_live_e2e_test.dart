@@ -140,6 +140,7 @@ void main() async {
         }
       },
       skip: skipUnlessDsn,
+      tags: const ['live'],
     );
 
     test(
@@ -201,6 +202,7 @@ void main() async {
         expect(n, 3);
       },
       skip: skipUnlessDsn,
+      tags: const ['live'],
     );
 
     test(
@@ -414,6 +416,7 @@ void main() async {
         expect(parsedCount, 2);
       },
       skip: skipUnlessDsn,
+      tags: const ['live'],
     );
 
     test(
@@ -455,6 +458,7 @@ void main() async {
           : !E2EEnv.odbcE2eTryTransactionalBatch
           ? 'Defina ODBC_E2E_TRANSACTIONAL_BATCH=true no .env para este teste.'
           : false,
+      tags: const ['live'],
     );
   });
 }

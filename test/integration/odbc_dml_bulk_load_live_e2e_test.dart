@@ -1,5 +1,5 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -25,13 +25,14 @@ void main() async {
       ? 'Defina ODBC_E2E_RPC_DSN ou ODBC_TEST_DSN / ODBC_DSN, ODBC_TEST_DSN_SQL_SERVER '
             'ou ODBC_TEST_DSN_POSTGRESQL no .env.'
       : !enabled
-          ? 'Defina ODBC_E2E_DML_BULK_TESTS=true no .env para o teste de carga (50k+ linhas, demorado).'
-          : null;
+      ? 'Defina ODBC_E2E_DML_BULK_TESTS=true no .env para o teste de carga (50k+ linhas, demorado).'
+      : null;
 
   group('ODBC DML bulk load (live E2E)', () {
     OdbcE2eRpcHarness? harness;
     var isReady = false;
     late OdbcE2eCoverageSql sql;
+    var createMs = 0;
 
     setUpAll(() async {
       if (!dsnValid || !enabled) {
@@ -63,6 +64,7 @@ void main() async {
         null,
       );
       swDdl.stop();
+      createMs = swDdl.elapsedMilliseconds;
       expect(create.isSuccess(), isTrue, reason: 'create table: $create');
 
       developer.log(
@@ -99,79 +101,45 @@ void main() async {
           reason: 'ODBC init failed or bulk E2E not enabled',
         );
         final h = harness!;
+        final phaseTimings = <String, int>{'create_ms': createMs};
 
         final totalRows = E2EEnv.odbcE2eDmlBulkRowCount;
-        final chunkSize = E2EEnv.odbcE2eDmlBulkChunkSize;
         final transportLimits = TransportLimits(
-          maxBatchSize: chunkSize,
+          maxBatchSize: E2EEnv.odbcE2eDmlBulkChunkSize,
           maxRows: totalRows + 200,
         );
 
         final swInsert = Stopwatch()..start();
-        var inserted = 0;
-        var batchIndex = 0;
-        while (inserted < totalRows) {
-          final take = math.min(chunkSize, totalRows - inserted);
-          final commands = <Map<String, dynamic>>[];
-          for (var j = 0; j < take; j++) {
-            final i = inserted + j + 1;
-            commands.add({
-              'sql': sql.insertRow(
-                id: i,
-                code: 'b$i',
-                amt: 1.0 + (i % 100) * 0.01,
-                birthDate: '2024-01-${(i % 28) + 1}',
-                ts: '2024-06-01 12:00:00',
-                isActive: i.isEven,
-              ),
-            });
-          }
-          // Keep each bulk chunk on a single direct connection so the live
-          // load test does not trip pool/circuit-breaker pressure mid-batch.
-          final insertReq = RpcRequest(
-            jsonrpc: '2.0',
-            method: 'sql.executeBatch',
-            id: 'e2e-dml-bulk-$batchIndex',
-            params: {
-              'commands': commands,
-              'options': {
-                'transaction': true,
-                'max_rows': take + 8,
-              },
-            },
-          );
-          final insertResp = await h.dispatcher.dispatch(
-            insertReq,
-            'e2e-agent',
-            limits: transportLimits,
-          );
-          expect(insertResp.isSuccess, isTrue, reason: 'batch $batchIndex: ${insertResp.error}');
-          final m = insertResp.result! as Map<String, dynamic>;
-          expect(m['failed_commands'], 0);
-          expect(m['successful_commands'], take);
-          inserted += take;
-          batchIndex++;
-          if (batchIndex % 10 == 0 || inserted >= totalRows) {
-            developer.log(
-              'DML bulk: inserted $inserted / $totalRows (batch size $chunkSize)',
-              name: 'e2e.odbc_dml_bulk',
-            );
-          }
-        }
+        final bulkInsertReq = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.bulkInsert',
+          id: 'e2e-dml-bulk-insert',
+          params: _buildBulkInsertParams(
+            tableName: sql.tableName,
+            rowCount: totalRows,
+          ),
+        );
+        final insertResp = await h.dispatcher.dispatch(
+          bulkInsertReq,
+          'e2e-agent',
+          limits: transportLimits,
+        );
+        expect(insertResp.isSuccess, isTrue, reason: '${insertResp.error}');
+        final insertMap = insertResp.result! as Map<String, dynamic>;
+        expect(insertMap['inserted_rows'], totalRows);
         swInsert.stop();
+        phaseTimings['insert_ms'] = swInsert.elapsedMilliseconds;
         developer.log(
-          'DML bulk: INSERT total $inserted rows in ${swInsert.elapsedMilliseconds} ms '
-          '($batchIndex batches, ~${(swInsert.elapsedMilliseconds / math.max(1, batchIndex)).toStringAsFixed(1)} ms/batch)',
+          'DML bulk: native bulk INSERT total $totalRows rows in '
+          '${swInsert.elapsedMilliseconds} ms',
           name: 'e2e.odbc_dml_bulk',
         );
-        final maxIns = E2EEnv.odbcE2eDmlBulkMaxMsInsert;
-        if (maxIns != null) {
-          expect(
-            swInsert.elapsedMilliseconds,
-            lessThanOrEqualTo(maxIns),
-            reason: 'insert slower than ODBC_E2E_DML_BULK_MAX_MS_INSERT=$maxIns',
-          );
-        }
+        final maxIns = E2EEnv.odbcE2eDmlBulkMaxMsInsertOrDefault;
+        expect(
+          swInsert.elapsedMilliseconds,
+          lessThanOrEqualTo(maxIns),
+          reason: 'insert slower than ODBC_E2E_DML_BULK_MAX_MS_INSERT/default=$maxIns',
+        );
 
         final countReq = RpcRequest(
           jsonrpc: '2.0',
@@ -213,6 +181,7 @@ void main() async {
           limits: transportLimits,
         );
         swUpdate.stop();
+        phaseTimings['update_ms'] = swUpdate.elapsedMilliseconds;
         expect(updateResp.isSuccess, isTrue, reason: '${updateResp.error}');
         developer.log(
           'DML bulk: UPDATE all ($totalRows rows) ${swUpdate.elapsedMilliseconds} ms',
@@ -242,6 +211,7 @@ void main() async {
           limits: transportLimits,
         );
         swDelete.stop();
+        phaseTimings['delete_ms'] = swDelete.elapsedMilliseconds;
         expect(deleteResp.isSuccess, isTrue, reason: '${deleteResp.error}');
         developer.log(
           'DML bulk: DELETE all rows ${swDelete.elapsedMilliseconds} ms',
@@ -262,7 +232,17 @@ void main() async {
           null,
         );
         swUserDrop.stop();
+        phaseTimings['drop_ms'] = swUserDrop.elapsedMilliseconds;
         expect(userDrop.isSuccess(), isTrue, reason: 'user drop: $userDrop');
+        developer.log(
+          'E2E_DML_BULK_PHASE_TIMINGS '
+          '${jsonEncode({
+            'rows': totalRows,
+            'method': 'odbc_fast.bulkInsert',
+            ...phaseTimings,
+          })}',
+          name: 'e2e.odbc_dml_bulk',
+        );
         developer.log(
           'DML bulk: DROP TABLE (end of test) ${swUserDrop.elapsedMilliseconds} ms',
           name: 'e2e.odbc_dml_bulk',
@@ -278,6 +258,40 @@ void main() async {
       },
       timeout: const Timeout(Duration(minutes: 30)),
       skip: skipMessage,
+      tags: const ['live', 'slow', 'perf'],
     );
   });
+}
+
+Map<String, dynamic> _buildBulkInsertParams({
+  required String tableName,
+  required int rowCount,
+}) {
+  final rows = <List<dynamic>>[];
+
+  for (var i = 1; i <= rowCount; i++) {
+    final day = (i % 28) + 1;
+    final isActive = i.isEven ? 1 : 0;
+    rows.add([
+      i,
+      'b$i',
+      (1.0 + (i % 100) * 0.01).toStringAsFixed(2),
+      '2024-01-${day.toString().padLeft(2, '0')}T00:00:00Z',
+      '2024-06-01T12:00:00Z',
+      isActive,
+    ]);
+  }
+
+  return {
+    'table': tableName,
+    'columns': const [
+      {'name': 'id', 'type': 'i32'},
+      {'name': 'code', 'type': 'text', 'max_len': 40},
+      {'name': 'amt', 'type': 'decimal', 'max_len': 16},
+      {'name': 'birth_date', 'type': 'timestamp'},
+      {'name': 'ts_col', 'type': 'timestamp'},
+      {'name': 'is_active', 'type': 'i32'},
+    ],
+    'rows': rows,
+  };
 }
