@@ -146,23 +146,34 @@ During burst tests, monitor these metrics via `MetricsCollector`:
 4. Review metrics and logs for anomalies
 5. Adjust `maxQueueSize` and `maxConcurrentWorkers` based on results
 
-## Future Enhancements
+## Runtime Tuning Follow-up
 
-### Phase 6: Multiple Workers (Only after measurement)
+The app now uses the internal async worker pool from `odbc_fast 3.7.0` by
+default. Burst test analysis should use the ODBC diagnostic payload before
+changing concurrency limits:
 
-If E2E tests show the bottleneck is the `odbc_fast` worker (not the database/driver), consider:
+- `runtime_tuning.async_worker_count`
+- `runtime_tuning.async_max_pending_requests`
+- `async_worker_pool.pending_requests`
+- `async_worker_pool.pending_saturation_percent`
+- `async_worker_pool.near_pending_limit`
+- `async_worker_pool.queue_wait_p95_micros`
+- `sql_queue.current_size`
+- `sql_queue.p95_wait_time_ms`
 
-- Multiple `ServiceLocator().initialize(useAsync: true)` instances
-- `OdbcWorkerPool` with 2-3 workers
-- Partitioned connection pools per worker
-- Updated metrics for multi-worker tracking
+If E2E tests show the internal ODBC worker pool is saturated while the database
+and driver still have headroom, tune:
 
-**Criteria to evaluate:**
-- Worker CPU utilization > 80% sustained
-- Database/driver response time < 10ms
-- Clear evidence that ODBC RPC serialization is the bottleneck
+- `ODBC_ASYNC_WORKER_COUNT`, capped by `min(ODBC_POOL_SIZE, CPU cores)`
+- `ODBC_ASYNC_MAX_PENDING_REQUESTS`, for expected bursts that should wait
+  inside the package instead of failing fast immediately
+- `SQL_QUEUE_MAX_SIZE` and SQL queue worker limits, when app queue wait grows
+  but ODBC workers are idle
 
-Do NOT implement multiple workers speculatively. Measure first.
+Do not add multiple `ServiceLocator` instances or partitioned custom ODBC pools
+for normal tuning. That architecture remains outside the default runtime path
+and should only be reconsidered after the supported package worker pool has
+been measured and exhausted.
 
 ## References
 
