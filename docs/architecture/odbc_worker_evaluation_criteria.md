@@ -1,300 +1,110 @@
-# ODBC Multiple Worker Evaluation Criteria
+# ODBC Worker Evaluation Criteria
 
-## Overview
+Atualizado: 2026-05-14
 
-This document defines the criteria and decision framework for evaluating whether to implement multiple `odbc_fast` workers. **Do not proceed with multiple workers without meeting these criteria first.**
+Este documento separa dois assuntos que nao devem ser misturados:
 
-## Current Architecture
+- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.7.0.
+  Agora e o default do app, configurado por `ODBC_ASYNC_WORKER_COUNT` e
+  `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
+- **Arquitetura customizada multi-`ServiceLocator`/multi-pool**: continuamos
+  fora de escopo. Ela cria roteamento, cancelamento, lifecycle e metricas por
+  pool que o app ainda nao precisa manter.
 
-- **Single `odbc_fast` worker**: One async service initialized via `ServiceLocator().initialize(useAsync: true)`
-- **Lease-based connection pool**: `OdbcConnectionPool` with configurable `poolSize` (default: 4)
-- **SQL execution queue**: Bounds concurrent SQL operations to prevent pool overload
-- **Native RPC semaphore**: Limits concurrent calls to ODBC worker (`leasePoolNativeHandshakeConcurrency`)
+## Runtime Atual
 
-## Why Multiple Workers Are Complex
+- `odbc.ServiceLocator.initialize(useAsync: true, asyncWorkerCount: ..., asyncMaxPendingRequests: ..., asyncBackpressureMode: failFast)`
+- `asyncWorkerCount` default: `min(poolSize persistido, CPU cores)`, minimo 1
+- `asyncMaxPendingRequests` default: `poolSize * 4`
+- `OdbcConnectionPool` lease-based continua sendo o default
+- Native pool so via `enableOdbcExperimentalDriverAdaptivePooling`
+- SQL Anywhere permanece fora do native pool
 
-1. **Connection ID partitioning**: Each worker has its own connection ID namespace
-2. **Pool lifecycle management**: Each worker needs an isolated connection pool
-3. **Metrics partitioning**: Tracking per-worker metrics adds complexity
-4. **Cancellation coordination**: SQL cancellation must target the correct worker
-5. **Increased resource usage**: More workers = more memory, threads, and overhead
+## Quando Ajustar o Worker Pool Interno
 
-## Decision Framework
+Ajuste apenas depois de medir:
 
-### Step 1: Measure Current Bottleneck
+| Sinal | Acao sugerida |
+| --- | --- |
+| `pending_requests` cresce e CPU/driver ainda tem folga | Aumentar `ODBC_ASYNC_WORKER_COUNT`, respeitando o teto `min(poolSize, CPU cores)`. |
+| Rejeicoes `failFast` aparecem em bursts esperados | Aumentar `ODBC_ASYNC_MAX_PENDING_REQUESTS` ou reduzir concorrencia upstream. |
+| Timeouts crescem junto com `active_requests` alto | Verificar query, driver e banco antes de aumentar workers. |
+| Queue wait do app cresce mas workers ficam ociosos | Ajustar `SqlExecutionQueue` e pool lease-based, nao o worker pool interno. |
 
-Run E2E burst tests (see `docs/testing/sql_queue_concurrency_tests.md`) and collect these metrics:
+## Fora de Escopo: Multi-ServiceLocator Customizado
 
-**Required Metrics:**
-- `maxConcurrentWorkers` achieved under load
-- `averageQueueWaitTime` during burst
-- `sqlQueueRejectionCount` and `sqlQueueTimeoutCount`
-- `poolAcquireTimeoutCount` (should be near zero with queue)
-- Database/driver response time (measured via query execution duration)
-- ODBC worker CPU utilization (via OS tools)
+Nao implementar multiplos `ServiceLocator` com pools separados sem evidencia
+forte. Essa arquitetura so deve ser reavaliada se todos os criterios abaixo
+forem verdadeiros:
 
-### Step 2: Identify Bottleneck
+- o worker pool interno do pacote ja foi medido e ajustado;
+- banco e driver nao sao o gargalo;
+- `SqlExecutionQueue` e `OdbcConnectionPool` estao estaveis;
+- cancelamento, retry, circuito e metricas ja conseguem identificar o worker
+  responsavel por cada request;
+- benchmark mostra ganho relevante que justifica a complexidade.
 
-Analyze where time is spent:
+## Metricas Obrigatorias
 
-| Bottleneck | Evidence | Solution |
-|------------|----------|----------|
-| **Database/Driver** | Query execution > 100ms, low worker CPU | Optimize queries, add indexes, upgrade hardware |
-| **Network** | High latency to database, low worker CPU | Improve network, move agent closer to database |
-| **Connection Pool** | Frequent pool acquire waits, queue rejections | Increase `poolSize`, tune `leasePoolNativeHandshakeConcurrency` |
-| **SQL Queue** | High rejection rate, low worker utilization | Increase `maxQueueSize`, tune `maxConcurrentWorkers` |
-| **ODBC Worker (RPC)** | Worker CPU > 80%, database response < 10ms, queue draining slowly | **Consider multiple workers** |
+O diagnostico ODBC deve registrar:
 
-### Step 3: Evaluate Multiple Workers (Only if ODBC Worker is bottleneck)
+- `runtime_tuning.pool_size`
+- `runtime_tuning.async_worker_count`
+- `runtime_tuning.async_max_pending_requests`
+- `runtime_tuning.async_backpressure_mode`
+- `worker_count`
+- `max_pending_requests`
+- `pending_requests`
+- `pending_saturation_percent`
+- `near_pending_limit`
+- `active_requests`
+- `total_routed`
+- `completed`
+- `failed`
+- `timeouts`
+- `fallbacks_to_blocking`
+- estatisticas por worker quando disponiveis
 
-**Criteria to proceed:**
+Compare essas metricas com:
 
-✅ **All of the following must be true:**
+- `sql_queue.current_size`, workers ativos, rejeicoes e timeouts da fila SQL;
+- timeouts de acquire do pool lease-based;
+- throughput e p95/p99 por metodo RPC;
+- CPU e memoria do processo;
+- erros especificos de driver (`invalid connection id`, buffer, cancelamento).
 
-1. **Worker CPU sustained > 80%** during representative load
-2. **Database response time < 10ms** average (not the bottleneck)
-3. **Queue is backing up** despite available database capacity
-4. **Single-worker throughput is insufficient** for production requirements
-5. **Connection pool is healthy** (no frequent timeouts or invalid IDs)
-6. **Burst tests pass consistently** with current architecture
-
-❌ **Do NOT proceed if any of these are true:**
-
-1. Database/driver is the bottleneck (slow queries)
-2. Worker CPU < 60% sustained under load
-3. Connection pool has instability (timeouts, invalid IDs, recycling issues)
-4. Burst tests show other issues (leaks, deadlocks, cascading failures)
-
-### Step 4: Design Multi-Worker Architecture
-
-If criteria are met, design the architecture before implementation:
-
-**Key Design Questions:**
-
-1. **How many workers?** Start with 2, measure, then consider 3. More workers ≠ better performance.
-2. **Pool size per worker?** Smaller pools per worker (e.g., 2 connections × 2 workers = 4 total)
-3. **Request routing?** Round-robin, least-loaded, or hash-based (e.g., by agent ID)?
-4. **Metrics aggregation?** Per-worker or aggregate? How to expose via `MetricsCollector`?
-5. **Cancellation?** How to route `sql.cancel` to the correct worker?
-6. **Failure handling?** What happens if one worker crashes or becomes unresponsive?
-
-**Prototype Before Production:**
-
-- Implement `OdbcWorkerPool` with 2 workers
-- Run burst tests to measure improvement
-- Compare metrics: throughput, latency, CPU, memory
-- Verify no regressions in stability or error handling
-
-### Step 5: Validate Improvement
-
-After implementing multiple workers, validate the change:
-
-**Success Criteria:**
-
-- **Throughput increase** proportional to worker count (e.g., 2x workers ≈ 1.8x throughput)
-- **No stability regressions** (same or better error rates, no new timeouts)
-- **Resource usage acceptable** (memory and CPU increase is justified by throughput gain)
-- **Metrics remain accurate** across all workers
-- **Cancellation works correctly** for all workers
-
-**If improvement is marginal (<20%)**, roll back and revisit bottleneck analysis.
-
-## Configuration Guidance
-
-### Starting Point (Current)
-
-```dart
-// Single worker, lease pool
-ServiceLocator().initialize(useAsync: true);
-
-final pool = OdbcConnectionPool(
-  service,
-  settings,
-  metricsCollector: metrics,
-);
-
-final queue = SqlExecutionQueue(
-  maxQueueSize: 50,
-  maxConcurrentWorkers: settings.poolSize, // Align with pool
-  metricsCollector: metrics,
-);
-```
-
-### Multi-Worker (Only after validation)
-
-```dart
-// Pseudo-code: actual implementation depends on design decisions
-
-final workerPool = OdbcWorkerPool(
-  workerCount: 2,
-  poolSizePerWorker: 2,
-  metricsCollector: metrics,
-);
-
-final queue = SqlExecutionQueue(
-  maxQueueSize: 50,
-  maxConcurrentWorkers: 4, // 2 workers × 2 connections
-  metricsCollector: metrics,
-);
-
-final gateway = MultiWorkerDatabaseGateway(
-  workerPool: workerPool,
-  routingStrategy: RoundRobinRouting(),
-);
-```
+`near_pending_limit=true` indica que o worker pool interno esta perto do limite
+configurado de requests pendentes. Trate como sinal para medir throughput,
+latencia p95/p99 e rejeicoes antes de aumentar limites.
 
 ## Driver Matrix
 
-Treat each driver family independently when evaluating performance changes.
-Do not assume that a gain or regression in one driver applies to the others.
+| Driver family | Recomendacao |
+| --- | --- |
+| SQL Anywhere | Lease-based pool como default. Nao usar native pool global. Validar qualquer aumento de concorrencia com burst e soak test. |
+| SQL Server | Bom candidato para benchmarks de throughput, mantendo rollback por env/config. |
+| PostgreSQL | Validar streaming, paginacao, lock timeout e cancelamento antes de aumentar agressivamente. |
 
-| Driver family | Default recommendation | Notes |
-|---------------|------------------------|-------|
-| **SQL Anywhere** | Keep **lease-based pool** as the default | Highest caution. Historical issues around invalid handles / buffer sizing make native pool changes high risk until benchmarks and soak tests prove stability. |
-| **SQL Server** | Lease pool by default; native pool is a **candidate for canary** after benchmarks | Good candidate for higher-throughput experiments, but only after validating timeouts, invalid connection IDs, and multi-result behavior under load. |
-| **PostgreSQL** | Lease pool by default; native pool may be evaluated after benchmarks | Validate cursor/pagination, streaming, and lock timeout behavior before changing pooling strategy. |
+## Benchmark
 
-### Driver-specific rollout rule
+Use DSN representativo e compare baseline/candidato:
 
-- **No global pool strategy switch** without per-driver evidence.
-- Prefer **driver-specific gates** (flag, environment, canary cohort) over a single global toggle.
-- Keep the current lease-pool path as the safe fallback for every driver.
-
-## Rollout and Rollback
-
-### Rollout checklist for risky changes
-
-Apply this checklist before enabling:
-
-- native pool for any driver
-- tighter timeout budgets
-- changed backpressure defaults
-- multiple `odbc_fast` workers
-
-Checklist:
-
-1. Run targeted unit tests and integration tests
-2. Run opt-in burst tests with representative DSN/query
-3. Capture baseline and candidate metrics
-4. Enable change only behind a feature flag or controlled environment gate
-5. Start with one driver family / canary environment
-6. Monitor for at least one representative load window before widening rollout
-
-### Rollback triggers
-
-Roll back immediately if any of these regressions appear:
-
-- `poolAcquireTimeoutCount` or `sqlQueueTimeoutCount` spikes above baseline
-- new `invalid connection id` or pool recycle failures appear
-- `buffer too small` errors increase
-- backpressure aborts (`backpressure_overflow`) increase materially
-- cancellation starts failing or hanging
-- throughput gain is marginal while error rate or latency worsens
-
-### Rollback path
-
-Every optimization should preserve a simple rollback path:
-
-- disable the feature flag / environment gate
-- return to the lease-based pool and single-worker baseline
-- rerun smoke and burst tests
-- compare metrics against the previous stable baseline
-
-## Advanced Optimization Gates
-
-Use the following gates before implementing or enabling higher-risk changes.
-
-### Native pool
-
-Consider native pool only when **all** are true:
-
-- representative benchmark shows meaningful gain vs lease pool
-- no regression in `invalid connection id`, `buffer too small`, or pool recycle
-- burst tests remain stable for the target driver
-- rollback path is a simple driver/flag switch back to lease pool
-
-### Bulk insert
-
-Consider `bulkInsert` / `bulkInsertParallel` only when **all** are true:
-
-- workload is dominated by high-volume ingest (not OLTP-style mixed traffic)
-- protocol and authorization model can represent the operation safely
-- benchmark proves better throughput than `sql.executeBatch`
-- failure handling and partial-write semantics are explicitly documented
-
-### Multiple workers
-
-Consider multiple workers only when the earlier criteria in this document are met
-and the following also hold:
-
-- lease/native pool tuning is already exhausted
-- queue and backpressure behaviour are already stable in single-worker mode
-- metrics and cancellation routing are ready for per-worker partitioning
-
-## Measurement Tools
-
-### Profiling ODBC Worker
-
-Use OS-level tools to measure worker CPU:
-
-**Windows:**
 ```powershell
-# Find Dart process
-Get-Process -Name *dart* | Select-Object Id, CPU, WorkingSet
-
-# Monitor specific process
-Get-Counter "\Process(dart)\% Processor Time" -Continuous
+dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
 ```
 
-**Linux:**
-```bash
-# Find process
-ps aux | grep dart
+Ou use o wrapper do repo:
 
-# Monitor CPU (via top or htop)
-top -p <pid>
+```powershell
+.\tool\odbc_async_benchmark.ps1
 ```
 
-### Database Response Time
+Tambem rode o burst do app:
 
-Measure via `MetricsCollector`:
-
-```dart
-final executionStart = DateTime.now();
-final result = await gateway.executeQuery(request);
-final executionTime = DateTime.now().difference(executionStart);
-
-print('Query execution: ${executionTime.inMilliseconds}ms');
+```powershell
+$env:RUN_ODBC_BURST_TESTS='true'
+flutter test test/integration/sql_queue_burst_test.dart
 ```
 
-Subtract queue wait time to isolate database/ODBC time.
-
-## Summary
-
-**Before Multiple Workers:**
-
-1. Implement and validate SQL execution queue
-2. Run E2E burst tests with representative load
-3. Measure bottleneck: database, network, pool, queue, or worker
-4. Tune configuration: `poolSize`, `maxQueueSize`, `maxConcurrentWorkers`
-
-**Multiple Workers Only If:**
-
-- Worker CPU > 80% sustained
-- Database response < 10ms
-- Single worker is proven bottleneck
-- Burst tests pass consistently
-
-**Otherwise:**
-
-- Optimize database (indexes, queries, hardware)
-- Tune queue and pool configuration
-- Improve network latency
-- Use `bulkInsert` for large batches
-
-## References
-
-- Main plan: `Plano Para Concorrência ODBC` (plan file)
-- SQL queue tests: `docs/testing/sql_queue_concurrency_tests.md`
-- Project specifics: `.cursor/rules/project_specifics.mdc`
-- E2E setup: `docs/testing/e2e_setup.md`
+Rollback imediato se throughput melhorar pouco enquanto p95/p99, timeouts,
+falhas de cancelamento ou erros de driver piorarem.

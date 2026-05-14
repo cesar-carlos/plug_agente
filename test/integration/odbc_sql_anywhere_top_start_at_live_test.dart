@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 
 import '../helpers/e2e_env.dart';
+import '../helpers/mock_odbc_connection_settings.dart';
 
 /// Verifies SQL Anywhere accepts TOP/START AT (agent pagination shape).
 void main() async {
@@ -31,7 +32,9 @@ ORDER BY table_id ASC
         return;
       }
 
-      locator = odbc.ServiceLocator()..initialize(useAsync: true);
+      locator = createAsyncOdbcServiceLocatorForSettings(
+        MockOdbcConnectionSettings(),
+      );
       final service = locator.asyncService;
       final initResult = await service.initialize();
       if (initResult.isError()) {

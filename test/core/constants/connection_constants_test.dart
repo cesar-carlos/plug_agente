@@ -32,6 +32,93 @@ void main() {
       );
     });
 
+    test('should default ODBC async worker count to min pool size and processor count', () {
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),
+        4,
+      );
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(2, 8),
+        2,
+      );
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(0, 0),
+        1,
+      );
+    });
+
+    test('should use valid ODBC_ASYNC_WORKER_COUNT override', () {
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_WORKER_COUNT=3');
+
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),
+        3,
+      );
+    });
+
+    test('should cap ODBC_ASYNC_WORKER_COUNT override at pool and CPU ceiling', () {
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_WORKER_COUNT=9');
+
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),
+        4,
+      );
+    });
+
+    test('should ignore invalid ODBC_ASYNC_WORKER_COUNT override', () {
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_WORKER_COUNT=invalid');
+
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),
+        4,
+      );
+
+      dotenv.clean();
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_WORKER_COUNT=0');
+
+      expect(
+        ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),
+        4,
+      );
+    });
+
+    test('should default ODBC async max pending requests to pool size times four', () {
+      expect(
+        ConnectionConstants.odbcAsyncMaxPendingRequestsForPoolSize(7),
+        28,
+      );
+      expect(
+        ConnectionConstants.odbcAsyncMaxPendingRequestsForPoolSize(0),
+        4,
+      );
+    });
+
+    test('should use valid ODBC_ASYNC_MAX_PENDING_REQUESTS override', () {
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_MAX_PENDING_REQUESTS=64');
+
+      expect(
+        ConnectionConstants.odbcAsyncMaxPendingRequestsForPoolSize(7),
+        64,
+      );
+    });
+
+    test('should ignore invalid ODBC_ASYNC_MAX_PENDING_REQUESTS override', () {
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_MAX_PENDING_REQUESTS=invalid');
+
+      expect(
+        ConnectionConstants.odbcAsyncMaxPendingRequestsForPoolSize(7),
+        28,
+      );
+
+      dotenv.clean();
+      dotenv.loadFromString(envString: 'ODBC_ASYNC_MAX_PENDING_REQUESTS=0');
+
+      expect(
+        ConnectionConstants.odbcAsyncMaxPendingRequestsForPoolSize(7),
+        28,
+      );
+    });
+
     test('should reserve half of pool for direct ODBC connections by default', () {
       expect(ConnectionConstants.directOdbcConnectionConcurrency(7), 3);
       expect(ConnectionConstants.directOdbcConnectionCapacityStrategy(), 'half_pool_reserved');

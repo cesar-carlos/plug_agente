@@ -1,5 +1,26 @@
+import 'dart:io' as io;
+
+import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+
+odbc.ServiceLocator createAsyncOdbcServiceLocatorForSettings(
+  IOdbcConnectionSettings settings,
+) {
+  final tuning = OdbcRuntimeTuning.forPoolSize(
+    poolSize: settings.poolSize,
+    processorCount: io.Platform.numberOfProcessors,
+  );
+  return odbc.ServiceLocator()..initialize(
+    useAsync: true,
+    asyncWorkerCount: tuning.asyncWorkerCount,
+    asyncMaxPendingRequests: tuning.asyncMaxPendingRequests,
+    // Keep E2E harnesses aligned with the production ODBC tuning contract.
+    // ignore: avoid_redundant_argument_values
+    asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+  );
+}
 
 class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   MockOdbcConnectionSettings({

@@ -4,6 +4,7 @@ import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -30,6 +31,13 @@ void main() {
   group('HealthService', () {
     test('should report persisted ODBC pool size and actual queue limits', () async {
       final settings = MockOdbcConnectionSettings(poolSize: 7);
+      const tuning = OdbcRuntimeTuning(
+        poolSize: 7,
+        processorCount: 8,
+        asyncWorkerCount: 7,
+        asyncMaxPendingRequests: 28,
+        asyncBackpressureMode: 'failFast',
+      );
       final metrics = MetricsCollector()
         ..recordSqlQueueWorkersEqualPool(workers: 7, poolSize: 7)
         ..recordPoolAcquireTimeout()
@@ -55,9 +63,11 @@ void main() {
         gateway: gateway,
         odbcSettings: settings,
         connectionPool: poolMock,
+        odbcRuntimeTuning: tuning,
       );
 
       final status = await service.getHealthStatusAsync();
+      final runtime = status['odbc_runtime_tuning']! as Map<String, Object?>;
       final pool = status['pool']! as Map<String, Object?>;
       final sqlQueue = status['sql_queue']! as Map<String, Object?>;
       final prepared = status['prepared']! as Map<String, Object?>;
@@ -65,6 +75,9 @@ void main() {
       final directConnections = status['direct_connections']! as Map<String, Object?>;
       final streaming = status['streaming']! as Map<String, Object?>;
 
+      expect(runtime['pool_size'], 7);
+      expect(runtime['async_worker_count'], 7);
+      expect(runtime['async_max_pending_requests'], 28);
       expect(pool['size'], 7);
       expect(pool['active_count'], 2);
       expect(pool['acquire_timeout_seconds'], 30);

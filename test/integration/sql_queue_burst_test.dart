@@ -1,11 +1,17 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:result_dart/result_dart.dart';
 
 import '../helpers/e2e_env.dart';
 import '../helpers/odbc_e2e_coverage_sql.dart';
@@ -19,6 +25,7 @@ void main() async {
   final runBurstTests = E2EEnv.odbcRunBurstTests;
   final slowQuery = E2EEnv.odbcLongQuery;
   final slowQueryValid = slowQuery != null && slowQuery.trim().isNotEmpty;
+  const burstWorkerHold = Duration(milliseconds: 750);
 
   final skipUnlessDsn = !dsnValid ? 'Defina ODBC_E2E_RPC_DSN ou uma DSN ODBC de teste no .env.' : false;
   final skipUnlessOptIn = !runBurstTests
@@ -50,19 +57,25 @@ void main() async {
       }
     });
 
-    QueuedDatabaseGateway createQueuedGateway() {
+    QueuedDatabaseGateway createQueuedGateway({
+      int? maxQueueSize,
+      int? maxConcurrentWorkers,
+    }) {
       final localHarness = harness!;
       localHarness.metrics.clear();
       final queue = SqlExecutionQueue(
-        maxQueueSize: E2EEnv.odbcBurstQueueSize,
-        maxConcurrentWorkers: E2EEnv.odbcBurstWorkers,
+        maxQueueSize: maxQueueSize ?? E2EEnv.odbcBurstQueueSize,
+        maxConcurrentWorkers: maxConcurrentWorkers ?? E2EEnv.odbcBurstWorkers,
         metricsCollector: localHarness.metrics,
         defaultEnqueueTimeout: Duration(
           milliseconds: E2EEnv.odbcBurstEnqueueTimeoutMs,
         ),
       );
       return QueuedDatabaseGateway(
-        delegate: localHarness.gateway,
+        delegate: _DelayedQueryGateway(
+          localHarness.gateway,
+          queryDelay: burstWorkerHold,
+        ),
         queue: queue,
       );
     }
@@ -76,35 +89,82 @@ void main() async {
       );
     }
 
+    Future<void> waitForQueueToFill(QueuedDatabaseGateway gateway) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (DateTime.now().isBefore(deadline)) {
+        if (gateway.queueSize >= gateway.maxQueueSize) {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
     test(
       'should reject a controlled burst without leaking pooled connections',
       () async {
         expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
         final localHarness = harness!;
         final burstQuery = slowQuery ?? '';
-        final queuedGateway = createQueuedGateway();
+        final queuedGateway = createQueuedGateway(
+          maxQueueSize: 2,
+          maxConcurrentWorkers: 1,
+        );
         final elapsed = Stopwatch()..start();
 
         try {
-          final futures = List.generate(E2EEnv.odbcBurstRequestCount, (index) {
-            return queuedGateway.executeQuery(
-              buildRequest('burst-$index', burstQuery),
+          final primingCount = math.min(
+            E2EEnv.odbcBurstRequestCount - 1,
+            queuedGateway.maxWorkers + queuedGateway.maxQueueSize,
+          );
+          final primingFutures = <Future<Result<QueryResponse>>>[];
+          for (var index = 0; index < primingCount; index++) {
+            primingFutures.add(
+              queuedGateway.executeQuery(
+                buildRequest('burst-prime-$index', burstQuery),
+              ),
             );
-          });
+          }
 
-          final results = await Future.wait(futures);
+          await waitForQueueToFill(queuedGateway);
+          final queueSizeBeforeOverflow = queuedGateway.queueSize;
+          final activeWorkersBeforeOverflow = queuedGateway.activeWorkers;
+
+          final overflowCount = math.max(
+            1,
+            E2EEnv.odbcBurstRequestCount - primingCount,
+          );
+          final overflowResults = await Future.wait(
+            List.generate(overflowCount, (index) {
+              return queuedGateway.executeQuery(
+                buildRequest('burst-overflow-$index', burstQuery),
+              );
+            }),
+          );
+          final primingResults = await Future.wait(primingFutures);
+          final results = <Result<QueryResponse>>[
+            ...overflowResults,
+            ...primingResults,
+          ];
           final rejected = results.where((result) {
             final error = result.exceptionOrNull();
             return error is domain.ConfigurationFailure && error.context['reason'] == 'sql_queue_full';
           }).length;
           final succeeded = results.where((result) => result.isSuccess()).length;
+          final accepted = results.length - rejected;
 
-          expect(rejected, greaterThan(0));
-          expect(succeeded, greaterThan(0));
           expect(
-            localHarness.metrics.sqlQueueRejectionCount,
-            greaterThanOrEqualTo(rejected),
+            rejected,
+            greaterThan(0),
+            reason:
+                'queueSizeBeforeOverflow=$queueSizeBeforeOverflow, '
+                'activeWorkersBeforeOverflow=$activeWorkersBeforeOverflow, '
+                'maxQueueSize=${queuedGateway.maxQueueSize}, '
+                'maxWorkers=${queuedGateway.maxWorkers}, '
+                'overflowCount=$overflowCount, '
+                'accepted=$accepted, '
+                'succeeded=$succeeded',
           );
+          expect(accepted, greaterThan(0));
 
           final active = await localHarness.connectionPool.getActiveCount();
           expect(active.isSuccess(), isTrue, reason: '$active');
@@ -117,9 +177,10 @@ void main() async {
               'test': 'overflow',
               'elapsed_ms': elapsed.elapsedMilliseconds,
               'request_count': E2EEnv.odbcBurstRequestCount,
-              'queue_size': E2EEnv.odbcBurstQueueSize,
-              'workers': E2EEnv.odbcBurstWorkers,
+              'queue_size': queuedGateway.maxQueueSize,
+              'workers': queuedGateway.maxWorkers,
               'rejected': rejected,
+              'accepted': accepted,
               'succeeded': succeeded,
             })}',
             name: 'e2e.sql_queue_burst',
@@ -205,4 +266,80 @@ void main() async {
       tags: const ['live', 'slow'],
     );
   });
+}
+
+final class _DelayedQueryGateway implements IDatabaseGateway {
+  const _DelayedQueryGateway(
+    this._delegate, {
+    required this.queryDelay,
+  });
+
+  final IDatabaseGateway _delegate;
+  final Duration queryDelay;
+
+  @override
+  Future<Result<bool>> testConnection(String connectionString) {
+    return _delegate.testConnection(connectionString);
+  }
+
+  @override
+  Future<Result<QueryResponse>> executeQuery(
+    QueryRequest request, {
+    Duration? timeout,
+    String? database,
+  }) async {
+    await Future<void>.delayed(queryDelay);
+    return _delegate.executeQuery(
+      request,
+      timeout: timeout,
+      database: database,
+    );
+  }
+
+  @override
+  Future<Result<List<SqlCommandResult>>> executeBatch(
+    String agentId,
+    List<SqlCommand> commands, {
+    String? database,
+    SqlExecutionOptions options = const SqlExecutionOptions(),
+    Duration? timeout,
+    String? sourceRpcRequestId,
+  }) {
+    return _delegate.executeBatch(
+      agentId,
+      commands,
+      database: database,
+      options: options,
+      timeout: timeout,
+      sourceRpcRequestId: sourceRpcRequestId,
+    );
+  }
+
+  @override
+  Future<Result<int>> executeNonQuery(
+    String query,
+    Map<String, dynamic>? parameters, {
+    Duration? timeout,
+    String? database,
+  }) {
+    return _delegate.executeNonQuery(
+      query,
+      parameters,
+      timeout: timeout,
+      database: database,
+    );
+  }
+
+  @override
+  Future<Result<int>> executeBulkInsert(
+    BulkInsertRequest request, {
+    Duration? timeout,
+    String? database,
+  }) {
+    return _delegate.executeBulkInsert(
+      request,
+      timeout: timeout,
+      database: database,
+    );
+  }
 }

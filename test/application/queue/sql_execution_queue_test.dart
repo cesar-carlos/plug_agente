@@ -307,6 +307,46 @@ void main() {
       expect(metrics.queueRejectionCount, equals(1));
     });
 
+    test('should reject overflow after workers and queue are deterministically filled', () async {
+      final metrics = _MockMetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 2,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+      final blocker = Completer<void>();
+
+      final acceptedFutures = <Future<res.Result<int>>>[];
+      for (var index = 0; index < 3; index++) {
+        acceptedFutures.add(
+          queue.submit<int>(() async {
+            await blocker.future;
+            return res.Success(index);
+          }),
+        );
+      }
+
+      final deadline = DateTime.now().add(const Duration(seconds: 1));
+      while (DateTime.now().isBefore(deadline) && queue.queueSize < queue.maxQueueSize) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+
+      expect(queue.activeWorkers, 1);
+      expect(queue.queueSize, queue.maxQueueSize);
+
+      final overflow = await queue.submit<int>(() async => const res.Success(99));
+
+      expect(overflow.isError(), isTrue);
+      final error = overflow.exceptionOrNull();
+      expect(error, isA<ConfigurationFailure>());
+      expect((error! as ConfigurationFailure).context['reason'], 'sql_queue_full');
+      expect(metrics.queueRejectionCount, 1);
+
+      blocker.complete();
+      final accepted = await Future.wait(acceptedFutures);
+      expect(accepted.where((result) => result.isSuccess()).length, 3);
+    });
+
     test('should record queue saturation threshold crossings', () async {
       final metrics = _MockMetricsCollector();
       final queue = SqlExecutionQueue(

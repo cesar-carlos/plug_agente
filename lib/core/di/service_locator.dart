@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io' as io;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
@@ -7,7 +8,9 @@ import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -196,6 +199,41 @@ Future<void> _migrateLegacyUserPreferences(
   }
 }
 
+OdbcRuntimeTuning resolveOdbcRuntimeTuning({
+  required IOdbcConnectionSettings settings,
+  int? processorCount,
+}) {
+  return OdbcRuntimeTuning.forPoolSize(
+    poolSize: settings.poolSize,
+    processorCount: processorCount ?? io.Platform.numberOfProcessors,
+  );
+}
+
+void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
+  final sqlQueueMaxWorkers = ConnectionConstants.sqlQueueMaxWorkersForPoolSize(
+    tuning.poolSize,
+  );
+  if (sqlQueueMaxWorkers > tuning.poolSize) {
+    developer.log(
+      'SQL queue workers exceed ODBC pool size '
+      '(poolSize: ${tuning.poolSize}, sqlQueueMaxWorkers: $sqlQueueMaxWorkers)',
+      name: 'service_locator',
+      level: 900,
+    );
+  }
+
+  final sqlQueueMaxSize = ConnectionConstants.sqlQueueMaxSize;
+  if (tuning.asyncMaxPendingRequests < sqlQueueMaxSize) {
+    developer.log(
+      'ODBC async pending limit is lower than SQL queue size '
+      '(asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests}, '
+      'sqlQueueMaxSize: $sqlQueueMaxSize)',
+      name: 'service_locator',
+      level: 900,
+    );
+  }
+}
+
 Never _throwGlobalStorageBootstrapError(
   GlobalStorageAccessException error,
 ) {
@@ -237,7 +275,6 @@ Future<void> setupDependencies({
   // Register capabilities globally
   getIt.registerSingleton<RuntimeCapabilities>(capabilities);
 
-  _odbcLocator.initialize(useAsync: true);
   final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
   getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);
 
@@ -262,6 +299,28 @@ Future<void> setupDependencies({
   final odbcSettings = OdbcConnectionSettings(appSettings);
   await odbcSettings.load();
   getIt.registerSingleton<IOdbcConnectionSettings>(odbcSettings);
+
+  final odbcRuntimeTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
+  getIt.registerSingleton<OdbcRuntimeTuning>(odbcRuntimeTuning);
+  _logOdbcRuntimeTuningWarnings(odbcRuntimeTuning);
+  _odbcLocator.initialize(
+    useAsync: true,
+    asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
+    asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
+    // Explicit because this runtime default is part of the ODBC tuning contract.
+    // ignore: avoid_redundant_argument_values
+    asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+  );
+  developer.log(
+    'ODBC async worker pool configured '
+    '(poolSize: ${odbcRuntimeTuning.poolSize}, '
+    'workerCount: ${odbcRuntimeTuning.asyncWorkerCount}, '
+    'maxPendingRequests: ${odbcRuntimeTuning.asyncMaxPendingRequests}, '
+    'backpressureMode: ${odbcRuntimeTuning.asyncBackpressureMode})',
+    name: 'service_locator',
+    level: 800,
+    error: odbcRuntimeTuning.toMap(),
+  );
 
   final featureFlags = FeatureFlags(appSettings);
   getIt.registerSingleton<FeatureFlags>(featureFlags);

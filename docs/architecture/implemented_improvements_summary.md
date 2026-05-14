@@ -2,6 +2,18 @@
 
 Data: 28 de Abril de 2026
 
+Atualizacao 2026-05-14:
+
+- `odbc_fast` atualizado para `^3.7.0`.
+- Worker pool assincrono interno do pacote ativado por padrao.
+- `OdbcRuntimeTuning` registra o tuning real usado no bootstrap.
+- Diagnostico ODBC passou a expor `runtime_tuning`, `async_worker_pool` e
+  correlacao com `sql_queue`.
+- Diagnostico ODBC passou a marcar `near_pending_limit` e registrar warning
+  quando `pending_requests` se aproxima de `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
+- `.env.example`, E2E docs e benchmark wrapper local foram atualizados para
+  `ODBC_ASYNC_WORKER_COUNT` e `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
+
 ## ✅ Melhorias Implementadas
 
 Todas as melhorias de alta prioridade foram implementadas com sucesso:

@@ -24,14 +24,15 @@ void main() async {
         return;
       }
 
-      locator = odbc.ServiceLocator()..initialize(useAsync: true);
+      final settings = MockOdbcConnectionSettings();
+      locator = createAsyncOdbcServiceLocatorForSettings(settings);
       final service = locator.asyncService;
       final initResult = await service.initialize();
       if (initResult.isError()) {
         return;
       }
 
-      gateway = OdbcStreamingGateway(service, MockOdbcConnectionSettings());
+      gateway = OdbcStreamingGateway(service, settings);
       isReady = true;
     });
 

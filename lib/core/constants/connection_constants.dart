@@ -1,4 +1,6 @@
 import 'dart:developer' as developer;
+import 'dart:io' as io;
+import 'dart:math' as math;
 
 import 'package:plug_agente/core/config/app_environment.dart';
 
@@ -72,6 +74,49 @@ class ConnectionConstants {
 
   /// ODBC pool size (configurable via ODBC_POOL_SIZE env var).
   static int get poolSize => _positiveIntEnv('ODBC_POOL_SIZE') ?? defaultPoolSize;
+
+  /// Async `odbc_fast` worker count for the current process.
+  ///
+  /// Defaults to `min(pool size, CPU cores)`, with a minimum of 1. The
+  /// `ODBC_ASYNC_WORKER_COUNT` override is capped by the same ceiling to avoid
+  /// oversubscribing the native driver beyond the app-level pool.
+  static int get odbcAsyncWorkerCount => odbcAsyncWorkerCountForPoolSize(
+    poolSize,
+    io.Platform.numberOfProcessors,
+  );
+
+  static int odbcAsyncWorkerCountForPoolSize(
+    int poolSize,
+    int processorCount,
+  ) {
+    final ceiling = _odbcAsyncWorkerCeiling(poolSize, processorCount);
+    final override = _positiveIntEnv('ODBC_ASYNC_WORKER_COUNT');
+    if (override != null) {
+      return math.min(override, ceiling);
+    }
+    return ceiling;
+  }
+
+  static int _odbcAsyncWorkerCeiling(int poolSize, int processorCount) {
+    final effectivePoolSize = poolSize > 0 ? poolSize : 1;
+    final effectiveProcessorCount = processorCount > 0 ? processorCount : 1;
+    return math.max(
+      1,
+      math.min(effectivePoolSize, effectiveProcessorCount),
+    );
+  }
+
+  /// Max pending requests accepted by the internal `odbc_fast` async pool.
+  static int get odbcAsyncMaxPendingRequests => odbcAsyncMaxPendingRequestsForPoolSize(poolSize);
+
+  static int odbcAsyncMaxPendingRequestsForPoolSize(int poolSize) {
+    final override = _positiveIntEnv('ODBC_ASYNC_MAX_PENDING_REQUESTS');
+    if (override != null) {
+      return override;
+    }
+    final effectivePoolSize = poolSize > 0 ? poolSize : 1;
+    return effectivePoolSize * 4;
+  }
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
   static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;

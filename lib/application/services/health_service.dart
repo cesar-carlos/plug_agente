@@ -3,6 +3,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/runtime/app_uptime.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
@@ -23,6 +24,7 @@ class HealthService {
     IStreamingDatabaseGateway? streamingGateway,
     IDirectConnectionLimiterDiagnostics? directConnectionLimiter,
     FeatureFlags? featureFlags,
+    OdbcRuntimeTuning? odbcRuntimeTuning,
     Duration poolSnapshotTtl = const Duration(seconds: 2),
   }) : _metrics = metricsCollector,
        _gateway = gateway,
@@ -32,6 +34,7 @@ class HealthService {
        _streamingGateway = streamingGateway,
        _directConnectionLimiter = directConnectionLimiter,
        _featureFlags = featureFlags,
+       _odbcRuntimeTuning = odbcRuntimeTuning,
        _poolSnapshotTtl = poolSnapshotTtl;
 
   final MetricsCollector _metrics;
@@ -42,6 +45,7 @@ class HealthService {
   final IStreamingDatabaseGateway? _streamingGateway;
   final IDirectConnectionLimiterDiagnostics? _directConnectionLimiter;
   final FeatureFlags? _featureFlags;
+  final OdbcRuntimeTuning? _odbcRuntimeTuning;
   final Duration _poolSnapshotTtl;
   Future<String?>? _driverTypeResolution;
   String? _cachedDriverType;
@@ -130,6 +134,7 @@ class HealthService {
       'status': 'healthy',
       'timestamp': DateTime.now().toIso8601String(),
       'version': AppConstants.appVersion,
+      'odbc_runtime_tuning': _odbcRuntimeTuning?.toMap(),
       'pool': {
         'size': _odbcSettings?.poolSize ?? ConnectionConstants.poolSize,
         'active_count': poolActiveCount,

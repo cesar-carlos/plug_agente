@@ -48,6 +48,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -255,6 +256,7 @@ void registerPlugDependencyGraph(
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
         featureFlags: getIt<FeatureFlags>(),
+        odbcRuntimeTuning: getIt<OdbcRuntimeTuning>(),
       ),
     )
     ..registerLazySingleton(
@@ -272,6 +274,8 @@ void registerPlugDependencyGraph(
         configRepository: getIt<IAgentConfigRepository>(),
         connectionPool: getIt<IConnectionPool>(),
         settings: getIt<IOdbcConnectionSettings>(),
+        runtimeTuning: getIt<OdbcRuntimeTuning>(),
+        metricsCollector: getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)

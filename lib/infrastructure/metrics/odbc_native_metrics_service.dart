@@ -1,8 +1,12 @@
+import 'dart:developer' as developer;
+
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -13,14 +17,23 @@ class OdbcNativeMetricsService {
     IAgentConfigRepository? configRepository,
     IConnectionPool? connectionPool,
     IOdbcConnectionSettings? settings,
+    OdbcRuntimeTuning? runtimeTuning,
+    MetricsCollector? metricsCollector,
   }) : _configRepository = configRepository,
        _connectionPool = connectionPool,
-       _settings = settings;
+       _settings = settings,
+       _runtimeTuning = runtimeTuning,
+       _metricsCollector = metricsCollector;
 
   final OdbcService _service;
   final IAgentConfigRepository? _configRepository;
   final IConnectionPool? _connectionPool;
   final IOdbcConnectionSettings? _settings;
+  final OdbcRuntimeTuning? _runtimeTuning;
+  final MetricsCollector? _metricsCollector;
+  bool _loggedAsyncWorkerPoolSaturation = false;
+
+  static const int _asyncPendingWarningThresholdPercent = 80;
 
   Future<Result<Map<String, dynamic>>> collectSnapshot() async {
     final metricsFuture = _service.getMetrics();
@@ -58,10 +71,13 @@ class OdbcNativeMetricsService {
       resolvedConnectionString,
     );
     final appPoolFuture = _collectAppPoolSnapshot();
+    final asyncWorkerPoolFuture = _collectAsyncWorkerPoolSnapshot();
+    final sqlQueueSnapshot = _collectSqlQueueSnapshot();
     final validationSnapshot = await validationFuture;
     final capabilitiesSnapshot = await capabilitiesFuture;
     final nativePoolSnapshot = await nativePoolFuture;
     final appPoolSnapshot = await appPoolFuture;
+    final asyncWorkerPoolSnapshot = await asyncWorkerPoolFuture;
 
     return Success(<String, dynamic>{
       'engine': <String, dynamic>{
@@ -88,6 +104,9 @@ class OdbcNativeMetricsService {
       'driver_capabilities': capabilitiesSnapshot,
       'app_pool': appPoolSnapshot,
       'native_pool': nativePoolSnapshot,
+      'async_worker_pool': asyncWorkerPoolSnapshot,
+      'runtime_tuning': _runtimeTuning?.toMap(),
+      'sql_queue': sqlQueueSnapshot,
     });
   }
 
@@ -191,5 +210,139 @@ class OdbcNativeMetricsService {
         'error': error.toString(),
       },
     );
+  }
+
+  Future<Map<String, dynamic>> _collectAsyncWorkerPoolSnapshot() async {
+    final statsResult = await _service.getAsyncWorkerPoolStats();
+    return statsResult.fold(
+      _buildAsyncWorkerPoolSnapshot,
+      (error) => <String, dynamic>{
+        'available': false,
+        'error': error.toString(),
+      },
+    );
+  }
+
+  Map<String, dynamic> _buildAsyncWorkerPoolSnapshot(
+    AsyncWorkerPoolStats stats,
+  ) {
+    final maxPendingRequests =
+        _runtimeTuning?.asyncMaxPendingRequests ?? (_settings == null ? null : _settings.poolSize * 4);
+    final pendingSaturationPercent = maxPendingRequests == null || maxPendingRequests <= 0
+        ? null
+        : stats.pendingRequests / maxPendingRequests * 100;
+    final isNearPendingLimit =
+        pendingSaturationPercent != null && pendingSaturationPercent >= _asyncPendingWarningThresholdPercent;
+
+    _logAsyncWorkerPoolSaturationIfNeeded(
+      isNearPendingLimit: isNearPendingLimit,
+      pendingRequests: stats.pendingRequests,
+      maxPendingRequests: maxPendingRequests,
+      pendingSaturationPercent: pendingSaturationPercent,
+    );
+
+    return <String, dynamic>{
+      'available': true,
+      'worker_count': stats.workerCount,
+      'configured_worker_count': _runtimeTuning?.asyncWorkerCount,
+      'max_pending_requests': maxPendingRequests,
+      'pending_requests': stats.pendingRequests,
+      'pending_saturation_percent': pendingSaturationPercent,
+      'near_pending_limit': isNearPendingLimit,
+      'active_requests': stats.activeRequests,
+      'total_routed': stats.totalRouted,
+      'completed': stats.completedRequests,
+      'failed': stats.failedRequests,
+      'timeouts': stats.timeouts,
+      'fallbacks_to_blocking': stats.fallbacksToBlocking,
+      'cancel_attempts': stats.cancelAttempts,
+      'cancel_succeeded': stats.cancelSucceeded,
+      'cancel_unsupported': stats.cancelUnsupported,
+      'latency_avg_micros': stats.latencyAvgMicros,
+      'latency_p95_micros': stats.latencyP95Micros,
+      'latency_max_micros': stats.latencyMaxMicros,
+      'queue_wait_avg_micros': stats.queueWaitAvgMicros,
+      'queue_wait_p95_micros': stats.queueWaitP95Micros,
+      'queue_wait_max_micros': stats.queueWaitMaxMicros,
+      'execution_avg_micros': stats.executionAvgMicros,
+      'execution_p95_micros': stats.executionP95Micros,
+      'execution_max_micros': stats.executionMaxMicros,
+      'workers': stats.workers.map(_workerStatsSnapshot).toList(growable: false),
+    };
+  }
+
+  void _logAsyncWorkerPoolSaturationIfNeeded({
+    required bool isNearPendingLimit,
+    required int pendingRequests,
+    required int? maxPendingRequests,
+    required double? pendingSaturationPercent,
+  }) {
+    if (!isNearPendingLimit) {
+      _loggedAsyncWorkerPoolSaturation = false;
+      return;
+    }
+    if (_loggedAsyncWorkerPoolSaturation) {
+      return;
+    }
+
+    _loggedAsyncWorkerPoolSaturation = true;
+    developer.log(
+      'ODBC async worker pool pending queue is near capacity',
+      name: 'odbc_native_metrics',
+      level: 900,
+      error: <String, Object?>{
+        'pending_requests': pendingRequests,
+        'max_pending_requests': maxPendingRequests,
+        'pending_saturation_percent': pendingSaturationPercent,
+        'suggestion': 'Consider increasing ODBC_ASYNC_MAX_PENDING_REQUESTS or reducing upstream SQL concurrency.',
+      },
+    );
+  }
+
+  Map<String, dynamic> _workerStatsSnapshot(AsyncWorkerStats worker) {
+    return <String, dynamic>{
+      'index': worker.index,
+      'pending_requests': worker.pendingRequests,
+      'active_requests': worker.activeRequests,
+      'total_routed': worker.totalRouted,
+      'completed': worker.completedRequests,
+      'failed': worker.failedRequests,
+      'timeouts': worker.timeouts,
+      'fallbacks_to_blocking': worker.fallbacksToBlocking,
+      'cancel_attempts': worker.cancelAttempts,
+      'cancel_succeeded': worker.cancelSucceeded,
+      'cancel_unsupported': worker.cancelUnsupported,
+      'latency_avg_micros': worker.latencyAvgMicros,
+      'latency_p95_micros': worker.latencyP95Micros,
+      'latency_max_micros': worker.latencyMaxMicros,
+      'queue_wait_avg_micros': worker.queueWaitAvgMicros,
+      'queue_wait_p95_micros': worker.queueWaitP95Micros,
+      'queue_wait_max_micros': worker.queueWaitMaxMicros,
+      'execution_avg_micros': worker.executionAvgMicros,
+      'execution_p95_micros': worker.executionP95Micros,
+      'execution_max_micros': worker.executionMaxMicros,
+    };
+  }
+
+  Map<String, dynamic> _collectSqlQueueSnapshot() {
+    final metricsCollector = _metricsCollector;
+    if (metricsCollector == null) {
+      return const <String, dynamic>{'available': false};
+    }
+
+    final metrics = metricsCollector.getSnapshot();
+    return <String, dynamic>{
+      'available': true,
+      'current_size': metrics['sql_queue_current_size'] ?? 0,
+      'max_observed_size': metrics['sql_queue_max_size'] ?? 0,
+      'active_workers': metrics['sql_queue_current_workers'] ?? 0,
+      'max_observed_workers': metrics['sql_queue_max_workers'] ?? 0,
+      'rejections_total': metrics['sql_queue_rejection_count'] ?? 0,
+      'timeouts_total': metrics['sql_queue_timeout_count'] ?? 0,
+      'avg_wait_time_ms': metrics['sql_queue_avg_wait_time_ms'] ?? 0,
+      'p95_wait_time_ms': metrics['sql_queue_p95_wait_time_ms'] ?? 0,
+      'max_recent_wait_time_ms': metrics['sql_queue_max_recent_wait_time_ms'] ?? 0,
+      'pool_wait_timeouts_total': metrics['pool_acquire_timeout_count'] ?? 0,
+    };
   }
 }

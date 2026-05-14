@@ -77,7 +77,8 @@ class OdbcE2eRpcHarness {
     String dsn,
     OdbcE2eSqlDialect dialect,
   ) async {
-    final locator = odbc.ServiceLocator()..initialize(useAsync: true);
+    final settings = MockOdbcConnectionSettings();
+    final locator = createAsyncOdbcServiceLocatorForSettings(settings);
     final service = locator.asyncService;
     final init = await service.initialize();
     if (init.isError()) {
@@ -92,7 +93,7 @@ class OdbcE2eRpcHarness {
       (_) => Future.value(Success(cfg)),
     );
 
-    final pool = OdbcConnectionPool(service, MockOdbcConnectionSettings());
+    final pool = OdbcConnectionPool(service, settings);
     final retry = RetryManager();
     final metrics = MetricsCollector()..clear();
     final gateway = OdbcDatabaseGateway(
@@ -101,7 +102,7 @@ class OdbcE2eRpcHarness {
       pool,
       retry,
       metrics,
-      MockOdbcConnectionSettings(),
+      settings,
     );
 
     final normalizer = QueryNormalizerService(QueryNormalizer());

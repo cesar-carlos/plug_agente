@@ -70,6 +70,28 @@ O `E2EEnv.odbcLongQuery` escolhe a variável consoante o DSN que o streaming est
 
 Pelo menos um DSN deve estar definido para rodar os testes ODBC. O teste usa o primeiro disponível na ordem: SQL Anywhere → SQL Server → PostgreSQL.
 
+### ODBC runtime tuning (`odbc_fast 3.7.0`)
+
+Os harnesses E2E que inicializam `odbc.ServiceLocator` usam os mesmos calculos
+do runtime da app:
+
+| Variavel | Obrigatoria | Descricao |
+| -------- | ----------- | --------- |
+| `ODBC_ASYNC_WORKER_COUNT` | Nao | Override positivo para workers assincronos; limitado a `min(poolSize, CPU cores)`. |
+| `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4`. |
+
+Para benchmark manual do pacote, use DSN representativo e rode:
+
+```powershell
+dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
+```
+
+Ou use o wrapper local, que imprime as variaveis de tuning antes de iniciar:
+
+```powershell
+.\tool\odbc_async_benchmark.ps1
+```
+
 ### ODBC RPC (`odbc_rpc_execute_coverage_live_e2e_test.dart`)
 
 Requer **pelo menos um** DSN ODBC (ou um override explícito):
@@ -199,6 +221,12 @@ flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
 
 # Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
 flutter test test/integration/sql_queue_burst_test.dart
+
+# Benchmark manual do worker pool interno do odbc_fast 3.7.0
+dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
+
+# Mesmo benchmark via wrapper local
+.\tool\odbc_async_benchmark.ps1
 
 # Lock / concorrência (opt-in: ODBC_RUN_LOCK_CONTENTION_TESTS=true e DSN)
 flutter test test/integration/odbc_lock_contention_live_integration_test.dart
