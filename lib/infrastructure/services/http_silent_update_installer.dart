@@ -111,7 +111,12 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         partFile.deleteSync();
       }
 
-      final downloadResult = await _download(assetUri, partFile);
+      final downloadResult = await _download(
+        assetUri,
+        partFile,
+        expectedSize: request.assetSize,
+        version: request.version,
+      );
       Exception? downloadError;
       downloadResult.fold(
         (_) {},
@@ -244,7 +249,12 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     }
   }
 
-  Future<Result<void>> _download(Uri assetUri, File destination) async {
+  Future<Result<void>> _download(
+    Uri assetUri,
+    File destination, {
+    required int expectedSize,
+    required String version,
+  }) async {
     final client = _httpClientFactory();
     try {
       final request = await client.getUrl(assetUri);
@@ -263,9 +273,42 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         );
       }
 
+      if (response.contentLength > expectedSize) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Silent update asset download exceeded appcast length',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateDownload',
+              'version': version,
+              'expected_size': expectedSize,
+              'content_length': response.contentLength,
+              'asset_url': assetUri.toString(),
+            },
+          ),
+        );
+      }
+
       final sink = destination.openWrite();
       try {
-        await response.forEach(sink.add);
+        var downloadedBytes = 0;
+        await for (final chunk in response) {
+          downloadedBytes += chunk.length;
+          if (downloadedBytes > expectedSize) {
+            return Failure(
+              domain.ValidationFailure.withContext(
+                message: 'Silent update asset download exceeded appcast length',
+                context: <String, dynamic>{
+                  'operation': 'silentUpdateDownload',
+                  'version': version,
+                  'expected_size': expectedSize,
+                  'downloaded_size': downloadedBytes,
+                  'asset_url': assetUri.toString(),
+                },
+              ),
+            );
+          }
+          sink.add(chunk);
+        }
       } finally {
         await sink.close();
       }

@@ -203,6 +203,40 @@ void main() {
       );
     });
 
+    test('aborts download when response exceeds appcast length', () async {
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      var processStarted = false;
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 4,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(processStarted, isFalse);
+      expect(tempDir.listSync(), isEmpty);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) => expect(failure, isA<domain.ValidationFailure>()),
+      );
+    });
+
     test('returns failure when process cannot be started', () async {
       final server = await _serveBytes(utf8.encode('hello'));
       addTearDown(() => server.close(force: true));

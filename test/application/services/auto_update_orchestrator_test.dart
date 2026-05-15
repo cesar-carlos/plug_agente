@@ -655,6 +655,101 @@ void main() {
         expect(fakeGateway.lastInBackground, isNull);
         expect(fakeInstaller.request?.version, '99.0.0+1');
       });
+
+      test('re-enabling automatic silent updates schedules an immediate silent check', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        final result = await orchestrator.setAutomaticSilentUpdatesEnabled(true);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        expect(result.isSuccess(), isTrue);
+        expect(fakeGateway.interval, 0);
+        expect(fakeInstaller.request?.version, '99.0.0+1');
+      });
+
+      test('keeps recent pending update when launcher status is still in progress', () async {
+        final statusDir = Directory.systemTemp.createTempSync('plug_launcher_in_progress_test_');
+        addTearDown(() {
+          if (statusDir.existsSync()) {
+            statusDir.deleteSync(recursive: true);
+          }
+        });
+        final now = DateTime.now();
+        final statusFile = File('${statusDir.path}${Platform.pathSeparator}launcher.status.json');
+        statusFile.writeAsStringSync(
+          jsonEncode(<String, Object?>{
+            'state': 'elevatedStarted',
+            'strategy': SilentUpdateInstallStrategy.currentUserThenElevated.name,
+            'installDirectory': r'C:\PlugAgente',
+            'installerPath': r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+            'logPath': r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+            'elevatedRetryStarted': true,
+            'appPid': 1234,
+            'signatureStatus': 'valid',
+            'signatureRequired': true,
+            'actualSha256': '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            'hashValidationStatus': 'valid',
+            'installDirectoryWritable': true,
+            'elevatedCancelled': false,
+            'lastUpdatedAt': now.toIso8601String(),
+          }),
+        );
+        await settingsStore.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(<String, Object?>{
+            'version': '99.0.0+1',
+            'installerPath': r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+            'logPath': r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+            'installDirectory': r'C:\PlugAgente',
+            'strategy': SilentUpdateInstallStrategy.currentUserThenElevated.name,
+            'launcherPath': r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+            'launcherStatusPath': statusFile.path,
+            'appPid': 1234,
+            'updateDirectorySecurityStatus': 'restricted',
+            'startedAt': now.toIso8601String(),
+          }),
+        );
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: FakeAppcastProbeService(),
+          silentUpdateInstaller: FakeSilentUpdateInstaller(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.startAutomaticChecks();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallStarted,
+        );
+        expect(orchestrator.lastAutomaticDiagnostics?.launcherState, 'elevatedStarted');
+        expect(orchestrator.lastAutomaticDiagnostics?.automaticFailureCount, isNull);
+        expect(settingsStore.getString('auto_update.pending_silent_update'), isNotNull);
+      });
     });
 
     group('checkManual', () {

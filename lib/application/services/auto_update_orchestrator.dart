@@ -709,6 +709,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       if (!enabled) {
         _automaticCheckTimer?.cancel();
         _automaticCheckTimer = null;
+      } else {
+        _scheduleAutomaticSilentChecks(runImmediately: true);
       }
       return const Success(unit);
     } on Exception catch (error) {
@@ -737,20 +739,30 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     _automaticCheckTimer = null;
 
     if (automaticSilentUpdatesEnabled) {
-      unawaited(checkSilently());
-      final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
-        environment: AppEnvironment.snapshot(),
-      );
-      if (intervalSeconds > 0) {
-        _automaticCheckTimer = Timer.periodic(
-          Duration(seconds: intervalSeconds),
-          (_) => unawaited(checkSilently()),
-        );
-      }
+      _scheduleAutomaticSilentChecks(runImmediately: true);
       return;
     }
 
     unawaited(checkInBackground());
+  }
+
+  void _scheduleAutomaticSilentChecks({required bool runImmediately}) {
+    _automaticCheckTimer?.cancel();
+    _automaticCheckTimer = null;
+
+    if (runImmediately) {
+      unawaited(checkSilently());
+    }
+
+    final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
+      environment: AppEnvironment.snapshot(),
+    );
+    if (intervalSeconds > 0) {
+      _automaticCheckTimer = Timer.periodic(
+        Duration(seconds: intervalSeconds),
+        (_) => unawaited(checkSilently()),
+      );
+    }
   }
 
   @override
@@ -969,6 +981,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         launcherStatusPath: null,
         appPid: null,
         updateDirectorySecurityStatus: null,
+        startedAt: DateTime.now(),
       );
       await _persistPendingSilentUpdate(pendingUpdate);
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
@@ -1031,6 +1044,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           launcherStatusPath: success.launcherStatusPath,
           appPid: success.appPid,
           updateDirectorySecurityStatus: success.updateDirectorySecurityStatus,
+          startedAt: DateTime.now(),
         ),
       );
       await _resetAutomaticFailureCooldownIfNeeded();
@@ -1128,6 +1142,42 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     } on FormatException {
       completed = false;
     }
+    if (!completed && _shouldKeepPendingSilentUpdate(pending, launcherStatus, now)) {
+      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+        checkedAt: now,
+        configuredFeedUrl: feedUrl,
+        requestedFeedUrl: feedUrl,
+        currentVersion: AppConstants.appVersion,
+        completedAt: now,
+        completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+        updateAvailable: true,
+        pendingVersion: pending.version,
+        installerPath: launcherStatus?.installerPath ?? pending.installerPath,
+        installerLogPath: launcherStatus?.logPath ?? pending.logPath,
+        installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
+        silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
+        launcherPath: pending.launcherPath,
+        launcherStatusPath: pending.launcherStatusPath,
+        launcherState: launcherStatus?.state,
+        nonAdminExitCode: launcherStatus?.nonAdminExitCode,
+        nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
+        elevatedExitCode: launcherStatus?.elevatedExitCode,
+        elevatedDurationMs: launcherStatus?.elevatedDurationMs,
+        elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
+        waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
+        appPid: launcherStatus?.appPid ?? pending.appPid,
+        signatureStatus: launcherStatus?.signatureStatus,
+        signatureRequired: launcherStatus?.signatureRequired,
+        updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
+        actualSha256: launcherStatus?.actualSha256,
+        hashValidationStatus: launcherStatus?.hashValidationStatus,
+        installDirectoryWritable: launcherStatus?.installDirectoryWritable,
+        elevatedCancelled: launcherStatus?.elevatedCancelled,
+        errorMessage: 'Silent update installer is still running',
+      );
+      await _persistLastAutomaticDiagnostics();
+      return;
+    }
     final failureState = completed ? null : await _recordAutomaticFailureAndApplyCooldown();
     if (completed) {
       await _resetAutomaticFailureCooldownIfNeeded();
@@ -1170,6 +1220,24 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
     await _persistLastAutomaticDiagnostics();
     await _clearPendingSilentUpdate();
+  }
+
+  bool _shouldKeepPendingSilentUpdate(
+    _PendingSilentUpdate pending,
+    _SilentUpdateLauncherStatus? launcherStatus,
+    DateTime now,
+  ) {
+    const maxPendingInstallerAge = Duration(minutes: 30);
+    final startedAt = launcherStatus?.lastUpdatedAt ?? pending.startedAt;
+    if (startedAt == null || now.difference(startedAt) > maxPendingInstallerAge) {
+      return false;
+    }
+    final state = launcherStatus?.state;
+    return state == null ||
+        state == 'started' ||
+        state == 'waitingForAppExit' ||
+        state == 'nonAdminStarted' ||
+        state == 'elevatedStarted';
   }
 
   _PendingSilentUpdate? _readPendingSilentUpdate() {
@@ -1655,6 +1723,7 @@ class _PendingSilentUpdate {
     required this.launcherStatusPath,
     required this.appPid,
     required this.updateDirectorySecurityStatus,
+    required this.startedAt,
   });
 
   final String version;
@@ -1666,6 +1735,7 @@ class _PendingSilentUpdate {
   final String? launcherStatusPath;
   final int? appPid;
   final String? updateDirectorySecurityStatus;
+  final DateTime? startedAt;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -1678,7 +1748,7 @@ class _PendingSilentUpdate {
       'launcherStatusPath': launcherStatusPath,
       'appPid': appPid,
       'updateDirectorySecurityStatus': updateDirectorySecurityStatus,
-      'startedAt': DateTime.now().toIso8601String(),
+      'startedAt': (startedAt ?? DateTime.now()).toIso8601String(),
     };
   }
 
@@ -1697,6 +1767,7 @@ class _PendingSilentUpdate {
       launcherStatusPath: json['launcherStatusPath'] as String?,
       appPid: _readInt(json['appPid']),
       updateDirectorySecurityStatus: json['updateDirectorySecurityStatus'] as String?,
+      startedAt: _readDateTime(json['startedAt']),
     );
   }
 
@@ -1704,6 +1775,13 @@ class _PendingSilentUpdate {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return null;
+  }
+
+  static DateTime? _readDateTime(Object? value) {
+    if (value is! String || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
   }
 }
 
@@ -1728,6 +1806,7 @@ class _SilentUpdateLauncherStatus {
     required this.installDirectoryWritable,
     required this.elevatedCancelled,
     required this.errorMessage,
+    required this.lastUpdatedAt,
   });
 
   final String? state;
@@ -1749,6 +1828,7 @@ class _SilentUpdateLauncherStatus {
   final bool? installDirectoryWritable;
   final bool? elevatedCancelled;
   final String? errorMessage;
+  final DateTime? lastUpdatedAt;
 
   String? get failureMessage {
     if (errorMessage != null && errorMessage!.isNotEmpty) {
@@ -1781,6 +1861,7 @@ class _SilentUpdateLauncherStatus {
       installDirectoryWritable: json['installDirectoryWritable'] as bool?,
       elevatedCancelled: json['elevatedCancelled'] as bool?,
       errorMessage: json['errorMessage'] as String?,
+      lastUpdatedAt: _readDateTime(json['lastUpdatedAt']),
     );
   }
 
@@ -1788,5 +1869,12 @@ class _SilentUpdateLauncherStatus {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return null;
+  }
+
+  static DateTime? _readDateTime(Object? value) {
+    if (value is! String || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
   }
 }
