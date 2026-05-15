@@ -1,0 +1,209 @@
+name: Release Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Short version, for example 1.6.8"
+        required: true
+        type: string
+      build_number:
+        description: "Build suffix used in pubspec.yaml"
+        required: true
+        type: string
+        default: "1"
+      run_full_tests:
+        description: "Run flutter analyze and the full Dart test suite"
+        required: true
+        type: boolean
+        default: true
+      require_signing:
+        description: "Fail if code signing certificate secrets are unavailable"
+        required: true
+        type: boolean
+        default: false
+      require_valid_update_signature:
+        description: "Build with AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true for staging validation"
+        required: true
+        type: boolean
+        default: false
+      auto_update_channel:
+        description: "Auto-update channel compiled into the preflight build"
+        required: true
+        type: choice
+        default: "stable"
+        options:
+          - stable
+          - beta
+          - internal
+      rollout_percentage:
+        description: "Rollout percentage to validate with appcast tooling"
+        required: true
+        type: string
+        default: "100"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-preflight-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: windows-latest
+    env:
+      VERSION_SHORT: ${{ inputs.version }}
+      FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
+      OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
+      AUTO_UPDATE_CHANNEL: ${{ inputs.auto_update_channel }}
+      AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.require_valid_update_signature }}
+      ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Update pubspec version in runner workspace
+        shell: python
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          full_version = os.environ["FULL_VERSION"]
+          if not re.fullmatch(r"\d+\.\d+\.\d+\+\d+", full_version):
+              raise SystemExit(f"Invalid FULL_VERSION: {full_version}")
+
+          pubspec = Path("pubspec.yaml")
+          content = pubspec.read_text(encoding="utf-8")
+          updated, replacements = re.subn(
+              r'^version:\s*["\']?\d+\.\d+\.\d+(?:\+\d+)?["\']?\s*(?:#|$)',
+              f"version: {full_version}",
+              content,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if replacements != 1:
+              raise SystemExit("Unable to update pubspec.yaml version.")
+          pubspec.write_text(updated, encoding="utf-8")
+
+      - name: Synchronize version files
+        run: python installer/update_version.py
+
+      - name: Validate rollout percentage
+        shell: python
+        run: |
+          import os
+          import sys
+
+          raw = os.environ["ROLLOUT_PERCENTAGE"].strip()
+          try:
+              value = int(raw)
+          except ValueError:
+              raise SystemExit(f"rollout_percentage must be an integer from 0 to 100, got {raw!r}")
+          if value < 0 or value > 100:
+              raise SystemExit(f"rollout_percentage must be from 0 to 100, got {value}")
+
+      - name: Release preflight checks
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag --require-iscc
+
+      - name: Analyze
+        if: inputs.run_full_tests
+        run: flutter analyze
+
+      - name: Dart tests
+        if: inputs.run_full_tests
+        run: flutter test
+
+      - name: Focused release tests
+        run: |
+          flutter test test/installer/setup_script_test.dart
+          python -m unittest tool.test_appcast_manager tool.test_validate_release -v
+
+      - name: Prepare signing certificate
+        id: signing
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+            "cert_path=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "plug-agente-code-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT_BASE64))
+          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build installer
+        env:
+          AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
+          WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
+          WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
+          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
+        run: python installer/build_installer.py
+
+      - name: Validate generated installer
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag
+
+      - name: Smoke native update helper
+        shell: pwsh
+        run: |
+          $artifactDir = Join-Path $env:RUNNER_TEMP "release-preflight"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          $manifest = Join-Path $artifactDir "manifest.txt"
+          "version=$env:FULL_VERSION" | Out-File -FilePath $manifest -Encoding utf8
+          "feed=$env:OFFICIAL_FEED_URL" | Out-File -FilePath $manifest -Append -Encoding utf8
+          "channel=$env:AUTO_UPDATE_CHANNEL" | Out-File -FilePath $manifest -Append -Encoding utf8
+          "requireValidSignature=$env:AUTO_UPDATE_REQUIRE_VALID_SIGNATURE" | Out-File -FilePath $manifest -Append -Encoding utf8
+          "rolloutPercentage=$env:ROLLOUT_PERCENTAGE" | Out-File -FilePath $manifest -Append -Encoding utf8
+
+          $bundleRoot = Join-Path $PWD "build\windows\x64\runner\Release"
+          $helper = Join-Path $bundleRoot "plug_update_helper.exe"
+          if (!(Test-Path $helper)) {
+            throw "plug_update_helper.exe was not found in the Windows release bundle."
+          }
+          "helper=$helper" | Out-File -FilePath $manifest -Append -Encoding utf8
+
+          $status = Join-Path $artifactDir "plug_update_helper_invalid_args_status.json"
+          $stdout = Join-Path $artifactDir "helper_stdout.txt"
+          $stderr = Join-Path $artifactDir "helper_stderr.txt"
+          $process = Start-Process -FilePath $helper -ArgumentList @("--status", $status) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $exitCode = $process.ExitCode
+          "helperInvalidArgsExitCode=$exitCode" | Out-File -FilePath $manifest -Append -Encoding utf8
+          if ($exitCode -ne 2) {
+            throw "Expected helper exit code 2 for invalid arguments, got $exitCode."
+          }
+          if (!(Test-Path $status)) {
+            throw "Expected helper to write a status JSON for invalid arguments."
+          }
+
+      - name: Upload preflight artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-preflight-${{ inputs.version }}
+          path: |
+            installer/dist/PlugAgente-Setup-${{ inputs.version }}.exe
+            ${{ runner.temp }}\release-preflight\*
+          if-no-files-found: ignore

@@ -1,6 +1,8 @@
 name: Validate Current Appcast
 
 on:
+  schedule:
+    - cron: "30 4 * * *"
   workflow_dispatch:
     inputs:
       feed_url:
@@ -39,9 +41,10 @@ jobs:
 
       - name: Inspect current appcast
         env:
-          FEED_URL: ${{ inputs.feed_url }}
-          MAX_APPCAST_ITEMS: ${{ inputs.max_items }}
+          FEED_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.feed_url || 'https://cesar-carlos.github.io/plug_agente/appcast.xml' }}
+          MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
+          curl -L -sS "${FEED_URL}" -o published_appcast.xml
           python3 tool/appcast_manager.py inspect-url \
             --feed-url "${FEED_URL}" \
             --env-file appcast.env \
@@ -50,8 +53,8 @@ jobs:
 
       - name: Smoke validate current appcast
         env:
-          FEED_URL: ${{ inputs.feed_url }}
-          MAX_APPCAST_ITEMS: ${{ inputs.max_items }}
+          FEED_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.feed_url || 'https://cesar-carlos.github.io/plug_agente/appcast.xml' }}
+          MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
           source appcast.env
           python3 tool/appcast_manager.py smoke-validate-url \
@@ -68,3 +71,14 @@ jobs:
             --max-items "${MAX_APPCAST_ITEMS}" \
             --attempts 3 \
             --delay-seconds 5
+
+      - name: Upload appcast diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: validate-appcast-diagnostics
+          path: |
+            published_appcast.xml
+            appcast.env
+            release_body.txt
+          if-no-files-found: ignore

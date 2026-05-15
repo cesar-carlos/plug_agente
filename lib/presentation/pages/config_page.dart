@@ -122,7 +122,7 @@ class _ConfigPageState extends State<ConfigPage> {
     UpdateCheckDiagnostics? diagnostics,
   ) {
     if (diagnostics == null) {
-      return '';
+      return '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}';
     }
 
     final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
@@ -130,6 +130,14 @@ class _ConfigPageState extends State<ConfigPage> {
         ? ''
         : ' - ${_formatCompletionSource(l10n, diagnostics.completionSource)}';
     return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt$completion';
+  }
+
+  String _buildAutoUpdateFeedStatusLabel(AppLocalizations l10n) {
+    final feedUrl = resolveAutoUpdateFeedUrl(environment: AppEnvironment.snapshot());
+    if (isOfficialAutoUpdateFeedUrl(feedUrl)) {
+      return l10n.configAutoUpdateFeedOfficial;
+    }
+    return l10n.configAutoUpdateFeedCustom;
   }
 
   String _formatTechnicalDetails(
@@ -598,6 +606,7 @@ class _ConfigPageState extends State<ConfigPage> {
       l10n,
       orchestrator.lastAutomaticDiagnostics,
     );
+    final autoUpdateFeedStatusLabel = _buildAutoUpdateFeedStatusLabel(l10n);
     final autoUpdateUnavailableMessage = isAutoUpdateAvailable ? null : _getUpdateUnavailableMessage(l10n);
 
     return ScaffoldPage(
@@ -620,6 +629,7 @@ class _ConfigPageState extends State<ConfigPage> {
             lastUpdateCheck: lastUpdateLabel,
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
+            autoUpdateFeedStatus: autoUpdateFeedStatusLabel,
             automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
             isCheckingUpdates: _isCheckingUpdates,
             isCheckingAutomaticUpdates: _isCheckingAutomaticUpdates,
@@ -664,6 +674,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.lastUpdateCheck,
     required this.lastBackgroundUpdateCheck,
     required this.lastAutomaticUpdateCheck,
+    required this.autoUpdateFeedStatus,
     required this.automaticSilentUpdatesEnabled,
     required this.isCheckingUpdates,
     required this.isCheckingAutomaticUpdates,
@@ -696,6 +707,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final String lastUpdateCheck;
   final String lastBackgroundUpdateCheck;
   final String lastAutomaticUpdateCheck;
+  final String autoUpdateFeedStatus;
   final bool automaticSilentUpdatesEnabled;
   final bool isCheckingUpdates;
   final bool isCheckingAutomaticUpdates;
@@ -769,6 +781,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             lastUpdateCheck: widget.lastUpdateCheck,
             lastBackgroundUpdateCheck: widget.lastBackgroundUpdateCheck,
             lastAutomaticUpdateCheck: widget.lastAutomaticUpdateCheck,
+            autoUpdateFeedStatus: widget.autoUpdateFeedStatus,
             automaticSilentUpdatesEnabled: widget.automaticSilentUpdatesEnabled,
             isCheckingUpdates: widget.isCheckingUpdates,
             isCheckingAutomaticUpdates: widget.isCheckingAutomaticUpdates,

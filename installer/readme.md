@@ -22,15 +22,21 @@ Esse comando executa:
    instalador, quando configurada
 5. `ISCC installer/setup.iss`
 
-Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
-`--dart-define=AUTO_UPDATE_FEED_URL=...`. Sem override, o app usa o feed
-oficial padrao.
+Quando o ambiente ou `.env` define `AUTO_UPDATE_FEED_URL`,
+`AUTO_UPDATE_CHANNEL` ou `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE`, o build injeta
+esses valores via `--dart-define`. Sem override de feed, o app usa o feed
+oficial padrao. Mantenha `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` em
+producao ate a assinatura Authenticode estar validada ponta a ponta.
 
 Antes de publicar manualmente, rode:
 
 ```bash
 python tool/release_preflight.py --version {versao} --require-iscc
 ```
+
+Para uma validacao completa no GitHub Actions sem publicar, use o workflow
+manual **Release Preflight**. Ele gera o instalador, valida o helper nativo e
+salva logs/status JSON como artifacts sem criar commit, tag ou release.
 
 Assinatura de codigo e opcional. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar
 para um certificado PFX, o script assina `plug_agente.exe`, o helper nativo de

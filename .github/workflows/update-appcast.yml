@@ -15,6 +15,15 @@ on:
         required: false
         type: string
         default: "100"
+      channel:
+        description: "Appcast channel for the new item."
+        required: false
+        type: choice
+        default: "stable"
+        options:
+          - stable
+          - beta
+          - internal
 
 jobs:
   update-appcast:
@@ -32,6 +41,7 @@ jobs:
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
       asset_sha256: ${{ steps.asset.outputs.sha256 }}
+      channel: ${{ steps.channel.outputs.channel }}
       rollout_percentage: ${{ steps.rollout.outputs.rollout_percentage }}
     permissions:
       contents: write
@@ -72,6 +82,24 @@ jobs:
               sys.exit(1)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"rollout_percentage={value}\n")
+          PYEOF
+
+      - name: Resolve appcast channel
+        id: channel
+        env:
+          RAW_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+
+          allowed = {"stable", "beta", "internal"}
+          channel = (os.environ.get("RAW_CHANNEL") or "stable").strip().lower() or "stable"
+          if channel not in allowed:
+              print(f"Error: channel must be one of {sorted(allowed)}, got {channel!r}.", file=sys.stderr)
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"channel={channel}\n")
           PYEOF
 
       - name: Load release context
@@ -284,7 +312,7 @@ jobs:
             --asset-size "${{ steps.asset.outputs.size }}" \
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
-            --channel "stable" \
+            --channel "${{ steps.channel.outputs.channel }}" \
             --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
@@ -303,7 +331,7 @@ jobs:
             --asset-size "${{ steps.asset.outputs.size }}" \
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
-            --channel "stable" \
+            --channel "${{ steps.channel.outputs.channel }}" \
             --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
@@ -359,6 +387,7 @@ jobs:
     env:
       MAX_APPCAST_ITEMS: "10"
       OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
+      CHANNEL: ${{ needs.update-appcast.outputs.channel }}
       ROLLOUT_PERCENTAGE: ${{ needs.update-appcast.outputs.rollout_percentage }}
     permissions:
       contents: read
@@ -397,7 +426,7 @@ jobs:
             --asset-size "${ASSET_SIZE}" \
             --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
-            --channel "stable" \
+            --channel "${CHANNEL}" \
             --rollout-percentage "${ROLLOUT_PERCENTAGE}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \

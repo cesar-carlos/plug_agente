@@ -108,7 +108,11 @@ def read_env_flag(key: str, *, default: bool = False) -> bool:
 
 
 def resolve_auto_update_feed_url() -> Optional[str]:
-    return read_env_value("AUTO_UPDATE_FEED_URL")
+    return os.environ.get("AUTO_UPDATE_FEED_URL") or read_env_value("AUTO_UPDATE_FEED_URL")
+
+
+def resolve_auto_update_define(key: str) -> Optional[str]:
+    return os.environ.get(key) or read_env_value(key)
 
 
 def read_env_value(key: str) -> Optional[str]:
@@ -215,6 +219,11 @@ def main() -> None:
             "   AUTO_UPDATE_FEED_URL nao encontrado no .env; usando feed oficial padrao",
             flush=True,
         )
+    for key in ("AUTO_UPDATE_CHANNEL", "AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"):
+        value = resolve_auto_update_define(key)
+        if value:
+            flutter_cmd.append(f"--dart-define={key}={value}")
+            print(f"   {key} injetado via --dart-define: {value}", flush=True)
     run(flutter_cmd)
 
     if not BUILD_DIR.exists():

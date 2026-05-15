@@ -9,6 +9,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.lastUpdateCheck,
     required this.lastBackgroundUpdateCheck,
     required this.lastAutomaticUpdateCheck,
+    required this.autoUpdateFeedStatus,
     required this.automaticSilentUpdatesEnabled,
     required this.onCheckUpdates,
     required this.onCheckAutomaticUpdates,
@@ -25,6 +26,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String lastUpdateCheck;
   final String lastBackgroundUpdateCheck;
   final String lastAutomaticUpdateCheck;
+  final String autoUpdateFeedStatus;
   final bool automaticSilentUpdatesEnabled;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCheckAutomaticUpdates;
@@ -39,8 +41,10 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
+    final displayLastAutomaticUpdate = lastAutomaticUpdateCheck.trim().isEmpty
+        ? '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}'
+        : lastAutomaticUpdateCheck;
     final hasBackgroundUpdate = lastBackgroundUpdateCheck.trim().isNotEmpty;
-    final hasAutomaticUpdate = lastAutomaticUpdateCheck.trim().isNotEmpty;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -82,13 +86,18 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                       style: context.captionText,
                     ),
                   ],
-                  if (hasAutomaticUpdate) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      lastAutomaticUpdateCheck,
-                      style: context.captionText,
-                    ),
-                  ],
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    displayLastAutomaticUpdate,
+                    key: const ValueKey('automatic_updates_last_attempt_label'),
+                    style: context.captionText,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    autoUpdateFeedStatus,
+                    key: const ValueKey('automatic_updates_feed_status_label'),
+                    style: context.captionText,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   SettingsToggleTile(
                     key: const ValueKey('automatic_silent_updates_toggle'),

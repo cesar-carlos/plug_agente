@@ -257,6 +257,35 @@ void main() {
     );
   });
 
+  testWidgets('shows official feed and never automatic attempt by default', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configAutoUpdateFeedOfficial), findsOneWidget);
+    expect(
+      find.text('${ptL10n.configLastAutomaticUpdatePrefix}${ptL10n.configLastUpdateNever}'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows custom feed when a valid override is configured', (tester) async {
+    dotenv.loadFromString(
+      envString: 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml',
+    );
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configAutoUpdateFeedCustom), findsOneWidget);
+  });
+
   testWidgets('toggles automatic silent updates preference', (tester) async {
     bool? capturedValue;
     final orchestrator = FakeAutoUpdateOrchestrator(

@@ -89,20 +89,28 @@ jobs:
       - name: Smoke native update helper
         shell: pwsh
         run: |
+          $artifactDir = Join-Path $env:RUNNER_TEMP "windows-helper-smoke"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          $manifest = Join-Path $artifactDir "manifest.txt"
           $bundleRoot = Join-Path $PWD "build\windows\x64\runner"
+          "bundleRoot=$bundleRoot" | Out-File -FilePath $manifest -Encoding utf8
           $helperFile = Get-ChildItem -Path $bundleRoot -Filter "plug_update_helper.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($null -eq $helperFile) {
             throw "plug_update_helper.exe was not found in the Windows debug bundle."
           }
           $helper = $helperFile.FullName
+          "helper=$helper" | Out-File -FilePath $manifest -Append -Encoding utf8
 
-          $status = Join-Path $env:RUNNER_TEMP "plug_update_helper_invalid_args_status.json"
+          $status = Join-Path $artifactDir "plug_update_helper_invalid_args_status.json"
           if (Test-Path $status) {
             Remove-Item $status -Force
           }
 
-          $process = Start-Process -FilePath $helper -ArgumentList @("--status", $status) -Wait -PassThru -WindowStyle Hidden
+          $stdout = Join-Path $artifactDir "helper_stdout.txt"
+          $stderr = Join-Path $artifactDir "helper_stderr.txt"
+          $process = Start-Process -FilePath $helper -ArgumentList @("--status", $status) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           $exitCode = $process.ExitCode
+          "exitCode=$exitCode" | Out-File -FilePath $manifest -Append -Encoding utf8
           if ($exitCode -ne 2) {
             throw "Expected helper exit code 2 for invalid arguments, got $exitCode."
           }
@@ -117,6 +125,14 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($json.errorMessage)) {
             throw "Expected helper status to include an errorMessage."
           }
+
+      - name: Upload helper smoke diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-helper-smoke-diagnostics
+          path: ${{ runner.temp }}\windows-helper-smoke\*
+          if-no-files-found: ignore
 
   transport-benchmark:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

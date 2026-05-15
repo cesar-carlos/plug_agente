@@ -48,6 +48,11 @@ assinatura Authenticode e registrada em diagnostico, mas nao bloqueia a
 instalacao. A protecao obrigatoria do fluxo silencioso e o `plug:sha256` do
 appcast.
 
+Para validar a politica futura de assinatura obrigatoria, gere um build de
+staging com assinatura configurada e `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true`.
+Nao use esse valor em producao enquanto o pipeline de assinatura e a publicacao
+de assets assinados nao estiverem verificados ponta a ponta.
+
 ## Feed Oficial via GitHub Pages
 
 O feed oficial e publicado por GitHub Pages usando Actions artifact, sem branch
@@ -180,10 +185,23 @@ python -m unittest tool.test_appcast_manager tool.test_validate_release -v
 
 O workflow de appcast aceita `rollout_percentage`, default `100`, para permitir
 rollout gradual em proximas releases.
+Em execucao manual ele tambem aceita `channel` (`stable`, `beta` ou
+`internal`). Releases publicadas automaticamente continuam entrando em
+`stable`.
 
-Para ensaio sem publicacao, execute **Publish Windows Release** com
-`dry_run=true`. Esse modo gera e valida o instalador, mas nao cria tag, release
-nem atualiza o appcast.
+Para ensaio completo sem publicacao, execute o workflow manual
+**Release Preflight**. Ele atualiza a versao apenas no workspace temporario do
+runner, roda validacoes, gera o instalador, valida o helper nativo e publica
+artefatos de diagnostico, mas nao cria commit, tag, GitHub Release nem deploy
+Pages. Use `require_valid_update_signature=true` somente em staging assinado.
+
+O workflow **Validate Current Appcast** roda diariamente contra o feed oficial
+do GitHub Pages e continua disponivel manualmente para validar uma URL custom.
+Quando falha, ele publica o appcast baixado e os arquivos de diagnostico como
+artifact do GitHub Actions.
+
+O job Windows de smoke do helper no CI publica `manifest.txt`, stdout/stderr e
+status JSON quando falha, para diagnosticar o helper sem reproduzir localmente.
 
 Nome esperado do asset:
 

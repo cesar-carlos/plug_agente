@@ -1502,6 +1502,18 @@ abstract class AppLocalizations {
   /// **'Try automatic update now'**
   String get configAutomaticSilentUpdatesCheckNow;
 
+  /// No description provided for @configAutoUpdateFeedOfficial.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed: official'**
+  String get configAutoUpdateFeedOfficial;
+
+  /// No description provided for @configAutoUpdateFeedCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed: custom'**
+  String get configAutoUpdateFeedCustom;
+
   /// No description provided for @configAutoUpdateNotConfigured.
   ///
   /// In en, this message translates to:

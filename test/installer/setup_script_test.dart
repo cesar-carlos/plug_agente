@@ -30,5 +30,14 @@ void main() {
       expect(buildScript, contains('plug_update_helper.exe'));
       expect(buildScript, contains('helper de update'));
     });
+
+    test('installer build injects auto update channel and signature defines', () {
+      final buildScript = File('installer/build_installer.py').readAsStringSync();
+
+      expect(buildScript, contains('AUTO_UPDATE_FEED_URL'));
+      expect(buildScript, contains('AUTO_UPDATE_CHANNEL'));
+      expect(buildScript, contains('AUTO_UPDATE_REQUIRE_VALID_SIGNATURE'));
+      expect(buildScript, contains('--dart-define='));
+    });
   });
 }

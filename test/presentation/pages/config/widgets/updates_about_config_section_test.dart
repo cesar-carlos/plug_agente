@@ -15,6 +15,7 @@ void main() {
     String lastUpdateCheck = '',
     String lastBackgroundUpdateCheck = '',
     String lastAutomaticUpdateCheck = '',
+    String? autoUpdateFeedStatus,
     bool automaticSilentUpdatesEnabled = true,
     bool isCheckingUpdates = false,
     bool isAutoUpdateAvailable = true,
@@ -39,6 +40,7 @@ void main() {
               lastUpdateCheck: lastUpdateCheck,
               lastBackgroundUpdateCheck: lastBackgroundUpdateCheck,
               lastAutomaticUpdateCheck: lastAutomaticUpdateCheck,
+              autoUpdateFeedStatus: autoUpdateFeedStatus ?? ptL10n.configAutoUpdateFeedOfficial,
               automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
               isCheckingUpdates: isCheckingUpdates,
               isAutoUpdateAvailable: isAutoUpdateAvailable,
@@ -112,7 +114,32 @@ void main() {
       (tester) async {
         await pumpSection(tester);
 
-        expect(find.textContaining(ptL10n.configLastUpdateNever), findsOneWidget);
+        expect(find.textContaining(ptL10n.configLastUpdateNever), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'always shows automatic update last attempt and feed status',
+      (tester) async {
+        await pumpSection(tester);
+
+        expect(
+          find.text('${ptL10n.configLastAutomaticUpdatePrefix}${ptL10n.configLastUpdateNever}'),
+          findsOneWidget,
+        );
+        expect(find.text(ptL10n.configAutoUpdateFeedOfficial), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'shows custom feed status when provided',
+      (tester) async {
+        await pumpSection(
+          tester,
+          autoUpdateFeedStatus: ptL10n.configAutoUpdateFeedCustom,
+        );
+
+        expect(find.text(ptL10n.configAutoUpdateFeedCustom), findsOneWidget);
       },
     );
 

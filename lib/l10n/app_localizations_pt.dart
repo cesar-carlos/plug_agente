@@ -753,6 +753,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configAutomaticSilentUpdatesCheckNow => 'Tentar atualização automática agora';
 
   @override
+  String get configAutoUpdateFeedOfficial => 'Feed: oficial';
+
+  @override
+  String get configAutoUpdateFeedCustom => 'Feed: personalizado';
+
+  @override
   String get configAutoUpdateNotConfigured =>
       'Auto-update está indisponível porque o feed configurado é inválido. Remova AUTO_UPDATE_FEED_URL para usar o feed oficial ou informe um feed Sparkle (.xml).';
 

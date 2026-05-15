@@ -138,6 +138,8 @@ jobs:
       - name: Build installer
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
+          AUTO_UPDATE_CHANNEL: stable
+          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: false
           WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
           WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing }}
