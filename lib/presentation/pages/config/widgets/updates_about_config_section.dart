@@ -11,11 +11,13 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.lastAutomaticUpdateCheck,
     required this.automaticSilentUpdatesEnabled,
     required this.onCheckUpdates,
+    required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
     required this.onAutomaticSilentUpdatesChanged,
     this.isAutoUpdateAvailable = true,
     this.unavailableMessage,
     this.isCheckingUpdates = false,
+    this.isCheckingAutomaticUpdates = false,
     super.key,
   });
 
@@ -25,11 +27,13 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String lastAutomaticUpdateCheck;
   final bool automaticSilentUpdatesEnabled;
   final VoidCallback onCheckUpdates;
+  final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
   final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
   final bool isAutoUpdateAvailable;
   final String? unavailableMessage;
   final bool isCheckingUpdates;
+  final bool isCheckingAutomaticUpdates;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +96,27 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     description: l10n.configAutomaticSilentUpdatesDescription,
                     value: automaticSilentUpdatesEnabled,
                     onChanged: onAutomaticSilentUpdatesChanged,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Button(
+                    key: const ValueKey('automatic_updates_check_now_button'),
+                    onPressed: isCheckingAutomaticUpdates ? null : onCheckAutomaticUpdates,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isCheckingAutomaticUpdates)
+                          const SizedBox(
+                            key: ValueKey('automatic_updates_progress_ring'),
+                            width: 16,
+                            height: 16,
+                            child: ProgressRing(strokeWidth: 2),
+                          )
+                        else
+                          const Icon(FluentIcons.refresh),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(l10n.configAutomaticSilentUpdatesCheckNow),
+                      ],
+                    ),
                   ),
                 ],
               )

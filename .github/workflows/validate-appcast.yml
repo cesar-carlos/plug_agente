@@ -7,7 +7,7 @@ on:
         description: "Sparkle feed URL to validate."
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml"
+        default: "https://cesar-carlos.github.io/plug_agente/appcast.xml"
       max_items:
         description: "Maximum items allowed in the feed."
         required: false
@@ -34,8 +34,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run appcast manager unit tests
-        run: python3 -m unittest tool.test_appcast_manager -v
+      - name: Run appcast tooling unit tests
+        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release -v
 
       - name: Inspect current appcast
         env:

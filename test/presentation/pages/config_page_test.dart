@@ -21,6 +21,7 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   FakeAutoUpdateOrchestrator({
     required this.isAvailable,
     this.onCheckManual,
+    this.onCheckSilently,
     this.onSetAutomaticSilentUpdatesEnabled,
     this.lastManualDiagnostics,
     this.lastBackgroundDiagnostics,
@@ -44,7 +45,9 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   UpdateCheckDiagnostics? lastAutomaticDiagnostics;
 
   Future<Result<bool>> Function()? onCheckManual;
+  Future<Result<bool>> Function()? onCheckSilently;
   Future<Result<void>> Function(bool value)? onSetAutomaticSilentUpdatesEnabled;
+  int silentCheckCount = 0;
 
   @override
   Future<Result<bool>> checkManual() async {
@@ -58,7 +61,13 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   Future<void> checkInBackground() async {}
 
   @override
-  Future<Result<bool>> checkSilently() async => const Success(false);
+  Future<Result<bool>> checkSilently() async {
+    silentCheckCount += 1;
+    if (onCheckSilently != null) {
+      return onCheckSilently!.call();
+    }
+    return const Success(false);
+  }
 
   @override
   Future<void> initialize() async {}
@@ -271,6 +280,27 @@ void main() {
 
     expect(capturedValue, isFalse);
     expect(orchestrator.automaticSilentUpdatesEnabled, isFalse);
+  });
+
+  testWidgets('manual automatic update button calls silent update flow', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      onCheckSilently: () async {
+        return const Success(false);
+      },
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configAutomaticSilentUpdatesCheckNow), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('automatic_updates_check_now_button')));
+    await tester.pumpAndSettle();
+
+    expect(orchestrator.silentCheckCount, 1);
   });
 
   testWidgets('shows automatic silent update diagnostics', (tester) async {

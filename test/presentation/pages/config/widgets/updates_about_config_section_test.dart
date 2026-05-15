@@ -22,6 +22,7 @@ void main() {
     String appVersion = '1.2.6+1',
     Locale locale = const Locale('pt'),
     VoidCallback? onCheckUpdates,
+    VoidCallback? onCheckAutomaticUpdates,
     VoidCallback? onCopyUpdateDiagnostics,
     ValueChanged<bool>? onAutomaticSilentUpdatesChanged,
     bool settle = true,
@@ -43,6 +44,7 @@ void main() {
               isAutoUpdateAvailable: isAutoUpdateAvailable,
               unavailableMessage: unavailableMessage,
               onCheckUpdates: onCheckUpdates ?? () {},
+              onCheckAutomaticUpdates: onCheckAutomaticUpdates ?? () {},
               onCopyUpdateDiagnostics: onCopyUpdateDiagnostics ?? () {},
               onAutomaticSilentUpdatesChanged: onAutomaticSilentUpdatesChanged ?? (_) {},
             ),
@@ -172,6 +174,17 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
+      expect(tapped, isTrue);
+    });
+
+    testWidgets('automatic update button triggers silent check callback', (tester) async {
+      var tapped = false;
+      await pumpSection(tester, onCheckAutomaticUpdates: () => tapped = true);
+
+      await tester.tap(find.byKey(const ValueKey('automatic_updates_check_now_button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
       expect(tapped, isTrue);
     });
 

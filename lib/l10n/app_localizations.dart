@@ -1496,6 +1496,12 @@ abstract class AppLocalizations {
   /// **'Automatic update installation disabled.'**
   String get configAutomaticSilentUpdatesDisabled;
 
+  /// No description provided for @configAutomaticSilentUpdatesCheckNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Try automatic update now'**
+  String get configAutomaticSilentUpdatesCheckNow;
+
   /// No description provided for @configAutoUpdateNotConfigured.
   ///
   /// In en, this message translates to:

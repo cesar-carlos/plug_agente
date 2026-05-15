@@ -48,7 +48,7 @@ jobs:
       VERSION_SHORT: ${{ inputs.version }}
       FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
       RELEASE_TAG: v${{ inputs.version }}
-      OFFICIAL_FEED_URL: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+      OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
@@ -116,6 +116,10 @@ jobs:
       - name: Test
         if: inputs.run_tests
         run: flutter test
+
+      - name: Validate appcast tooling
+        if: inputs.run_tests
+        run: python -m unittest tool.test_appcast_manager tool.test_validate_release -v
 
       - name: Prepare signing certificate
         id: signing

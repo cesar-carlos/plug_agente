@@ -114,7 +114,7 @@ o smoke check do feed publicado usando `tool/appcast_manager.py`.
 Feed oficial:
 
 ```text
-https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+https://cesar-carlos.github.io/plug_agente/appcast.xml
 ```
 
 Validacoes detalhadas do feed e do update ficam em
@@ -133,7 +133,7 @@ Para validar o feed remoto publicado:
 ```bash
 python tool/validate_release.py \
   --tag v1.2.7 \
-  --feed-url https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+  --feed-url https://cesar-carlos.github.io/plug_agente/appcast.xml
 ```
 
 ## Fonte de Verdade do Appcast
@@ -178,5 +178,7 @@ python tool/release_preflight.py --version 1.2.7 --require-iscc --analyze --test
   assinatura nao estiver configurada.
 - A retencao do `appcast.xml` e limitada pelo workflow para evitar crescimento
   indefinido do feed.
+- O feed oficial e publicado via GitHub Pages usando Actions artifact; habilite
+  `Settings` > `Pages` > `GitHub Actions` uma vez no repositorio.
 - O CI executa `actionlint` nos workflows para detectar problemas de sintaxe,
   expressoes e scripts inline antes de usar o fluxo de release.

@@ -745,6 +745,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configAutomaticSilentUpdatesDisabled => 'Automatic update installation disabled.';
 
   @override
+  String get configAutomaticSilentUpdatesCheckNow => 'Try automatic update now';
+
+  @override
   String get configAutoUpdateNotConfigured =>
       'Auto-update is unavailable because the configured feed is invalid. Remove AUTO_UPDATE_FEED_URL to use the official feed, or set it to a Sparkle feed (.xml).';
 

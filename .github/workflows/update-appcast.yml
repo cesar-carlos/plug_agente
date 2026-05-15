@@ -10,6 +10,11 @@ on:
         required: false
         type: string
         default: ""
+      rollout_percentage:
+        description: "Rollout percentage for the new appcast item."
+        required: false
+        type: string
+        default: "100"
 
 jobs:
   update-appcast:
@@ -27,6 +32,7 @@ jobs:
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
       asset_sha256: ${{ steps.asset.outputs.sha256 }}
+      rollout_percentage: ${{ steps.rollout.outputs.rollout_percentage }}
     permissions:
       contents: write
       actions: write
@@ -43,8 +49,30 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run appcast manager unit tests
-        run: python3 -m unittest tool.test_appcast_manager -v
+      - name: Run appcast tooling unit tests
+        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release -v
+
+      - name: Resolve rollout percentage
+        id: rollout
+        env:
+          RAW_ROLLOUT_PERCENTAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.rollout_percentage || '100' }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import sys
+
+          raw = (os.environ.get("RAW_ROLLOUT_PERCENTAGE") or "100").strip() or "100"
+          try:
+              value = int(raw)
+          except ValueError:
+              print(f"Error: rollout_percentage must be an integer from 0 to 100, got {raw!r}.", file=sys.stderr)
+              sys.exit(1)
+          if value < 0 or value > 100:
+              print(f"Error: rollout_percentage must be from 0 to 100, got {value}.", file=sys.stderr)
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"rollout_percentage={value}\n")
+          PYEOF
 
       - name: Load release context
         id: ctx
@@ -257,7 +285,7 @@ jobs:
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
             --channel "stable" \
-            --rollout-percentage "100" \
+            --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
 
@@ -276,7 +304,7 @@ jobs:
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
             --channel "stable" \
-            --rollout-percentage "100" \
+            --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
 
@@ -289,12 +317,49 @@ jobs:
           git diff --staged --quiet || git commit -m "Update appcast.xml for ${{ steps.release.outputs.tag }}"
           git push origin main
 
-  smoke-validate-appcast:
+  deploy-pages:
     needs: update-appcast
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout published appcast
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p pages-artifact
+          cp appcast.xml pages-artifact/appcast.xml
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-artifact
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke-validate-appcast:
+    needs:
+      - update-appcast
+      - deploy-pages
     runs-on: ubuntu-latest
     env:
       MAX_APPCAST_ITEMS: "10"
-      OFFICIAL_FEED_URL: https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml
+      OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
+      ROLLOUT_PERCENTAGE: ${{ needs.update-appcast.outputs.rollout_percentage }}
     permissions:
       contents: read
       actions: read
@@ -333,7 +398,7 @@ jobs:
             --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
             --channel "stable" \
-            --rollout-percentage "100" \
+            --rollout-percentage "${ROLLOUT_PERCENTAGE}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \
             --attempts 6 \

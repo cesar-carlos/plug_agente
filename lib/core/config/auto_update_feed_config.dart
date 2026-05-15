@@ -1,4 +1,4 @@
-const String officialAutoUpdateFeedUrl = 'https://raw.githubusercontent.com/cesar-carlos/plug_agente/main/appcast.xml';
+const String officialAutoUpdateFeedUrl = 'https://cesar-carlos.github.io/plug_agente/appcast.xml';
 
 String? resolveAutoUpdateFeedOverride({
   required Map<String, String> environment,

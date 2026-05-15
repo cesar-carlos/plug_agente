@@ -35,6 +35,7 @@ class ConfigPage extends StatefulWidget {
 class _ConfigPageState extends State<ConfigPage> {
   String _lastUpdateCheck = '';
   bool _isCheckingUpdates = false;
+  bool _isCheckingAutomaticUpdates = false;
 
   /// `AppConstants.appVersion` é mantido em sincronia com `pubspec.yaml` pelo
   /// script `installer/update_version.py`. Usamos a constante diretamente para
@@ -444,6 +445,69 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
+  Future<void> _checkAutomaticUpdatesNow() async {
+    if (_isCheckingAutomaticUpdates) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    if (!orchestrator.isAvailable) {
+      SettingsFeedback.showError(
+        context: context,
+        title: l10n.gsSectionUpdates,
+        message: _getUpdateUnavailableMessage(l10n),
+      );
+      return;
+    }
+
+    setState(() {
+      _isCheckingAutomaticUpdates = true;
+    });
+
+    final result = await orchestrator.checkSilently();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isCheckingAutomaticUpdates = false;
+    });
+
+    result.fold(
+      (_) {
+        final technicalDetails = _formatTechnicalDetails(
+          l10n,
+          null,
+          null,
+          orchestrator.lastAutomaticDiagnostics,
+        );
+        final source = _formatCompletionSource(
+          l10n,
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+        );
+        return SettingsFeedback.showInfo(
+          context: context,
+          title: l10n.gsSectionUpdates,
+          message: '$source\n\n$technicalDetails',
+        );
+      },
+      (failure) {
+        final technicalDetails = _formatTechnicalDetails(
+          l10n,
+          null,
+          null,
+          orchestrator.lastAutomaticDiagnostics,
+        );
+        return SettingsFeedback.showError(
+          context: context,
+          title: l10n.gsSectionUpdates,
+          message: '${failure.toDisplayMessage()}\n\n$technicalDetails',
+        );
+      },
+    );
+  }
+
   Future<void> _copyUpdateDiagnostics() async {
     final l10n = AppLocalizations.of(context)!;
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
@@ -558,6 +622,7 @@ class _ConfigPageState extends State<ConfigPage> {
             lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
             automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
             isCheckingUpdates: _isCheckingUpdates,
+            isCheckingAutomaticUpdates: _isCheckingAutomaticUpdates,
             startupSupported: startupSupported,
             startMinimizedSupported: capabilities.supportsTray,
             startupError: systemSettingsProvider.startupError,
@@ -576,6 +641,7 @@ class _ConfigPageState extends State<ConfigPage> {
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
             onRepairStartupLaunchConfiguration: systemSettingsProvider.repairStartupLaunchConfiguration,
             onCheckUpdates: _checkUpdates,
+            onCheckAutomaticUpdates: _checkAutomaticUpdatesNow,
             onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
             onAutomaticSilentUpdatesChanged: (value) {
               unawaited(_onAutomaticSilentUpdatesChanged(value));
@@ -600,6 +666,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.lastAutomaticUpdateCheck,
     required this.automaticSilentUpdatesEnabled,
     required this.isCheckingUpdates,
+    required this.isCheckingAutomaticUpdates,
     required this.startupSupported,
     required this.startMinimizedSupported,
     required this.startupError,
@@ -615,6 +682,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onOpenStartupSettings,
     required this.onRepairStartupLaunchConfiguration,
     required this.onCheckUpdates,
+    required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
     required this.onAutomaticSilentUpdatesChanged,
   });
@@ -630,6 +698,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final String lastAutomaticUpdateCheck;
   final bool automaticSilentUpdatesEnabled;
   final bool isCheckingUpdates;
+  final bool isCheckingAutomaticUpdates;
   final bool startupSupported;
   final bool startMinimizedSupported;
   final SystemSettingsErrorState? startupError;
@@ -645,6 +714,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final VoidCallback onOpenStartupSettings;
   final VoidCallback onRepairStartupLaunchConfiguration;
   final VoidCallback onCheckUpdates;
+  final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
   final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
 
@@ -701,9 +771,11 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             lastAutomaticUpdateCheck: widget.lastAutomaticUpdateCheck,
             automaticSilentUpdatesEnabled: widget.automaticSilentUpdatesEnabled,
             isCheckingUpdates: widget.isCheckingUpdates,
+            isCheckingAutomaticUpdates: widget.isCheckingAutomaticUpdates,
             isAutoUpdateAvailable: widget.isAutoUpdateAvailable,
             unavailableMessage: widget.autoUpdateUnavailableMessage,
             onCheckUpdates: widget.onCheckUpdates,
+            onCheckAutomaticUpdates: widget.onCheckAutomaticUpdates,
             onCopyUpdateDiagnostics: widget.onCopyUpdateDiagnostics,
             onAutomaticSilentUpdatesChanged: widget.onAutomaticSilentUpdatesChanged,
           ),
