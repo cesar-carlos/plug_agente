@@ -89,10 +89,12 @@ jobs:
       - name: Smoke native update helper
         shell: pwsh
         run: |
-          $helper = Join-Path $PWD "build\windows\x64\runner\Debug\plug_update_helper.exe"
-          if (!(Test-Path $helper)) {
+          $bundleRoot = Join-Path $PWD "build\windows\x64\runner"
+          $helperFile = Get-ChildItem -Path $bundleRoot -Filter "plug_update_helper.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $helperFile) {
             throw "plug_update_helper.exe was not found in the Windows debug bundle."
           }
+          $helper = $helperFile.FullName
 
           $status = Join-Path $env:RUNNER_TEMP "plug_update_helper_invalid_args_status.json"
           if (Test-Path $status) {
