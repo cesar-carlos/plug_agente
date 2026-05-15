@@ -14,6 +14,8 @@ void main() {
     WidgetTester tester, {
     String lastUpdateCheck = '',
     String lastBackgroundUpdateCheck = '',
+    String lastAutomaticUpdateCheck = '',
+    bool automaticSilentUpdatesEnabled = true,
     bool isCheckingUpdates = false,
     bool isAutoUpdateAvailable = true,
     String? unavailableMessage,
@@ -21,6 +23,7 @@ void main() {
     Locale locale = const Locale('pt'),
     VoidCallback? onCheckUpdates,
     VoidCallback? onCopyUpdateDiagnostics,
+    ValueChanged<bool>? onAutomaticSilentUpdatesChanged,
     bool settle = true,
   }) async {
     await tester.pumpWidget(
@@ -34,11 +37,14 @@ void main() {
               appVersion: appVersion,
               lastUpdateCheck: lastUpdateCheck,
               lastBackgroundUpdateCheck: lastBackgroundUpdateCheck,
+              lastAutomaticUpdateCheck: lastAutomaticUpdateCheck,
+              automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
               isCheckingUpdates: isCheckingUpdates,
               isAutoUpdateAvailable: isAutoUpdateAvailable,
               unavailableMessage: unavailableMessage,
               onCheckUpdates: onCheckUpdates ?? () {},
               onCopyUpdateDiagnostics: onCopyUpdateDiagnostics ?? () {},
+              onAutomaticSilentUpdatesChanged: onAutomaticSilentUpdatesChanged ?? (_) {},
             ),
           ),
         ),
@@ -130,6 +136,34 @@ void main() {
         expect(find.textContaining(background), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'shows automatic update label when provided',
+      (tester) async {
+        final automatic =
+            '${ptL10n.configLastAutomaticUpdatePrefix}14/05/2026 11:20 - ${ptL10n.configUpdateCompletionSourceAutomaticInstallStarted}';
+        await pumpSection(
+          tester,
+          lastAutomaticUpdateCheck: automatic,
+        );
+
+        expect(find.textContaining(automatic), findsOneWidget);
+      },
+    );
+
+    testWidgets('automatic updates toggle triggers callback', (tester) async {
+      bool? value;
+      await pumpSection(
+        tester,
+        onAutomaticSilentUpdatesChanged: (next) => value = next,
+      );
+
+      await tester.tap(find.byType(ToggleSwitch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(value, isFalse);
+    });
 
     testWidgets('refresh button triggers onCheckUpdates callback', (tester) async {
       var tapped = false;

@@ -6,4 +6,5 @@ class AppSettingsKeys {
   static const String startMinimized = 'settings.start_minimized';
   static const String minimizeToTray = 'settings.minimize_to_tray';
   static const String closeToTray = 'settings.close_to_tray';
+  static const String automaticSilentUpdatesEnabled = 'settings.automatic_silent_updates_enabled';
 }

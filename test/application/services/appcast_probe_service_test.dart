@@ -17,10 +17,16 @@ void main() {
           ..headers.contentType = ContentType('text', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:plug="https://plug.se7esistemas.com/appcast">
   <channel>
     <item>
-      <enclosure sparkle:version="1.2.3+4" />
+      <enclosure
+        url="https://example.com/downloads/PlugAgente-Setup-1.2.3.exe"
+        sparkle:version="1.2.3+4"
+        length="12345"
+        plug:sha256="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        plug:channel="stable"
+        plug:rolloutPercentage="25" />
     </item>
     <item>
       <enclosure sparkle:version="1.2.2+3" />
@@ -37,6 +43,12 @@ void main() {
 
       expect(result.errorMessage, isNull);
       expect(result.latestVersion, '1.2.3+4');
+      expect(result.assetUrl, 'https://example.com/downloads/PlugAgente-Setup-1.2.3.exe');
+      expect(result.assetSize, 12345);
+      expect(result.assetName, 'PlugAgente-Setup-1.2.3.exe');
+      expect(result.sha256, '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+      expect(result.channel, 'stable');
+      expect(result.rolloutPercentage, 25);
       expect(result.itemCount, 2);
     });
 

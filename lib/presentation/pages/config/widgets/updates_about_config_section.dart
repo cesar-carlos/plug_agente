@@ -8,8 +8,11 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.appVersion,
     required this.lastUpdateCheck,
     required this.lastBackgroundUpdateCheck,
+    required this.lastAutomaticUpdateCheck,
+    required this.automaticSilentUpdatesEnabled,
     required this.onCheckUpdates,
     required this.onCopyUpdateDiagnostics,
+    required this.onAutomaticSilentUpdatesChanged,
     this.isAutoUpdateAvailable = true,
     this.unavailableMessage,
     this.isCheckingUpdates = false,
@@ -19,8 +22,11 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String appVersion;
   final String lastUpdateCheck;
   final String lastBackgroundUpdateCheck;
+  final String lastAutomaticUpdateCheck;
+  final bool automaticSilentUpdatesEnabled;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
+  final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
   final bool isAutoUpdateAvailable;
   final String? unavailableMessage;
   final bool isCheckingUpdates;
@@ -30,6 +36,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final displayLastUpdate = lastUpdateCheck.isEmpty ? l10n.configLastUpdateNever : lastUpdateCheck;
     final hasBackgroundUpdate = lastBackgroundUpdateCheck.trim().isNotEmpty;
+    final hasAutomaticUpdate = lastAutomaticUpdateCheck.trim().isNotEmpty;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -71,6 +78,21 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                       style: context.captionText,
                     ),
                   ],
+                  if (hasAutomaticUpdate) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      lastAutomaticUpdateCheck,
+                      style: context.captionText,
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  SettingsToggleTile(
+                    key: const ValueKey('automatic_silent_updates_toggle'),
+                    label: l10n.configAutomaticSilentUpdatesToggle,
+                    description: l10n.configAutomaticSilentUpdatesDescription,
+                    value: automaticSilentUpdatesEnabled,
+                    onChanged: onAutomaticSilentUpdatesChanged,
+                  ),
                 ],
               )
             else

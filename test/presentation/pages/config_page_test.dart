@@ -21,12 +21,18 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   FakeAutoUpdateOrchestrator({
     required this.isAvailable,
     this.onCheckManual,
+    this.onSetAutomaticSilentUpdatesEnabled,
     this.lastManualDiagnostics,
     this.lastBackgroundDiagnostics,
+    this.lastAutomaticDiagnostics,
+    this.automaticSilentUpdatesEnabled = true,
   });
 
   @override
   final bool isAvailable;
+
+  @override
+  bool automaticSilentUpdatesEnabled;
 
   @override
   UpdateCheckDiagnostics? lastManualDiagnostics;
@@ -34,7 +40,11 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   @override
   UpdateCheckDiagnostics? lastBackgroundDiagnostics;
 
+  @override
+  UpdateCheckDiagnostics? lastAutomaticDiagnostics;
+
   Future<Result<bool>> Function()? onCheckManual;
+  Future<Result<void>> Function(bool value)? onSetAutomaticSilentUpdatesEnabled;
 
   @override
   Future<Result<bool>> checkManual() async {
@@ -48,7 +58,22 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   Future<void> checkInBackground() async {}
 
   @override
+  Future<Result<bool>> checkSilently() async => const Success(false);
+
+  @override
   Future<void> initialize() async {}
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async {
+    automaticSilentUpdatesEnabled = enabled;
+    if (onSetAutomaticSilentUpdatesEnabled != null) {
+      return onSetAutomaticSilentUpdatesEnabled!.call(enabled);
+    }
+    return const Success(unit);
+  }
+
+  @override
+  Future<void> startAutomaticChecks() async {}
 }
 
 void main() {
@@ -221,5 +246,63 @@ void main() {
       find.textContaining('${ptL10n.configLastBackgroundUpdatePrefix}08/05/2026 09:15'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('toggles automatic silent updates preference', (tester) async {
+    bool? capturedValue;
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      onSetAutomaticSilentUpdatesEnabled: (value) async {
+        capturedValue = value;
+        return const Success(unit);
+      },
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configAutomaticSilentUpdatesToggle), findsOneWidget);
+
+    await tester.tap(find.byType(ToggleSwitch).last);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(capturedValue, isFalse);
+    expect(orchestrator.automaticSilentUpdatesEnabled, isFalse);
+  });
+
+  testWidgets('shows automatic silent update diagnostics', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      lastAutomaticDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 14, 11, 20),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.7+1',
+        completedAt: DateTime(2026, 5, 14, 11, 21),
+        completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+        remoteVersion: '1.6.8+1',
+        assetName: 'PlugAgente-Setup-1.6.8.exe',
+        assetUrl: 'https://example.com/PlugAgente-Setup-1.6.8.exe',
+        assetSize: 123,
+        sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        installerPath: r'C:\PlugAgente\updates\PlugAgente-Setup-1.6.8.exe',
+        installerLogPath: r'C:\PlugAgente\updates\PlugAgente-Update-1.6.8+1.log',
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastAutomaticUpdatePrefix}14/05/2026 11:20'),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const ValueKey('updates_copy_diagnostics_button')), findsOneWidget);
   });
 }

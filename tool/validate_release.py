@@ -56,6 +56,10 @@ def load_release(repo: str, tag: str) -> ReleaseInfo:
         raise ValueError(f"Release asset {expected_asset_name!r} not found. Available assets: {names}")
 
     asset = matching_assets[0]
+    asset_digest = str(asset.get("digest") or "")
+    if not asset_digest:
+        raise ValueError(f"Release asset {expected_asset_name!r} is missing GitHub digest.")
+    asset_sha256 = appcast_manager.normalize_sha256(asset_digest)
     return ReleaseInfo(
         tag=str(data.get("tag_name") or tag),
         name=str(data.get("name") or ""),
@@ -64,7 +68,7 @@ def load_release(repo: str, tag: str) -> ReleaseInfo:
             name=str(asset.get("name") or ""),
             url=str(asset.get("browser_download_url") or ""),
             size=str(asset.get("size") or ""),
-            digest=str(asset.get("digest") or ""),
+            digest=asset_sha256,
         ),
     )
 
@@ -111,7 +115,10 @@ def validate_appcast(args: argparse.Namespace, release: ReleaseInfo) -> str | No
         full_version=full_version,
         asset_url=release.asset.url,
         asset_size=release.asset.size,
+        asset_sha256=release.asset.digest,
         asset_name=release.asset.name,
+        channel=args.channel,
+        rollout_percentage=args.rollout_percentage,
         release_body=release.body,
         max_items=args.max_items,
     )
@@ -124,6 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo", default="cesar-carlos/plug_agente")
     parser.add_argument("--tag", required=True, help="Release tag, for example v1.6.5.")
     parser.add_argument("--full-version", help="Expected full app version, for example 1.6.5+1.")
+    parser.add_argument("--channel", default=appcast_manager.DEFAULT_CHANNEL)
+    parser.add_argument("--rollout-percentage", type=int, default=appcast_manager.DEFAULT_ROLLOUT_PERCENTAGE)
     parser.add_argument("--appcast", type=Path, help="Local appcast.xml to validate.")
     parser.add_argument("--feed-url", help="Published appcast feed URL to validate.")
     parser.add_argument("--max-items", type=int, default=10)

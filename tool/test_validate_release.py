@@ -22,7 +22,7 @@ class ValidateReleaseTests(unittest.TestCase):
                 name="PlugAgente-Setup-1.6.6.exe",
                 url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.6/PlugAgente-Setup-1.6.6.exe",
                 size="12345",
-                digest="sha256:abc",
+                digest="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             ),
         )
 
@@ -33,6 +33,7 @@ class ValidateReleaseTests(unittest.TestCase):
             full_version="1.6.6+1",
             asset_url=release.asset.url,
             asset_size=release.asset.size,
+            asset_sha256=release.asset.digest,
             asset_name=release.asset.name,
             release_body=release.body,
         )
@@ -49,6 +50,8 @@ class ValidateReleaseTests(unittest.TestCase):
                 feed_url=None,
                 no_cache_bust=False,
                 full_version=None,
+                channel=appcast_manager.DEFAULT_CHANNEL,
+                rollout_percentage=appcast_manager.DEFAULT_ROLLOUT_PERCENTAGE,
                 max_items=10,
             )
 
@@ -63,6 +66,7 @@ class ValidateReleaseTests(unittest.TestCase):
             full_version="1.6.5+1",
             asset_url=release.asset.url.replace("v1.6.6", "v1.6.5").replace("1.6.6.exe", "1.6.5.exe"),
             asset_size=release.asset.size,
+            asset_sha256=release.asset.digest,
             asset_name="PlugAgente-Setup-1.6.5.exe",
             release_body=release.body,
         )
@@ -79,11 +83,33 @@ class ValidateReleaseTests(unittest.TestCase):
                 feed_url=None,
                 no_cache_bust=False,
                 full_version=None,
+                channel=appcast_manager.DEFAULT_CHANNEL,
+                rollout_percentage=appcast_manager.DEFAULT_ROLLOUT_PERCENTAGE,
                 max_items=10,
             )
 
             with self.assertRaisesRegex(ValueError, "does not match release version"):
                 validate_release.validate_appcast(args, release)
+
+    def test_load_release_requires_asset_digest(self) -> None:
+        original_request = validate_release.github_request_json
+        validate_release.github_request_json = lambda _: {
+            "tag_name": "v1.6.6",
+            "name": "Version 1.6.6",
+            "body": "Release notes",
+            "assets": [
+                {
+                    "name": "PlugAgente-Setup-1.6.6.exe",
+                    "browser_download_url": "https://example.com/PlugAgente-Setup-1.6.6.exe",
+                    "size": 12345,
+                }
+            ],
+        }
+        try:
+            with self.assertRaisesRegex(ValueError, "missing GitHub digest"):
+                validate_release.load_release("owner/repo", "v1.6.6")
+        finally:
+            validate_release.github_request_json = original_request
 
 
 if __name__ == "__main__":

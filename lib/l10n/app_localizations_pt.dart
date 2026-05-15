@@ -724,6 +724,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configLastBackgroundUpdatePrefix => 'Última verificação em segundo plano: ';
 
   @override
+  String get configLastAutomaticUpdatePrefix => 'Última verificação automática: ';
+
+  @override
   String get configUpdatesAvailable => 'Uma nova versão está disponível. Siga as instruções para atualizar.';
 
   @override
@@ -732,6 +735,19 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get configUpdatesNotAvailableHint =>
       'Se você acabou de publicar uma nova versão, aguarde até 5 minutos e tente novamente.';
+
+  @override
+  String get configAutomaticSilentUpdatesToggle => 'Instalar atualizações automaticamente';
+
+  @override
+  String get configAutomaticSilentUpdatesDescription =>
+      'Baixa, valida e inicia o instalador em modo silencioso. O Windows ainda pode solicitar UAC.';
+
+  @override
+  String get configAutomaticSilentUpdatesEnabled => 'Instalação automática de atualizações ativada.';
+
+  @override
+  String get configAutomaticSilentUpdatesDisabled => 'Instalação automática de atualizações desativada.';
 
   @override
   String get configAutoUpdateNotConfigured =>
@@ -753,6 +769,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateTechnicalBackgroundTitle => 'Detalhes técnicos em segundo plano';
+
+  @override
+  String get configUpdateTechnicalAutomaticTitle => 'Detalhes técnicos da atualização automática';
 
   @override
   String get configUpdateTechnicalCurrentVersion => 'Versão atual';
@@ -797,6 +816,102 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateTechnicalRemoteVersion => 'Versão remota';
 
   @override
+  String get configUpdateTechnicalAssetName => 'Nome do asset';
+
+  @override
+  String get configUpdateTechnicalAssetUrl => 'URL do asset';
+
+  @override
+  String get configUpdateTechnicalAssetSize => 'Tamanho do asset';
+
+  @override
+  String get configUpdateTechnicalSha256 => 'SHA-256 esperado';
+
+  @override
+  String get configUpdateTechnicalActualSha256 => 'SHA-256 real';
+
+  @override
+  String get configUpdateTechnicalHashValidationStatus => 'Validação do hash';
+
+  @override
+  String get configUpdateTechnicalRolloutChannel => 'Canal de update';
+
+  @override
+  String get configUpdateTechnicalRolloutPercentage => 'Percentual de rollout';
+
+  @override
+  String get configUpdateTechnicalRolloutBucket => 'Bucket de rollout';
+
+  @override
+  String get configUpdateTechnicalRolloutEligible => 'Elegível no rollout';
+
+  @override
+  String get configUpdateTechnicalPendingVersion => 'Versão pendente';
+
+  @override
+  String get configUpdateTechnicalInstallerPath => 'Caminho do instalador';
+
+  @override
+  String get configUpdateTechnicalInstallerLogPath => 'Log do instalador';
+
+  @override
+  String get configUpdateTechnicalInstallDirectory => 'Diretório de instalação';
+
+  @override
+  String get configUpdateTechnicalUpdateDirectorySecurity => 'Segurança do diretório de updates';
+
+  @override
+  String get configUpdateTechnicalInstallDirectoryWritable => 'Diretório de instalação gravável';
+
+  @override
+  String get configUpdateTechnicalSilentStrategy => 'Estratégia silenciosa';
+
+  @override
+  String get configUpdateTechnicalLauncherPath => 'Caminho do launcher';
+
+  @override
+  String get configUpdateTechnicalLauncherStatusPath => 'Status do launcher';
+
+  @override
+  String get configUpdateTechnicalLauncherState => 'Estado do launcher';
+
+  @override
+  String get configUpdateTechnicalAppPid => 'PID do app';
+
+  @override
+  String get configUpdateTechnicalSignatureStatus => 'Status da assinatura';
+
+  @override
+  String get configUpdateTechnicalSignatureRequired => 'Assinatura obrigatória';
+
+  @override
+  String get configUpdateTechnicalWaitForAppExitDurationMs => 'Espera pelo fechamento do app (ms)';
+
+  @override
+  String get configUpdateTechnicalNonAdminExitCode => 'Exit code sem admin';
+
+  @override
+  String get configUpdateTechnicalNonAdminDurationMs => 'Duração sem admin (ms)';
+
+  @override
+  String get configUpdateTechnicalElevatedExitCode => 'Exit code elevado';
+
+  @override
+  String get configUpdateTechnicalElevatedDurationMs => 'Duração elevada (ms)';
+
+  @override
+  String get configUpdateTechnicalElevatedRetryStarted => 'Retry elevado iniciado';
+
+  @override
+  String get configUpdateTechnicalElevatedCancelled => 'Prompt elevado cancelado';
+
+  @override
+  String get configUpdateTechnicalAutomaticFailureCount => 'Contagem de falhas automáticas';
+
+  @override
+  String get configUpdateTechnicalAutomaticCooldownUntil => 'Cooldown automático até';
+
+  @override
   String get configUpdateTechnicalUpdaterError => 'Erro do updater';
 
   @override
@@ -825,6 +940,36 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceCircuitOpen => 'Checagens pausadas por timeouts repetidos';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticDisabled => 'Instalação automática desativada';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticPendingCompleted => 'Atualização automática pendente concluída';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticPendingFailed => 'Atualização automática pendente não concluída';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticUpdateNotAvailable => 'Sem atualização automática disponível';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticValidationFailure => 'Validação da atualização automática falhou';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticDownloadFailure => 'Download da atualização automática falhou';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticInstallStarted => 'Instalador automático iniciado';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticInstallFailure => 'Falha ao iniciar instalador automático';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticCooldown => 'Atualizações automáticas pausadas';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticRolloutSkipped => 'Atualização automática ignorada pelo rollout';
 
   @override
   String get configCopyUpdateDiagnostics => 'Copiar diagnóstico de update';
@@ -1435,7 +1580,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctScopeNotInformed => 'não informado pela API';
 
   @override
-  String get ctNoRulesConfigured => 'No specific rules configured';
+  String get ctNoRulesConfigured => 'Nenhuma regra específica configurada';
 
   @override
   String get ctStatusRevoked => 'revogado';

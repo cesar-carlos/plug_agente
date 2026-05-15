@@ -63,6 +63,7 @@ bool hasInvalidAutoUpdateFeedOverride({
 
 const int _defaultCheckIntervalSeconds = 3600;
 const int _minimumCheckIntervalSeconds = 3600;
+const String defaultAutoUpdateChannel = 'stable';
 
 int resolveAutoUpdateCheckIntervalSeconds({
   required Map<String, String> environment,
@@ -74,4 +75,28 @@ int resolveAutoUpdateCheckIntervalSeconds({
     return _defaultCheckIntervalSeconds;
   }
   return parsed;
+}
+
+String resolveAutoUpdateChannel({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_CHANNEL')).trim();
+  final environmentValue = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_CHANNEL']?.trim() ?? '';
+  if (environmentValue.isEmpty) {
+    return defaultAutoUpdateChannel;
+  }
+  return environmentValue.toLowerCase();
+}
+
+bool resolveAutoUpdateRequireValidSignature({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_REQUIRE_VALID_SIGNATURE')).trim();
+  final value = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_REQUIRE_VALID_SIGNATURE']?.trim() ?? '';
+  return switch (value.toLowerCase()) {
+    '1' || 'true' || 'yes' || 'sim' => true,
+    _ => false,
+  };
 }

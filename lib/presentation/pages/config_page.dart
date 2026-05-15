@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
@@ -69,6 +71,19 @@ class _ConfigPageState extends State<ConfigPage> {
       UpdateCheckCompletionSource.triggerFailure => l10n.configUpdateCompletionSourceTriggerFailure,
       UpdateCheckCompletionSource.notInitialized => l10n.configUpdateCompletionSourceNotInitialized,
       UpdateCheckCompletionSource.circuitOpen => l10n.configUpdateCompletionSourceCircuitOpen,
+      UpdateCheckCompletionSource.automaticDisabled => l10n.configUpdateCompletionSourceAutomaticDisabled,
+      UpdateCheckCompletionSource.automaticPendingCompleted =>
+        l10n.configUpdateCompletionSourceAutomaticPendingCompleted,
+      UpdateCheckCompletionSource.automaticPendingFailed => l10n.configUpdateCompletionSourceAutomaticPendingFailed,
+      UpdateCheckCompletionSource.automaticUpdateNotAvailable =>
+        l10n.configUpdateCompletionSourceAutomaticUpdateNotAvailable,
+      UpdateCheckCompletionSource.automaticValidationFailure =>
+        l10n.configUpdateCompletionSourceAutomaticValidationFailure,
+      UpdateCheckCompletionSource.automaticDownloadFailure => l10n.configUpdateCompletionSourceAutomaticDownloadFailure,
+      UpdateCheckCompletionSource.automaticInstallStarted => l10n.configUpdateCompletionSourceAutomaticInstallStarted,
+      UpdateCheckCompletionSource.automaticInstallFailure => l10n.configUpdateCompletionSourceAutomaticInstallFailure,
+      UpdateCheckCompletionSource.automaticCooldown => l10n.configUpdateCompletionSourceAutomaticCooldown,
+      UpdateCheckCompletionSource.automaticRolloutSkipped => l10n.configUpdateCompletionSourceAutomaticRolloutSkipped,
       null => '-',
     };
   }
@@ -101,22 +116,38 @@ class _ConfigPageState extends State<ConfigPage> {
     return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt$completion';
   }
 
-  String _formatTechnicalDetails(
+  String _buildAutomaticUpdateLabel(
     AppLocalizations l10n,
     UpdateCheckDiagnostics? diagnostics,
-    UpdateCheckDiagnostics? backgroundDiagnostics,
   ) {
-    if (diagnostics == null && backgroundDiagnostics == null) {
+    if (diagnostics == null) {
+      return '';
+    }
+
+    final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
+    final completion = diagnostics.completionSource == null
+        ? ''
+        : ' - ${_formatCompletionSource(l10n, diagnostics.completionSource)}';
+    return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt$completion';
+  }
+
+  String _formatTechnicalDetails(
+    AppLocalizations l10n,
+    UpdateCheckDiagnostics? manualDiagnostics,
+    UpdateCheckDiagnostics? backgroundDiagnostics,
+    UpdateCheckDiagnostics? automaticDiagnostics,
+  ) {
+    if (manualDiagnostics == null && backgroundDiagnostics == null && automaticDiagnostics == null) {
       return l10n.configUpdateTechnicalNoData;
     }
 
     final lines = <String>[];
-    if (diagnostics != null) {
+    if (manualDiagnostics != null) {
       _appendDiagnosticsSection(
         lines,
         l10n: l10n,
         title: l10n.configUpdateTechnicalTitle,
-        diagnostics: diagnostics,
+        diagnostics: manualDiagnostics,
       );
     }
     if (backgroundDiagnostics != null) {
@@ -130,6 +161,17 @@ class _ConfigPageState extends State<ConfigPage> {
         diagnostics: backgroundDiagnostics,
       );
     }
+    if (automaticDiagnostics != null) {
+      if (lines.isNotEmpty) {
+        lines.add('');
+      }
+      _appendDiagnosticsSection(
+        lines,
+        l10n: l10n,
+        title: l10n.configUpdateTechnicalAutomaticTitle,
+        diagnostics: automaticDiagnostics,
+      );
+    }
 
     return lines.join('\n');
   }
@@ -140,11 +182,12 @@ class _ConfigPageState extends State<ConfigPage> {
   ) {
     final manual = orchestrator.lastManualDiagnostics;
     final background = orchestrator.lastBackgroundDiagnostics;
-    final primaryDiagnostics = manual ?? background;
+    final automatic = orchestrator.lastAutomaticDiagnostics;
     final technicalDetails = _formatTechnicalDetails(
       l10n,
-      primaryDiagnostics,
-      null,
+      manual,
+      background,
+      automatic,
     );
     return <String>[
       'Plug Agente Auto-Update',
@@ -191,6 +234,117 @@ class _ConfigPageState extends State<ConfigPage> {
     } else if (diagnostics.appcastProbeVersion != null && diagnostics.appcastProbeVersion!.isNotEmpty) {
       lines.add(
         '${l10n.configUpdateTechnicalRemoteVersion}: ${diagnostics.appcastProbeVersion}',
+      );
+    }
+
+    if (diagnostics.assetName != null && diagnostics.assetName!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalAssetName}: ${diagnostics.assetName}');
+    }
+    if (diagnostics.assetUrl != null && diagnostics.assetUrl!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalAssetUrl}: ${diagnostics.assetUrl}');
+    }
+    if (diagnostics.assetSize != null) {
+      lines.add('${l10n.configUpdateTechnicalAssetSize}: ${diagnostics.assetSize}');
+    }
+    if (diagnostics.sha256 != null && diagnostics.sha256!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalSha256}: ${diagnostics.sha256}');
+    }
+    if (diagnostics.actualSha256 != null && diagnostics.actualSha256!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalActualSha256}: ${diagnostics.actualSha256}');
+    }
+    if (diagnostics.hashValidationStatus != null && diagnostics.hashValidationStatus!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalHashValidationStatus}: ${diagnostics.hashValidationStatus}');
+    }
+    if (diagnostics.rolloutChannel != null && diagnostics.rolloutChannel!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalRolloutChannel}: ${diagnostics.rolloutChannel}');
+    }
+    if (diagnostics.rolloutPercentage != null) {
+      lines.add('${l10n.configUpdateTechnicalRolloutPercentage}: ${diagnostics.rolloutPercentage}');
+    }
+    if (diagnostics.rolloutBucket != null) {
+      lines.add('${l10n.configUpdateTechnicalRolloutBucket}: ${diagnostics.rolloutBucket}');
+    }
+    if (diagnostics.rolloutEligible != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalRolloutEligible}: ${diagnostics.rolloutEligible! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      );
+    }
+    if (diagnostics.pendingVersion != null && diagnostics.pendingVersion!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalPendingVersion}: ${diagnostics.pendingVersion}');
+    }
+    if (diagnostics.installerPath != null && diagnostics.installerPath!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalInstallerPath}: ${diagnostics.installerPath}');
+    }
+    if (diagnostics.installerLogPath != null && diagnostics.installerLogPath!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalInstallerLogPath}: ${diagnostics.installerLogPath}');
+    }
+    if (diagnostics.installDirectory != null && diagnostics.installDirectory!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalInstallDirectory}: ${diagnostics.installDirectory}');
+    }
+    if (diagnostics.updateDirectorySecurityStatus != null && diagnostics.updateDirectorySecurityStatus!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalUpdateDirectorySecurity}: ${diagnostics.updateDirectorySecurityStatus}');
+    }
+    if (diagnostics.installDirectoryWritable != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalInstallDirectoryWritable}: ${diagnostics.installDirectoryWritable! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      );
+    }
+    if (diagnostics.silentUpdateStrategy != null && diagnostics.silentUpdateStrategy!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalSilentStrategy}: ${diagnostics.silentUpdateStrategy}');
+    }
+    if (diagnostics.launcherPath != null && diagnostics.launcherPath!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalLauncherPath}: ${diagnostics.launcherPath}');
+    }
+    if (diagnostics.launcherStatusPath != null && diagnostics.launcherStatusPath!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalLauncherStatusPath}: ${diagnostics.launcherStatusPath}');
+    }
+    if (diagnostics.launcherState != null && diagnostics.launcherState!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalLauncherState}: ${diagnostics.launcherState}');
+    }
+    if (diagnostics.appPid != null) {
+      lines.add('${l10n.configUpdateTechnicalAppPid}: ${diagnostics.appPid}');
+    }
+    if (diagnostics.signatureStatus != null && diagnostics.signatureStatus!.isNotEmpty) {
+      lines.add('${l10n.configUpdateTechnicalSignatureStatus}: ${diagnostics.signatureStatus}');
+    }
+    if (diagnostics.signatureRequired != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalSignatureRequired}: ${diagnostics.signatureRequired! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      );
+    }
+    if (diagnostics.waitForAppExitDurationMs != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalWaitForAppExitDurationMs}: ${diagnostics.waitForAppExitDurationMs}',
+      );
+    }
+    if (diagnostics.nonAdminExitCode != null) {
+      lines.add('${l10n.configUpdateTechnicalNonAdminExitCode}: ${diagnostics.nonAdminExitCode}');
+    }
+    if (diagnostics.nonAdminDurationMs != null) {
+      lines.add('${l10n.configUpdateTechnicalNonAdminDurationMs}: ${diagnostics.nonAdminDurationMs}');
+    }
+    if (diagnostics.elevatedExitCode != null) {
+      lines.add('${l10n.configUpdateTechnicalElevatedExitCode}: ${diagnostics.elevatedExitCode}');
+    }
+    if (diagnostics.elevatedDurationMs != null) {
+      lines.add('${l10n.configUpdateTechnicalElevatedDurationMs}: ${diagnostics.elevatedDurationMs}');
+    }
+    if (diagnostics.elevatedRetryStarted != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalElevatedRetryStarted}: ${diagnostics.elevatedRetryStarted! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      );
+    }
+    if (diagnostics.elevatedCancelled != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalElevatedCancelled}: ${diagnostics.elevatedCancelled! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
+      );
+    }
+    if (diagnostics.automaticFailureCount != null) {
+      lines.add('${l10n.configUpdateTechnicalAutomaticFailureCount}: ${diagnostics.automaticFailureCount}');
+    }
+    if (diagnostics.automaticCooldownUntil != null) {
+      lines.add(
+        '${l10n.configUpdateTechnicalAutomaticCooldownUntil}: ${_formatLastUpdateCheck(diagnostics.automaticCooldownUntil!)}',
       );
     }
 
@@ -266,6 +420,7 @@ class _ConfigPageState extends State<ConfigPage> {
           l10n,
           orchestrator.lastManualDiagnostics,
           null,
+          null,
         );
         return SettingsFeedback.showInfo(
           context: context,
@@ -277,6 +432,7 @@ class _ConfigPageState extends State<ConfigPage> {
         final technicalDetails = _formatTechnicalDetails(
           l10n,
           orchestrator.lastManualDiagnostics,
+          null,
           null,
         );
         return SettingsFeedback.showError(
@@ -303,6 +459,38 @@ class _ConfigPageState extends State<ConfigPage> {
         severity: InfoBarSeverity.success,
         onClose: close,
       ),
+    );
+  }
+
+  Future<void> _onAutomaticSilentUpdatesChanged(bool value) async {
+    final l10n = AppLocalizations.of(context)!;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final result = await orchestrator.setAutomaticSilentUpdatesEnabled(value);
+    if (!mounted) {
+      return;
+    }
+
+    result.fold(
+      (_) {
+        setState(() {});
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(
+              value ? l10n.configAutomaticSilentUpdatesEnabled : l10n.configAutomaticSilentUpdatesDisabled,
+            ),
+            severity: InfoBarSeverity.success,
+            onClose: close,
+          ),
+        );
+      },
+      (failure) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.gsSectionUpdates,
+          message: failure.toDisplayMessage(),
+        );
+      },
     );
   }
 
@@ -342,6 +530,10 @@ class _ConfigPageState extends State<ConfigPage> {
       l10n,
       orchestrator.lastBackgroundDiagnostics,
     );
+    final lastAutomaticUpdateLabel = _buildAutomaticUpdateLabel(
+      l10n,
+      orchestrator.lastAutomaticDiagnostics,
+    );
     final autoUpdateUnavailableMessage = isAutoUpdateAvailable ? null : _getUpdateUnavailableMessage(l10n);
 
     return ScaffoldPage(
@@ -363,6 +555,8 @@ class _ConfigPageState extends State<ConfigPage> {
             closeToTray: systemSettingsProvider.closeToTray,
             lastUpdateCheck: lastUpdateLabel,
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
+            lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
+            automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
             isCheckingUpdates: _isCheckingUpdates,
             startupSupported: startupSupported,
             startMinimizedSupported: capabilities.supportsTray,
@@ -383,6 +577,9 @@ class _ConfigPageState extends State<ConfigPage> {
             onRepairStartupLaunchConfiguration: systemSettingsProvider.repairStartupLaunchConfiguration,
             onCheckUpdates: _checkUpdates,
             onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
+            onAutomaticSilentUpdatesChanged: (value) {
+              unawaited(_onAutomaticSilentUpdatesChanged(value));
+            },
           ),
         ),
       ),
@@ -400,6 +597,8 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.closeToTray,
     required this.lastUpdateCheck,
     required this.lastBackgroundUpdateCheck,
+    required this.lastAutomaticUpdateCheck,
+    required this.automaticSilentUpdatesEnabled,
     required this.isCheckingUpdates,
     required this.startupSupported,
     required this.startMinimizedSupported,
@@ -417,6 +616,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onRepairStartupLaunchConfiguration,
     required this.onCheckUpdates,
     required this.onCopyUpdateDiagnostics,
+    required this.onAutomaticSilentUpdatesChanged,
   });
 
   final String appVersion;
@@ -427,6 +627,8 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool closeToTray;
   final String lastUpdateCheck;
   final String lastBackgroundUpdateCheck;
+  final String lastAutomaticUpdateCheck;
+  final bool automaticSilentUpdatesEnabled;
   final bool isCheckingUpdates;
   final bool startupSupported;
   final bool startMinimizedSupported;
@@ -444,6 +646,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final VoidCallback onRepairStartupLaunchConfiguration;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
+  final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
 
   @override
   State<_ConfigTabbedContent> createState() => _ConfigTabbedContentState();
@@ -495,11 +698,14 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             appVersion: widget.appVersion,
             lastUpdateCheck: widget.lastUpdateCheck,
             lastBackgroundUpdateCheck: widget.lastBackgroundUpdateCheck,
+            lastAutomaticUpdateCheck: widget.lastAutomaticUpdateCheck,
+            automaticSilentUpdatesEnabled: widget.automaticSilentUpdatesEnabled,
             isCheckingUpdates: widget.isCheckingUpdates,
             isAutoUpdateAvailable: widget.isAutoUpdateAvailable,
             unavailableMessage: widget.autoUpdateUnavailableMessage,
             onCheckUpdates: widget.onCheckUpdates,
             onCopyUpdateDiagnostics: widget.onCopyUpdateDiagnostics,
+            onAutomaticSilentUpdatesChanged: widget.onAutomaticSilentUpdatesChanged,
           ),
         ),
         AppFluentTabItem(

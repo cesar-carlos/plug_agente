@@ -222,11 +222,16 @@ def main() -> None:
 
     if not (BUILD_DIR / "plug_agente.exe").exists():
         raise SystemExit("Erro: plug_agente.exe nao encontrado no build")
+    if not (BUILD_DIR / "plug_update_helper.exe").exists():
+        raise SystemExit("Erro: plug_update_helper.exe nao encontrado no build")
 
     app_exe = BUILD_DIR / "plug_agente.exe"
+    helper_exe = BUILD_DIR / "plug_update_helper.exe"
     if should_sign_artifacts():
         print("\n2.1. Assinando executavel Windows...", flush=True)
         sign_file(app_exe)
+        print("\n2.2. Assinando helper de update Windows...", flush=True)
+        sign_file(helper_exe)
 
     print("\n3. Compilando instalador Inno Setup...", flush=True)
     iscc = find_iscc()

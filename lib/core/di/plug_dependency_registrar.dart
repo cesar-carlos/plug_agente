@@ -16,6 +16,7 @@ import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
@@ -55,6 +56,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -119,6 +121,7 @@ import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
+import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
@@ -597,11 +600,20 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton(
       () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
     )
+    ..registerLazySingleton<ISilentUpdateInstaller>(
+      HttpSilentUpdateInstaller.new,
+    )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
       () => AutoUpdateOrchestrator(
         getIt<RuntimeCapabilities>(),
+        silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
         settingsStore: getIt<IAppSettingsStore>(),
         metricsCollector: getIt<MetricsCollector>(),
+        closeApplicationForSilentUpdate: () async {
+          if (getIt.isRegistered<WindowManagerService>()) {
+            await getIt<WindowManagerService>().close();
+          }
+        },
       ),
     )
     ..registerLazySingleton(

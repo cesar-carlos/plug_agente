@@ -54,6 +54,7 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
+add_subdirectory("update_helper")
 
 
 # Generated plugin build rules, which manage building the plugins and adding

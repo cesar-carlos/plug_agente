@@ -14,12 +14,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+PLUG_NS = "https://plug.se7esistemas.com/appcast"
 APPCAST_TITLE = "Plug Agente Updates"
 APPCAST_LINK = "https://github.com/cesar-carlos/plug_agente/releases"
 APPCAST_DESCRIPTION = "Atualizacoes do Plug Agente"
 ENCLOSURE_MIME_TYPE = "application/octet-stream"
 WINDOWS_OS_NAME = "windows"
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+DEFAULT_CHANNEL = "stable"
+DEFAULT_ROLLOUT_PERCENTAGE = 100
 
 
 @dataclass(frozen=True)
@@ -28,8 +32,11 @@ class AppcastContext:
     full_version: str
     asset_url: str
     asset_size: str
+    asset_sha256: str
     release_body: str = ""
     asset_name: str = ""
+    channel: str = DEFAULT_CHANNEL
+    rollout_percentage: int = DEFAULT_ROLLOUT_PERCENTAGE
     max_items: int = 10
 
     @property
@@ -54,14 +61,45 @@ class AppcastContext:
             return self.asset_url.rsplit("/", 1)[-1]
         return ""
 
+    @property
+    def expected_asset_sha256(self) -> str:
+        return normalize_sha256(self.asset_sha256)
+
+    @property
+    def expected_channel(self) -> str:
+        channel = (self.channel or DEFAULT_CHANNEL).strip().lower()
+        if not channel:
+            return DEFAULT_CHANNEL
+        return channel
+
+    @property
+    def expected_rollout_percentage(self) -> int:
+        percentage = int(self.rollout_percentage)
+        if percentage < 0 or percentage > 100:
+            raise ValueError("rollout percentage must be between 0 and 100")
+        return percentage
+
 
 def sanitize_release_notes(raw: str, max_len: int = 2000) -> str:
     cleaned = CONTROL_CHAR_RE.sub("", raw or "")
     return cleaned[:max_len]
 
 
+def normalize_sha256(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized.startswith("sha256:"):
+        normalized = normalized.split(":", 1)[1].strip()
+    if not SHA256_RE.fullmatch(normalized):
+        raise ValueError("asset SHA-256 must be a 64-character lowercase hexadecimal digest")
+    return normalized
+
+
 def _sparkle_attr(name: str) -> str:
     return f"{{{SPARKLE_NS}}}{name}"
+
+
+def _plug_attr(name: str) -> str:
+    return f"{{{PLUG_NS}}}{name}"
 
 
 def _sparkle_version(enclosure: et.Element | None) -> str:
@@ -74,6 +112,32 @@ def _sparkle_os(enclosure: et.Element | None) -> str:
     if enclosure is None:
         return ""
     return (enclosure.get(_sparkle_attr("os")) or enclosure.get("sparkle:os") or "").strip()
+
+
+def _plug_sha256(enclosure: et.Element | None) -> str:
+    if enclosure is None:
+        return ""
+    raw = enclosure.get(_plug_attr("sha256")) or enclosure.get("plug:sha256") or ""
+    return normalize_sha256(raw)
+
+
+def _plug_channel(enclosure: et.Element | None) -> str:
+    if enclosure is None:
+        return DEFAULT_CHANNEL
+    raw = enclosure.get(_plug_attr("channel")) or enclosure.get("plug:channel") or DEFAULT_CHANNEL
+    return raw.strip().lower() or DEFAULT_CHANNEL
+
+
+def _plug_rollout_percentage(enclosure: et.Element | None) -> int:
+    if enclosure is None:
+        return DEFAULT_ROLLOUT_PERCENTAGE
+    raw = enclosure.get(_plug_attr("rolloutPercentage")) or enclosure.get("plug:rolloutPercentage") or ""
+    if not raw.strip():
+        return DEFAULT_ROLLOUT_PERCENTAGE
+    percentage = int(raw.strip())
+    if percentage < 0 or percentage > 100:
+        raise ValueError("plug:rolloutPercentage must be between 0 and 100")
+    return percentage
 
 
 def _cache_busted_url(feed_url: str) -> str:
@@ -116,6 +180,7 @@ def update_appcast_tree(
     root = tree.getroot()
     channel = _ensure_channel(root)
     et.register_namespace("sparkle", SPARKLE_NS)
+    et.register_namespace("plug", PLUG_NS)
 
     for item in list(channel.findall("item")):
         enclosure = item.find("enclosure")
@@ -131,6 +196,9 @@ def update_appcast_tree(
     enclosure.set("url", context.asset_url)
     enclosure.set(_sparkle_attr("version"), context.version)
     enclosure.set(_sparkle_attr("os"), WINDOWS_OS_NAME)
+    enclosure.set(_plug_attr("sha256"), context.expected_asset_sha256)
+    enclosure.set(_plug_attr("channel"), context.expected_channel)
+    enclosure.set(_plug_attr("rolloutPercentage"), str(context.expected_rollout_percentage))
     enclosure.set("length", str(context.asset_size))
     enclosure.set("type", ENCLOSURE_MIME_TYPE)
     channel.insert(0, item)
@@ -198,6 +266,9 @@ def validate_item(item: et.Element, context: AppcastContext) -> None:
     latest_size = (enclosure.get("length") or "").strip()
     mime_type = (enclosure.get("type") or "").strip()
     os_name = _sparkle_os(enclosure)
+    sha256 = _plug_sha256(enclosure)
+    channel = _plug_channel(enclosure)
+    rollout_percentage = _plug_rollout_percentage(enclosure)
 
     if title != context.expected_title:
         raise ValueError(
@@ -213,6 +284,12 @@ def validate_item(item: et.Element, context: AppcastContext) -> None:
         raise ValueError("latest enclosure URL does not match release asset URL")
     if latest_size != str(context.asset_size):
         raise ValueError("latest enclosure length does not match release asset size")
+    if sha256 != context.expected_asset_sha256:
+        raise ValueError("latest enclosure plug:sha256 does not match release asset SHA-256")
+    if channel != context.expected_channel:
+        raise ValueError("latest enclosure plug:channel does not match release channel")
+    if rollout_percentage != context.expected_rollout_percentage:
+        raise ValueError("latest enclosure plug:rolloutPercentage does not match release rollout percentage")
     if mime_type != ENCLOSURE_MIME_TYPE:
         raise ValueError(f"invalid enclosure type: {mime_type!r}")
     if os_name != WINDOWS_OS_NAME:
@@ -251,13 +328,19 @@ def context_from_latest_item(item: et.Element, *, max_items: int = 10) -> Appcas
 
     asset_url = (enclosure.get("url") or "").strip()
     asset_size = (enclosure.get("length") or "").strip()
+    asset_sha256 = _plug_sha256(enclosure)
+    channel = _plug_channel(enclosure)
+    rollout_percentage = _plug_rollout_percentage(enclosure)
     asset_name = Path(urllib.parse.urlparse(asset_url).path).name
     context = AppcastContext(
         version_short=version.split("+", 1)[0],
         full_version=version,
         asset_url=asset_url,
         asset_size=asset_size,
+        asset_sha256=asset_sha256,
         asset_name=asset_name,
+        channel=channel,
+        rollout_percentage=rollout_percentage,
         release_body=description,
         max_items=max_items,
     )
@@ -287,6 +370,9 @@ def write_shell_env(path: Path, context: AppcastContext) -> None:
         "ASSET_URL": context.asset_url,
         "ASSET_SIZE": context.asset_size,
         "ASSET_NAME": context.expected_asset_name,
+        "ASSET_SHA256": context.expected_asset_sha256,
+        "CHANNEL": context.expected_channel,
+        "ROLLOUT_PERCENTAGE": str(context.expected_rollout_percentage),
     }
     path.write_text(
         "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items()),
@@ -339,7 +425,10 @@ def build_context_from_args(args: argparse.Namespace) -> AppcastContext:
         full_version=args.full_version,
         asset_url=args.asset_url,
         asset_size=str(args.asset_size),
+        asset_sha256=args.asset_sha256,
         asset_name=getattr(args, "asset_name", "") or "",
+        channel=getattr(args, "channel", DEFAULT_CHANNEL),
+        rollout_percentage=getattr(args, "rollout_percentage", DEFAULT_ROLLOUT_PERCENTAGE),
         release_body=load_release_body(getattr(args, "release_body_file", None)),
         max_items=args.max_items,
     )
@@ -405,7 +494,10 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--full-version", required=True)
         subparser.add_argument("--asset-url", required=True)
         subparser.add_argument("--asset-size", required=True)
+        subparser.add_argument("--asset-sha256", required=True)
         subparser.add_argument("--asset-name", default="")
+        subparser.add_argument("--channel", default=DEFAULT_CHANNEL)
+        subparser.add_argument("--rollout-percentage", type=int, default=DEFAULT_ROLLOUT_PERCENTAGE)
         subparser.add_argument("--release-body-file", type=Path)
         subparser.add_argument("--max-items", type=int, default=10)
 

@@ -205,11 +205,10 @@ class AppInitializer {
 
     try {
       final orchestrator = getIt<IAutoUpdateOrchestrator>();
-      await orchestrator.initialize();
+      await orchestrator.startAutomaticChecks();
       if (orchestrator.isAvailable) {
-        unawaited(orchestrator.checkInBackground());
         developer.log(
-          'Auto-update initialized and initial background check triggered',
+          'Auto-update initialized and automatic check scheduling started',
           name: 'app_initializer',
           level: 800,
         );

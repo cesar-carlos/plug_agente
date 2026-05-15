@@ -60,7 +60,10 @@ jobs:
             --full-version "${FULL_VERSION}" \
             --asset-url "${ASSET_URL}" \
             --asset-size "${ASSET_SIZE}" \
+            --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
+            --channel "${CHANNEL}" \
+            --rollout-percentage "${ROLLOUT_PERCENTAGE}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \
             --attempts 3 \

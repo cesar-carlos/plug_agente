@@ -26,6 +26,7 @@ jobs:
       asset_url: ${{ steps.asset.outputs.url }}
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
+      asset_sha256: ${{ steps.asset.outputs.sha256 }}
     permissions:
       contents: write
       actions: write
@@ -157,11 +158,40 @@ jobs:
             exit 1
           fi
 
+          ASSET_DOWNLOAD_PATH="release_asset_${ASSET_NAME}"
+          curl -L -sS \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/octet-stream" \
+            "$ASSET_API_URL" \
+            -o "$ASSET_DOWNLOAD_PATH"
+          ACTUAL_SIZE=$(python3 - "$ASSET_DOWNLOAD_PATH" << 'PYEOF'
+          import os
+          import sys
+          print(os.path.getsize(sys.argv[1]))
+          PYEOF
+          )
+          if [ "$ACTUAL_SIZE" != "$ASSET_SIZE" ]; then
+            echo "Error: Downloaded asset size mismatch. expected=$ASSET_SIZE actual=$ACTUAL_SIZE"
+            exit 1
+          fi
+          ASSET_SHA256=$(python3 - "$ASSET_DOWNLOAD_PATH" << 'PYEOF'
+          import hashlib
+          import sys
+          h = hashlib.sha256()
+          with open(sys.argv[1], "rb") as f:
+              for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                  h.update(chunk)
+          print(h.hexdigest())
+          PYEOF
+          )
+          rm -f "$ASSET_DOWNLOAD_PATH"
+
           {
             echo "url=$ASSET_URL"
             echo "api_url=$ASSET_API_URL"
             echo "size=$ASSET_SIZE"
             echo "name=$ASSET_NAME"
+            echo "sha256=$ASSET_SHA256"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate release consistency
@@ -224,7 +254,10 @@ jobs:
             --full-version "${{ steps.release.outputs.full_version }}" \
             --asset-url "${{ steps.asset.outputs.url }}" \
             --asset-size "${{ steps.asset.outputs.size }}" \
+            --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
+            --channel "stable" \
+            --rollout-percentage "100" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
 
@@ -240,7 +273,10 @@ jobs:
             --full-version "${FULL_VERSION}" \
             --asset-url "${{ steps.asset.outputs.url }}" \
             --asset-size "${{ steps.asset.outputs.size }}" \
+            --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
+            --channel "stable" \
+            --rollout-percentage "100" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
 
@@ -282,6 +318,7 @@ jobs:
       - name: Smoke validate published appcast feed
         env:
           ASSET_NAME: ${{ needs.update-appcast.outputs.asset_name }}
+          ASSET_SHA256: ${{ needs.update-appcast.outputs.asset_sha256 }}
           ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
           ASSET_URL: ${{ needs.update-appcast.outputs.asset_url }}
           FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
@@ -293,7 +330,10 @@ jobs:
             --full-version "${FULL_VERSION}" \
             --asset-url "${ASSET_URL}" \
             --asset-size "${ASSET_SIZE}" \
+            --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
+            --channel "stable" \
+            --rollout-percentage "100" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \
             --attempts 6 \

@@ -7,12 +7,24 @@ class AppcastProbeResult {
   const AppcastProbeResult({
     required this.requestUrl,
     this.latestVersion,
+    this.assetUrl,
+    this.assetSize,
+    this.assetName,
+    this.sha256,
+    this.channel,
+    this.rolloutPercentage,
     this.itemCount,
     this.errorMessage,
   });
 
   final String requestUrl;
   final String? latestVersion;
+  final String? assetUrl;
+  final int? assetSize;
+  final String? assetName;
+  final String? sha256;
+  final String? channel;
+  final int? rolloutPercentage;
   final int? itemCount;
   final String? errorMessage;
 }
@@ -29,6 +41,7 @@ class AppcastProbeService implements IAppcastProbeService {
 
   static const int _maxAppcastBytes = 1024 * 1024;
   static const String _sparkleNamespace = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
+  static const String _plugNamespace = 'https://plug.se7esistemas.com/appcast';
 
   @override
   Future<AppcastProbeResult> probeLatest({
@@ -112,6 +125,12 @@ class AppcastProbeService implements IAppcastProbeService {
       return AppcastProbeResult(
         requestUrl: feedUrl,
         latestVersion: latestVersion,
+        assetUrl: _attributeValue(enclosure, 'url'),
+        assetSize: _assetSizeFromEnclosure(enclosure),
+        assetName: _assetNameFromUrl(_attributeValue(enclosure, 'url')),
+        sha256: _plugSha256FromEnclosure(enclosure),
+        channel: _plugChannelFromEnclosure(enclosure),
+        rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
         itemCount: items.length,
       );
     } on Exception catch (e) {
@@ -138,15 +157,67 @@ class AppcastProbeService implements IAppcastProbeService {
   }
 
   static String? _sparkleVersionFromEnclosure(XmlElement enclosure) {
+    return _namespacedAttributeValue(
+      enclosure,
+      localName: 'version',
+      prefix: 'sparkle',
+      namespaceUri: _sparkleNamespace,
+      qualifiedName: 'sparkle:version',
+    );
+  }
+
+  static String? _plugSha256FromEnclosure(XmlElement enclosure) {
+    return _namespacedAttributeValue(
+      enclosure,
+      localName: 'sha256',
+      prefix: 'plug',
+      namespaceUri: _plugNamespace,
+      qualifiedName: 'plug:sha256',
+    )?.toLowerCase();
+  }
+
+  static String? _plugChannelFromEnclosure(XmlElement enclosure) {
+    return _namespacedAttributeValue(
+      enclosure,
+      localName: 'channel',
+      prefix: 'plug',
+      namespaceUri: _plugNamespace,
+      qualifiedName: 'plug:channel',
+    )?.toLowerCase();
+  }
+
+  static int? _plugRolloutPercentageFromEnclosure(XmlElement enclosure) {
+    final raw = _namespacedAttributeValue(
+      enclosure,
+      localName: 'rolloutPercentage',
+      prefix: 'plug',
+      namespaceUri: _plugNamespace,
+      qualifiedName: 'plug:rolloutPercentage',
+    );
+    if (raw == null) {
+      return null;
+    }
+    return int.tryParse(raw);
+  }
+
+  static String? _namespacedAttributeValue(
+    XmlElement enclosure, {
+    required String localName,
+    required String prefix,
+    required String namespaceUri,
+    required String qualifiedName,
+  }) {
+    final expectedLocalName = localName.toLowerCase();
+    final expectedQualifiedName = qualifiedName.toLowerCase();
     for (final attribute in enclosure.attributes) {
-      final localName = attribute.name.local.toLowerCase();
-      final prefix = attribute.name.prefix?.toLowerCase();
-      final namespaceUri = attribute.name.namespaceUri;
+      final attributeLocalName = attribute.name.local.toLowerCase();
+      final attributePrefix = attribute.name.prefix?.toLowerCase();
+      final attributeNamespaceUri = attribute.name.namespaceUri;
       final qualified = attribute.name.qualified.toLowerCase();
-      final isSparkleVersion =
-          localName == 'version' &&
-          (namespaceUri == _sparkleNamespace || prefix == 'sparkle' || qualified == 'sparkle:version');
-      if (!isSparkleVersion) {
+      final isTargetAttribute =
+          attributeLocalName == expectedLocalName &&
+          (attributeNamespaceUri == namespaceUri || attributePrefix == prefix || qualified == expectedQualifiedName);
+      if (!isTargetAttribute) {
         continue;
       }
       final value = attribute.value.trim();
@@ -155,5 +226,30 @@ class AppcastProbeService implements IAppcastProbeService {
       }
     }
     return null;
+  }
+
+  static String? _attributeValue(XmlElement element, String name) {
+    final value = element.getAttribute(name)?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  static int? _assetSizeFromEnclosure(XmlElement enclosure) {
+    final raw = _attributeValue(enclosure, 'length');
+    if (raw == null) {
+      return null;
+    }
+    return int.tryParse(raw);
+  }
+
+  static String? _assetNameFromUrl(String? assetUrl) {
+    if (assetUrl == null) {
+      return null;
+    }
+    final uri = Uri.tryParse(assetUrl);
+    if (uri == null || uri.pathSegments.isEmpty) {
+      return null;
+    }
+    final name = uri.pathSegments.last.trim();
+    return name.isEmpty ? null : name;
   }
 }

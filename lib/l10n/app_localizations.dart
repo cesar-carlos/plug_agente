@@ -1448,6 +1448,12 @@ abstract class AppLocalizations {
   /// **'Last background check: '**
   String get configLastBackgroundUpdatePrefix;
 
+  /// No description provided for @configLastAutomaticUpdatePrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Last automatic check: '**
+  String get configLastAutomaticUpdatePrefix;
+
   /// No description provided for @configUpdatesAvailable.
   ///
   /// In en, this message translates to:
@@ -1465,6 +1471,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If you just published a new version, wait up to 5 minutes and try again.'**
   String get configUpdatesNotAvailableHint;
+
+  /// No description provided for @configAutomaticSilentUpdatesToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install updates automatically'**
+  String get configAutomaticSilentUpdatesToggle;
+
+  /// No description provided for @configAutomaticSilentUpdatesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads, validates, and starts the installer silently. Windows may still request UAC.'**
+  String get configAutomaticSilentUpdatesDescription;
+
+  /// No description provided for @configAutomaticSilentUpdatesEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update installation enabled.'**
+  String get configAutomaticSilentUpdatesEnabled;
+
+  /// No description provided for @configAutomaticSilentUpdatesDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update installation disabled.'**
+  String get configAutomaticSilentUpdatesDisabled;
 
   /// No description provided for @configAutoUpdateNotConfigured.
   ///
@@ -1501,6 +1531,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background technical details'**
   String get configUpdateTechnicalBackgroundTitle;
+
+  /// No description provided for @configUpdateTechnicalAutomaticTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update technical details'**
+  String get configUpdateTechnicalAutomaticTitle;
 
   /// No description provided for @configUpdateTechnicalCurrentVersion.
   ///
@@ -1586,6 +1622,198 @@ abstract class AppLocalizations {
   /// **'Remote version'**
   String get configUpdateTechnicalRemoteVersion;
 
+  /// No description provided for @configUpdateTechnicalAssetName.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset name'**
+  String get configUpdateTechnicalAssetName;
+
+  /// No description provided for @configUpdateTechnicalAssetUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset URL'**
+  String get configUpdateTechnicalAssetUrl;
+
+  /// No description provided for @configUpdateTechnicalAssetSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset size'**
+  String get configUpdateTechnicalAssetSize;
+
+  /// No description provided for @configUpdateTechnicalSha256.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected SHA-256'**
+  String get configUpdateTechnicalSha256;
+
+  /// No description provided for @configUpdateTechnicalActualSha256.
+  ///
+  /// In en, this message translates to:
+  /// **'Actual SHA-256'**
+  String get configUpdateTechnicalActualSha256;
+
+  /// No description provided for @configUpdateTechnicalHashValidationStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Hash validation'**
+  String get configUpdateTechnicalHashValidationStatus;
+
+  /// No description provided for @configUpdateTechnicalRolloutChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Update channel'**
+  String get configUpdateTechnicalRolloutChannel;
+
+  /// No description provided for @configUpdateTechnicalRolloutPercentage.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollout percentage'**
+  String get configUpdateTechnicalRolloutPercentage;
+
+  /// No description provided for @configUpdateTechnicalRolloutBucket.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollout bucket'**
+  String get configUpdateTechnicalRolloutBucket;
+
+  /// No description provided for @configUpdateTechnicalRolloutEligible.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollout eligible'**
+  String get configUpdateTechnicalRolloutEligible;
+
+  /// No description provided for @configUpdateTechnicalPendingVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending version'**
+  String get configUpdateTechnicalPendingVersion;
+
+  /// No description provided for @configUpdateTechnicalInstallerPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Installer path'**
+  String get configUpdateTechnicalInstallerPath;
+
+  /// No description provided for @configUpdateTechnicalInstallerLogPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Installer log'**
+  String get configUpdateTechnicalInstallerLogPath;
+
+  /// No description provided for @configUpdateTechnicalInstallDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Install directory'**
+  String get configUpdateTechnicalInstallDirectory;
+
+  /// No description provided for @configUpdateTechnicalUpdateDirectorySecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Update directory security'**
+  String get configUpdateTechnicalUpdateDirectorySecurity;
+
+  /// No description provided for @configUpdateTechnicalInstallDirectoryWritable.
+  ///
+  /// In en, this message translates to:
+  /// **'Install directory writable'**
+  String get configUpdateTechnicalInstallDirectoryWritable;
+
+  /// No description provided for @configUpdateTechnicalSilentStrategy.
+  ///
+  /// In en, this message translates to:
+  /// **'Silent update strategy'**
+  String get configUpdateTechnicalSilentStrategy;
+
+  /// No description provided for @configUpdateTechnicalLauncherPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Launcher path'**
+  String get configUpdateTechnicalLauncherPath;
+
+  /// No description provided for @configUpdateTechnicalLauncherStatusPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Launcher status'**
+  String get configUpdateTechnicalLauncherStatusPath;
+
+  /// No description provided for @configUpdateTechnicalLauncherState.
+  ///
+  /// In en, this message translates to:
+  /// **'Launcher state'**
+  String get configUpdateTechnicalLauncherState;
+
+  /// No description provided for @configUpdateTechnicalAppPid.
+  ///
+  /// In en, this message translates to:
+  /// **'App PID'**
+  String get configUpdateTechnicalAppPid;
+
+  /// No description provided for @configUpdateTechnicalSignatureStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature status'**
+  String get configUpdateTechnicalSignatureStatus;
+
+  /// No description provided for @configUpdateTechnicalSignatureRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature required'**
+  String get configUpdateTechnicalSignatureRequired;
+
+  /// No description provided for @configUpdateTechnicalWaitForAppExitDurationMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for app exit (ms)'**
+  String get configUpdateTechnicalWaitForAppExitDurationMs;
+
+  /// No description provided for @configUpdateTechnicalNonAdminExitCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Non-admin exit code'**
+  String get configUpdateTechnicalNonAdminExitCode;
+
+  /// No description provided for @configUpdateTechnicalNonAdminDurationMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Non-admin duration (ms)'**
+  String get configUpdateTechnicalNonAdminDurationMs;
+
+  /// No description provided for @configUpdateTechnicalElevatedExitCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated exit code'**
+  String get configUpdateTechnicalElevatedExitCode;
+
+  /// No description provided for @configUpdateTechnicalElevatedDurationMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated duration (ms)'**
+  String get configUpdateTechnicalElevatedDurationMs;
+
+  /// No description provided for @configUpdateTechnicalElevatedRetryStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated retry started'**
+  String get configUpdateTechnicalElevatedRetryStarted;
+
+  /// No description provided for @configUpdateTechnicalElevatedCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated prompt cancelled'**
+  String get configUpdateTechnicalElevatedCancelled;
+
+  /// No description provided for @configUpdateTechnicalAutomaticFailureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic failure count'**
+  String get configUpdateTechnicalAutomaticFailureCount;
+
+  /// No description provided for @configUpdateTechnicalAutomaticCooldownUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic cooldown until'**
+  String get configUpdateTechnicalAutomaticCooldownUntil;
+
   /// No description provided for @configUpdateTechnicalUpdaterError.
   ///
   /// In en, this message translates to:
@@ -1645,6 +1873,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checks paused after repeated timeouts'**
   String get configUpdateCompletionSourceCircuitOpen;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic installation disabled'**
+  String get configUpdateCompletionSourceAutomaticDisabled;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticPendingCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending automatic update completed'**
+  String get configUpdateCompletionSourceAutomaticPendingCompleted;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticPendingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending automatic update did not complete'**
+  String get configUpdateCompletionSourceAutomaticPendingFailed;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticUpdateNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No automatic update available'**
+  String get configUpdateCompletionSourceAutomaticUpdateNotAvailable;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticValidationFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update validation failed'**
+  String get configUpdateCompletionSourceAutomaticValidationFailure;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticDownloadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update download failed'**
+  String get configUpdateCompletionSourceAutomaticDownloadFailure;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticInstallStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic installer started'**
+  String get configUpdateCompletionSourceAutomaticInstallStarted;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticInstallFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic installer failed to start'**
+  String get configUpdateCompletionSourceAutomaticInstallFailure;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticCooldown.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic updates paused'**
+  String get configUpdateCompletionSourceAutomaticCooldown;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticRolloutSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update skipped by rollout'**
+  String get configUpdateCompletionSourceAutomaticRolloutSkipped;
 
   /// No description provided for @configCopyUpdateDiagnostics.
   ///

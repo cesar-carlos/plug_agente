@@ -21,6 +21,7 @@ class AppcastManagerTests(unittest.TestCase):
         full_version: str = "1.6.0+1",
         asset_url: str = "https://example.com/releases/download/v1.6.0/PlugAgente-Setup-1.6.0.exe",
         asset_size: str = "12345",
+        asset_sha256: str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         release_body: str = "Release notes with <tag> & details",
         asset_name: str = "PlugAgente-Setup-1.6.0.exe",
         max_items: int = 2,
@@ -30,6 +31,7 @@ class AppcastManagerTests(unittest.TestCase):
             full_version=full_version,
             asset_url=asset_url,
             asset_size=asset_size,
+            asset_sha256=asset_sha256,
             release_body=release_body,
             asset_name=asset_name,
             max_items=max_items,
@@ -66,6 +68,9 @@ class AppcastManagerTests(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0].findtext("title"), "Version 1.6.0+1")
         self.assertEqual(items[1].findtext("title"), "Version 1.5.9+1")
+        latest_enclosure = items[0].find("enclosure")
+        self.assertEqual(latest_enclosure.get(appcast_manager._plug_attr("channel")), "stable")
+        self.assertEqual(latest_enclosure.get(appcast_manager._plug_attr("rolloutPercentage")), "100")
 
     def test_update_appcast_tree_round_trips_release_body_without_double_escaping(self) -> None:
         context = self.build_context(release_body="Body with <tag> & details")
@@ -92,6 +97,19 @@ class AppcastManagerTests(unittest.TestCase):
         latest_enclosure = tree.getroot().find("channel").find("item").find("enclosure")
         latest_enclosure.set("url", "https://example.com/other.exe")
         with self.assertRaisesRegex(ValueError, "latest enclosure URL does not match release asset URL"):
+            appcast_manager.validate_appcast_tree(tree, context)
+
+    def test_validate_appcast_tree_requires_sha256_on_latest_item(self) -> None:
+        context = self.build_context()
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+        )
+
+        latest_enclosure = tree.getroot().find("channel").find("item").find("enclosure")
+        latest_enclosure.attrib.pop(appcast_manager._plug_attr("sha256"))
+
+        with self.assertRaisesRegex(ValueError, "asset SHA-256"):
             appcast_manager.validate_appcast_tree(tree, context)
 
     def test_smoke_validate_feed_reads_latest_item_from_local_server(self) -> None:
@@ -207,6 +225,12 @@ class AppcastManagerTests(unittest.TestCase):
             env_content = env_path.read_text(encoding="utf-8")
             self.assertIn("FULL_VERSION=1.6.0+1", env_content)
             self.assertIn("ASSET_NAME=PlugAgente-Setup-1.6.0.exe", env_content)
+            self.assertIn(
+                "ASSET_SHA256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                env_content,
+            )
+            self.assertIn("CHANNEL=stable", env_content)
+            self.assertIn("ROLLOUT_PERCENTAGE=100", env_content)
             self.assertEqual(release_body_path.read_text(encoding="utf-8"), context.release_body)
 
 

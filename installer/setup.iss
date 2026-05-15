@@ -28,6 +28,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=commandline
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
 MinVersion=10.0
@@ -53,6 +54,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
 
 [Registry]
 Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
@@ -64,6 +66,11 @@ Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 function GetAutostartValue(Param: String): String;
 begin
   Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + '{#AutostartArg}';
+end;
+
+function ShouldLaunchAfterSilentUpdate(): Boolean;
+begin
+  Result := WizardSilent() and (ExpandConstant('{param:LAUNCHAFTERUPDATE|0}') = '1');
 end;
 
 function IsVCRedistInstalled(): Boolean;
