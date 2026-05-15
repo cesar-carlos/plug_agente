@@ -14,8 +14,12 @@ void main() {
     test('declares and installs native update helper', () {
       final windowsCmake = File('windows/CMakeLists.txt').readAsStringSync();
       final helperCmake = File('windows/update_helper/CMakeLists.txt').readAsStringSync();
+      final installPrefixIndex = windowsCmake.indexOf(r'set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}"');
+      final helperSubdirectoryIndex = windowsCmake.indexOf('add_subdirectory("update_helper")');
 
       expect(windowsCmake, contains('add_subdirectory("update_helper")'));
+      expect(installPrefixIndex, isNonNegative);
+      expect(helperSubdirectoryIndex, greaterThan(installPrefixIndex));
       expect(helperCmake, contains('add_executable(plug_update_helper'));
       expect(helperCmake, contains('install(TARGETS plug_update_helper'));
     });
