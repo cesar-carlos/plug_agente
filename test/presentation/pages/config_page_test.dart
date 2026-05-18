@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
+import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -107,8 +110,12 @@ void main() {
   Future<void> pumpPage(
     WidgetTester tester, {
     required FakeAutoUpdateOrchestrator orchestrator,
+    RuntimeDetectionDiagnostics? runtimeDiagnostics,
   }) async {
     getIt.registerSingleton<RuntimeCapabilities>(RuntimeCapabilities.full());
+    if (runtimeDiagnostics != null) {
+      getIt.registerSingleton<RuntimeDetectionDiagnostics>(runtimeDiagnostics);
+    }
     getIt.registerSingleton<IAutoUpdateOrchestrator>(orchestrator);
 
     await tester.pumpWidget(
@@ -363,5 +370,56 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('updates_copy_diagnostics_button')), findsOneWidget);
+  });
+
+  testWidgets('copies update diagnostics with runtime detection details', (tester) async {
+    String? clipboardPayload;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'Clipboard.setData') {
+          final args = methodCall.arguments as Map<dynamic, dynamic>;
+          clipboardPayload = args['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+    await pumpPage(
+      tester,
+      orchestrator: orchestrator,
+      runtimeDiagnostics: RuntimeDetectionDiagnostics.detected(
+        source: RuntimeDetectionSource.rtlGetVersion,
+        versionInfo: const WindowsVersionInfo(
+          majorVersion: 10,
+          minorVersion: 0,
+          buildNumber: 26200,
+          isServer: false,
+          productName: 'Windows 10/11',
+        ),
+      ),
+    );
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('updates_copy_diagnostics_button')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(clipboardPayload, isNotNull);
+    expect(clipboardPayload, contains('Runtime Detection'));
+    expect(clipboardPayload, contains('runtime_mode: full'));
+    expect(clipboardPayload, contains('detection_source: rtl_get_version'));
+    expect(clipboardPayload, contains('version: 10.0.26200'));
+    expect(clipboardPayload, contains('is_server: false'));
+    expect(clipboardPayload, contains('product_name: Windows 10/11'));
   });
 }

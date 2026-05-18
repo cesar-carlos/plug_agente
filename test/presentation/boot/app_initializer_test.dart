@@ -1,46 +1,115 @@
-import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/settings/app_settings_keys.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
+import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
+import 'package:result_dart/result_dart.dart';
 
 void main() {
-  group('resolveStartupWindowPreferences', () {
-    test('should return defaults when settings are missing', () {
-      final prefs = InMemoryAppSettingsStore();
+  test('passes detected runtime diagnostics through bootstrap setup callback', () async {
+    var capturedCapabilities = null as RuntimeCapabilities?;
+    var capturedDiagnostics = null as RuntimeDetectionDiagnostics?;
+    var bootstrapPhasesRan = false;
+    var desktopFeaturesInitialized = false;
 
-      final preferences = resolveStartupWindowPreferences(prefs);
+    final initializer = AppInitializer(
+      runtimeProbe: _FakeWindowsRuntimeProbe(
+        result: const Success(
+          WindowsVersionInfo(
+            majorVersion: 10,
+            minorVersion: 0,
+            buildNumber: 26200,
+            isServer: false,
+            productName: 'Windows 11 Pro',
+          ),
+        ),
+        diagnostics: RuntimeDetectionDiagnostics.detected(
+          source: RuntimeDetectionSource.rtlGetVersion,
+          versionInfo: const WindowsVersionInfo(
+            majorVersion: 10,
+            minorVersion: 0,
+            buildNumber: 26200,
+            isServer: false,
+            productName: 'Windows 11 Pro',
+          ),
+        ),
+      ),
+      setupDependenciesOverride:
+          ({
+            required RuntimeCapabilities capabilities,
+            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+          }) async {
+            capturedCapabilities = capabilities;
+            capturedDiagnostics = runtimeDetectionDiagnostics;
+          },
+      bootstrapPhasesOverride: () async {
+        bootstrapPhasesRan = true;
+      },
+      initializeDesktopFeaturesOverride: (capabilities) async {
+        desktopFeaturesInitialized = true;
+      },
+      resolveInitialRouteOverride: (_) => '/agent-actions',
+    );
 
-      check(preferences.startMinimized).isFalse();
-      check(preferences.minimizeToTray).isTrue();
-      check(preferences.closeToTray).isTrue();
-    });
+    final result = await initializer.initialize(const <String>[]);
 
-    test('should return saved values from settings store', () async {
-      final prefs = InMemoryAppSettingsStore();
-      await prefs.setBool(AppSettingsKeys.startMinimized, true);
-      await prefs.setBool(AppSettingsKeys.minimizeToTray, false);
-      await prefs.setBool(AppSettingsKeys.closeToTray, false);
-
-      final preferences = resolveStartupWindowPreferences(prefs);
-
-      check(preferences.startMinimized).isTrue();
-      check(preferences.minimizeToTray).isFalse();
-      check(preferences.closeToTray).isFalse();
-    });
-
-    test('should disable start minimized when tray restore is unavailable', () async {
-      final prefs = InMemoryAppSettingsStore();
-      await prefs.setBool(AppSettingsKeys.startMinimized, true);
-
-      final preferences = resolveStartupWindowPreferences(
-        prefs,
-        canStartMinimized: false,
-      );
-
-      check(preferences.startMinimized).isFalse();
-      check(preferences.minimizeToTray).isTrue();
-      check(preferences.closeToTray).isTrue();
-    });
+    expect(result.initialRoute, '/agent-actions');
+    expect(result.capabilities.mode, RuntimeMode.full);
+    expect(capturedCapabilities?.mode, RuntimeMode.full);
+    expect(capturedDiagnostics?.source, RuntimeDetectionSource.rtlGetVersion);
+    expect(capturedDiagnostics?.versionInfo?.versionString, '10.0.26200');
+    expect(bootstrapPhasesRan, isTrue);
+    expect(desktopFeaturesInitialized, isTrue);
   });
+
+  test('passes fallback failed diagnostics when runtime probe fails', () async {
+    var capturedCapabilities = null as RuntimeCapabilities?;
+    var capturedDiagnostics = null as RuntimeDetectionDiagnostics?;
+
+    final initializer = AppInitializer(
+      runtimeProbe: _FakeWindowsRuntimeProbe(
+        result: Failure<WindowsVersionInfo, Exception>(Exception('probe failed')),
+        diagnostics: RuntimeDetectionDiagnostics.failed(
+          failureMessage: 'probe failed',
+          rawOperatingSystemVersion: 'Windows mystery build',
+        ),
+      ),
+      setupDependenciesOverride:
+          ({
+            required RuntimeCapabilities capabilities,
+            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+          }) async {
+            capturedCapabilities = capabilities;
+            capturedDiagnostics = runtimeDetectionDiagnostics;
+          },
+      bootstrapPhasesOverride: () async {},
+      initializeDesktopFeaturesOverride: (capabilities) async {},
+    );
+
+    final result = await initializer.initialize(const <String>[]);
+
+    expect(result.capabilities.mode, RuntimeMode.degraded);
+    expect(capturedCapabilities?.isDegraded, isTrue);
+    expect(capturedDiagnostics?.source, RuntimeDetectionSource.detectionFailed);
+    expect(capturedDiagnostics?.rawOperatingSystemVersion, 'Windows mystery build');
+  });
+}
+
+class _FakeWindowsRuntimeProbe implements IWindowsRuntimeProbe {
+  _FakeWindowsRuntimeProbe({
+    required this.result,
+    this.diagnostics,
+  });
+
+  final Result<WindowsVersionInfo> result;
+
+  final RuntimeDetectionDiagnostics? diagnostics;
+
+  @override
+  RuntimeDetectionDiagnostics? get lastDiagnostics => diagnostics;
+
+  @override
+  Future<Result<WindowsVersionInfo>> detect() async => result;
 }

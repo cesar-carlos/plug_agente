@@ -4,29 +4,47 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:win32/win32.dart';
 
-/// Implementação de detecção de versão do Windows usando Win32 API.
 class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
+  WindowsRuntimeProbe({
+    int Function(Pointer<OSVERSIONINFOEX>)? rtlGetVersionInvoker,
+    String Function()? operatingSystemVersionProvider,
+  }) : _rtlGetVersionInvoker = rtlGetVersionInvoker ?? _defaultRtlGetVersionInvoker,
+       _operatingSystemVersionProvider = operatingSystemVersionProvider ?? _defaultOperatingSystemVersionProvider;
+
   static final RegExp _fallbackOsVersionPattern = RegExp(
     r'Version (\d+)\.(\d+)\.(\d+)',
   );
+
+  static int _defaultRtlGetVersionInvoker(Pointer<OSVERSIONINFOEX> versionInfo) {
+    final rtlGetVersion = DynamicLibrary.open('ntdll.dll')
+        .lookupFunction<Int32 Function(Pointer<OSVERSIONINFOEX>), int Function(Pointer<OSVERSIONINFOEX>)>(
+          'RtlGetVersion',
+        );
+    return rtlGetVersion(versionInfo);
+  }
+
+  static String _defaultOperatingSystemVersionProvider() => Platform.operatingSystemVersion;
+
+  final int Function(Pointer<OSVERSIONINFOEX>) _rtlGetVersionInvoker;
+  final String Function() _operatingSystemVersionProvider;
+
+  RuntimeDetectionDiagnostics? _lastDiagnostics;
+
+  @override
+  RuntimeDetectionDiagnostics? get lastDiagnostics => _lastDiagnostics;
 
   @override
   Future<Result<WindowsVersionInfo>> detect() async {
     try {
       final versionInfo = calloc<OSVERSIONINFOEX>();
       versionInfo.ref.dwOSVersionInfoSize = sizeOf<OSVERSIONINFOEX>();
-
-      final rtlGetVersion = DynamicLibrary.open('ntdll.dll')
-          .lookupFunction<Int32 Function(Pointer<OSVERSIONINFOEX>), int Function(Pointer<OSVERSIONINFOEX>)>(
-            'RtlGetVersion',
-          );
-
-      final result = rtlGetVersion(versionInfo);
+      final result = _rtlGetVersionInvoker(versionInfo);
 
       if (result != 0) {
         calloc.free(versionInfo);
@@ -40,11 +58,16 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
         isServer: versionInfo.ref.wProductType != VER_NT_WORKSTATION,
         productName: _getProductName(versionInfo.ref),
       );
-
       calloc.free(versionInfo);
 
+      _lastDiagnostics = RuntimeDetectionDiagnostics.detected(
+        source: RuntimeDetectionSource.rtlGetVersion,
+        versionInfo: info,
+      );
+
       developer.log(
-        'Windows version detected: $info',
+        'Windows version detected via ${_lastDiagnostics!.sourceName}: '
+        'version=${info.versionString} isServer=${info.isServer} product=${info.productName ?? "-"}',
         name: 'runtime_probe',
         level: 800,
       );
@@ -81,7 +104,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
 
   Result<WindowsVersionInfo> _fallbackDetection() {
     try {
-      final osVersion = Platform.operatingSystemVersion;
+      final osVersion = _operatingSystemVersionProvider();
       developer.log(
         'Using fallback detection from Platform.operatingSystemVersion: $osVersion',
         name: 'runtime_probe',
@@ -103,10 +126,26 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
           isServer: osVersionLower.contains('server'),
           productName: 'Windows (fallback detection)',
         );
+        _lastDiagnostics = RuntimeDetectionDiagnostics.detected(
+          source: RuntimeDetectionSource.platformOperatingSystemVersion,
+          versionInfo: info,
+          rawOperatingSystemVersion: osVersion,
+        );
+
+        developer.log(
+          'Windows version detected via ${_lastDiagnostics!.sourceName}: '
+          'version=${info.versionString} isServer=${info.isServer} product=${info.productName ?? "-"}',
+          name: 'runtime_probe',
+          level: 800,
+        );
 
         return Success(info);
       }
 
+      _lastDiagnostics = RuntimeDetectionDiagnostics.failed(
+        failureMessage: 'Could not parse Windows version from: $osVersion',
+        rawOperatingSystemVersion: osVersion,
+      );
       return Failure(
         domain.ConfigurationFailure(
           'Could not parse Windows version from: $osVersion',
@@ -119,6 +158,9 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
         level: 1000,
         error: e,
         stackTrace: stackTrace,
+      );
+      _lastDiagnostics = RuntimeDetectionDiagnostics.failed(
+        failureMessage: 'Failed to detect Windows version: $e',
       );
       return Failure(
         domain.ConfigurationFailure('Failed to detect Windows version: $e'),

@@ -2,13 +2,24 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
+import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
+import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
+import 'package:plug_agente/application/use_cases/cleanup_agent_action_executions.dart';
+import 'package:plug_agente/application/use_cases/cleanup_expired_agent_action_remote_audit.dart';
+import 'package:plug_agente/application/use_cases/cleanup_expired_rpc_idempotency_cache.dart';
+import 'package:plug_agente/application/use_cases/reconcile_agent_action_executions.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/runtime/app_uptime.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/runtime/runtime_policy_evaluator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -28,6 +39,21 @@ typedef StartupWindowPreferences = ({
   bool closeToTray,
 });
 
+typedef SetupDependenciesOverride =
+    Future<void> Function({
+      required RuntimeCapabilities capabilities,
+      RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+    });
+
+typedef BootstrapPhasesOverride = Future<void> Function();
+
+typedef InitializeDesktopFeaturesOverride =
+    Future<void> Function(
+      RuntimeCapabilities capabilities,
+    );
+
+typedef ResolveInitialRouteOverride = String? Function(List<String> args);
+
 @visibleForTesting
 StartupWindowPreferences resolveStartupWindowPreferences(
   IAppSettingsStore settingsStore, {
@@ -41,22 +67,46 @@ StartupWindowPreferences resolveStartupWindowPreferences(
 }
 
 class AppInitializer {
-  const AppInitializer({required this.runtimeProbe});
+  AppInitializer({
+    required this.runtimeProbe,
+    this.setupDependenciesOverride,
+    this.bootstrapPhasesOverride,
+    this.initializeDesktopFeaturesOverride,
+    this.resolveInitialRouteOverride,
+  });
 
   final IWindowsRuntimeProbe runtimeProbe;
+  final SetupDependenciesOverride? setupDependenciesOverride;
+  final BootstrapPhasesOverride? bootstrapPhasesOverride;
+  final InitializeDesktopFeaturesOverride? initializeDesktopFeaturesOverride;
+  final ResolveInitialRouteOverride? resolveInitialRouteOverride;
+  RuntimeDetectionDiagnostics? _lastRuntimeDetectionDiagnostics;
 
   Future<AppBootstrapData> initialize(List<String> args) async {
     AppUptime.markStarted();
     await AppEnvironment.loadOptional();
 
     final capabilities = await _resolveRuntimeCapabilities();
-    await setupDependencies(capabilities: capabilities);
+    await (setupDependenciesOverride ?? setupDependencies)(
+      capabilities: capabilities,
+      runtimeDetectionDiagnostics: _lastRuntimeDetectionDiagnostics,
+    );
+    _markAgentActionsSubsystemStarting();
+    try {
+      if (bootstrapPhasesOverride case final BootstrapPhasesOverride override) {
+        await override();
+      } else {
+        await _runBootstrapPhases();
+      }
+    } finally {
+      _markAgentActionsSubsystemReady();
+    }
+    if (bootstrapPhasesOverride == null) {
+      await _dispatchAppStartAgentActions();
+    }
 
-    // Warm up ODBC connection pool if connection string is configured
-    await _warmUpConnectionPool();
-
-    final initialRoute = _resolveInitialRoute(args);
-    await _initializeDesktopFeatures(capabilities);
+    final initialRoute = resolveInitialRouteOverride?.call(args) ?? _resolveInitialRoute(args);
+    await (initializeDesktopFeaturesOverride ?? _initializeDesktopFeatures)(capabilities);
 
     return AppBootstrapData(
       capabilities: capabilities,
@@ -71,14 +121,29 @@ class AppInitializer {
     final versionResult = await probe.detect();
     final capabilities = versionResult.fold(
       (versionInfo) {
+        _lastRuntimeDetectionDiagnostics = probe.lastDiagnostics;
         developer.log(
           'Windows version detected: $versionInfo',
           name: 'app_initializer',
           level: 800,
         );
+        if (_lastRuntimeDetectionDiagnostics case final RuntimeDetectionDiagnostics diagnostics) {
+          developer.log(
+            'Runtime detection details: source=${diagnostics.sourceName} '
+            'version=${versionInfo.versionString} isServer=${versionInfo.isServer} '
+            'product=${versionInfo.productName ?? "-"}',
+            name: 'app_initializer',
+            level: 800,
+          );
+        }
         return evaluator.evaluate(versionInfo);
       },
       (failure) {
+        _lastRuntimeDetectionDiagnostics =
+            probe.lastDiagnostics ??
+            RuntimeDetectionDiagnostics.failed(
+              failureMessage: failure.toString(),
+            );
         developer.log(
           'Failed to detect Windows version, using degraded safe mode: $failure',
           name: 'app_initializer',
@@ -110,10 +175,198 @@ class AppInitializer {
     return capabilities;
   }
 
+  Future<void> _runBootstrapPhases() async {
+    await _reconcileAgentActionExecutions();
+    await _purgeOldAgentActionExecutions();
+    await _purgeExpiredRpcIdempotencyCache();
+    _startRpcIdempotencyPeriodicPurge();
+    await _purgeExpiredAgentActionRemoteAudit();
+    _startAgentActionExecutionPeriodicPurge();
+    _startAgentActionRemoteAuditPeriodicPurge();
+
+    // Warm up ODBC connection pool if connection string is configured
+    await _warmUpConnectionPool();
+    await _startAgentActionScheduler();
+  }
+
   String? _resolveInitialRoute(List<String> args) {
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink(args);
     return initialLink != null ? deepLinkService.deepLinkToRoute(initialLink) : null;
+  }
+
+  Future<void> _reconcileAgentActionExecutions() async {
+    try {
+      final result = await getIt<ReconcileAgentActionExecutions>()();
+      result.fold(
+        (count) {
+          if (count > 0) {
+            developer.log(
+              'Reconciled $count interrupted agent action execution(s) during bootstrap',
+              name: 'app_initializer',
+              level: 800,
+            );
+          }
+        },
+        (failure) {
+          developer.log(
+            'Failed to reconcile agent action executions during bootstrap (continuing without)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to reconcile agent action executions during bootstrap (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _purgeExpiredRpcIdempotencyCache() async {
+    try {
+      final result = await getIt<CleanupExpiredRpcIdempotencyCache>()();
+      result.fold(
+        (int count) {
+          if (count > 0) {
+            developer.log(
+              'Purged $count expired RPC idempotency cache row(s) during bootstrap',
+              name: 'app_initializer',
+              level: 800,
+            );
+          }
+        },
+        (Object failure) {
+          developer.log(
+            'Failed to purge expired RPC idempotency cache during bootstrap (continuing without)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to purge expired RPC idempotency cache during bootstrap (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _startRpcIdempotencyPeriodicPurge() {
+    try {
+      getIt<RpcIdempotencyCachePeriodicPurge>().start();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to start periodic RPC idempotency cache purge (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _purgeExpiredAgentActionRemoteAudit() async {
+    try {
+      final result = await getIt<CleanupExpiredAgentActionRemoteAudit>()();
+      result.fold(
+        (int count) {
+          if (count > 0) {
+            developer.log(
+              'Purged $count old agent action remote audit row(s) during bootstrap',
+              name: 'app_initializer',
+              level: 800,
+            );
+          }
+        },
+        (Object failure) {
+          developer.log(
+            'Failed to purge old agent action remote audit rows during bootstrap (continuing without)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to purge old agent action remote audit rows during bootstrap (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _startAgentActionRemoteAuditPeriodicPurge() {
+    try {
+      getIt<AgentActionRemoteAuditPeriodicPurge>().start();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to start periodic agent action remote audit purge (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _purgeOldAgentActionExecutions() async {
+    try {
+      final result = await getIt<CleanupAgentActionExecutions>()();
+      result.fold(
+        (int count) {
+          if (count > 0) {
+            developer.log(
+              'Purged $count old terminal agent action execution row(s) during bootstrap',
+              name: 'app_initializer',
+              level: 800,
+            );
+          }
+        },
+        (Object failure) {
+          developer.log(
+            'Failed to purge old agent action executions during bootstrap (continuing without)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to purge old agent action executions during bootstrap (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _startAgentActionExecutionPeriodicPurge() {
+    try {
+      getIt<AgentActionExecutionPeriodicPurge>().start();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to start periodic agent action execution history purge (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _warmUpConnectionPool() async {
@@ -166,6 +419,88 @@ class AppInitializer {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  Future<void> _startAgentActionScheduler() async {
+    try {
+      final scheduler = getIt<AgentActionTriggerScheduler>();
+      final startResult = await scheduler.start();
+      startResult.fold(
+        (snapshot) {
+          developer.log(
+            'Agent action scheduler started '
+            '(scheduled: ${snapshot.scheduledCount}, skipped: ${snapshot.skippedCount}, '
+            'issues: ${snapshot.issues.length})',
+            name: 'app_initializer',
+            level: snapshot.hasIssues ? 900 : 800,
+          );
+        },
+        (failure) {
+          developer.log(
+            'Failed to start agent action scheduler (continuing without temporal actions)',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to initialize agent action scheduler (continuing without)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _dispatchAppStartAgentActions() async {
+    final scheduler = getIt<AgentActionTriggerScheduler>();
+    try {
+      final result = await scheduler.dispatchAppStartTriggers();
+      result.fold(
+        (count) {
+          if (count > 0) {
+            developer.log(
+              'Dispatched $count app-start agent action trigger(s)',
+              name: 'app_initializer',
+              level: 800,
+            );
+          }
+        },
+        (failure) {
+          developer.log(
+            'Failed to dispatch app-start agent action triggers',
+            name: 'app_initializer',
+            level: 900,
+            error: failure,
+          );
+        },
+      );
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to dispatch app-start agent action triggers',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _markAgentActionsSubsystemStarting() {
+    if (!getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
+      return;
+    }
+    getIt<AgentActionRuntimeStateGuard>().markStarting(reason: AgentActionRuntimeStateConstants.bootstrapReason);
+  }
+
+  void _markAgentActionsSubsystemReady() {
+    if (!getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
+      return;
+    }
+    getIt<AgentActionRuntimeStateGuard>().markReady();
   }
 
   Future<void> _initializeDesktopFeatures(

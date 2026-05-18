@@ -7,9 +7,13 @@ import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/core/support/runtime_support_diagnostics_builder.dart';
+import 'package:plug_agente/core/support/support_diagnostics_section.dart';
+import 'package:plug_agente/core/support/support_diagnostics_text_formatter.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -19,6 +23,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/updates_about_conf
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
+import 'package:plug_agente/presentation/support/update_support_diagnostics_builder.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
@@ -33,6 +38,10 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
+  static const SupportDiagnosticsTextFormatter _supportTextFormatter = SupportDiagnosticsTextFormatter();
+  static const RuntimeSupportDiagnosticsBuilder _runtimeDiagnosticsBuilder = RuntimeSupportDiagnosticsBuilder();
+  static const UpdateSupportDiagnosticsBuilder _updateDiagnosticsBuilder = UpdateSupportDiagnosticsBuilder();
+
   String _lastUpdateCheck = '';
   bool _isCheckingUpdates = false;
   bool _isCheckingAutomaticUpdates = false;
@@ -50,13 +59,6 @@ class _ConfigPageState extends State<ConfigPage> {
     final hour = dateTime.hour.toString().padLeft(2, '0');
     final minute = dateTime.minute.toString().padLeft(2, '0');
     return '$day/$month/$year $hour:$minute';
-  }
-
-  String _formatDurationMs(DateTime? startedAt, DateTime? completedAt) {
-    if (startedAt == null || completedAt == null) {
-      return '-';
-    }
-    return completedAt.difference(startedAt).inMilliseconds.toString();
   }
 
   String _formatCompletionSource(
@@ -146,226 +148,59 @@ class _ConfigPageState extends State<ConfigPage> {
     UpdateCheckDiagnostics? backgroundDiagnostics,
     UpdateCheckDiagnostics? automaticDiagnostics,
   ) {
-    if (manualDiagnostics == null && backgroundDiagnostics == null && automaticDiagnostics == null) {
+    final sections = _updateDiagnosticsBuilder.buildSections(
+      l10n: l10n,
+      currentAppVersion: _appVersion,
+      manualDiagnostics: manualDiagnostics,
+      backgroundDiagnostics: backgroundDiagnostics,
+      automaticDiagnostics: automaticDiagnostics,
+    );
+
+    if (sections.isEmpty) {
       return l10n.configUpdateTechnicalNoData;
     }
 
-    final lines = <String>[];
-    if (manualDiagnostics != null) {
-      _appendDiagnosticsSection(
-        lines,
-        l10n: l10n,
-        title: l10n.configUpdateTechnicalTitle,
-        diagnostics: manualDiagnostics,
-      );
-    }
-    if (backgroundDiagnostics != null) {
-      if (lines.isNotEmpty) {
-        lines.add('');
-      }
-      _appendDiagnosticsSection(
-        lines,
-        l10n: l10n,
-        title: l10n.configUpdateTechnicalBackgroundTitle,
-        diagnostics: backgroundDiagnostics,
-      );
-    }
-    if (automaticDiagnostics != null) {
-      if (lines.isNotEmpty) {
-        lines.add('');
-      }
-      _appendDiagnosticsSection(
-        lines,
-        l10n: l10n,
-        title: l10n.configUpdateTechnicalAutomaticTitle,
-        diagnostics: automaticDiagnostics,
-      );
-    }
-
-    return lines.join('\n');
+    return _supportTextFormatter.formatSections(sections);
   }
 
   String _buildUpdateSupportDiagnostics(
     AppLocalizations l10n,
     IAutoUpdateOrchestrator orchestrator,
   ) {
-    final manual = orchestrator.lastManualDiagnostics;
-    final background = orchestrator.lastBackgroundDiagnostics;
-    final automatic = orchestrator.lastAutomaticDiagnostics;
-    final technicalDetails = _formatTechnicalDetails(
-      l10n,
-      manual,
-      background,
-      automatic,
-    );
-    return <String>[
-      'Plug Agente Auto-Update',
-      '${l10n.gsLabelVersion}: $_appVersion',
-      '',
-      technicalDetails,
-    ].join('\n');
+    final sections = <SupportDiagnosticsSection>[
+      SupportDiagnosticsSection(
+        title: 'Plug Agente Auto-Update',
+        fields: <SupportDiagnosticsField>[
+          SupportDiagnosticsField(
+            key: l10n.gsLabelVersion,
+            value: _appVersion,
+          ),
+        ],
+      ),
+      if (_buildRuntimeSupportDiagnostics() case final SupportDiagnosticsSection runtimeSection) runtimeSection,
+      ..._updateDiagnosticsBuilder.buildSections(
+        l10n: l10n,
+        currentAppVersion: _appVersion,
+        manualDiagnostics: orchestrator.lastManualDiagnostics,
+        backgroundDiagnostics: orchestrator.lastBackgroundDiagnostics,
+        automaticDiagnostics: orchestrator.lastAutomaticDiagnostics,
+      ),
+    ];
+
+    return _supportTextFormatter.formatSections(sections);
   }
 
-  void _appendDiagnosticsSection(
-    List<String> lines, {
-    required AppLocalizations l10n,
-    required String title,
-    required UpdateCheckDiagnostics diagnostics,
-  }) {
-    lines.add(title);
-    lines.addAll(<String>[
-      '${l10n.configUpdateTechnicalCurrentVersion}: ${diagnostics.currentVersion ?? _appVersion}',
-      '${l10n.configUpdateTechnicalCheckedAt}: ${_formatLastUpdateCheck(diagnostics.checkedAt)}',
-      '${l10n.configUpdateTechnicalConfiguredFeed}: ${diagnostics.configuredFeedUrl}',
-      '${l10n.configUpdateTechnicalRequestedFeed}: ${diagnostics.requestedFeedUrl}',
-      '${l10n.configUpdateTechnicalOfficialFeed}: ${isOfficialAutoUpdateFeedUrl(diagnostics.configuredFeedUrl) ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      '${l10n.configUpdateTechnicalProbeRequestUrl}: ${diagnostics.probeRequestUrl ?? diagnostics.requestedFeedUrl}',
-      '${l10n.configUpdateTechnicalProbeSucceeded}: ${diagnostics.probeSucceeded == null
-          ? '-'
-          : diagnostics.probeSucceeded!
-          ? l10n.configUpdateTechnicalOfficialFeedYes
-          : l10n.configUpdateTechnicalOfficialFeedNo}',
-      '${l10n.configUpdateTechnicalCompletionSource}: ${_formatCompletionSource(l10n, diagnostics.completionSource)}',
-      '${l10n.configUpdateTechnicalTriggerDurationMs}: ${_formatDurationMs(diagnostics.triggerStartedAt, diagnostics.triggerCompletedAt)}',
-      '${l10n.configUpdateTechnicalTotalDurationMs}: ${_formatDurationMs(diagnostics.checkedAt, diagnostics.completedAt)}',
-    ]);
-
-    if (diagnostics.appcastProbeItemCount != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalFeedItemCount}: ${diagnostics.appcastProbeItemCount}',
-      );
+  SupportDiagnosticsSection? _buildRuntimeSupportDiagnostics() {
+    if (!getIt.isRegistered<RuntimeCapabilities>()) {
+      return null;
     }
 
-    if (diagnostics.remoteVersion != null && diagnostics.remoteVersion!.isNotEmpty) {
-      lines.add(
-        '${l10n.configUpdateTechnicalRemoteVersion}: ${diagnostics.remoteVersion}',
-      );
-    } else if (diagnostics.appcastProbeVersion != null && diagnostics.appcastProbeVersion!.isNotEmpty) {
-      lines.add(
-        '${l10n.configUpdateTechnicalRemoteVersion}: ${diagnostics.appcastProbeVersion}',
-      );
-    }
-
-    if (diagnostics.assetName != null && diagnostics.assetName!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalAssetName}: ${diagnostics.assetName}');
-    }
-    if (diagnostics.assetUrl != null && diagnostics.assetUrl!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalAssetUrl}: ${diagnostics.assetUrl}');
-    }
-    if (diagnostics.assetSize != null) {
-      lines.add('${l10n.configUpdateTechnicalAssetSize}: ${diagnostics.assetSize}');
-    }
-    if (diagnostics.sha256 != null && diagnostics.sha256!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalSha256}: ${diagnostics.sha256}');
-    }
-    if (diagnostics.actualSha256 != null && diagnostics.actualSha256!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalActualSha256}: ${diagnostics.actualSha256}');
-    }
-    if (diagnostics.hashValidationStatus != null && diagnostics.hashValidationStatus!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalHashValidationStatus}: ${diagnostics.hashValidationStatus}');
-    }
-    if (diagnostics.rolloutChannel != null && diagnostics.rolloutChannel!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalRolloutChannel}: ${diagnostics.rolloutChannel}');
-    }
-    if (diagnostics.rolloutPercentage != null) {
-      lines.add('${l10n.configUpdateTechnicalRolloutPercentage}: ${diagnostics.rolloutPercentage}');
-    }
-    if (diagnostics.rolloutBucket != null) {
-      lines.add('${l10n.configUpdateTechnicalRolloutBucket}: ${diagnostics.rolloutBucket}');
-    }
-    if (diagnostics.rolloutEligible != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalRolloutEligible}: ${diagnostics.rolloutEligible! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      );
-    }
-    if (diagnostics.pendingVersion != null && diagnostics.pendingVersion!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalPendingVersion}: ${diagnostics.pendingVersion}');
-    }
-    if (diagnostics.installerPath != null && diagnostics.installerPath!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalInstallerPath}: ${diagnostics.installerPath}');
-    }
-    if (diagnostics.installerLogPath != null && diagnostics.installerLogPath!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalInstallerLogPath}: ${diagnostics.installerLogPath}');
-    }
-    if (diagnostics.installDirectory != null && diagnostics.installDirectory!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalInstallDirectory}: ${diagnostics.installDirectory}');
-    }
-    if (diagnostics.updateDirectorySecurityStatus != null && diagnostics.updateDirectorySecurityStatus!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalUpdateDirectorySecurity}: ${diagnostics.updateDirectorySecurityStatus}');
-    }
-    if (diagnostics.installDirectoryWritable != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalInstallDirectoryWritable}: ${diagnostics.installDirectoryWritable! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      );
-    }
-    if (diagnostics.silentUpdateStrategy != null && diagnostics.silentUpdateStrategy!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalSilentStrategy}: ${diagnostics.silentUpdateStrategy}');
-    }
-    if (diagnostics.launcherPath != null && diagnostics.launcherPath!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalLauncherPath}: ${diagnostics.launcherPath}');
-    }
-    if (diagnostics.launcherStatusPath != null && diagnostics.launcherStatusPath!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalLauncherStatusPath}: ${diagnostics.launcherStatusPath}');
-    }
-    if (diagnostics.launcherState != null && diagnostics.launcherState!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalLauncherState}: ${diagnostics.launcherState}');
-    }
-    if (diagnostics.appPid != null) {
-      lines.add('${l10n.configUpdateTechnicalAppPid}: ${diagnostics.appPid}');
-    }
-    if (diagnostics.signatureStatus != null && diagnostics.signatureStatus!.isNotEmpty) {
-      lines.add('${l10n.configUpdateTechnicalSignatureStatus}: ${diagnostics.signatureStatus}');
-    }
-    if (diagnostics.signatureRequired != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalSignatureRequired}: ${diagnostics.signatureRequired! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      );
-    }
-    if (diagnostics.waitForAppExitDurationMs != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalWaitForAppExitDurationMs}: ${diagnostics.waitForAppExitDurationMs}',
-      );
-    }
-    if (diagnostics.nonAdminExitCode != null) {
-      lines.add('${l10n.configUpdateTechnicalNonAdminExitCode}: ${diagnostics.nonAdminExitCode}');
-    }
-    if (diagnostics.nonAdminDurationMs != null) {
-      lines.add('${l10n.configUpdateTechnicalNonAdminDurationMs}: ${diagnostics.nonAdminDurationMs}');
-    }
-    if (diagnostics.elevatedExitCode != null) {
-      lines.add('${l10n.configUpdateTechnicalElevatedExitCode}: ${diagnostics.elevatedExitCode}');
-    }
-    if (diagnostics.elevatedDurationMs != null) {
-      lines.add('${l10n.configUpdateTechnicalElevatedDurationMs}: ${diagnostics.elevatedDurationMs}');
-    }
-    if (diagnostics.elevatedRetryStarted != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalElevatedRetryStarted}: ${diagnostics.elevatedRetryStarted! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      );
-    }
-    if (diagnostics.elevatedCancelled != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalElevatedCancelled}: ${diagnostics.elevatedCancelled! ? l10n.configUpdateTechnicalOfficialFeedYes : l10n.configUpdateTechnicalOfficialFeedNo}',
-      );
-    }
-    if (diagnostics.automaticFailureCount != null) {
-      lines.add('${l10n.configUpdateTechnicalAutomaticFailureCount}: ${diagnostics.automaticFailureCount}');
-    }
-    if (diagnostics.automaticCooldownUntil != null) {
-      lines.add(
-        '${l10n.configUpdateTechnicalAutomaticCooldownUntil}: ${_formatLastUpdateCheck(diagnostics.automaticCooldownUntil!)}',
-      );
-    }
-
-    if (diagnostics.errorMessage != null && diagnostics.errorMessage!.isNotEmpty) {
-      lines.add(
-        '${l10n.configUpdateTechnicalUpdaterError}: ${diagnostics.errorMessage}',
-      );
-    } else if (diagnostics.probeErrorMessage != null && diagnostics.probeErrorMessage!.isNotEmpty) {
-      lines.add(
-        '${l10n.configUpdateTechnicalAppcastError}: ${diagnostics.probeErrorMessage}',
-      );
-    }
+    final capabilities = getIt<RuntimeCapabilities>();
+    final diagnostics = getIt.isRegistered<RuntimeDetectionDiagnostics>() ? getIt<RuntimeDetectionDiagnostics>() : null;
+    return _runtimeDiagnosticsBuilder.buildSection(
+      capabilities: capabilities,
+      diagnostics: diagnostics,
+    );
   }
 
   String _resolveLastUpdateLabel(
