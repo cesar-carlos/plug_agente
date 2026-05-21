@@ -1040,7 +1040,9 @@ rejeitados pelo schema publicado.
 - **Result:** objeto alinhado a
 `docs/communication/schemas/rpc.result.agent-get-health.schema.json`, com
 `status`, `timestamp`, `version`, `pool`, `sql_queue`, `agent_actions`,
-`queries` e `uptime_seconds`. O bloco `agent_actions` e seguro para o Hub e
+`queries`, `batch` e `uptime_seconds`. O bloco `batch` inclui diagnosticos de
+paralelismo, caminho transacional e recomendacao de migrar grandes lotes de
+`INSERT` para `sql.bulkInsert`. O bloco `agent_actions` e seguro para o Hub e
 inclui feature flags efetivas, estado operacional do subsistema e tipos
 suportados/indisponiveis.
 - **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao
@@ -1888,6 +1890,10 @@ falha com contexto de timeout/budget (sem executar esse comando).
   e nao multiplicam o consumo de conexoes do pool. O health expoe
   `batch.parallel_global_wait_avg_ms`, `parallel_global_wait_p95_ms`,
   `parallel_global_wait_p99_ms` e `parallel_global_wait_sample_count`.
+- Grandes lotes homogeneos de `INSERT` em `sql.executeBatch` continuam
+  suportados, mas o agente incrementa `batch.bulk_insert_recommended_total`
+  para orientar migracao para `sql.bulkInsert`, que usa o bulk insert nativo
+  ODBC.
 - `ODBC_DIRECT_CONNECTION_MAX_CONCURRENT` pode sobrescrever o limite de
   conexoes ODBC diretas usadas por streaming/fallback. Sem override, o agente
   reserva metade do tamanho do pool para esses caminhos. Overrides maiores que

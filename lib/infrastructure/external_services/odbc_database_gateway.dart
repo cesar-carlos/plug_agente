@@ -60,6 +60,7 @@ class _BatchExecutionContext {
     required this.deadline,
     this.directLease,
     this.ownedConnection = false,
+    this.nativeCompatibleAcquire = false,
   });
 
   final String connectionId;
@@ -70,6 +71,9 @@ class _BatchExecutionContext {
   /// When true, [connectionId] was obtained via [OdbcService.connect] and must
   /// be disconnected; otherwise it is a pooled handle and must be released.
   final bool ownedConnection;
+
+  /// True when the handle came from the native-compatible adaptive pool path.
+  final bool nativeCompatibleAcquire;
 }
 
 class _BatchTransactionStart {
@@ -129,12 +133,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     FeatureFlags? featureFlags,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     ISqlInvestigationCollector? sqlInvestigation,
-  }) : _activeConfigResolver = configContext is ActiveConfigResolver
-           ? configContext
-           : null,
-       _configRepository = configContext is IAgentConfigRepository
-           ? configContext
-           : null,
+  }) : _activeConfigResolver = configContext is ActiveConfigResolver ? configContext : null,
+       _configRepository = configContext is IAgentConfigRepository ? configContext : null,
        _featureFlags = featureFlags,
        _connectionManager = OdbcGatewayConnectionManager(
          service: _service,
@@ -174,6 +174,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   DateTime? _cachedNativeCompatibleSqlAllowlistExpiresAt;
   static const int _multiResultSqlLogPreviewChars = 120;
   static const int _maxPreparedStatementsPerBatchConnection = 64;
+  static const int _bulkInsertRecommendationCommandThreshold = 50;
   static const int _asyncRequestPendingStatus = 0;
   static const int _asyncRequestReadyStatus = 1;
   static const int _asyncRequestErrorStatus = -1;
@@ -1084,6 +1085,80 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     };
   }
 
+  bool _shouldUseNativeCompatibleTransactionalBatch({
+    required DatabaseConfig databaseConfig,
+    required List<SqlCommand> commands,
+  }) {
+    if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false) || commands.isEmpty) {
+      return false;
+    }
+    if (!commands.every((command) => _isNativeCompatibleTransactionalDml(command.sql))) {
+      return false;
+    }
+    return switch (databaseConfig.databaseType) {
+      DatabaseType.sqlServer || DatabaseType.postgresql => true,
+      DatabaseType.sybaseAnywhere => false,
+    };
+  }
+
+  bool _isNativeCompatibleTransactionalDml(String sql) {
+    final normalized = _normalizeNativeCompatibleSql(sql);
+    final startsWithSupportedDml =
+        normalized.startsWith('insert ') ||
+        normalized.startsWith('update ') ||
+        normalized.startsWith('delete ') ||
+        normalized.startsWith('merge ');
+    if (!startsWithSupportedDml) {
+      return false;
+    }
+
+    final padded = ' $normalized ';
+    return !padded.contains(' output ') && !padded.contains(' returning ');
+  }
+
+  bool _shouldFallbackTransactionalNativePoolToDirect(
+    _BatchExecutionContext context,
+    Object error,
+    int attempt,
+  ) {
+    if (!context.nativeCompatibleAcquire || context.ownedConnection || attempt > 0) {
+      return false;
+    }
+    final failure = error is domain.Failure ? error : OdbcFailureMapper.mapQueryError(error);
+    if (failure.context['operation'] == 'transaction_validation') {
+      return false;
+    }
+    return failure is domain.ConnectionFailure ||
+        _queryFailureIndicatesInvalidConnectionId(failure) ||
+        failure.context['connectionFailed'] == true ||
+        failure.context['timeout'] == true ||
+        failure.context['reason'] == OdbcContextConstants.bufferTooSmallReason ||
+        failure.context['reason'] == OdbcContextConstants.odbcWorkerBusyConnectReason ||
+        OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(_odbcErrorMessage(failure));
+  }
+
+  void _recordTransactionalNativePoolFallback({
+    required _BatchExecutionContext context,
+    required Object error,
+    required String stage,
+    String? connectionId,
+  }) {
+    _metrics.recordTransactionalBatchNativePoolFallback();
+    _metrics.recordDiagnosticReason(
+      category: 'batch',
+      reason: RpcSqlDiagnosticsConstants.transactionalNativePoolFallbackReason,
+    );
+    if (connectionId != null) {
+      _connectionManager.markConnectionForDiscard(connectionId);
+    }
+    _connectionManager.recordPooledExecutionFailure(
+      connectionString: context.connectionString,
+      connectionId: connectionId,
+      error: error,
+      stage: stage,
+    );
+  }
+
   bool _isNativeCompatibleProbeQuery(String sql) {
     final normalized = SqlValidator.removeComments(
       sql,
@@ -1182,6 +1257,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _timeoutFromSqlExecutionOptions(options) ??
         (options.transaction ? ConnectionConstants.defaultTransactionalBatchTimeout : null);
     final batchPreview = _previewBatchCommandsForInvestigation(commands);
+    _recordBulkInsertRecommendationIfUseful(commands);
     if (_shouldUseParallelReadOnlyBatch(commands, options)) {
       return _executeParallelReadOnlyBatch(
         agentId: agentId,
@@ -1194,11 +1270,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
+    var forceDirectTransactionalConnection = false;
     for (var attempt = 0; attempt < 2; attempt++) {
       final contextResult = await _prepareBatchExecutionContext(
         database: database,
         timeout: effectiveTimeout,
-        useOwnedConnection: options.transaction,
+        useOwnedConnection: options.transaction && forceDirectTransactionalConnection,
+        allowNativeCompatibleTransaction: options.transaction && !forceDirectTransactionalConnection,
+        commands: commands,
         batchSqlPreview: batchPreview,
         sourceRpcRequestId: sourceRpcRequestId,
       );
@@ -1221,7 +1300,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
         if (beginResult.isError()) {
           final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
-          if (options.transaction && attempt == 0 && _queryFailureIndicatesInvalidConnectionId(beginFailure)) {
+          if (_shouldFallbackTransactionalNativePoolToDirect(context, beginFailure, attempt)) {
+            _recordTransactionalNativePoolFallback(
+              context: context,
+              connectionId: connectionState.connectionId,
+              error: beginFailure,
+              stage: 'transaction_begin',
+            );
+            forceDirectTransactionalConnection = true;
+            recycleAfterRelease = true;
+          } else if (options.transaction && attempt == 0 && _queryFailureIndicatesInvalidConnectionId(beginFailure)) {
             recycleAfterRelease = true;
           } else {
             return Failure(beginFailure);
@@ -1231,6 +1319,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             _metrics.recordTransactionalBatchDirectPath();
             developer.log(
               'Transactional executeBatch uses direct ODBC connection (pool bypass)',
+              name: 'database_gateway',
+              level: 800,
+            );
+          } else if (options.transaction && context.nativeCompatibleAcquire) {
+            _metrics.recordTransactionalBatchNativePoolPath();
+            developer.log(
+              'Transactional executeBatch uses native-compatible ODBC pool path',
               name: 'database_gateway',
               level: 800,
             );
@@ -1247,6 +1342,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             sourceRpcRequestId: sourceRpcRequestId,
           );
           if (commandResult.isError()) {
+            final commandFailure = commandResult.exceptionOrNull()!;
+            if (_shouldFallbackTransactionalNativePoolToDirect(context, commandFailure, attempt)) {
+              _recordTransactionalNativePoolFallback(
+                context: context,
+                connectionId: connectionState.connectionId,
+                error: commandFailure,
+                stage: 'transaction_execute',
+              );
+              forceDirectTransactionalConnection = true;
+              recycleAfterRelease = true;
+              continue;
+            }
             return Failure(commandResult.exceptionOrNull()!);
           }
 
@@ -1256,6 +1363,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               transaction: transaction,
             );
             if (commitResult.isError()) {
+              final commitFailure = commitResult.exceptionOrNull()!;
+              if (_shouldFallbackTransactionalNativePoolToDirect(context, commitFailure, attempt)) {
+                _recordTransactionalNativePoolFallback(
+                  context: context,
+                  connectionId: connectionState.connectionId,
+                  error: commitFailure,
+                  stage: 'transaction_commit',
+                );
+                forceDirectTransactionalConnection = true;
+                recycleAfterRelease = true;
+                continue;
+              }
               return Failure(commitResult.exceptionOrNull()!);
             }
           }
@@ -1284,6 +1403,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           error: error,
           stackTrace: stackTrace,
         );
+        if (_shouldFallbackTransactionalNativePoolToDirect(context, error, attempt)) {
+          _recordTransactionalNativePoolFallback(
+            context: context,
+            connectionId: activeConnectionId,
+            error: error,
+            stage: 'transaction_unexpected_error',
+          );
+          forceDirectTransactionalConnection = true;
+          recycleAfterRelease = true;
+          continue;
+        }
         return Failure(
           domain.QueryExecutionFailure.withContext(
             message: 'Batch execution failed unexpectedly',
@@ -1305,6 +1435,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               deadline: context.deadline,
               directLease: context.directLease,
               ownedConnection: context.ownedConnection,
+              nativeCompatibleAcquire: context.nativeCompatibleAcquire,
             ),
           );
         }
@@ -1341,6 +1472,47 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return commands.every(
       (command) => SqlValidator.validateSelectQuery(command.sql).isSuccess(),
     );
+  }
+
+  void _recordBulkInsertRecommendationIfUseful(List<SqlCommand> commands) {
+    if (commands.length < _bulkInsertRecommendationCommandThreshold) {
+      return;
+    }
+
+    String? tableName;
+    for (final command in commands) {
+      final currentTable = _insertTargetTable(command.sql);
+      if (currentTable == null) {
+        return;
+      }
+      tableName ??= currentTable;
+      if (tableName != currentTable) {
+        return;
+      }
+    }
+
+    _metrics.recordBatchBulkInsertRecommended();
+    developer.log(
+      'Large homogeneous INSERT batch detected; sql.bulkInsert is recommended for this workload',
+      name: 'database_gateway',
+      level: 800,
+      error: {
+        'command_count': commands.length,
+        'table': tableName,
+        'threshold': _bulkInsertRecommendationCommandThreshold,
+      },
+    );
+  }
+
+  String? _insertTargetTable(String sql) {
+    final normalized = SqlValidator.removeComments(
+      sql,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
+    if (normalized.contains(' returning ') || normalized.contains(' output ')) {
+      return null;
+    }
+    final match = RegExp(r'^insert\s+into\s+([^\s(]+)').firstMatch(normalized);
+    return match?.group(1);
   }
 
   Future<Result<List<SqlCommandResult>>> _executeParallelReadOnlyBatch({
@@ -1533,6 +1705,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String? database,
     required Duration? timeout,
     required bool useOwnedConnection,
+    required bool allowNativeCompatibleTransaction,
+    required List<SqlCommand> commands,
     required String batchSqlPreview,
     String? sourceRpcRequestId,
   }) async {
@@ -1564,8 +1738,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       databaseOverride: database,
     );
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
+    final useNativeCompatibleTransaction =
+        allowNativeCompatibleTransaction &&
+        _shouldUseNativeCompatibleTransactionalBatch(
+          databaseConfig: localConfig,
+          commands: commands,
+        );
 
-    if (useOwnedConnection) {
+    if (useOwnedConnection || (allowNativeCompatibleTransaction && !useNativeCompatibleTransaction)) {
       final leaseResult = await _connectionManager.acquireDirectLease(
         operation: 'batch_transaction',
         deadline: deadline,
@@ -1619,14 +1799,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final poolResult = await _connectionManager.acquirePooledConnection(
-      connectionString,
-      options: _connectionOptionsForTimeout(
-        _remainingTimeoutFromDeadline(deadline) ?? timeout,
-      ),
-      deadline: deadline,
-      context: {'operation': 'batch_execute'},
+    final connectionOptions = _connectionOptionsForTimeout(
+      _remainingTimeoutFromDeadline(deadline) ?? timeout,
     );
+    final poolResult = useNativeCompatibleTransaction
+        ? await _connectionManager.acquireNativeCompatiblePooledConnection(
+            connectionString,
+            leaseFallbackOptions: connectionOptions,
+            deadline: deadline,
+            context: {'operation': 'batch_transaction_native_compatible'},
+          )
+        : await _connectionManager.acquirePooledConnection(
+            connectionString,
+            options: connectionOptions,
+            deadline: deadline,
+            context: {'operation': 'batch_execute'},
+          );
     if (poolResult.isError()) {
       final error = poolResult.exceptionOrNull()!;
       final failure = error is domain.Failure
@@ -1651,6 +1839,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionId: poolResult.getOrNull()!,
         connectionString: connectionString,
         deadline: deadline,
+        nativeCompatibleAcquire: useNativeCompatibleTransaction,
       ),
     );
   }

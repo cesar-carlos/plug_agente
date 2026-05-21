@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -99,6 +101,27 @@ void main() async {
       }
     }
 
+    Future<void> writeHealthSnapshot(
+      QueuedDatabaseGateway gateway,
+      String name,
+    ) async {
+      final outputDirectory = Platform.environment['ODBC_BURST_HEALTH_SNAPSHOT_DIR']?.trim();
+      if (outputDirectory == null || outputDirectory.isEmpty) {
+        return;
+      }
+
+      final localHarness = harness!;
+      final healthService = HealthService(
+        metricsCollector: localHarness.metrics,
+        gateway: gateway,
+        connectionPool: localHarness.connectionPool,
+      );
+      final snapshot = await healthService.getHealthStatusAsync();
+      final file = File('$outputDirectory${Platform.pathSeparator}health_$name.json');
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync('${const JsonEncoder.withIndent('  ').convert(snapshot)}\n');
+    }
+
     test(
       'should reject a controlled burst without leaking pooled connections',
       () async {
@@ -112,6 +135,7 @@ void main() async {
         final elapsed = Stopwatch()..start();
 
         try {
+          await writeHealthSnapshot(queuedGateway, 'burst_overflow_before');
           final primingCount = math.min(
             E2EEnv.odbcBurstRequestCount - 1,
             queuedGateway.maxWorkers + queuedGateway.maxQueueSize,
@@ -191,6 +215,7 @@ void main() async {
             reason: 'burst overflow test exceeded ODBC_BURST_MAX_MS_PER_TEST=$maxMs',
           );
         } finally {
+          await writeHealthSnapshot(queuedGateway, 'burst_overflow_after');
           queuedGateway.dispose();
         }
       },
@@ -213,6 +238,7 @@ void main() async {
         final elapsed = Stopwatch()..start();
 
         try {
+          await writeHealthSnapshot(queuedGateway, 'burst_recovery_before');
           final burst = List.generate(E2EEnv.odbcBurstRequestCount, (index) {
             return queuedGateway.executeQuery(
               buildRequest('burst-recovery-$index', burstQuery),
@@ -254,6 +280,7 @@ void main() async {
             reason: 'burst recovery test exceeded ODBC_BURST_MAX_MS_PER_TEST=$maxMs',
           );
         } finally {
+          await writeHealthSnapshot(queuedGateway, 'burst_recovery_after');
           queuedGateway.dispose();
         }
       },

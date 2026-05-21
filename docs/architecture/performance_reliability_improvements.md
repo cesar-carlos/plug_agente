@@ -3,26 +3,26 @@
 Atualizado: 2026-05-14
 
 Este documento registra o estado atual das melhorias de performance e
-confiabilidade do caminho ODBC. O foco atual e `odbc_fast 3.7.0`: usar o
-worker pool assincrono interno do pacote por padrao, mantendo o pool
-lease-based do app como caminho seguro.
+confiabilidade do caminho ODBC. O foco atual e `odbc_fast 3.8.0`: usar o
+worker pool assincrono interno do pacote por padrao e habilitar o pool
+adaptativo para drivers elegiveis com fallback seguro.
 
 ## Status
 
 | Area | Status | Observacao |
 | --- | --- | --- |
 | `SqlExecutionQueue` / `QueuedDatabaseGateway` | Implementado | O fluxo RPC usa fila bounded com backpressure e metricas. |
-| `OdbcConnectionPool` lease-based | Implementado | Continua sendo o default do app para compatibilidade entre drivers. |
-| Pool warm-up | Implementado | Warm-up permanece no pool lease-based. |
+| `OdbcConnectionPool` lease-based | Implementado | Continua sendo fallback seguro e caminho obrigatorio para SQL Anywhere. |
+| Pool warm-up | Implementado | Warm-up respeita a estrategia efetiva do pool adaptativo/lease. |
 | Circuit breaker | Implementado | Falhas repetidas de conexao deixam de consumir timeouts completos por request. |
 | Retry com backoff exponencial | Implementado | `RetryManager` permanece como mecanismo padrao de retry. |
 | Bulk insert | Implementado | `sql.bulkInsert` usa suporte nativo do pacote quando aplicavel. |
 | Streaming | Implementado | O app chama `streamQuery`; o `odbc_fast` tenta `streamQueryBatched` internamente antes do fallback. |
 | Worker pool assincrono `odbc_fast` | Implementado | Default configuravel: `min(poolSize persistido, CPU cores)`, minimo 1. |
-| Native pool global | Fora de escopo | So pode ser habilitado por `enableOdbcExperimentalDriverAdaptivePooling`; SQL Anywhere fica fora. |
+| Adaptive/native pool | Implementado | Habilitado por default para SQL Server/PostgreSQL elegiveis; SQL Anywhere fica fora. |
 | Result encoding columnar | Adiado | Row-major continua default compativel. Columnar deve ser opt-in por flag e benchmark. |
 
-## ODBC Fast 3.7.0
+## ODBC Fast 3.8.0
 
 O bootstrap do runtime inicializa `odbc.ServiceLocator` com:
 
@@ -30,6 +30,11 @@ O bootstrap do runtime inicializa `odbc.ServiceLocator` com:
 - `asyncWorkerCount`: calculado a partir do `poolSize` persistido em `OdbcConnectionSettings` e do numero de CPUs
 - `asyncMaxPendingRequests`: default `poolSize * 4`
 - `asyncBackpressureMode: failFast`
+
+`failFast` e intencional: a fila `SqlExecutionQueue` e a fronteira visivel de
+backpressure do app. Os presets `OdbcUsageProfile` do pacote continuam uteis
+como referencia, mas o app usa tuning explicito para alinhar workers ao pool
+persistido pelo usuario.
 
 Variaveis de ambiente:
 
@@ -121,6 +126,20 @@ Ou pelo wrapper local:
 .\tool\odbc_async_benchmark.ps1
 ```
 
+Para validar streaming batched-first do `odbc_fast 3.8.0`:
+
+```powershell
+.\tool\odbc_streaming_benchmark.ps1
+```
+
+O wrapper usa a query longa configurada para o driver quando
+`ODBC_STREAM_BENCH_QUERY` nao estiver definido. Para comparar SQL Anywhere, SQL
+Server e PostgreSQL em uma unica rodada, use:
+
+```powershell
+.\tool\odbc_driver_matrix_benchmark.ps1
+```
+
 No Windows, o fluxo consolidado de validacao operacional pode ser executado via:
 
 ```powershell
@@ -131,6 +150,11 @@ No Windows, o fluxo consolidado de validacao operacional pode ser executado via:
 Tambem rode `RUN_ODBC_BURST_TESTS=true` com DSN representativo e query longa
 para comparar throughput, p95/p99, queue wait, pending requests dos workers e
 timeouts antes/depois.
+
+O fluxo `-All` grava snapshots `health_burst_*_before/after.json` e logs
+`driver_matrix_*` no diretorio da validacao. Use
+`batch.bulk_insert_recommended_total` para identificar batches grandes de
+`INSERT` que devem migrar para `sql.bulkInsert`.
 
 Para registrar os resultados observados e a decisao final de tuning, use
 `docs/architecture/odbc_operational_validation_runbook.md`.

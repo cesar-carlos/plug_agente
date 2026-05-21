@@ -267,9 +267,9 @@ class FeatureFlags {
   /// When false, SQL investigation feed is not recorded or shown (reduces exposure of SQL text).
   bool get enableDashboardSqlInvestigationFeed => _prefs.getBool(_keyEnableDashboardSqlInvestigationFeed) ?? true;
 
-  /// Whether eligible drivers may use the experimental adaptive ODBC pool selector.
+  /// Whether eligible drivers may use the adaptive ODBC pool selector.
   bool get enableOdbcExperimentalDriverAdaptivePooling =>
-      _prefs.getBool(_keyEnableOdbcExperimentalDriverAdaptivePooling) ?? false;
+      _prefs.getBool(_keyEnableOdbcExperimentalDriverAdaptivePooling) ?? true;
 
   Future<void> setEnableOdbcExperimentalDriverAdaptivePooling(bool value) async {
     await _prefs.setBool(_keyEnableOdbcExperimentalDriverAdaptivePooling, value);
@@ -411,7 +411,7 @@ class FeatureFlags {
     await setRequireIncomingPayloadSignatures(false);
     await setEnableOdbcPaginatedSqlDebugLog(false);
     await setEnableDashboardSqlInvestigationFeed(true);
-    await setEnableOdbcExperimentalDriverAdaptivePooling(false);
+    await setEnableOdbcExperimentalDriverAdaptivePooling(true);
     await setEnableHubHardReloginRecovery(true);
     await setHubHardReloginFailureThreshold(3);
     await setEnableAgentActions(true);

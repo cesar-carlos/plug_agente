@@ -32,6 +32,20 @@ class SettingsFeedback {
     );
   }
 
+  static Future<void> showWarning({
+    required BuildContext context,
+    required String title,
+    required String message,
+    VoidCallback? onConfirm,
+  }) {
+    return MessageModal.showWarning<void>(
+      context: context,
+      title: title,
+      message: message,
+      onConfirm: onConfirm,
+    );
+  }
+
   static Future<void> showError({
     required BuildContext context,
     required String title,

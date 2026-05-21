@@ -781,6 +781,7 @@
   "msgOdbcDriverNameRequired": "ODBC Driver name is required",
   "msgConnectionCheckFailed": "Could not connect to database. Check credentials and settings.",
   "btnOk": "OK",
+  "btnClose": "Close",
   "btnCancel": "Cancel",
   "queryNoResults": "No results",
   "queryNoResultsMessage": "Execute a SELECT query to see results here.",

@@ -3758,6 +3758,12 @@ abstract class AppLocalizations {
   /// **'OK'**
   String get btnOk;
 
+  /// No description provided for @btnClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get btnClose;
+
   /// No description provided for @btnCancel.
   ///
   /// In en, this message translates to:

@@ -448,9 +448,9 @@ void main() async {
         expect(txMap['failed_commands'], 0);
         expect(txMap['successful_commands'], 2);
         expect(
-          h.metrics.transactionalBatchDirectPathCount,
+          h.metrics.transactionalBatchDirectPathCount + h.metrics.transactionalBatchNativePoolPathCount,
           greaterThanOrEqualTo(1),
-          reason: 'transactional batch should use direct ODBC path',
+          reason: 'transactional batch should use a tracked guarded path',
         );
       },
       skip: skipUnlessDsn != false

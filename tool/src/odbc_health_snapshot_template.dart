@@ -199,6 +199,10 @@ Future<Map<String, Object?>> buildOdbcHealthSnapshotTemplate({
     'batch': <String, Object>{
       'read_only_parallel_total': 0,
       'read_only_parallel_capped_total': 0,
+      'transactional_direct_total': 0,
+      'transactional_native_pool_total': 0,
+      'transactional_native_pool_fallback_total': 0,
+      'bulk_insert_recommended_total': 0,
       'last_requested_parallelism': 0,
       'last_effective_parallelism': 0,
       'parallel_global_wait_avg_ms': 0.0,

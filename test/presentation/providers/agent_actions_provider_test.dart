@@ -153,6 +153,32 @@ void main() {
     expect(repository.savedExecutions, isEmpty);
   });
 
+  test('caches filtered definition list until provider state changes', () async {
+    repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    repository.definitions['action-2'] = const AgentActionDefinition(
+      id: 'action-2',
+      name: 'Other command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'echo ok'),
+    );
+
+    await provider.load();
+
+    final first = provider.filteredDefinitions;
+    final second = provider.filteredDefinitions;
+    expect(identical(first, second), isTrue);
+
+    provider.setDefinitionSearchQuery('Other');
+    final third = provider.filteredDefinitions;
+    expect(identical(first, third), isFalse);
+    expect(third.map((definition) => definition.id), contains('action-2'));
+  });
+
   test('loads triggers for the selected action after refresh', () async {
     repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',
@@ -528,7 +554,16 @@ void main() {
     );
   });
 
-  test('should warn when com object runner is registered but no handlers are configured', () {
+  test('should warn when a com object action exists but no handlers are configured', () async {
+    repository.definitions['com-action'] = const AgentActionDefinition(
+      id: 'com-action',
+      name: 'COM action',
+      state: AgentActionState.active,
+      config: ComObjectActionConfig(
+        progId: 'Data7.Application',
+        memberName: 'Run',
+      ),
+    );
     final runnerRegistry = AgentActionLocalRunnerRegistry([
       const _FakeAgentActionLocalRunner(),
       const _FakeComObjectLocalRunner(),
@@ -542,7 +577,26 @@ void main() {
       comObjectInvocationDiagnostics: const _FakeComObjectInvocationDiagnostics(),
     );
 
+    await providerWithCom.load();
+
     expect(providerWithCom.shouldWarnComObjectHandlersMissing, isTrue);
+  });
+
+  test('should not warn com object handlers when no com object actions exist', () {
+    final runnerRegistry = AgentActionLocalRunnerRegistry([
+      const _FakeAgentActionLocalRunner(),
+      const _FakeComObjectLocalRunner(),
+    ]);
+    final providerWithCom = _buildProvider(
+      repository: repository,
+      featureFlags: featureFlags,
+      executionQueue: executionQueue,
+      developerData7ConnectionGateway: developerData7ConnectionGateway,
+      runnerRegistry: runnerRegistry,
+      comObjectInvocationDiagnostics: const _FakeComObjectInvocationDiagnostics(),
+    );
+
+    expect(providerWithCom.shouldWarnComObjectHandlersMissing, isFalse);
   });
 
   test('should not warn com object handlers when registry has handlers', () {
@@ -894,7 +948,7 @@ void main() {
     );
   });
 
-  test('should filter saved actions by type and search query', () async {
+  test('should filter saved actions by type, state and search query', () async {
     repository.definitions['cmd'] = const AgentActionDefinition(
       id: 'cmd',
       name: 'Backup command',
@@ -904,7 +958,7 @@ void main() {
     repository.definitions['email'] = const AgentActionDefinition(
       id: 'email',
       name: 'Notify ops',
-      state: AgentActionState.active,
+      state: AgentActionState.paused,
       config: EmailActionConfig(
         smtpProfileId: 'smtp-local',
         from: 'agent@example.com',
@@ -921,10 +975,20 @@ void main() {
     expect(provider.filteredDefinitions.map((definition) => definition.id), ['email']);
 
     provider.setDefinitionTypeFilter(null);
+    provider.setDefinitionStateFilter(AgentActionState.paused);
+
+    expect(provider.filteredDefinitions.map((definition) => definition.id), ['email']);
+
+    provider.setDefinitionStateFilter(null);
     provider.selectAction('cmd');
     provider.setDefinitionSearchQuery('backup');
 
     expect(provider.filteredDefinitions.map((definition) => definition.id), ['cmd']);
+
+    provider.clearDefinitionFilters();
+
+    expect(provider.hasDefinitionListFilters, isFalse);
+    expect(provider.filteredDefinitions.map((definition) => definition.id), ['cmd', 'email']);
   });
 
   test('should filter execution history by failure phase', () async {
@@ -1074,7 +1138,8 @@ AgentActionsProvider _buildProvider({
   IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
   AgentActionTriggerScheduler? triggerScheduler,
 }) {
-  final runners = runnerRegistry ??
+  final runners =
+      runnerRegistry ??
       AgentActionLocalRunnerRegistry([
         const _FakeAgentActionLocalRunner(),
         const _FakeDeveloperActionLocalRunner(),

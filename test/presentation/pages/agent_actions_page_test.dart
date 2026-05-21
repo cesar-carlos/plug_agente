@@ -76,6 +76,36 @@ Finder _filledButtonWithText(String text) {
   );
 }
 
+Future<void> _openTab(WidgetTester tester, String label) async {
+  await tester.tap(find.text(label).first);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openCreateActionDialog(
+  WidgetTester tester,
+  AppLocalizations l10n,
+) async {
+  await tester.tap(find.widgetWithText(FilledButton, l10n.agentActionsFormNew).first);
+  await tester.pumpAndSettle();
+  expect(find.byType(ContentDialog), findsOneWidget);
+}
+
+Future<void> _openSelectedActionDialog(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_more_action-1')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_edit_action-1')));
+  await tester.pumpAndSettle();
+  expect(find.byType(ContentDialog), findsOneWidget);
+}
+
+Future<void> _openActionDetailsDialog(WidgetTester tester, String actionId) async {
+  await tester.tap(find.byKey(ValueKey<String>('agent_action_definition_more_$actionId')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey<String>('agent_action_definition_details_$actionId')));
+  await tester.pumpAndSettle();
+  expect(find.byType(ContentDialog), findsOneWidget);
+}
+
 void main() {
   late AppLocalizations ptL10n;
 
@@ -104,7 +134,7 @@ void main() {
     expect(find.text(ptL10n.agentActionsFormCommand), findsNothing);
   });
 
-  testWidgets('renders empty state and command line form', (tester) async {
+  testWidgets('renders empty state and opens command line form dialog', (tester) async {
     final harness = _AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -113,9 +143,19 @@ void main() {
 
     expect(find.text(ptL10n.navAgentActions), findsWidgets);
     expect(find.text(ptL10n.agentActionsEmptyActions), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsNothing);
+
+    await _openCreateActionDialog(tester, ptL10n);
+
     expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormName), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormCommand), findsOneWidget);
+
+    Navigator.pop(tester.element(find.byType(ContentDialog)));
+    await tester.pumpAndSettle();
+
+    await _openTab(tester, ptL10n.configTabPreferences);
+
     expect(find.text(ptL10n.agentActionsRetentionTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionEnvVariables), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionSave), findsOneWidget);
@@ -127,6 +167,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.configTabPreferences);
 
     await tester.enterText(
       _agentActionFormTextBox(ptL10n.agentActionsRetentionExecutionHistory),
@@ -166,6 +207,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.configTabPreferences);
 
     expect(find.text(ptL10n.agentActionsRetentionUseEnvDefaults), findsOneWidget);
 
@@ -185,7 +227,7 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
   });
 
-  testWidgets('shows maintenance mode info bar when maintenance is enabled', (tester) async {
+  testWidgets('shows maintenance mode info modal when maintenance toggle is enabled', (tester) async {
     final harness = _AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -194,11 +236,18 @@ void main() {
 
     expect(find.text(ptL10n.agentActionsMaintenanceModeInfoTitle), findsNothing);
 
-    await harness.provider.setMaintenanceMode(enabled: true);
+    await tester.tap(find.byType(ToggleSwitch).first);
     await tester.pumpAndSettle();
 
     expect(find.text(ptL10n.agentActionsMaintenanceModeInfoTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsMaintenanceModeInfoMessage), findsOneWidget);
+    expect(find.byType(ContentDialog), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsMaintenanceMode));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsMaintenanceModeInfoTitle), findsNothing);
+    await _openTab(tester, ptL10n.configTabPreferences);
     expect(find.text(ptL10n.agentActionsSummaryMaintenanceActive), findsOneWidget);
   });
 
@@ -214,8 +263,12 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
-    final addTrigger = find.widgetWithText(Button, ptL10n.agentActionsTriggerAdd);
+    final addTrigger = find.descendant(
+      of: find.byType(ContentDialog),
+      matching: find.widgetWithText(Button, ptL10n.agentActionsTriggerAdd),
+    );
     expect(tester.widget<Button>(addTrigger).onPressed, isNotNull);
 
     await harness.provider.setMaintenanceMode(enabled: true);
@@ -238,12 +291,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
-
-    await tester.drag(
-      find.byKey(const ValueKey<String>('agent_actions_detail_scroll')),
-      const Offset(0, -1200),
-    );
-    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledMessage), findsOneWidget);
@@ -272,6 +320,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.configTabPreferences);
 
     expect(find.text('Runtime Detection'), findsOneWidget);
     expect(find.textContaining('runtime_mode: degraded', findRichText: true), findsWidgets);
@@ -295,7 +344,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Run command'), findsWidgets);
-    expect(find.byKey(const ValueKey<String>('agent_actions_detail_scroll')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('agent_actions_detail_scroll')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('agent_action_definition_more_action-1')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -320,7 +370,21 @@ void main() {
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey<String>('agent_actions_detail_scroll')), findsOneWidget);
+    expect(find.text('Run command'), findsWidgets);
+    expect(find.byKey(const ValueKey<String>('agent_actions_detail_scroll')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps action editor dialog stable in compact viewport', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(920, 680));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, ptL10n.agentActionsFormSave), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -349,6 +413,7 @@ void main() {
 
     await harness.provider.refreshTriggersForSelection();
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsTriggersTitle), findsOneWidget);
     expect(find.text('Morning'), findsOneWidget);
@@ -362,6 +427,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
 
     final nameField = _agentActionFormTextBox(ptL10n.agentActionsFormName);
     final commandField = _agentActionFormTextBox(ptL10n.agentActionsFormCommand);
@@ -372,11 +438,6 @@ void main() {
     await tester.enterText(commandField, 'dir');
 
     final saveAction = _filledButtonWithText(ptL10n.agentActionsFormSave);
-    await tester.drag(
-      find.byKey(const ValueKey<String>('agent_actions_detail_scroll')),
-      const Offset(0, -2200),
-    );
-    await tester.pumpAndSettle();
     tester.widget<FilledButton>(saveAction).onPressed!.call();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -384,7 +445,38 @@ void main() {
 
     expect(harness.repository.definitions, hasLength(1));
     expect(find.text('Run dir'), findsWidgets);
-    expect(find.text(ptL10n.agentActionsFormEditTitle), findsOneWidget);
+    expect(find.byType(ContentDialog), findsNothing);
+  });
+
+  testWidgets('keeps action dialog open when validation fails', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    tester.widget<FilledButton>(_filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ContentDialog), findsNWidgets(2));
+    expect(find.text(ptL10n.agentActionsValidationTitle), findsOneWidget);
+    expect(
+      find.textContaining(ptL10n.formFieldRequired(ptL10n.agentActionsFormName)),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(ptL10n.formFieldRequired(ptL10n.agentActionsFormCommand)),
+      findsOneWidget,
+    );
+    expect(harness.repository.definitions, isEmpty);
+
+    Navigator.pop(tester.element(find.text(ptL10n.agentActionsValidationTitle)));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ContentDialog), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
   });
 
   testWidgets('renders developer form for selected developer action', (tester) async {
@@ -411,6 +503,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditDeveloperTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormExecutorPath), findsOneWidget);
@@ -459,6 +552,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     final configPathField = _agentActionFormTextBox(ptL10n.agentActionsFormData7ConfigPath);
     final shortcutButton = find.ancestor(
@@ -502,6 +596,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(
       find.text(ptL10n.agentActionsFormExecutorPathHintExpectedFileName),
@@ -542,6 +637,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(
       find.text(ptL10n.agentActionsFormExecutorPathHintMissing),
@@ -579,6 +675,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(
       find.text(
@@ -617,6 +714,7 @@ void main() {
 
     await tester.tap(find.text(ptL10n.agentActionsTestSelected));
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.byKey(const ValueKey('agent_actions_test_preview')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsTestPreviewTitle), findsOneWidget);
@@ -661,6 +759,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     await tester.enterText(
       _agentActionFormTextBox(ptL10n.agentActionsFormConnectionSearch),
@@ -696,6 +795,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormConnectionChangedTitle), findsOneWidget);
@@ -731,6 +831,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     await tester.enterText(
       _agentActionFormTextBox(ptL10n.agentActionsFormConnectionId),
@@ -774,6 +875,14 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      _agentActionFormTextBox(ptL10n.agentActionsFormConnectionId),
+      '34512A51-672C-4ECE-9991-F43E175E7A8B',
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('agent_actions_developer_connection_missing_info_bar')), findsOneWidget);
@@ -827,6 +936,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     expect(find.text('Run command'), findsWidgets);
     expect(find.text(ptL10n.agentActionsDiagnosticsTitle), findsOneWidget);
@@ -963,6 +1073,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     expect(find.text('Chunked output'), findsWidgets);
     expect(
@@ -1000,6 +1111,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
 
     final typeCombo = find.byWidgetPredicate((widget) => widget is ComboBox<AgentActionType>);
     expect(typeCombo, findsOneWidget);
@@ -1032,6 +1144,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsRiskRunnerUnavailable), findsWidgets);
     expect(find.text(ptL10n.agentActionsActionTypeUnavailableTitle), findsOneWidget);
@@ -1072,6 +1185,149 @@ void main() {
     expect(find.text('Notify ops'), findsWidgets);
   });
 
+  testWidgets('clears saved action filters from the grid controls', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['cmd'] = const AgentActionDefinition(
+      id: 'cmd',
+      name: 'Backup command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    harness.repository.definitions['email'] = const AgentActionDefinition(
+      id: 'email',
+      name: 'Notify ops',
+      state: AgentActionState.paused,
+      config: EmailActionConfig(
+        smtpProfileId: 'smtp-local',
+        from: 'agent@example.com',
+        to: <String>['ops@example.com'],
+        subjectTemplate: 'Done',
+        bodyTemplate: 'Finished',
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    harness.provider.selectAction('email');
+    harness.provider
+      ..setDefinitionTypeFilter(AgentActionType.email)
+      ..setDefinitionStateFilter(AgentActionState.paused)
+      ..setDefinitionSearchQuery('notify');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Backup command'), findsNothing);
+    expect(find.text('Notify ops'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(Button, ptL10n.ctButtonClearFilters));
+    await tester.pumpAndSettle();
+
+    expect(harness.provider.hasDefinitionListFilters, isFalse);
+    expect(find.text('Backup command'), findsWidgets);
+    expect(find.text('Notify ops'), findsWidgets);
+  });
+
+  testWidgets('restores persisted action page tab and filters', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    await harness.appSettingsStore.setValues({
+      'agent_actions.ui.selected_tab': 1,
+      'agent_actions.ui.definition_type_filter': AgentActionType.email.name,
+      'agent_actions.ui.definition_state_filter': AgentActionState.paused.name,
+      'agent_actions.ui.definition_search': 'notify',
+      'agent_actions.ui.history_status_filter': AgentActionExecutionStatus.failed.name,
+      'agent_actions.ui.history_source_filter': AgentActionRequestSource.localUi.name,
+      'agent_actions.ui.history_period_filter': AgentActionHistoryPeriod.last24Hours.name,
+      'agent_actions.ui.history_search': 'execution-2',
+    });
+    harness.repository.definitions['email'] = const AgentActionDefinition(
+      id: 'email',
+      name: 'Notify ops',
+      state: AgentActionState.paused,
+      config: EmailActionConfig(
+        smtpProfileId: 'smtp-local',
+        from: 'agent@example.com',
+        to: <String>['ops@example.com'],
+        subjectTemplate: 'Done',
+        bodyTemplate: 'Finished',
+      ),
+    );
+    harness.repository.definitions['cmd'] = const AgentActionDefinition(
+      id: 'cmd',
+      name: 'Backup command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsHistoryFilterStatus), findsOneWidget);
+    expect(harness.provider.definitionTypeFilter, AgentActionType.email);
+    expect(harness.provider.definitionStateFilter, AgentActionState.paused);
+    expect(harness.provider.definitionSearchQuery, 'notify');
+    expect(harness.provider.historyStatusFilter, AgentActionExecutionStatus.failed);
+    expect(harness.provider.historySourceFilter, AgentActionRequestSource.localUi);
+    expect(harness.provider.historyPeriodFilter, AgentActionHistoryPeriod.last24Hours);
+    expect(harness.provider.historySearchQuery, 'execution-2');
+
+    await _openTab(tester, ptL10n.agentActionsSummaryActions);
+
+    expect(find.text('Notify ops'), findsWidgets);
+    expect(find.text('Backup command'), findsNothing);
+  });
+
+  testWidgets('runs, tests and deletes an action from row commands', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(const ValueKey<String>('agent_action_definition_row_action-1'));
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(FluentIcons.play)));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.executions.values.any((execution) => execution.actionId == 'action-1'), isTrue);
+
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(FluentIcons.test_beaker)));
+    await tester.pumpAndSettle();
+
+    expect(harness.provider.lastTestedActionId, 'action-1');
+
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(FluentIcons.more)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(FluentIcons.delete).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsDeleteConfirm));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.definitions, isNot(contains('action-1')));
+  });
+
+  testWidgets('Ctrl+N opens the action editor when the page has focus', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ContentDialog), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+  });
+
   testWidgets('filters execution history by execution id search query', (tester) async {
     final harness = _AgentActionsPageHarness();
     harness.repository.definitions['action-1'] = const AgentActionDefinition(
@@ -1102,6 +1358,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     harness.provider.setHistorySearchQuery('trace-keep');
     await tester.pumpAndSettle();
@@ -1140,6 +1397,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     harness.provider.setHistoryFailurePhaseFilter('process_exit');
     await tester.pumpAndSettle();
@@ -1160,6 +1418,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsSecretPlaceholdersTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRiskSecretPlaceholders), findsWidgets);
@@ -1178,6 +1437,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsSecretsSectionTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsSecretStatusMissing), findsOneWidget);
@@ -1197,13 +1457,18 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     await tester.tap(
       find.byKey(const ValueKey<String>('agent_action_secret_configure_button_api_token')),
     );
     await tester.pumpAndSettle();
 
-    final dialog = find.byType(ContentDialog);
+    expect(find.byType(ContentDialog), findsNWidgets(2));
+    final dialog = find.ancestor(
+      of: find.text(ptL10n.agentActionsSecretConfigureTitle('api_token')),
+      matching: find.byType(ContentDialog),
+    );
     expect(dialog, findsOneWidget);
 
     await tester.enterText(
@@ -1240,6 +1505,15 @@ void main() {
       comObjectInvocationDiagnostics: const _FakeComObjectInvocationDiagnostics(),
       includeComObjectRunner: true,
     );
+    harness.repository.definitions['com-action'] = const AgentActionDefinition(
+      id: 'com-action',
+      name: 'COM action',
+      state: AgentActionState.active,
+      config: ComObjectActionConfig(
+        progId: 'Data7.Application',
+        memberName: 'Run',
+      ),
+    );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await tester.pumpWidget(harness.buildWidget());
@@ -1247,6 +1521,22 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsComObjectHandlersMissingMessage), findsOneWidget);
+    await _openTab(tester, ptL10n.configTabPreferences);
+    expect(find.text(ptL10n.agentActionsSummaryComHandlersNone), findsOneWidget);
+  });
+
+  testWidgets('hides com object handlers warning when no com actions exist', (tester) async {
+    final harness = _AgentActionsPageHarness(
+      comObjectInvocationDiagnostics: const _FakeComObjectInvocationDiagnostics(),
+      includeComObjectRunner: true,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsNothing);
+    await _openTab(tester, ptL10n.configTabPreferences);
     expect(find.text(ptL10n.agentActionsSummaryComHandlersNone), findsOneWidget);
   });
 
@@ -1261,6 +1551,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsNothing);
+    await _openTab(tester, ptL10n.configTabPreferences);
     expect(find.text('2'), findsOneWidget);
     expect(find.text(ptL10n.agentActionsSummaryComHandlers), findsOneWidget);
   });
@@ -1334,6 +1625,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsRemoteAuditTitle);
 
     final showInHistory = find.text(ptL10n.agentActionsRemoteAuditShowInHistory);
     await tester.ensureVisible(showInHistory);
@@ -1377,6 +1669,7 @@ void main() {
     expect(find.text(ptL10n.agentActionsRiskRemoteReapproval), findsWidgets);
     expect(find.text(ptL10n.agentActionsRiskSensitiveOutput), findsWidgets);
     expect(find.text(ptL10n.agentActionsRiskLeaveProcessRunning), findsWidgets);
+    await _openSelectedActionDialog(tester);
     expect(find.byKey(const ValueKey('agent_actions_remote_reapproval_info_bar')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormRemoteReapprovalRequiredTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormRemoteReapprovalRequiredMessage), findsOneWidget);
@@ -1388,6 +1681,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormCaptureStdout));
 
@@ -1415,6 +1709,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormCaptureStdout));
 
@@ -1448,6 +1743,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormMaxConcurrent));
 
@@ -1481,6 +1777,7 @@ void main() {
 
     await tester.tap(find.text(ptL10n.agentActionsTestSelected));
     await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.byKey(const ValueKey('agent_actions_test_preview')), findsOneWidget);
     expect(
@@ -1512,6 +1809,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormMaxConcurrent));
 
@@ -1528,6 +1826,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
 
     final stdoutEncodingLabel = find.text(ptL10n.agentActionsFormStdoutEncoding);
     await tester.ensureVisible(stdoutEncodingLabel);
@@ -1555,6 +1854,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormStdoutEncoding));
 
@@ -1603,6 +1903,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
+    await _openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     const copySupport = ValueKey<String>('execution_support_copy_button_execution-1');
     final copySupportFinder = find.byKey(copySupport);
@@ -1772,6 +2073,10 @@ class _AgentActionsPageHarness {
       getIt.unregister<AgentActionRetentionSettings>();
     }
     getIt.registerSingleton<AgentActionRetentionSettings>(retentionSettings);
+    if (getIt.isRegistered<IAppSettingsStore>()) {
+      getIt.unregister<IAppSettingsStore>();
+    }
+    getIt.registerSingleton<IAppSettingsStore>(appSettingsStore);
 
     return FluentApp(
       locale: const Locale('pt'),

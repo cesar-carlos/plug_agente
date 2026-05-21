@@ -102,6 +102,10 @@ class AppDataGridScrollable<T> extends StatelessWidget {
     super.key,
     this.scrollController,
     this.emptyMessage,
+    this.rowKey,
+    this.isRowSelected,
+    this.onRowPressed,
+    this.rowHeight,
   });
 
   final List<AppGridColumn> columns;
@@ -109,6 +113,10 @@ class AppDataGridScrollable<T> extends StatelessWidget {
   final List<Widget> Function(T item) rowCells;
   final ScrollController? scrollController;
   final String? emptyMessage;
+  final Key Function(T item)? rowKey;
+  final bool Function(T item)? isRowSelected;
+  final ValueChanged<T>? onRowPressed;
+  final double? rowHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -134,12 +142,16 @@ class AppDataGridScrollable<T> extends StatelessWidget {
                 itemCount: rows.length,
                 itemBuilder: (context, index) {
                   return _AppDataGridRow<T>(
+                    key: rowKey?.call(rows[index]),
                     item: rows[index],
                     columns: columns,
                     cells: rowCells(rows[index]),
                     index: index,
                     strokeColor: strokeColor,
+                    height: rowHeight,
                     isLast: index == rows.length - 1,
+                    selected: isRowSelected?.call(rows[index]) ?? false,
+                    onPressed: onRowPressed == null ? null : () => onRowPressed!(rows[index]),
                   );
                 },
               ),
@@ -200,6 +212,9 @@ class _AppDataGridRow<T> extends StatelessWidget {
     required this.strokeColor,
     required this.isLast,
     this.height,
+    this.selected = false,
+    this.onPressed,
+    super.key,
   });
 
   final T item;
@@ -209,6 +224,8 @@ class _AppDataGridRow<T> extends StatelessWidget {
   final Color strokeColor;
   final bool isLast;
   final double? height;
+  final bool selected;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +235,12 @@ class _AppDataGridRow<T> extends StatelessWidget {
       'got ${cells.length}.',
     );
 
-    final rowColor = index.isEven ? Colors.transparent : FluentTheme.of(context).resources.subtleFillColorSecondary;
+    final theme = FluentTheme.of(context);
+    final rowColor = selected
+        ? theme.accentColor.withValues(alpha: 0.18)
+        : index.isEven
+        ? Colors.transparent
+        : theme.resources.subtleFillColorSecondary;
 
     final content = Row(
       children: List<Widget>.generate(
@@ -233,7 +255,7 @@ class _AppDataGridRow<T> extends StatelessWidget {
       ),
     );
 
-    return Container(
+    final row = Container(
       height: height,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -250,6 +272,23 @@ class _AppDataGridRow<T> extends StatelessWidget {
               ),
       ),
       child: content,
+    );
+
+    if (onPressed == null) {
+      return row;
+    }
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: row,
+        ),
+      ),
     );
   }
 }

@@ -14,6 +14,9 @@ Responder, com dados, a estas perguntas:
 - A fila SQL rejeita de forma controlada quando saturada?
 - O worker pool async do `odbc_fast` esta subdimensionado, equilibrado ou
   superdimensionado?
+- O pool adaptativo esta usando o caminho nativo somente em drivers elegiveis?
+- `service.streamQuery` continua usando o caminho batched-first do
+  `odbc_fast 3.8.0` sem regressao no workload local?
 - Ha sinais de gargalo no banco/driver em vez do app?
 
 ## Ambiente Validado
@@ -54,7 +57,8 @@ CIRCUIT_BREAKER_RESET_SEC=
 3. Rodar burst test opt-in.
 4. Coletar novo snapshot de `agent.getHealth`.
 5. Rodar benchmark async ODBC.
-6. Comparar resultados e decidir tuning.
+6. Rodar benchmark de streaming ODBC.
+7. Comparar resultados e decidir tuning.
 
 Atalho opcional no Windows:
 
@@ -78,6 +82,7 @@ Cada execucao cria uma subpasta timestampada com:
 - `smoke.log`
 - `burst.log`
 - `benchmark.log`
+- `streaming_benchmark.log`
 
 Os arquivos de log so aparecem para as etapas realmente executadas.
 O template JSON e um baseline local do shape atual de `agent.getHealth`; ainda
@@ -176,9 +181,83 @@ Registrar:
 | Timeouts | |
 | Observacoes | |
 
+## 4. Benchmark Streaming ODBC
+
+O app chama `service.streamQuery`; no `odbc_fast 3.8.0`, esse caminho tenta
+`streamQueryBatched` primeiro e usa o streaming legado apenas como fallback.
+Use o benchmark abaixo para comparar `streamQuery` e `streamQueryBatched` com
+o mesmo DSN/query.
+
+Comandos:
+
+```powershell
+dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
+```
+
+Ou via wrapper do repo:
+
+```powershell
+.\tool\odbc_streaming_benchmark.ps1
+```
+
+O wrapper usa `ODBC_STREAM_BENCH_QUERY` quando definido. Sem esse override, ele
+usa a query longa especifica do driver (`ODBC_INTEGRATION_LONG_QUERY_*`) ou a
+query longa generica. Nao valide streaming com resultado de 1 linha.
+
+Variaveis uteis:
+
+```env
+ODBC_STREAM_BENCH_QUERY=
+ODBC_STREAM_BENCH_FETCH_SIZE=1000
+ODBC_STREAM_BENCH_CHUNK_SIZE=65536
+ODBC_STREAM_BENCH_OUTPUT=text
+```
+
+Registrar:
+
+| Medida | Valor |
+| --- | --- |
+| `streamQuery` ms / rows/s | |
+| `streamQueryBatched` ms / rows/s | |
+| Fetch size | |
+| Chunk size | |
+| Observacoes | |
+
+## 5. Benchmark Por Driver
+
+Use a matriz quando houver mais de um DSN configurado ou quando a decisao de
+tuning envolver pool nativo/adaptativo:
+
+```powershell
+.\tool\odbc_driver_matrix_benchmark.ps1
+```
+
+O script roda async e streaming benchmarks para:
+
+- SQL Anywhere: `ODBC_TEST_DSN` / `ODBC_DSN`
+- SQL Server: `ODBC_TEST_DSN_SQL_SERVER` / `ODBC_DSN_SQL_SERVER`
+- PostgreSQL: `ODBC_TEST_DSN_POSTGRESQL` / `ODBC_DSN_POSTGRESQL`
+
+Leitura esperada:
+
+- SQL Anywhere deve permanecer no lease/direct path.
+- SQL Server/PostgreSQL podem justificar aumento de pool/workers se p95/p99 nao
+  piorarem e `transactional_native_pool_fallback_total` continuar baixo.
+- Driver sem DSN configurado e pulado, nao falha a validacao.
+
 ## Snapshot de Health
 
-Cole aqui um snapshot representativo antes e depois do burst:
+O fluxo `.\tool\run_odbc_operational_validation.ps1 -All` define
+`ODBC_BURST_HEALTH_SNAPSHOT_DIR` para o teste de burst e grava snapshots reais:
+
+```text
+health_burst_overflow_before.json
+health_burst_overflow_after.json
+health_burst_recovery_before.json
+health_burst_recovery_after.json
+```
+
+Se o burst nao for executado, colete manualmente um snapshot representativo:
 
 ```dart
 final health = await getIt<HealthService>().getHealthStatusAsync();
@@ -189,6 +268,12 @@ Campos mais importantes:
 
 - `odbc_runtime_tuning.async_worker_count`
 - `odbc_runtime_tuning.async_max_pending_requests`
+- `pool.effective_strategy`
+- `pool.native_eligible`
+- `pool.native_compatible_acquire_success_total`
+- `batch.transactional_native_pool_total`
+- `batch.transactional_native_pool_fallback_total`
+- `batch.bulk_insert_recommended_total`
 - `pool.active_count`
 - `pool.fallbacks_total`
 - `sql_queue.current_size`
@@ -217,8 +302,13 @@ Campos mais importantes:
 | --- | --- | --- | --- |
 | `odbc_runtime_tuning.async_worker_count` | | | |
 | `odbc_runtime_tuning.async_max_pending_requests` | | | |
+| `pool.effective_strategy` | | | |
+| `pool.native_eligible` | | | |
 | `pool.active_count` | | | |
 | `pool.fallbacks_total` | | | |
+| `batch.transactional_native_pool_total` | | | |
+| `batch.transactional_native_pool_fallback_total` | | | |
+| `batch.bulk_insert_recommended_total` | | | |
 | `sql_queue.rejections_total` | | | |
 | `sql_queue.timeouts_total` | | | |
 | `sql_queue.p95_wait_time_ms` | | | |

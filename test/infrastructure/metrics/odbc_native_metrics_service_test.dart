@@ -18,6 +18,8 @@ class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {
 
 class MockConnectionPool extends Mock implements IConnectionPool {}
 
+class MockConnectionPoolDiagnostics extends Mock implements IConnectionPool, IConnectionPoolDiagnostics {}
+
 const _asyncWorkerStats = AsyncWorkerStats(
   index: 0,
   activeRequests: 1,
@@ -296,6 +298,66 @@ void main() {
       final appPool = snapshot['app_pool'] as Map<String, dynamic>;
       expect(appPool['available'], isTrue);
       expect(appPool['active_connections'], 3);
+    });
+
+    test('should expose adaptive pool diagnostics in app and native pool snapshots', () async {
+      final pool = MockConnectionPoolDiagnostics();
+      service = OdbcNativeMetricsService(
+        mockService,
+        connectionPool: pool,
+        settings: MockOdbcConnectionSettings(),
+        runtimeTuning: runtimeTuning,
+        metricsCollector: metricsCollector,
+      );
+      when(() => mockService.getMetrics()).thenAnswer(
+        (_) async => const Success(
+          OdbcMetrics(
+            queryCount: 1,
+            errorCount: 0,
+            uptimeSecs: 10,
+            totalLatencyMillis: 5,
+            avgLatencyMillis: 5,
+          ),
+        ),
+      );
+      when(() => mockService.getPreparedStatementsMetrics()).thenAnswer(
+        (_) async => const Success(
+          PreparedStatementMetrics(
+            cacheSize: 0,
+            cacheMaxSize: 16,
+            cacheHits: 0,
+            cacheMisses: 0,
+            totalPrepares: 0,
+            totalExecutions: 0,
+            memoryUsageBytes: 0,
+            avgExecutionsPerStmt: 0,
+          ),
+        ),
+      );
+      when(pool.getHealthDiagnostics).thenReturn(
+        const <String, Object?>{
+          'strategy': 'adaptive_experimental',
+          'effective_strategy': 'native_compatible',
+          'native_eligible': true,
+        },
+      );
+      when(pool.getActiveCount).thenAnswer((_) async => const Success(2));
+      when(() => mockService.getAsyncWorkerPoolStats()).thenAnswer(
+        (_) async => const Success(_asyncWorkerPoolStats),
+      );
+
+      final result = await service.collectSnapshot();
+
+      expect(result.isSuccess(), isTrue);
+      final snapshot = result.getOrThrow();
+      final appPool = snapshot['app_pool'] as Map<String, dynamic>;
+      final nativePool = snapshot['native_pool'] as Map<String, dynamic>;
+      expect(appPool['active_connections'], 2);
+      expect(appPool['diagnostics'], containsPair('strategy', 'adaptive_experimental'));
+      expect(nativePool['available'], isTrue);
+      expect(nativePool['state_source'], 'pool_diagnostics');
+      expect(nativePool['effective_strategy'], 'native_compatible');
+      expect(nativePool['native_eligible'], isTrue);
     });
 
     test('should return typed failure when getMetrics fails', () async {

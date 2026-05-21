@@ -7,6 +7,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/iana_timezone_id_field.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:uuid/uuid.dart';
@@ -372,7 +373,12 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         final remoteError = provider.errorMessage;
 
         return ContentDialog(
-          title: Text(isEditing ? l10n.agentActionsTriggerEditorTitleEdit : l10n.agentActionsTriggerEditorTitleNew),
+          title: AppDialogTitleBar(
+            title: Text(isEditing ? l10n.agentActionsTriggerEditorTitleEdit : l10n.agentActionsTriggerEditorTitleNew),
+            closeTooltip: l10n.btnClose,
+            canClose: !provider.isSavingTrigger,
+            onClose: () => Navigator.pop(context),
+          ),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(

@@ -448,7 +448,6 @@ Future<void> setupDependencies({
     asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
     asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
     // Explicit because this runtime default is part of the ODBC tuning contract.
-    // ignore: avoid_redundant_argument_values
     asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
   );
   developer.log(

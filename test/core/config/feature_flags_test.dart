@@ -40,25 +40,25 @@ void main() {
       expect(flags.compressionThreshold, 4096);
     });
 
-    test('keeps experimental adaptive ODBC pooling disabled by default', () async {
+    test('enables adaptive ODBC pooling by default with persisted opt-out', () async {
       final store = InMemoryAppSettingsStore();
       final flags = FeatureFlags(store);
 
-      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isFalse);
-
-      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
-
       expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isTrue);
-      expect(store.getBool('feature_enable_odbc_experimental_driver_adaptive_pooling'), isTrue);
+
+      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(false);
+
+      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isFalse);
+      expect(store.getBool('feature_enable_odbc_experimental_driver_adaptive_pooling'), isFalse);
     });
 
-    test('resets experimental adaptive ODBC pooling to disabled default', () async {
+    test('resets adaptive ODBC pooling to enabled default', () async {
       final flags = FeatureFlags(InMemoryAppSettingsStore());
-      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(false);
 
       await flags.resetToDefaults();
 
-      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isFalse);
+      expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isTrue);
     });
 
     test('enables DB streaming path by default when socket chunking is enabled separately', () {

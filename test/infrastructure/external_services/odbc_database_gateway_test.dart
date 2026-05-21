@@ -1933,6 +1933,267 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
+      'should use native-compatible pool path for SQL Server transactional DML batch',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const nativeId = 'native-tx-1';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(nativeId));
+        when(() => nativePool.release(nativeId)).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.beginTransaction(
+            nativeId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(7));
+        when(
+          () => mockService.executeQuery(
+            'INSERT INTO audit_log (id) VALUES (1)',
+            connectionId: nativeId,
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: [],
+              rows: [],
+              rowCount: 1,
+            ),
+          ),
+        );
+        when(() => mockService.commitTransaction(nativeId, 7)).thenAnswer((_) async => const Success(unit));
+
+        final result = await nativeGateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'INSERT INTO audit_log (id) VALUES (1)')],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).called(1);
+        verifyNever(() => nativePool.acquire(connectionString, options: any(named: 'options')));
+        verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
+        expect(metrics.transactionalBatchNativePoolPathCount, 1);
+        expect(metrics.transactionalBatchDirectPathCount, 0);
+      },
+    );
+
+    test(
+      'should keep SQL Anywhere transactional DML batch on direct path',
+      () async {
+        const connectionString = 'Driver={SQL Anywhere 17};Server=localhost;';
+        const ownedId = 'owned-sqlanywhere-tx-1';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere 17',
+        );
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(8));
+        when(
+          () => mockService.executeQuery(
+            'INSERT INTO audit_log (id) VALUES (1)',
+            connectionId: ownedId,
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: [],
+              rows: [],
+              rowCount: 1,
+            ),
+          ),
+        );
+        when(() => mockService.commitTransaction(ownedId, 8)).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async => const Success(unit));
+
+        final result = await nativeGateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'INSERT INTO audit_log (id) VALUES (1)')],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        );
+        verify(() => mockService.connect(any(), options: any(named: 'options'))).called(1);
+        expect(metrics.transactionalBatchDirectPathCount, 1);
+        expect(metrics.transactionalBatchNativePoolPathCount, 0);
+      },
+    );
+
+    test(
+      'should fallback transactional DML batch to direct path when native begin fails',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const nativeId = 'native-tx-stale-1';
+        const ownedId = 'owned-tx-fallback-1';
+        final config = _buildConfig(connectionString);
+        final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+        final nativePool = MockNativeCompatibleConnectionPool();
+        final nativeGateway = OdbcDatabaseGateway(
+          mockConfigRepository,
+          mockService,
+          nativePool,
+          retryManager,
+          metrics,
+          mockSettings,
+          featureFlags: featureFlags,
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
+        when(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(nativeId));
+        when(() => nativePool.discard(nativeId)).thenAnswer((_) async => const Success(unit));
+        when(
+          () => nativePool.getActiveCount(
+            connectionString: any(named: 'connectionString'),
+          ),
+        ).thenAnswer((_) async => const Success(0));
+        when(() => nativePool.recycle(connectionString)).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.beginTransaction(
+            nativeId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const Failure(
+            ConnectionError(
+              message: 'Invalid connection ID: stale transaction handle',
+              nativeCode: 100000,
+            ),
+          ),
+        );
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          ),
+        );
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(9));
+        when(
+          () => mockService.executeQuery(
+            'INSERT INTO audit_log (id) VALUES (1)',
+            connectionId: ownedId,
+          ),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(
+              columns: [],
+              rows: [],
+              rowCount: 1,
+            ),
+          ),
+        );
+        when(() => mockService.commitTransaction(ownedId, 9)).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async => const Success(unit));
+
+        final result = await nativeGateway.executeBatch(
+          config.agentId,
+          const [SqlCommand(sql: 'INSERT INTO audit_log (id) VALUES (1)')],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => nativePool.acquireNativeCompatible(
+            connectionString,
+            leaseFallbackOptions: any(named: 'leaseFallbackOptions'),
+            acquireTimeout: any(named: 'acquireTimeout'),
+          ),
+        ).called(1);
+        verify(() => mockService.connect(any(), options: any(named: 'options'))).called(1);
+        expect(metrics.transactionalBatchNativePoolFallbackCount, 1);
+        expect(metrics.transactionalBatchDirectPathCount, 1);
+      },
+    );
+
+    test(
       'should retry transactional batch when transaction start fails with structured invalid connection id',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -2316,6 +2577,59 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
             any(),
             any(),
           ),
+        );
+      },
+    );
+
+    test(
+      'should recommend sql.bulkInsert for large homogeneous insert batches',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const pooledConnectionId = 'pool-batch-insert-recommendation-1';
+        final config = _buildConfig(connectionString);
+        final commands = List<SqlCommand>.generate(
+          50,
+          (index) => SqlCommand(sql: 'INSERT INTO customers (id) VALUES ($index)'),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: [],
+              rows: [],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          commands,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrThrow(), hasLength(commands.length));
+        expect(metrics.batchBulkInsertRecommendedCount, 1);
+        expect(
+          metrics.getSnapshot()['recent_diagnostic_reasons'],
+          contains('batch:batch_bulk_insert_recommended'),
         );
       },
     );
@@ -3486,5 +3800,3 @@ Config _buildConfig(
     agentId: 'agent-1',
   );
 }
-
-

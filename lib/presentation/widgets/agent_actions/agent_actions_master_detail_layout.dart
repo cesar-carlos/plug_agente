@@ -10,8 +10,8 @@ class AgentActionsMasterDetailLayout extends StatelessWidget {
     super.key,
   });
 
-  static const double _stackedBreakpoint = 1120;
-  static const double _masterPanelWidth = 360;
+  static const double _stackedBreakpoint = 1180;
+  static const double _masterPanelWidth = 720;
   static const double _minStackedMasterHeight = 220;
   static const double _maxStackedMasterHeight = 320;
 

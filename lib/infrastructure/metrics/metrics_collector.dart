@@ -31,6 +31,9 @@ class MetricsCollector
   static const String _multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
   static const String _multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';
   static const String _transactionalBatchDirectPathCounter = 'transactional_batch_direct_path';
+  static const String _transactionalBatchNativePoolPathCounter = 'transactional_batch_native_pool_path';
+  static const String _transactionalBatchNativePoolFallbackCounter = 'transactional_batch_native_pool_fallback';
+  static const String _batchBulkInsertRecommendedCounter = 'batch_bulk_insert_recommended';
   static const String _directConnectionFallbackCounter = 'direct_connection_fallback';
   static const String _odbcNativePoolFallbackCounter = 'odbc_native_pool_fallback';
   static const String _odbcNativePoolOptionsSkipCounter = 'odbc_native_pool_options_skip';
@@ -211,6 +214,10 @@ class MetricsCollector
   int get multiResultPoolVacuousFallbackCount => _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
   int get multiResultDirectStillVacuousCount => _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
   int get transactionalBatchDirectPathCount => _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
+  int get transactionalBatchNativePoolPathCount => _eventCounters[_transactionalBatchNativePoolPathCounter] ?? 0;
+  int get transactionalBatchNativePoolFallbackCount =>
+      _eventCounters[_transactionalBatchNativePoolFallbackCounter] ?? 0;
+  int get batchBulkInsertRecommendedCount => _eventCounters[_batchBulkInsertRecommendedCounter] ?? 0;
   int get directConnectionFallbackCount => _eventCounters[_directConnectionFallbackCounter] ?? 0;
   int get odbcNativePoolFallbackCount => _eventCounters[_odbcNativePoolFallbackCounter] ?? 0;
   int get odbcNativePoolOptionsSkipCount => _eventCounters[_odbcNativePoolOptionsSkipCounter] ?? 0;
@@ -603,6 +610,19 @@ class MetricsCollector
   void recordMultiResultDirectStillVacuous() => _incrementEventCounter(_multiResultDirectStillVacuousCounter);
 
   void recordTransactionalBatchDirectPath() => _incrementEventCounter(_transactionalBatchDirectPathCounter);
+
+  void recordTransactionalBatchNativePoolPath() => _incrementEventCounter(_transactionalBatchNativePoolPathCounter);
+
+  void recordTransactionalBatchNativePoolFallback() =>
+      _incrementEventCounter(_transactionalBatchNativePoolFallbackCounter);
+
+  void recordBatchBulkInsertRecommended() {
+    _incrementEventCounter(_batchBulkInsertRecommendedCounter);
+    recordDiagnosticReason(
+      category: 'batch',
+      reason: RpcSqlDiagnosticsConstants.batchBulkInsertRecommendedReason,
+    );
+  }
 
   void recordDirectConnectionFallback() => _incrementEventCounter(_directConnectionFallbackCounter);
 

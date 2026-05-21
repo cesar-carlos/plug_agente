@@ -3,6 +3,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_content_dialog.dart';
 
 enum MessageType { info, success, warning, error, confirmation }
 
@@ -86,6 +87,23 @@ class MessageModal extends StatelessWidget {
     );
   }
 
+  static Future<T?> showWarning<T>({
+    required BuildContext context,
+    required String title,
+    required String message,
+    VoidCallback? onConfirm,
+    String? confirmText,
+  }) {
+    return show<T>(
+      context: context,
+      title: title,
+      message: message,
+      type: MessageType.warning,
+      onConfirm: onConfirm,
+      confirmText: confirmText,
+    );
+  }
+
   static Future<T?> showError<T>({
     required BuildContext context,
     required String title,
@@ -127,23 +145,13 @@ class MessageModal extends StatelessWidget {
         iconData = FluentIcons.info;
     }
 
-    return ContentDialog(
-      title: Row(
-        children: [
-          Icon(iconData, color: feedbackColors.accent, size: 24),
-          if (title != null) ...[
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                title!,
-                style: context.sectionTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ],
-      ),
+    final l10n = AppLocalizations.of(context)!;
+
+    return AppContentDialog(
+      leading: Icon(iconData, color: feedbackColors.accent, size: 24),
+      title: Text(title ?? ''),
+      closeTooltip: l10n.btnClose,
+      onClose: () => Navigator.of(context).pop(false),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

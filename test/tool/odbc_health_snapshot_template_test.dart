@@ -14,6 +14,7 @@ void main() {
       final pool = snapshot['pool']! as Map<String, Object?>;
       final sqlQueue = snapshot['sql_queue']! as Map<String, Object?>;
       final timeouts = snapshot['timeouts']! as Map<String, Object?>;
+      final batch = snapshot['batch']! as Map<String, Object?>;
 
       expect(runtime['pool_size'], 4);
       expect(runtime['async_worker_count'], 4);
@@ -24,6 +25,10 @@ void main() {
       expect(sqlQueue['max_workers'], 4);
       expect(sqlQueue['enqueue_timeout_seconds'], 5);
       expect(timeouts['pool_total'], 0);
+      expect(batch['transactional_direct_total'], 0);
+      expect(batch['transactional_native_pool_total'], 0);
+      expect(batch['transactional_native_pool_fallback_total'], 0);
+      expect(batch['bulk_insert_recommended_total'], 0);
     });
 
     test('should honor env overrides for queue and async tuning', () async {

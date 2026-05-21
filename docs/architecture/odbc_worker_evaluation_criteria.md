@@ -4,7 +4,7 @@ Atualizado: 2026-05-14
 
 Este documento separa dois assuntos que nao devem ser misturados:
 
-- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.7.0.
+- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.8.0.
   Agora e o default do app, configurado por `ODBC_ASYNC_WORKER_COUNT` e
   `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 - **Arquitetura customizada multi-`ServiceLocator`/multi-pool**: continuamos
@@ -16,8 +16,8 @@ Este documento separa dois assuntos que nao devem ser misturados:
 - `odbc.ServiceLocator.initialize(useAsync: true, asyncWorkerCount: ..., asyncMaxPendingRequests: ..., asyncBackpressureMode: failFast)`
 - `asyncWorkerCount` default: `min(poolSize persistido, CPU cores)`, minimo 1
 - `asyncMaxPendingRequests` default: `poolSize * 4`
-- `OdbcConnectionPool` lease-based continua sendo o default
-- Native pool so via `enableOdbcExperimentalDriverAdaptivePooling`
+- Pool adaptativo fica habilitado por default para drivers elegiveis
+- `OdbcConnectionPool` lease-based continua sendo fallback seguro
 - SQL Anywhere permanece fora do native pool
 
 ## Quando Ajustar o Worker Pool Interno
@@ -99,6 +99,18 @@ Ou use o wrapper do repo:
 .\tool\odbc_async_benchmark.ps1
 ```
 
+Para comparar streaming legado e batched streaming:
+
+```powershell
+.\tool\odbc_streaming_benchmark.ps1
+```
+
+Para comparar SQL Anywhere, SQL Server e PostgreSQL configurados:
+
+```powershell
+.\tool\odbc_driver_matrix_benchmark.ps1
+```
+
 Tambem rode o burst do app:
 
 ```powershell
@@ -112,6 +124,10 @@ No Windows, para consolidar preflight, testes e worksheet de evidencias:
 .\tool\run_odbc_operational_validation.ps1
 .\tool\run_odbc_operational_validation.ps1 -All
 ```
+
+O modo `-All` grava snapshots `health_burst_*_before/after.json` e logs
+`driver_matrix_*`. Use esses artefatos antes de aumentar workers/pool e antes
+de aceitar o pool nativo em SQL Server/PostgreSQL.
 
 Rollback imediato se throughput melhorar pouco enquanto p95/p99, timeouts,
 falhas de cancelamento ou erros de driver piorarem.

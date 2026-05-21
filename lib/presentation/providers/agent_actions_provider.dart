@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -48,7 +49,6 @@ enum AgentActionHistoryPeriod {
 }
 
 class AgentActionsProvider extends ChangeNotifier {
-
   AgentActionsProvider(
     this._listDefinitions,
     this._listExecutions,
@@ -156,6 +156,7 @@ class AgentActionsProvider extends ChangeNotifier {
   String? _historyFailurePhaseFilter;
   String _historySearchQuery = '';
   AgentActionType? _definitionTypeFilter;
+  AgentActionState? _definitionStateFilter;
   String _definitionSearchQuery = '';
   AgentActionSecretAvailabilityReport? _selectedSecretReport;
   String? _savingActionSecretName;
@@ -170,29 +171,48 @@ class AgentActionsProvider extends ChangeNotifier {
   bool _isLoadingRemoteAudit = false;
   String? _auditCorrelationExecutionId;
 
-  List<AgentActionDefinition> get definitions => List.unmodifiable(_definitions);
+  UnmodifiableListView<AgentActionDefinition>? _definitionsViewCache;
+  UnmodifiableListView<AgentActionExecution>? _executionsViewCache;
+  UnmodifiableListView<AgentActionTrigger>? _triggersViewCache;
+  UnmodifiableListView<DeveloperData7ConnectionOption>? _developerConnectionsViewCache;
+  UnmodifiableListView<AgentActionRemoteAuditRecord>? _remoteAuditEntriesViewCache;
+  List<AgentActionDefinition>? _filteredDefinitionsCache;
+  List<AgentActionExecution>? _filteredSelectedExecutionsCache;
+
+  List<AgentActionDefinition> get definitions =>
+      _definitionsViewCache ??= UnmodifiableListView<AgentActionDefinition>(_definitions);
   AgentActionType? get definitionTypeFilter => _definitionTypeFilter;
+  AgentActionState? get definitionStateFilter => _definitionStateFilter;
   String get definitionSearchQuery => _definitionSearchQuery;
 
   List<AgentActionDefinition> get filteredDefinitions {
+    final cached = _filteredDefinitionsCache;
+    if (cached != null) {
+      return cached;
+    }
+
     final matched = _definitions.where(_matchesDefinitionListFilter).toList(growable: false);
     final selectedId = selectedActionId;
     if (selectedId == null) {
-      return matched;
+      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
     }
     if (matched.any((definition) => definition.id == selectedId)) {
-      return matched;
+      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
     }
     final selected = _existingDefinition(selectedId);
     if (selected == null) {
-      return matched;
+      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
     }
-    return <AgentActionDefinition>[selected, ...matched];
+    return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(<AgentActionDefinition>[
+      selected,
+      ...matched,
+    ]);
   }
 
   bool get hasDefinitionListFilters =>
-      _definitionTypeFilter != null || _definitionSearchQuery.isNotEmpty;
-  List<AgentActionExecution> get executions => List.unmodifiable(_executions);
+      _definitionTypeFilter != null || _definitionStateFilter != null || _definitionSearchQuery.isNotEmpty;
+  List<AgentActionExecution> get executions =>
+      _executionsViewCache ??= UnmodifiableListView<AgentActionExecution>(_executions);
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isDeleting => _isDeleting;
@@ -202,7 +222,7 @@ class AgentActionsProvider extends ChangeNotifier {
   bool get isLoadingTriggers => _isLoadingTriggers;
   bool get isSavingTrigger => _isSavingTrigger;
   bool get isTransferringBundle => _isTransferringBundle;
-  List<AgentActionTrigger> get triggers => List.unmodifiable(_triggers);
+  List<AgentActionTrigger> get triggers => _triggersViewCache ??= UnmodifiableListView<AgentActionTrigger>(_triggers);
   String? get errorMessage => _errorMessage;
   bool get isFeatureEnabled => _featureFlags.enableAgentActions;
   bool get isRemoteAgentActionsEnabled => _featureFlags.enableRemoteAgentActions;
@@ -216,8 +236,7 @@ class AgentActionsProvider extends ChangeNotifier {
   bool get canTransferBundle =>
       canManageTriggers && !_isLoading && !_isTransferringBundle && !_isSaving && !_isDeleting;
   AgentActionRuntimeStateSnapshot get runtimeSubsystemSnapshot =>
-      _runtimeStateGuard?.snapshot ??
-      const AgentActionRuntimeStateSnapshot(status: AgentActionSubsystemStatus.ready);
+      _runtimeStateGuard?.snapshot ?? const AgentActionRuntimeStateSnapshot(status: AgentActionSubsystemStatus.ready);
   String? get lastTestedActionId => _lastTestedActionId;
   bool? get lastTestCanRun => _lastTestCanRun;
   String? get lastTestCommandPreview => _lastTestCommandPreview;
@@ -229,11 +248,9 @@ class AgentActionsProvider extends ChangeNotifier {
   String? get historyFailurePhaseFilter => _historyFailurePhaseFilter;
   String get historySearchQuery => _historySearchQuery;
   AgentActionSecretAvailabilityReport? get selectedSecretReport => _selectedSecretReport;
-  Set<String> get selectedSecretPlaceholderNames =>
-      _selectedSecretReport?.referencedSecretNames ?? const <String>{};
+  Set<String> get selectedSecretPlaceholderNames => _selectedSecretReport?.referencedSecretNames ?? const <String>{};
   Set<String> get selectedMissingSecretNames => _selectedSecretReport?.missingSecretNames ?? const <String>{};
-  bool get isActionSecretStoreAvailable =>
-      _saveAgentActionSecret != null && _deleteAgentActionSecret != null;
+  bool get isActionSecretStoreAvailable => _saveAgentActionSecret != null && _deleteAgentActionSecret != null;
   String? get secretOperationErrorMessage => _secretOperationErrorMessage;
 
   bool isActionSecretConfigured(String secretName) {
@@ -241,14 +258,14 @@ class AgentActionsProvider extends ChangeNotifier {
     if (report == null) {
       return false;
     }
-    return report.referencedSecretNames.contains(secretName) &&
-        !report.missingSecretNames.contains(secretName);
+    return report.referencedSecretNames.contains(secretName) && !report.missingSecretNames.contains(secretName);
   }
 
   bool isSavingActionSecret(String secretName) => _savingActionSecretName == secretName;
 
   bool isDeletingActionSecret(String secretName) => _deletingActionSecretName == secretName;
-  List<DeveloperData7ConnectionOption> get developerConnections => List.unmodifiable(_developerConnections);
+  List<DeveloperData7ConnectionOption> get developerConnections =>
+      _developerConnectionsViewCache ??= UnmodifiableListView<DeveloperData7ConnectionOption>(_developerConnections);
   String? get developerConnectionLookupMessage => _developerConnectionLookupMessage;
   String? get resolvedDeveloperData7ConfigPath => _resolvedDeveloperData7ConfigPath;
   bool get usedDefaultDeveloperData7ConfigPath => _usedDefaultDeveloperData7ConfigPath;
@@ -278,9 +295,16 @@ class AgentActionsProvider extends ChangeNotifier {
     return _comObjectInvocationDiagnostics?.registeredHandlerCount;
   }
 
-  /// True when the COM runner is registered but no ProgID/member handlers are configured.
+  /// True when COM actions exist but no ProgID/member handlers are configured.
   bool get shouldWarnComObjectHandlersMissing {
     if (!isFeatureEnabled || isActionTypeUnavailable(AgentActionType.comObject)) {
+      return false;
+    }
+
+    final hasComObjectDefinitions = _definitions.any(
+      (AgentActionDefinition definition) => definition.type == AgentActionType.comObject,
+    );
+    if (!hasComObjectDefinitions) {
       return false;
     }
 
@@ -292,7 +316,8 @@ class AgentActionsProvider extends ChangeNotifier {
     return diagnostics.registeredHandlerCount <= 0;
   }
 
-  List<AgentActionRemoteAuditRecord> get remoteAuditEntries => List.unmodifiable(_remoteAuditEntries);
+  List<AgentActionRemoteAuditRecord> get remoteAuditEntries =>
+      _remoteAuditEntriesViewCache ??= UnmodifiableListView<AgentActionRemoteAuditRecord>(_remoteAuditEntries);
   String? get remoteAuditLoadError => _remoteAuditLoadError;
   bool get isLoadingRemoteAudit => _isLoadingRemoteAudit;
   String? get auditCorrelationExecutionId => _auditCorrelationExecutionId;
@@ -310,19 +335,12 @@ class AgentActionsProvider extends ChangeNotifier {
 
   bool get canRunSelected {
     final definition = selectedDefinition;
-    return isFeatureEnabled &&
-        !_isRunning &&
-        definition != null &&
-        definition.canRun &&
-        _allowsLocalManualOperation(definition.type);
+    return definition != null && canRunDefinition(definition);
   }
 
   bool get canTestSelected {
     final definition = selectedDefinition;
-    return isFeatureEnabled &&
-        !_isTesting &&
-        definition != null &&
-        _allowsLocalManualOperation(definition.type);
+    return definition != null && canTestDefinition(definition);
   }
 
   bool get canSaveAction {
@@ -331,7 +349,19 @@ class AgentActionsProvider extends ChangeNotifier {
 
   bool get canDeleteSelected {
     final definition = selectedDefinition;
-    if (!isFeatureEnabled || _isDeleting || definition == null) {
+    return definition != null && canDeleteDefinition(definition);
+  }
+
+  bool canRunDefinition(AgentActionDefinition definition) {
+    return isFeatureEnabled && !_isRunning && definition.canRun && _allowsLocalManualOperation(definition.type);
+  }
+
+  bool canTestDefinition(AgentActionDefinition definition) {
+    return isFeatureEnabled && !_isTesting && _allowsLocalManualOperation(definition.type);
+  }
+
+  bool canDeleteDefinition(AgentActionDefinition definition) {
+    if (!isFeatureEnabled || _isDeleting) {
       return false;
     }
 
@@ -341,6 +371,11 @@ class AgentActionsProvider extends ChangeNotifier {
   }
 
   List<AgentActionExecution> get filteredSelectedExecutions {
+    final cached = _filteredSelectedExecutionsCache;
+    if (cached != null) {
+      return cached;
+    }
+
     final selected = selectedDefinition;
     if (selected == null) {
       return const <AgentActionExecution>[];
@@ -365,7 +400,7 @@ class AgentActionsProvider extends ChangeNotifier {
         .toList(growable: false);
 
     filtered.sort((left, right) => right.requestedAt.compareTo(left.requestedAt));
-    return filtered;
+    return _filteredSelectedExecutionsCache = List<AgentActionExecution>.unmodifiable(filtered);
   }
 
   bool hasCancellationInProgress(String executionId) {
@@ -522,6 +557,22 @@ class AgentActionsProvider extends ChangeNotifier {
     return _remoteAuditExport.buildJson(_remoteAuditEntries);
   }
 
+  @override
+  void notifyListeners() {
+    _invalidateDerivedCaches();
+    super.notifyListeners();
+  }
+
+  void _invalidateDerivedCaches() {
+    _definitionsViewCache = null;
+    _executionsViewCache = null;
+    _triggersViewCache = null;
+    _developerConnectionsViewCache = null;
+    _remoteAuditEntriesViewCache = null;
+    _filteredDefinitionsCache = null;
+    _filteredSelectedExecutionsCache = null;
+  }
+
   /// Resets execution history filters, selects the audited action id, and highlights
   /// the audited execution id when that execution is visible after the in-memory
   /// list is updated. When the execution is missing from the list loaded by `load`,
@@ -622,6 +673,7 @@ class AgentActionsProvider extends ChangeNotifier {
       execution,
     ]..sort((AgentActionExecution a, AgentActionExecution b) => b.requestedAt.compareTo(a.requestedAt));
     _executions = merged;
+    _invalidateDerivedCaches();
   }
 
   Future<Result<CapturedOutputUtf8Window>> sliceCapturedOutput({
@@ -739,6 +791,15 @@ class AgentActionsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDefinitionStateFilter(AgentActionState? state) {
+    if (_definitionStateFilter == state) {
+      return;
+    }
+
+    _definitionStateFilter = state;
+    notifyListeners();
+  }
+
   void setDefinitionSearchQuery(String query) {
     final normalized = query.trim();
     if (_definitionSearchQuery == normalized) {
@@ -749,8 +810,22 @@ class AgentActionsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearDefinitionFilters() {
+    if (!hasDefinitionListFilters) {
+      return;
+    }
+
+    _definitionTypeFilter = null;
+    _definitionStateFilter = null;
+    _definitionSearchQuery = '';
+    notifyListeners();
+  }
+
   bool _matchesDefinitionListFilter(AgentActionDefinition definition) {
     if (_definitionTypeFilter != null && definition.type != _definitionTypeFilter) {
+      return false;
+    }
+    if (_definitionStateFilter != null && definition.state != _definitionStateFilter) {
       return false;
     }
     if (_definitionSearchQuery.isEmpty) {
@@ -927,7 +1002,7 @@ class AgentActionsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> saveCommandLineAction({
+  Future<bool> saveCommandLineAction({
     required String name,
     required String command,
     String? actionId,
@@ -951,7 +1026,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -999,10 +1074,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveExecutableAction({
+  Future<bool> saveExecutableAction({
     required String name,
     required String executablePath,
     required List<String> arguments,
@@ -1027,7 +1102,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1079,10 +1154,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveScriptAction({
+  Future<bool> saveScriptAction({
     required String name,
     required String scriptPath,
     required List<String> arguments,
@@ -1108,7 +1183,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1166,10 +1241,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveJarAction({
+  Future<bool> saveJarAction({
     required String name,
     required String jarPath,
     required List<String> arguments,
@@ -1195,7 +1270,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1253,10 +1328,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveEmailAction({
+  Future<bool> saveEmailAction({
     required String name,
     required String smtpProfileId,
     required String from,
@@ -1284,7 +1359,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1332,10 +1407,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveComObjectAction({
+  Future<bool> saveComObjectAction({
     required String name,
     required String progId,
     required String memberName,
@@ -1358,7 +1433,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1401,10 +1476,10 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
-  Future<void> saveDeveloperData7Action({
+  Future<bool> saveDeveloperData7Action({
     required String name,
     required String executorPath,
     required String projectPath,
@@ -1431,7 +1506,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
   }) async {
     if (!canSaveAction) {
-      return;
+      return false;
     }
 
     _isSaving = true;
@@ -1480,7 +1555,7 @@ class AgentActionsProvider extends ChangeNotifier {
       updatedAt: _now(),
     );
 
-    await _persistDefinition(definition);
+    return _persistDefinition(definition);
   }
 
   Future<bool> exportBundleToFile(String filePath) async {
@@ -1507,8 +1582,7 @@ class AgentActionsProvider extends ChangeNotifier {
       await File(filePath).writeAsString(result.getOrThrow());
     } on IOException {
       _isTransferringBundle = false;
-      _errorMessage =
-          'Nao foi possivel gravar o arquivo de exportacao. Verifique o caminho e as permissoes.';
+      _errorMessage = 'Nao foi possivel gravar o arquivo de exportacao. Verifique o caminho e as permissoes.';
       notifyListeners();
       return false;
     }
@@ -1532,8 +1606,7 @@ class AgentActionsProvider extends ChangeNotifier {
       payload = await File(filePath).readAsString();
     } on IOException {
       _isTransferringBundle = false;
-      _errorMessage =
-          'Nao foi possivel ler o arquivo de importacao. Verifique o caminho e as permissoes.';
+      _errorMessage = 'Nao foi possivel ler o arquivo de importacao. Verifique o caminho e as permissoes.';
       notifyListeners();
       return null;
     }
@@ -1788,8 +1861,7 @@ class AgentActionsProvider extends ChangeNotifier {
     _lastTestCommandPreview = null;
     _lastTestPreviewErrorMessage = _messageFor(failure);
     if (failure is ActionFailure) {
-      _lastTestDiagnostics = const AgentActionFailureDiagnosticsResolver()
-          .redactedDiagnosticsForTestPreview(failure);
+      _lastTestDiagnostics = const AgentActionFailureDiagnosticsResolver().redactedDiagnosticsForTestPreview(failure);
     } else {
       _lastTestDiagnostics = const <String, Object?>{};
     }
@@ -1860,7 +1932,7 @@ class AgentActionsProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> _persistDefinition(AgentActionDefinition definition) async {
+  Future<bool> _persistDefinition(AgentActionDefinition definition) async {
     final result = await _saveDefinition(definition);
     var shouldReload = false;
     result.fold(
@@ -1876,10 +1948,11 @@ class AgentActionsProvider extends ChangeNotifier {
     _isSaving = false;
     if (shouldReload) {
       await load();
-      return;
+      return true;
     }
 
     notifyListeners();
+    return false;
   }
 
   void _clearLastTestPreviewState() {

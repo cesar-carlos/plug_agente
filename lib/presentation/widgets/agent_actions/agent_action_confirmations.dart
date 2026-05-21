@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 
 Future<bool> confirmReapproveRemoteAgentAction({
   required BuildContext context,
@@ -90,7 +91,11 @@ Future<bool> _confirm({
     context: context,
     builder: (BuildContext dialogContext) {
       return ContentDialog(
-        title: Text(title),
+        title: AppDialogTitleBar(
+          title: Text(title),
+          closeTooltip: AppLocalizations.of(dialogContext)!.btnClose,
+          onClose: () => Navigator.pop(dialogContext, false),
+        ),
         content: Text(message),
         actions: [
           Button(

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' as widgets;
 import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/application/rpc/agent_action_execution_output_pager.dart';
@@ -15,31 +16,39 @@ import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_definition_dialog.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_secrets_section.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_detail_panel.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_master_detail_layout.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_summary_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_toolbar_card.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_filter_bar.dart';
+import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
+part 'agent_actions_page_editor.dart';
+
 class _AgentActionsPageKeys {
   static const ValueKey<String> detailScroll = ValueKey<String>('agent_actions_detail_scroll');
-  static const ValueKey<String> historyList = ValueKey<String>('agent_actions_history_list');
   static const ValueKey<String> testPreview = ValueKey<String>('agent_actions_test_preview');
   static const ValueKey<String> remoteReapprovalInfoBar = ValueKey<String>('agent_actions_remote_reapproval_info_bar');
   static const ValueKey<String> developerConnectionMissingInfoBar = ValueKey<String>(
@@ -57,6 +66,18 @@ class _AgentActionsPageKeys {
   }
 }
 
+class _AgentActionsUiPreferenceKeys {
+  static const String selectedTab = 'agent_actions.ui.selected_tab';
+  static const String definitionTypeFilter = 'agent_actions.ui.definition_type_filter';
+  static const String definitionStateFilter = 'agent_actions.ui.definition_state_filter';
+  static const String definitionSearch = 'agent_actions.ui.definition_search';
+  static const String historyStatusFilter = 'agent_actions.ui.history_status_filter';
+  static const String historySourceFilter = 'agent_actions.ui.history_source_filter';
+  static const String historyPeriodFilter = 'agent_actions.ui.history_period_filter';
+  static const String historyFailurePhaseFilter = 'agent_actions.ui.history_failure_phase_filter';
+  static const String historySearch = 'agent_actions.ui.history_search';
+}
+
 class AgentActionsPage extends StatefulWidget {
   const AgentActionsPage({super.key});
 
@@ -65,14 +86,20 @@ class AgentActionsPage extends StatefulWidget {
 }
 
 class _AgentActionsPageState extends State<AgentActionsPage> {
+  int _selectedTabIndex = 0;
+  bool _restoredUiPreferences = false;
+
   @override
   void initState() {
     super.initState();
+    _selectedTabIndex = _settingsStore()?.getInt(_AgentActionsUiPreferenceKeys.selectedTab) ?? 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      unawaited(context.read<AgentActionsProvider>().load());
+      final provider = context.read<AgentActionsProvider>();
+      _restoreProviderUiPreferences(provider);
+      unawaited(provider.load());
     });
   }
 
@@ -91,98 +118,538 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           style: context.sectionTitle,
         ),
       ),
-      content: Padding(
-        padding: AppLayout.pagePadding(context),
-        child: Consumer<AgentActionsProvider>(
-          builder: (context, provider, _) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AgentActionsToolbarCard(provider: provider, l10n: l10n),
-                        const SizedBox(height: AppSpacing.md),
-                        if (!provider.isFeatureEnabled) ...[
-                          InfoBar(
-                            title: Text(l10n.agentActionsDisabledTitle),
-                            content: Text(l10n.agentActionsDisabledMessage),
-                            severity: InfoBarSeverity.warning,
-                            isLong: true,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                        if (provider.isFeatureEnabled && provider.isMaintenanceMode) ...[
-                          InfoBar(
-                            title: Text(l10n.agentActionsMaintenanceModeInfoTitle),
-                            content: Text(l10n.agentActionsMaintenanceModeInfoMessage),
-                            isLong: true,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                        ..._elevatedRunnerStatusWidgets(provider, l10n),
-                        ..._runtimeSubsystemStatusWidgets(provider, l10n),
-                        ..._schedulerOperationalIssueWidgets(provider, l10n),
-                        ..._comObjectInvocationWarningWidgets(provider, l10n),
-                        if (provider.errorMessage != null) ...[
-                          InfoBar(
-                            title: Text(l10n.agentActionsErrorTitle),
-                            content: SelectableText(provider.errorMessage!),
-                            severity: InfoBarSeverity.error,
-                            isLong: true,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                        AgentActionsSummaryCard(provider: provider, l10n: l10n),
-                        if (provider.isFeatureEnabled) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          AgentActionsRetentionCard(l10n: l10n),
-                        ],
-                        if (runtimeCapabilities.isDegraded ||
-                            runtimeCapabilities.isUnsupported ||
-                            runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          AgentActionsRuntimeSupportCard(
-                            capabilities: runtimeCapabilities,
-                            diagnostics: runtimeDiagnostics,
-                          ),
-                        ],
-                        if (provider.isRemoteAuditSectionVisible) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          AgentActionsRemoteAuditPanel(provider: provider, l10n: l10n),
-                        ],
-                        const SizedBox(height: AppSpacing.md),
-                      ],
+      content: Consumer<AgentActionsProvider>(
+        builder: (context, provider, _) {
+          return widgets.CallbackShortcuts(
+            bindings: <widgets.ShortcutActivator, VoidCallback>{
+              const widgets.SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
+                _runPageShortcut(() {
+                  if (provider.canSaveAction) {
+                    unawaited(_showActionEditorDialog(context, provider, l10n));
+                  }
+                });
+              },
+              const widgets.SingleActivator(LogicalKeyboardKey.enter): () {
+                _runPageShortcut(() => _editSelectedAction(context, provider, l10n));
+              },
+              const widgets.SingleActivator(LogicalKeyboardKey.delete): () {
+                _runPageShortcut(() => _deleteSelectedAction(context, provider, l10n));
+              },
+              const widgets.SingleActivator(LogicalKeyboardKey.f5): () {
+                _runPageShortcut(() => unawaited(provider.load()));
+              },
+              const widgets.SingleActivator(LogicalKeyboardKey.keyT, control: true): () {
+                _runPageShortcut(() {
+                  if (provider.canTestSelected) {
+                    unawaited(provider.testSelectedAction());
+                  }
+                });
+              },
+              const widgets.SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
+                _runPageShortcut(() {
+                  if (provider.canRunSelected) {
+                    unawaited(provider.runSelectedAction());
+                  }
+                });
+              },
+            },
+            child: widgets.Focus(
+              autofocus: true,
+              child: Padding(
+                padding: AppLayout.pagePadding(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _AgentActionsStatusStrip(
+                      provider: provider,
+                      l10n: l10n,
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: provider.isFeatureEnabled
-                      ? AgentActionsMasterDetailLayout(
-                          master: _AgentActionsList(provider: provider, l10n: l10n),
-                          detail: _AgentActionsDetail(provider: provider, l10n: l10n),
-                        )
-                      : AppCard(
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: Text(
-                                l10n.agentActionsDisabledMessage,
-                                style: context.bodyMuted,
-                                textAlign: TextAlign.center,
+                    const SizedBox(height: AppSpacing.md),
+                    Expanded(
+                      child: provider.isFeatureEnabled
+                          ? _buildTabs(
+                              context: context,
+                              provider: provider,
+                              l10n: l10n,
+                              runtimeCapabilities: runtimeCapabilities,
+                              runtimeDiagnostics: runtimeDiagnostics,
+                            )
+                          : AppCard(
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  child: Text(
+                                    l10n.agentActionsDisabledMessage,
+                                    style: context.bodyMuted,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
+                    ),
+                  ],
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTabs({
+    required BuildContext context,
+    required AgentActionsProvider provider,
+    required AppLocalizations l10n,
+    required RuntimeCapabilities runtimeCapabilities,
+    required RuntimeDetectionDiagnostics? runtimeDiagnostics,
+  }) {
+    final items = [
+      AppFluentTabItem(
+        icon: FluentIcons.processing,
+        text: l10n.agentActionsSummaryActions,
+        body: _AgentActionsActionsTab(
+          provider: provider,
+          l10n: l10n,
+          onCreateAction: () => _showActionEditorDialog(context, provider, l10n),
+          onShowDetails: (definition) => _showActionDetailsDialog(
+            context,
+            provider,
+            l10n,
+            definition,
+          ),
+          onEditAction: (definition) => _showActionEditorDialog(
+            context,
+            provider,
+            l10n,
+            definition: definition,
+          ),
         ),
       ),
+      AppFluentTabItem(
+        icon: FluentIcons.history,
+        text: l10n.agentActionsHistoryTitle,
+        body: _AgentActionsHistoryTab(provider: provider, l10n: l10n),
+      ),
+      AppFluentTabItem(
+        icon: FluentIcons.settings,
+        text: l10n.configTabPreferences,
+        body: _AgentActionsSettingsTab(
+          provider: provider,
+          l10n: l10n,
+          runtimeCapabilities: runtimeCapabilities,
+          runtimeDiagnostics: runtimeDiagnostics,
+        ),
+      ),
+      if (provider.isRemoteAuditSectionVisible)
+        AppFluentTabItem(
+          icon: FluentIcons.cloud,
+          text: l10n.agentActionsRemoteAuditTitle,
+          body: AgentActionsRemoteAuditPanel(provider: provider, l10n: l10n),
+        ),
+    ];
+    final safeIndex = _selectedTabIndex.clamp(0, items.length - 1);
+
+    return AppFluentTabView(
+      currentIndex: safeIndex,
+      onChanged: _handleTabChanged,
+      items: items,
+    );
+  }
+
+  void _handleTabChanged(int index) {
+    setState(() => _selectedTabIndex = index);
+    unawaited(_settingsStore()?.setInt(_AgentActionsUiPreferenceKeys.selectedTab, index));
+  }
+
+  void _restoreProviderUiPreferences(AgentActionsProvider provider) {
+    if (_restoredUiPreferences) {
+      return;
+    }
+    _restoredUiPreferences = true;
+
+    final store = _settingsStore();
+    if (store == null) {
+      return;
+    }
+
+    provider
+      ..setDefinitionTypeFilter(
+        _enumByName(AgentActionType.values, store.getString(_AgentActionsUiPreferenceKeys.definitionTypeFilter)),
+      )
+      ..setDefinitionStateFilter(
+        _enumByName(AgentActionState.values, store.getString(_AgentActionsUiPreferenceKeys.definitionStateFilter)),
+      )
+      ..setDefinitionSearchQuery(store.getString(_AgentActionsUiPreferenceKeys.definitionSearch) ?? '')
+      ..setHistoryStatusFilter(
+        _enumByName(
+          AgentActionExecutionStatus.values,
+          store.getString(_AgentActionsUiPreferenceKeys.historyStatusFilter),
+        ),
+      )
+      ..setHistorySourceFilter(
+        _enumByName(
+          AgentActionRequestSource.values,
+          store.getString(_AgentActionsUiPreferenceKeys.historySourceFilter),
+        ),
+      )
+      ..setHistoryPeriodFilter(
+        _enumByName(
+              AgentActionHistoryPeriod.values,
+              store.getString(_AgentActionsUiPreferenceKeys.historyPeriodFilter),
+            ) ??
+            AgentActionHistoryPeriod.all,
+      )
+      ..setHistoryFailurePhaseFilter(store.getString(_AgentActionsUiPreferenceKeys.historyFailurePhaseFilter))
+      ..setHistorySearchQuery(store.getString(_AgentActionsUiPreferenceKeys.historySearch) ?? '');
+  }
+
+  void _runPageShortcut(VoidCallback action) {
+    if (_isTextInputFocused()) {
+      return;
+    }
+    action();
+  }
+
+  bool _isTextInputFocused() {
+    final focusedContext = widgets.FocusManager.instance.primaryFocus?.context;
+    if (focusedContext == null) {
+      return false;
+    }
+    return focusedContext.widget is widgets.EditableText ||
+        focusedContext.findAncestorWidgetOfExactType<widgets.EditableText>() != null;
+  }
+
+  void _editSelectedAction(
+    BuildContext context,
+    AgentActionsProvider provider,
+    AppLocalizations l10n,
+  ) {
+    final definition = provider.selectedDefinition;
+    if (definition == null || !isAgentActionTypeEditableInUi(definition.type)) {
+      return;
+    }
+    unawaited(_showActionEditorDialog(context, provider, l10n, definition: definition));
+  }
+
+  void _deleteSelectedAction(
+    BuildContext context,
+    AgentActionsProvider provider,
+    AppLocalizations l10n,
+  ) {
+    final definition = provider.selectedDefinition;
+    if (definition == null || !provider.canDeleteSelected) {
+      return;
+    }
+    unawaited(_confirmDelete(context, provider, definition, l10n));
+  }
+
+  Future<void> _showActionEditorDialog(
+    BuildContext context,
+    AgentActionsProvider provider,
+    AppLocalizations l10n, {
+    AgentActionDefinition? definition,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AgentActionDefinitionDialog(
+          child: _AgentActionEditor(
+            provider: provider,
+            definition: definition,
+            l10n: l10n,
+            showChrome: false,
+            onSaved: () {
+              Navigator.pop(dialogContext);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showActionDetailsDialog(
+    BuildContext context,
+    AgentActionsProvider provider,
+    AppLocalizations l10n,
+    AgentActionDefinition definition,
+  ) async {
+    provider.selectAction(definition.id);
+    await provider.refreshTriggersForSelection();
+    if (!context.mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AgentActionDetailsDialog(
+          definition: definition,
+          l10n: l10n,
+          content: ListenableBuilder(
+            listenable: provider,
+            builder: (context, _) {
+              final selected = provider.selectedDefinition;
+              if (selected == null) {
+                return Center(
+                  child: Text(
+                    l10n.agentActionsEmptySelection,
+                    style: context.bodyMuted,
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+
+              return ListView(
+                key: _AgentActionsPageKeys.detailScroll,
+                children: [
+                  _SelectedActionDetailContent(
+                    provider: provider,
+                    l10n: l10n,
+                    definition: selected,
+                    lastTestCanRun: provider.lastTestCanRun ?? false,
+                    onEditAction: (definition) {
+                      Navigator.pop(dialogContext);
+                      unawaited(
+                        _showActionEditorDialog(
+                          context,
+                          provider,
+                          l10n,
+                          definition: definition,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+IAppSettingsStore? _settingsStore() {
+  return getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null;
+}
+
+T? _enumByName<T extends Enum>(List<T> values, String? name) {
+  if (name == null || name.isEmpty) {
+    return null;
+  }
+  for (final value in values) {
+    if (value.name == name) {
+      return value;
+    }
+  }
+  return null;
+}
+
+Future<void> _persistUiPreference(String key, String? value) async {
+  final store = _settingsStore();
+  if (store == null) {
+    return;
+  }
+  if (value == null || value.isEmpty) {
+    await store.remove(key);
+    return;
+  }
+  await store.setString(key, value);
+}
+
+Future<void> _removeUiPreferences(List<String> keys) async {
+  final store = _settingsStore();
+  if (store == null) {
+    return;
+  }
+  for (final key in keys) {
+    await store.remove(key);
+  }
+}
+
+class _AgentActionsStatusStrip extends StatelessWidget {
+  const _AgentActionsStatusStrip({
+    required this.provider,
+    required this.l10n,
+  });
+
+  final AgentActionsProvider provider;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusWidgets = <Widget>[
+      if (!provider.isFeatureEnabled)
+        InfoBar(
+          title: Text(l10n.agentActionsDisabledTitle),
+          content: Text(l10n.agentActionsDisabledMessage),
+          severity: InfoBarSeverity.warning,
+          isLong: true,
+        ),
+      ..._runtimeSubsystemStatusWidgets(provider, l10n),
+      ..._schedulerOperationalIssueWidgets(provider, l10n),
+      ..._comObjectInvocationWarningWidgets(provider, l10n),
+      if (provider.errorMessage != null)
+        InfoBar(
+          title: Text(l10n.agentActionsErrorTitle),
+          content: SelectableText(provider.errorMessage!),
+          severity: InfoBarSeverity.error,
+          isLong: true,
+        ),
+    ];
+
+    if (statusWidgets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 170),
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: statusWidgets.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) => statusWidgets[index],
+      ),
+    );
+  }
+}
+
+class _AgentActionsActionsTab extends StatelessWidget {
+  const _AgentActionsActionsTab({
+    required this.provider,
+    required this.l10n,
+    required this.onCreateAction,
+    required this.onShowDetails,
+    required this.onEditAction,
+  });
+
+  final AgentActionsProvider provider;
+  final AppLocalizations l10n;
+  final VoidCallback onCreateAction;
+  final ValueChanged<AgentActionDefinition> onShowDetails;
+  final ValueChanged<AgentActionDefinition> onEditAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AgentActionsToolbarCard(
+          provider: provider,
+          l10n: l10n,
+          onCreateAction: provider.canSaveAction ? onCreateAction : null,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(
+          child: _AgentActionsList(
+            provider: provider,
+            l10n: l10n,
+            onCreateAction: onCreateAction,
+            onShowDetails: onShowDetails,
+            onAddTrigger: (definition) {
+              provider.selectAction(definition.id);
+              provider.clearTriggerOperationError();
+              unawaited(
+                showAgentActionTriggerSaveDialog(
+                  context: context,
+                  provider: provider,
+                  l10n: l10n,
+                  actionId: definition.id,
+                ),
+              );
+            },
+            onEditAction: onEditAction,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AgentActionsHistoryTab extends StatelessWidget {
+  const _AgentActionsHistoryTab({
+    required this.provider,
+    required this.l10n,
+  });
+
+  final AgentActionsProvider provider;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = provider.selectedDefinition;
+    if (selected == null) {
+      return AgentActionsEmptySelectionPanel(
+        detailScrollKey: _AgentActionsPageKeys.detailScroll,
+        content: Center(
+          child: Text(
+            l10n.agentActionsEmptySelection,
+            style: context.bodyMuted,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconFor(selected.type), size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: Text(selected.name, style: context.sectionTitle)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _AgentActionsHistoryFilters(provider: provider, l10n: l10n),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(
+            child: _AgentActionExecutionList(
+              executions: provider.filteredSelectedExecutions,
+              provider: provider,
+              l10n: l10n,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentActionsSettingsTab extends StatelessWidget {
+  const _AgentActionsSettingsTab({
+    required this.provider,
+    required this.l10n,
+    required this.runtimeCapabilities,
+    required this.runtimeDiagnostics,
+  });
+
+  final AgentActionsProvider provider;
+  final AppLocalizations l10n;
+  final RuntimeCapabilities runtimeCapabilities;
+  final RuntimeDetectionDiagnostics? runtimeDiagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        AgentActionsSummaryCard(provider: provider, l10n: l10n),
+        const SizedBox(height: AppSpacing.md),
+        ..._elevatedRunnerStatusWidgets(provider, l10n),
+        AgentActionsRetentionCard(l10n: l10n),
+        if (runtimeCapabilities.isDegraded ||
+            runtimeCapabilities.isUnsupported ||
+            runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[
+          const SizedBox(height: AppSpacing.md),
+          AgentActionsRuntimeSupportCard(
+            capabilities: runtimeCapabilities,
+            diagnostics: runtimeDiagnostics,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -349,10 +816,18 @@ class _AgentActionsList extends StatelessWidget {
   const _AgentActionsList({
     required this.provider,
     required this.l10n,
+    required this.onCreateAction,
+    required this.onShowDetails,
+    required this.onAddTrigger,
+    required this.onEditAction,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final VoidCallback onCreateAction;
+  final ValueChanged<AgentActionDefinition> onShowDetails;
+  final ValueChanged<AgentActionDefinition> onAddTrigger;
+  final ValueChanged<AgentActionDefinition> onEditAction;
 
   @override
   Widget build(BuildContext context) {
@@ -362,10 +837,44 @@ class _AgentActionsList extends StatelessWidget {
     if (provider.definitions.isEmpty) {
       return AppCard(
         child: Center(
-          child: Text(
-            l10n.agentActionsEmptyActions,
-            style: context.bodyMuted,
-            textAlign: TextAlign.center,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  FluentIcons.processing,
+                  size: 36,
+                  color: FluentTheme.of(context).accentColor,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  l10n.agentActionsEmptyActions,
+                  style: context.sectionTitle,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '${_typeLabel(AgentActionType.commandLine, l10n)}, '
+                  '${_typeLabel(AgentActionType.executable, l10n)}, '
+                  '${_typeLabel(AgentActionType.script, l10n)}',
+                  style: context.bodyMuted,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                FilledButton(
+                  onPressed: provider.canSaveAction ? onCreateAction : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.add),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(l10n.agentActionsFormNew),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -374,55 +883,202 @@ class _AgentActionsList extends StatelessWidget {
     final visibleDefinitions = provider.filteredDefinitions;
 
     return AppCard(
-      padding: EdgeInsets.zero,
-      child: ListView(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: _AgentActionsDefinitionFilters(provider: provider, l10n: l10n),
+          _AgentActionsDefinitionFilters(provider: provider, l10n: l10n),
+          const SizedBox(height: AppSpacing.sm),
+          Expanded(
+            child: AppDataGridScrollable<AgentActionDefinition>(
+              columns: [
+                AppGridColumn(label: l10n.agentActionsFormName, flex: 4),
+                AppGridColumn(label: l10n.agentActionsFormType, flex: 2),
+                AppGridColumn(label: l10n.agentActionsFormState, flex: 2),
+                const AppGridColumn(label: 'Riscos/Gatilhos', flex: 2),
+                AppGridColumn(label: l10n.ctGridColumnActions, flex: 5, alignment: Alignment.centerRight),
+              ],
+              rows: visibleDefinitions,
+              rowHeight: 52,
+              emptyMessage: l10n.agentActionsListFilterEmpty,
+              rowKey: (definition) => ValueKey<String>('agent_action_definition_row_${definition.id}'),
+              isRowSelected: (definition) => provider.selectedDefinition?.id == definition.id,
+              onRowPressed: (definition) => provider.selectAction(definition.id),
+              rowCells: (definition) {
+                final riskDescriptors = collectAgentActionRiskDescriptors(
+                  definition: definition,
+                  l10n: l10n,
+                  runnerUnavailable: provider.isActionTypeUnavailable(definition.type),
+                  editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
+                  needsValidation: definition.state == AgentActionState.needsValidation,
+                  secretPlaceholderNames: definition.id == provider.selectedActionId
+                      ? provider.selectedSecretPlaceholderNames
+                      : AgentActionSecretPlaceholderScanner.collectFromDefinition(definition),
+                  triggers: definition.id == provider.selectedActionId
+                      ? provider.triggers
+                      : const <AgentActionTrigger>[],
+                );
+                return [
+                  _DefinitionNameCell(definition: definition, l10n: l10n),
+                  Text(_typeLabel(definition.type, l10n), overflow: TextOverflow.ellipsis),
+                  Text(_stateLabel(definition.state, l10n), overflow: TextOverflow.ellipsis),
+                  if (riskDescriptors.isEmpty)
+                    Text(_actionSubtitle(definition, l10n), style: context.captionText)
+                  else
+                    AgentActionRiskChips(descriptors: riskDescriptors),
+                  _DefinitionRowActions(
+                    definition: definition,
+                    provider: provider,
+                    l10n: l10n,
+                    onShowDetails: onShowDetails,
+                    onAddTrigger: onAddTrigger,
+                    onEditAction: onEditAction,
+                  ),
+                ];
+              },
+            ),
           ),
-          if (visibleDefinitions.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Text(
-                l10n.agentActionsListFilterEmpty,
-                style: context.bodyMuted,
-                textAlign: TextAlign.center,
-              ),
-            )
-          else
-            ...visibleDefinitions.map((definition) {
-              final selected = provider.selectedActionId == definition.id;
-              final riskDescriptors = collectAgentActionRiskDescriptors(
-                definition: definition,
-                l10n: l10n,
-                runnerUnavailable: provider.isActionTypeUnavailable(definition.type),
-                editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
-                needsValidation: definition.state == AgentActionState.needsValidation,
-                secretPlaceholderNames: definition.id == provider.selectedActionId
-                    ? provider.selectedSecretPlaceholderNames
-                    : AgentActionSecretPlaceholderScanner.collectFromDefinition(definition),
-                triggers: definition.id == provider.selectedActionId ? provider.triggers : const <AgentActionTrigger>[],
-              );
-              return ListTile.selectable(
-                selected: selected,
-                leading: Icon(_iconFor(definition.type)),
-                title: Text(definition.name),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_actionSubtitle(definition, l10n)),
-                    if (riskDescriptors.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      AgentActionRiskChips(descriptors: riskDescriptors),
-                    ],
-                  ],
-                ),
-                onPressed: () => provider.selectAction(definition.id),
-              );
-            }),
         ],
       ),
+    );
+  }
+}
+
+class _DefinitionNameCell extends StatelessWidget {
+  const _DefinitionNameCell({
+    required this.definition,
+    required this.l10n,
+  });
+
+  final AgentActionDefinition definition;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(_iconFor(definition.type), size: 16),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(definition.name, overflow: TextOverflow.ellipsis),
+              Text(definition.id, style: context.captionText, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DefinitionRowActions extends StatelessWidget {
+  const _DefinitionRowActions({
+    required this.definition,
+    required this.provider,
+    required this.l10n,
+    required this.onShowDetails,
+    required this.onAddTrigger,
+    required this.onEditAction,
+  });
+
+  final AgentActionDefinition definition;
+  final AgentActionsProvider provider;
+  final AppLocalizations l10n;
+  final ValueChanged<AgentActionDefinition> onShowDetails;
+  final ValueChanged<AgentActionDefinition> onAddTrigger;
+  final ValueChanged<AgentActionDefinition> onEditAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: l10n.agentActionsRunSelected,
+          child: IconButton(
+            icon: provider.isRunning
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: ProgressRing(strokeWidth: 2),
+                  )
+                : const Icon(FluentIcons.play),
+            onPressed: provider.canRunDefinition(definition)
+                ? () {
+                    provider.selectAction(definition.id);
+                    unawaited(provider.runSelectedAction());
+                  }
+                : null,
+          ),
+        ),
+        Tooltip(
+          message: l10n.agentActionsTestSelected,
+          child: IconButton(
+            icon: provider.isTesting
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: ProgressRing(strokeWidth: 2),
+                  )
+                : const Icon(FluentIcons.test_beaker),
+            onPressed: provider.canTestDefinition(definition)
+                ? () {
+                    provider.selectAction(definition.id);
+                    unawaited(provider.testSelectedAction());
+                  }
+                : null,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        DropDownButton(
+          key: ValueKey<String>('agent_action_definition_more_${definition.id}'),
+          buttonBuilder: (context, onOpen) => IconButton(
+            icon: const Icon(FluentIcons.more),
+            onPressed: onOpen,
+          ),
+          items: [
+            MenuFlyoutItem(
+              key: ValueKey<String>('agent_action_definition_details_${definition.id}'),
+              leading: const Icon(FluentIcons.view),
+              text: Text(l10n.ctButtonViewDetails),
+              onPressed: () {
+                provider.selectAction(definition.id);
+                onShowDetails(definition);
+              },
+            ),
+            MenuFlyoutItem(
+              key: ValueKey<String>('agent_action_definition_trigger_${definition.id}'),
+              leading: const Icon(FluentIcons.add_event),
+              text: Text(l10n.agentActionsTriggerAdd),
+              onPressed: provider.canManageTriggers && !provider.isSavingTrigger
+                  ? () {
+                      provider.selectAction(definition.id);
+                      onAddTrigger(definition);
+                    }
+                  : null,
+            ),
+            MenuFlyoutItem(
+              key: ValueKey<String>('agent_action_definition_edit_${definition.id}'),
+              leading: const Icon(FluentIcons.edit),
+              text: Text(l10n.ctButtonEdit),
+              onPressed: isAgentActionTypeEditableInUi(definition.type) ? () => onEditAction(definition) : null,
+            ),
+            const MenuFlyoutSeparator(),
+            MenuFlyoutItem(
+              leading: const Icon(FluentIcons.delete),
+              text: Text(l10n.agentActionsDeleteSelected),
+              onPressed: provider.canDeleteDefinition(definition)
+                  ? () {
+                      provider.selectAction(definition.id);
+                      unawaited(_confirmDelete(context, provider, definition, l10n));
+                    }
+                  : null,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -469,12 +1125,10 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
     final provider = widget.provider;
     final l10n = widget.l10n;
 
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
+    return AppFilterBar(
       children: [
         SizedBox(
-          width: 190,
+          width: 220,
           child: AppDropdown<AgentActionType?>(
             label: l10n.agentActionsListFilterType,
             value: provider.definitionTypeFilter,
@@ -489,75 +1143,62 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
                 ),
               ),
             ],
-            onChanged: provider.setDefinitionTypeFilter,
+            onChanged: (type) {
+              provider.setDefinitionTypeFilter(type);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionTypeFilter, type?.name));
+            },
           ),
         ),
         SizedBox(
           width: 220,
+          child: AppDropdown<AgentActionState?>(
+            label: l10n.agentActionsFormState,
+            value: provider.definitionStateFilter,
+            items: [
+              ComboBoxItem<AgentActionState?>(
+                child: Text(l10n.agentActionsHistoryFilterAll),
+              ),
+              ...AgentActionState.values.map(
+                (state) => ComboBoxItem<AgentActionState?>(
+                  value: state,
+                  child: Text(_stateLabel(state, l10n)),
+                ),
+              ),
+            ],
+            onChanged: (state) {
+              provider.setDefinitionStateFilter(state);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionStateFilter, state?.name));
+            },
+          ),
+        ),
+        SizedBox(
+          width: 260,
           child: AppTextField(
             label: l10n.agentActionsListFilterSearch,
             controller: _searchController,
-            onChanged: provider.setDefinitionSearchQuery,
+            onChanged: (query) {
+              provider.setDefinitionSearchQuery(query);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionSearch, query.trim()));
+            },
             textInputAction: TextInputAction.search,
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _AgentActionsDetail extends StatelessWidget {
-  const _AgentActionsDetail({
-    required this.provider,
-    required this.l10n,
-  });
-
-  final AgentActionsProvider provider;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = provider.selectedDefinition;
-    if (selected == null) {
-      return AgentActionsEmptySelectionPanel(
-        detailScrollKey: _AgentActionsPageKeys.detailScroll,
-        content: Column(
-          children: [
-            Text(
-              l10n.agentActionsEmptySelection,
-              style: context.bodyMuted,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _AgentActionEditor(
-              provider: provider,
-              l10n: l10n,
-            ),
-          ],
+        Button(
+          onPressed: provider.hasDefinitionListFilters
+              ? () {
+                  provider.clearDefinitionFilters();
+                  unawaited(
+                    _removeUiPreferences([
+                      _AgentActionsUiPreferenceKeys.definitionTypeFilter,
+                      _AgentActionsUiPreferenceKeys.definitionStateFilter,
+                      _AgentActionsUiPreferenceKeys.definitionSearch,
+                    ]),
+                  );
+                }
+              : null,
+          child: Text(l10n.ctButtonClearFilters),
         ),
-      );
-    }
-
-    final executions = provider.filteredSelectedExecutions;
-    final lastTestCanRun = provider.lastTestCanRun ?? false;
-    return AgentActionsDetailPanel(
-      detailScrollKey: _AgentActionsPageKeys.detailScroll,
-      historyListKey: _AgentActionsPageKeys.historyList,
-      emptySelectionContent: const SizedBox.shrink(),
-      selectionContent: _SelectedActionDetailContent(
-        provider: provider,
-        l10n: l10n,
-        definition: selected,
-        lastTestCanRun: lastTestCanRun,
-      ),
-      historyTitle: Text(l10n.agentActionsHistoryTitle, style: context.sectionTitle),
-      historyFilters: _AgentActionsHistoryFilters(provider: provider, l10n: l10n),
-      historyList: _AgentActionExecutionList(
-        executions: executions,
-        provider: provider,
-        l10n: l10n,
-        shrinkWrap: true,
-      ),
+      ],
     );
   }
 }
@@ -568,12 +1209,14 @@ class _SelectedActionDetailContent extends StatelessWidget {
     required this.l10n,
     required this.definition,
     required this.lastTestCanRun,
+    required this.onEditAction,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
   final AgentActionDefinition definition;
   final bool lastTestCanRun;
+  final ValueChanged<AgentActionDefinition> onEditAction;
 
   @override
   Widget build(BuildContext context) {
@@ -587,6 +1230,17 @@ class _SelectedActionDetailContent extends StatelessWidget {
             Expanded(child: Text(definition.name, style: context.sectionTitle)),
             Text(_stateLabel(definition.state, l10n), style: context.bodyMuted),
             const SizedBox(width: AppSpacing.sm),
+            Tooltip(
+              message: l10n.ctButtonEdit,
+              child: Semantics(
+                button: true,
+                label: l10n.ctButtonEdit,
+                child: IconButton(
+                  icon: const Icon(FluentIcons.edit),
+                  onPressed: isAgentActionTypeEditableInUi(definition.type) ? () => onEditAction(definition) : null,
+                ),
+              ),
+            ),
             Tooltip(
               message: l10n.agentActionsDeleteSelected,
               child: Semantics(
@@ -730,12 +1384,6 @@ class _SelectedActionDetailContent extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.lg),
-        _AgentActionEditor(
-          provider: provider,
-          definition: definition,
-          l10n: l10n,
-        ),
-        const SizedBox(height: AppSpacing.lg),
         Row(
           children: [
             Expanded(
@@ -775,13 +1423,11 @@ class _AgentActionExecutionList extends StatelessWidget {
     required this.executions,
     required this.provider,
     required this.l10n,
-    this.shrinkWrap = false,
   });
 
   final List<AgentActionExecution> executions;
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
-  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -796,8 +1442,6 @@ class _AgentActionExecutionList extends StatelessWidget {
     }
 
     return ListView.separated(
-      shrinkWrap: shrinkWrap,
-      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       itemCount: executions.length,
       separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
@@ -975,7 +1619,11 @@ Future<void> _confirmDeleteTrigger(
     context: context,
     builder: (context) {
       return ContentDialog(
-        title: Text(l10n.agentActionsTriggerDeleteConfirmTitle),
+        title: AppDialogTitleBar(
+          title: Text(l10n.agentActionsTriggerDeleteConfirmTitle),
+          closeTooltip: l10n.btnClose,
+          onClose: () => Navigator.pop(context, false),
+        ),
         content: Text(l10n.agentActionsTriggerDeleteConfirmMessage(label)),
         actions: [
           Button(
@@ -1010,7 +1658,11 @@ Future<void> _confirmDelete(
     context: context,
     builder: (context) {
       return ContentDialog(
-        title: Text(l10n.agentActionsDeleteConfirmTitle),
+        title: AppDialogTitleBar(
+          title: Text(l10n.agentActionsDeleteConfirmTitle),
+          closeTooltip: l10n.btnClose,
+          onClose: () => Navigator.pop(context, false),
+        ),
         content: Text(l10n.agentActionsDeleteConfirmMessage(definition.name)),
         actions: [
           Button(
@@ -1097,7 +1749,10 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
                 ),
               ),
             ],
-            onChanged: provider.setHistoryStatusFilter,
+            onChanged: (status) {
+              provider.setHistoryStatusFilter(status);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyStatusFilter, status?.name));
+            },
           ),
         ),
         SizedBox(
@@ -1116,7 +1771,10 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
                 ),
               ),
             ],
-            onChanged: provider.setHistorySourceFilter,
+            onChanged: (source) {
+              provider.setHistorySourceFilter(source);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historySourceFilter, source?.name));
+            },
           ),
         ),
         SizedBox(
@@ -1137,6 +1795,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
                 return;
               }
               provider.setHistoryPeriodFilter(period);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyPeriodFilter, period.name));
             },
           ),
         ),
@@ -1156,7 +1815,10 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
                 ),
               ),
             ],
-            onChanged: provider.setHistoryFailurePhaseFilter,
+            onChanged: (phase) {
+              provider.setHistoryFailurePhaseFilter(phase);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyFailurePhaseFilter, phase));
+            },
           ),
         ),
         SizedBox(
@@ -1164,3099 +1826,15 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
           child: AppTextField(
             label: l10n.agentActionsHistoryFilterSearch,
             controller: _searchController,
-            onChanged: provider.setHistorySearchQuery,
-            textInputAction: TextInputAction.search,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AgentActionEditor extends StatefulWidget {
-  const _AgentActionEditor({
-    required this.provider,
-    required this.l10n,
-    this.definition,
-  });
-
-  final AgentActionsProvider provider;
-  final AgentActionDefinition? definition;
-  final AppLocalizations l10n;
-
-  @override
-  State<_AgentActionEditor> createState() => _AgentActionEditorState();
-}
-
-class _AgentActionEditorState extends State<_AgentActionEditor> {
-  static const String _defaultDeveloperExecutorPath = r'C:\Data7\bin\Executor.exe';
-  static const String _defaultDeveloperConfigBinPath = r'C:\Data7\bin\Data7.Config';
-  static const String _defaultDeveloperConfigRootPath = r'C:\Data7\Data7.Config';
-
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _commandController = TextEditingController();
-  final TextEditingController _workingDirectoryController = TextEditingController();
-  final TextEditingController _executableTargetPathController = TextEditingController();
-  final TextEditingController _executableArgumentsController = TextEditingController();
-  final TextEditingController _scriptPathController = TextEditingController();
-  final TextEditingController _scriptInterpreterPathController = TextEditingController();
-  final TextEditingController _jarPathController = TextEditingController();
-  final TextEditingController _javaExecutablePathController = TextEditingController();
-  final TextEditingController _smtpProfileIdController = TextEditingController();
-  final TextEditingController _emailFromController = TextEditingController();
-  final TextEditingController _emailToController = TextEditingController();
-  final TextEditingController _emailCcController = TextEditingController();
-  final TextEditingController _emailBccController = TextEditingController();
-  final TextEditingController _emailSubjectController = TextEditingController();
-  final TextEditingController _emailBodyController = TextEditingController();
-  final TextEditingController _emailAttachmentsController = TextEditingController();
-  final TextEditingController _comProgIdController = TextEditingController();
-  final TextEditingController _comMemberNameController = TextEditingController();
-  final TextEditingController _comArgumentsController = TextEditingController(text: '{}');
-  final TextEditingController _executorPathController = TextEditingController();
-  final TextEditingController _projectPathController = TextEditingController();
-  final TextEditingController _data7ConfigPathController = TextEditingController();
-  final TextEditingController _connectionIdController = TextEditingController();
-  final TextEditingController _connectionLabelController = TextEditingController();
-  final TextEditingController _developerConnectionSearchController = TextEditingController();
-  String _developerConnectionSearchQuery = '';
-  final TextEditingController _maxRuntimeMinutesController = TextEditingController();
-  final TextEditingController _allowedProfilesController = TextEditingController();
-  final TextEditingController _allowedEnvironmentVariableNamesController = TextEditingController();
-  final TextEditingController _environmentVariablesController = TextEditingController();
-  final TextEditingController _acceptedExitCodesController = TextEditingController();
-  final TextEditingController _runtimeParameterSchemaController = TextEditingController();
-  final TextEditingController _maxConcurrentController = TextEditingController(text: '1');
-  final TextEditingController _maxQueuedController = TextEditingController(text: '100');
-  final TextEditingController _allowedWorkingDirectoriesController = TextEditingController();
-  final TextEditingController _allowedContextDirectoriesController = TextEditingController();
-
-  String? _editingActionId;
-  AgentActionType _draftType = AgentActionType.commandLine;
-  AgentActionState _state = AgentActionState.needsValidation;
-  bool _notifyOnSuccess = false;
-  bool _notifyOnFailure = false;
-  bool _notifyOnTimeout = false;
-  int _maxAttempts = 1;
-  bool _allowRemoteRetry = false;
-  int _maxRuntimeMinutes = 30;
-  bool _killMainProcessOnTimeout = true;
-  AgentActionOnAppExitBehavior _onAppExit = AgentActionOnAppExitBehavior.killMainProcess;
-  AgentActionProcessWindowMode _processWindowMode = AgentActionProcessWindowMode.normal;
-  AgentActionOutputEncodingMode _stdoutEncodingMode = AgentActionOutputEncodingMode.systemConsole;
-  AgentActionOutputEncodingMode _stderrEncodingMode = AgentActionOutputEncodingMode.systemConsole;
-  bool _captureStdout = true;
-  bool _captureStderr = true;
-  bool _redactBeforePersisting = true;
-  AgentActionConcurrencyBehavior _concurrencyBehavior = AgentActionConcurrencyBehavior.enqueue;
-  bool _remoteEnabled = false;
-  bool _remoteAdHoc = false;
-  bool _remoteApprovalGranted = false;
-  bool _runElevated = false;
-  AgentActionPathChangePolicy _pathChangePolicy = AgentActionPathChangePolicy.failIfChanged;
-  AgentActionContextInjectionMode _contextInjectionMode = AgentActionContextInjectionMode.argument;
-  String? _validationMessage;
-
-  static const AgentOperationalProfileResolver _operationalProfileResolver = AgentOperationalProfileResolver();
-  static const ActionEnvironmentResolver _environmentResolver = ActionEnvironmentResolver();
-  static const String _localRemoteApprover = 'local-ui';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDefinition(widget.definition);
-  }
-
-  @override
-  void didUpdateWidget(_AgentActionEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.definition?.id != widget.definition?.id || oldWidget.definition?.type != widget.definition?.type) {
-      _loadDefinition(widget.definition);
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _commandController.dispose();
-    _workingDirectoryController.dispose();
-    _executableTargetPathController.dispose();
-    _executableArgumentsController.dispose();
-    _scriptPathController.dispose();
-    _scriptInterpreterPathController.dispose();
-    _jarPathController.dispose();
-    _javaExecutablePathController.dispose();
-    _smtpProfileIdController.dispose();
-    _emailFromController.dispose();
-    _emailToController.dispose();
-    _emailCcController.dispose();
-    _emailBccController.dispose();
-    _emailSubjectController.dispose();
-    _emailBodyController.dispose();
-    _emailAttachmentsController.dispose();
-    _comProgIdController.dispose();
-    _comMemberNameController.dispose();
-    _comArgumentsController.dispose();
-    _executorPathController.dispose();
-    _projectPathController.dispose();
-    _data7ConfigPathController.dispose();
-    _connectionIdController.dispose();
-    _connectionLabelController.dispose();
-    _developerConnectionSearchController.dispose();
-    _maxRuntimeMinutesController.dispose();
-    _allowedProfilesController.dispose();
-    _allowedEnvironmentVariableNamesController.dispose();
-    _environmentVariablesController.dispose();
-    _acceptedExitCodesController.dispose();
-    _runtimeParameterSchemaController.dispose();
-    _maxConcurrentController.dispose();
-    _maxQueuedController.dispose();
-    _allowedWorkingDirectoriesController.dispose();
-    _allowedContextDirectoriesController.dispose();
-    super.dispose();
-  }
-
-  void _loadDefinition(AgentActionDefinition? definition) {
-    _validationMessage = null;
-    if (definition == null) {
-      _clearDraft();
-      return;
-    }
-    _editingActionId = definition.id;
-    _nameController.text = definition.name;
-    _descriptionController.text = definition.description ?? '';
-    _state = definition.state;
-    final notification = definition.policies.notification;
-    _notifyOnSuccess = notification.notifyOnSuccess;
-    _notifyOnFailure = notification.notifyOnFailure;
-    _notifyOnTimeout = notification.notifyOnTimeout;
-    final retry = definition.policies.retry;
-    _maxAttempts = retry.maxAttempts < 1 ? 1 : retry.maxAttempts;
-    _allowRemoteRetry = retry.allowRemote;
-    final timeout = definition.policies.timeout;
-    _maxRuntimeMinutes = timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes;
-    _maxRuntimeMinutesController.text = '$_maxRuntimeMinutes';
-    _killMainProcessOnTimeout = timeout.killMainProcessOnTimeout;
-    final environment = definition.policies.environment;
-    _allowedProfilesController.text = environment.allowedProfiles.join(', ');
-    _allowedEnvironmentVariableNamesController.text = environment.allowedVariableNames.join(', ');
-    _environmentVariablesController.text = _formatEnvironmentVariables(environment.variables);
-    final exitCode = definition.policies.exitCode;
-    _acceptedExitCodesController.text = exitCode.acceptedExitCodes.join(', ');
-    _onAppExit = definition.policies.lifecycle.onAppExit;
-    _processWindowMode = definition.policies.process.windowMode;
-    final encoding = definition.policies.encoding;
-    _stdoutEncodingMode = encoding.stdout;
-    _stderrEncodingMode = encoding.stderr;
-    final capture = definition.policies.capture;
-    _captureStdout = capture.captureStdout;
-    _captureStderr = capture.captureStderr;
-    _redactBeforePersisting = capture.redactBeforePersisting;
-    final queue = definition.policies.queue;
-    _maxConcurrentController.text = '${queue.maxConcurrent}';
-    _maxQueuedController.text = '${queue.maxQueued}';
-    _concurrencyBehavior = queue.concurrencyBehavior;
-    final pathPolicy = definition.policies.path;
-    _allowedWorkingDirectoriesController.text = pathPolicy.allowedWorkingDirectories.join(', ');
-    _allowedContextDirectoriesController.text = pathPolicy.allowedContextDirectories.join(', ');
-    final remote = definition.policies.remote;
-    _remoteEnabled = remote.isEnabled;
-    _remoteAdHoc = remote.allowAdHoc && widget.provider.isRemoteAdHocAgentActionsEnabled;
-    _remoteApprovalGranted = remote.approvedAt != null && !remote.requiresReapproval;
-    _runElevated = definition.policies.elevated.runElevated && widget.provider.isElevatedAgentActionsEnabled;
-    final contextPolicy = definition.policies.context;
-    _contextInjectionMode = contextPolicy.injectionMode;
-    final runtimeSchema = contextPolicy.runtimeParameterSchema;
-    _runtimeParameterSchemaController.text = runtimeSchema == null
-        ? ''
-        : const JsonEncoder.withIndent('  ').convert(runtimeSchema);
-    switch (definition.config) {
-      case final CommandLineActionConfig config:
-        _draftType = AgentActionType.commandLine;
-        _commandController.text = config.command;
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _pathChangePolicy = config.workingDirectory?.pathChangePolicy ?? AgentActionPathChangePolicy.failIfChanged;
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ExecutableActionConfig config:
-        _draftType = AgentActionType.executable;
-        _commandController.clear();
-        _executableTargetPathController.text = config.executablePath.originalPath;
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ScriptActionConfig config:
-        _draftType = AgentActionType.script;
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.text = config.scriptPath.originalPath;
-        _scriptInterpreterPathController.text = config.interpreterPath?.originalPath ?? '';
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final JarActionConfig config:
-        _draftType = AgentActionType.jar;
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.text = config.jarPath.originalPath;
-        _javaExecutablePathController.text = config.javaExecutablePath?.originalPath ?? '';
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final EmailActionConfig config:
-        _draftType = AgentActionType.email;
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.text = config.smtpProfileId;
-        _emailFromController.text = config.from;
-        _emailToController.text = config.to.join('\n');
-        _emailCcController.text = config.cc.join('\n');
-        _emailBccController.text = config.bcc.join('\n');
-        _emailSubjectController.text = config.subjectTemplate;
-        _emailBodyController.text = config.bodyTemplate;
-        _emailAttachmentsController.text = config.attachmentPaths.map((path) => path.originalPath).join('\n');
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ComObjectActionConfig config:
-        _draftType = AgentActionType.comObject;
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.text = config.progId;
-        _comMemberNameController.text = config.memberName;
-        _comArgumentsController.text = const JsonEncoder.withIndent('  ').convert(config.arguments);
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final DeveloperActionConfig config:
-        _draftType = AgentActionType.developer;
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.text = config.executorPath.originalPath;
-        _projectPathController.text = config.projectPath.originalPath;
-        _data7ConfigPathController.text = config.data7ConfigPath.originalPath;
-        _connectionIdController.text = config.connectionId;
-        _connectionLabelController.text = config.connectionLabel;
-        _scheduleDeveloperConnectionReload(
-          pathPolicy: definition.policies.path,
-          selectedConnectionId: config.connectionId,
-        );
-    }
-  }
-
-  void _clearDraft([AgentActionType? draftType]) {
-    _editingActionId = null;
-    _draftType = draftType ?? _draftType;
-    _nameController.clear();
-    _descriptionController.clear();
-    _commandController.clear();
-    _workingDirectoryController.clear();
-    _executableTargetPathController.clear();
-    _executableArgumentsController.clear();
-    _scriptPathController.clear();
-    _scriptInterpreterPathController.clear();
-    _jarPathController.clear();
-    _javaExecutablePathController.clear();
-    _smtpProfileIdController.clear();
-    _emailFromController.clear();
-    _emailToController.clear();
-    _emailCcController.clear();
-    _emailBccController.clear();
-    _emailSubjectController.clear();
-    _emailBodyController.clear();
-    _emailAttachmentsController.clear();
-    _comProgIdController.clear();
-    _comMemberNameController.clear();
-    _comArgumentsController.text = '{}';
-    _executorPathController.clear();
-    _projectPathController.clear();
-    _data7ConfigPathController.clear();
-    _connectionIdController.clear();
-    _connectionLabelController.clear();
-    _state = AgentActionState.needsValidation;
-    _notifyOnSuccess = false;
-    _notifyOnFailure = false;
-    _notifyOnTimeout = false;
-    _maxAttempts = 1;
-    _allowRemoteRetry = false;
-    _maxRuntimeMinutes = 30;
-    _maxRuntimeMinutesController.text = '30';
-    _killMainProcessOnTimeout = true;
-    _allowedProfilesController.clear();
-    _allowedEnvironmentVariableNamesController.clear();
-    _environmentVariablesController.clear();
-    _acceptedExitCodesController.text = '0';
-    _onAppExit = AgentActionOnAppExitBehavior.killMainProcess;
-    _processWindowMode = AgentActionProcessWindowMode.normal;
-    _stdoutEncodingMode = AgentActionOutputEncodingMode.systemConsole;
-    _stderrEncodingMode = AgentActionOutputEncodingMode.systemConsole;
-    _captureStdout = true;
-    _captureStderr = true;
-    _redactBeforePersisting = true;
-    _maxConcurrentController.text = '1';
-    _maxQueuedController.text = '100';
-    _concurrencyBehavior = AgentActionConcurrencyBehavior.enqueue;
-    _allowedWorkingDirectoriesController.clear();
-    _allowedContextDirectoriesController.clear();
-    _remoteEnabled = false;
-    _remoteAdHoc = false;
-    _remoteApprovalGranted = false;
-    _runElevated = false;
-    _validationMessage = null;
-    widget.provider.clearDeveloperData7Connections(notify: false);
-  }
-
-  AgentActionRetryPolicy _draftRetryPolicy() {
-    return AgentActionRetryPolicy(
-      maxAttempts: _maxAttempts,
-      allowRemote: _allowRemoteRetry,
-    );
-  }
-
-  AgentActionTimeoutPolicy _draftTimeoutPolicy() {
-    return AgentActionTimeoutPolicy(
-      maxRuntime: Duration(minutes: _maxRuntimeMinutes),
-      killMainProcessOnTimeout: _killMainProcessOnTimeout,
-    );
-  }
-
-  AgentActionNotificationPolicy _draftNotificationPolicy() {
-    return AgentActionNotificationPolicy(
-      notifyOnSuccess: _notifyOnSuccess,
-      notifyOnFailure: _notifyOnFailure,
-      notifyOnTimeout: _notifyOnTimeout,
-    );
-  }
-
-  AgentActionEnvironmentPolicy _draftEnvironmentPolicy() {
-    return AgentActionEnvironmentPolicy(
-      allowedProfiles: _parseAllowedProfiles(_allowedProfilesController.text),
-      allowedVariableNames: _parseCommaSeparatedTokens(_allowedEnvironmentVariableNamesController.text),
-      variables: _parseEnvironmentVariables(_environmentVariablesController.text),
-    );
-  }
-
-  AgentActionExitCodePolicy _draftExitCodePolicy(Set<int> acceptedExitCodes) {
-    return AgentActionExitCodePolicy(acceptedExitCodes: acceptedExitCodes);
-  }
-
-  AgentActionLifecyclePolicy _draftLifecyclePolicy() {
-    return AgentActionLifecyclePolicy(onAppExit: _onAppExit);
-  }
-
-  AgentActionProcessPolicy _draftProcessPolicy() {
-    return AgentActionProcessPolicy(windowMode: _processWindowMode);
-  }
-
-  AgentActionEncodingPolicy _draftEncodingPolicy() {
-    return AgentActionEncodingPolicy(
-      stdout: _stdoutEncodingMode,
-      stderr: _stderrEncodingMode,
-    );
-  }
-
-  AgentActionCapturePolicy _draftCapturePolicy() {
-    return AgentActionCapturePolicy(
-      captureStdout: _captureStdout,
-      captureStderr: _captureStderr,
-      redactBeforePersisting: _redactBeforePersisting,
-    );
-  }
-
-  AgentActionQueuePolicy _draftQueuePolicy() {
-    return AgentActionQueuePolicy(
-      maxConcurrent: _parsePositiveInt(_maxConcurrentController.text) ?? 1,
-      maxQueued: _parsePositiveInt(_maxQueuedController.text) ?? 100,
-      concurrencyBehavior: _concurrencyBehavior,
-    );
-  }
-
-  AgentActionPathPolicy _draftPathPolicy() {
-    return AgentActionPathPolicy(
-      allowedWorkingDirectories: _parseCommaSeparatedTokens(_allowedWorkingDirectoriesController.text),
-      allowedContextDirectories: _parseCommaSeparatedTokens(_allowedContextDirectoriesController.text),
-    );
-  }
-
-  int? _parsePositiveInt(String input) {
-    final parsed = int.tryParse(input.trim());
-    if (parsed == null || parsed < 1) {
-      return null;
-    }
-
-    return parsed;
-  }
-
-  bool get _draftCapturesProcessOutput {
-    return switch (_draftType) {
-      AgentActionType.commandLine ||
-      AgentActionType.executable ||
-      AgentActionType.script ||
-      AgentActionType.jar ||
-      AgentActionType.developer => true,
-      AgentActionType.email || AgentActionType.comObject => false,
-    };
-  }
-
-  AgentActionElevatedPolicy _draftElevatedPolicy() {
-    if (!widget.provider.isElevatedAgentActionsEnabled) {
-      return const AgentActionElevatedPolicy();
-    }
-    return AgentActionElevatedPolicy(runElevated: _runElevated);
-  }
-
-  AgentActionContextPolicy _draftContextPolicy() {
-    final schemaText = _runtimeParameterSchemaController.text.trim();
-    if (schemaText.isEmpty) {
-      return AgentActionContextPolicy(
-        injectionMode: _contextInjectionMode,
-      );
-    }
-
-    final decoded = jsonDecode(schemaText);
-    if (decoded is! Map) {
-      throw const FormatException('Runtime parameter schema must be a JSON object.');
-    }
-
-    return AgentActionContextPolicy(
-      injectionMode: _contextInjectionMode,
-      runtimeParameterSchema: decoded.cast<String, Object?>(),
-    );
-  }
-
-  bool _validateDraftContextPolicy() {
-    try {
-      _draftContextPolicy();
-      return true;
-    } on FormatException {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormRuntimeParameterSchemaHint;
-      });
-      return false;
-    }
-  }
-
-  bool _validateDraftEnvironmentPolicy() {
-    try {
-      final policy = _draftEnvironmentPolicy();
-      final failure = _environmentResolver.validatePolicy(
-        actionId: _editingActionId ?? 'draft',
-        policy: policy,
-      );
-      if (failure != null) {
-        setState(() {
-          _validationMessage = failure.context['user_message'] as String? ?? failure.message;
-        });
-        return false;
-      }
-      return true;
-    } on FormatException {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormEnvironmentVariablesInvalid;
-      });
-      return false;
-    }
-  }
-
-  bool _validateDraftQueuePolicy() {
-    if (_parsePositiveInt(_maxConcurrentController.text) == null) {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormInvalidQueueLimits;
-      });
-      return false;
-    }
-
-    if (_parsePositiveInt(_maxQueuedController.text) == null) {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormInvalidQueueLimits;
-      });
-      return false;
-    }
-
-    return true;
-  }
-
-  bool _validateDraftPolicies() {
-    return _validateDraftContextPolicy() && _validateDraftEnvironmentPolicy() && _validateDraftQueuePolicy();
-  }
-
-  AgentActionRemotePolicy _draftRemotePolicy() {
-    if (!_remoteEnabled) {
-      return const AgentActionRemotePolicy();
-    }
-
-    final existing = widget.definition;
-    final previous = existing?.policies.remote;
-    final DateTime? approvedAt;
-    if (!_remoteApprovalGranted) {
-      approvedAt = null;
-    } else if (previous?.approvedAt == null || (previous?.requiresReapproval ?? false)) {
-      approvedAt = DateTime.now().toUtc();
-    } else {
-      approvedAt = previous!.approvedAt;
-    }
-
-    return AgentActionRemotePolicy(
-      isEnabled: true,
-      allowAdHoc: widget.provider.isRemoteAdHocAgentActionsEnabled && _remoteAdHoc,
-      approvedBy: approvedAt == null ? null : (previous?.approvedBy ?? _localRemoteApprover),
-      approvedAt: approvedAt,
-      approvalReason: previous?.approvalReason,
-      riskFingerprint: previous?.riskFingerprint,
-      requiresReapproval: !_remoteApprovalGranted && (previous?.requiresReapproval ?? false),
-    );
-  }
-
-  Set<String> _parseAllowedProfiles(String input) => _parseCommaSeparatedTokens(input);
-
-  Set<String> _parseCommaSeparatedTokens(String input) {
-    if (input.trim().isEmpty) {
-      return const <String>{};
-    }
-
-    return input.split(',').map((String part) => part.trim()).where((String part) => part.isNotEmpty).toSet();
-  }
-
-  Map<String, String> _parseEnvironmentVariables(String input) {
-    final variables = <String, String>{};
-    for (final rawLine in input.split(RegExp(r'\r?\n'))) {
-      final line = rawLine.trim();
-      if (line.isEmpty || line.startsWith('#')) {
-        continue;
-      }
-
-      final separatorIndex = line.indexOf('=');
-      if (separatorIndex <= 0) {
-        throw const FormatException('Invalid environment variable line.');
-      }
-
-      final name = line.substring(0, separatorIndex).trim();
-      if (name.isEmpty) {
-        throw const FormatException('Environment variable name is blank.');
-      }
-
-      variables[name] = line.substring(separatorIndex + 1);
-    }
-
-    return Map<String, String>.unmodifiable(variables);
-  }
-
-  String _formatEnvironmentVariables(Map<String, String> variables) {
-    if (variables.isEmpty) {
-      return '';
-    }
-
-    final names = variables.keys.toList()..sort();
-    return names.map((String name) => '$name=${variables[name]}').join('\n');
-  }
-
-  Set<int>? _tryParseAcceptedExitCodes(String input) {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) {
-      return const <int>{0};
-    }
-
-    final codes = <int>{};
-    for (final part in trimmed.split(',')) {
-      final token = part.trim();
-      if (token.isEmpty) {
-        continue;
-      }
-      final code = int.tryParse(token);
-      if (code == null) {
-        return null;
-      }
-      codes.add(code);
-    }
-
-    if (codes.isEmpty) {
-      return const <int>{0};
-    }
-
-    return codes;
-  }
-
-  Future<void> _save() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormName);
-      });
-      return;
-    }
-
-    final acceptedExitCodes = _tryParseAcceptedExitCodes(_acceptedExitCodesController.text);
-    if (acceptedExitCodes == null) {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormInvalidExitCodes;
-      });
-      return;
-    }
-
-    if (_remoteEnabled && !_remoteApprovalGranted) {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormRemoteApprovalRequired;
-      });
-      return;
-    }
-
-    final saveResult = switch (_draftType) {
-      AgentActionType.commandLine => _saveCommandLineDraft(),
-      AgentActionType.executable => _saveExecutableDraft(),
-      AgentActionType.script => _saveScriptDraft(),
-      AgentActionType.jar => _saveJarDraft(),
-      AgentActionType.email => _saveEmailDraft(),
-      AgentActionType.comObject => _saveComObjectDraft(),
-      AgentActionType.developer => _saveDeveloperDraft(),
-    };
-    if (!saveResult) {
-      return;
-    }
-
-    setState(() {
-      _validationMessage = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final saving = widget.provider.isSaving;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                _editingActionId == null ? _createTitle() : _editTitle(),
-                style: context.sectionTitle,
-              ),
-            ),
-            Button(
-              onPressed: saving
-                  ? null
-                  : () {
-                      setState(_clearDraft);
-                    },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(FluentIcons.add),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(widget.l10n.agentActionsFormNew),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (_validationMessage != null) ...[
-          InfoBar(
-            title: Text(widget.l10n.agentActionsValidationTitle),
-            content: Text(_validationMessage!),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stackFields = constraints.maxWidth < 720;
-            final nameField = AppTextField(
-              label: widget.l10n.agentActionsFormName,
-              controller: _nameController,
-              enabled: !saving && widget.provider.canSaveAction,
-              textInputAction: TextInputAction.next,
-            );
-            final typeField = AppDropdown<AgentActionType>(
-              label: widget.l10n.agentActionsFormType,
-              value: _draftType,
-              items: _editableDraftTypes
-                  .map(
-                    (type) {
-                      final unavailable = widget.provider.isActionTypeUnavailable(type);
-                      return ComboBoxItem<AgentActionType>(
-                        value: type,
-                        enabled: !unavailable,
-                        child: Text(
-                          unavailable
-                              ? '${_typeLabel(type, widget.l10n)} (${widget.l10n.agentActionsRiskRunnerUnavailable})'
-                              : _typeLabel(type, widget.l10n),
-                        ),
-                      );
-                    },
-                  )
-                  .toList(growable: false),
-              onChanged: saving || _editingActionId != null
-                  ? null
-                  : (value) {
-                      if (value == null || value == _draftType) {
-                        return;
-                      }
-                      setState(() {
-                        _clearDraft(value);
-                      });
-                    },
-            );
-            final stateField = AppDropdown<AgentActionState>(
-              label: widget.l10n.agentActionsFormState,
-              value: _state,
-              items: AgentActionState.values
-                  .map(
-                    (state) => ComboBoxItem<AgentActionState>(
-                      value: state,
-                      child: Text(_stateLabel(state, widget.l10n)),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: saving
-                  ? null
-                  : (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _state = value;
-                      });
-                    },
-            );
-
-            if (stackFields) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  nameField,
-                  const SizedBox(height: AppSpacing.sm),
-                  typeField,
-                  const SizedBox(height: AppSpacing.sm),
-                  stateField,
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: nameField),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 220, child: typeField),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 220, child: stateField),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormDescription,
-          controller: _descriptionController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ..._buildDraftFields(saving),
-        const SizedBox(height: AppSpacing.md),
-        _buildExecutionPoliciesSection(saving),
-        const SizedBox(height: AppSpacing.md),
-        _buildRuntimePoliciesSection(saving),
-        const SizedBox(height: AppSpacing.md),
-        _buildRemotePolicySection(saving),
-        const SizedBox(height: AppSpacing.md),
-        _buildNotificationPolicySection(saving),
-        const SizedBox(height: AppSpacing.md),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton(
-            onPressed: saving || !widget.provider.canSaveAction
-                ? null
-                : () {
-                    unawaited(_save());
-                  },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (saving)
-                  const SizedBox.square(
-                    dimension: 14,
-                    child: ProgressRing(strokeWidth: 2),
-                  )
-                else
-                  const Icon(FluentIcons.save),
-                const SizedBox(width: AppSpacing.xs),
-                Text(widget.l10n.agentActionsFormSave),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExecutionPoliciesSection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormExecutionPoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormExecutionPoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 220,
-              child: AppDropdown<int>(
-                label: widget.l10n.agentActionsFormMaxAttempts,
-                value: _maxAttempts,
-                items: List<ComboBoxItem<int>>.generate(
-                  5,
-                  (int index) {
-                    final attempts = index + 1;
-                    return ComboBoxItem<int>(
-                      value: attempts,
-                      child: Text('$attempts'),
-                    );
-                  },
-                  growable: false,
-                ),
-                onChanged: enabled
-                    ? (int? value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _maxAttempts = value;
-                        });
-                      }
-                    : null,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormMaxRuntimeMinutes,
-                controller: _maxRuntimeMinutesController,
-                enabled: enabled,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                onChanged: (String value) {
-                  final parsed = int.tryParse(value.trim());
-                  if (parsed != null && parsed > 0) {
-                    setState(() {
-                      _maxRuntimeMinutes = parsed;
-                    });
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _killMainProcessOnTimeout,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _killMainProcessOnTimeout = value ?? true;
-                      });
-                    }
-                  : null,
-              content: Text(widget.l10n.agentActionsFormKillOnTimeout),
-            ),
-            Checkbox(
-              checked: _allowRemoteRetry,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _allowRemoteRetry = value ?? false;
-                      });
-                    }
-                  : null,
-              content: Text(widget.l10n.agentActionsFormAllowRemoteRetry),
-            ),
-            if (widget.provider.isElevatedAgentActionsEnabled)
-              Checkbox(
-                checked: _runElevated,
-                onChanged:
-                    enabled && widget.provider.isElevatedRunnerConfigured && !widget.provider.isElevatedRunnerDegraded
-                    ? (bool? value) {
-                        unawaited(_onRunElevatedChanged(value ?? false));
-                      }
-                    : null,
-                content: Text(widget.l10n.agentActionsFormRunElevated),
-              ),
-          ],
-        ),
-        if (widget.provider.isElevatedAgentActionsEnabled) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            widget.l10n.agentActionsFormRunElevatedHint,
-            style: context.bodyMuted,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        AppDropdown<AgentActionContextInjectionMode>(
-          label: widget.l10n.agentActionsFormContextInjectionMode,
-          value: _contextInjectionMode,
-          items: [
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.argument,
-              child: Text(widget.l10n.agentActionsFormContextInjectionArgument),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.file,
-              child: Text(widget.l10n.agentActionsFormContextInjectionFile),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.environment,
-              child: Text(widget.l10n.agentActionsFormContextInjectionEnvironment),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.stdin,
-              child: Text(widget.l10n.agentActionsFormContextInjectionStdin),
-            ),
-          ],
-          onChanged: enabled
-              ? (AgentActionContextInjectionMode? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _contextInjectionMode = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<AgentActionPathChangePolicy>(
-          label: widget.l10n.agentActionsFormPathChangePolicy,
-          value: _pathChangePolicy,
-          items: [
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.failIfChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyFail),
-            ),
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.warnIfChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyWarn),
-            ),
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.allowChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyAllow),
-            ),
-          ],
-          onChanged: enabled
-              ? (AgentActionPathChangePolicy? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _pathChangePolicy = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormRuntimeParameterSchema,
-          controller: _runtimeParameterSchemaController,
-          enabled: enabled,
-          maxLines: 6,
-          hint: widget.l10n.agentActionsFormRuntimeParameterSchemaHint,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRuntimePoliciesSection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    final currentProfile = _operationalProfileResolver.currentProfile;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormRuntimePoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormRuntimePoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        InfoBar(
-          title: Text(
-            currentProfile == null
-                ? widget.l10n.agentActionsFormCurrentOperationalProfileUnset
-                : widget.l10n.agentActionsFormCurrentOperationalProfile(currentProfile),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedProfiles,
-          controller: _allowedProfilesController,
-          enabled: enabled,
-          hint: widget.l10n.agentActionsFormAllowedProfilesHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedEnvironmentVariableNames,
-          controller: _allowedEnvironmentVariableNamesController,
-          enabled: enabled,
-          hint: widget.l10n.agentActionsFormAllowedEnvironmentVariableNamesHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEnvironmentVariables,
-          controller: _environmentVariablesController,
-          enabled: enabled,
-          maxLines: 6,
-          hint: widget.l10n.agentActionsFormEnvironmentVariablesHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          widget.l10n.agentActionsFormQueuePolicyDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stackFields = constraints.maxWidth < 720;
-            final maxConcurrentField = AppTextField(
-              label: widget.l10n.agentActionsFormMaxConcurrent,
-              controller: _maxConcurrentController,
-              enabled: enabled,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-            );
-            final maxQueuedField = AppTextField(
-              label: widget.l10n.agentActionsFormMaxQueued,
-              controller: _maxQueuedController,
-              enabled: enabled,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-            );
-
-            if (stackFields) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  maxConcurrentField,
-                  const SizedBox(height: AppSpacing.sm),
-                  maxQueuedField,
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: maxConcurrentField),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: maxQueuedField),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<AgentActionConcurrencyBehavior>(
-          label: widget.l10n.agentActionsFormConcurrencyBehavior,
-          value: _concurrencyBehavior,
-          items: AgentActionConcurrencyBehavior.values
-              .map(
-                (AgentActionConcurrencyBehavior behavior) => ComboBoxItem<AgentActionConcurrencyBehavior>(
-                  value: behavior,
-                  child: Text(_concurrencyBehaviorLabel(behavior, widget.l10n)),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: enabled
-              ? (AgentActionConcurrencyBehavior? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _concurrencyBehavior = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          widget.l10n.agentActionsFormPathAllowlistDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedWorkingDirectories,
-          controller: _allowedWorkingDirectoriesController,
-          enabled: enabled,
-          maxLines: 3,
-          hint: widget.l10n.agentActionsFormPathAllowlistHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedContextDirectories,
-          controller: _allowedContextDirectoriesController,
-          enabled: enabled,
-          maxLines: 3,
-          hint: widget.l10n.agentActionsFormPathAllowlistHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        if (_draftCapturesProcessOutput) ...[
-          AppDropdown<AgentActionProcessWindowMode>(
-            label: widget.l10n.agentActionsFormProcessWindowMode,
-            value: _processWindowMode,
-            items: AgentActionProcessWindowMode.values
-                .map(
-                  (AgentActionProcessWindowMode mode) => ComboBoxItem<AgentActionProcessWindowMode>(
-                    value: mode,
-                    child: Text(_processWindowModeLabel(mode, widget.l10n)),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: enabled
-                ? (AgentActionProcessWindowMode? value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _processWindowMode = value;
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            widget.l10n.agentActionsFormCapturePolicyDescription,
-            style: context.bodyMuted,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Checkbox(
-                checked: _captureStdout,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _captureStdout = value ?? true;
-                        });
-                      }
-                    : null,
-                content: Text(widget.l10n.agentActionsFormCaptureStdout),
-              ),
-              Checkbox(
-                checked: _captureStderr,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _captureStderr = value ?? true;
-                        });
-                      }
-                    : null,
-                content: Text(widget.l10n.agentActionsFormCaptureStderr),
-              ),
-              Checkbox(
-                checked: _redactBeforePersisting,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _redactBeforePersisting = value ?? true;
-                        });
-                      }
-                    : null,
-                content: Text(widget.l10n.agentActionsFormRedactBeforePersisting),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            widget.l10n.agentActionsFormOutputEncodingDescription,
-            style: context.bodyMuted,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AppDropdown<AgentActionOutputEncodingMode>(
-                  label: widget.l10n.agentActionsFormStdoutEncoding,
-                  value: _stdoutEncodingMode,
-                  items: AgentActionOutputEncodingMode.values
-                      .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
-                          value: mode,
-                          child: Text(_outputEncodingModeLabel(mode, widget.l10n)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
-                          if (value == null) {
-                            return;
-                          }
-                          setState(() {
-                            _stdoutEncodingMode = value;
-                          });
-                        }
-                      : null,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppDropdown<AgentActionOutputEncodingMode>(
-                  label: widget.l10n.agentActionsFormStderrEncoding,
-                  value: _stderrEncodingMode,
-                  items: AgentActionOutputEncodingMode.values
-                      .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
-                          value: mode,
-                          child: Text(_outputEncodingModeLabel(mode, widget.l10n)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
-                          if (value == null) {
-                            return;
-                          }
-                          setState(() {
-                            _stderrEncodingMode = value;
-                          });
-                        }
-                      : null,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stackFields = constraints.maxWidth < 720;
-            final exitCodesField = AppTextField(
-              label: widget.l10n.agentActionsFormAcceptedExitCodes,
-              controller: _acceptedExitCodesController,
-              enabled: enabled,
-              hint: widget.l10n.agentActionsFormAcceptedExitCodesHint,
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.next,
-            );
-            final onAppExitField = AppDropdown<AgentActionOnAppExitBehavior>(
-              label: widget.l10n.agentActionsFormOnAppExit,
-              value: _onAppExit,
-              items: AgentActionOnAppExitBehavior.values
-                  .map(
-                    (AgentActionOnAppExitBehavior behavior) => ComboBoxItem<AgentActionOnAppExitBehavior>(
-                      value: behavior,
-                      child: Text(_onAppExitLabel(behavior, widget.l10n)),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: enabled
-                  ? (AgentActionOnAppExitBehavior? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _onAppExit = value;
-                      });
-                    }
-                  : null,
-            );
-
-            if (stackFields) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  exitCodesField,
-                  const SizedBox(height: AppSpacing.sm),
-                  onAppExitField,
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: exitCodesField),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 280, child: onAppExitField),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  String _onAppExitLabel(AgentActionOnAppExitBehavior behavior, AppLocalizations l10n) {
-    return switch (behavior) {
-      AgentActionOnAppExitBehavior.killMainProcess => l10n.agentActionsFormOnAppExitKill,
-      AgentActionOnAppExitBehavior.waitThenKillMainProcess => l10n.agentActionsFormOnAppExitWaitThenKill,
-      AgentActionOnAppExitBehavior.leaveRunning => l10n.agentActionsFormOnAppExitLeaveRunning,
-    };
-  }
-
-  String _processWindowModeLabel(AgentActionProcessWindowMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      AgentActionProcessWindowMode.normal => l10n.agentActionsFormProcessWindowModeNormal,
-      AgentActionProcessWindowMode.hidden => l10n.agentActionsFormProcessWindowModeHidden,
-      AgentActionProcessWindowMode.minimized => l10n.agentActionsFormProcessWindowModeMinimized,
-    };
-  }
-
-  String _concurrencyBehaviorLabel(AgentActionConcurrencyBehavior behavior, AppLocalizations l10n) {
-    return switch (behavior) {
-      AgentActionConcurrencyBehavior.allowParallel => l10n.agentActionsFormConcurrencyAllowParallel,
-      AgentActionConcurrencyBehavior.enqueue => l10n.agentActionsFormConcurrencyEnqueue,
-      AgentActionConcurrencyBehavior.reject => l10n.agentActionsFormConcurrencyReject,
-      AgentActionConcurrencyBehavior.ignore => l10n.agentActionsFormConcurrencyIgnore,
-    };
-  }
-
-  String _outputEncodingModeLabel(AgentActionOutputEncodingMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      AgentActionOutputEncodingMode.utf8 => l10n.agentActionsFormOutputEncodingUtf8,
-      AgentActionOutputEncodingMode.systemConsole => l10n.agentActionsFormOutputEncodingSystemConsole,
-    };
-  }
-
-  Widget _buildRemotePolicySection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    final remoteFeatureEnabled = widget.provider.isRemoteAgentActionsEnabled;
-    final remoteAdHocFeatureEnabled = widget.provider.isRemoteAdHocAgentActionsEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormRemotePoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormRemotePoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        if (!remoteFeatureEnabled) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsFormRemoteFeatureDisabledTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteFeatureDisabledMessage),
-            isLong: true,
-          ),
-        ] else if (!remoteAdHocFeatureEnabled) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsFormRemoteAdHocFeatureDisabledTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteAdHocFeatureDisabledMessage),
-            isLong: true,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _remoteEnabled,
-              onChanged: !enabled
-                  ? null
-                  : (bool? value) {
-                      unawaited(_onRemoteEnabledChanged(value ?? false));
-                    },
-              content: Text(widget.l10n.agentActionsFormRemoteExecutionEnabled),
-            ),
-            Checkbox(
-              checked: _remoteAdHoc,
-              onChanged: !enabled || !_remoteEnabled || !remoteAdHocFeatureEnabled
-                  ? null
-                  : (bool? value) {
-                      unawaited(_onRemoteAdHocChanged(value ?? false));
-                    },
-              content: Text(widget.l10n.agentActionsFormRemoteAdHocEnabled),
-            ),
-          ],
-        ),
-        if (widget.definition?.policies.remote.requiresReapproval ?? false) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            key: _AgentActionsPageKeys.remoteReapprovalInfoBar,
-            title: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredMessage),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-        ] else if (_remoteEnabled && _remoteApprovalGranted) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            widget.l10n.agentActionsFormRemoteApprovedHint,
-            style: context.bodyMuted,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Future<void> _onRemoteEnabledChanged(bool enabled) async {
-    if (enabled) {
-      if (!context.mounted) {
-        return;
-      }
-      final needsReapproval = widget.definition?.policies.remote.requiresReapproval ?? false;
-      var confirmed = false;
-      if (context.mounted) {
-        confirmed = needsReapproval
-            ? await confirmReapproveRemoteAgentAction(
-                context: context,
-                l10n: widget.l10n,
-              )
-            : await confirmEnableRemoteAgentAction(
-                context: context,
-                l10n: widget.l10n,
-              );
-      }
-      if (!confirmed || !context.mounted) {
-        return;
-      }
-
-      setState(() {
-        _remoteEnabled = true;
-        _remoteApprovalGranted = true;
-      });
-      return;
-    }
-
-    setState(() {
-      _remoteEnabled = false;
-      _remoteAdHoc = false;
-      _remoteApprovalGranted = false;
-    });
-  }
-
-  Future<void> _onRemoteAdHocChanged(bool enabled) async {
-    if (enabled) {
-      if (!context.mounted) {
-        return;
-      }
-      var confirmed = false;
-      if (context.mounted) {
-        confirmed = await confirmEnableRemoteAdHocAgentAction(
-          context: context,
-          l10n: widget.l10n,
-        );
-      }
-      if (!confirmed || !context.mounted) {
-        return;
-      }
-    }
-
-    setState(() {
-      _remoteAdHoc = enabled;
-    });
-  }
-
-  Future<void> _onRunElevatedChanged(bool enabled) async {
-    if (!enabled) {
-      setState(() {
-        _runElevated = false;
-      });
-      return;
-    }
-
-    if (!context.mounted) {
-      return;
-    }
-
-    final confirmed = await confirmEnableElevatedAgentAction(
-      context: context,
-      l10n: widget.l10n,
-    );
-    if (!confirmed || !context.mounted) {
-      return;
-    }
-
-    setState(() {
-      _runElevated = true;
-    });
-  }
-
-  Widget _buildNotificationPolicySection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormNotificationsTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormNotificationsDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _notifyOnSuccess,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnSuccess = value ?? false;
-                      });
-                    }
-                  : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnSuccess),
-            ),
-            Checkbox(
-              checked: _notifyOnFailure,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnFailure = value ?? false;
-                      });
-                    }
-                  : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnFailure),
-            ),
-            Checkbox(
-              checked: _notifyOnTimeout,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnTimeout = value ?? false;
-                      });
-                    }
-                  : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnTimeout),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _buildDraftFields(bool saving) {
-    return switch (_draftType) {
-      AgentActionType.commandLine => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormCommand,
-          controller: _commandController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 2,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.executable => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormExecutablePath,
-          controller: _executableTargetPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseExecutablePath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickExecutableTargetPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.comObject => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormComProgId,
-          controller: _comProgIdController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormComMemberName,
-          controller: _comMemberNameController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormComArguments,
-          controller: _comArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 8,
-          textInputAction: TextInputAction.done,
-          hint: widget.l10n.agentActionsFormComArgumentsHint,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.email => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormSmtpProfileId,
-          controller: _smtpProfileIdController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormSmtpProfileIdHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailFrom,
-          controller: _emailFromController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailTo,
-          controller: _emailToController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailToHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailCc,
-          controller: _emailCcController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 3,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailCcHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailBcc,
-          controller: _emailBccController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 3,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailBccHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailSubject,
-          controller: _emailSubjectController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailSubjectHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailBody,
-          controller: _emailBodyController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 8,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailBodyHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailAttachments,
-          controller: _emailAttachmentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.done,
-          hint: widget.l10n.agentActionsFormEmailAttachmentsHint,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.jar => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormJarPath,
-          controller: _jarPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseJarPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickJarPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormJavaExecutablePath,
-          controller: _javaExecutablePathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormJavaExecutablePathHint,
-          suffixIcon: _PathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseJavaExecutablePath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickJavaExecutablePath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.script => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormScriptPath,
-          controller: _scriptPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseScriptPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormInterpreterPath,
-          controller: _scriptInterpreterPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormInterpreterPathHint,
-          suffixIcon: _PathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseInterpreterPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptInterpreterPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
-        ),
-      ],
-      AgentActionType.developer => <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormExecutorPath,
-                controller: _executorPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: _PathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseExecutorPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperExecutorPath,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormProjectPath,
-                controller: _projectPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: _PathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseProjectPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperProjectPath,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _DeveloperPathShortcuts(
-          primaryLabel: widget.l10n.agentActionsFormUseDefaultExecutorPath,
-          onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperExecutorPath,
-        ),
-        ..._buildDeveloperBinaryPathHints(),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Button(
-              onPressed: saving || !widget.provider.canSaveAction || widget.provider.isLoadingDeveloperConnections
-                  ? null
-                  : () {
-                      unawaited(
-                        _reloadDeveloperConnections(
-                          pathPolicy: _draftPathPolicy(),
-                        ),
-                      );
-                    },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.provider.isLoadingDeveloperConnections)
-                    const SizedBox.square(
-                      dimension: 14,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  else
-                    const Icon(FluentIcons.refresh),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(widget.l10n.agentActionsFormReloadConnections),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            if (widget.provider.usedDefaultDeveloperData7ConfigPath)
-              Expanded(
-                child: Text(
-                  widget.l10n.agentActionsFormDefaultConfigResolved,
-                  style: context.bodyMuted,
-                ),
-              ),
-          ],
-        ),
-        if (widget.provider.developerConnectionLookupMessage != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsValidationTitle),
-            content: Text(widget.provider.developerConnectionLookupMessage!),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-        ],
-        ..._buildDeveloperConnectionStatus(),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormData7ConfigPath,
-                controller: _data7ConfigPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperConfigPathChanged,
-                suffixIcon: _PathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseData7ConfigPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperData7ConfigPath,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormConnectionId,
-                controller: _connectionIdController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperConnectionIdChanged,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _DeveloperPathShortcuts(
-          primaryLabel: widget.l10n.agentActionsFormUseDefaultConfigBinPath,
-          onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperData7ConfigBinPath,
-          secondaryLabel: widget.l10n.agentActionsFormUseDefaultConfigRootPath,
-          onSecondaryPressed: saving || !widget.provider.canSaveAction
-              ? null
-              : _applyDefaultDeveloperData7ConfigRootPath,
-        ),
-        ..._buildDeveloperConfigPathHints(),
-        ..._buildDeveloperResolvedConfigHints(),
-        if (widget.provider.developerConnections.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppTextField(
-            label: widget.l10n.agentActionsFormConnectionSearch,
-            controller: _developerConnectionSearchController,
-            enabled: !saving && widget.provider.canSaveAction,
-            onChanged: (value) {
-              setState(() {
-                _developerConnectionSearchQuery = value;
-              });
+            onChanged: (query) {
+              provider.setHistorySearchQuery(query);
+              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historySearch, query.trim()));
             },
             textInputAction: TextInputAction.search,
           ),
-          if (_developerConnectionFilterHasNoMatches) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              widget.l10n.agentActionsFormConnectionFilterEmpty,
-              style: context.bodyMuted,
-            ),
-          ],
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<String>(
-          label: widget.l10n.agentActionsFormConnectionSelector,
-          value:
-              _developerConnectionsForSelector().any(
-                (option) => option.id == _connectionIdController.text.trim(),
-              )
-              ? _connectionIdController.text.trim()
-              : null,
-          items: _developerConnectionsForSelector()
-              .map(
-                (option) => ComboBoxItem<String>(
-                  value: option.id,
-                  child: Text(option.label),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: saving || !widget.provider.canSaveAction ? null : _applyDeveloperConnectionSelection,
-          placeholder: Text(widget.l10n.agentActionsFormConnectionSelectorPlaceholder),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormConnectionLabel,
-          controller: _connectionLabelController,
-          enabled: false,
-          readOnly: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
         ),
       ],
-    };
-  }
-
-  List<Widget> _buildDeveloperBinaryPathHints() {
-    final hints = <_DeveloperHintData>[];
-    final executorPath = _executorPathController.text.trim();
-    if (executorPath.isNotEmpty) {
-      final normalizedExecutorPath = _normalizePathForComparison(executorPath);
-      if (!_endsWithFileName(normalizedExecutorPath, 'executor.exe')) {
-        hints.add(
-          _DeveloperHintData.warning(
-            widget.l10n.agentActionsFormExecutorPathHintExpectedFileName,
-          ),
-        );
-      } else if (normalizedExecutorPath == _normalizePathForComparison(_defaultDeveloperExecutorPath)) {
-        hints.add(
-          _DeveloperHintData.info(
-            widget.l10n.agentActionsFormExecutorPathHintDefault,
-          ),
-        );
-      }
-      hints.addAll(
-        _buildDeveloperFileInspectionHints(
-          path: executorPath,
-          missingMessage: widget.l10n.agentActionsFormExecutorPathHintMissing,
-          directoryMessage: widget.l10n.agentActionsFormExecutorPathHintDirectory,
-        ),
-      );
-    }
-
-    final projectPath = _projectPathController.text.trim();
-    if (projectPath.isNotEmpty) {
-      if (!_normalizePathForComparison(projectPath).endsWith('.7proj')) {
-        hints.add(
-          _DeveloperHintData.warning(
-            widget.l10n.agentActionsFormProjectPathHintExpectedExtension,
-          ),
-        );
-      }
-      hints.addAll(
-        _buildDeveloperFileInspectionHints(
-          path: projectPath,
-          missingMessage: widget.l10n.agentActionsFormProjectPathHintMissing,
-          directoryMessage: widget.l10n.agentActionsFormProjectPathHintDirectory,
-        ),
-      );
-    }
-
-    if (hints.isEmpty) {
-      return const <Widget>[];
-    }
-
-    return <Widget>[
-      const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(hints: hints),
-    ];
-  }
-
-  List<Widget> _buildDeveloperConfigPathHints() {
-    final configPath = _data7ConfigPathController.text.trim();
-    if (configPath.isEmpty) {
-      return const <Widget>[];
-    }
-
-    final normalizedConfigPath = _normalizePathForComparison(configPath);
-    final hints = <_DeveloperHintData>[];
-    if (!_endsWithFileName(normalizedConfigPath, 'data7.config')) {
-      hints.add(
-        _DeveloperHintData.warning(
-          widget.l10n.agentActionsFormData7ConfigPathHintExpectedFileName,
-        ),
-      );
-    } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigBinPath)) {
-      hints.add(
-        _DeveloperHintData.info(
-          widget.l10n.agentActionsFormData7ConfigPathHintDefaultBin,
-        ),
-      );
-    } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigRootPath)) {
-      hints.add(
-        _DeveloperHintData.info(
-          widget.l10n.agentActionsFormData7ConfigPathHintDefaultRoot,
-        ),
-      );
-    }
-    hints.addAll(
-      _buildDeveloperFileInspectionHints(
-        path: configPath,
-        missingMessage: widget.l10n.agentActionsFormData7ConfigPathHintMissing,
-        directoryMessage: widget.l10n.agentActionsFormData7ConfigPathHintDirectory,
-      ),
     );
-
-    if (hints.isEmpty) {
-      return const <Widget>[];
-    }
-
-    return <Widget>[
-      const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(hints: hints),
-    ];
-  }
-
-  List<Widget> _buildDeveloperResolvedConfigHints() {
-    final resolvedPath = widget.provider.resolvedDeveloperData7ConfigPath?.trim();
-    if (resolvedPath == null || resolvedPath.isEmpty) {
-      return const <Widget>[];
-    }
-
-    final typedPath = _data7ConfigPathController.text.trim();
-    final normalizedResolvedPath = _normalizePathForComparison(resolvedPath);
-    final normalizedTypedPath = _normalizePathForComparison(typedPath);
-    final message = normalizedTypedPath.isNotEmpty && normalizedResolvedPath != normalizedTypedPath
-        ? widget.l10n.agentActionsFormLoadedConfigPath(resolvedPath)
-        : widget.l10n.agentActionsFormResolvedConfigPath(resolvedPath);
-
-    return <Widget>[
-      const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(
-        hints: <_DeveloperHintData>[
-          _DeveloperHintData.info(message),
-        ],
-      ),
-    ];
-  }
-
-  List<Widget> _buildDeveloperConnectionStatus() {
-    final definition = widget.definition;
-    if (definition == null || definition.config is! DeveloperActionConfig) {
-      return const <Widget>[];
-    }
-    if (_draftType != AgentActionType.developer) {
-      return const <Widget>[];
-    }
-    if (widget.provider.developerConnectionLookupMessage != null) {
-      return const <Widget>[];
-    }
-
-    final config = definition.config as DeveloperActionConfig;
-    final selectedConnectionId = _connectionIdController.text.trim();
-    if (selectedConnectionId.isEmpty) {
-      return const <Widget>[];
-    }
-
-    final selectedOption = widget.provider.developerConnections
-        .where((option) => option.id == selectedConnectionId)
-        .firstOrNull;
-
-    if (selectedOption == null && widget.provider.developerConnections.isNotEmpty) {
-      final savedConnectionId = config.connectionId.trim();
-      final isSavedConnectionMissing = selectedConnectionId == savedConnectionId;
-      return <Widget>[
-        const SizedBox(height: AppSpacing.sm),
-        InfoBar(
-          key: isSavedConnectionMissing
-              ? _AgentActionsPageKeys.developerConnectionMissingInfoBar
-              : _AgentActionsPageKeys.developerConnectionUnknownInfoBar,
-          title: Text(
-            isSavedConnectionMissing
-                ? widget.l10n.agentActionsFormConnectionMissingTitle
-                : widget.l10n.agentActionsFormConnectionUnknownTitle,
-          ),
-          content: Text(
-            isSavedConnectionMissing
-                ? widget.l10n.agentActionsFormConnectionMissingMessage
-                : widget.l10n.agentActionsFormConnectionUnknownMessage,
-          ),
-          severity: InfoBarSeverity.warning,
-          isLong: true,
-        ),
-      ];
-    }
-
-    final savedSnapshotHash = config.connectionSnapshotHash?.trim();
-    if (selectedOption != null &&
-        savedSnapshotHash != null &&
-        savedSnapshotHash.isNotEmpty &&
-        savedSnapshotHash != selectedOption.snapshotHash) {
-      return <Widget>[
-        const SizedBox(height: AppSpacing.sm),
-        InfoBar(
-          key: _AgentActionsPageKeys.developerConnectionChangedInfoBar,
-          title: Text(widget.l10n.agentActionsFormConnectionChangedTitle),
-          content: Text(widget.l10n.agentActionsFormConnectionChangedMessage),
-          severity: InfoBarSeverity.warning,
-          isLong: true,
-        ),
-      ];
-    }
-
-    return const <Widget>[];
-  }
-
-  bool _saveExecutableDraft() {
-    final executablePath = _executableTargetPathController.text.trim();
-    if (executablePath.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormExecutablePath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveExecutableAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        executablePath: executablePath,
-        arguments: _parseStructuredArguments(_executableArgumentsController.text),
-        workingDirectory: _workingDirectoryController.text,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        encodingPolicy: _draftEncodingPolicy(),
-        capturePolicy: _draftCapturePolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  bool _saveJarDraft() {
-    final jarPath = _jarPathController.text.trim();
-    if (jarPath.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormJarPath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveJarAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        jarPath: jarPath,
-        javaExecutablePath: _javaExecutablePathController.text,
-        arguments: _parseStructuredArguments(_executableArgumentsController.text),
-        workingDirectory: _workingDirectoryController.text,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        encodingPolicy: _draftEncodingPolicy(),
-        capturePolicy: _draftCapturePolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  bool _saveEmailDraft() {
-    final smtpProfileId = _smtpProfileIdController.text.trim();
-    if (smtpProfileId.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormSmtpProfileId);
-      });
-      return false;
-    }
-
-    final from = _emailFromController.text.trim();
-    if (from.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailFrom);
-      });
-      return false;
-    }
-
-    final to = _parseStructuredArguments(_emailToController.text);
-    if (to.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailTo);
-      });
-      return false;
-    }
-
-    final subject = _emailSubjectController.text.trim();
-    if (subject.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailSubject);
-      });
-      return false;
-    }
-
-    final body = _emailBodyController.text.trim();
-    if (body.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailBody);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    final attachmentPaths = _parseStructuredArguments(_emailAttachmentsController.text)
-        .map(
-          (path) => AgentActionPathReference(
-            originalPath: path,
-            pathChangePolicy: _pathChangePolicy,
-          ),
-        )
-        .toList(growable: false);
-
-    unawaited(
-      widget.provider.saveEmailAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        smtpProfileId: smtpProfileId,
-        from: from,
-        to: to,
-        cc: _parseStructuredArguments(_emailCcController.text),
-        bcc: _parseStructuredArguments(_emailBccController.text),
-        subjectTemplate: subject,
-        bodyTemplate: body,
-        attachmentPaths: attachmentPaths,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  bool _saveComObjectDraft() {
-    final progId = _comProgIdController.text.trim();
-    if (progId.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormComProgId);
-      });
-      return false;
-    }
-
-    final memberName = _comMemberNameController.text.trim();
-    if (memberName.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormComMemberName);
-      });
-      return false;
-    }
-
-    final argumentsResult = _parseComObjectArguments(_comArgumentsController.text);
-    if (argumentsResult == null) {
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormInvalidComArguments;
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveComObjectAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        progId: progId,
-        memberName: memberName,
-        arguments: argumentsResult,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  Map<String, Object?>? _parseComObjectArguments(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return const <String, Object?>{};
-    }
-
-    try {
-      final decoded = jsonDecode(trimmed);
-      if (decoded is! Map) {
-        return null;
-      }
-
-      return Map<String, Object?>.from(decoded);
-    } on FormatException {
-      return null;
-    }
-  }
-
-  bool _saveScriptDraft() {
-    final scriptPath = _scriptPathController.text.trim();
-    if (scriptPath.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormScriptPath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveScriptAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        scriptPath: scriptPath,
-        interpreterPath: _scriptInterpreterPathController.text,
-        arguments: _parseStructuredArguments(_executableArgumentsController.text),
-        workingDirectory: _workingDirectoryController.text,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        encodingPolicy: _draftEncodingPolicy(),
-        capturePolicy: _draftCapturePolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  List<String> _parseStructuredArguments(String raw) {
-    return raw
-        .split(RegExp(r'\r?\n'))
-        .map((String line) => line.trim())
-        .where((String line) => line.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  bool _saveCommandLineDraft() {
-    final command = _commandController.text.trim();
-    if (command.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormCommand);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveCommandLineAction(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        command: command,
-        workingDirectory: _workingDirectoryController.text,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        encodingPolicy: _draftEncodingPolicy(),
-        capturePolicy: _draftCapturePolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  bool _saveDeveloperDraft() {
-    final executorPath = _executorPathController.text.trim();
-    if (executorPath.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormExecutorPath);
-      });
-      return false;
-    }
-
-    final projectPath = _projectPathController.text.trim();
-    if (projectPath.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormProjectPath);
-      });
-      return false;
-    }
-
-    final connectionId = _connectionIdController.text.trim();
-    if (connectionId.isEmpty) {
-      setState(() {
-        _validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormConnectionId);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    unawaited(
-      widget.provider.saveDeveloperData7Action(
-        actionId: _editingActionId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text,
-        executorPath: executorPath,
-        projectPath: projectPath,
-        data7ConfigPath: _data7ConfigPathController.text,
-        connectionId: connectionId,
-        connectionLabel: _connectionLabelController.text,
-        state: _state,
-        notificationPolicy: _draftNotificationPolicy(),
-        retryPolicy: _draftRetryPolicy(),
-        timeoutPolicy: _draftTimeoutPolicy(),
-        environmentPolicy: _draftEnvironmentPolicy(),
-        exitCodePolicy: _draftExitCodePolicy(_tryParseAcceptedExitCodes(_acceptedExitCodesController.text)!),
-        processPolicy: _draftProcessPolicy(),
-        encodingPolicy: _draftEncodingPolicy(),
-        capturePolicy: _draftCapturePolicy(),
-        lifecyclePolicy: _draftLifecyclePolicy(),
-        remotePolicy: _draftRemotePolicy(),
-        elevatedPolicy: _draftElevatedPolicy(),
-        contextPolicy: _draftContextPolicy(),
-        pathChangePolicy: _pathChangePolicy,
-        queuePolicy: _draftQueuePolicy(),
-        pathPolicy: _draftPathPolicy(),
-      ),
-    );
-    return true;
-  }
-
-  String _createTitle() {
-    return switch (_draftType) {
-      AgentActionType.commandLine => widget.l10n.agentActionsFormCreateTitle,
-      AgentActionType.executable => widget.l10n.agentActionsFormCreateExecutableTitle,
-      AgentActionType.script => widget.l10n.agentActionsFormCreateScriptTitle,
-      AgentActionType.jar => widget.l10n.agentActionsFormCreateJarTitle,
-      AgentActionType.email => widget.l10n.agentActionsFormCreateEmailTitle,
-      AgentActionType.comObject => widget.l10n.agentActionsFormCreateComObjectTitle,
-      AgentActionType.developer => widget.l10n.agentActionsFormCreateDeveloperTitle,
-    };
-  }
-
-  String _editTitle() {
-    return switch (_draftType) {
-      AgentActionType.commandLine => widget.l10n.agentActionsFormEditTitle,
-      AgentActionType.executable => widget.l10n.agentActionsFormEditExecutableTitle,
-      AgentActionType.script => widget.l10n.agentActionsFormEditScriptTitle,
-      AgentActionType.jar => widget.l10n.agentActionsFormEditJarTitle,
-      AgentActionType.email => widget.l10n.agentActionsFormEditEmailTitle,
-      AgentActionType.comObject => widget.l10n.agentActionsFormEditComObjectTitle,
-      AgentActionType.developer => widget.l10n.agentActionsFormEditDeveloperTitle,
-    };
-  }
-
-  void _scheduleDeveloperConnectionReload({
-    required AgentActionPathPolicy pathPolicy,
-    required String? selectedConnectionId,
-  }) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _draftType != AgentActionType.developer) {
-        return;
-      }
-      unawaited(
-        _reloadDeveloperConnections(
-          pathPolicy: pathPolicy,
-          selectedConnectionId: selectedConnectionId,
-        ),
-      );
-    });
-  }
-
-  Future<void> _reloadDeveloperConnections({
-    AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-    String? selectedConnectionId,
-  }) async {
-    final actionId = (_editingActionId?.trim().isNotEmpty ?? false) ? _editingActionId!.trim() : 'developer-draft';
-    await widget.provider.loadDeveloperData7Connections(
-      actionId: actionId,
-      data7ConfigPath: _data7ConfigPathController.text,
-      selectedConnectionId: selectedConnectionId ?? _connectionIdController.text,
-      pathPolicy: pathPolicy,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    final resolvedPath = widget.provider.resolvedDeveloperData7ConfigPath;
-    final typedConfigPath = _data7ConfigPathController.text.trim();
-    if (resolvedPath != null &&
-        resolvedPath.isNotEmpty &&
-        (typedConfigPath.isEmpty || widget.provider.usedDefaultDeveloperData7ConfigPath)) {
-      _data7ConfigPathController.text = resolvedPath;
-    }
-
-    final selectedId = selectedConnectionId ?? _connectionIdController.text.trim();
-    final selectedOption = widget.provider.developerConnections.where((option) => option.id == selectedId).firstOrNull;
-    if (selectedOption != null) {
-      _applyDeveloperConnectionSelection(selectedOption.id);
-      return;
-    }
-
-    if (selectedId.isEmpty && widget.provider.developerConnections.length == 1) {
-      _applyDeveloperConnectionSelection(widget.provider.developerConnections.single.id);
-    }
-  }
-
-  void _applyDeveloperConnectionSelection(String? connectionId) {
-    if (connectionId == null || connectionId.trim().isEmpty) {
-      return;
-    }
-
-    final selectedOption = widget.provider.developerConnections
-        .where((option) => option.id == connectionId)
-        .firstOrNull;
-    if (selectedOption == null) {
-      return;
-    }
-
-    setState(() {
-      _connectionIdController.text = selectedOption.id;
-      _connectionLabelController.text = selectedOption.label;
-    });
-  }
-
-  void _handleDeveloperConfigPathChanged(String _) {
-    widget.provider.clearDeveloperData7Connections(notify: false);
-    setState(() {
-      _connectionLabelController.clear();
-      _developerConnectionSearchQuery = '';
-      _developerConnectionSearchController.clear();
-      _validationMessage = null;
-    });
-  }
-
-  bool get _developerConnectionFilterHasNoMatches {
-    final query = _developerConnectionSearchQuery.trim();
-    if (query.isEmpty || widget.provider.developerConnections.isEmpty) {
-      return false;
-    }
-
-    final needle = query.toLowerCase();
-    return !widget.provider.developerConnections.any(
-      (option) => option.id.toLowerCase().contains(needle) || option.label.toLowerCase().contains(needle),
-    );
-  }
-
-  List<DeveloperData7ConnectionOption> _developerConnectionsForSelector() {
-    final all = widget.provider.developerConnections;
-    final query = _developerConnectionSearchQuery.trim().toLowerCase();
-    final matched = query.isEmpty
-        ? all
-        : all
-              .where(
-                (option) => option.id.toLowerCase().contains(query) || option.label.toLowerCase().contains(query),
-              )
-              .toList(growable: false);
-
-    final selectedId = _connectionIdController.text.trim();
-    if (selectedId.isEmpty || matched.any((option) => option.id == selectedId)) {
-      return matched;
-    }
-
-    final selected = all.where((option) => option.id == selectedId).firstOrNull;
-    if (selected == null) {
-      return matched;
-    }
-
-    return <DeveloperData7ConnectionOption>[selected, ...matched];
-  }
-
-  void _handleDeveloperBinaryPathChanged(String _) {
-    setState(() {
-      _validationMessage = null;
-    });
-  }
-
-  void _handleDeveloperConnectionIdChanged(String value) {
-    final selectedOption = widget.provider.developerConnections
-        .where((option) => option.id == value.trim())
-        .firstOrNull;
-    setState(() {
-      _connectionLabelController.text = selectedOption?.label ?? '';
-    });
-  }
-
-  Future<void> _pickJarPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseJarPath,
-      allowedExtensions: const ['jar'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _jarPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickJavaExecutablePath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseJavaExecutablePath,
-      allowedExtensions: const ['exe'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _javaExecutablePathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickScriptPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseScriptPath,
-      allowedExtensions: const ['ps1', 'bat', 'cmd', 'py'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _scriptPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickScriptInterpreterPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseInterpreterPath,
-      allowedExtensions: const ['exe'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _scriptInterpreterPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickExecutableTargetPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseExecutablePath,
-      allowedExtensions: const ['exe', 'bat', 'cmd'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _executableTargetPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickDeveloperExecutorPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseExecutorPath,
-      allowedExtensions: const ['exe'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _executorPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  void _applyDefaultDeveloperExecutorPath() {
-    setState(() {
-      _executorPathController.text = _defaultDeveloperExecutorPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickDeveloperProjectPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseProjectPath,
-      allowedExtensions: const ['7proj'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _projectPathController.text = selectedPath;
-      _validationMessage = null;
-    });
-  }
-
-  Future<void> _pickDeveloperData7ConfigPath() async {
-    final selectedPath = await _pickSingleFile(
-      dialogTitle: widget.l10n.agentActionsFormBrowseData7ConfigPath,
-      allowedExtensions: const ['config'],
-    );
-    if (selectedPath == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _data7ConfigPathController.text = selectedPath;
-      _connectionIdController.clear();
-      _connectionLabelController.clear();
-      _validationMessage = null;
-    });
-    widget.provider.clearDeveloperData7Connections(notify: false);
-
-    await _reloadDeveloperConnections(
-      pathPolicy: _draftPathPolicy(),
-    );
-  }
-
-  Future<void> _applyDefaultDeveloperData7ConfigBinPath() async {
-    await _applyDeveloperData7ConfigPath(_defaultDeveloperConfigBinPath);
-  }
-
-  Future<void> _applyDefaultDeveloperData7ConfigRootPath() async {
-    await _applyDeveloperData7ConfigPath(_defaultDeveloperConfigRootPath);
-  }
-
-  Future<void> _applyDeveloperData7ConfigPath(String path) async {
-    setState(() {
-      _data7ConfigPathController.text = path;
-      _connectionIdController.clear();
-      _connectionLabelController.clear();
-      _validationMessage = null;
-    });
-    widget.provider.clearDeveloperData7Connections(notify: false);
-
-    await _reloadDeveloperConnections(
-      pathPolicy: _draftPathPolicy(),
-    );
-  }
-
-  Future<String?> _pickSingleFile({
-    required String dialogTitle,
-    required List<String> allowedExtensions,
-  }) async {
-    try {
-      final picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: allowedExtensions,
-        dialogTitle: dialogTitle,
-      );
-      return picked?.files.singleOrNull?.path;
-    } on Exception {
-      if (!mounted) {
-        return null;
-      }
-
-      setState(() {
-        _validationMessage = widget.l10n.agentActionsFormBrowseFileError;
-      });
-      return null;
-    }
-  }
-
-  String _normalizePathForComparison(String path) {
-    return path.trim().replaceAll('/', r'\').toLowerCase();
-  }
-
-  bool _endsWithFileName(String normalizedPath, String fileName) {
-    final expectedSuffix = r'\' + fileName.toLowerCase();
-    return normalizedPath.endsWith(expectedSuffix) || normalizedPath == fileName.toLowerCase();
-  }
-
-  List<_DeveloperHintData> _buildDeveloperFileInspectionHints({
-    required String path,
-    required String missingMessage,
-    required String directoryMessage,
-  }) {
-    try {
-      final entityType = FileSystemEntity.typeSync(path);
-      return switch (entityType) {
-        FileSystemEntityType.notFound => <_DeveloperHintData>[
-          _DeveloperHintData.warning(missingMessage),
-        ],
-        FileSystemEntityType.directory => <_DeveloperHintData>[
-          _DeveloperHintData.warning(directoryMessage),
-        ],
-        _ => const <_DeveloperHintData>[],
-      };
-    } on FileSystemException {
-      return <_DeveloperHintData>[
-        _DeveloperHintData.warning(
-          widget.l10n.agentActionsFormPathHintInspectionFailed,
-        ),
-      ];
-    }
   }
 }
 

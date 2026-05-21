@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -21,7 +22,12 @@ Future<bool> showAgentActionSecretConfigureDialog({
       return StatefulBuilder(
         builder: (BuildContext context, void Function(void Function()) setState) {
           return ContentDialog(
-            title: Text(l10n.agentActionsSecretConfigureTitle(secretName)),
+            title: AppDialogTitleBar(
+              title: Text(l10n.agentActionsSecretConfigureTitle(secretName)),
+              closeTooltip: l10n.btnClose,
+              canClose: !isSaving,
+              onClose: () => Navigator.pop(dialogContext, false),
+            ),
             content: Form(
               key: formKey,
               child: Column(
@@ -115,7 +121,11 @@ Future<bool> confirmDeleteAgentActionSecret({
     context: context,
     builder: (BuildContext dialogContext) {
       return ContentDialog(
-        title: Text(l10n.agentActionsSecretDeleteTitle),
+        title: AppDialogTitleBar(
+          title: Text(l10n.agentActionsSecretDeleteTitle),
+          closeTooltip: l10n.btnClose,
+          onClose: () => Navigator.pop(dialogContext, false),
+        ),
         content: Text(l10n.agentActionsSecretDeleteMessage(secretName)),
         actions: [
           Button(

@@ -1,3 +1,5 @@
+export 'feedback/app_content_dialog.dart';
+export 'feedback/app_dialog_title_bar.dart';
 export 'feedback/centered_message.dart';
 export 'feedback/error_display.dart';
 export 'feedback/error_widget.dart';

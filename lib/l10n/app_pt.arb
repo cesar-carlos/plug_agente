@@ -781,6 +781,7 @@
   "msgOdbcDriverNameRequired": "Nome do Driver ODBC é obrigatório",
   "msgConnectionCheckFailed": "Não foi possível conectar ao banco de dados. Verifique as credenciais e configurações.",
   "btnOk": "OK",
+  "btnClose": "Fechar",
   "btnCancel": "Cancelar",
   "queryNoResults": "Sem resultados",
   "queryNoResultsMessage": "Execute uma consulta SELECT para ver os resultados aqui.",

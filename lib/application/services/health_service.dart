@@ -268,6 +268,10 @@ class HealthService {
       'batch': {
         'read_only_parallel_total': metrics['read_only_batch_parallel'] ?? 0,
         'read_only_parallel_capped_total': metrics['read_only_batch_parallel_capped'] ?? 0,
+        'transactional_direct_total': metrics['transactional_batch_direct_path'] ?? 0,
+        'transactional_native_pool_total': metrics['transactional_batch_native_pool_path'] ?? 0,
+        'transactional_native_pool_fallback_total': metrics['transactional_batch_native_pool_fallback'] ?? 0,
+        'bulk_insert_recommended_total': metrics['batch_bulk_insert_recommended'] ?? 0,
         'last_requested_parallelism': metrics['read_only_batch_parallel_last_requested'] ?? 0,
         'last_effective_parallelism': metrics['read_only_batch_parallel_last_effective'] ?? 0,
         'parallel_global_wait_avg_ms': metrics['read_only_batch_parallel_wait_avg_time_ms'] ?? 0.0,

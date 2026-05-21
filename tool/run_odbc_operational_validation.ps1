@@ -14,12 +14,14 @@
   .\tool\run_odbc_operational_validation.ps1 -All
 
 .EXAMPLE
-  .\tool\run_odbc_operational_validation.ps1 -RunSmoke -RunBenchmark
+  .\tool\run_odbc_operational_validation.ps1 -RunSmoke -RunBenchmark -RunStreamingBenchmark -RunDriverMatrixBenchmark
 #>
 param(
   [switch]$RunSmoke,
   [switch]$RunBurst,
   [switch]$RunBenchmark,
+  [switch]$RunStreamingBenchmark,
+  [switch]$RunDriverMatrixBenchmark,
   [switch]$All,
   [switch]$SkipPreflight,
   [string]$EnvPath = ".env",
@@ -98,6 +100,57 @@ function Get-GitCommitOrDefault {
   }
 
   return "(not resolved)"
+}
+
+function Get-DsnDriverFamily {
+  param([string]$ConnectionString)
+
+  if ([string]::IsNullOrWhiteSpace($ConnectionString) -or $ConnectionString -eq "(not configured)") {
+    return "(not configured)"
+  }
+
+  $upper = $ConnectionString.ToUpperInvariant()
+  if ($upper.Contains("POSTGRE")) {
+    return "PostgreSQL"
+  }
+  if ($upper.Contains("ANYWHERE") -or $upper.Contains("SYBASE") -or $upper.Contains("SQLA")) {
+    return "SQL Anywhere"
+  }
+  if ($upper.Contains("SQL SERVER") -or $upper.Contains("ODBC DRIVER")) {
+    return "SQL Server"
+  }
+  return "unknown"
+}
+
+function Get-NativeAdaptiveEligibility {
+  param([string]$DriverFamily)
+
+  if ($DriverFamily -eq "SQL Server" -or $DriverFamily -eq "PostgreSQL") {
+    return "eligible"
+  }
+  if ($DriverFamily -eq "SQL Anywhere") {
+    return "blocked (lease/direct path)"
+  }
+  return "unknown"
+}
+
+function Get-DriverTuningRecommendation {
+  param([string]$DriverFamily)
+
+  switch ($DriverFamily) {
+    "SQL Server" {
+      return "Validate native/adaptive pool with driver matrix; tune ODBC_POOL_SIZE and SQL_QUEUE_MAX_WORKERS together, then watch transactional_native_pool_fallback."
+    }
+    "PostgreSQL" {
+      return "Validate native/adaptive pool with driver matrix; prefer batched streaming for large SELECTs and watch pending saturation."
+    }
+    "SQL Anywhere" {
+      return "Keep lease/direct path; tune SQL queue, direct limiter and bulkInsert instead of native pool."
+    }
+    default {
+      return "Configure a representative DSN and run the driver matrix before changing pool defaults."
+    }
+  }
 }
 
 function Update-ContextFromHealthSnapshotTemplate {
@@ -182,6 +235,8 @@ function New-ValidationReport {
     ('| Run directory | `{0}` |' -f $Context.RunDirectory),
     ('| Build / commit | `{0}` |' -f $Context.Commit),
     ('| DSN used | `{0}` |' -f $Context.DsnUsed),
+    ('| Driver family | {0} |' -f $Context.DriverFamily),
+    ('| Native/adaptive pool eligibility | {0} |' -f $Context.NativeAdaptiveEligibility),
     ('| Smoke query | `{0}` |' -f $Context.SmokeQuery),
     ('| Long query | `{0}` |' -f $Context.LongQuery),
     '',
@@ -200,6 +255,10 @@ function New-ValidationReport {
     ('RUN_ODBC_BURST_TESTS={0}' -f $Context.RunOdbcBurstTests),
     '```',
     '',
+    'Driver recommendation:',
+    '',
+    ('> {0}' -f $Context.DriverTuningRecommendation),
+    '',
     '## Step Status',
     '',
     '| Step | Status | Command |',
@@ -208,6 +267,8 @@ function New-ValidationReport {
     ('| Smoke | {0} | `{1}` |' -f $Steps.Smoke.Status, $Steps.Smoke.Command),
     ('| Burst | {0} | `{1}` |' -f $Steps.Burst.Status, $Steps.Burst.Command),
     ('| Benchmark | {0} | `{1}` |' -f $Steps.Benchmark.Status, $Steps.Benchmark.Command),
+    ('| Streaming benchmark | {0} | `{1}` |' -f $Steps.StreamingBenchmark.Status, $Steps.StreamingBenchmark.Command),
+    ('| Driver matrix benchmark | {0} | `{1}` |' -f $Steps.DriverMatrixBenchmark.Status, $Steps.DriverMatrixBenchmark.Command),
     '',
     '## Step Artifacts',
     '',
@@ -217,28 +278,20 @@ function New-ValidationReport {
     ('| Smoke | {0} | {1} | {2} |' -f $Steps.Smoke.Log, $Steps.Smoke.StartedAt, $Steps.Smoke.FinishedAt),
     ('| Burst | {0} | {1} | {2} |' -f $Steps.Burst.Log, $Steps.Burst.StartedAt, $Steps.Burst.FinishedAt),
     ('| Benchmark | {0} | {1} | {2} |' -f $Steps.Benchmark.Log, $Steps.Benchmark.StartedAt, $Steps.Benchmark.FinishedAt),
+    ('| Streaming benchmark | {0} | {1} | {2} |' -f $Steps.StreamingBenchmark.Log, $Steps.StreamingBenchmark.StartedAt, $Steps.StreamingBenchmark.FinishedAt),
+    ('| Driver matrix benchmark | {0} | {1} | {2} |' -f $Steps.DriverMatrixBenchmark.Log, $Steps.DriverMatrixBenchmark.StartedAt, $Steps.DriverMatrixBenchmark.FinishedAt),
     '',
     '## Auxiliary Artifacts',
     '',
     '| Artifact | Purpose |',
     '| --- | --- |',
     '| `health_snapshot_template.json` | Template no shape atual de `agent.getHealth` com tuning efetivo do ambiente local. |',
+    '| `health_burst_*_before.json` / `health_burst_*_after.json` | Snapshots reais de `HealthService.getHealthStatusAsync()` gravados pelo teste de burst quando `-RunBurst`/`-All` roda. |',
+    '| `driver_matrix_*_async.log` / `driver_matrix_*_streaming.log` | Benchmark por driver configurado; drivers sem DSN sao pulados. |',
     '',
-    '## Manual Health Snapshots',
+    '## Automated Health Snapshots',
     '',
-    'Collect `agent.getHealth` or `HealthService.getHealthStatusAsync()` before and after the burst.',
-    '',
-    '### Snapshot Before Burst',
-    '',
-    '```json',
-    '{}',
-    '```',
-    '',
-    '### Snapshot After Burst',
-    '',
-    '```json',
-    '{}',
-    '```',
+    'When Burst runs, `sql_queue_burst_test.dart` receives `ODBC_BURST_HEALTH_SNAPSHOT_DIR` and writes before/after health JSON files into the run directory. If the Burst step is not requested, collect `agent.getHealth` manually before making tuning decisions.',
     '',
     '## Quick Comparison',
     '',
@@ -300,6 +353,8 @@ if ($All) {
   $RunSmoke = $true
   $RunBurst = $true
   $RunBenchmark = $true
+  $RunStreamingBenchmark = $true
+  $RunDriverMatrixBenchmark = $true
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -343,6 +398,10 @@ if ([string]::IsNullOrWhiteSpace($context.DsnUsed)) {
   $context.DsnUsed = "(not configured)"
 }
 
+$context.DriverFamily = Get-DsnDriverFamily $context.DsnUsed
+$context.NativeAdaptiveEligibility = Get-NativeAdaptiveEligibility $context.DriverFamily
+$context.DriverTuningRecommendation = Get-DriverTuningRecommendation $context.DriverFamily
+
 if ([string]::IsNullOrWhiteSpace($context.LongQuery)) {
   $context.LongQuery = "(not configured)"
 }
@@ -381,6 +440,20 @@ $steps = @{
     Status = if ($RunBenchmark) { "pending" } else { "not requested" }
     Command = ".\tool\odbc_async_benchmark.ps1"
     Log = if ($RunBenchmark) { "benchmark.log" } else { "(not requested)" }
+    StartedAt = "-"
+    FinishedAt = "-"
+  }
+  StreamingBenchmark = @{
+    Status = if ($RunStreamingBenchmark) { "pending" } else { "not requested" }
+    Command = ".\tool\odbc_streaming_benchmark.ps1"
+    Log = if ($RunStreamingBenchmark) { "streaming_benchmark.log" } else { "(not requested)" }
+    StartedAt = "-"
+    FinishedAt = "-"
+  }
+  DriverMatrixBenchmark = @{
+    Status = if ($RunDriverMatrixBenchmark) { "pending" } else { "not requested" }
+    Command = ".\tool\odbc_driver_matrix_benchmark.ps1 -OutputDirectory <runDirectory>"
+    Log = if ($RunDriverMatrixBenchmark) { "driver_matrix.log" } else { "(not requested)" }
     StartedAt = "-"
     FinishedAt = "-"
   }
@@ -449,6 +522,7 @@ try {
 
   if ($RunBurst) {
     $env:RUN_ODBC_BURST_TESTS = "true"
+    $env:ODBC_BURST_HEALTH_SNAPSHOT_DIR = $runDirectory
     $context.RunOdbcBurstTests = "true"
     $burstResult = Invoke-StepCommand -Name "Burst" -CommandText $steps.Burst.Command -LogPath (Join-Path $runDirectory $steps.Burst.Log) -Command {
       flutter test test/integration/sql_queue_burst_test.dart
@@ -474,6 +548,32 @@ try {
       throw "Benchmark failed."
     }
   }
+
+  if ($RunStreamingBenchmark) {
+    $streamingBenchmarkResult = Invoke-StepCommand -Name "Streaming benchmark" -CommandText $steps.StreamingBenchmark.Command -LogPath (Join-Path $runDirectory $steps.StreamingBenchmark.Log) -Command {
+      & (Join-Path $repoRoot "tool\odbc_streaming_benchmark.ps1")
+    }
+    $steps.StreamingBenchmark.Status = if ($streamingBenchmarkResult.Succeeded) { "passed" } else { "failed" }
+    $steps.StreamingBenchmark.StartedAt = $streamingBenchmarkResult.StartedAt
+    $steps.StreamingBenchmark.FinishedAt = $streamingBenchmarkResult.FinishedAt
+    if (-not $streamingBenchmarkResult.Succeeded) {
+      $failureDetected = $true
+      throw "Streaming benchmark failed."
+    }
+  }
+
+  if ($RunDriverMatrixBenchmark) {
+    $driverMatrixResult = Invoke-StepCommand -Name "Driver matrix benchmark" -CommandText $steps.DriverMatrixBenchmark.Command -LogPath (Join-Path $runDirectory $steps.DriverMatrixBenchmark.Log) -Command {
+      & (Join-Path $repoRoot "tool\odbc_driver_matrix_benchmark.ps1") -OutputDirectory $runDirectory
+    }
+    $steps.DriverMatrixBenchmark.Status = if ($driverMatrixResult.Succeeded) { "passed" } else { "failed" }
+    $steps.DriverMatrixBenchmark.StartedAt = $driverMatrixResult.StartedAt
+    $steps.DriverMatrixBenchmark.FinishedAt = $driverMatrixResult.FinishedAt
+    if (-not $driverMatrixResult.Succeeded) {
+      $failureDetected = $true
+      throw "Driver matrix benchmark failed."
+    }
+  }
 }
 finally {
   $report = New-ValidationReport -Context $context -Steps $steps
@@ -481,7 +581,7 @@ finally {
   Write-Host ""
   Write-Host "Validation worksheet: $reportPath" -ForegroundColor Gray
   Write-Host "Run artifacts directory: $runDirectory" -ForegroundColor Gray
-  Write-Host "Fill the health snapshots manually from agent.getHealth or HealthService.getHealthStatusAsync()." -ForegroundColor Gray
+  Write-Host "Burst health snapshots are written automatically when -RunBurst or -All is used." -ForegroundColor Gray
   Pop-Location
 }
 

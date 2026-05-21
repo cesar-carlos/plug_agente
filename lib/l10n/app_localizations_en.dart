@@ -1991,6 +1991,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get btnOk => 'OK';
 
   @override
+  String get btnClose => 'Close';
+
+  @override
   String get btnCancel => 'Cancel';
 
   @override

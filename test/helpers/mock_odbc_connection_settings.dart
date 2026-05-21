@@ -17,7 +17,6 @@ odbc.ServiceLocator createAsyncOdbcServiceLocatorForSettings(
     asyncWorkerCount: tuning.asyncWorkerCount,
     asyncMaxPendingRequests: tuning.asyncMaxPendingRequests,
     // Keep E2E harnesses aligned with the production ODBC tuning contract.
-    // ignore: avoid_redundant_argument_values
     asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
   );
 }

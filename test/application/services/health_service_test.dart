@@ -261,7 +261,11 @@ void main() {
         ..recordPreparedStatementReuse()
         ..recordPreparedPrepareTime(const Duration(milliseconds: 12))
         ..recordDirectConnectionFallback()
-        ..recordOdbcNativePoolFallback();
+        ..recordOdbcNativePoolFallback()
+        ..recordTransactionalBatchDirectPath()
+        ..recordTransactionalBatchNativePoolPath()
+        ..recordTransactionalBatchNativePoolFallback()
+        ..recordBatchBulkInsertRecommended();
       final poolMock = _MockConnectionPool();
       when(poolMock.getActiveCount).thenAnswer((_) => Future.value(const Success(2)));
       final queue = SqlExecutionQueue(
@@ -290,6 +294,7 @@ void main() {
       final timeouts = status['timeouts']! as Map<String, Object?>;
       final directConnections = status['direct_connections']! as Map<String, Object?>;
       final streaming = status['streaming']! as Map<String, Object?>;
+      final batch = status['batch']! as Map<String, Object?>;
 
       expect(runtime['pool_size'], 7);
       expect(runtime['async_worker_count'], 7);
@@ -318,6 +323,10 @@ void main() {
       expect(directConnections['override_requested'], isNull);
       expect(directConnections['override_exceeds_pool'], isFalse);
       expect(streaming['active_streams'], 0);
+      expect(batch['transactional_direct_total'], 1);
+      expect(batch['transactional_native_pool_total'], 1);
+      expect(batch['transactional_native_pool_fallback_total'], 1);
+      expect(batch['bulk_insert_recommended_total'], 1);
     });
 
     test('should cache resolved driver type and prefer pool diagnostics metadata', () async {

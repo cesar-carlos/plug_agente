@@ -182,12 +182,16 @@ class OdbcNativeMetricsService {
   Future<Map<String, dynamic>> _collectNativePoolSnapshot(
     String? connectionString,
   ) async {
-    if (connectionString == null || _settings?.useNativeOdbcPool != true) {
-      return const <String, dynamic>{'available': false};
+    final pool = _connectionPool;
+    if (pool case final IConnectionPoolDiagnostics diagnosticsPool when pool is! OdbcNativeConnectionPool) {
+      return <String, dynamic>{
+        'available': true,
+        'state_source': 'pool_diagnostics',
+        ...diagnosticsPool.getHealthDiagnostics(),
+      };
     }
 
-    final pool = _connectionPool;
-    if (pool is! OdbcNativeConnectionPool) {
+    if (connectionString == null || pool is! OdbcNativeConnectionPool) {
       return const <String, dynamic>{'available': false};
     }
 
@@ -207,15 +211,20 @@ class OdbcNativeMetricsService {
       return const <String, dynamic>{'available': false};
     }
 
+    final diagnostics = pool is IConnectionPoolDiagnostics
+        ? (pool as IConnectionPoolDiagnostics).getHealthDiagnostics()
+        : const <String, Object?>{};
     final activeResult = await pool.getActiveCount();
     return activeResult.fold(
       (active) => <String, dynamic>{
         'available': true,
         'active_connections': active,
+        if (diagnostics.isNotEmpty) 'diagnostics': diagnostics,
       },
       (error) => <String, dynamic>{
         'available': false,
         'error': error.toString(),
+        if (diagnostics.isNotEmpty) 'diagnostics': diagnostics,
       },
     );
   }

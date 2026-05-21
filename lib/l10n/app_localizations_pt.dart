@@ -1993,6 +1993,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get btnOk => 'OK';
 
   @override
+  String get btnClose => 'Fechar';
+
+  @override
   String get btnCancel => 'Cancelar';
 
   @override

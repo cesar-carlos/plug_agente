@@ -4,7 +4,8 @@ Data: 28 de Abril de 2026
 
 Atualizacao 2026-05-14:
 
-- `odbc_fast` atualizado para `^3.7.0`.
+- `odbc_fast` atualizado para a linha anterior que introduziu o worker pool
+  assincrono interno.
 - Worker pool assincrono interno do pacote ativado por padrao.
 - `OdbcRuntimeTuning` registra o tuning real usado no bootstrap.
 - Diagnostico ODBC passou a expor `runtime_tuning`, `async_worker_pool` e
@@ -13,6 +14,16 @@ Atualizacao 2026-05-14:
   quando `pending_requests` se aproxima de `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 - `.env.example`, E2E docs e benchmark wrapper local foram atualizados para
   `ODBC_ASYNC_WORKER_COUNT` e `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
+
+Atualizacao 2026-05-21 (ODBC 3.8.0):
+
+- `odbc_fast` atualizado para `^3.8.0`.
+- Pool adaptativo ODBC habilitado por default para SQL Server/PostgreSQL
+  elegiveis, mantendo SQL Anywhere no caminho lease/direct.
+- Batch transacional DML-only pode usar o caminho native-compatible com
+  fallback direto e metricas dedicadas.
+- Benchmark wrapper de streaming adicionado para comparar `streamQuery` e
+  `streamQueryBatched`.
 
 Atualizacao 2026-05-21:
 

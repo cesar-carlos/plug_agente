@@ -252,7 +252,7 @@ O `E2EEnv.odbcLongQuery` escolhe a variável consoante o DSN que o streaming est
 
 Pelo menos um DSN deve estar definido para rodar os testes ODBC. O teste usa o primeiro disponível na ordem: SQL Anywhere → SQL Server → PostgreSQL.
 
-### ODBC runtime tuning (`odbc_fast 3.7.0`)
+### ODBC runtime tuning (`odbc_fast 3.8.0`)
 
 Os harnesses E2E que inicializam `odbc.ServiceLocator` usam os mesmos calculos
 do runtime da app:
@@ -261,6 +261,15 @@ do runtime da app:
 | -------- | ----------- | --------- |
 | `ODBC_ASYNC_WORKER_COUNT` | Nao | Override positivo para workers assincronos; limitado a `min(poolSize, CPU cores)`. |
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4`. |
+
+O app mantem `asyncBackpressureMode=failFast` de forma explicita porque a
+fila `SqlExecutionQueue` ja controla backpressure antes do worker pool interno
+do `odbc_fast`.
+
+O pool adaptativo ODBC fica habilitado por default para drivers elegiveis
+(SQL Server/PostgreSQL), mas continua bloqueado para SQL Anywhere. Um valor
+persistido `feature_enable_odbc_experimental_driver_adaptive_pooling=false`
+continua funcionando como opt-out operacional.
 
 Para benchmark manual do pacote, use DSN representativo e rode:
 
@@ -274,6 +283,25 @@ Ou use o wrapper local, que imprime as variaveis de tuning antes de iniciar:
 .\tool\odbc_async_benchmark.ps1
 ```
 
+Para comparar streaming legado e batched streaming do pacote (`streamQuery`
+versus `streamQueryBatched`):
+
+```powershell
+dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
+.\tool\odbc_streaming_benchmark.ps1
+```
+
+O wrapper `odbc_streaming_benchmark.ps1` usa `ODBC_STREAM_BENCH_QUERY` quando
+definido; caso contrario, reaproveita a query longa do driver
+(`ODBC_INTEGRATION_LONG_QUERY_*` ou `ODBC_INTEGRATION_LONG_QUERY`). Isso evita
+benchmark acidental com `SELECT 1`.
+
+Para comparar drivers configurados separadamente:
+
+```powershell
+.\tool\odbc_driver_matrix_benchmark.ps1
+```
+
 Para o fluxo operacional completo no Windows (preflight + worksheet Markdown,
 e opcionalmente smoke/burst/benchmark), use:
 
@@ -285,6 +313,9 @@ e opcionalmente smoke/burst/benchmark), use:
 O relatorio gerado fica em `artifacts/odbc_validation/` e complementa
 `docs/architecture/odbc_operational_validation_runbook.md`.
 Cada execucao cria uma subpasta timestampada com o Markdown e logs por etapa.
+Com `-All`, o fluxo tambem grava `streaming_benchmark.log`, logs
+`driver_matrix_*` por driver configurado e snapshots
+`health_burst_*_before/after.json` gerados pelo teste de burst.
 
 ### ODBC RPC (`odbc_rpc_execute_coverage_live_e2e_test.dart`)
 
@@ -304,7 +335,7 @@ Requer **pelo menos um** DSN ODBC (ou um override explícito):
 
 **Multi-result e pool:** o `OdbcDatabaseGateway` tenta `executeQueryMultiFull` na conexão do pool; se o payload vier vazio com sucesso, repete a mesma execução numa **conexão direta** e incrementa o contador de métricas `multi_result_pool_vacuous_fallback` no `MetricsCollector`. Se ainda assim vier vazio, regista `multi_result_direct_still_vacuous`. Os contadores de evento são chaves estáveis para exportação (ex.: OpenTelemetry).
 
-**Batch transacional:** `executeBatch` com `transaction: true` usa **conexão ODBC direta** (sem pool) para `beginTransaction`/`commit`, evitando falhas típicas de handle do pool (`Invalid connection ID`, etc.). O contador de métricas `transactional_batch_direct_path` incrementa por lote transacional executado. O 3.º teste E2E continua **opcional** via `ODBC_E2E_TRANSACTIONAL_BATCH` (desligado por omissão no `.env.example` para `flutter test` verde).
+**Batch transacional:** `executeBatch` com `transaction: true` usa fast path pooled/native-compatible para DML-only em SQL Server/PostgreSQL quando elegivel e continua em conexao direta para SQL Anywhere, batches com leitura/`RETURNING`/`OUTPUT`, options incompativeis ou fallback. Os contadores estaveis sao `transactional_batch_native_pool_path`, `transactional_batch_native_pool_fallback` e `transactional_batch_direct_path`. O 3.o teste E2E continua **opcional** via `ODBC_E2E_TRANSACTIONAL_BATCH` (desligado por omissao no `.env.example` para `flutter test` verde).
 
 ### ODBC DML performance (`odbc_dml_perf_live_e2e_test.dart`)
 
@@ -423,11 +454,14 @@ flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
 # Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
 flutter test test/integration/sql_queue_burst_test.dart
 
-# Benchmark manual do worker pool interno do odbc_fast 3.7.0
+# Benchmark manual do worker pool interno do odbc_fast 3.8.0
 dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
 
 # Mesmo benchmark via wrapper local
 .\tool\odbc_async_benchmark.ps1
+
+# Benchmark de streaming do odbc_fast 3.8.0
+.\tool\odbc_streaming_benchmark.ps1
 
 # Fluxo operacional completo + worksheet Markdown
 .\tool\run_odbc_operational_validation.ps1

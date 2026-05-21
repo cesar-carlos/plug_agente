@@ -25,7 +25,7 @@ void main() {
       configRepository = _MockAgentConfigRepository();
     });
 
-    test('ignores legacy native pool setting and returns lease OdbcConnectionPool', () {
+    test('ignores legacy native pool setting and returns adaptive pool by default', () {
       final settings = MockOdbcConnectionSettings(useNativeOdbcPool: true);
       final pool = createOdbcConnectionPool(
         service,
@@ -34,10 +34,10 @@ void main() {
         FeatureFlags(InMemoryAppSettingsStore()),
         configRepository,
       );
-      expect(pool, isA<OdbcConnectionPool>());
+      expect(pool, isA<AdaptiveOdbcConnectionPool>());
     });
 
-    test('returns lease OdbcConnectionPool by default', () {
+    test('returns adaptive pool by default', () {
       final settings = MockOdbcConnectionSettings();
       final pool = createOdbcConnectionPool(
         service,
@@ -46,12 +46,12 @@ void main() {
         FeatureFlags(InMemoryAppSettingsStore()),
         configRepository,
       );
-      expect(pool, isA<OdbcConnectionPool>());
+      expect(pool, isA<AdaptiveOdbcConnectionPool>());
     });
 
-    test('returns adaptive pool when experimental flag is enabled', () async {
+    test('returns lease pool when adaptive pooling is explicitly disabled', () async {
       final flags = FeatureFlags(InMemoryAppSettingsStore());
-      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
+      await flags.setEnableOdbcExperimentalDriverAdaptivePooling(false);
       final settings = MockOdbcConnectionSettings();
       final pool = createOdbcConnectionPool(
         service,
@@ -61,7 +61,7 @@ void main() {
         configRepository,
       );
 
-      expect(pool, isA<AdaptiveOdbcConnectionPool>());
+      expect(pool, isA<OdbcConnectionPool>());
     });
   });
 }

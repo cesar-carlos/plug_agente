@@ -7,6 +7,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
@@ -14,11 +15,13 @@ class AgentActionsToolbarCard extends StatelessWidget {
   const AgentActionsToolbarCard({
     required this.provider,
     required this.l10n,
+    this.onCreateAction,
     super.key,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final VoidCallback? onCreateAction;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +40,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
             checked: provider.isMaintenanceMode,
             onChanged: provider.isFeatureEnabled
                 ? (value) {
-                    unawaited(provider.setMaintenanceMode(enabled: value));
+                    unawaited(_setMaintenanceMode(context, value));
                   }
                 : null,
             content: Text(l10n.agentActionsMaintenanceMode),
@@ -49,6 +52,17 @@ class AgentActionsToolbarCard extends StatelessWidget {
 
   List<Widget> _buildActionControls(BuildContext context) {
     return [
+      FilledButton(
+        onPressed: onCreateAction,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(FluentIcons.add),
+            const SizedBox(width: AppSpacing.xs),
+            Text(l10n.agentActionsFormNew),
+          ],
+        ),
+      ),
       Button(
         onPressed: provider.isLoading ? null : provider.load,
         child: Row(
@@ -88,7 +102,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
           ],
         ),
       ),
-      FilledButton(
+      Button(
         onPressed: provider.canRunSelected ? provider.runSelectedAction : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -138,6 +152,24 @@ class AgentActionsToolbarCard extends StatelessWidget {
           ],
         ),
     ];
+  }
+
+  Future<void> _setMaintenanceMode(BuildContext context, bool enabled) async {
+    if (enabled) {
+      final confirmed = await MessageModal.show<bool>(
+        context: context,
+        title: l10n.agentActionsMaintenanceModeInfoTitle,
+        message: l10n.agentActionsMaintenanceModeInfoMessage,
+        type: MessageType.confirmation,
+        confirmText: l10n.agentActionsMaintenanceMode,
+        cancelText: l10n.btnCancel,
+      );
+      if (confirmed != true || !context.mounted) {
+        return;
+      }
+    }
+
+    await provider.setMaintenanceMode(enabled: enabled);
   }
 
   Future<void> _exportBundle(BuildContext context) async {
