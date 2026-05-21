@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-get-execution.v1.json",
+  "title": "agent.action.getExecution params",
+  "type": "object",
+  "required": ["execution_id"],
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent action execution identifier returned by agent.action.run or visible in execution history."
+    },
+    "include_output": {
+      "type": "boolean",
+      "description": "When false, stdout and stderr payloads are omitted even if stored. Defaults to true."
+    },
+    "stdout_offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "UTF-8 byte offset into stored redacted stdout for this response window."
+    },
+    "stdout_cursor": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Alias for stdout_offset."
+    },
+    "output_offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Legacy alias for stdout_offset."
+    },
+    "stderr_offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "UTF-8 byte offset into stored redacted stderr for this response window."
+    },
+    "stderr_cursor": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Alias for stderr_offset."
+    },
+    "max_output_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 524288,
+      "description": "Maximum UTF-8 bytes to return per stream (stdout and stderr each). Defaults to 65536 when omitted."
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional distributed trace id for remote audit correlation on read-only polling."
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional hub requester identity for remote audit correlation on read-only polling."
+    },
+    "client_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque token or JWT for authorization when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    }
+  },
+  "additionalProperties": false
+}

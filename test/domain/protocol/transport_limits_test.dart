@@ -1,5 +1,6 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 
 void main() {
@@ -180,6 +181,25 @@ void main() {
       check(
         caps.limits.maxDecodedPayloadBytes,
       ).equals(TransportLimits.defaultMaxPayloadBytes);
+    });
+
+    test('defaultCapabilities should include agentActions only when provided', () {
+      final withoutActions = ProtocolCapabilities.defaultCapabilities();
+      final withActions = ProtocolCapabilities.defaultCapabilities(
+        agentActions: const {
+          'supportedMethods': [
+            AgentActionRpcConstants.agentActionRunRpcMethodName,
+            AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          ],
+          'remoteAdHoc': false,
+        },
+      );
+
+      check(withoutActions.extensions.containsKey('agentActions')).isFalse();
+      check(withActions.extensions['agentActions']).isA<Map<String, dynamic>>();
+      check(
+        ((withActions.extensions['agentActions'] as Map<String, dynamic>)['supportedMethods'] as List<String>).first,
+      ).equals(AgentActionRpcConstants.agentActionRunRpcMethodName);
     });
   });
 }

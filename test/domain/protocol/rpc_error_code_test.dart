@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
 void main() {
@@ -69,11 +70,11 @@ void main() {
       final data = RpcErrorCode.buildErrorData(
         code: RpcErrorCode.resultTooLarge,
         technicalMessage: 'Backpressure overflow',
-        subreason: 'backpressure_overflow',
+        subreason: RpcStreamingConstants.backpressureOverflowReason,
       );
 
       expect(data['reason'], equals('result_too_large'));
-      expect(data['subreason'], equals('backpressure_overflow'));
+      expect(data['subreason'], equals(RpcStreamingConstants.backpressureOverflowReason));
     });
 
     test('omits subreason key when not provided', () {

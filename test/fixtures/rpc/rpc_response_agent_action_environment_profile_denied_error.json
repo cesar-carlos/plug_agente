@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-profile",
+  "error": {
+    "code": -32002,
+    "message": "Not authorized",
+    "data": {
+      "reason": "environment_profile_denied",
+      "category": "action",
+      "retryable": false,
+      "user_message": "A acao nao esta autorizada para o perfil operacional atual do agente.",
+      "technical_message": "Action is not allowed in the current agent operational profile.",
+      "correlation_id": "req-run-profile",
+      "timestamp": "2026-05-18T16:05:00.000Z",
+      "method": "agent.action.run",
+      "action_id": "action-profile-1",
+      "current_profile": "development",
+      "allowed_profiles": ["production"]
+    }
+  }
+}

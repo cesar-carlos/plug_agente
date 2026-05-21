@@ -19,6 +19,33 @@
       "type": "string",
       "description": "Application version string"
     },
+    "agent_runtime": {
+      "type": "object",
+      "description": "Stable runtime identity for correlating executions and remote audit (when injected).",
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "description": "Persisted instance id for this agent installation"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Session id for the current agent process boot"
+        }
+      }
+    },
+    "odbc_runtime_tuning": {
+      "type": ["object", "null"],
+      "description": "Effective ODBC async worker tuning derived from pool size (null when not wired).",
+      "additionalProperties": false,
+      "properties": {
+        "pool_size": { "type": "integer", "minimum": 0 },
+        "processor_count": { "type": "integer", "minimum": 0 },
+        "async_worker_count": { "type": "integer", "minimum": 0 },
+        "async_max_pending_requests": { "type": "integer", "minimum": 0 },
+        "async_backpressure_mode": { "type": "string" }
+      }
+    },
     "pool": {
       "type": "object",
       "required": ["size"],
@@ -96,6 +123,192 @@
         "materialized_responses_total": { "type": "integer", "minimum": 0 },
         "cancel_requests_total": { "type": "integer", "minimum": 0 },
         "backpressure_cancels_total": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "agent_actions": {
+      "type": "object",
+      "description": "Agent action subsystem diagnostics safe for hub health checks.",
+      "required": [
+        "enabled",
+        "remote_enabled",
+        "remote_ad_hoc_enabled",
+        "maintenance_mode",
+        "status",
+        "supported_types",
+        "unavailable_types"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "remote_enabled": { "type": "boolean" },
+        "remote_ad_hoc_enabled": { "type": "boolean" },
+        "maintenance_mode": { "type": "boolean" },
+        "remote_audit_enabled": { "type": "boolean" },
+        "elevated_enabled": {
+          "type": "boolean",
+          "description": "True when elevated agent actions feature flag is enabled."
+        },
+        "elevated_runner_configured": {
+          "type": "boolean",
+          "description": "True when the Windows elevated helper scheduled task and ready marker are present."
+        },
+        "elevated_runner_degraded": {
+          "type": "boolean",
+          "description": "True when the elevated helper recently failed and should be repaired."
+        },
+        "com_object_handlers_registered_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of ProgID/member COM invocations registered in ComObjectInvocationRegistry."
+        },
+        "com_object_invocation_ready": {
+          "type": "boolean",
+          "description": "True when at least one COM handler is registered (homologation stub or production handlers)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["starting", "ready", "draining", "maintenance", "degraded", "disabled", "unknown"]
+        },
+        "supported_types": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unavailable_types": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "queue_counters": {
+          "type": "object",
+          "description": "Aggregated local action execution queue counters (no dynamic labels).",
+          "additionalProperties": false,
+          "properties": {
+            "concurrency_reject_total": { "type": "integer", "minimum": 0 },
+            "concurrency_ignore_total": { "type": "integer", "minimum": 0 },
+            "depth_full_total": { "type": "integer", "minimum": 0 },
+            "pending_enqueued_total": { "type": "integer", "minimum": 0 },
+            "idempotent_replay_total": { "type": "integer", "minimum": 0 },
+            "run_started_total": { "type": "integer", "minimum": 0 },
+            "pending_wait_timeout_total": { "type": "integer", "minimum": 0 },
+            "pending_cancelled_total": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "queue_wait_ms": {
+          "type": "object",
+          "description": "Recent samples of time spent waiting in the local pending queue before start.",
+          "additionalProperties": false,
+          "properties": {
+            "avg_time_ms": { "type": "number", "minimum": 0 },
+            "p95_time_ms": { "type": "integer", "minimum": 0 },
+            "p99_time_ms": { "type": "integer", "minimum": 0 },
+            "max_recent_time_ms": { "type": "integer", "minimum": 0 },
+            "sample_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "execution_counters": {
+          "type": "object",
+          "description": "Aggregated local action execution terminal outcomes and maintenance counters.",
+          "additionalProperties": false,
+          "properties": {
+            "terminal_succeeded_total": { "type": "integer", "minimum": 0 },
+            "terminal_failed_total": { "type": "integer", "minimum": 0 },
+            "terminal_skipped_total": { "type": "integer", "minimum": 0 },
+            "terminal_cancelled_total": { "type": "integer", "minimum": 0 },
+            "terminal_killed_total": { "type": "integer", "minimum": 0 },
+            "terminal_timed_out_total": { "type": "integer", "minimum": 0 },
+            "terminal_interrupted_total": { "type": "integer", "minimum": 0 },
+            "terminal_unknown_total": { "type": "integer", "minimum": 0 },
+            "remote_permission_denied_total": { "type": "integer", "minimum": 0 },
+            "local_authorization_denied_total": { "type": "integer", "minimum": 0 },
+            "remote_rate_limited_total": { "type": "integer", "minimum": 0 },
+            "history_purge_total": { "type": "integer", "minimum": 0 },
+            "remote_audit_purge_total": { "type": "integer", "minimum": 0 },
+            "rpc_idempotency_cache_purge_total": { "type": "integer", "minimum": 0 },
+            "elevated_bridge_artifacts_purge_total": { "type": "integer", "minimum": 0 },
+            "remote_audit_execution_correlated_total": { "type": "integer", "minimum": 0 },
+            "cancel_kill_failed_total": { "type": "integer", "minimum": 0 },
+            "cancel_kill_permission_denied_total": { "type": "integer", "minimum": 0 },
+            "cancel_process_not_active_total": { "type": "integer", "minimum": 0 },
+            "cancel_process_id_mismatch_total": { "type": "integer", "minimum": 0 },
+            "cancel_process_identity_mismatch_total": { "type": "integer", "minimum": 0 },
+            "cancel_process_identity_unavailable_total": { "type": "integer", "minimum": 0 },
+            "captured_stdout_truncated_total": { "type": "integer", "minimum": 0 },
+            "captured_stderr_truncated_total": { "type": "integer", "minimum": 0 },
+            "captured_stdout_bytes_total": { "type": "integer", "minimum": 0 },
+            "captured_stderr_bytes_total": { "type": "integer", "minimum": 0 },
+            "captured_output_cleared_total": { "type": "integer", "minimum": 0 },
+            "elevated_status_file_terminal_total": { "type": "integer", "minimum": 0 },
+            "elevated_status_file_wait_timeout_total": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "execution_duration_ms": {
+          "type": "object",
+          "description": "Recent samples of local action execution duration (process start to finish).",
+          "additionalProperties": false,
+          "properties": {
+            "avg_time_ms": { "type": "number", "minimum": 0 },
+            "p95_time_ms": { "type": "integer", "minimum": 0 },
+            "p99_time_ms": { "type": "integer", "minimum": 0 },
+            "max_recent_time_ms": { "type": "integer", "minimum": 0 },
+            "sample_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "remote_rpc_counters": {
+          "type": "object",
+          "description": "Totals for completed remote JSON-RPC agent.action.* calls (success vs error).",
+          "additionalProperties": false,
+          "properties": {
+            "run_success_total": { "type": "integer", "minimum": 0 },
+            "run_error_total": { "type": "integer", "minimum": 0 },
+            "run_notification_rejected_total": { "type": "integer", "minimum": 0 },
+            "validate_run_success_total": { "type": "integer", "minimum": 0 },
+            "validate_run_error_total": { "type": "integer", "minimum": 0 },
+            "validate_run_notification_rejected_total": { "type": "integer", "minimum": 0 },
+            "cancel_success_total": { "type": "integer", "minimum": 0 },
+            "cancel_error_total": { "type": "integer", "minimum": 0 },
+            "cancel_notification_rejected_total": { "type": "integer", "minimum": 0 },
+            "get_execution_success_total": { "type": "integer", "minimum": 0 },
+            "get_execution_error_total": { "type": "integer", "minimum": 0 },
+            "get_execution_notification_rejected_total": { "type": "integer", "minimum": 0 },
+            "batch_read_limit_rejected_total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "JSON-RPC batches rejected for exceeding max read-only agent.action.* methods per batch."
+            }
+          }
+        },
+        "retention": {
+          "type": "object",
+          "description": "Effective agent action retention policy (persisted overrides, env, or defaults).",
+          "additionalProperties": false,
+          "properties": {
+            "execution_days": { "type": "integer", "minimum": 1 },
+            "remote_audit_days": { "type": "integer", "minimum": 1 },
+            "captured_output_hours": { "type": "integer", "minimum": 1 },
+            "persisted_override": {
+              "type": "boolean",
+              "description": "True when retention values were saved in local app settings."
+            },
+            "rpc_idempotency_ttl_seconds": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "scheduler": {
+          "type": "object",
+          "description": "In-process temporal trigger scheduler diagnostics.",
+          "additionalProperties": false,
+          "properties": {
+            "started": { "type": "boolean" },
+            "bootstrap_disabled": { "type": "boolean" },
+            "temporal_timer_count": { "type": "integer", "minimum": 0 },
+            "instance_lock_held": {
+              "type": "boolean",
+              "description": "True when this process holds the exclusive scheduler lock file."
+            },
+            "last_start_issue_reason": {
+              "type": "string",
+              "description": "Stable reason when temporal scheduling did not start (e.g. scheduler_instance_locked, scheduler_bootstrap_failed)."
+            }
+          }
+        }
       },
       "additionalProperties": true
     },

@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-idem-mismatch",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "remote_idempotency_fingerprint_mismatch",
+      "category": "action",
+      "retryable": false,
+      "user_message": "The request parameters are invalid.",
+      "technical_message": "idempotency_key was already used with a different request payload",
+      "correlation_id": "req-run-idem-mismatch",
+      "timestamp": "2026-05-18T15:35:00.000Z",
+      "method": "agent.action.run",
+      "idempotency_key": "idem-shared"
+    }
+  }
+}

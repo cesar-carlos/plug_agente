@@ -1,0 +1,52 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-cancel-1",
+  "result": {
+    "cancelled": true,
+    "execution_id": "exec-queued-1",
+    "status": "cancelled",
+    "reason": "cancelled",
+    "execution": {
+      "execution_id": "exec-queued-1",
+      "action_id": "action-1",
+      "action_type": "commandLine",
+      "status": "cancelled",
+      "source": "remoteHub",
+      "requested_at": "2026-05-18T14:00:01.000Z",
+      "idempotency_key": "idem-run-1",
+      "requested_by": "hub",
+      "trace_id": "trace-run-1",
+      "timestamps": {
+        "queue_started_at": "2026-05-18T14:00:01.000Z",
+        "finished_at": "2026-05-18T14:00:02.000Z"
+      },
+      "process": {},
+      "output": {
+        "stdout": {
+          "captured": false,
+          "truncated": false,
+          "utf8_total_bytes": 0,
+          "offset": 0,
+          "next_offset": 0,
+          "response_truncated": false
+        },
+        "stderr": {
+          "captured": false,
+          "truncated": false,
+          "utf8_total_bytes": 0,
+          "offset": 0,
+          "next_offset": 0,
+          "response_truncated": false
+        }
+      },
+      "flags": {
+        "terminal": true,
+        "skipped": false,
+        "timed_out": false,
+        "cancelled": true,
+        "killed": false,
+        "redaction_applied": true
+      }
+    }
+  }
+}

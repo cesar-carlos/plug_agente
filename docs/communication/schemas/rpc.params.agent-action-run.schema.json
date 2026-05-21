@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-run.v1.json",
+  "title": "agent.action.run params",
+  "type": "object",
+  "required": ["action_id", "idempotency_key"],
+  "properties": {
+    "action_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of a saved local action approved for remote execution."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required remote idempotency key. Reusing the same key for the same action returns the existing execution; reusing it with a different allowed payload is rejected. When enableSocketIdempotency is active, successful responses are cached in SQLite as agent.action.run:{key} with TTL from AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS (default min(execution retention, 24h)). Dedup after cache expiry uses persisted agent_action_execution rows until history retention (AGENT_ACTION_EXECUTION_RETENTION_DAYS, default 3 days)."
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional distributed trace id for execution and remote audit correlation. When omitted, the agent uses meta.trace_id or W3C traceparent."
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional hub requester identity for execution metadata and remote audit. When omitted, the agent derives a safe value from RPC meta."
+    },
+    "trigger_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional enabled remote trigger id. Required when the action has more than one enabled remote trigger; otherwise the sole enabled remote trigger is selected automatically."
+    },
+    "client_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque token or JWT for authorization when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    }
+  },
+  "additionalProperties": false
+}

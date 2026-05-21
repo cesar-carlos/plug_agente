@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": "batch-run-1",
+  "error": {
+    "code": -32600,
+    "message": "Invalid Request",
+    "data": {
+      "reason": "method_not_allowed_in_batch",
+      "category": "validation",
+      "retryable": false,
+      "user_message": "Invalid request. Please review the submitted data.",
+      "technical_message": "Method agent.action.run is not allowed in JSON-RPC batch",
+      "correlation_id": "batch-run-1",
+      "timestamp": "2026-05-20T12:05:00.000Z",
+      "method": "agent.action.run"
+    }
+  }
+}

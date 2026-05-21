@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-get-execution.v1.json",
+  "title": "agent.action.getExecution result",
+  "type": "object",
+  "required": [
+    "execution_id",
+    "action_id",
+    "action_type",
+    "status",
+    "source",
+    "requested_at",
+    "timestamps",
+    "process",
+    "output",
+    "flags"
+  ],
+  "properties": {
+    "execution_id": { "type": "string", "minLength": 1 },
+    "action_id": { "type": "string", "minLength": 1 },
+    "action_type": {
+      "type": "string",
+      "enum": ["commandLine", "executable", "script", "jar", "email", "comObject", "developer"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "succeeded", "failed", "skipped", "cancelled", "killed", "timedOut", "interrupted", "unknown"]
+    },
+    "source": {
+      "type": "string",
+      "enum": ["localUi", "scheduler", "remoteHub", "appLifecycle"]
+    },
+    "requested_at": { "type": "string", "format": "date-time" },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "requested_by": { "type": "string", "minLength": 1 },
+    "trace_id": { "type": "string", "minLength": 1 },
+    "runtime_instance_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable per-installation identifier of the agent process that accepted the execution."
+    },
+    "runtime_session_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the current agent boot session when the execution was created."
+    },
+    "trigger": {
+      "type": "object",
+      "properties": {
+        "trigger_id": { "type": "string", "minLength": 1 },
+        "trigger_type": {
+          "type": "string",
+          "enum": ["manual", "remote", "once", "interval", "daily", "weekly", "monthly", "appStart", "appClose"]
+        },
+        "scheduled_at": { "type": "string", "format": "date-time" },
+        "triggered_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "timestamps": {
+      "type": "object",
+      "properties": {
+        "queue_started_at": { "type": "string", "format": "date-time" },
+        "process_started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "timeout_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "process": {
+      "type": "object",
+      "properties": {
+        "pid": { "type": "integer", "minimum": 0 },
+        "exit_code": { "type": "integer" },
+        "executable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Safe executable identity only. The raw command is never returned."
+        },
+        "argument_count": { "type": "integer", "minimum": 0 },
+        "command_preview": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Redacted preview suitable for diagnostics. It must not contain raw sensitive command arguments."
+        }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "required": ["stdout", "stderr"],
+      "properties": {
+        "stdout": { "$ref": "#/$defs/capturedOutput" },
+        "stderr": { "$ref": "#/$defs/capturedOutput" }
+      },
+      "additionalProperties": false
+    },
+    "flags": {
+      "type": "object",
+      "required": ["terminal", "skipped", "timed_out", "cancelled", "killed", "redaction_applied"],
+      "properties": {
+        "terminal": { "type": "boolean" },
+        "skipped": { "type": "boolean" },
+        "timed_out": { "type": "boolean" },
+        "cancelled": { "type": "boolean" },
+        "killed": { "type": "boolean" },
+        "redaction_applied": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "context_hash": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Redacted context hash, usually sha256:<hex>."
+    },
+    "definition_snapshot_hash": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Redacted definition snapshot hash."
+    },
+    "failure": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "phase": { "type": "string", "minLength": 1 },
+        "corrective_action": {
+          "type": "string",
+          "enum": [
+            "review_path",
+            "review_runner",
+            "review_exit_code",
+            "review_queue",
+            "review_timeout",
+            "retry_kill",
+            "review_definition_validation",
+            "review_preflight",
+            "review_start_process",
+            "review_runtime"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "capturedOutput": {
+      "type": "object",
+      "required": ["captured", "truncated", "utf8_total_bytes", "offset", "next_offset", "response_truncated"],
+      "properties": {
+        "captured": { "type": "boolean" },
+        "text": { "type": "string" },
+        "truncated": { "type": "boolean" },
+        "utf8_total_bytes": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer", "minimum": 0 },
+        "next_offset": { "type": "integer", "minimum": 0 },
+        "response_truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

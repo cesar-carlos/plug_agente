@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "method": "agent.action.getExecution",
+  "id": "req-get-page-1",
+  "api_version": "2.11.1",
+  "params": {
+    "execution_id": "exec-succeeded-1",
+    "stdout_offset": 0,
+    "max_output_bytes": 50
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-context",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "remote_context_not_supported",
+      "category": "action",
+      "retryable": false,
+      "user_message": "The request parameters are invalid.",
+      "technical_message": "Remote agent action RPC does not accept inline context in MVP",
+      "correlation_id": "req-run-context",
+      "timestamp": "2026-05-18T15:00:00.000Z",
+      "method": "agent.action.run",
+      "field": "context_json"
+    }
+  }
+}

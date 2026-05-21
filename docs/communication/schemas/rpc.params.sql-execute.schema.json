@@ -31,7 +31,7 @@
     },
     "idempotency_key": {
       "type": "string",
-      "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return cached response (TTL 5min). Reusing the same key with a different request payload is rejected."
+      "description": "Unique key for request deduplication. When enableSocketIdempotency is active, duplicate keys return a cached response while the entry has not expired (default TTL 300s; agent env RPC_IDEMPOTENCY_CACHE_TTL_SECONDS). Reusing the same key with a different request payload is rejected. Entries are scoped per RPC method: the agent stores keys internally as `{method}:{idempotency_key}`, independent of the JSON-RPC `id` field, so the same key on another method does not collide."
     },
     "options": {
       "type": "object",
