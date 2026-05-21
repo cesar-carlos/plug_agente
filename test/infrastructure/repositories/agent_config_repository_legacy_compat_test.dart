@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
@@ -164,6 +165,73 @@ void main() {
       expect(storedSecrets.authToken, 'access-token');
       expect(storedSecrets.refreshToken, 'refresh-token');
       expect(storedSecrets.authPassword, 'agent_pass');
+    });
+
+    test('save should preserve current secure tokens when config has stale tokens', () async {
+      final database = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(database.close);
+      final secretStore = _FakeHubAuthSecretStore();
+
+      final now = DateTime.utc(2025);
+      await database
+          .into(database.configTable)
+          .insert(
+            ConfigTableCompanion.insert(
+              id: 'cfg-secure',
+              serverUrl: const Value('https://hub.example.com'),
+              agentId: const Value('agent-1'),
+              driverName: 'SQL Server',
+              odbcDriverName: const Value('ODBC Driver 17 for SQL Server'),
+              connectionString: '',
+              username: '',
+              password: const Value(''),
+              databaseName: '',
+              host: 'localhost',
+              port: 1433,
+              authUsername: const Value('agent_user'),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      await secretStore.saveSecrets(
+        'cfg-secure',
+        const HubAuthSecrets(
+          authToken: 'fresh-access',
+          refreshToken: 'fresh-refresh',
+          authPassword: 'agent_pass',
+        ),
+      );
+
+      final repository = AgentConfigRepository(
+        database,
+        authSecretStore: secretStore,
+        hubSessionStore: HubSessionStore(
+          database,
+          authSecretStore: secretStore,
+        ),
+      );
+
+      final loaded = (await repository.getById('cfg-secure')).getOrThrow();
+      final staleConfig = loaded.copyWith(
+        authToken: 'expired-access',
+        refreshToken: 'expired-refresh',
+        authPassword: 'new_agent_pass',
+        nomeFantasia: 'Updated',
+        updatedAt: now.add(const Duration(minutes: 1)),
+      );
+
+      final saveResult = await repository.save(staleConfig);
+
+      expect(saveResult.isSuccess(), isTrue);
+      final storedSecrets = await secretStore.readSecrets('cfg-secure');
+      expect(storedSecrets.authToken, 'fresh-access');
+      expect(storedSecrets.refreshToken, 'fresh-refresh');
+      expect(storedSecrets.authPassword, 'new_agent_pass');
+
+      final row = await repository.getByIdMetadata('cfg-secure');
+      expect(row.getOrThrow().authToken, isNull);
+      expect(row.getOrThrow().refreshToken, isNull);
+      expect(row.getOrThrow().authPassword, isNull);
     });
   });
 }

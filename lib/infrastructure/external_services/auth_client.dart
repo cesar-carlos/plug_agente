@@ -108,10 +108,10 @@ class AuthClient implements IAuthClient {
         stackTrace: stackTrace,
       );
       if (e.response?.statusCode == AppConstants.httpStatusUnauthorized) {
-        final data = e.response?.data as Map<String, dynamic>?;
+        final data = _readResponseMap(e.response?.data);
         return Failure(
           domain.ValidationFailure(
-            data?['error'] as String? ?? 'Invalid credentials',
+            _readErrorMessage(data, fallback: 'Invalid credentials'),
           ),
         );
       }
@@ -194,10 +194,13 @@ class AuthClient implements IAuthClient {
       return Failure(domain.ValidationFailure('Refresh failed'));
     } on DioException catch (e, stackTrace) {
       if (e.response?.statusCode == AppConstants.httpStatusUnauthorized) {
-        final data = e.response?.data as Map<String, dynamic>?;
+        final data = _readResponseMap(e.response?.data);
         return Failure(
           domain.ValidationFailure(
-            data?['error'] as String? ?? 'Refresh token expired or revoked',
+            _readErrorMessage(
+              data,
+              fallback: 'Refresh token expired or revoked',
+            ),
           ),
         );
       }
@@ -267,7 +270,7 @@ class AuthClient implements IAuthClient {
 
     return Failure(
       domain.ValidationFailure(
-        _readString(data, 'error') ?? _readString(data, 'message') ?? fallbackErrorMessage,
+        _readErrorMessage(data, fallback: fallbackErrorMessage),
       ),
     );
   }
@@ -275,5 +278,49 @@ class AuthClient implements IAuthClient {
   String? _readString(Map<String, dynamic> data, String key) {
     final value = data[key];
     return value is String ? value : null;
+  }
+
+  String _readErrorMessage(
+    Map<String, dynamic>? data, {
+    required String fallback,
+  }) {
+    if (data == null) {
+      return fallback;
+    }
+
+    return _stringFromPayload(data['error']) ?? _stringFromPayload(data['message']) ?? fallback;
+  }
+
+  Map<String, dynamic>? _readResponseMap(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          if (entry.key is String) entry.key as String: entry.value,
+      };
+    }
+    return null;
+  }
+
+  String? _stringFromPayload(Object? value) {
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (value is Map<String, dynamic>) {
+      return _stringFromPayload(value['message']) ??
+          _stringFromPayload(value['error']) ??
+          _stringFromPayload(value['detail']) ??
+          _stringFromPayload(value['reason']);
+    }
+    if (value is Map) {
+      return _stringFromPayload(value['message']) ??
+          _stringFromPayload(value['error']) ??
+          _stringFromPayload(value['detail']) ??
+          _stringFromPayload(value['reason']);
+    }
+    return null;
   }
 }

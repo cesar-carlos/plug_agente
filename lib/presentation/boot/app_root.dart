@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -65,6 +67,7 @@ import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnost
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/presentation/app/app.dart';
+import 'package:plug_agente/presentation/boot/startup_auto_session_retry_policy.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -254,6 +257,9 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
   String? _lastOdbcSignature;
   bool _startupFlowHandled = false;
   bool _startupFlowRunning = false;
+  final StartupAutoSessionRetryPolicy _startupRetryPolicy = const StartupAutoSessionRetryPolicy();
+  Timer? _startupRetryTimer;
+  int _startupTransientRetryCount = 0;
 
   @override
   void initState() {
@@ -271,6 +277,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
       );
     }
     _configProvider?.removeListener(_onConfigStateChanged);
+    _cancelStartupRetryTimer();
     super.dispose();
   }
 
@@ -366,9 +373,11 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
 
       var shouldStop = false;
       AuthToken? startupToken;
+      var startupRetryScheduled = false;
       bootstrapResult.fold(
         (session) {
           startupToken = session.token;
+          _startupTransientRetryCount = 0;
           authProvider.restoreToken(
             session.token,
             configId: startupContext.configId,
@@ -376,11 +385,14 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
         },
         (failure) {
           authProvider.setRecoveryError(failure.toDisplayMessage());
+          startupRetryScheduled = _scheduleStartupRetryIfAllowed(failure);
           shouldStop = true;
         },
       );
       if (shouldStop || startupToken == null) {
-        _markStartupFlowHandled();
+        if (!startupRetryScheduled) {
+          _markStartupFlowHandled();
+        }
         return;
       }
 
@@ -430,8 +442,38 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
   }
 
   void _markStartupFlowHandled() {
+    _cancelStartupRetryTimer();
     _startupFlowHandled = true;
     AppLogger.debug('Startup auth/socket auto-flow completed');
+  }
+
+  bool _scheduleStartupRetryIfAllowed(Object failure) {
+    if (!_startupRetryPolicy.canRetry(failure, _startupTransientRetryCount)) {
+      return false;
+    }
+
+    _startupTransientRetryCount += 1;
+    final retryNumber = _startupTransientRetryCount;
+    final delay = _startupRetryPolicy.delayForRetry(retryNumber);
+    _startupRetryTimer?.cancel();
+    AppLogger.warning(
+      'Startup auth/socket bootstrap failed transiently; retrying in '
+      '${delay.inMilliseconds}ms (attempt $retryNumber/${_startupRetryPolicy.maxTransientRetries})',
+      failure.toTechnicalMessage(),
+    );
+    _startupRetryTimer = Timer(delay, () {
+      _startupRetryTimer = null;
+      if (!mounted || _startupFlowHandled) {
+        return;
+      }
+      unawaited(_attemptStartupLoginAndConnect());
+    });
+    return true;
+  }
+
+  void _cancelStartupRetryTimer() {
+    _startupRetryTimer?.cancel();
+    _startupRetryTimer = null;
   }
 
   @override

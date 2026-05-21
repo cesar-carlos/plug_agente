@@ -7,6 +7,7 @@ import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_credentials.dart';
@@ -89,12 +90,9 @@ void main() {
         ),
       ),
     );
-    when(() => refreshAuthToken(serverUrl, 'old-refresh'))
-        .thenAnswer((_) async => const Success(refreshed));
-    when(() => hubSessionStore.writeSessionTokens(configId, refreshed))
-        .thenAnswer((_) async => const Success(unit));
-    when(() => saveAuthToken(configId, refreshed))
-        .thenAnswer((_) async => const Success(unit));
+    when(() => refreshAuthToken(serverUrl, 'old-refresh')).thenAnswer((_) async => const Success(refreshed));
+    when(() => hubSessionStore.writeSessionTokens(configId, refreshed)).thenAnswer((_) async => const Success(unit));
+    when(() => saveAuthToken(configId, refreshed)).thenAnswer((_) async => const Success(unit));
 
     final result = await coordinator.refreshSession(
       serverUrl,
@@ -120,8 +118,7 @@ void main() {
       ),
     );
     when(() => loginUser(serverUrl, any())).thenAnswer((_) async => const Success(token));
-    when(() => hubSessionStore.writeSessionTokens(configId, token))
-        .thenAnswer((_) async => const Success(unit));
+    when(() => hubSessionStore.writeSessionTokens(configId, token)).thenAnswer((_) async => const Success(unit));
     when(() => saveAuthToken(configId, token)).thenAnswer((_) async => const Success(unit));
 
     final result = await coordinator.loginWithStoredCredentials(
@@ -136,7 +133,11 @@ void main() {
     verify(() => saveAuthToken(configId, token)).called(1);
   });
 
-  test('bootstrapAutoSession prefers persisted token before stored credentials', () async {
+  test('bootstrapAutoSession refreshes persisted token before returning it', () async {
+    const refreshed = AuthToken(
+      token: 'fresh-access',
+      refreshToken: 'fresh-refresh',
+    );
     when(() => hubSessionStore.readSession(configId)).thenAnswer(
       (_) async => const Success(
         HubStoredSession(
@@ -147,6 +148,78 @@ void main() {
         ),
       ),
     );
+    when(() => refreshAuthToken(serverUrl, 'persisted-refresh')).thenAnswer((_) async => const Success(refreshed));
+    when(() => hubSessionStore.writeSessionTokens(configId, refreshed)).thenAnswer((_) async => const Success(unit));
+    when(() => saveAuthToken(configId, refreshed)).thenAnswer((_) async => const Success(unit));
+
+    final result = await coordinator.bootstrapAutoSession(
+      configId: configId,
+      serverUrl: serverUrl,
+      agentId: agentId,
+    );
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrThrow().source, HubBootstrapSource.refreshedToken);
+    expect(result.getOrThrow().token.token, 'fresh-access');
+    verify(() => refreshAuthToken(serverUrl, 'persisted-refresh')).called(1);
+    verifyNever(() => loginUser(any(), any()));
+  });
+
+  test('bootstrapAutoSession falls back to stored credentials when persisted refresh is terminal', () async {
+    const loggedIn = AuthToken(token: 'login-access', refreshToken: 'login-refresh');
+    when(() => hubSessionStore.readSession(configId)).thenAnswer(
+      (_) async => const Success(
+        HubStoredSession(
+          token: AuthToken(
+            token: 'expired-access',
+            refreshToken: 'expired-refresh',
+          ),
+        ),
+      ),
+    );
+    when(() => refreshAuthToken(serverUrl, 'expired-refresh')).thenAnswer(
+      (_) async => Failure(domain.ValidationFailure('Refresh token expired or revoked')),
+    );
+    when(() => hubSessionStore.readStoredCredentials(configId)).thenAnswer(
+      (_) async => const Success(
+        HubStoredCredentialsState(
+          credentials: HubStoredCredentials(
+            username: 'agent_user',
+            password: 'agent_pass',
+          ),
+        ),
+      ),
+    );
+    when(() => loginUser(serverUrl, any())).thenAnswer((_) async => const Success(loggedIn));
+    when(() => hubSessionStore.writeSessionTokens(configId, loggedIn)).thenAnswer((_) async => const Success(unit));
+    when(() => saveAuthToken(configId, loggedIn)).thenAnswer((_) async => const Success(unit));
+
+    final result = await coordinator.bootstrapAutoSession(
+      configId: configId,
+      serverUrl: serverUrl,
+      agentId: agentId,
+    );
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrThrow().source, HubBootstrapSource.storedCredentials);
+    expect(result.getOrThrow().token.token, 'login-access');
+    verify(() => loginUser(serverUrl, any())).called(1);
+  });
+
+  test('bootstrapAutoSession uses persisted token when refresh fails transiently', () async {
+    when(() => hubSessionStore.readSession(configId)).thenAnswer(
+      (_) async => const Success(
+        HubStoredSession(
+          token: AuthToken(
+            token: 'existing-access',
+            refreshToken: 'existing-refresh',
+          ),
+        ),
+      ),
+    );
+    when(() => refreshAuthToken(serverUrl, 'existing-refresh')).thenAnswer(
+      (_) async => Failure(domain.NetworkFailure('Hub unavailable')),
+    );
 
     final result = await coordinator.bootstrapAutoSession(
       configId: configId,
@@ -156,6 +229,7 @@ void main() {
 
     expect(result.isSuccess(), isTrue);
     expect(result.getOrThrow().source, HubBootstrapSource.persistedToken);
+    expect(result.getOrThrow().token.token, 'existing-access');
     verifyNever(() => loginUser(any(), any()));
   });
 

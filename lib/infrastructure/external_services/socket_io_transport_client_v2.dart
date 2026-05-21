@@ -823,6 +823,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (error is Map<String, dynamic>) {
       return _StructuredConnectError.fromMap(error);
     }
+    if (error is Map) {
+      return _StructuredConnectError.fromMap({
+        for (final entry in error.entries) entry.key.toString(): entry.value,
+      });
+    }
     if (error is String) {
       final trimmed = error.trim();
       if (trimmed.isEmpty || (trimmed[0] != '{' && trimmed[0] != '[')) {

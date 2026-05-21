@@ -480,6 +480,34 @@ void main() {
       );
     });
 
+    test('should request token refresh for dynamic-map auth connect errors', () async {
+      var tokenRefreshRequested = false;
+      client.setOnTokenExpired(() {
+        tokenRefreshRequested = true;
+      });
+
+      final connectFuture = client.connect(
+        'https://hub.test',
+        'agent-1',
+        authToken: 'expired-token',
+      );
+      emitEvent('connect_error', <dynamic, dynamic>{
+        'code': 'auth_failed',
+        'message': 'Hub rejected the token',
+      });
+
+      final result = await connectFuture;
+
+      expect(result.isError(), isTrue);
+      expect(tokenRefreshRequested, isTrue);
+      verify(
+        () => mockDataSource.createSocket(
+          'https://hub.test',
+          authToken: 'expired-token',
+        ),
+      ).called(1);
+    });
+
     test('should fail connect when local agent:register validation fails', () async {
       when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
       var reconnectionRequested = false;

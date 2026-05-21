@@ -67,8 +67,7 @@ class HubSessionCoordinator {
       );
     }
 
-    final token =
-        currentToken ?? await loadPersistedTokenPair(resolvedConfigId);
+    final token = currentToken ?? await loadPersistedTokenPair(resolvedConfigId);
     final refreshToken = token?.refreshToken.trim();
     if (refreshToken == null || refreshToken.isEmpty) {
       return Failure(
@@ -149,14 +148,60 @@ class HubSessionCoordinator {
   }) async {
     final persistedToken = await loadPersistedTokenPair(configId);
     if (persistedToken != null) {
-      return Success(
-        HubBootstrapSession(
-          token: persistedToken,
-          source: HubBootstrapSource.persistedToken,
-        ),
+      final refreshResult = await refreshSession(
+        serverUrl,
+        configId: configId,
+        currentToken: persistedToken,
+      );
+      if (refreshResult.isSuccess()) {
+        return Success(
+          HubBootstrapSession(
+            token: refreshResult.getOrThrow(),
+            source: HubBootstrapSource.refreshedToken,
+          ),
+        );
+      }
+
+      final refreshFailure = refreshResult.exceptionOrNull();
+      if (refreshFailure is domain_errors.Failure && refreshFailure.isTransient) {
+        return Success(
+          HubBootstrapSession(
+            token: persistedToken,
+            source: HubBootstrapSource.persistedToken,
+          ),
+        );
+      }
+
+      final storedCredentialsLogin = await _loginWithStoredCredentialsAsBootstrap(
+        serverUrl,
+        agentId,
+        configId: configId,
+      );
+      if (storedCredentialsLogin.isSuccess()) {
+        return storedCredentialsLogin;
+      }
+
+      final fallbackFailure = storedCredentialsLogin.exceptionOrNull() ?? refreshFailure;
+      return Failure(
+        fallbackFailure ??
+            domain_errors.ConfigurationFailure(
+              'Unable to bootstrap hub session',
+            ),
       );
     }
 
+    return _loginWithStoredCredentialsAsBootstrap(
+      serverUrl,
+      agentId,
+      configId: configId,
+    );
+  }
+
+  Future<Result<HubBootstrapSession>> _loginWithStoredCredentialsAsBootstrap(
+    String serverUrl,
+    String agentId, {
+    required String configId,
+  }) async {
     final loginResult = await loginWithStoredCredentials(
       serverUrl,
       agentId,
@@ -226,6 +271,7 @@ class HubSessionCoordinator {
 
 enum HubBootstrapSource {
   persistedToken,
+  refreshedToken,
   storedCredentials,
 }
 

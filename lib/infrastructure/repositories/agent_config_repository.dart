@@ -339,8 +339,15 @@ class AgentConfigRepository implements IAgentConfigRepository {
     }
 
     try {
-      if (secrets.hasAny) {
-        await _authSecretStore.saveSecrets(configId, secrets);
+      final currentSecrets = await _authSecretStore.readSecrets(configId);
+      final secretsToPersist = HubAuthSecrets(
+        authToken: _normalize(currentSecrets.authToken) ?? _normalize(secrets.authToken),
+        refreshToken: _normalize(currentSecrets.refreshToken) ?? _normalize(secrets.refreshToken),
+        authPassword: _normalize(secrets.authPassword),
+      );
+
+      if (secretsToPersist.hasAny) {
+        await _authSecretStore.saveSecrets(configId, secretsToPersist);
       } else {
         await _authSecretStore.deleteSecrets(configId);
       }
@@ -357,4 +364,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
     }
   }
 
+  String? _normalize(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
 }
