@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
+import 'package:plug_agente/core/constants/rpc_response_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -118,7 +119,7 @@ class RpcResponsePreparer {
       buildErrorResponse(
         id: null,
         code: RpcErrorCode.internalError,
-        technicalMessage: 'Outgoing rpc:response failed contract validation',
+        technicalMessage: RpcResponseConstants.outgoingContractValidationFailedTechnicalMessage,
       ),
     );
 

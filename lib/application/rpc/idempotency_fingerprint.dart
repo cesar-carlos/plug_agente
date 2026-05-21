@@ -16,13 +16,22 @@ String buildIdempotencyFingerprintForEnvelope(Map<String, dynamic> envelope) {
 
 /// Resolves fingerprint on the main isolate or in a worker when [params] are
 /// large enough that canonicalization + JSON + hash would risk UI jank.
+///
+/// Optional [runtimeInstanceId] / [runtimeSessionId] namespace RPC idempotency
+/// to the current agent process (e.g. `agent.action.*` after restart).
 Future<String> resolveIdempotencyFingerprint(
   String method,
-  Map<String, dynamic> params,
-) async {
+  Map<String, dynamic> params, {
+  String? runtimeInstanceId,
+  String? runtimeSessionId,
+}) async {
+  final trimmedInstance = runtimeInstanceId?.trim();
+  final trimmedSession = runtimeSessionId?.trim();
   final envelope = <String, dynamic>{
     'method': method,
     'params': params,
+    if (trimmedInstance != null && trimmedInstance.isNotEmpty) 'runtime_instance_id': trimmedInstance,
+    if (trimmedSession != null && trimmedSession.isNotEmpty) 'runtime_session_id': trimmedSession,
   };
   if (jsonTreeLikelyExceedsByteBudget(
     params,

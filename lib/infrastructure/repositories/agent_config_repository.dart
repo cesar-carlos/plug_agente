@@ -56,6 +56,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
   }
 
   @override
+  Future<Result<Config>> getByIdMetadata(String id) {
+    return getById(id);
+  }
+
+  @override
   Future<Result<List<Config>>> getAll() async {
     try {
       final configsData = await _database.select(_database.configTable).get();
@@ -73,6 +78,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
         ),
       );
     }
+  }
+
+  @override
+  Future<Result<List<Config>>> getAllMetadata() {
+    return getAll();
   }
 
   @override
@@ -145,6 +155,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
         ),
       );
     }
+  }
+
+  @override
+  Future<Result<Config>> getCurrentConfigMetadata() {
+    return getCurrentConfig();
   }
 
   Future<ConfigData> _mapEntityToData(Config config) async {
