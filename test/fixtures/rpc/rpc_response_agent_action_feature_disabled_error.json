@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-validate-feature-off",
+  "error": {
+    "code": -32015,
+    "message": "Agent actions temporarily unavailable",
+    "data": {
+      "reason": "agent_actions_feature_disabled",
+      "category": "transport",
+      "retryable": true,
+      "user_message": "Agent actions are temporarily unavailable. Please try again later.",
+      "technical_message": "Agent actions are disabled by feature flag",
+      "correlation_id": "req-validate-feature-off",
+      "timestamp": "2026-05-18T15:20:00.000Z",
+      "method": "agent.action.validateRun"
+    }
+  }
+}

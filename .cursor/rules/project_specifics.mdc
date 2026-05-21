@@ -203,6 +203,16 @@ Future<Result<User>> getById(String id) async {
 - Rode `dart run tool/check_e2e_env.dart` para verificar configuracao antes dos
   testes
 - Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
+- Acoes agendadas (`agent.action.*`): gate local/CI sem Hub via
+  `tool/run_agent_actions_operational_gate.ps1` ou
+  `tool/homologate_hub_agent_actions.ps1 -RunContractTests` (manifestos
+  `tool/agent_actions_*_test_paths.txt`); preflight estatico:
+  `tool/preflight_agent_actions_production.ps1`; live Hub opt-in com `RUN_LIVE_HUB_*`,
+  `E2E_HUB_URL`, `E2E_HUB_TOKEN`,
+  assinatura `PAYLOAD_SIGNING_*` e `-ValidateLiveEnv -RunLiveTests`; preflight live:
+  `dart run tool/validate_live_hub_agent_actions_env.dart` (ver
+  `docs/implemente/plano_acoes_agendadas_execucoes.md` e secao Hub em
+  `e2e_setup.md`)
 
 ## Expectativas de Teste no Repositorio
 

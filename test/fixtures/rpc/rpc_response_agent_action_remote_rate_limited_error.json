@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-rate",
+  "error": {
+    "code": -32013,
+    "message": "Rate limit exceeded",
+    "data": {
+      "reason": "agent_action_remote_rate_limited",
+      "category": "transport",
+      "retryable": true,
+      "user_message": "Too many requests. Please try again later.",
+      "technical_message": "Agent action remote rate limit exceeded",
+      "correlation_id": "req-run-rate",
+      "timestamp": "2026-05-18T15:05:00.000Z",
+      "method": "agent.action.run",
+      "retry_after_ms": 60000
+    }
+  }
+}

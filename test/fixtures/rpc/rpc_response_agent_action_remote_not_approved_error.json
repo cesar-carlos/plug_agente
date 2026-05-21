@@ -1,0 +1,20 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-not-approved",
+  "error": {
+    "code": -32002,
+    "message": "Not authorized",
+    "data": {
+      "reason": "remote_action_not_approved",
+      "category": "action",
+      "retryable": false,
+      "user_message": "A acao nao esta aprovada para execucao remota.",
+      "technical_message": "Action is not approved for remote execution.",
+      "correlation_id": "req-run-not-approved",
+      "timestamp": "2026-05-18T16:00:00.000Z",
+      "method": "agent.action.run",
+      "action_id": "action-remote-1",
+      "failure_code": "ACTION_REMOTE_NOT_APPROVED"
+    }
+  }
+}

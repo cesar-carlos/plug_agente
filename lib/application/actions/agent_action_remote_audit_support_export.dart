@@ -32,6 +32,7 @@ class AgentActionRemoteAuditSupportExport {
                   SupportDiagnosticsField(key: 'execution_id', value: record.executionId),
                   SupportDiagnosticsField(key: 'trace_id', value: record.traceId),
                   SupportDiagnosticsField(key: 'requested_by', value: record.requestedBy),
+                  SupportDiagnosticsField(key: 'idempotency_key', value: record.idempotencyKey),
                   SupportDiagnosticsField(key: 'reason_code', value: record.reasonCode),
                   SupportDiagnosticsField(key: 'rpc_error_code', value: record.rpcErrorCode),
                   SupportDiagnosticsField(key: 'client_id', value: record.clientId),

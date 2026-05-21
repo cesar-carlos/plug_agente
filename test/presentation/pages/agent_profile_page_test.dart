@@ -2,8 +2,11 @@ import 'package:dio/dio.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
@@ -39,7 +42,11 @@ void main() {
     late MockAuthProvider mockAuthProvider;
     late MockPushAgentProfileToHub mockPushToHub;
 
-    setUp(() {
+    setUp(() async {
+      await getIt.reset();
+      getIt.registerSingleton<AgentRegisterProfileProvider>(
+        AgentRegisterProfileProvider(),
+      );
       mockConfigProvider = MockConfigProvider();
       mockConnectionProvider = MockConnectionProvider();
       mockAuthProvider = MockAuthProvider();
@@ -54,7 +61,7 @@ void main() {
       });
       when(
         () => mockConfigProvider.saveConfig(),
-      ).thenAnswer((_) async => const Success(unit));
+      ).thenAnswer((_) async => Success(_sampleConfig));
       when(() => mockConfigProvider.updateAgentProfile(any())).thenReturn(null);
       when(
         () => mockConfigProvider.persistHubProfileCatalogSync(
@@ -64,6 +71,11 @@ void main() {
       ).thenAnswer((_) async => const Success(unit));
       when(() => mockConnectionProvider.isConnected).thenReturn(false);
       when(() => mockAuthProvider.currentToken).thenReturn(null);
+      when(() => mockAuthProvider.currentTokenForConfig(any())).thenReturn(null);
+    });
+
+    tearDown(() async {
+      await getIt.reset();
     });
 
     testWidgets('shows identity section when config is loaded', (tester) async {
@@ -111,6 +123,43 @@ void main() {
       verify(() => mockConfigProvider.updateAgentProfile(any())).called(1);
       verify(() => mockConfigProvider.saveConfig()).called(1);
     });
+
+    testWidgets(
+      'does not sync profile with a token from another config',
+      (tester) async {
+        when(() => mockConnectionProvider.isConnected).thenReturn(true);
+        when(
+          () => mockAuthProvider.currentToken,
+        ).thenReturn(const AuthToken(token: 'foreign-token', refreshToken: 'r1'));
+        when(() => mockAuthProvider.currentTokenForConfig('config-1')).thenReturn(null);
+
+        await tester.binding.setSurfaceSize(const Size(1400, 1000));
+        await tester.pumpWidget(
+          _buildWidget(
+            mockConfigProvider,
+            mockConnectionProvider,
+            mockAuthProvider,
+            mockPushToHub,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text(ptL10n.agentProfileActionSave));
+        await tester.tap(find.text(ptL10n.agentProfileActionSave));
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pumpAndSettle();
+
+        verifyNever(
+          () => mockPushToHub.call(
+            serverUrl: any(named: 'serverUrl'),
+            agentId: any(named: 'agentId'),
+            accessToken: any(named: 'accessToken'),
+            profile: any(named: 'profile'),
+            expectedProfileVersion: any(named: 'expectedProfileVersion'),
+          ),
+        );
+      },
+    );
   });
 }
 

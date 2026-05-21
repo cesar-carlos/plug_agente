@@ -37,5 +37,48 @@ void main() {
         expect(b, equals(a));
       },
     );
+
+    test('optional runtime ids change fingerprint and remain stable under key order', () {
+      final params = <String, dynamic>{'action_id': 'a1', 'idempotency_key': 'k1'};
+      final withoutRuntime = buildIdempotencyFingerprintForEnvelope({
+        'method': 'agent.action.run',
+        'params': params,
+      });
+      final withRuntime = buildIdempotencyFingerprintForEnvelope({
+        'method': 'agent.action.run',
+        'params': params,
+        'runtime_instance_id': 'inst-1',
+        'runtime_session_id': 'sess-1',
+      });
+      expect(withoutRuntime, isNot(equals(withRuntime)));
+      expect(
+        withRuntime,
+        equals(
+          buildIdempotencyFingerprintForEnvelope({
+            'method': 'agent.action.run',
+            'params': params,
+            'runtime_session_id': 'sess-1',
+            'runtime_instance_id': 'inst-1',
+          }),
+        ),
+      );
+    });
+
+    test('resolveIdempotencyFingerprint forwards runtime ids into envelope', () async {
+      final params = <String, dynamic>{'action_id': 'a1', 'idempotency_key': 'k1'};
+      final expected = buildIdempotencyFingerprintForEnvelope({
+        'method': 'agent.action.run',
+        'params': params,
+        'runtime_instance_id': 'inst-x',
+        'runtime_session_id': 'sess-y',
+      });
+      final actual = await resolveIdempotencyFingerprint(
+        'agent.action.run',
+        params,
+        runtimeInstanceId: 'inst-x',
+        runtimeSessionId: 'sess-y',
+      );
+      expect(actual, equals(expected));
+    });
   });
 }

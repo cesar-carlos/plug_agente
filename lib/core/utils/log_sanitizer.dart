@@ -14,6 +14,9 @@ class LogSanitizer {
   LogSanitizer._();
 
   static const _exactSensitiveKeys = {
+    'command_preview',
+    'commandpreview',
+    'process_command_preview',
     'password',
     'token',
     'secret',

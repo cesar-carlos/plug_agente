@@ -17,6 +17,8 @@ constexpr wchar_t kSingleInstanceMutexGlobal[] =
     L"Global\\PlugAgente_SingleInstance";
 constexpr wchar_t kSingleInstanceMutexLocal[] =
     L"Local\\PlugAgente_SingleInstance";
+constexpr wchar_t kRunnerWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+constexpr ULONG_PTR kRuntimeDeepLinkMessageId = 0x706c7567;
 
 class MutexGuard {
  public:
@@ -50,8 +52,45 @@ bool HasAutostartArg(const std::vector<std::string>& args) {
   return false;
 }
 
-void HandleSecondInstance(bool is_autostart) {
+std::string ExtractDeepLinkArgument(const std::vector<std::string>& args) {
+  for (const auto& arg : args) {
+    if (arg.rfind("plugdb://", 0) == 0 || arg.rfind("http://", 0) == 0 ||
+        arg.rfind("https://", 0) == 0) {
+      return arg;
+    }
+  }
+  return std::string();
+}
+
+bool ForwardDeepLinkToExistingInstance(const std::string& deep_link) {
+  if (deep_link.empty()) {
+    return false;
+  }
+
+  HWND target_window = ::FindWindowW(kRunnerWindowClassName, nullptr);
+  if (target_window == nullptr) {
+    return false;
+  }
+
+  COPYDATASTRUCT copy_data{};
+  copy_data.dwData = kRuntimeDeepLinkMessageId;
+  copy_data.cbData = static_cast<DWORD>(deep_link.size() + 1);
+  copy_data.lpData = const_cast<char*>(deep_link.c_str());
+
+  DWORD_PTR send_result = 0;
+  const auto send_status = ::SendMessageTimeoutW(
+      target_window, WM_COPYDATA, 0,
+      reinterpret_cast<LPARAM>(&copy_data), SMTO_ABORTIFHUNG, 2000,
+      &send_result);
+  return send_status != 0 && send_result == 0;
+}
+
+void HandleSecondInstance(const std::vector<std::string>& args,
+                          bool is_autostart) {
   if (is_autostart) {
+    return;
+  }
+  if (ForwardDeepLinkToExistingInstance(ExtractDeepLinkArgument(args))) {
     return;
   }
   wchar_t username[256];
@@ -130,7 +169,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     if (IsAnotherInstanceRunning()) {
       std::vector<std::string> args = GetCommandLineArguments();
       const bool is_autostart = HasAutostartArg(args);
-      HandleSecondInstance(is_autostart);
+      HandleSecondInstance(args, is_autostart);
       return EXIT_SUCCESS;
     }
     if (::IsDebuggerPresent()) {

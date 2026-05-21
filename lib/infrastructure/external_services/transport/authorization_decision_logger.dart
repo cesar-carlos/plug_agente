@@ -1,4 +1,5 @@
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 /// Mirrors authorization decisions from RPC responses (allow/denied/auth-fail)
@@ -83,7 +84,7 @@ class AuthorizationDecisionLogger {
       'request_id': request.id,
       'method': request.method,
       'code': error.code,
-      'reason': 'unauthorized',
+      'reason': AuthorizationContextConstants.unauthorizedReason,
     };
 
     if (errorData is Map<String, dynamic>) {
@@ -99,7 +100,7 @@ class AuthorizationDecisionLogger {
 
     _logMessage('AUTH', 'authorization.denied', payload);
 
-    if (payload['reason'] == 'token_revoked') {
+    if (payload['reason'] == AuthorizationContextConstants.tokenRevokedReason) {
       _requestTokenRefresh('token_revoked');
     }
   }

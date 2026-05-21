@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
@@ -16,6 +19,7 @@ class ConfigProvider extends ChangeNotifier {
   ConfigProvider(
     this._saveConfigUseCase,
     this._loadConfigUseCase,
+    this._activeConfigResolver,
     this._configService,
     this._uuid,
   ) {
@@ -23,6 +27,7 @@ class ConfigProvider extends ChangeNotifier {
   }
   final SaveAgentConfig _saveConfigUseCase;
   final LoadAgentConfig _loadConfigUseCase;
+  final ActiveConfigResolver _activeConfigResolver;
   final ConfigService _configService;
   final Uuid _uuid;
 
@@ -30,6 +35,11 @@ class ConfigProvider extends ChangeNotifier {
   bool _isLoading = false;
   String _error = '';
   bool _isPasswordVisible = false;
+  int _batchDepth = 0;
+  bool _batchedStateChanged = false;
+  Future<Result<Config>>? _saveLoopFuture;
+  bool _saveRequested = false;
+  int _loadRequestToken = 0;
 
   Config? get currentConfig => _currentConfig;
   bool get isLoading => _isLoading;
@@ -73,25 +83,30 @@ class ConfigProvider extends ChangeNotifier {
   /// Use this to load a specific configuration when navigating
   /// with route parameters (e.g., from deep links).
   Future<void> loadConfigById(String id) async {
+    final requestToken = ++_loadRequestToken;
     _isLoading = true;
     _error = '';
     notifyListeners();
 
     final result = await _loadConfigUseCase(id);
+    if (requestToken != _loadRequestToken) {
+      return;
+    }
 
-    result.fold(
-      (config) {
-        _currentConfig = config;
-        AppLogger.info('Config loaded successfully by ID: $id');
-      },
-      (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to load config: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
-      },
-    );
+    if (result.isSuccess()) {
+      final config = result.getOrThrow();
+      _currentConfig = config;
+      await _activeConfigResolver.setActiveConfigId(config.id);
+      AppLogger.info('Config loaded successfully by ID: $id');
+    } else {
+      final failure = result.exceptionOrNull()!;
+      _currentConfig = null;
+      _error = failure.toDisplayMessage();
+      AppLogger.error(
+        'Failed to load config: ${failure.toDisplayMessage()}',
+        failure.toTechnicalMessage(),
+      );
+    }
 
     _isLoading = false;
     notifyListeners();
@@ -114,7 +129,33 @@ class ConfigProvider extends ChangeNotifier {
     );
   }
 
-  Future<Result<void>> saveConfig() async {
+  Future<Result<Config>> saveConfig() {
+    _saveRequested = true;
+    final inFlightSave = _saveLoopFuture;
+    if (inFlightSave != null) {
+      return inFlightSave;
+    }
+
+    final saveLoop = _drainSaveRequests().whenComplete(() {
+      _saveLoopFuture = null;
+    });
+    _saveLoopFuture = saveLoop;
+    return saveLoop;
+  }
+
+  Future<Result<Config>> _drainSaveRequests() async {
+    Result<Config>? latestResult;
+    while (_saveRequested) {
+      _saveRequested = false;
+      latestResult = await _performSingleSaveConfig();
+    }
+    return latestResult ??
+        Failure(
+          domain_errors.ValidationFailure('Nenhuma configuraÃ§Ã£o para salvar'),
+        );
+  }
+
+  Future<Result<Config>> _performSingleSaveConfig() async {
     if (_currentConfig == null) {
       _error = 'No configuration to save';
       notifyListeners();
@@ -139,9 +180,11 @@ class ConfigProvider extends ChangeNotifier {
     final result = await _saveConfigUseCase(configWithConnectionString);
 
     result.fold(
-      (_) {
+      (savedConfig) {
+        _currentConfig = savedConfig;
         _error = '';
         AppLogger.info('Config saved successfully');
+        unawaited(_activeConfigResolver.setActiveConfigId(savedConfig.id));
       },
       (failure) {
         _error = failure.toDisplayMessage();
@@ -157,6 +200,19 @@ class ConfigProvider extends ChangeNotifier {
     return result;
   }
 
+  void batchUpdate(VoidCallback action) {
+    _batchDepth++;
+    try {
+      action();
+    } finally {
+      _batchDepth--;
+      if (_batchDepth == 0 && _batchedStateChanged) {
+        _batchedStateChanged = false;
+        notifyListeners();
+      }
+    }
+  }
+
   void _ensureConfigExists() {
     if (_currentConfig == null) {
       _createDefaultConfig();
@@ -164,161 +220,131 @@ class ConfigProvider extends ChangeNotifier {
   }
 
   void updateServerUrl(String serverUrl) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(
-      serverUrl: normalizeServerUrl(serverUrl),
+    _updateCurrentConfig(
+      (config) => config.copyWith(serverUrl: normalizeServerUrl(serverUrl)),
     );
-    notifyListeners();
   }
 
   void updateAgentId(String agentId) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(agentId: agentId);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(agentId: agentId));
   }
 
   void updateDriverName(String driverName) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(driverName: driverName);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(driverName: driverName));
   }
 
   void updateOdbcDriverName(String odbcDriverName) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(odbcDriverName: odbcDriverName);
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(odbcDriverName: odbcDriverName),
+    );
   }
 
   void updateUsername(String username) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(username: username);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(username: username));
   }
 
   void updatePassword(String password) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(password: password);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(password: password));
   }
 
   void updateAuthUsername(String? authUsername) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(authUsername: authUsername);
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(authUsername: authUsername),
+    );
   }
 
   void updateAuthPassword(String? authPassword) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(authPassword: authPassword);
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(authPassword: authPassword),
+    );
   }
 
   void updateDatabaseName(String databaseName) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(databaseName: databaseName);
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(databaseName: databaseName),
+    );
   }
 
   void updateHost(String host) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(host: host);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(host: host));
   }
 
   void updatePort(int port) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(port: port);
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(port: port));
   }
 
   void updateNome(String nome) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(nome: nome.trim());
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(nome: nome.trim()));
   }
 
   void updateNomeFantasia(String nomeFantasia) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(
-      nomeFantasia: nomeFantasia.trim(),
+    _updateCurrentConfig(
+      (config) => config.copyWith(nomeFantasia: nomeFantasia.trim()),
     );
-    notifyListeners();
   }
 
   void updateCnaeCnpjCpf(String cnaeCnpjCpf) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(cnaeCnpjCpf: cnaeCnpjCpf.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(cnaeCnpjCpf: cnaeCnpjCpf.trim()),
+    );
   }
 
   void updateTelefone(String telefone) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(telefone: telefone.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(telefone: telefone.trim()),
+    );
   }
 
   void updateCelular(String celular) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(celular: celular.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(celular: celular.trim()),
+    );
   }
 
   void updateEmail(String email) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(email: email.trim());
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(email: email.trim()));
   }
 
   void updateEndereco(String endereco) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(endereco: endereco.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(endereco: endereco.trim()),
+    );
   }
 
   void updateNumeroEndereco(String numeroEndereco) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(
-      numeroEndereco: numeroEndereco.trim(),
+    _updateCurrentConfig(
+      (config) => config.copyWith(numeroEndereco: numeroEndereco.trim()),
     );
-    notifyListeners();
   }
 
   void updateBairro(String bairro) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(bairro: bairro.trim());
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(bairro: bairro.trim()));
   }
 
   void updateCep(String cep) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(cep: cep.trim());
-    notifyListeners();
+    _updateCurrentConfig((config) => config.copyWith(cep: cep.trim()));
   }
 
   void updateNomeMunicipio(String nomeMunicipio) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(
-      nomeMunicipio: nomeMunicipio.trim(),
+    _updateCurrentConfig(
+      (config) => config.copyWith(nomeMunicipio: nomeMunicipio.trim()),
     );
-    notifyListeners();
   }
 
   void updateUfMunicipio(String ufMunicipio) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(ufMunicipio: ufMunicipio.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(ufMunicipio: ufMunicipio.trim()),
+    );
   }
 
   void updateObservacao(String observacao) {
-    _ensureConfigExists();
-    _currentConfig = _currentConfig!.copyWith(observacao: observacao.trim());
-    notifyListeners();
+    _updateCurrentConfig(
+      (config) => config.copyWith(observacao: observacao.trim()),
+    );
   }
 
   void updateAgentProfile(AgentProfile profile) {
-    _ensureConfigExists();
-    _currentConfig = profile.applyToConfig(_currentConfig!);
-    notifyListeners();
+    _updateCurrentConfig(profile.applyToConfig);
   }
 
   /// Persists hub catalog revision after a successful profile PATCH (CAS for next push).
@@ -332,14 +358,19 @@ class ConfigProvider extends ChangeNotifier {
       );
     }
 
-    _currentConfig = _currentConfig!.copyWith(
-      hubProfileVersion: profileVersion,
-      hubProfileUpdatedAt: profileUpdatedAtIso,
-      updatedAt: DateTime.now(),
+    _updateCurrentConfig(
+      (config) => config.copyWith(
+        hubProfileVersion: profileVersion,
+        hubProfileUpdatedAt: profileUpdatedAtIso,
+        updatedAt: DateTime.now(),
+      ),
     );
-    notifyListeners();
 
-    return saveConfig();
+    final saveResult = await saveConfig();
+    return saveResult.fold(
+      (_) => const Success(unit),
+      Failure.new,
+    );
   }
 
   void togglePasswordVisibility() {
@@ -355,5 +386,59 @@ class ConfigProvider extends ChangeNotifier {
   String getConnectionString() {
     if (_currentConfig == null) return '';
     return _configService.generateConnectionString(_currentConfig!);
+  }
+
+  void _updateCurrentConfig(Config Function(Config current) transform) {
+    _ensureConfigExists();
+    final currentConfig = _currentConfig!;
+    final nextConfig = transform(currentConfig);
+    if (_configContentsEqual(currentConfig, nextConfig)) {
+      return;
+    }
+    _currentConfig = nextConfig;
+    _notifyStateChanged();
+  }
+
+  void _notifyStateChanged() {
+    if (_batchDepth > 0) {
+      _batchedStateChanged = true;
+      return;
+    }
+    notifyListeners();
+  }
+
+  bool _configContentsEqual(Config left, Config right) {
+    return left.id == right.id &&
+        left.serverUrl == right.serverUrl &&
+        left.agentId == right.agentId &&
+        left.authToken == right.authToken &&
+        left.refreshToken == right.refreshToken &&
+        left.authUsername == right.authUsername &&
+        left.authPassword == right.authPassword &&
+        left.driverName == right.driverName &&
+        left.odbcDriverName == right.odbcDriverName &&
+        left.connectionString == right.connectionString &&
+        left.username == right.username &&
+        left.password == right.password &&
+        left.databaseName == right.databaseName &&
+        left.host == right.host &&
+        left.port == right.port &&
+        left.nome == right.nome &&
+        left.nomeFantasia == right.nomeFantasia &&
+        left.cnaeCnpjCpf == right.cnaeCnpjCpf &&
+        left.telefone == right.telefone &&
+        left.celular == right.celular &&
+        left.email == right.email &&
+        left.endereco == right.endereco &&
+        left.numeroEndereco == right.numeroEndereco &&
+        left.bairro == right.bairro &&
+        left.cep == right.cep &&
+        left.nomeMunicipio == right.nomeMunicipio &&
+        left.ufMunicipio == right.ufMunicipio &&
+        left.observacao == right.observacao &&
+        left.hubProfileVersion == right.hubProfileVersion &&
+        left.hubProfileUpdatedAt == right.hubProfileUpdatedAt &&
+        left.createdAt == right.createdAt &&
+        left.updatedAt == right.updatedAt;
   }
 }

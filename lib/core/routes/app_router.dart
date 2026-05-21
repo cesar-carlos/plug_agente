@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/presentation/pages/agent_actions_page.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
 import 'package:plug_agente/presentation/pages/dashboard_page.dart';
@@ -125,6 +126,13 @@ GoRouter createAppRouter({
             name: 'websocketSettings',
             builder: (context, state) {
               return const WebSocketSettingsPage();
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.agentActions,
+            name: 'agentActions',
+            builder: (context, state) {
+              return const AgentActionsPage();
             },
           ),
         ],

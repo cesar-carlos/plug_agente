@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -41,7 +42,7 @@ final class OdbcGatewayConnectionManager {
       _metrics.recordPoolAcquireTimeout();
       _metrics.recordDiagnosticReason(
         category: 'timeout',
-        reason: 'pool_wait_timeout',
+        reason: OdbcContextConstants.poolWaitTimeoutReason,
       );
       return Failure(
         _poolBudgetExhaustedFailure(
@@ -80,7 +81,7 @@ final class OdbcGatewayConnectionManager {
       _metrics.recordPoolAcquireTimeout();
       _metrics.recordDiagnosticReason(
         category: 'timeout',
-        reason: 'pool_wait_timeout',
+        reason: OdbcContextConstants.poolWaitTimeoutReason,
       );
       return Failure(
         _poolBudgetExhaustedFailure(
@@ -132,14 +133,14 @@ final class OdbcGatewayConnectionManager {
       _metrics.recordDirectConnectionAcquireTimeout();
       _metrics.recordDiagnosticReason(
         category: 'timeout',
-        reason: 'direct_connection_limit_timeout',
+        reason: OdbcContextConstants.directConnectionLimitTimeoutReason,
       );
       return Failure(
         _poolBudgetExhaustedFailure(
           operation: 'direct_connection_acquire',
           context: {
             'direct_operation': operation,
-            'reason': 'direct_connection_limit_timeout',
+            'reason': OdbcContextConstants.directConnectionLimitTimeoutReason,
             'retryable': true,
           },
         ),
@@ -349,7 +350,7 @@ final class OdbcGatewayConnectionManager {
         ...context,
         'timeout': true,
         'timeout_stage': 'pool',
-        'reason': context['reason'] ?? 'pool_wait_timeout',
+        'reason': context['reason'] ?? OdbcContextConstants.poolWaitTimeoutReason,
         'retryable': true,
       },
     );

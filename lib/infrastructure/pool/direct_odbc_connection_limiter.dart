@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_direct_connection_limiter_diagnostics.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -63,7 +64,7 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
             'direct_operation': operation,
             'timeout': true,
             'timeout_stage': 'pool',
-            'reason': 'direct_connection_limit_timeout',
+            'reason': OdbcContextConstants.directConnectionLimitTimeoutReason,
             'retryable': true,
           },
         ),

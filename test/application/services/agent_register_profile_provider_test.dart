@@ -26,7 +26,7 @@ void main() {
     });
 
     test('should build register profile snapshot from current config', () async {
-      when(() => repository.getCurrentConfig()).thenAnswer(
+      when(() => repository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_validConfig()),
       );
 
@@ -42,7 +42,7 @@ void main() {
     });
 
     test('should return null when config cannot be loaded', () async {
-      when(() => repository.getCurrentConfig()).thenAnswer(
+      when(() => repository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Failure(domain.NotFoundFailure('No config')),
       );
 
@@ -53,18 +53,18 @@ void main() {
 
     test('should reuse the pending snapshot load for concurrent calls', () async {
       final completer = Completer<Result<Config>>();
-      when(() => repository.getCurrentConfig()).thenAnswer((_) => completer.future);
+      when(() => repository.getCurrentConfigMetadata()).thenAnswer((_) => completer.future);
 
       final first = provider.loadSnapshot();
       final second = provider.loadSnapshot();
       completer.complete(Success(_validConfig()));
 
       expect(await first, await second);
-      verify(() => repository.getCurrentConfig()).called(1);
+      verify(() => repository.getCurrentConfigMetadata()).called(1);
     });
 
     test('should reuse cached snapshot until TTL expires', () async {
-      when(() => repository.getCurrentConfig()).thenAnswer(
+      when(() => repository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_validConfig()),
       );
 
@@ -72,17 +72,17 @@ void main() {
       final second = await provider.loadSnapshot();
 
       expect(identical(first, second), isTrue);
-      verify(() => repository.getCurrentConfig()).called(1);
+      verify(() => repository.getCurrentConfigMetadata()).called(1);
 
       now = now.add(const Duration(seconds: 3));
       final third = await provider.loadSnapshot();
 
       expect(third, isNotNull);
-      verify(() => repository.getCurrentConfig()).called(1);
+      verify(() => repository.getCurrentConfigMetadata()).called(1);
     });
 
     test('should clear cached snapshot on demand', () async {
-      when(() => repository.getCurrentConfig()).thenAnswer(
+      when(() => repository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_validConfig()),
       );
 
@@ -90,7 +90,7 @@ void main() {
       provider.clearCache();
       await provider.loadSnapshot();
 
-      verify(() => repository.getCurrentConfig()).called(2);
+      verify(() => repository.getCurrentConfigMetadata()).called(2);
     });
   });
 }

@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -184,7 +185,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
               'failedIndex': i,
               'totalCommands': commands.length,
               'completedCommands': results.length,
-              'reason': 'transaction_failed',
+              'reason': OdbcContextConstants.transactionFailedReason,
               'operation': 'transaction',
             },
           ),

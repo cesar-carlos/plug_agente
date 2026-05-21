@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-risk-stale",
+  "error": {
+    "code": -32002,
+    "message": "Not authorized",
+    "data": {
+      "reason": "remote_risk_fingerprint_stale",
+      "category": "action",
+      "retryable": false,
+      "user_message": "A aprovacao remota desta acao nao reflete mais a configuracao atual (por exemplo, segredo rotacionado). Reaprove na pagina Acoes antes de executar pelo Hub.",
+      "technical_message": "Remote action approval is stale after a risk-bearing change.",
+      "correlation_id": "req-run-risk-stale",
+      "timestamp": "2026-05-20T12:00:00.000Z",
+      "method": "agent.action.run",
+      "action_id": "action-remote-secret",
+      "failure_code": "ACTION_REMOTE_NOT_APPROVED",
+      "remote_requires_reapproval": true
+    }
+  }
+}

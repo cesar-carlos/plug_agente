@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart' as app_log;
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -129,7 +131,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
           error,
           operation: 'initialize_streaming_odbc',
           context: {
-            'reason': 'odbc_initialization_failed',
+            'reason': OdbcContextConstants.odbcInitializationFailedReason,
             'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
           },
         ),
@@ -210,7 +212,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
                     context: {
                       'connectionId': connection.id,
                       'rpc_error_code': RpcErrorCode.resultTooLarge,
-                      'reason': 'backpressure_overflow',
+                      'reason': RpcStreamingConstants.backpressureOverflowReason,
                     },
                   ),
                 );
@@ -225,7 +227,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
                     operation: 'executeQueryStream',
                     context: {
                       'connectionId': connection.id,
-                      'reason': 'socket_disconnect',
+                      'reason': OdbcContextConstants.socketDisconnectReason,
                     },
                   ),
                 );
@@ -278,7 +280,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
           };
           if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
             context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
-            context['reason'] = 'backpressure_overflow';
+            context['reason'] = RpcStreamingConstants.backpressureOverflowReason;
           }
           return Failure(
             OdbcFailureMapper.mapStreamingError(
@@ -359,7 +361,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
               error,
               operation: 'cancel_streaming_disconnect',
               context: {
-                'reason': 'stream_cancel_disconnect_failed',
+                'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
                 'executionId': stream.executionId,
                 'user_message':
                     'A consulta foi marcada para cancelamento, mas a desconexão '
@@ -376,7 +378,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
           error,
           operation: 'cancel_streaming_disconnect',
           context: {
-            'reason': 'stream_cancel_disconnect_timeout',
+            'reason': OdbcContextConstants.streamCancelDisconnectTimeoutReason,
             'executionId': stream.executionId,
             'timeout_ms': _cancelDisconnectTimeout.inMilliseconds,
             'user_message':

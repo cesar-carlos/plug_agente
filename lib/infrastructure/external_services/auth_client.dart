@@ -49,7 +49,10 @@ class AuthClient implements IAuthClient {
       ];
 
       for (final attempt in endpointAttempts) {
-        final url = joinServerUrlAndPath(serverUrl, attempt.path);
+        final url = joinServerUrlAndPath(
+          hubHttpBaseUrl(serverUrl),
+          attempt.path,
+        );
         if (kDebugMode) {
           developer.log(
             'AuthClient: Attempting login to $url',
@@ -155,7 +158,7 @@ class AuthClient implements IAuthClient {
       ];
 
       for (final endpoint in endpointAttempts) {
-        final url = joinServerUrlAndPath(serverUrl, endpoint);
+        final url = joinServerUrlAndPath(hubHttpBaseUrl(serverUrl), endpoint);
         try {
           final response = await _dio.post<Map<String, dynamic>>(
             url,

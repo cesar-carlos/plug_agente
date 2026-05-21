@@ -193,6 +193,45 @@ void main() {
       check(calls[1].arguments.join(' ')).contains(AppStrings.singleInstanceArgAutostart);
     });
 
+    test('should report repair needed without UAC when validation forbids elevation', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final calls = <_ProcessInvocation>[];
+
+      Future<ProcessResult> processRunner(
+        String executable,
+        List<String> arguments,
+      ) async {
+        calls.add(
+          _ProcessInvocation(
+            executable: executable,
+            arguments: arguments,
+          ),
+        );
+        return ProcessResult(
+          1,
+          0,
+          r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run Plug Agente REG_SZ "C:\Program Files\PlugAgente\plug_agente.exe"',
+          '',
+        );
+      }
+
+      final service = AutoStartService(processRunner: processRunner);
+      final result = await service.ensureLaunchConfiguration(
+        allowElevation: false,
+      );
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.needsRepair),
+        (_) => fail('Expected success'),
+      );
+      check(calls.length).equals(1);
+      check(calls.single.arguments).contains('query');
+    });
+
     test('should not repair registry entry that already has autostart argument', () async {
       if (!Platform.isWindows) {
         return;

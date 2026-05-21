@@ -1,0 +1,53 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-get-failed-1",
+  "result": {
+    "execution_id": "exec-failed-1",
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "status": "failed",
+    "source": "remoteHub",
+    "requested_at": "2026-05-18T14:00:01.000Z",
+    "timestamps": {
+      "process_started_at": "2026-05-18T14:00:01.000Z",
+      "finished_at": "2026-05-18T14:00:02.000Z"
+    },
+    "process": {
+      "executable": "cmd.exe",
+      "argument_count": 2,
+      "command_preview": "cmd.exe /C [REDACTED_COMMAND]"
+    },
+    "output": {
+      "stdout": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      },
+      "stderr": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      }
+    },
+    "flags": {
+      "terminal": true,
+      "skipped": false,
+      "timed_out": false,
+      "cancelled": false,
+      "killed": false,
+      "redaction_applied": true
+    },
+    "failure": {
+      "code": "ACTION_RUNTIME_ERROR",
+      "phase": "start_process",
+      "corrective_action": "review_start_process",
+      "message": "Failed to start command line action process."
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/health_service.dart';
@@ -9,6 +10,9 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/domain/actions/action_enums.dart';
+import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -33,6 +37,8 @@ class MockProtocolNegotiator extends Mock implements ProtocolNegotiator {}
 class MockRpcMethodDispatcher extends Mock implements RpcMethodDispatcher {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
+
+class MockAgentActionLocalRunner extends Mock implements AgentActionLocalRunner {}
 
 class MockSocket extends Mock implements io.Socket {}
 
@@ -233,6 +239,12 @@ void main() {
       when(
         () => mockFeatureFlags.enableSocketCancelMethod,
       ).thenReturn(false);
+      when(() => mockFeatureFlags.enableAgentActions).thenReturn(true);
+      when(() => mockFeatureFlags.enableRemoteAgentActions).thenReturn(false);
+      when(() => mockFeatureFlags.enableRemoteAdHocAgentActions).thenReturn(false);
+      when(() => mockFeatureFlags.enableElevatedAgentActions).thenReturn(false);
+      when(() => mockFeatureFlags.enableAgentActionsMaintenanceMode).thenReturn(false);
+      when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
       when(
         () => mockNegotiator.negotiate(
           agentCapabilities: any(named: 'agentCapabilities'),
@@ -284,6 +296,78 @@ void main() {
       expect(
         (registerPayload['capabilities'] as Map<String, dynamic>)['extensions'],
         isA<Map<String, dynamic>>(),
+      );
+    });
+
+    test('should advertise agent action runtime status when remote actions are enabled', () async {
+      when(() => mockFeatureFlags.enableAgentActions).thenReturn(true);
+      when(() => mockFeatureFlags.enableRemoteAgentActions).thenReturn(true);
+
+      final commandLineRunner = MockAgentActionLocalRunner();
+      when(() => commandLineRunner.type).thenReturn(AgentActionType.commandLine);
+      final developerRunner = MockAgentActionLocalRunner();
+      when(() => developerRunner.type).thenReturn(AgentActionType.developer);
+      final runnerRegistry = AgentActionLocalRunnerRegistry([
+        commandLineRunner,
+        developerRunner,
+      ]);
+
+      final runtimeStateGuard = AgentActionRuntimeStateGuard()..markDraining(reason: 'shutdown');
+      client = SocketIOTransportClientV2(
+        dataSource: mockDataSource,
+        negotiator: mockNegotiator,
+        rpcDispatcher: mockDispatcher,
+        featureFlags: mockFeatureFlags,
+        protocolMetricsCollector: metricsCollector,
+        actionRuntimeStateGuard: runtimeStateGuard,
+        agentActionLocalRunnerRegistry: runnerRegistry,
+      );
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      final result = await connectFuture;
+
+      expect(result.isSuccess(), isTrue);
+      final registerPayload =
+          decodeWirePayload(
+                emitted.firstWhere((item) => item.event == 'agent:register').data,
+              )
+              as Map<String, dynamic>;
+      final capabilities = registerPayload['capabilities'] as Map<String, dynamic>;
+      final extensions = capabilities['extensions'] as Map<String, dynamic>;
+      final agentActions = extensions['agentActions'] as Map<String, dynamic>;
+
+      expect(agentActions['enabled'], isTrue);
+      expect(agentActions['status'], 'draining');
+      expect(agentActions['maintenanceMode'], isFalse);
+      expect(agentActions['remoteAdHoc'], isFalse);
+      expect(agentActions['elevatedAllowed'], isFalse);
+      expect(agentActions['supportsElevated'], isFalse);
+      expect(agentActions['requiresIdempotencyKey'], isTrue);
+      expect(agentActions['supportsRun'], isTrue);
+      expect(agentActions['supportsValidateRun'], isTrue);
+      expect(agentActions['supportsDryRun'], isTrue);
+      expect(agentActions['supportsContext'], isFalse);
+      expect(agentActions['supportsOutputPaging'], isTrue);
+      expect(agentActions['supportsCancel'], isTrue);
+      expect(agentActions['supportsGetExecution'], isTrue);
+      expect(agentActions['methods'], AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
+      expect(agentActions['supportedMethods'], AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
+      expect(agentActions['authorizationScopes'], AgentActionRpcConstants.remotePublishedAuthorizationScopesOrdered);
+      expect(agentActions['supportedTypes'], ['commandLine', 'developer']);
+      expect(agentActions['version'], 1);
+      expect(agentActions['unavailableTypes'], isEmpty);
+      expect(
+        agentActions['defaultQueueLimits'],
+        AgentActionRpcConstants.remoteAgentActionsDefaultQueueLimitsCapability,
+      );
+      expect(
+        agentActions['limits'],
+        AgentActionRpcConstants.remoteAgentActionsLimitsCapability,
+      );
+      expect(
+        agentActions['batchPolicy'],
+        AgentActionRpcConstants.remoteAgentActionsBatchPolicyCapability,
       );
     });
 

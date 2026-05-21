@@ -16,6 +16,47 @@ String joinServerUrlAndPath(String serverUrl, String path) {
   return '$normalizedServerUrl$normalizedPath';
 }
 
+String hubHttpBaseUrl(String serverUrl) {
+  final normalizedServerUrl = normalizeServerUrl(serverUrl);
+  if (normalizedServerUrl.isEmpty) {
+    return normalizedServerUrl;
+  }
+
+  final parsedUri = Uri.tryParse(normalizedServerUrl);
+  if (parsedUri == null ||
+      (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
+    final lowerUrl = normalizedServerUrl.toLowerCase();
+    const agentsSuffix = '/$_agentsNamespace';
+    const consumersSuffix = '/$_consumersNamespace';
+    if (lowerUrl.endsWith(agentsSuffix)) {
+      return normalizedServerUrl.substring(
+        0,
+        normalizedServerUrl.length - agentsSuffix.length,
+      );
+    }
+    if (lowerUrl.endsWith(consumersSuffix)) {
+      return normalizedServerUrl.substring(
+        0,
+        normalizedServerUrl.length - consumersSuffix.length,
+      );
+    }
+    return normalizedServerUrl;
+  }
+
+  final pathSegments = parsedUri.pathSegments
+      .where((segment) => segment.isNotEmpty)
+      .toList();
+  if (pathSegments.isNotEmpty) {
+    final lastSegment = pathSegments.last.toLowerCase();
+    if (lastSegment == _agentsNamespace || lastSegment == _consumersNamespace) {
+      pathSegments.removeLast();
+      return parsedUri.replace(pathSegments: pathSegments).toString();
+    }
+  }
+
+  return normalizedServerUrl;
+}
+
 String ensureAgentsNamespaceUrl(String serverUrl) {
   final normalizedServerUrl = normalizeServerUrl(serverUrl);
   if (normalizedServerUrl.isEmpty) {

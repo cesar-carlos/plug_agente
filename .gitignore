@@ -37,6 +37,7 @@ migrate_working_dir/
 # Release validation scratch files
 /appcast.env
 /release_body.txt
+/artifacts/odbc_validation/
 
 # Flutter/Dart/Pub related
 **/doc/api/

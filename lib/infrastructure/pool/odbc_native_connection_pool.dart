@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -91,7 +92,7 @@ class OdbcNativeConnectionPool
     if (poolId == null) {
       return const Success(<String, Object?>{
         'available': false,
-        'reason': 'pool_not_created',
+        'reason': OdbcContextConstants.poolNotCreatedReason,
       });
     }
 
@@ -184,7 +185,7 @@ class OdbcNativeConnectionPool
           message: 'Native ODBC pool does not support custom connection options.',
           context: <String, dynamic>{
             'operation': 'pool_acquire',
-            'reason': 'native_pool_custom_options_unsupported',
+            'reason': OdbcContextConstants.nativePoolCustomOptionsUnsupportedReason,
           },
         ),
       );
@@ -208,7 +209,7 @@ class OdbcNativeConnectionPool
               context: {
                 'timeout': true,
                 'timeout_stage': 'pool',
-                'reason': 'odbc_worker_busy_connect',
+                'reason': OdbcContextConstants.odbcWorkerBusyConnectReason,
                 'retryable': true,
               },
             ),

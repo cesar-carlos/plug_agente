@@ -3,6 +3,10 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
@@ -13,6 +17,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/payload_l
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 
@@ -21,6 +26,29 @@ class _MockFeatureFlags extends Mock implements FeatureFlags {}
 class _MockDispatcher extends Mock implements RpcMethodDispatcher {}
 
 class _MockStreamEmitter extends Mock implements IRpcStreamEmitter {}
+
+Map<String, dynamic> _minimalRpcBatchItemForDisallowedAgentAction(String method, String id) {
+  return switch (method) {
+    AgentActionRpcConstants.agentActionRunRpcMethodName => {
+      'jsonrpc': '2.0',
+      'id': id,
+      'method': method,
+      'params': {
+        'action_id': 'action-1',
+        'idempotency_key': 'idem-$id',
+      },
+    },
+    AgentActionRpcConstants.agentActionCancelRpcMethodName => {
+      'jsonrpc': '2.0',
+      'id': id,
+      'method': method,
+      'params': {
+        'execution_id': 'execution-1',
+      },
+    },
+    _ => throw UnsupportedError('Add minimal batch RPC item for method "$method"'),
+  };
+}
 
 void main() {
   setUpAll(() {
@@ -37,8 +65,10 @@ void main() {
   late List<dynamic> emittedResponses;
   late List<({String event, dynamic payload})> emittedEvents;
   late RpcInboundHandler handler;
+  late MetricsCollector inboundMetrics;
 
   setUp(() {
+    inboundMetrics = MetricsCollector();
     featureFlags = _MockFeatureFlags();
     when(() => featureFlags.enableSocketSchemaValidation).thenReturn(false);
     when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(false);
@@ -115,6 +145,7 @@ void main() {
         emittedEvents.add((event: event, payload: payload));
       },
       hasReceivedCapabilities: () => true,
+      metricsCollector: inboundMetrics,
     );
   });
 
@@ -149,6 +180,12 @@ void main() {
       final response = emittedResponses.single as RpcResponse;
       expect(response.error?.code, RpcErrorCode.rateLimited);
       expect(response.id, 'req-x');
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(data['reason'], RpcInboundConstants.concurrentHandlersExceededReason);
+      expect(
+        data['technical_message'],
+        RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(ConnectionConstants.maxConcurrentRpcHandlers),
+      );
     });
   });
 
@@ -193,6 +230,73 @@ void main() {
           negotiatedExtensions: any(named: 'negotiatedExtensions'),
         ),
       );
+    });
+  });
+
+  group('agent.action notification contract', () {
+    test('should dispatch but not emit rpc response for agent.action notification', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.error(
+          id: null,
+          error: RpcError(
+            code: RpcErrorCode.invalidParams,
+            message: RpcErrorCode.getMessage(RpcErrorCode.invalidParams),
+            data: RpcErrorCode.buildErrorData(
+              code: RpcErrorCode.invalidParams,
+              technicalMessage: 'agent.action.run requires a JSON-RPC id',
+              reason: AgentActionRpcConstants.remoteAgentActionNotificationNotAllowedRpcReason,
+            ),
+          ),
+        ),
+      );
+
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: const {
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'params': <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-1',
+          },
+        },
+      );
+
+      await handler.handleRequest(wire);
+
+      expect(emittedResponses, isEmpty);
+      verify(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
     });
   });
 
@@ -262,6 +366,187 @@ void main() {
       expect(emittedResponses, hasLength(1));
       final response = emittedResponses.single as RpcResponse;
       expect(response.error?.code, RpcErrorCode.invalidRequest);
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(data['detail'], RpcInboundConstants.batchRequestEmptyDetail);
+      expect(data['technical_message'], RpcInboundConstants.batchRequestEmptyDetail);
+    });
+
+    test('rejects side-effect agent actions in batch before dispatch', () async {
+      const methods = AgentActionRpcConstants.jsonRpcBatchDisallowedAgentActionMethodsOrdered;
+      final batch = <Map<String, dynamic>>[
+        for (var i = 0; i < methods.length; i++) _minimalRpcBatchItemForDisallowedAgentAction(methods[i], 'id-$i'),
+      ];
+
+      await handler.handleBatchRequest(batch);
+
+      expect(emittedResponses, hasLength(1));
+      final responses = emittedResponses.single as List<RpcResponse>;
+      expect(responses, hasLength(methods.length));
+      expect(responses.map((response) => response.id), [for (var i = 0; i < methods.length; i++) 'id-$i']);
+      expect(
+        responses.map((response) => response.error?.code),
+        everyElement(RpcErrorCode.invalidRequest),
+      );
+      expect(
+        responses.map((response) {
+          final data = response.error?.data as Map<String, dynamic>?;
+          return data?['reason'];
+        }),
+        everyElement(AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedErrorReason),
+      );
+      verifyNever(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+    });
+
+    test('dispatches read-only agent.action.getExecution inside JSON-RPC batch', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(
+          id: 'get-batch-1',
+          result: <String, dynamic>{'execution_id': 'execution-1'},
+        ),
+      );
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'get-batch-1',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'params': {
+            'execution_id': 'execution-1',
+          },
+        },
+      ]);
+
+      expect(emittedResponses, hasLength(1));
+      final responses = emittedResponses.single as List<RpcResponse>;
+      expect(responses, hasLength(1));
+      expect(responses.single.error, isNull);
+      expect(responses.single.result, isA<Map<String, dynamic>>());
+      expect(
+        (responses.single.result! as Map<String, dynamic>)['execution_id'],
+        'execution-1',
+      );
+
+      verify(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
+    });
+
+    test('dispatches agent.action.validateRun inside JSON-RPC batch', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(
+          id: 'validate-batch-1',
+          result: <String, dynamic>{
+            'valid': true,
+            'action_id': 'action-1',
+            'action_type': 'commandLine',
+          },
+        ),
+      );
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'validate-batch-1',
+          'method': AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-validate-1',
+          },
+        },
+      ]);
+
+      expect(emittedResponses, hasLength(1));
+      final responses = emittedResponses.single as List<RpcResponse>;
+      expect(responses, hasLength(1));
+      expect(responses.single.error, isNull);
+      final result = responses.single.result! as Map<String, dynamic>;
+      expect(result['valid'], isTrue);
+      expect(result['action_id'], 'action-1');
+
+      verify(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
+    });
+
+    test('rejects batch when read-only agent.action RPC count exceeds limit', () async {
+      final limit = AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch;
+      final batch = List<Map<String, dynamic>>.generate(
+        limit + 1,
+        (index) => {
+          'jsonrpc': '2.0',
+          'id': 'read-batch-$index',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'params': {'execution_id': 'execution-$index'},
+        },
+      );
+
+      await handler.handleBatchRequest(batch);
+
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.error?.code, RpcErrorCode.invalidRequest);
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(
+        data['reason'],
+        AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitErrorReason,
+      );
+      expect(data['read_method_count'], limit + 1);
+      expect(data['limit'], limit);
+      verifyNever(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+      expect(
+        inboundMetrics.getSnapshot()['rpc_remote_agent_action_batch_read_limit_rejected'],
+        1,
+      );
     });
   });
 
@@ -333,7 +618,7 @@ void main() {
       final response = emittedResponses.single as RpcResponse;
       expect(response.error?.code, RpcErrorCode.invalidRequest);
       final data = response.error!.data as Map<String, dynamic>;
-      expect(data['reason'], 'protocol_not_ready');
+      expect(data['reason'], RpcInboundConstants.protocolNotReadyReason);
       // Dispatcher must NOT be invoked when protocol is not ready.
       verifyNever(
         () => dispatcher.dispatch(

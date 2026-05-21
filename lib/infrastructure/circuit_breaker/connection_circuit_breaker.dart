@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
@@ -86,7 +88,7 @@ class ConnectionCircuitBreaker {
           domain.ConnectionFailure.withContext(
             message: 'Circuit breaker open for database connection (${elapsed.inSeconds}s/${_resetTimeout.inSeconds}s)',
             context: {
-              'reason': 'circuit_breaker_open',
+              'reason': OdbcContextConstants.circuitBreakerOpenReason,
               'consecutive_failures': _consecutiveFailures,
               'time_since_open_seconds': elapsed.inSeconds,
               'reset_timeout_seconds': _resetTimeout.inSeconds,
@@ -139,18 +141,19 @@ class ConnectionCircuitBreaker {
   bool _isConnectionQueryFailure(domain.QueryExecutionFailure failure) {
     final reason = failure.context['reason']?.toString();
     return failure.context['connectionFailed'] == true &&
-        (reason == 'connection_lost_during_query' || reason == 'odbc_worker_crashed');
+        (reason == OdbcContextConstants.connectionLostDuringQueryReason ||
+            reason == OdbcContextConstants.odbcWorkerCrashedReason);
   }
 
   bool _isLocalPressureFailure(domain.ConnectionFailure failure) {
     final reason = failure.context['reason']?.toString();
     return failure.context['poolExhausted'] == true ||
-        reason == 'pool_exhausted' ||
-        reason == 'pool_wait_timeout' ||
-        reason == 'odbc_worker_busy_connect' ||
-        reason == 'direct_connection_limit_timeout' ||
-        reason == 'sql_queue_full' ||
-        reason == 'queue_wait_timeout';
+        reason == OdbcContextConstants.poolExhaustedReason ||
+        reason == OdbcContextConstants.poolWaitTimeoutReason ||
+        reason == OdbcContextConstants.odbcWorkerBusyConnectReason ||
+        reason == OdbcContextConstants.directConnectionLimitTimeoutReason ||
+        reason == SqlPipelineContextConstants.sqlQueueFullReason ||
+        reason == SqlPipelineContextConstants.queueWaitTimeoutReason;
   }
 
   void _onSuccess(String connectionString) {

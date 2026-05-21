@@ -16,6 +16,10 @@ void main() {
       expect(NavDestination.config.route, equals(AppRoutes.config));
     });
 
+    test('should return correct route for agent actions', () {
+      expect(NavDestination.agentActions.route, equals(AppRoutes.agentActions));
+    });
+
     test('should return correct route for agent profile', () {
       expect(NavDestination.agentProfile.route, equals(AppRoutes.agentProfile));
     });
@@ -47,6 +51,13 @@ void main() {
       expect(
         NavDestination.fromRoute('/config'),
         equals(NavDestination.config),
+      );
+    });
+
+    test('should return agent actions from agent actions route', () {
+      expect(
+        NavDestination.fromRoute('/agent-actions'),
+        equals(NavDestination.agentActions),
       );
     });
 
@@ -91,7 +102,12 @@ void main() {
       expect(NavDestination.playground.index, equals(2));
       expect(NavDestination.databaseSettings.index, equals(3));
       expect(NavDestination.websocketSettings.index, equals(4));
-      expect(NavDestination.config.index, equals(5));
+      expect(NavDestination.agentActions.index, equals(5));
+      expect(NavDestination.config.index, equals(6));
+      expect(
+        NavDestination.navOrder.indexOf(NavDestination.agentActions),
+        NavDestination.navOrder.indexOf(NavDestination.config) - 1,
+      );
     });
   });
 
@@ -99,6 +115,7 @@ void main() {
     test('should have correct route constants', () {
       expect(AppRoutes.dashboard, equals('/'));
       expect(AppRoutes.playground, equals('/playground'));
+      expect(AppRoutes.agentActions, equals('/agent-actions'));
       expect(AppRoutes.config, equals('/config'));
       expect(AppRoutes.configEdit, equals('/config/:id'));
       expect(AppRoutes.agentProfile, equals('/agent-profile'));

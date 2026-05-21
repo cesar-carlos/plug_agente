@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -40,7 +41,7 @@ class ExecuteSqlBatch {
               context: {
                 'operation': 'batch_validation',
                 'index': i,
-                'reason': failure.context['reason'] ?? 'invalid_sql',
+                'reason': failure.context['reason'] ?? SqlPipelineContextConstants.invalidSqlReason,
               },
             ),
           );

@@ -45,6 +45,7 @@ class AppConstants {
   static const String agentsListPath = '/api/v1/agents';
 
   static const String installationIdSettingsKey = 'plug_agente.installation_id';
+  static const String activeConfigIdSettingsKey = 'plug_agente.active_config_id';
 
   /// Written under the global app data directory when restore fails after shutdown.
   static const String lastRestoreErrorFileName = 'last_restore_error.txt';

@@ -106,5 +106,15 @@ $env:RUN_ODBC_BURST_TESTS='true'
 flutter test test/integration/sql_queue_burst_test.dart
 ```
 
+No Windows, para consolidar preflight, testes e worksheet de evidencias:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1
+.\tool\run_odbc_operational_validation.ps1 -All
+```
+
 Rollback imediato se throughput melhorar pouco enquanto p95/p99, timeouts,
 falhas de cancelamento ou erros de driver piorarem.
+
+Depois de comparar baseline/candidato, registre os numeros e a decisao de
+tuning em `docs/architecture/odbc_operational_validation_runbook.md`.

@@ -138,5 +138,55 @@ void main() {
       expect(ConnectionConstants.directOdbcConnectionConcurrency(4), 4);
       expect(ConnectionConstants.directOdbcConnectionOverrideExceedsPool(4), isTrue);
     });
+
+    test('should default RPC idempotency entry TTL to 300 seconds', () {
+      expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 300));
+    });
+
+    test('should use RPC_IDEMPOTENCY_CACHE_TTL_SECONDS when valid', () {
+      dotenv.loadFromString(envString: 'RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=120');
+
+      expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 120));
+    });
+
+    test('should clamp RPC_IDEMPOTENCY_CACHE_TTL_SECONDS below minimum to 60', () {
+      dotenv.loadFromString(envString: 'RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=30');
+
+      expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 60));
+    });
+
+    test('should clamp RPC_IDEMPOTENCY_CACHE_TTL_SECONDS above maximum to 86400', () {
+      dotenv.loadFromString(envString: 'RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=200000');
+
+      expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 86400));
+    });
+
+    test('should fall back to default when RPC_IDEMPOTENCY_CACHE_TTL_SECONDS is invalid', () {
+      dotenv.loadFromString(envString: 'RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=not-a-number');
+
+      expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 300));
+    });
+
+    test('should default agent action RPC idempotency TTL to min execution retention and 24h', () {
+      expect(ConnectionConstants.agentActionRpcIdempotencyEntryTtl, const Duration(hours: 24));
+    });
+
+    test('should use AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS when valid', () {
+      dotenv.loadFromString(envString: 'AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=7200');
+
+      expect(ConnectionConstants.agentActionRpcIdempotencyEntryTtl, const Duration(hours: 2));
+    });
+
+    test('should clamp AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS below minimum to 60', () {
+      dotenv.loadFromString(envString: 'AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS=10');
+
+      expect(ConnectionConstants.agentActionRpcIdempotencyEntryTtl, const Duration(seconds: 60));
+    });
+
+    test('should align agent action RPC idempotency default with shorter execution retention', () {
+      dotenv.loadFromString(envString: 'AGENT_ACTION_EXECUTION_RETENTION_DAYS=1');
+
+      expect(ConnectionConstants.agentActionRpcIdempotencyEntryTtl, const Duration(days: 1));
+    });
   });
 }

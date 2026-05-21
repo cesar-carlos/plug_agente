@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../tool/src/live_hub_agent_action_env_check.dart' as live_hub_env;
 
 /// Environment variables for E2E and live integration tests.
 ///
@@ -71,6 +72,20 @@ class E2EEnv {
   /// Whether signed PayloadFrame hub tests should run (`RUN_LIVE_HUB_SIGNING_TESTS=true`).
   static bool get runLiveHubSigningTests => _get('RUN_LIVE_HUB_SIGNING_TESTS') == 'true';
 
+  /// Whether live hub Socket.IO tests for `agent.action.*` readiness should run
+  /// (`RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`). Requires the same hub URL/token
+  /// as [runLiveHubTests]; signed PayloadFrame path requires [runLiveHubSigningTests].
+  static bool get runLiveHubAgentActionRpcTests => _get('RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS') == 'true';
+
+  /// When true (`E2E_HUB_EXPECT_AGENT_ACTION_RPC=true`), the strict live test in
+  /// `hub_agent_action_rpc_live_e2e_test.dart` waits for an inbound `rpc:request`
+  /// whose method starts with `agent.action.` after `agent:ready` (hub must emit).
+  static bool get e2eHubExpectAgentActionRpc => _get('E2E_HUB_EXPECT_AGENT_ACTION_RPC') == 'true';
+
+  /// When true (`E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY=true`), live hub tests assert
+  /// `agent:capabilities` includes an `agentActions` extension after signed register.
+  static bool get e2eHubExpectAgentActionsCapability => _get('E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY') == 'true';
+
   /// Base URL for hub Socket smoke test (`E2E_HUB_URL`). `/agents` is appended when missing.
   static String? get e2eHubUrl {
     final v = _get('E2E_HUB_URL');
@@ -97,6 +112,47 @@ class E2EEnv {
 
   /// Active PayloadFrame signing secret for live hub signing tests.
   static String? get e2ePayloadSigningKey => _get('PAYLOAD_SIGNING_KEY');
+
+  /// Environment variable names missing for live hub `agent.action.*` tests.
+  static List<String> get missingLiveHubAgentActionVariableNames => live_hub_env.missingLiveHubAgentActionVariables(
+    runLiveHubTests: runLiveHubTests,
+    runLiveHubSigningTests: runLiveHubSigningTests,
+    runLiveHubAgentActionRpcTests: runLiveHubAgentActionRpcTests,
+    hubUrl: e2eHubUrl,
+    hubToken: e2eHubToken,
+    payloadSigningKeyId: e2ePayloadSigningKeyId,
+    payloadSigningKey: e2ePayloadSigningKey,
+  );
+
+  /// Whether live hub `agent.action.*` integration tests can run.
+  static bool get isLiveHubAgentActionReady => liveHubAgentActionReadinessSkipMessage == null;
+
+  /// Skip reason for live hub agent.action tests; `null` when [isLiveHubAgentActionReady].
+  static String? get liveHubAgentActionReadinessSkipMessage {
+    if (!runLiveHubTests) {
+      return 'Set RUN_LIVE_HUB_TESTS=true in .env to run hub agent.action readiness tests.';
+    }
+    if (!runLiveHubAgentActionRpcTests) {
+      return 'Set RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true to run hub agent.action readiness tests.';
+    }
+    if (!runLiveHubSigningTests) {
+      return 'Set RUN_LIVE_HUB_SIGNING_TESTS=true (signed PayloadFrame path required for this test).';
+    }
+    final hubUrl = e2eHubUrl;
+    if (hubUrl == null || hubUrl.isEmpty) {
+      return 'Set E2E_HUB_URL (hub base URL, e.g. https://host:port or wss://host/path).';
+    }
+    final hubToken = e2eHubToken;
+    if (hubToken == null || hubToken.isEmpty) {
+      return 'Set E2E_HUB_TOKEN (agent token for the Socket.IO auth handshake).';
+    }
+    final keyId = e2ePayloadSigningKeyId;
+    final key = e2ePayloadSigningKey;
+    if (keyId == null || keyId.isEmpty || key == null || key.isEmpty) {
+      return 'Set PAYLOAD_SIGNING_KEY_ID/PAYLOAD_SIGNING_KEY or PAYLOAD_SIGNING_ACTIVE_KEY_ID/PAYLOAD_SIGNING_KEY.';
+    }
+    return null;
+  }
 
   static const String _defaultApiBaseUrl = 'http://31.97.29.223:3000/';
   static const String _defaultTimeoutUrl = 'http://10.255.255.1:9999/';
@@ -263,6 +319,14 @@ class E2EEnv {
   @visibleForTesting
   static void resetForTesting() {
     _loaded = false;
+  }
+
+  /// Loads [envString] into dotenv and marks env as ready (tests only).
+  @visibleForTesting
+  static Future<void> loadForTesting(String envString) async {
+    resetForTesting();
+    dotenv.loadFromString(envString: envString, isOptional: true);
+    _loaded = true;
   }
 
   /// Validates that [url] looks like http(s) URL. Returns false if invalid.

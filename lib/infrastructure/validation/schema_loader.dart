@@ -29,12 +29,19 @@ class TransportSchemaIds {
   static const String paramsSqlCancel = 'rpc.params.sql-cancel.schema.json';
   static const String paramsAgentGetProfile = 'rpc.params.agent-get-profile.schema.json';
   static const String paramsAgentGetHealth = 'rpc.params.agent-get-health.schema.json';
+  static const String paramsAgentActionGetExecution = 'rpc.params.agent-action-get-execution.schema.json';
+  static const String paramsAgentActionRun = 'rpc.params.agent-action-run.schema.json';
+  static const String paramsAgentActionValidateRun = 'rpc.params.agent-action-validate-run.schema.json';
+  static const String paramsAgentActionCancel = 'rpc.params.agent-action-cancel.schema.json';
   static const String paramsClientTokenGetPolicy = 'rpc.params.client-token-get-policy.schema.json';
   static const String resultSqlExecute = 'rpc.result.sql-execute.schema.json';
   static const String resultSqlExecuteBatch = 'rpc.result.sql-execute-batch.schema.json';
   static const String resultSqlBulkInsert = 'rpc.result.sql-bulk-insert.schema.json';
   static const String resultAgentGetProfile = 'rpc.result.agent-get-profile.schema.json';
   static const String resultAgentGetHealth = 'rpc.result.agent-get-health.schema.json';
+  static const String resultAgentActionGetExecution = 'rpc.result.agent-action-get-execution.schema.json';
+  static const String resultAgentActionValidateRun = 'rpc.result.agent-action-validate-run.schema.json';
+  static const String resultAgentActionCancel = 'rpc.result.agent-action-cancel.schema.json';
   static const String resultClientTokenGetPolicy = 'rpc.result.client-token-get-policy.schema.json';
   static const String streamChunk = 'rpc.stream.chunk.schema.json';
   static const String streamComplete = 'rpc.stream.complete.schema.json';
@@ -57,12 +64,19 @@ class TransportSchemaIds {
     paramsSqlCancel,
     paramsAgentGetProfile,
     paramsAgentGetHealth,
+    paramsAgentActionGetExecution,
+    paramsAgentActionRun,
+    paramsAgentActionValidateRun,
+    paramsAgentActionCancel,
     paramsClientTokenGetPolicy,
     resultSqlExecute,
     resultSqlExecuteBatch,
     resultSqlBulkInsert,
     resultAgentGetProfile,
     resultAgentGetHealth,
+    resultAgentActionGetExecution,
+    resultAgentActionValidateRun,
+    resultAgentActionCancel,
     resultClientTokenGetPolicy,
     streamChunk,
     streamComplete,

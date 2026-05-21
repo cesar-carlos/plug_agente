@@ -42,6 +42,7 @@ class ProtocolCapabilities {
     bool streamingResults = false,
     int? recommendedStreamPullWindowSize,
     int? maxStreamPullWindowSize,
+    Map<String, dynamic>? agentActions,
   }) {
     final extensions = <String, dynamic>{
       'batchSupport': true,
@@ -68,6 +69,9 @@ class ProtocolCapabilities {
     };
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';
+    }
+    if (agentActions != null) {
+      extensions['agentActions'] = agentActions;
     }
 
     return ProtocolCapabilities(

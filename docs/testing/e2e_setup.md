@@ -52,6 +52,188 @@ hub:
 
 Não coloque o token em logs. Em CI, use *secrets* do repositório (ver job opcional `live-hub-e2e` no workflow Flutter).
 
+#### Onde obter os valores (desenvolvimento local)
+
+| Variável | Fonte usual |
+| -------- | ----------- |
+| `E2E_HUB_URL` | Mesma URL do Hub que o Plug Agente usa na UI (Socket.IO); o teste acrescenta `/agents` se faltar. Ex.: `wss://host/hub` ou `https://host:port`. |
+| `E2E_HUB_TOKEN` | Token do agente no Hub (login/registro do agente no painel ou API de agente do Hub). |
+| `PAYLOAD_SIGNING_KEY_ID` / `PAYLOAD_SIGNING_ACTIVE_KEY_ID` | `key_id` ativo configurado no **servidor Hub** para `PayloadFrame`. |
+| `PAYLOAD_SIGNING_KEY` | Segredo HMAC correspondente no Hub (deve ser **idêntico** no agente e no Hub). |
+
+Se desenvolves o monorepo local, podes alinhar a partir de `../plug_server/.env` (mesmos valores do deployment Hub):
+
+```bash
+dart run tool/promote_e2e_signing_from_monorepo_env.dart
+```
+
+Se o Hub ainda não tiver chaves HMAC (desenvolvimento local), gere um par de teste e replique no `plug_server/.env`:
+
+```bash
+dart run tool/generate_dev_e2e_signing.dart
+dart run tool/generate_dev_e2e_signing.dart --write
+```
+
+Com `--write`, preenche chaves **vazias** em `plug_agente/.env` e, se existir no monorepo,
+em `../plug_server/.env` (mesmo par nos dois). **Não use `e2e-dev` contra um Hub remoto
+de produção** — o connect Socket.IO pode passar, mas `agent:capabilities` assinado
+estoura timeout até o par HMAC coincidir com o servidor.
+
+Se `validate_live_hub_agent_actions_env.dart` mostrar aviso `e2e-dev` + URL remota,
+copie `PAYLOAD_SIGNING_*` do `.env` do Hub em deploy (`promote_e2e_signing_from_monorepo_env.dart`
+ou painel **Config → WebSocket** + `export_e2e_secrets_from_local.dart`).
+
+Smoke Socket.IO (só URL + token, sem assinatura PayloadFrame):  
+`flutter test test/integration/hub_socket_live_e2e_test.dart --name "should connect to agents namespace"`
+
+Smoke assinatura (`agent:register` → `agent:capabilities` — exige HMAC igual ao Hub):  
+`flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"`
+
+Depois de preencher o `.env`, rode `dart run tool/validate_live_hub_agent_actions_env.dart` (checklist `[ok]`/`[ ]`, sem imprimir segredos).
+
+Alinhe o agent id do register assinado com o agente do token:
+
+```bash
+dart run tool/suggest_e2e_hub_from_local_config.dart --apply-agent-id
+```
+
+Se o smoke Socket.IO falhar com `jwt expired`, renove `E2E_HUB_TOKEN` (login no app em **Config** ou token do admin do Hub). O preflight `validate_live_hub_agent_actions_env.dart` também avisa quando o JWT em `.env` já expirou.
+
+```bash
+dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
+```
+
+Alternativa sem abrir o app (credenciais de agente no `.env`):
+
+```bash
+# E2E_HUB_URL, E2E_HUB_AGENT_ID, E2E_HUB_USERNAME, E2E_HUB_PASSWORD
+dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
+```
+
+`sync_e2e_hub_env_from_local.dart` passa `--force` automaticamente quando o JWT em `.env` já expirou.
+
+No Windows, se o Plug Agente já estiver configurado na UI (**Config** → URL do servidor + login), rode:
+
+```bash
+dart run tool/suggest_e2e_hub_from_local_config.dart
+dart run tool/suggest_e2e_hub_from_local_config.dart --apply-url
+```
+
+Isso lê `agent_config.db` em `PlugAgente` e sugere `E2E_HUB_URL` (com `/agents` quando necessário). Com `--apply-url`, grava só `E2E_HUB_URL` no `.env` se a linha estiver vazia. Indica se há `auth_token` ou credenciais salvas, mas **não** imprime token nem chaves HMAC.
+
+Para preencher `E2E_HUB_TOKEN` sem copiar manualmente (usa `auth_token` no DB ou login HTTP com usuário/senha salvos na config):
+
+```bash
+dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token
+```
+
+O token **não** é impresso no terminal; só é gravado no `.env` quando a linha está vazia.
+
+Atalho (aplica URL + tenta token + roda validate):
+
+```bash
+dart run tool/sync_e2e_hub_env_from_local.dart
+```
+
+`PAYLOAD_SIGNING_KEY_ID` e `PAYLOAD_SIGNING_KEY` ainda precisam vir do Hub (ou da secção de signing na UI), salvo export opt-in:
+
+```bash
+dart run tool/sync_e2e_hub_env_from_local.dart --export-secure
+```
+
+Requer login e signing configurados no app instalado (`plug_agente.exe`, Windows). Lê `%APPDATA%\com.se7esistemas\plug_agente\flutter_secure_storage.dat`; **não** imprime segredos. O script roda com `dart run` (sem Flutter UI); se `payload_signing_keys_json` não existir no storage, configure signing na UI **Config** (WebSocket) ou copie `PAYLOAD_SIGNING_*` do `.env` do Hub (`plug_server`).
+
+Homologação:
+
+```powershell
+.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv -ValidateLiveEnv -RunContractTests -RunLiveTests
+```
+
+`-PrepareLiveEnv` executa, em sequência: `sync_e2e_hub_env_from_local.dart --export-secure`, `promote_e2e_signing_from_monorepo_env.dart --force` (ou `generate_dev_e2e_signing.dart --write`), e `fetch_e2e_hub_token_from_local_config.dart --apply-token --force` (JWT expirado exige login na Config, credenciais salvas ou `E2E_HUB_USERNAME`/`E2E_HUB_PASSWORD` no `.env`).
+
+### Hub `agent.action.*` (`hub_agent_action_rpc_live_e2e_test.dart`)
+
+Homologação opt-in do contrato remoto de ações após handshake assinado (`agent:register` → `agent:capabilities` → `agent:ready`). Não executa SQL nem dispara execução real no agente além do que o Hub enviar quando `E2E_HUB_EXPECT_AGENT_ACTION_RPC` estiver ligado.
+
+| Variável | Obrigatória | Descrição |
+| -------- | ----------- | --------- |
+| `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS` | Sim | `true` para não ignorar este ficheiro (tag `live`) |
+| `RUN_LIVE_HUB_TESTS` | Sim | Mesmo requisito da secção Hub acima |
+| `RUN_LIVE_HUB_SIGNING_TESTS` | Sim | Handshake com `PayloadFrame` assinado |
+| `E2E_HUB_URL` / `E2E_HUB_TOKEN` | Sim | URL e token do agente no hub |
+| `PAYLOAD_SIGNING_KEY_ID` / `PAYLOAD_SIGNING_KEY` | Sim* | Chaves HMAC partilhadas com o hub (ver secção Hub) |
+| `E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY` | Não | `true`: exige `extensions.agentActions` em `agent:capabilities` (`supportsContext: false`, `requiresIdempotencyKey`, `methods`, `limits`, `batchPolicy`) |
+| `E2E_HUB_EXPECT_AGENT_ACTION_RPC` | Não | `true`: após `agent:ready`, aguarda até 25s por um `rpc:request` com método `agent.action.*` (o hub de teste precisa emitir tráfego) |
+
+```bash
+flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live
+```
+
+Runner PowerShell (verifica `.env`, testes de contrato opcionais e live opt-in):
+
+```powershell
+.\tool\run_agent_actions_operational_gate.ps1
+.\tool\preflight_agent_actions_production.ps1
+.\tool\preflight_agent_actions_production.ps1 -RunContractTests
+.\tool\homologate_hub_agent_actions.ps1 -RunContractTests
+.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv
+.\tool\homologate_hub_agent_actions.ps1 -RunContractTests -RunLiveTests
+```
+
+`preflight_agent_actions_production.ps1` runs static production checks (COM handler registry, live `.env` consistency when `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`) and can chain `-RunContractTests` / `-ValidateLiveEnv`. Use `-StrictCom` before production deploy when `comObject` actions must not rely on the homologation stub.
+
+`-RunContractTests` runs the contract manifest (`tool/agent_actions_contract_test_paths.txt`) and UI manifest (`tool/agent_actions_ui_test_paths.txt`) without a live Hub. GitHub Actions and `homologate_hub_agent_actions.ps1` read the same lists (validated by `agent_action_test_manifest_test.dart` and `agent_actions_ci_gate_paths_sync_test.dart`). `run_agent_actions_operational_gate.ps1` chains preflight + homologate with `-RunContractTests` (PowerShell switches via hashtable, not string arrays). Preflight static checks run before the contract bundle.
+
+**Operational rollback (agent only, not `.env`):** disable remote rollout via app `FeatureFlags` (`disableAgentActionsRemoteRollout()` in code, or UI toggles when exposed), then maintenance mode, then `enableAgentActions=false`. See `docs/implemente/plano_acoes_agendadas_execucoes.md` (gate §4195, **Riscos aceitos** RA-01..RA-08, **Roteiro operacional pos-MVP**).
+
+**PR security checklist per action type:** `dart run tool/agent_action_security_gate_checklist.dart` or `dart run tool/agent_action_security_gate_checklist.dart commandLine`.
+
+`-ValidateLiveEnv` runs `dart run tool/validate_live_hub_agent_actions_env.dart` (same rules as `E2EEnv` / `hub_agent_action_rpc_live_e2e_test.dart`) before `-RunLiveTests`. The tool prints a per-variable checklist (`[ok]` / `[ ]`) without exposing secret values. Run it alone without the full homologation script.
+
+CI runs the same file set on every push/PR in the **Agent actions homologation gate** job (`.github/workflows/flutter_ci.yml`). Live Hub `agent.action.*` tests run only on manual **workflow_dispatch** of `live-hub-e2e` when repository secrets are configured.
+
+### COM actions (homologation stub)
+
+Local COM execution requires handlers in `ComObjectInvocationRegistry`. Without production handlers, use the opt-in stub (also reflected in `agent.getHealth` → `com_object_invocation_ready` and the **Ações** warning when count is zero). `dart run tool/check_e2e_env.dart` prints whether stub variables are complete.
+
+| Variável | Obrigatória | Descrição |
+| -------- | ----------- | --------- |
+| `AGENT_ACTION_COM_STUB_ENABLED` | Sim | `true` to register `ComObjectStubInvocationHandler` at startup |
+| `AGENT_ACTION_COM_STUB_PROG_ID` | Sim | ProgID allowed by stub (e.g. `AgentAction.Test`) |
+| `AGENT_ACTION_COM_STUB_MEMBER_NAME` | Sim | Member name (e.g. `Ping`) |
+
+Restart the agent after changing these values. The UI InfoBar clears when `com_object_handlers_registered_count` is greater than zero.
+
+### Retenção de ações (purge local)
+
+Os timers de purge no bootstrap usam `AgentActionRetentionSettings` (precedência: valores salvos na UI **Ações → Retenção de dados** > variáveis de ambiente > defaults).
+
+| Variável | Default | Descrição |
+| -------- | ------- | --------- |
+| `AGENT_ACTION_EXECUTION_RETENTION_DAYS` | `3` | Histórico de execuções terminais (`CleanupAgentActionExecutions`) |
+| `AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS` | `90` | Auditoria remota append-only (`CleanupExpiredAgentActionRemoteAudit`) |
+| `AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS` | `24` | Limpeza de stdout/stderr em linhas antigas (`CleanupAgentActionCapturedOutput`; máximo = retenção de execução em horas) |
+| `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` | `min(execução, 24h)` | TTL do cache Drift para `agent.action.run` / `validateRun` |
+
+Chaves persistidas na instalação (via `IAppSettingsStore`): `agent_action_execution_retention_days`, `agent_action_remote_audit_retention_days`, `agent_action_captured_output_retention_hours`.
+
+**Timestamps (wire):** `agent.action.getExecution` expõe `requested_at`, `trigger.scheduled_at` / `triggered_at` e `timestamps.*` em UTC (`…Z`). A UI local formata com `toLocal()`.
+
+### Elevated action runner (Windows, homologação manual)
+
+O helper elevado **não** usa `E2EEnv` nem testes `live` automatizados neste ciclo. Valide em máquina Windows com UAC.
+
+| Passo | Comando / configuração |
+| ----- | ---------------------- |
+| Pre-flight (script) | `.\tool\homologate_elevated_runner.ps1 -Build` (opcional: `-RunUnitTests` para testes Dart sem UAC) |
+| Build do helper | `.\tool\build_elevated_runner.ps1` → `build\elevated_runner\plug_agente_elevated_runner.exe` (copia também para `build\windows\x64\runner\Release` se existir) |
+| Path opcional | `ELEVATED_ACTION_RUNNER_EXE=C:\caminho\plug_agente_elevated_runner.exe` no `.env` quando o exe não estiver ao lado do `plug_agente.exe` |
+| Habilitar na app | Feature flag **Elevated agent actions** (`FeatureFlags.enableElevatedAgentActions` / preferências) |
+| Preparar na UI | Página **Ações** → InfoBar “Preparar executor elevado” (registra tarefa `PlugAgente\ElevatedActionRunner`) |
+| Teste unitário (sem UAC) | `flutter test test/infrastructure/actions/elevated_action_runner_installer_test.dart test/application/actions/elevated_agent_action_execution_service_test.dart` |
+
+Artefatos bridge sob o diretório de dados do app: `agent_actions/elevated/{requests,status,cancel,materialized}`.
+
 ### ODBC (odbc_streaming_live_integration_test.dart)
 
 | Variável                                            | Obrigatória  | Descrição                                                                     |
@@ -91,6 +273,18 @@ Ou use o wrapper local, que imprime as variaveis de tuning antes de iniciar:
 ```powershell
 .\tool\odbc_async_benchmark.ps1
 ```
+
+Para o fluxo operacional completo no Windows (preflight + worksheet Markdown,
+e opcionalmente smoke/burst/benchmark), use:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1
+.\tool\run_odbc_operational_validation.ps1 -All
+```
+
+O relatorio gerado fica em `artifacts/odbc_validation/` e complementa
+`docs/architecture/odbc_operational_validation_runbook.md`.
+Cada execucao cria uma subpasta timestampada com o Markdown e logs por etapa.
 
 ### ODBC RPC (`odbc_rpc_execute_coverage_live_e2e_test.dart`)
 
@@ -183,6 +377,13 @@ dart run tool/check_e2e_env.dart
 
 O script exibe quais variáveis estão definidas e quais testes serão executados ou ignorados. Pode ser executado de qualquer diretório; localiza a raiz do projeto automaticamente. Inclui também `RUN_ODBC_BURST_TESTS` e o estado de `sql_queue_burst_test` (DSN RPC + query longa).
 
+No Windows, o wrapper abaixo tambem roda esse preflight e ja gera uma
+worksheet operacional:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1
+```
+
 ## Executar Testes
 
 ```bash
@@ -227,6 +428,10 @@ dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
 
 # Mesmo benchmark via wrapper local
 .\tool\odbc_async_benchmark.ps1
+
+# Fluxo operacional completo + worksheet Markdown
+.\tool\run_odbc_operational_validation.ps1
+.\tool\run_odbc_operational_validation.ps1 -All
 
 # Lock / concorrência (opt-in: ODBC_RUN_LOCK_CONTENTION_TESTS=true e DSN)
 flutter test test/integration/odbc_lock_contention_live_integration_test.dart
@@ -275,6 +480,7 @@ Edite as variáveis no início de cada script. Consulte `docs/database/sql_anywh
 - `test/integration/odbc_dml_perf_live_e2e_test.dart` – desempenho DML em lote (opt-in)
 - `test/integration/odbc_dml_bulk_load_live_e2e_test.dart` – carga massiva (ex.: 50k linhas, opt-in)
 - `test/integration/sql_queue_burst_test.dart` – burst paralelo na fila ODBC (opt-in: `RUN_ODBC_BURST_TESTS`)
+- `tool/run_odbc_operational_validation.ps1` – wrapper operacional Windows para preflight/smoke/burst/benchmark + worksheet Markdown
 - `.env.example` – template das variáveis E2E/integração (benchmarks podem acrescentar muitas chaves no `.env` local)
 - `docs/database/sql_anywhere_connection.md` – formato de connection string SQL Anywhere
 

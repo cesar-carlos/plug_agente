@@ -12,6 +12,7 @@ import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -32,9 +33,9 @@ import 'package:uuid/uuid.dart';
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 HealthService _healthServiceForIntegration(IDatabaseGateway gateway) => HealthService(
-      metricsCollector: MetricsCollector(),
-      gateway: gateway,
-    );
+  metricsCollector: MetricsCollector(),
+  gateway: gateway,
+);
 
 class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
@@ -148,6 +149,7 @@ void main() {
     when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(false);
     when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
     when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
+    when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
 
     final classifier = SqlOperationClassifier();
     final tokenValidation = ClientTokenValidationService(mockResolver);
@@ -232,7 +234,7 @@ void main() {
       check(response.isError).isTrue();
       check(response.error?.code).equals(RpcErrorCode.unauthorized);
       final data = response.error!.data as Map<String, dynamic>;
-      check(data['reason']).equals('unauthorized');
+      check(data['reason']).equals(AuthorizationContextConstants.unauthorizedReason);
       check(data['odbc_reason']).equals('missing_permission');
       final denied = data['denied_resources'] as List<dynamic>?;
       check(denied).isNotNull();
@@ -294,8 +296,8 @@ void main() {
 
       check(response.isError).isTrue();
       final data = response.error!.data as Map<String, dynamic>;
-      check(data['reason']).equals('unauthorized');
-      check(data['odbc_reason']).equals('token_revoked');
+      check(data['reason']).equals(AuthorizationContextConstants.unauthorizedReason);
+      check(data['odbc_reason']).equals(AuthorizationContextConstants.tokenRevokedReason);
       final dr = data['denied_resources'] as List<dynamic>?;
       check(dr).isNotNull();
       check(dr!.length).equals(1);
@@ -396,7 +398,7 @@ void main() {
         check(response.isError).isTrue();
         check(response.error?.code).equals(RpcErrorCode.unauthorized);
         final data = response.error!.data as Map<String, dynamic>;
-        check(data['reason']).equals('unauthorized');
+        check(data['reason']).equals(AuthorizationContextConstants.unauthorizedReason);
         check(data['odbc_reason']).equals('token_not_found');
         verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);

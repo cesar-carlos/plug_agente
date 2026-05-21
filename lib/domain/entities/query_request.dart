@@ -14,6 +14,7 @@ class QueryRequest {
     required this.agentId,
     required this.query,
     required this.timestamp,
+    this.configId,
     this.parameters,
     this.clientToken,
     this.pagination,
@@ -23,6 +24,7 @@ class QueryRequest {
   });
   final String id;
   final String agentId;
+  final String? configId;
   final String query;
   final Map<String, dynamic>? parameters;
   final DateTime timestamp;

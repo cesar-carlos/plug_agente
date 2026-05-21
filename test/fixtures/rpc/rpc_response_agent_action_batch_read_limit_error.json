@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "error": {
+    "code": -32600,
+    "message": "Invalid Request",
+    "data": {
+      "reason": "agent_action_batch_read_limit_exceeded",
+      "category": "validation",
+      "retryable": false,
+      "user_message": "Invalid request. Please review the submitted data.",
+      "technical_message": "Batch contains too many read-only agent action RPC methods: 33 > 32",
+      "correlation_id": "batch-read-limit",
+      "timestamp": "2026-05-20T12:00:00.000Z",
+      "read_method_count": 33,
+      "limit": 32
+    }
+  }
+}

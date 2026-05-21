@@ -128,6 +128,3282 @@ abstract class AppLocalizations {
   /// **'WebSocket connection'**
   String get navWebSocketSettings;
 
+  /// No description provided for @navAgentActions.
+  ///
+  /// In en, this message translates to:
+  /// **'System Actions'**
+  String get navAgentActions;
+
+  /// No description provided for @agentActionsRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get agentActionsRefresh;
+
+  /// No description provided for @agentActionsRunSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Run selected'**
+  String get agentActionsRunSelected;
+
+  /// No description provided for @agentActionsTestSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Test action'**
+  String get agentActionsTestSelected;
+
+  /// No description provided for @agentActionsCancelExecution.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel execution'**
+  String get agentActionsCancelExecution;
+
+  /// No description provided for @agentActionsDeleteSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete action'**
+  String get agentActionsDeleteSelected;
+
+  /// No description provided for @agentActionsDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete action'**
+  String get agentActionsDeleteConfirmTitle;
+
+  /// No description provided for @agentActionsDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{actionName}\"? Execution history is preserved, but this action can no longer be run.'**
+  String agentActionsDeleteConfirmMessage(Object actionName);
+
+  /// No description provided for @agentActionsDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get agentActionsDeleteConfirm;
+
+  /// No description provided for @agentActionsDeleteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsDeleteCancel;
+
+  /// No description provided for @agentActionsExportBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export actions…'**
+  String get agentActionsExportBundle;
+
+  /// No description provided for @agentActionsImportBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import actions…'**
+  String get agentActionsImportBundle;
+
+  /// No description provided for @agentActionsExportBundleDefaultFileName.
+  ///
+  /// In en, this message translates to:
+  /// **'plug_agente_actions.json'**
+  String get agentActionsExportBundleDefaultFileName;
+
+  /// No description provided for @agentActionsExportBundleSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions exported'**
+  String get agentActionsExportBundleSuccessTitle;
+
+  /// No description provided for @agentActionsExportBundleSuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The sanitized action bundle was saved. Secret values were not included; configure placeholders on the target machine.'**
+  String get agentActionsExportBundleSuccessMessage;
+
+  /// No description provided for @agentActionsImportBundleSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions imported'**
+  String get agentActionsImportBundleSuccessTitle;
+
+  /// No description provided for @agentActionsImportBundleSuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {definitionCount, plural, =1{1 action} other{{definitionCount} actions}} and {triggerCount, plural, =1{1 trigger} other{{triggerCount} triggers}}. Definitions need validation before run.'**
+  String agentActionsImportBundleSuccessMessage(int definitionCount, int triggerCount);
+
+  /// No description provided for @agentActionsImportBundleSecretsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure these secret placeholders on this machine: {secretNames}.'**
+  String agentActionsImportBundleSecretsMessage(Object secretNames);
+
+  /// No description provided for @agentActionsConfirmImportBundleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import actions'**
+  String get agentActionsConfirmImportBundleTitle;
+
+  /// No description provided for @agentActionsConfirmImportBundleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import actions from a JSON bundle? Existing actions with the same id will be updated. Triggers are imported paused and remote execution requires reapproval.'**
+  String get agentActionsConfirmImportBundleMessage;
+
+  /// No description provided for @agentActionsConfirmImportBundleConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get agentActionsConfirmImportBundleConfirm;
+
+  /// No description provided for @agentActionsConfirmImportBundleCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmImportBundleCancel;
+
+  /// No description provided for @agentActionsBundleTransferFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action bundle transfer failed'**
+  String get agentActionsBundleTransferFailedTitle;
+
+  /// No description provided for @agentActionsBundlePickerError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the file picker.'**
+  String get agentActionsBundlePickerError;
+
+  /// No description provided for @agentActionsTestSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action test completed'**
+  String get agentActionsTestSuccessTitle;
+
+  /// No description provided for @agentActionsTestCanRunMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The action configuration is valid and the action can run.'**
+  String get agentActionsTestCanRunMessage;
+
+  /// No description provided for @agentActionsTestValidButInactiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The action configuration is valid, but the action is not active.'**
+  String get agentActionsTestValidButInactiveMessage;
+
+  /// No description provided for @agentActionsTestPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Redacted test preview'**
+  String get agentActionsTestPreviewTitle;
+
+  /// No description provided for @agentActionsTestPreviewCommandLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepared command'**
+  String get agentActionsTestPreviewCommandLabel;
+
+  /// No description provided for @agentActionsTestPreviewUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable'**
+  String get agentActionsTestPreviewUnavailableTitle;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get agentActionsTestPreviewDiagnosticEngine;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticConnectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection'**
+  String get agentActionsTestPreviewDiagnosticConnectionLabel;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticCatalogCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Catalog connections'**
+  String get agentActionsTestPreviewDiagnosticCatalogCount;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticDefaultConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Used default config'**
+  String get agentActionsTestPreviewDiagnosticDefaultConfig;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get agentActionsTestPreviewDiagnosticYes;
+
+  /// No description provided for @agentActionsTestPreviewDiagnosticNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get agentActionsTestPreviewDiagnosticNo;
+
+  /// No description provided for @agentActionsFormCreateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New command line action'**
+  String get agentActionsFormCreateTitle;
+
+  /// No description provided for @agentActionsFormEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Command line action'**
+  String get agentActionsFormEditTitle;
+
+  /// No description provided for @agentActionsFormCreateDeveloperTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New developer action'**
+  String get agentActionsFormCreateDeveloperTitle;
+
+  /// No description provided for @agentActionsFormEditDeveloperTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer action'**
+  String get agentActionsFormEditDeveloperTitle;
+
+  /// No description provided for @agentActionsFormCreateExecutableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New executable action'**
+  String get agentActionsFormCreateExecutableTitle;
+
+  /// No description provided for @agentActionsFormEditExecutableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Executable action'**
+  String get agentActionsFormEditExecutableTitle;
+
+  /// No description provided for @agentActionsFormExecutablePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Executable path'**
+  String get agentActionsFormExecutablePath;
+
+  /// No description provided for @agentActionsFormArguments.
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments'**
+  String get agentActionsFormArguments;
+
+  /// No description provided for @agentActionsFormArgumentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter one argument per line.'**
+  String get agentActionsFormArgumentsHint;
+
+  /// No description provided for @agentActionsFormBrowseExecutablePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse executable'**
+  String get agentActionsFormBrowseExecutablePath;
+
+  /// No description provided for @agentActionsFormCreateScriptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New script action'**
+  String get agentActionsFormCreateScriptTitle;
+
+  /// No description provided for @agentActionsFormEditScriptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Script action'**
+  String get agentActionsFormEditScriptTitle;
+
+  /// No description provided for @agentActionsFormScriptPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Script path'**
+  String get agentActionsFormScriptPath;
+
+  /// No description provided for @agentActionsFormInterpreterPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Interpreter path (optional)'**
+  String get agentActionsFormInterpreterPath;
+
+  /// No description provided for @agentActionsFormInterpreterPathHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use the default interpreter for the script extension.'**
+  String get agentActionsFormInterpreterPathHint;
+
+  /// No description provided for @agentActionsFormBrowseScriptPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse script'**
+  String get agentActionsFormBrowseScriptPath;
+
+  /// No description provided for @agentActionsFormBrowseInterpreterPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse interpreter'**
+  String get agentActionsFormBrowseInterpreterPath;
+
+  /// No description provided for @agentActionsFormCreateJarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New JAR action'**
+  String get agentActionsFormCreateJarTitle;
+
+  /// No description provided for @agentActionsFormEditJarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'JAR action'**
+  String get agentActionsFormEditJarTitle;
+
+  /// No description provided for @agentActionsFormJarPath.
+  ///
+  /// In en, this message translates to:
+  /// **'JAR file path'**
+  String get agentActionsFormJarPath;
+
+  /// No description provided for @agentActionsFormJavaExecutablePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Java executable path (optional)'**
+  String get agentActionsFormJavaExecutablePath;
+
+  /// No description provided for @agentActionsFormJavaExecutablePathHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use java.exe from PATH.'**
+  String get agentActionsFormJavaExecutablePathHint;
+
+  /// No description provided for @agentActionsFormBrowseJarPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse JAR file'**
+  String get agentActionsFormBrowseJarPath;
+
+  /// No description provided for @agentActionsFormBrowseJavaExecutablePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse java.exe'**
+  String get agentActionsFormBrowseJavaExecutablePath;
+
+  /// No description provided for @agentActionsFormCreateEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New email action'**
+  String get agentActionsFormCreateEmailTitle;
+
+  /// No description provided for @agentActionsFormEditEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email action'**
+  String get agentActionsFormEditEmailTitle;
+
+  /// No description provided for @agentActionsFormSmtpProfileId.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP profile secret name'**
+  String get agentActionsFormSmtpProfileId;
+
+  /// No description provided for @agentActionsFormSmtpProfileIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Name of the secret that stores the SMTP JSON profile.'**
+  String get agentActionsFormSmtpProfileIdHint;
+
+  /// No description provided for @agentActionsFormEmailFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From address'**
+  String get agentActionsFormEmailFrom;
+
+  /// No description provided for @agentActionsFormEmailTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To recipients'**
+  String get agentActionsFormEmailTo;
+
+  /// No description provided for @agentActionsFormEmailToHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One email address per line.'**
+  String get agentActionsFormEmailToHint;
+
+  /// No description provided for @agentActionsFormEmailCc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cc recipients (optional)'**
+  String get agentActionsFormEmailCc;
+
+  /// No description provided for @agentActionsFormEmailCcHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One email address per line.'**
+  String get agentActionsFormEmailCcHint;
+
+  /// No description provided for @agentActionsFormEmailBcc.
+  ///
+  /// In en, this message translates to:
+  /// **'Bcc recipients (optional)'**
+  String get agentActionsFormEmailBcc;
+
+  /// No description provided for @agentActionsFormEmailBccHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One email address per line.'**
+  String get agentActionsFormEmailBccHint;
+
+  /// No description provided for @agentActionsFormEmailSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject template'**
+  String get agentActionsFormEmailSubject;
+
+  /// No description provided for @agentActionsFormEmailSubjectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use context tokens resolved from the optional context JSON file.'**
+  String get agentActionsFormEmailSubjectHint;
+
+  /// No description provided for @agentActionsFormEmailBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Body template'**
+  String get agentActionsFormEmailBody;
+
+  /// No description provided for @agentActionsFormEmailBodyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain text body. Use context tokens resolved from the optional context JSON file.'**
+  String get agentActionsFormEmailBodyHint;
+
+  /// No description provided for @agentActionsFormEmailAttachments.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment paths (optional)'**
+  String get agentActionsFormEmailAttachments;
+
+  /// No description provided for @agentActionsFormEmailAttachmentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One file path per line. Allowed types are validated by the action policy.'**
+  String get agentActionsFormEmailAttachmentsHint;
+
+  /// No description provided for @agentActionsFormCreateComObjectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New COM object action'**
+  String get agentActionsFormCreateComObjectTitle;
+
+  /// No description provided for @agentActionsFormEditComObjectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'COM object action'**
+  String get agentActionsFormEditComObjectTitle;
+
+  /// No description provided for @agentActionsFormComProgId.
+  ///
+  /// In en, this message translates to:
+  /// **'COM ProgID'**
+  String get agentActionsFormComProgId;
+
+  /// No description provided for @agentActionsFormComMemberName.
+  ///
+  /// In en, this message translates to:
+  /// **'COM member'**
+  String get agentActionsFormComMemberName;
+
+  /// No description provided for @agentActionsFormComArguments.
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments (JSON object)'**
+  String get agentActionsFormComArguments;
+
+  /// No description provided for @agentActionsFormComArgumentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a flat JSON object with string, number, or boolean values.'**
+  String get agentActionsFormComArgumentsHint;
+
+  /// No description provided for @agentActionsFormInvalidComArguments.
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments must be a valid JSON object.'**
+  String get agentActionsFormInvalidComArguments;
+
+  /// No description provided for @agentActionsFormNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get agentActionsFormNew;
+
+  /// No description provided for @agentActionsFormSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save action'**
+  String get agentActionsFormSave;
+
+  /// No description provided for @agentActionsFormName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get agentActionsFormName;
+
+  /// No description provided for @agentActionsFormDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get agentActionsFormDescription;
+
+  /// No description provided for @agentActionsFormType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get agentActionsFormType;
+
+  /// No description provided for @agentActionsFormCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get agentActionsFormCommand;
+
+  /// No description provided for @agentActionsFormWorkingDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get agentActionsFormWorkingDirectory;
+
+  /// No description provided for @agentActionsFormExecutorPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Executor.exe path'**
+  String get agentActionsFormExecutorPath;
+
+  /// No description provided for @agentActionsFormProjectPath.
+  ///
+  /// In en, this message translates to:
+  /// **'.7Proj file path'**
+  String get agentActionsFormProjectPath;
+
+  /// No description provided for @agentActionsFormData7ConfigPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Data7.Config path'**
+  String get agentActionsFormData7ConfigPath;
+
+  /// No description provided for @agentActionsFormBrowseExecutorPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse Executor.exe'**
+  String get agentActionsFormBrowseExecutorPath;
+
+  /// No description provided for @agentActionsFormBrowseProjectPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse .7Proj file'**
+  String get agentActionsFormBrowseProjectPath;
+
+  /// No description provided for @agentActionsFormBrowseData7ConfigPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse Data7.Config'**
+  String get agentActionsFormBrowseData7ConfigPath;
+
+  /// No description provided for @agentActionsFormBrowseFileError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the file picker for this action.'**
+  String get agentActionsFormBrowseFileError;
+
+  /// No description provided for @agentActionsFormUseDefaultExecutorPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Use default Executor'**
+  String get agentActionsFormUseDefaultExecutorPath;
+
+  /// No description provided for @agentActionsFormUseDefaultConfigBinPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Use default config (bin)'**
+  String get agentActionsFormUseDefaultConfigBinPath;
+
+  /// No description provided for @agentActionsFormUseDefaultConfigRootPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Use default config (root)'**
+  String get agentActionsFormUseDefaultConfigRootPath;
+
+  /// No description provided for @agentActionsFormExecutorPathHintExpectedFileName.
+  ///
+  /// In en, this message translates to:
+  /// **'The executor path must end with Executor.exe.'**
+  String get agentActionsFormExecutorPathHintExpectedFileName;
+
+  /// No description provided for @agentActionsFormExecutorPathHintDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'The executor is pointing to the default Data7 path.'**
+  String get agentActionsFormExecutorPathHintDefault;
+
+  /// No description provided for @agentActionsFormExecutorPathHintMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected Executor.exe was not found at this path.'**
+  String get agentActionsFormExecutorPathHintMissing;
+
+  /// No description provided for @agentActionsFormExecutorPathHintDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'The executor path points to a directory, not an Executor.exe file.'**
+  String get agentActionsFormExecutorPathHintDirectory;
+
+  /// No description provided for @agentActionsFormProjectPathHintExpectedExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'The project must point to a .7Proj file.'**
+  String get agentActionsFormProjectPathHintExpectedExtension;
+
+  /// No description provided for @agentActionsFormProjectPathHintMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected .7Proj file was not found at this path.'**
+  String get agentActionsFormProjectPathHintMissing;
+
+  /// No description provided for @agentActionsFormProjectPathHintDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'The project path points to a directory, not a .7Proj file.'**
+  String get agentActionsFormProjectPathHintDirectory;
+
+  /// No description provided for @agentActionsFormData7ConfigPathHintExpectedFileName.
+  ///
+  /// In en, this message translates to:
+  /// **'The config path must end with Data7.Config.'**
+  String get agentActionsFormData7ConfigPathHintExpectedFileName;
+
+  /// No description provided for @agentActionsFormData7ConfigPathHintDefaultBin.
+  ///
+  /// In en, this message translates to:
+  /// **'The Data7.Config path is using the default C:\\Data7\\bin location.'**
+  String get agentActionsFormData7ConfigPathHintDefaultBin;
+
+  /// No description provided for @agentActionsFormData7ConfigPathHintDefaultRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'The Data7.Config path is using the default C:\\Data7 location.'**
+  String get agentActionsFormData7ConfigPathHintDefaultRoot;
+
+  /// No description provided for @agentActionsFormData7ConfigPathHintMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected Data7.Config was not found at this path.'**
+  String get agentActionsFormData7ConfigPathHintMissing;
+
+  /// No description provided for @agentActionsFormData7ConfigPathHintDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'The config path points to a directory, not a Data7.Config file.'**
+  String get agentActionsFormData7ConfigPathHintDirectory;
+
+  /// No description provided for @agentActionsFormPathHintInspectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not inspect this local path right now. Review permissions, links, or disk availability.'**
+  String get agentActionsFormPathHintInspectionFailed;
+
+  /// No description provided for @agentActionsFormReloadConnections.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload connections'**
+  String get agentActionsFormReloadConnections;
+
+  /// No description provided for @agentActionsFormDefaultConfigResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Using the Data7.Config found in the default location.'**
+  String get agentActionsFormDefaultConfigResolved;
+
+  /// No description provided for @agentActionsFormResolvedConfigPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved config: {path}'**
+  String agentActionsFormResolvedConfigPath(Object path);
+
+  /// No description provided for @agentActionsFormLoadedConfigPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Connections loaded from: {path}'**
+  String agentActionsFormLoadedConfigPath(Object path);
+
+  /// No description provided for @agentActionsFormConnectionId.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection ID'**
+  String get agentActionsFormConnectionId;
+
+  /// No description provided for @agentActionsFormConnectionSelector.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded connection'**
+  String get agentActionsFormConnectionSelector;
+
+  /// No description provided for @agentActionsFormConnectionSelectorPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a loaded connection'**
+  String get agentActionsFormConnectionSelectorPlaceholder;
+
+  /// No description provided for @agentActionsFormConnectionSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter loaded connections'**
+  String get agentActionsFormConnectionSearch;
+
+  /// No description provided for @agentActionsFormConnectionFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No loaded connection matches this filter.'**
+  String get agentActionsFormConnectionFilterEmpty;
+
+  /// No description provided for @agentActionsFormConnectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe connection label'**
+  String get agentActionsFormConnectionLabel;
+
+  /// No description provided for @agentActionsFormConnectionMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved connection not found'**
+  String get agentActionsFormConnectionMissingTitle;
+
+  /// No description provided for @agentActionsFormConnectionMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved connection no longer exists in the loaded Data7.Config. Reload the connections, select another valid connection, and save the action again.'**
+  String get agentActionsFormConnectionMissingMessage;
+
+  /// No description provided for @agentActionsFormConnectionUnknownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection ID is outside the loaded catalog'**
+  String get agentActionsFormConnectionUnknownTitle;
+
+  /// No description provided for @agentActionsFormConnectionUnknownMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The entered ID does not belong to the catalog loaded right now. Select a valid connection from the list or reload the connections before saving.'**
+  String get agentActionsFormConnectionUnknownMessage;
+
+  /// No description provided for @agentActionsFormConnectionChangedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection changed since the last validation'**
+  String get agentActionsFormConnectionChangedTitle;
+
+  /// No description provided for @agentActionsFormConnectionChangedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The loaded connection changed since the saved snapshot. Review the configuration and save the action again before running it.'**
+  String get agentActionsFormConnectionChangedMessage;
+
+  /// No description provided for @agentActionsFormUnsupportedType.
+  ///
+  /// In en, this message translates to:
+  /// **'The visual editor for this action type is not available on this screen yet.'**
+  String get agentActionsFormUnsupportedType;
+
+  /// No description provided for @agentActionsFormState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get agentActionsFormState;
+
+  /// No description provided for @agentActionsFormNotificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop notifications'**
+  String get agentActionsFormNotificationsTitle;
+
+  /// No description provided for @agentActionsFormNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a Windows notification when a local run reaches a terminal state.'**
+  String get agentActionsFormNotificationsDescription;
+
+  /// No description provided for @agentActionsFormNotifyOnSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify on success'**
+  String get agentActionsFormNotifyOnSuccess;
+
+  /// No description provided for @agentActionsFormNotifyOnFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify on failure'**
+  String get agentActionsFormNotifyOnFailure;
+
+  /// No description provided for @agentActionsFormNotifyOnTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify on timeout'**
+  String get agentActionsFormNotifyOnTimeout;
+
+  /// No description provided for @agentActionNotificationSuccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution finished successfully.'**
+  String get agentActionNotificationSuccessBody;
+
+  /// No description provided for @agentActionNotificationTimeoutBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution exceeded the configured maximum runtime.'**
+  String get agentActionNotificationTimeoutBody;
+
+  /// No description provided for @agentActionNotificationFailureFallbackBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution finished with a failure.'**
+  String get agentActionNotificationFailureFallbackBody;
+
+  /// No description provided for @agentActionsFormExecutionPoliciesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution policies'**
+  String get agentActionsFormExecutionPoliciesTitle;
+
+  /// No description provided for @agentActionsFormExecutionPoliciesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout and retry apply to local runs and scheduled triggers. Remote Hub runs stay at one attempt unless remote retry is enabled.'**
+  String get agentActionsFormExecutionPoliciesDescription;
+
+  /// No description provided for @agentActionsFormPathChangePolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Path change policy'**
+  String get agentActionsFormPathChangePolicy;
+
+  /// No description provided for @agentActionsFormPathChangePolicyFail.
+  ///
+  /// In en, this message translates to:
+  /// **'Fail if path or file content changed'**
+  String get agentActionsFormPathChangePolicyFail;
+
+  /// No description provided for @agentActionsFormPathChangePolicyWarn.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn if path or file content changed'**
+  String get agentActionsFormPathChangePolicyWarn;
+
+  /// No description provided for @agentActionsFormPathChangePolicyAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow path and content changes'**
+  String get agentActionsFormPathChangePolicyAllow;
+
+  /// No description provided for @agentActionsFormContextInjectionMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Context injection mode'**
+  String get agentActionsFormContextInjectionMode;
+
+  /// No description provided for @agentActionsFormContextInjectionArgument.
+  ///
+  /// In en, this message translates to:
+  /// **'Argument (default)'**
+  String get agentActionsFormContextInjectionArgument;
+
+  /// No description provided for @agentActionsFormContextInjectionFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Context file (required at run)'**
+  String get agentActionsFormContextInjectionFile;
+
+  /// No description provided for @agentActionsFormContextInjectionEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment variables'**
+  String get agentActionsFormContextInjectionEnvironment;
+
+  /// No description provided for @agentActionsFormContextInjectionStdin.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard input'**
+  String get agentActionsFormContextInjectionStdin;
+
+  /// No description provided for @agentActionsFormRuntimeParameterSchema.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime parameters JSON schema (optional)'**
+  String get agentActionsFormRuntimeParameterSchema;
+
+  /// No description provided for @agentActionsFormRuntimeParameterSchemaHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JSON Schema object validated against runtimeParameters on each run. Leave empty to skip.'**
+  String get agentActionsFormRuntimeParameterSchemaHint;
+
+  /// No description provided for @agentActionsTestPreviewPathSnapshotWarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'Path snapshot warnings'**
+  String get agentActionsTestPreviewPathSnapshotWarnings;
+
+  /// No description provided for @agentActionsFormMaxRuntimeMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum runtime (minutes)'**
+  String get agentActionsFormMaxRuntimeMinutes;
+
+  /// No description provided for @agentActionsFormKillOnTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill main process on timeout'**
+  String get agentActionsFormKillOnTimeout;
+
+  /// No description provided for @agentActionsFormMaxAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum attempts'**
+  String get agentActionsFormMaxAttempts;
+
+  /// No description provided for @agentActionsFormAllowRemoteRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow retry on remote Hub runs'**
+  String get agentActionsFormAllowRemoteRetry;
+
+  /// No description provided for @agentActionsFormRuntimePoliciesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime constraints'**
+  String get agentActionsFormRuntimePoliciesTitle;
+
+  /// No description provided for @agentActionsFormRuntimePoliciesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational profile gate, child-process environment, accepted exit codes, and behavior when the Plug agent closes. Empty allowed profiles means any profile.'**
+  String get agentActionsFormRuntimePoliciesDescription;
+
+  /// No description provided for @agentActionsFormAllowedProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed operational profiles'**
+  String get agentActionsFormAllowedProfiles;
+
+  /// No description provided for @agentActionsFormAllowedProfilesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated (e.g. prod, homolog). Leave empty for any profile.'**
+  String get agentActionsFormAllowedProfilesHint;
+
+  /// No description provided for @agentActionsFormAllowedEnvironmentVariableNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed environment variable names'**
+  String get agentActionsFormAllowedEnvironmentVariableNames;
+
+  /// No description provided for @agentActionsFormAllowedEnvironmentVariableNamesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated (e.g. PLUG_API_URL, PLUG_TOKEN). Leave empty to allow any name used below or at runtime.'**
+  String get agentActionsFormAllowedEnvironmentVariableNamesHint;
+
+  /// No description provided for @agentActionsFormEnvironmentVariables.
+  ///
+  /// In en, this message translates to:
+  /// **'Process environment variables'**
+  String get agentActionsFormEnvironmentVariables;
+
+  /// No description provided for @agentActionsFormEnvironmentVariablesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One NAME=value per line. Reference action secrets with the placeholder convention documented in the secrets section. Applied when the action starts a process; environment injection mode adds runtime parameters from the run request.'**
+  String get agentActionsFormEnvironmentVariablesHint;
+
+  /// No description provided for @agentActionsFormEnvironmentVariablesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment variables must use one NAME=value per line with a valid variable name.'**
+  String get agentActionsFormEnvironmentVariablesInvalid;
+
+  /// No description provided for @agentActionsFormCurrentOperationalProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Current agent profile: {profile}'**
+  String agentActionsFormCurrentOperationalProfile(String profile);
+
+  /// No description provided for @agentActionsFormCurrentOperationalProfileUnset.
+  ///
+  /// In en, this message translates to:
+  /// **'Current agent profile is not set (AGENT_OPERATIONAL_PROFILE).'**
+  String get agentActionsFormCurrentOperationalProfileUnset;
+
+  /// No description provided for @agentActionsFormAcceptedExitCodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted exit codes'**
+  String get agentActionsFormAcceptedExitCodes;
+
+  /// No description provided for @agentActionsFormAcceptedExitCodesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated integers (default 0).'**
+  String get agentActionsFormAcceptedExitCodesHint;
+
+  /// No description provided for @agentActionsFormInvalidExitCodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter comma-separated integers for exit codes (e.g. 0, 1).'**
+  String get agentActionsFormInvalidExitCodes;
+
+  /// No description provided for @agentActionsFormProcessWindowMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Process window'**
+  String get agentActionsFormProcessWindowMode;
+
+  /// No description provided for @agentActionsFormProcessWindowModeNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal console'**
+  String get agentActionsFormProcessWindowModeNormal;
+
+  /// No description provided for @agentActionsFormProcessWindowModeHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden (best effort)'**
+  String get agentActionsFormProcessWindowModeHidden;
+
+  /// No description provided for @agentActionsFormProcessWindowModeMinimized.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimized (normal start)'**
+  String get agentActionsFormProcessWindowModeMinimized;
+
+  /// No description provided for @agentActionsFormCapturePolicyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Control whether process output is stored and redacted before persistence.'**
+  String get agentActionsFormCapturePolicyDescription;
+
+  /// No description provided for @agentActionsFormCaptureStdout.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture stdout'**
+  String get agentActionsFormCaptureStdout;
+
+  /// No description provided for @agentActionsFormCaptureStderr.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture stderr'**
+  String get agentActionsFormCaptureStderr;
+
+  /// No description provided for @agentActionsFormRedactBeforePersisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Redact output before saving'**
+  String get agentActionsFormRedactBeforePersisting;
+
+  /// No description provided for @agentActionsFormQueuePolicyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Limits concurrent runs and queue behavior for this action definition.'**
+  String get agentActionsFormQueuePolicyDescription;
+
+  /// No description provided for @agentActionsFormMaxConcurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Max concurrent runs'**
+  String get agentActionsFormMaxConcurrent;
+
+  /// No description provided for @agentActionsFormMaxQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Max queued runs'**
+  String get agentActionsFormMaxQueued;
+
+  /// No description provided for @agentActionsFormInvalidQueueLimits.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter positive integers for max concurrent and max queued runs.'**
+  String get agentActionsFormInvalidQueueLimits;
+
+  /// No description provided for @agentActionsFormConcurrencyBehavior.
+  ///
+  /// In en, this message translates to:
+  /// **'When limit is reached'**
+  String get agentActionsFormConcurrencyBehavior;
+
+  /// No description provided for @agentActionsFormConcurrencyAllowParallel.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow parallel (no limit)'**
+  String get agentActionsFormConcurrencyAllowParallel;
+
+  /// No description provided for @agentActionsFormConcurrencyEnqueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enqueue and wait'**
+  String get agentActionsFormConcurrencyEnqueue;
+
+  /// No description provided for @agentActionsFormConcurrencyReject.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject new runs'**
+  String get agentActionsFormConcurrencyReject;
+
+  /// No description provided for @agentActionsFormConcurrencyIgnore.
+  ///
+  /// In en, this message translates to:
+  /// **'Run anyway (ignore limit)'**
+  String get agentActionsFormConcurrencyIgnore;
+
+  /// No description provided for @agentActionsFormPathAllowlistDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional directory allowlists. Leave empty to allow any path validated at runtime.'**
+  String get agentActionsFormPathAllowlistDescription;
+
+  /// No description provided for @agentActionsFormAllowedWorkingDirectories.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed working directories'**
+  String get agentActionsFormAllowedWorkingDirectories;
+
+  /// No description provided for @agentActionsFormAllowedContextDirectories.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed context directories'**
+  String get agentActionsFormAllowedContextDirectories;
+
+  /// No description provided for @agentActionsFormPathAllowlistHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated absolute paths (e.g. C:\\\\Data7\\\\bin).'**
+  String get agentActionsFormPathAllowlistHint;
+
+  /// No description provided for @agentActionsFormOutputEncodingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'How captured stdout and stderr are decoded during execution.'**
+  String get agentActionsFormOutputEncodingDescription;
+
+  /// No description provided for @agentActionsFormStdoutEncoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Stdout encoding'**
+  String get agentActionsFormStdoutEncoding;
+
+  /// No description provided for @agentActionsFormStderrEncoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Stderr encoding'**
+  String get agentActionsFormStderrEncoding;
+
+  /// No description provided for @agentActionsFormOutputEncodingUtf8.
+  ///
+  /// In en, this message translates to:
+  /// **'UTF-8'**
+  String get agentActionsFormOutputEncodingUtf8;
+
+  /// No description provided for @agentActionsFormOutputEncodingSystemConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'System console (Windows)'**
+  String get agentActionsFormOutputEncodingSystemConsole;
+
+  /// No description provided for @agentActionsFormOnAppExit.
+  ///
+  /// In en, this message translates to:
+  /// **'When the agent closes'**
+  String get agentActionsFormOnAppExit;
+
+  /// No description provided for @agentActionsFormOnAppExitKill.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill main process'**
+  String get agentActionsFormOnAppExitKill;
+
+  /// No description provided for @agentActionsFormOnAppExitWaitThenKill.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait, then kill main process'**
+  String get agentActionsFormOnAppExitWaitThenKill;
+
+  /// No description provided for @agentActionsFormOnAppExitLeaveRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave process running'**
+  String get agentActionsFormOnAppExitLeaveRunning;
+
+  /// No description provided for @agentActionsFormRemotePoliciesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote execution'**
+  String get agentActionsFormRemotePoliciesTitle;
+
+  /// No description provided for @agentActionsFormRemotePoliciesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow the Hub to run this saved action over Socket.IO JSON-RPC. Requires explicit local approval.'**
+  String get agentActionsFormRemotePoliciesDescription;
+
+  /// No description provided for @agentActionsFormRemoteExecutionEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow remote Hub execution'**
+  String get agentActionsFormRemoteExecutionEnabled;
+
+  /// No description provided for @agentActionsFormRemoteAdHocEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow remote ad-hoc commands'**
+  String get agentActionsFormRemoteAdHocEnabled;
+
+  /// No description provided for @agentActionsFormRemoteApprovedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote execution is approved for this definition.'**
+  String get agentActionsFormRemoteApprovedHint;
+
+  /// No description provided for @agentActionsFormRemoteApprovalRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm remote execution before saving.'**
+  String get agentActionsFormRemoteApprovalRequired;
+
+  /// No description provided for @agentActionsFormRemoteReapprovalRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote re-approval required'**
+  String get agentActionsFormRemoteReapprovalRequiredTitle;
+
+  /// No description provided for @agentActionsFormRemoteReapprovalRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Risk-bearing fields changed since the last remote approval. Confirm remote execution again before saving.'**
+  String get agentActionsFormRemoteReapprovalRequiredMessage;
+
+  /// No description provided for @agentActionsConfirmRemoteReapprovalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-approve remote execution?'**
+  String get agentActionsConfirmRemoteReapprovalTitle;
+
+  /// No description provided for @agentActionsConfirmRemoteReapprovalMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Command, paths, or runtime policies changed. The Hub cannot run this action remotely until you confirm again.'**
+  String get agentActionsConfirmRemoteReapprovalMessage;
+
+  /// No description provided for @agentActionsConfirmRemoteReapprovalConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-approve'**
+  String get agentActionsConfirmRemoteReapprovalConfirm;
+
+  /// No description provided for @agentActionsConfirmRemoteReapprovalCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmRemoteReapprovalCancel;
+
+  /// No description provided for @agentActionsFormRemoteFeatureDisabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote agent actions are off'**
+  String get agentActionsFormRemoteFeatureDisabledTitle;
+
+  /// No description provided for @agentActionsFormRemoteFeatureDisabledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable the remote agent actions feature flag before the Hub can call agent.action.* for this agent.'**
+  String get agentActionsFormRemoteFeatureDisabledMessage;
+
+  /// No description provided for @agentActionsFormRemoteAdHocFeatureDisabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote ad-hoc disabled'**
+  String get agentActionsFormRemoteAdHocFeatureDisabledTitle;
+
+  /// No description provided for @agentActionsFormRemoteAdHocFeatureDisabledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable the remote ad-hoc feature flag to allow free-form hub commands on this agent.'**
+  String get agentActionsFormRemoteAdHocFeatureDisabledMessage;
+
+  /// No description provided for @agentActionsRiskRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote'**
+  String get agentActionsRiskRemote;
+
+  /// No description provided for @agentActionsRiskRemoteAdHoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote ad-hoc'**
+  String get agentActionsRiskRemoteAdHoc;
+
+  /// No description provided for @agentActionsRiskRemoteReapproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-approval required'**
+  String get agentActionsRiskRemoteReapproval;
+
+  /// No description provided for @agentActionsRiskAppCloseTrigger.
+  ///
+  /// In en, this message translates to:
+  /// **'App close trigger'**
+  String get agentActionsRiskAppCloseTrigger;
+
+  /// No description provided for @agentActionsRiskSensitiveOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Unredacted output'**
+  String get agentActionsRiskSensitiveOutput;
+
+  /// No description provided for @agentActionsRiskLeaveProcessRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Leaves process running'**
+  String get agentActionsRiskLeaveProcessRunning;
+
+  /// No description provided for @agentActionsRiskUnsupportedType.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported editor'**
+  String get agentActionsRiskUnsupportedType;
+
+  /// No description provided for @agentActionsRiskNeedsValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs validation'**
+  String get agentActionsRiskNeedsValidation;
+
+  /// No description provided for @agentActionsRiskSecretPlaceholders.
+  ///
+  /// In en, this message translates to:
+  /// **'Uses secrets'**
+  String get agentActionsRiskSecretPlaceholders;
+
+  /// No description provided for @agentActionsNeedsValidationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Validation required'**
+  String get agentActionsNeedsValidationTitle;
+
+  /// No description provided for @agentActionsNeedsValidationMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Test this action locally before running or enabling remote execution.'**
+  String get agentActionsNeedsValidationMessage;
+
+  /// No description provided for @agentActionsSecretPlaceholdersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Secret placeholders referenced'**
+  String get agentActionsSecretPlaceholdersTitle;
+
+  /// No description provided for @agentActionsSecretPlaceholdersMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This action references secrets: {secretNames}. Configure them in secure storage before running.'**
+  String agentActionsSecretPlaceholdersMessage(String secretNames);
+
+  /// No description provided for @agentActionsMissingSecretsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing secrets'**
+  String get agentActionsMissingSecretsTitle;
+
+  /// No description provided for @agentActionsMissingSecretsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'These secrets are not available locally: {secretNames}.'**
+  String agentActionsMissingSecretsMessage(String secretNames);
+
+  /// No description provided for @agentActionsSecretsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action secrets'**
+  String get agentActionsSecretsSectionTitle;
+
+  /// No description provided for @agentActionsSecretsSectionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure values for each secret placeholder referenced by this action. Values are stored only in secure local storage.'**
+  String get agentActionsSecretsSectionMessage;
+
+  /// No description provided for @agentActionsSecretStatusConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured'**
+  String get agentActionsSecretStatusConfigured;
+
+  /// No description provided for @agentActionsSecretStatusMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get agentActionsSecretStatusMissing;
+
+  /// No description provided for @agentActionsSecretConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure'**
+  String get agentActionsSecretConfigure;
+
+  /// No description provided for @agentActionsSecretUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get agentActionsSecretUpdate;
+
+  /// No description provided for @agentActionsSecretRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get agentActionsSecretRemove;
+
+  /// No description provided for @agentActionsSecretConfigureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure secret {secretName}'**
+  String agentActionsSecretConfigureTitle(String secretName);
+
+  /// No description provided for @agentActionsSecretConfigureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the secret value. It will not appear in action definitions, logs, or execution history.'**
+  String get agentActionsSecretConfigureMessage;
+
+  /// No description provided for @agentActionsSecretConfigureValueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Secret value'**
+  String get agentActionsSecretConfigureValueLabel;
+
+  /// No description provided for @agentActionsSecretConfigureValueHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter value'**
+  String get agentActionsSecretConfigureValueHint;
+
+  /// No description provided for @agentActionsSecretConfigureSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get agentActionsSecretConfigureSave;
+
+  /// No description provided for @agentActionsSecretConfigureCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsSecretConfigureCancel;
+
+  /// No description provided for @agentActionsSecretConfigureErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save secret'**
+  String get agentActionsSecretConfigureErrorTitle;
+
+  /// No description provided for @agentActionsSecretDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove secret?'**
+  String get agentActionsSecretDeleteTitle;
+
+  /// No description provided for @agentActionsSecretDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the locally stored value for \"{secretName}\"? The action will fail until the secret is configured again.'**
+  String agentActionsSecretDeleteMessage(String secretName);
+
+  /// No description provided for @agentActionsSecretDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get agentActionsSecretDeleteConfirm;
+
+  /// No description provided for @agentActionsSecretDeleteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsSecretDeleteCancel;
+
+  /// No description provided for @agentActionsSecretOperationErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Secret operation failed'**
+  String get agentActionsSecretOperationErrorTitle;
+
+  /// No description provided for @agentActionsHistoryFilterSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search execution'**
+  String get agentActionsHistoryFilterSearch;
+
+  /// No description provided for @agentActionsRiskRunnerUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Runner unavailable'**
+  String get agentActionsRiskRunnerUnavailable;
+
+  /// No description provided for @agentActionsRiskElevated.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated execution'**
+  String get agentActionsRiskElevated;
+
+  /// No description provided for @agentActionsActionTypeUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runner unavailable for this action type'**
+  String get agentActionsActionTypeUnavailableTitle;
+
+  /// No description provided for @agentActionsActionTypeUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent subsystem is degraded and cannot run {actionType} actions until the runner or capability is restored.'**
+  String agentActionsActionTypeUnavailableMessage(String actionType);
+
+  /// No description provided for @agentActionsQueueActiveIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'{pending} pending · {running} running in queue'**
+  String agentActionsQueueActiveIndicator(int pending, int running);
+
+  /// No description provided for @agentActionsConfirmRemoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable remote execution?'**
+  String get agentActionsConfirmRemoteTitle;
+
+  /// No description provided for @agentActionsConfirmRemoteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The Hub will be able to run this saved action when scopes, token policy and feature flags allow it.'**
+  String get agentActionsConfirmRemoteMessage;
+
+  /// No description provided for @agentActionsConfirmRemoteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable remote'**
+  String get agentActionsConfirmRemoteConfirm;
+
+  /// No description provided for @agentActionsConfirmRemoteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmRemoteCancel;
+
+  /// No description provided for @agentActionsConfirmRemoteAdHocTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable remote ad-hoc commands?'**
+  String get agentActionsConfirmRemoteAdHocTitle;
+
+  /// No description provided for @agentActionsConfirmRemoteAdHocMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Ad-hoc remote commands are high risk and should stay disabled unless you explicitly need them.'**
+  String get agentActionsConfirmRemoteAdHocMessage;
+
+  /// No description provided for @agentActionsConfirmRemoteAdHocConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable ad-hoc'**
+  String get agentActionsConfirmRemoteAdHocConfirm;
+
+  /// No description provided for @agentActionsConfirmRemoteAdHocCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmRemoteAdHocCancel;
+
+  /// No description provided for @agentActionsConfirmAppCloseTriggerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add app-close trigger?'**
+  String get agentActionsConfirmAppCloseTriggerTitle;
+
+  /// No description provided for @agentActionsConfirmAppCloseTriggerMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This trigger runs when the Plug agent closes and may start or stop processes while the app shuts down.'**
+  String get agentActionsConfirmAppCloseTriggerMessage;
+
+  /// No description provided for @agentActionsConfirmAppCloseTriggerConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Use app close'**
+  String get agentActionsConfirmAppCloseTriggerConfirm;
+
+  /// No description provided for @agentActionsConfirmAppCloseTriggerCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmAppCloseTriggerCancel;
+
+  /// No description provided for @agentActionsConfirmElevatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable elevated execution?'**
+  String get agentActionsConfirmElevatedTitle;
+
+  /// No description provided for @agentActionsConfirmElevatedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs use the elevated helper and administrator privileges on this machine. Install and prepare the helper before enabling.'**
+  String get agentActionsConfirmElevatedMessage;
+
+  /// No description provided for @agentActionsConfirmElevatedConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable elevated'**
+  String get agentActionsConfirmElevatedConfirm;
+
+  /// No description provided for @agentActionsConfirmElevatedCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmElevatedCancel;
+
+  /// No description provided for @agentActionsValidationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the action fields'**
+  String get agentActionsValidationTitle;
+
+  /// No description provided for @agentActionsMaintenanceMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance mode'**
+  String get agentActionsMaintenanceMode;
+
+  /// No description provided for @agentActionsMaintenanceModeInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance mode is on'**
+  String get agentActionsMaintenanceModeInfoTitle;
+
+  /// No description provided for @agentActionsMaintenanceModeInfoMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled runs, app start/close triggers, and remote runs are paused. You can still run actions from this screen and edit definitions.'**
+  String get agentActionsMaintenanceModeInfoMessage;
+
+  /// No description provided for @agentActionsElevatedRunnerNotReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated runner not prepared'**
+  String get agentActionsElevatedRunnerNotReadyTitle;
+
+  /// No description provided for @agentActionsElevatedRunnerNotReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once.'**
+  String get agentActionsElevatedRunnerNotReadyMessage;
+
+  /// No description provided for @agentActionsElevatedRunnerDegradedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated runner unavailable'**
+  String get agentActionsElevatedRunnerDegradedTitle;
+
+  /// No description provided for @agentActionsElevatedRunnerDegradedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The elevated helper failed recently. Prepare it again before running actions with high privilege.'**
+  String get agentActionsElevatedRunnerDegradedMessage;
+
+  /// No description provided for @agentActionsElevatedRunnerPrepare.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare elevated runner'**
+  String get agentActionsElevatedRunnerPrepare;
+
+  /// No description provided for @agentActionsElevatedRunnerPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing elevated runner...'**
+  String get agentActionsElevatedRunnerPreparing;
+
+  /// No description provided for @agentActionsFormRunElevated.
+  ///
+  /// In en, this message translates to:
+  /// **'Run with elevated privilege (Windows helper)'**
+  String get agentActionsFormRunElevated;
+
+  /// No description provided for @agentActionsFormRunElevatedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires the helper executable and a prepared scheduled task on this agent.'**
+  String get agentActionsFormRunElevatedHint;
+
+  /// No description provided for @agentActionsSubsystemStatusStartingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions are starting'**
+  String get agentActionsSubsystemStatusStartingTitle;
+
+  /// No description provided for @agentActionsSubsystemStatusStartingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The subsystem is still initializing. Local run and test stay disabled until it is ready.'**
+  String get agentActionsSubsystemStatusStartingMessage;
+
+  /// No description provided for @agentActionsSubsystemStatusDrainingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions are shutting down'**
+  String get agentActionsSubsystemStatusDrainingTitle;
+
+  /// No description provided for @agentActionsSubsystemStatusDrainingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'New runs are blocked while the Plug agent closes. App-close triggers may still run.'**
+  String get agentActionsSubsystemStatusDrainingMessage;
+
+  /// No description provided for @agentActionsSubsystemStatusDegradedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Some action types are unavailable'**
+  String get agentActionsSubsystemStatusDegradedTitle;
+
+  /// No description provided for @agentActionsSubsystemStatusDegradedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable types: {types}. Other actions may still run from this screen.'**
+  String agentActionsSubsystemStatusDegradedMessage(String types);
+
+  /// No description provided for @agentActionsSubsystemStatusDisabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions subsystem disabled'**
+  String get agentActionsSubsystemStatusDisabledTitle;
+
+  /// No description provided for @agentActionsSubsystemStatusDisabledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The runtime guard reports the subsystem as disabled. Check feature flags and restart the agent if needed.'**
+  String get agentActionsSubsystemStatusDisabledMessage;
+
+  /// No description provided for @agentActionsSchedulerOperationalIssueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled triggers are not running'**
+  String get agentActionsSchedulerOperationalIssueTitle;
+
+  /// No description provided for @agentActionsSchedulerInstanceLockedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Another Plug Agente process is already running the action scheduler for this data folder. Close the other instance or use a separate data directory. Manual runs and remote actions may still work in this window.'**
+  String get agentActionsSchedulerInstanceLockedMessage;
+
+  /// No description provided for @agentActionsSchedulerBootstrapFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The action scheduler stopped after a startup failure. Restart the agent or review saved triggers. Manual runs may still work until you fix the schedule configuration.'**
+  String get agentActionsSchedulerBootstrapFailedMessage;
+
+  /// No description provided for @agentActionsComObjectHandlersMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'COM actions are not ready'**
+  String get agentActionsComObjectHandlersMissingTitle;
+
+  /// No description provided for @agentActionsComObjectHandlersMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No COM ProgID/member handlers are registered in this agent. COM actions will fail until handlers are added to ComObjectInvocationRegistry or homologation stub env vars are set (AGENT_ACTION_COM_STUB_ENABLED). See agent.getHealth com_object_invocation_ready.'**
+  String get agentActionsComObjectHandlersMissingMessage;
+
+  /// No description provided for @agentActionsDisabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions disabled'**
+  String get agentActionsDisabledTitle;
+
+  /// No description provided for @agentActionsDisabledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions are disabled by feature flag.'**
+  String get agentActionsDisabledMessage;
+
+  /// No description provided for @agentActionsErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action operation failed'**
+  String get agentActionsErrorTitle;
+
+  /// No description provided for @agentActionsSummaryActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get agentActionsSummaryActions;
+
+  /// No description provided for @agentActionsSummaryQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get agentActionsSummaryQueued;
+
+  /// No description provided for @agentActionsSummaryRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get agentActionsSummaryRunning;
+
+  /// No description provided for @agentActionsSummaryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get agentActionsSummaryFailed;
+
+  /// No description provided for @agentActionsSummaryMaintenance.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get agentActionsSummaryMaintenance;
+
+  /// No description provided for @agentActionsSummaryMaintenanceActive.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get agentActionsSummaryMaintenanceActive;
+
+  /// No description provided for @agentActionsSummaryComHandlers.
+  ///
+  /// In en, this message translates to:
+  /// **'COM handlers'**
+  String get agentActionsSummaryComHandlers;
+
+  /// No description provided for @agentActionsSummaryComHandlersNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get agentActionsSummaryComHandlersNone;
+
+  /// No description provided for @agentActionsRetentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data retention'**
+  String get agentActionsRetentionTitle;
+
+  /// No description provided for @agentActionsRetentionDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Periodic purge removes local rows older than the windows below. Saved values here take precedence over environment variables for this installation.'**
+  String get agentActionsRetentionDescription;
+
+  /// No description provided for @agentActionsRetentionExecutionHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal execution history'**
+  String get agentActionsRetentionExecutionHistory;
+
+  /// No description provided for @agentActionsRetentionExecutionHistoryValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one {1 day} other {{days} days}}'**
+  String agentActionsRetentionExecutionHistoryValue(int days);
+
+  /// No description provided for @agentActionsRetentionRemoteAudit.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote agent.action audit'**
+  String get agentActionsRetentionRemoteAudit;
+
+  /// No description provided for @agentActionsRetentionRemoteAuditValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one {1 day} other {{days} days}}'**
+  String agentActionsRetentionRemoteAuditValue(int days);
+
+  /// No description provided for @agentActionsRetentionCapturedOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured stdout/stderr on terminal rows'**
+  String get agentActionsRetentionCapturedOutput;
+
+  /// No description provided for @agentActionsRetentionCapturedOutputValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours, plural, one {1 hour} other {{hours} hours}}'**
+  String agentActionsRetentionCapturedOutputValue(int hours);
+
+  /// No description provided for @agentActionsRetentionEnvVariables.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment variables (fallback): AGENT_ACTION_EXECUTION_RETENTION_DAYS, AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS, AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS'**
+  String get agentActionsRetentionEnvVariables;
+
+  /// No description provided for @agentActionsRetentionSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save retention'**
+  String get agentActionsRetentionSave;
+
+  /// No description provided for @agentActionsRetentionReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get agentActionsRetentionReset;
+
+  /// No description provided for @agentActionsRetentionUseEnvDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Use environment defaults'**
+  String get agentActionsRetentionUseEnvDefaults;
+
+  /// No description provided for @agentActionsRetentionClearedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention restored'**
+  String get agentActionsRetentionClearedTitle;
+
+  /// No description provided for @agentActionsRetentionClearedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom values were removed. Cleanup windows now follow environment variables or agent defaults.'**
+  String get agentActionsRetentionClearedMessage;
+
+  /// No description provided for @agentActionsRetentionSavedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention saved'**
+  String get agentActionsRetentionSavedTitle;
+
+  /// No description provided for @agentActionsRetentionSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleanup windows were updated for this installation.'**
+  String get agentActionsRetentionSavedMessage;
+
+  /// No description provided for @agentActionsRetentionInvalidValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter valid whole numbers in every field.'**
+  String get agentActionsRetentionInvalidValue;
+
+  /// No description provided for @agentActionsRetentionPersistedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom values are stored locally and override the environment fallback.'**
+  String get agentActionsRetentionPersistedHint;
+
+  /// No description provided for @agentActionsEmptyActions.
+  ///
+  /// In en, this message translates to:
+  /// **'No actions registered.'**
+  String get agentActionsEmptyActions;
+
+  /// No description provided for @agentActionsListFilterType.
+  ///
+  /// In en, this message translates to:
+  /// **'Action type'**
+  String get agentActionsListFilterType;
+
+  /// No description provided for @agentActionsListFilterSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search actions'**
+  String get agentActionsListFilterSearch;
+
+  /// No description provided for @agentActionsListFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No actions match the current filters.'**
+  String get agentActionsListFilterEmpty;
+
+  /// No description provided for @agentActionsEmptySelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an action to inspect execution details.'**
+  String get agentActionsEmptySelection;
+
+  /// No description provided for @agentActionsHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution history'**
+  String get agentActionsHistoryTitle;
+
+  /// No description provided for @agentActionsHistoryFilterStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get agentActionsHistoryFilterStatus;
+
+  /// No description provided for @agentActionsHistoryFilterSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get agentActionsHistoryFilterSource;
+
+  /// No description provided for @agentActionsHistoryFilterPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get agentActionsHistoryFilterPeriod;
+
+  /// No description provided for @agentActionsHistoryFilterFailurePhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Failure phase'**
+  String get agentActionsHistoryFilterFailurePhase;
+
+  /// No description provided for @agentActionsHistoryFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get agentActionsHistoryFilterAll;
+
+  /// No description provided for @agentActionsHistoryPeriodAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get agentActionsHistoryPeriodAll;
+
+  /// No description provided for @agentActionsHistoryPeriodLast24Hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 24 hours'**
+  String get agentActionsHistoryPeriodLast24Hours;
+
+  /// No description provided for @agentActionsHistoryPeriodLast3Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 3 days'**
+  String get agentActionsHistoryPeriodLast3Days;
+
+  /// No description provided for @agentActionsRemoteAuditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote agent.action audit'**
+  String get agentActionsRemoteAuditTitle;
+
+  /// No description provided for @agentActionsRemoteAuditDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent Hub JSON-RPC and execution lifecycle rows for agent.action.* (append-only; retention and purge still apply).'**
+  String get agentActionsRemoteAuditDescription;
+
+  /// No description provided for @agentActionsRemoteAuditFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get agentActionsRemoteAuditFilterAll;
+
+  /// No description provided for @agentActionsRemoteAuditFilterRpc.
+  ///
+  /// In en, this message translates to:
+  /// **'RPC'**
+  String get agentActionsRemoteAuditFilterRpc;
+
+  /// No description provided for @agentActionsRemoteAuditFilterLifecycle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lifecycle'**
+  String get agentActionsRemoteAuditFilterLifecycle;
+
+  /// No description provided for @agentActionsRemoteAuditFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No rows match this filter.'**
+  String get agentActionsRemoteAuditFilterEmpty;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get agentActionsRemoteAuditOutcomeReceived;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Success'**
+  String get agentActionsRemoteAuditOutcomeSuccess;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeRpcError.
+  ///
+  /// In en, this message translates to:
+  /// **'RPC error'**
+  String get agentActionsRemoteAuditOutcomeRpcError;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeAuthorizationDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization denied'**
+  String get agentActionsRemoteAuditOutcomeAuthorizationDenied;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeNotificationRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification rejected'**
+  String get agentActionsRemoteAuditOutcomeNotificationRejected;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate limited'**
+  String get agentActionsRemoteAuditOutcomeRateLimited;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeLifecycleEnqueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Enqueued'**
+  String get agentActionsRemoteAuditOutcomeLifecycleEnqueued;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeLifecycleStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get agentActionsRemoteAuditOutcomeLifecycleStarted;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeLifecycleCancelRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel requested'**
+  String get agentActionsRemoteAuditOutcomeLifecycleCancelRequested;
+
+  /// No description provided for @agentActionsRemoteAuditOutcomeLifecycleFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get agentActionsRemoteAuditOutcomeLifecycleFinished;
+
+  /// No description provided for @agentActionsRemoteAuditEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No remote audit rows recorded yet.'**
+  String get agentActionsRemoteAuditEmpty;
+
+  /// No description provided for @agentActionsRemoteAuditRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get agentActionsRemoteAuditRefresh;
+
+  /// No description provided for @agentActionsRemoteAuditCopyJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy as JSON'**
+  String get agentActionsRemoteAuditCopyJson;
+
+  /// No description provided for @agentActionsRemoteAuditCopiedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit copied to the clipboard.'**
+  String get agentActionsRemoteAuditCopiedToast;
+
+  /// No description provided for @agentActionsRemoteAuditShowInHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in history'**
+  String get agentActionsRemoteAuditShowInHistory;
+
+  /// No description provided for @agentActionsRemoteAuditExecutionNotInHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution {executionId} is not in the loaded history. It may be outside the retention window or list limit.'**
+  String agentActionsRemoteAuditExecutionNotInHistory(Object executionId);
+
+  /// No description provided for @agentActionsRemoteAuditRuntimeInstanceMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution {executionId} belongs to another agent installation (audit instance {auditInstanceId}). Local history only highlights when the runtime instance matches.'**
+  String agentActionsRemoteAuditRuntimeInstanceMismatch(Object executionId, Object auditInstanceId);
+
+  /// No description provided for @agentActionsRemoteAuditFieldAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get agentActionsRemoteAuditFieldAction;
+
+  /// No description provided for @agentActionsRemoteAuditFieldExecution.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution'**
+  String get agentActionsRemoteAuditFieldExecution;
+
+  /// No description provided for @agentActionsRemoteAuditFieldTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Trace'**
+  String get agentActionsRemoteAuditFieldTrace;
+
+  /// No description provided for @agentActionsRemoteAuditFieldRequestedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Requester'**
+  String get agentActionsRemoteAuditFieldRequestedBy;
+
+  /// No description provided for @agentActionsRemoteAuditFieldIdempotencyKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Idempotency'**
+  String get agentActionsRemoteAuditFieldIdempotencyKey;
+
+  /// No description provided for @agentActionsRemoteAuditFieldReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get agentActionsRemoteAuditFieldReason;
+
+  /// No description provided for @agentActionsRemoteAuditFieldClient.
+  ///
+  /// In en, this message translates to:
+  /// **'Client'**
+  String get agentActionsRemoteAuditFieldClient;
+
+  /// No description provided for @agentActionsRemoteAuditFieldRuntimeInstance.
+  ///
+  /// In en, this message translates to:
+  /// **'Instance'**
+  String get agentActionsRemoteAuditFieldRuntimeInstance;
+
+  /// No description provided for @agentActionsRemoteAuditFieldRuntimeSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Session'**
+  String get agentActionsRemoteAuditFieldRuntimeSession;
+
+  /// No description provided for @agentActionsRemoteAuditReasonMissingClientToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Client token missing'**
+  String get agentActionsRemoteAuditReasonMissingClientToken;
+
+  /// No description provided for @agentActionsRemoteAuditReasonPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission denied'**
+  String get agentActionsRemoteAuditReasonPermissionDenied;
+
+  /// No description provided for @agentActionsRemoteAuditReasonRemoteRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote rate limit'**
+  String get agentActionsRemoteAuditReasonRemoteRateLimited;
+
+  /// No description provided for @agentActionsRemoteAuditReasonRemoteDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote actions disabled'**
+  String get agentActionsRemoteAuditReasonRemoteDisabled;
+
+  /// No description provided for @agentActionsRemoteAuditReasonFeatureDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions disabled'**
+  String get agentActionsRemoteAuditReasonFeatureDisabled;
+
+  /// No description provided for @agentActionsRemoteAuditReasonMaintenanceMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance mode'**
+  String get agentActionsRemoteAuditReasonMaintenanceMode;
+
+  /// No description provided for @agentActionsRemoteAuditReasonNotificationNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification not allowed'**
+  String get agentActionsRemoteAuditReasonNotificationNotAllowed;
+
+  /// No description provided for @agentActionsRemoteAuditReasonRemoteContextNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote context not supported'**
+  String get agentActionsRemoteAuditReasonRemoteContextNotSupported;
+
+  /// No description provided for @agentActionsRemoteAuditReasonIdempotencyRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Idempotency key required'**
+  String get agentActionsRemoteAuditReasonIdempotencyRequired;
+
+  /// No description provided for @agentActionsRemoteAuditReasonIdempotencyMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Idempotency fingerprint mismatch'**
+  String get agentActionsRemoteAuditReasonIdempotencyMismatch;
+
+  /// No description provided for @agentActionsRemoteAuditReasonBatchNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Method not allowed in batch'**
+  String get agentActionsRemoteAuditReasonBatchNotAllowed;
+
+  /// No description provided for @agentActionsRemoteAuditReasonExecutionNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution not found'**
+  String get agentActionsRemoteAuditReasonExecutionNotFound;
+
+  /// No description provided for @agentActionsRemoteAuditReasonAlreadyFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Already finished'**
+  String get agentActionsRemoteAuditReasonAlreadyFinished;
+
+  /// No description provided for @agentActionsRemoteAuditReasonKillFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill failed'**
+  String get agentActionsRemoteAuditReasonKillFailed;
+
+  /// No description provided for @agentActionsEmptyHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No executions recorded for this action.'**
+  String get agentActionsEmptyHistory;
+
+  /// No description provided for @agentActionsTriggersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedules and triggers'**
+  String get agentActionsTriggersTitle;
+
+  /// No description provided for @agentActionsTriggersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No triggers saved for this action.'**
+  String get agentActionsTriggersEmpty;
+
+  /// No description provided for @agentActionsTriggersLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading triggers…'**
+  String get agentActionsTriggersLoading;
+
+  /// No description provided for @agentActionsTriggerEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get agentActionsTriggerEnabled;
+
+  /// No description provided for @agentActionsTriggerDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get agentActionsTriggerDisabled;
+
+  /// No description provided for @agentActionsTriggerUnnamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed trigger'**
+  String get agentActionsTriggerUnnamed;
+
+  /// No description provided for @agentActionsTriggerNotScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not scheduled'**
+  String get agentActionsTriggerNotScheduled;
+
+  /// No description provided for @agentActionsTriggerNextRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Next run: {when}'**
+  String agentActionsTriggerNextRun(Object when);
+
+  /// No description provided for @agentActionsTriggerSummaryTimeZone.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone: {ianaId}'**
+  String agentActionsTriggerSummaryTimeZone(Object ianaId);
+
+  /// No description provided for @agentActionsTriggerSummaryCatchUpEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Catch-up for missed runs enabled'**
+  String get agentActionsTriggerSummaryCatchUpEnabled;
+
+  /// No description provided for @agentActionsTriggerTypeManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get agentActionsTriggerTypeManual;
+
+  /// No description provided for @agentActionsTriggerTypeRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote'**
+  String get agentActionsTriggerTypeRemote;
+
+  /// No description provided for @agentActionsTriggerTypeOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Once'**
+  String get agentActionsTriggerTypeOnce;
+
+  /// No description provided for @agentActionsTriggerTypeInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Interval'**
+  String get agentActionsTriggerTypeInterval;
+
+  /// No description provided for @agentActionsTriggerTypeDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get agentActionsTriggerTypeDaily;
+
+  /// No description provided for @agentActionsTriggerTypeWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get agentActionsTriggerTypeWeekly;
+
+  /// No description provided for @agentActionsTriggerTypeMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get agentActionsTriggerTypeMonthly;
+
+  /// No description provided for @agentActionsTriggerTypeAppStart.
+  ///
+  /// In en, this message translates to:
+  /// **'App start'**
+  String get agentActionsTriggerTypeAppStart;
+
+  /// No description provided for @agentActionsTriggerTypeAppClose.
+  ///
+  /// In en, this message translates to:
+  /// **'App close'**
+  String get agentActionsTriggerTypeAppClose;
+
+  /// No description provided for @agentActionsTriggerDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete trigger'**
+  String get agentActionsTriggerDelete;
+
+  /// No description provided for @agentActionsTriggerDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete trigger'**
+  String get agentActionsTriggerDeleteConfirmTitle;
+
+  /// No description provided for @agentActionsTriggerDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{triggerLabel}\"? Scheduled runs stop for this trigger.'**
+  String agentActionsTriggerDeleteConfirmMessage(Object triggerLabel);
+
+  /// No description provided for @agentActionsTriggerDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get agentActionsTriggerDeleteConfirm;
+
+  /// No description provided for @agentActionsTriggerDeleteCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsTriggerDeleteCancel;
+
+  /// No description provided for @agentActionsTriggerAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add trigger'**
+  String get agentActionsTriggerAdd;
+
+  /// No description provided for @agentActionsTriggerEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit trigger'**
+  String get agentActionsTriggerEdit;
+
+  /// No description provided for @agentActionsTriggerSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save trigger'**
+  String get agentActionsTriggerSave;
+
+  /// No description provided for @agentActionsTriggerCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsTriggerCancel;
+
+  /// No description provided for @agentActionsTriggerEditorTitleNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New trigger'**
+  String get agentActionsTriggerEditorTitleNew;
+
+  /// No description provided for @agentActionsTriggerEditorTitleEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit trigger'**
+  String get agentActionsTriggerEditorTitleEdit;
+
+  /// No description provided for @agentActionsTriggerFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get agentActionsTriggerFieldName;
+
+  /// No description provided for @agentActionsTriggerFieldType.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger type'**
+  String get agentActionsTriggerFieldType;
+
+  /// No description provided for @agentActionsTriggerFieldTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'IANA time zone (optional)'**
+  String get agentActionsTriggerFieldTimezone;
+
+  /// No description provided for @agentActionsTriggerFieldTimezoneFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter IANA zones'**
+  String get agentActionsTriggerFieldTimezoneFilter;
+
+  /// No description provided for @agentActionsTriggerHintTimezoneFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. America, Europe, UTC'**
+  String get agentActionsTriggerHintTimezoneFilter;
+
+  /// No description provided for @agentActionsTriggerHintTimezonePick.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a row to fill the field above. Leave empty to use the device default.'**
+  String get agentActionsTriggerHintTimezonePick;
+
+  /// No description provided for @agentActionsTriggerHintTimezoneSearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Type in the filter to search IANA time zones.'**
+  String get agentActionsTriggerHintTimezoneSearchEmpty;
+
+  /// No description provided for @agentActionsTriggerTimezoneNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No time zone matches the filter.'**
+  String get agentActionsTriggerTimezoneNoMatches;
+
+  /// No description provided for @agentActionsTriggerTimezoneMatchesTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {count} matches. Refine the filter.'**
+  String agentActionsTriggerTimezoneMatchesTruncated(int count);
+
+  /// No description provided for @agentActionsTriggerFieldStartAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Start date and time'**
+  String get agentActionsTriggerFieldStartAt;
+
+  /// No description provided for @agentActionsTriggerFieldStartAtOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Active from (optional)'**
+  String get agentActionsTriggerFieldStartAtOptional;
+
+  /// No description provided for @agentActionsTriggerFieldEndAtOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Active until (optional)'**
+  String get agentActionsTriggerFieldEndAtOptional;
+
+  /// No description provided for @agentActionsTriggerFieldIntervalMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Interval (minutes)'**
+  String get agentActionsTriggerFieldIntervalMinutes;
+
+  /// No description provided for @agentActionsTriggerFieldTimeOfDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Time of day'**
+  String get agentActionsTriggerFieldTimeOfDay;
+
+  /// No description provided for @agentActionsTriggerHintTimeOfDay.
+  ///
+  /// In en, this message translates to:
+  /// **'HH:mm (24-hour)'**
+  String get agentActionsTriggerHintTimeOfDay;
+
+  /// No description provided for @agentActionsTriggerFieldWeekdays.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekdays'**
+  String get agentActionsTriggerFieldWeekdays;
+
+  /// No description provided for @agentActionsTriggerFieldDayOfMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Day of month (1-31)'**
+  String get agentActionsTriggerFieldDayOfMonth;
+
+  /// No description provided for @agentActionsTriggerHintDateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Format: yyyy-MM-dd HH:mm (local)'**
+  String get agentActionsTriggerHintDateTime;
+
+  /// No description provided for @agentActionsTriggerFieldIgnoreMissedRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignore missed runs during downtime'**
+  String get agentActionsTriggerFieldIgnoreMissedRuns;
+
+  /// No description provided for @agentActionsTriggerHintIgnoreMissedRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off to run schedules that were missed while the app was closed, when the trigger type supports catch-up.'**
+  String get agentActionsTriggerHintIgnoreMissedRuns;
+
+  /// No description provided for @agentActionsTriggerValidationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the trigger fields'**
+  String get agentActionsTriggerValidationTitle;
+
+  /// No description provided for @agentActionsTriggerValidationInvalidStartAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid start date and time.'**
+  String get agentActionsTriggerValidationInvalidStartAt;
+
+  /// No description provided for @agentActionsTriggerValidationInvalidIntervalMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive whole number of minutes.'**
+  String get agentActionsTriggerValidationInvalidIntervalMinutes;
+
+  /// No description provided for @agentActionsTriggerValidationInvalidTimeOfDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the time as HH:mm using a 24-hour clock.'**
+  String get agentActionsTriggerValidationInvalidTimeOfDay;
+
+  /// No description provided for @agentActionsTriggerValidationWeekdaysRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one weekday.'**
+  String get agentActionsTriggerValidationWeekdaysRequired;
+
+  /// No description provided for @agentActionsTriggerValidationInvalidDayOfMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a day of month between 1 and 31.'**
+  String get agentActionsTriggerValidationInvalidDayOfMonth;
+
+  /// No description provided for @agentActionsTriggerWeekdayMon.
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get agentActionsTriggerWeekdayMon;
+
+  /// No description provided for @agentActionsTriggerWeekdayTue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tue'**
+  String get agentActionsTriggerWeekdayTue;
+
+  /// No description provided for @agentActionsTriggerWeekdayWed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wed'**
+  String get agentActionsTriggerWeekdayWed;
+
+  /// No description provided for @agentActionsTriggerWeekdayThu.
+  ///
+  /// In en, this message translates to:
+  /// **'Thu'**
+  String get agentActionsTriggerWeekdayThu;
+
+  /// No description provided for @agentActionsTriggerWeekdayFri.
+  ///
+  /// In en, this message translates to:
+  /// **'Fri'**
+  String get agentActionsTriggerWeekdayFri;
+
+  /// No description provided for @agentActionsTriggerWeekdaySat.
+  ///
+  /// In en, this message translates to:
+  /// **'Sat'**
+  String get agentActionsTriggerWeekdaySat;
+
+  /// No description provided for @agentActionsTriggerWeekdaySun.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get agentActionsTriggerWeekdaySun;
+
+  /// No description provided for @agentActionsRequestedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested at'**
+  String get agentActionsRequestedAt;
+
+  /// No description provided for @agentActionsExitCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code'**
+  String get agentActionsExitCode;
+
+  /// No description provided for @agentActionsSourceLocalUi.
+  ///
+  /// In en, this message translates to:
+  /// **'Local UI'**
+  String get agentActionsSourceLocalUi;
+
+  /// No description provided for @agentActionsSourceScheduler.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduler'**
+  String get agentActionsSourceScheduler;
+
+  /// No description provided for @agentActionsSourceRemoteHub.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub'**
+  String get agentActionsSourceRemoteHub;
+
+  /// No description provided for @agentActionsSourceAppLifecycle.
+  ///
+  /// In en, this message translates to:
+  /// **'App lifecycle'**
+  String get agentActionsSourceAppLifecycle;
+
+  /// No description provided for @agentActionsDiagnosticsCopySupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy support JSON'**
+  String get agentActionsDiagnosticsCopySupport;
+
+  /// No description provided for @agentActionsDiagnosticsCopiedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics copied to the clipboard.'**
+  String get agentActionsDiagnosticsCopiedToast;
+
+  /// No description provided for @agentActionsDiagnosticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get agentActionsDiagnosticsTitle;
+
+  /// No description provided for @agentActionsDiagnosticsExecutionId.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution'**
+  String get agentActionsDiagnosticsExecutionId;
+
+  /// No description provided for @agentActionsDiagnosticsSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get agentActionsDiagnosticsSource;
+
+  /// No description provided for @agentActionsDiagnosticsPid.
+  ///
+  /// In en, this message translates to:
+  /// **'PID'**
+  String get agentActionsDiagnosticsPid;
+
+  /// No description provided for @agentActionsDiagnosticsStartedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get agentActionsDiagnosticsStartedAt;
+
+  /// No description provided for @agentActionsDiagnosticsFinishedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get agentActionsDiagnosticsFinishedAt;
+
+  /// No description provided for @agentActionsDiagnosticsTimeoutAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout'**
+  String get agentActionsDiagnosticsTimeoutAt;
+
+  /// No description provided for @agentActionsDiagnosticsDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get agentActionsDiagnosticsDuration;
+
+  /// No description provided for @agentActionsDiagnosticsExecutable.
+  ///
+  /// In en, this message translates to:
+  /// **'Executable'**
+  String get agentActionsDiagnosticsExecutable;
+
+  /// No description provided for @agentActionsDiagnosticsArgumentCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments'**
+  String get agentActionsDiagnosticsArgumentCount;
+
+  /// No description provided for @agentActionsDiagnosticsCommandPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Command preview'**
+  String get agentActionsDiagnosticsCommandPreview;
+
+  /// No description provided for @agentActionsDiagnosticsFailureCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Failure code'**
+  String get agentActionsDiagnosticsFailureCode;
+
+  /// No description provided for @agentActionsDiagnosticsFailurePhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Failure phase'**
+  String get agentActionsDiagnosticsFailurePhase;
+
+  /// No description provided for @agentActionsFailurePhaseExecutionPreflight.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution preflight'**
+  String get agentActionsFailurePhaseExecutionPreflight;
+
+  /// No description provided for @agentActionsFailurePhaseDefinitionValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Definition validation'**
+  String get agentActionsFailurePhaseDefinitionValidation;
+
+  /// No description provided for @agentActionsFailurePhaseStartProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'Process start'**
+  String get agentActionsFailurePhaseStartProcess;
+
+  /// No description provided for @agentActionsFailurePhaseStdinSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Stdin setup'**
+  String get agentActionsFailurePhaseStdinSetup;
+
+  /// No description provided for @agentActionsFailurePhaseProcessRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Process runtime'**
+  String get agentActionsFailurePhaseProcessRuntime;
+
+  /// No description provided for @agentActionsFailurePhaseProcessExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Process exit'**
+  String get agentActionsFailurePhaseProcessExit;
+
+  /// No description provided for @agentActionsFailurePhaseQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get agentActionsFailurePhaseQueue;
+
+  /// No description provided for @agentActionsFailurePhaseTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout'**
+  String get agentActionsFailurePhaseTimeout;
+
+  /// No description provided for @agentActionsFailurePhaseAuthorization.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization'**
+  String get agentActionsFailurePhaseAuthorization;
+
+  /// No description provided for @agentActionsFailurePhaseValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Validation'**
+  String get agentActionsFailurePhaseValidation;
+
+  /// No description provided for @agentActionsFailurePhaseLookup.
+  ///
+  /// In en, this message translates to:
+  /// **'Lookup'**
+  String get agentActionsFailurePhaseLookup;
+
+  /// No description provided for @agentActionsFailurePhaseCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation'**
+  String get agentActionsFailurePhaseCancel;
+
+  /// No description provided for @agentActionsFailurePhasePlatformCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform check'**
+  String get agentActionsFailurePhasePlatformCheck;
+
+  /// No description provided for @agentActionsFailurePhaseSmtpSend.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP send'**
+  String get agentActionsFailurePhaseSmtpSend;
+
+  /// No description provided for @agentActionsFailurePhaseExecutionSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send preparation'**
+  String get agentActionsFailurePhaseExecutionSend;
+
+  /// No description provided for @agentActionsFailurePhaseElevatedSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated submit'**
+  String get agentActionsFailurePhaseElevatedSubmit;
+
+  /// No description provided for @agentActionsFailurePhaseBootstrapReconciliation.
+  ///
+  /// In en, this message translates to:
+  /// **'Bootstrap reconciliation'**
+  String get agentActionsFailurePhaseBootstrapReconciliation;
+
+  /// No description provided for @agentActionsExecutionFailurePhaseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed during: {phase}'**
+  String agentActionsExecutionFailurePhaseLabel(String phase);
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrective action'**
+  String get agentActionsDiagnosticsCorrectiveAction;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectivePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the saved path, validate the file or directory again, and update the action before running it.'**
+  String get agentActionsDiagnosticsCorrectivePath;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveRunner.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the configured executable, interpreter, or runner path and validate the action again.'**
+  String get agentActionsDiagnosticsCorrectiveRunner;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveExitCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the exit code and the redacted output. Adjust accepted exit codes or fix the executed command.'**
+  String get agentActionsDiagnosticsCorrectiveExitCode;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the queue to drain or adjust the action concurrency and queue limits.'**
+  String get agentActionsDiagnosticsCorrectiveQueue;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the configured timeout and investigate why the process did not finish within the expected window.'**
+  String get agentActionsDiagnosticsCorrectiveTimeout;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveKill.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify whether the main process is still running and try canceling again after reviewing PID and permissions.'**
+  String get agentActionsDiagnosticsCorrectiveKill;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveDefinitionValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Review required fields and validate the action definition again before running it.'**
+  String get agentActionsDiagnosticsCorrectiveDefinitionValidation;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectivePreflight.
+  ///
+  /// In en, this message translates to:
+  /// **'Revalidate paths, permissions, context, and local prerequisites before starting the execution.'**
+  String get agentActionsDiagnosticsCorrectivePreflight;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveStartProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'Check executable, arguments, and working directory before trying to start the process again.'**
+  String get agentActionsDiagnosticsCorrectiveStartProcess;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect the redacted output and operational details to identify the failure that happened during execution.'**
+  String get agentActionsDiagnosticsCorrectiveRuntime;
+
+  /// No description provided for @agentActionsDiagnosticsStdout.
+  ///
+  /// In en, this message translates to:
+  /// **'stdout'**
+  String get agentActionsDiagnosticsStdout;
+
+  /// No description provided for @agentActionsDiagnosticsStderr.
+  ///
+  /// In en, this message translates to:
+  /// **'stderr'**
+  String get agentActionsDiagnosticsStderr;
+
+  /// No description provided for @agentActionsDiagnosticsTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'truncated'**
+  String get agentActionsDiagnosticsTruncated;
+
+  /// No description provided for @agentActionsDiagnosticsStoredInChunks.
+  ///
+  /// In en, this message translates to:
+  /// **'stored in segments'**
+  String get agentActionsDiagnosticsStoredInChunks;
+
+  /// No description provided for @agentActionsExecutionOutputInChunks.
+  ///
+  /// In en, this message translates to:
+  /// **'large output in segments'**
+  String get agentActionsExecutionOutputInChunks;
+
+  /// No description provided for @agentActionsDiagnosticsOutputLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load captured output'**
+  String get agentActionsDiagnosticsOutputLoadFailed;
+
+  /// No description provided for @agentActionsDiagnosticsLoadMoreStdout.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more stdout'**
+  String get agentActionsDiagnosticsLoadMoreStdout;
+
+  /// No description provided for @agentActionsDiagnosticsLoadMoreStderr.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more stderr'**
+  String get agentActionsDiagnosticsLoadMoreStderr;
+
+  /// No description provided for @agentActionsDiagnosticsDefinitionSnapshotHash.
+  ///
+  /// In en, this message translates to:
+  /// **'Definition snapshot hash'**
+  String get agentActionsDiagnosticsDefinitionSnapshotHash;
+
+  /// No description provided for @agentActionsDiagnosticsContextHash.
+  ///
+  /// In en, this message translates to:
+  /// **'Context hash'**
+  String get agentActionsDiagnosticsContextHash;
+
+  /// No description provided for @agentActionsDiagnosticsRedactionApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Redaction applied'**
+  String get agentActionsDiagnosticsRedactionApplied;
+
+  /// No description provided for @agentActionsDiagnosticsValueYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get agentActionsDiagnosticsValueYes;
+
+  /// No description provided for @agentActionsDiagnosticsValueNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get agentActionsDiagnosticsValueNo;
+
+  /// No description provided for @agentActionsDiagnosticsQueueStartedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue started'**
+  String get agentActionsDiagnosticsQueueStartedAt;
+
+  /// No description provided for @agentActionsDiagnosticsIdempotencyKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Idempotency key'**
+  String get agentActionsDiagnosticsIdempotencyKey;
+
+  /// No description provided for @agentActionsDiagnosticsRequestedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested by'**
+  String get agentActionsDiagnosticsRequestedBy;
+
+  /// No description provided for @agentActionsDiagnosticsTraceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Trace id'**
+  String get agentActionsDiagnosticsTraceId;
+
+  /// No description provided for @agentActionsDiagnosticsRuntimeInstanceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime instance id'**
+  String get agentActionsDiagnosticsRuntimeInstanceId;
+
+  /// No description provided for @agentActionsDiagnosticsRuntimeSessionId.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime session id'**
+  String get agentActionsDiagnosticsRuntimeSessionId;
+
+  /// No description provided for @agentActionsDiagnosticsTriggerId.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger'**
+  String get agentActionsDiagnosticsTriggerId;
+
+  /// No description provided for @agentActionsDiagnosticsTriggerType.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger type'**
+  String get agentActionsDiagnosticsTriggerType;
+
+  /// No description provided for @agentActionsDiagnosticsScheduledAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled for'**
+  String get agentActionsDiagnosticsScheduledAt;
+
+  /// No description provided for @agentActionsDiagnosticsTriggeredAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Triggered at'**
+  String get agentActionsDiagnosticsTriggeredAt;
+
+  /// No description provided for @agentActionsTypeCommandLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Command line'**
+  String get agentActionsTypeCommandLine;
+
+  /// No description provided for @agentActionsTypeExecutable.
+  ///
+  /// In en, this message translates to:
+  /// **'Executable'**
+  String get agentActionsTypeExecutable;
+
+  /// No description provided for @agentActionsTypeScript.
+  ///
+  /// In en, this message translates to:
+  /// **'Script'**
+  String get agentActionsTypeScript;
+
+  /// No description provided for @agentActionsTypeJar.
+  ///
+  /// In en, this message translates to:
+  /// **'JAR'**
+  String get agentActionsTypeJar;
+
+  /// No description provided for @agentActionsTypeEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get agentActionsTypeEmail;
+
+  /// No description provided for @agentActionsTypeComObject.
+  ///
+  /// In en, this message translates to:
+  /// **'COM object'**
+  String get agentActionsTypeComObject;
+
+  /// No description provided for @agentActionsTypeDeveloper.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer'**
+  String get agentActionsTypeDeveloper;
+
+  /// No description provided for @agentActionsStateActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get agentActionsStateActive;
+
+  /// No description provided for @agentActionsStatePaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get agentActionsStatePaused;
+
+  /// No description provided for @agentActionsStateDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get agentActionsStateDisabled;
+
+  /// No description provided for @agentActionsStateNeedsValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs validation'**
+  String get agentActionsStateNeedsValidation;
+
+  /// No description provided for @agentActionsStatusQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get agentActionsStatusQueued;
+
+  /// No description provided for @agentActionsStatusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get agentActionsStatusRunning;
+
+  /// No description provided for @agentActionsStatusSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeeded'**
+  String get agentActionsStatusSucceeded;
+
+  /// No description provided for @agentActionsStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get agentActionsStatusFailed;
+
+  /// No description provided for @agentActionsStatusSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get agentActionsStatusSkipped;
+
+  /// No description provided for @agentActionsStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get agentActionsStatusCancelled;
+
+  /// No description provided for @agentActionsStatusKilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Killed'**
+  String get agentActionsStatusKilled;
+
+  /// No description provided for @agentActionsStatusTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed out'**
+  String get agentActionsStatusTimedOut;
+
+  /// No description provided for @agentActionsStatusInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted'**
+  String get agentActionsStatusInterrupted;
+
+  /// No description provided for @agentActionsStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get agentActionsStatusUnknown;
+
   /// No description provided for @formFieldRequired.
   ///
   /// In en, this message translates to:
@@ -2323,6 +5599,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Too many requests in a short time. Wait and try again.'**
   String get msgRpcRateLimited;
+
+  /// No description provided for @msgRpcAgentActionsTemporarilyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent actions are temporarily unavailable. Wait and try again.'**
+  String get msgRpcAgentActionsTemporarilyUnavailable;
 
   /// No description provided for @msgRpcReplayDetected.
   ///

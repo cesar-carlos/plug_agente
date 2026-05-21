@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
+import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -13,6 +17,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 
 /// Handles inbound `rpc:request` events (single and batch) from the hub.
@@ -45,6 +50,7 @@ class RpcInboundHandler {
     required Future<void> Function(dynamic responseData) emitRpcResponse,
     required Future<void> Function(String event, dynamic payload) emitEvent,
     required bool Function() hasReceivedCapabilities,
+    MetricsCollector? metricsCollector,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _agentIdProvider = agentIdProvider,
@@ -59,7 +65,8 @@ class RpcInboundHandler {
        _streamEmitterFactory = streamEmitterFactory,
        _emitRpcResponse = emitRpcResponse,
        _emitEvent = emitEvent,
-       _hasReceivedCapabilities = hasReceivedCapabilities;
+       _hasReceivedCapabilities = hasReceivedCapabilities,
+       _metricsCollector = metricsCollector;
 
   final FeatureFlags _featureFlags;
   final ProtocolConfig Function() _protocolProvider;
@@ -76,6 +83,7 @@ class RpcInboundHandler {
   final Future<void> Function(dynamic responseData) _emitRpcResponse;
   final Future<void> Function(String event, dynamic payload) _emitEvent;
   final bool Function() _hasReceivedCapabilities;
+  final MetricsCollector? _metricsCollector;
 
   int _activeRpcHandlers = 0;
 
@@ -125,13 +133,13 @@ class RpcInboundHandler {
       _responsePreparer.buildErrorResponse(
         id: id,
         code: RpcErrorCode.rateLimited,
-        technicalMessage:
-            'Concurrent RPC handler limit exceeded '
-            '(${ConnectionConstants.maxConcurrentRpcHandlers})',
+        technicalMessage: RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(
+          ConnectionConstants.maxConcurrentRpcHandlers,
+        ),
         // Distinguish from window-based rate limiting so the hub knows whether
-        // to back off in time (rate_window_exceeded) or reduce parallelism
-        // (concurrent_handlers_exceeded).
-        errorReason: 'concurrent_handlers_exceeded',
+        // to back off in time (see rateWindowExceededReason) or reduce parallelism
+        // (see concurrentHandlersExceededReason).
+        errorReason: RpcInboundConstants.concurrentHandlersExceededReason,
       ),
     );
   }
@@ -155,8 +163,8 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           _extractRequestIdFromWirePayload(payload),
           RpcErrorCode.invalidRequest,
-          'Protocol not ready: agent:capabilities has not been received yet',
-          errorReason: 'protocol_not_ready',
+          RpcInboundConstants.protocolNotReadyTechnicalMessage,
+          errorReason: RpcInboundConstants.protocolNotReadyReason,
         );
         socketAck?.call();
         return;
@@ -186,7 +194,7 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           null,
           RpcErrorCode.invalidRequest,
-          'Request must be a JSON object',
+          RpcInboundConstants.requestMustBeJsonObjectTechnicalMessage,
         );
         socketAck?.call();
         return;
@@ -197,7 +205,7 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           requestMap['id'],
           RpcErrorCode.invalidPayload,
-          'Request exceeds negotiated payload limit',
+          RpcInboundConstants.requestExceedsPayloadLimitTechnicalMessage,
         );
         socketAck?.call();
         return;
@@ -226,7 +234,7 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           requestMap['id'],
           RpcErrorCode.authenticationFailed,
-          'Invalid payload signature',
+          RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
           errorReason: RpcErrorCode.reasonInvalidSignature,
         );
         socketAck?.call();
@@ -238,7 +246,7 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           null,
           RpcErrorCode.invalidRequest,
-          'id: null notifications require negotiated compatibility',
+          RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
         );
         socketAck?.call();
         return;
@@ -322,9 +330,9 @@ class RpcInboundHandler {
           message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
           data: RpcErrorCode.buildErrorData(
             code: RpcErrorCode.internalError,
-            technicalMessage: 'Unhandled exception in RPC request handler',
+            technicalMessage: RpcInboundConstants.unhandledSingleRequestTechnicalMessage,
             extra: {
-              'failure_code': 'unhandled_exception',
+              'failure_code': RpcInboundConstants.unhandledExceptionFailureCode,
               'exception_type': error.runtimeType.toString(),
             },
           ),
@@ -361,8 +369,8 @@ class RpcInboundHandler {
             message: RpcErrorCode.getMessage(code),
             data: RpcErrorCode.buildErrorData(
               code: code,
-              technicalMessage: 'Batch request cannot be empty',
-              extra: {'detail': 'Batch request cannot be empty'},
+              technicalMessage: RpcInboundConstants.batchRequestEmptyDetail,
+              extra: {'detail': RpcInboundConstants.batchRequestEmptyDetail},
             ),
           ),
         );
@@ -374,7 +382,7 @@ class RpcInboundHandler {
         await _sendSchemaValidationError(
           null,
           RpcErrorCode.invalidPayload,
-          'Batch request exceeds negotiated payload limit',
+          RpcInboundConstants.batchRequestExceedsPayloadLimitTechnicalMessage,
         );
         return;
       }
@@ -402,7 +410,7 @@ class RpcInboundHandler {
           await _sendSchemaValidationError(
             null,
             RpcErrorCode.invalidRequest,
-            'Each element in a batch must be a JSON object',
+            RpcInboundConstants.eachBatchElementMustBeJsonObjectTechnicalMessage,
           );
           return;
         }
@@ -410,7 +418,7 @@ class RpcInboundHandler {
           await _sendSchemaValidationError(
             item['id'],
             RpcErrorCode.authenticationFailed,
-            'Invalid payload signature',
+            RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
             errorReason: RpcErrorCode.reasonInvalidSignature,
           );
           return;
@@ -424,7 +432,7 @@ class RpcInboundHandler {
           await _sendSchemaValidationError(
             null,
             RpcErrorCode.invalidRequest,
-            'id: null notifications require negotiated compatibility',
+            RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
           );
           return;
         }
@@ -449,8 +457,8 @@ class RpcInboundHandler {
                   message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
                   data: RpcErrorCode.buildErrorData(
                     code: RpcErrorCode.invalidRequest,
-                    technicalMessage: 'Batch contains duplicate request IDs: $duplicateIds',
-                    reason: 'batch_duplicate_ids',
+                    technicalMessage: '${RpcBatchConstants.duplicateRequestIdsTechnicalMessagePrefix}$duplicateIds',
+                    reason: RpcBatchConstants.duplicateRequestIdsReason,
                     extra: {'duplicate_ids': duplicateIds},
                   ),
                 ),
@@ -466,8 +474,8 @@ class RpcInboundHandler {
                   message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
                   data: RpcErrorCode.buildErrorData(
                     code: RpcErrorCode.invalidRequest,
-                    technicalMessage: 'Batch exceeds limit: $size > $limit',
-                    reason: 'batch_exceeds_limit',
+                    technicalMessage: '${RpcBatchConstants.exceedsLimitTechnicalMessagePrefix}$size > $limit',
+                    reason: RpcBatchConstants.exceedsLimitReason,
                     extra: {'size': size, 'limit': limit},
                   ),
                 ),
@@ -479,10 +487,55 @@ class RpcInboundHandler {
         }
       }
 
+      final readOnlyAgentActionCount = requests
+          .where((request) => _isAgentActionBatchReadMethod(request.method))
+          .length;
+      final maxReadPerBatch = AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch;
+      if (readOnlyAgentActionCount > maxReadPerBatch) {
+        _metricsCollector?.recordRpcAgentActionBatchReadLimitRejected();
+        await _emitRpcResponse(
+          RpcResponse.error(
+            id: null,
+            error: RpcError(
+              code: RpcErrorCode.invalidRequest,
+              message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+              data: RpcErrorCode.buildErrorData(
+                code: RpcErrorCode.invalidRequest,
+                technicalMessage:
+                    '${AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitTechnicalMessagePrefix}'
+                    '$readOnlyAgentActionCount > $maxReadPerBatch',
+                reason: AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitErrorReason,
+                extra: <String, Object?>{
+                  'read_method_count': readOnlyAgentActionCount,
+                  'limit': maxReadPerBatch,
+                },
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
       final responses = <({int index, RpcResponse response})>[];
 
       for (var index = 0; index < requests.length; index++) {
         final request = requests[index];
+        if (_isAgentActionBatchRejectedMethod(request.method)) {
+          final errorResponse = _responsePreparer.buildErrorResponse(
+            id: request.id,
+            code: RpcErrorCode.invalidRequest,
+            technicalMessage:
+                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessagePrefix}'
+                '${request.method}'
+                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessageSuffix}',
+            errorReason: AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedErrorReason,
+          );
+          if (!request.isNotification) {
+            responses.add((index: index, response: errorResponse));
+          }
+          continue;
+        }
+
         final guardResult = _requestGuard.evaluate(request);
         if (guardResult != RpcRequestGuardResult.allow) {
           final errorResponse = _responsePreparer.buildErrorResponse(
@@ -556,8 +609,8 @@ class RpcInboundHandler {
           message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
           data: RpcErrorCode.buildErrorData(
             code: RpcErrorCode.internalError,
-            technicalMessage: 'Unhandled exception in batch processing',
-            extra: {'failure_code': 'unhandled_batch_exception'},
+            technicalMessage: RpcInboundConstants.unhandledBatchProcessingTechnicalMessage,
+            extra: {'failure_code': RpcInboundConstants.unhandledBatchExceptionFailureCode},
           ),
         ),
       );
@@ -571,6 +624,15 @@ class RpcInboundHandler {
         );
       }
     }
+  }
+
+  bool _isAgentActionBatchRejectedMethod(String method) {
+    return AgentActionRpcConstants.jsonRpcBatchDisallowedAgentActionMethods.contains(method);
+  }
+
+  bool _isAgentActionBatchReadMethod(String method) {
+    return method == AgentActionRpcConstants.agentActionGetExecutionRpcMethodName ||
+        method == AgentActionRpcConstants.agentActionValidateRunRpcMethodName;
   }
 
   Future<void> _emitRequestAck(dynamic requestId) async {
@@ -678,28 +740,28 @@ class RpcInboundHandler {
 
   /// Distinct reasons for the same RPC code (`-32013 rate_limited`) so the
   /// hub can choose the right back-off strategy:
-  /// - `rate_window_exceeded`: too many requests per time window.
-  /// - `concurrent_handlers_exceeded`: too many in-flight RPC handlers.
-  /// - `replay_detected`: duplicate request id within the replay window.
+  /// - `RpcInboundConstants.rateWindowExceededReason`: too many requests per time window.
+  /// - `RpcInboundConstants.concurrentHandlersExceededReason`: too many in-flight RPC handlers.
+  /// - Replay uses the canonical `RpcErrorCode.getReason(replayDetected)`.
   String? _guardResultToReason(RpcRequestGuardResult result) {
     switch (result) {
       case RpcRequestGuardResult.allow:
         return null;
       case RpcRequestGuardResult.rateLimited:
-        return 'rate_window_exceeded';
+        return RpcInboundConstants.rateWindowExceededReason;
       case RpcRequestGuardResult.replayDetected:
-        return 'replay_detected';
+        return RpcErrorCode.getReason(RpcErrorCode.replayDetected);
     }
   }
 
   String _guardResultToTechnicalMessage(RpcRequestGuardResult result) {
     switch (result) {
       case RpcRequestGuardResult.allow:
-        return 'Unexpected guard result';
+        return RpcInboundConstants.unexpectedGuardResultTechnicalMessage;
       case RpcRequestGuardResult.rateLimited:
-        return 'Rate limit exceeded for rpc:request';
+        return RpcInboundConstants.rateLimitExceededForRpcRequestTechnicalMessage;
       case RpcRequestGuardResult.replayDetected:
-        return 'Duplicate request id within replay window';
+        return RpcInboundConstants.duplicateRequestIdWithinReplayWindowTechnicalMessage;
     }
   }
 }

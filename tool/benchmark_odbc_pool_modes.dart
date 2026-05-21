@@ -685,13 +685,22 @@ class _BenchmarkConfigRepository implements IAgentConfigRepository {
   Future<Result<List<Config>>> getAll() async => Success([_config()]);
 
   @override
+  Future<Result<List<Config>>> getAllMetadata() async => getAll();
+
+  @override
   Future<Result<Config>> getById(String id) async => Success(_config().copyWith(id: id));
+
+  @override
+  Future<Result<Config>> getByIdMetadata(String id) async => getById(id);
 
   @override
   Future<Result<Config>> save(Config config) async => Success(config);
 
   @override
   Future<Result<void>> delete(String id) async => Failure(domain.NotFoundFailure('Benchmark repository is read-only'));
+
+  @override
+  Future<Result<Config>> getCurrentConfigMetadata() async => getCurrentConfig();
 
   Config _config() {
     return Config(

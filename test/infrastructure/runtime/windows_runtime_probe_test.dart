@@ -49,6 +49,19 @@ void main() {
       );
     });
 
+    test('does not treat workstation fallback text as server when only build metadata mentions server', () async {
+      final probe = WindowsRuntimeProbe(
+        rtlGetVersionInvoker: (_) => 1,
+        operatingSystemVersionProvider: () =>
+            'Microsoft Windows [Version 10.0.26200.6584] (build on server-host-01)',
+      );
+
+      final result = await probe.detect();
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow().isServer, isFalse);
+    });
+
     test('records detection failure when fallback text cannot be parsed', () async {
       final probe = WindowsRuntimeProbe(
         rtlGetVersionInvoker: (_) => 1,

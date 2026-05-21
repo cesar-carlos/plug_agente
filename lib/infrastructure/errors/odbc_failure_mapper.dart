@@ -1,4 +1,7 @@
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
@@ -36,7 +39,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'connectionFailed': true,
           'retryable': true,
-          'reason': 'odbc_worker_crashed',
+          'reason': OdbcContextConstants.odbcWorkerCrashedReason,
           'user_message': 'A conexão ODBC foi interrompida internamente. Tente executar a operação novamente.',
         },
       );
@@ -49,7 +52,7 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'database': true,
-          'reason': 'odbc_driver_not_found',
+          'reason': OdbcContextConstants.odbcDriverNotFoundReason,
           'user_message':
               'O driver ODBC configurado nao foi encontrado neste computador. '
               'Revise o driver e a fonte de dados nas configuracoes.',
@@ -64,7 +67,7 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'connectionFailed': true,
-          'reason': 'authentication_failed',
+          'reason': OdbcContextConstants.authenticationFailedReason,
           'user_message':
               'Nao foi possivel autenticar no banco de dados. '
               'Verifique usuario, senha e permissoes.',
@@ -81,7 +84,7 @@ class OdbcFailureMapper {
           'connectionFailed': true,
           'timeout': true,
           'timeout_stage': 'connect',
-          'reason': 'connection_timeout',
+          'reason': OdbcContextConstants.connectionTimeoutReason,
           'user_message':
               'A conexao com o banco demorou mais do que o esperado. '
               'Confirme se o servidor esta acessivel e tente novamente.',
@@ -97,7 +100,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'connectionFailed': true,
           'retryable': _isRetryableConnection(sqlState),
-          'reason': 'server_unreachable',
+          'reason': OdbcContextConstants.serverUnreachableReason,
           'user_message':
               'Nao foi possivel conectar ao servidor do banco. '
               'Verifique host, porta, VPN e disponibilidade da rede.',
@@ -112,7 +115,7 @@ class OdbcFailureMapper {
         ...baseContext,
         'connectionFailed': true,
         'retryable': _isRetryableConnection(sqlState),
-        'reason': 'database_connection_failed',
+        'reason': OdbcContextConstants.databaseConnectionFailedReason,
         'user_message': 'Nao foi possivel estabelecer conexao com o banco de dados.',
       },
     );
@@ -133,7 +136,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'execution_cancelled',
+          'reason': OdbcContextConstants.executionCancelledReason,
           'rpc_error_code': RpcErrorCode.executionCancelled,
           'user_message': 'A consulta foi cancelada antes de concluir.',
         },
@@ -146,7 +149,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'odbc_malformed_payload',
+          'reason': OdbcContextConstants.odbcMalformedPayloadReason,
           'user_message': 'O banco retornou uma resposta que nao pode ser interpretada pelo agente.',
         },
       );
@@ -158,7 +161,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'transaction_rollback_failed',
+          'reason': OdbcContextConstants.transactionRollbackFailedReason,
           'retryable': error.category == ErrorCategory.transient,
           'user_message': 'A transacao falhou e o banco nao confirmou o rollback.',
         },
@@ -171,7 +174,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'odbc_resource_limit',
+          'reason': OdbcContextConstants.odbcResourceLimitReason,
           'retryable': true,
           'user_message': 'O limite de recursos ODBC foi atingido. Tente novamente em instantes.',
         },
@@ -186,7 +189,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'connectionFailed': true,
           'retryable': true,
-          'reason': 'odbc_worker_crashed',
+          'reason': OdbcContextConstants.odbcWorkerCrashedReason,
           'user_message': 'O worker ODBC foi interrompido durante a consulta. Tente novamente.',
         },
       );
@@ -198,7 +201,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'buffer_too_small',
+          'reason': OdbcContextConstants.bufferTooSmallReason,
           'user_message':
               'O resultado da consulta excede o buffer atual. '
               'Ative o streaming ou aumente o buffer de resultados.',
@@ -214,7 +217,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'timeout': true,
           'timeout_stage': 'sql',
-          'reason': 'query_timeout',
+          'reason': RpcSqlBudgetConstants.queryTimeoutReason,
           'user_message': 'A consulta demorou mais do que o permitido para concluir.',
         },
       );
@@ -228,7 +231,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'connectionFailed': true,
           'retryable': _isRetryableConnection(sqlState),
-          'reason': 'connection_lost_during_query',
+          'reason': OdbcContextConstants.connectionLostDuringQueryReason,
           'user_message':
               'A sessao com o banco de dados foi interrompida durante a consulta. '
               'Verifique rede, servidor e tente novamente.',
@@ -243,7 +246,7 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'retryable': true,
-          'reason': 'transient_query_failure',
+          'reason': OdbcContextConstants.transientQueryFailureReason,
           'user_message':
               'O banco retornou uma falha transitoria ao executar a consulta. '
               'Tente novamente.',
@@ -265,7 +268,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'sql_permission_denied',
+          'reason': OdbcContextConstants.sqlPermissionDeniedReason,
           'user_message': userMessage,
           if (deniedResources.isNotEmpty) 'resource': deniedResources.first,
           if (deniedResources.isNotEmpty) 'denied_resources': deniedResources,
@@ -280,7 +283,7 @@ class OdbcFailureMapper {
         context: {
           ...baseContext,
           'operation': 'sql_validation',
-          'reason': 'sql_validation_failed',
+          'reason': SqlPipelineContextConstants.sqlValidationFailedReason,
           'user_message':
               'A consulta nao pode ser executada porque contem um erro de '
               'sintaxe ou referencia invalida.',
@@ -293,7 +296,7 @@ class OdbcFailureMapper {
       cause: error,
       context: {
         ...baseContext,
-        'reason': 'sql_execution_failed',
+        'reason': OdbcContextConstants.sqlExecutionFailedReason,
         'user_message': 'O banco de dados retornou um erro ao executar a consulta.',
       },
     );
@@ -318,7 +321,9 @@ class OdbcFailureMapper {
         ...baseContext,
         'poolExhausted': isExhausted,
         'retryable': contextRetryable is bool ? contextRetryable : isExhausted,
-        'reason': contextReason ?? (isExhausted ? 'pool_exhausted' : 'pool_error'),
+        'reason':
+            contextReason ??
+            (isExhausted ? OdbcContextConstants.poolExhaustedReason : OdbcContextConstants.poolErrorReason),
         'user_message':
             contextUserMessage ??
             (isExhausted
@@ -343,7 +348,7 @@ class OdbcFailureMapper {
         cause: error,
         context: {
           ...baseContext,
-          'reason': 'execution_cancelled',
+          'reason': OdbcContextConstants.executionCancelledReason,
           'rpc_error_code': RpcErrorCode.executionCancelled,
           'user_message': 'A consulta em streaming foi cancelada.',
         },

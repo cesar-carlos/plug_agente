@@ -31,13 +31,7 @@ class RuntimePolicyEvaluator {
     }
 
     if (versionInfo.isWindows10OrLater && versionInfo.isServer) {
-      return RuntimeCapabilities.degraded(
-        reasons: [
-          'Windows Server detectado',
-          'Versão: ${versionInfo.versionString}',
-          'Recursos de desktop desabilitados por política de servidor',
-        ],
-      );
+      return RuntimeCapabilities.serverShellLimited();
     }
 
     return RuntimeCapabilities.full();

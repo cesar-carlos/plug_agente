@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -16,7 +16,6 @@ import 'package:plug_agente/presentation/mappers/agent_profile_validation_messag
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
-import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form_components.dart';
@@ -50,6 +49,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   late final ConfigFormController _formController;
   late final OpenCnpjClient _openCnpjClient;
   late final ViaCepClient _viaCepClient;
+  ConfigProvider? _configProvider;
   bool _isLookingUpCnpj = false;
   bool _isLookingUpCep = false;
   bool _isSaving = false;
@@ -62,11 +62,36 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     _viaCepClient = widget.viaCepClient ?? getIt<ViaCepClient>();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (widget.configId != null) {
-        await _loadConfig(widget.configId!);
-      }
-      _checkAndInitializeFields();
+      _setupConfigListener();
+      unawaited(_initializePage());
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant AgentProfilePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.configId != widget.configId) {
+      _formController.resetForConfig();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_initializePage());
+      });
+    }
+  }
+
+  Future<void> _initializePage() async {
+    if (!mounted) {
+      return;
+    }
+    if (widget.configId != null) {
+      await _loadConfig(widget.configId!);
+      if (!mounted) {
+        return;
+      }
+    }
+    _initializeFormIfReady();
   }
 
   Future<void> _loadConfig(String configId) async {
@@ -74,29 +99,31 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     await configProvider.loadConfigById(configId);
   }
 
-  void _checkAndInitializeFields() {
+  void _setupConfigListener() {
+    _configProvider = context.read<ConfigProvider>();
+    _configProvider!.removeListener(_onConfigStateChanged);
+    _configProvider!.addListener(_onConfigStateChanged);
+  }
+
+  void _onConfigStateChanged() {
+    _initializeFormIfReady(configProvider: _configProvider);
+  }
+
+  void _initializeFormIfReady({
+    ConfigProvider? configProvider,
+  }) {
     if (!mounted) {
       return;
     }
-
-    final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
-      _formController.initializeFromConfig(configProvider.currentConfig);
-      return;
-    }
-
-    if (configProvider.isLoading) {
-      unawaited(
-        Future<void>.delayed(
-          AppConstants.formTransitionDelay,
-          _checkAndInitializeFields,
-        ),
-      );
+    final provider = configProvider ?? context.read<ConfigProvider>();
+    if (!_formController.fieldsInitialized && !provider.isLoading && provider.currentConfig != null) {
+      _formController.initializeFromConfig(provider.currentConfig);
     }
   }
 
   @override
   void dispose() {
+    _configProvider?.removeListener(_onConfigStateChanged);
     _formController.dispose();
     super.dispose();
   }
@@ -241,19 +268,24 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       return;
     }
 
+    getIt<AgentRegisterProfileProvider>().clearCache();
+
     var hubSyncFailed = false;
     String? hubSyncErrorMessage;
     var hubSyncSucceeded = false;
-    final connectionProvider = context.read<ConnectionProvider>();
     final authProvider = context.read<AuthProvider>();
     final savedConfig = configProvider.currentConfig;
-    final authHeaderToken = authProvider.currentToken?.token.trim();
+    final authHeaderToken = authProvider
+        .currentTokenForConfig(
+          savedConfig?.id,
+        )
+        ?.token
+        .trim();
     final configStoredToken = savedConfig?.authToken?.trim();
     final accessToken = (authHeaderToken != null && authHeaderToken.isNotEmpty)
         ? authHeaderToken
         : (configStoredToken ?? '');
-    if (connectionProvider.isConnected &&
-        accessToken.isNotEmpty &&
+    if (accessToken.isNotEmpty &&
         savedConfig != null &&
         savedConfig.serverUrl.trim().isNotEmpty &&
         savedConfig.agentId.trim().isNotEmpty) {
@@ -275,7 +307,9 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
           profileUpdatedAtIso: synced.profileUpdatedAt,
         );
         persistResult.fold(
-          (_) {},
+          (_) {
+            getIt<AgentRegisterProfileProvider>().clearCache();
+          },
           (Object failure) {
             AppLogger.warning(
               'Hub profile synced but failed to persist catalog version locally: '
@@ -789,8 +823,8 @@ class _AgentProfileSaveAction extends StatelessWidget {
       child: AppButton(
         label: saveLabel,
         isLoading: isLoading,
-        onPressed: () {
-          unawaited(onPressed());
+        onPressed: () async {
+          await onPressed();
         },
       ),
     );

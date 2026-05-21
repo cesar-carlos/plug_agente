@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:result_dart/result_dart.dart' as res;
@@ -565,7 +566,7 @@ void main() {
         fail('expected ServerFailure');
       }
       expect(error.message, contains('unexpected error'));
-      expect(error.context['reason'], equals('unexpected_task_error'));
+      expect(error.context['reason'], equals(SqlPipelineContextConstants.unexpectedTaskErrorReason));
     });
 
     test('should report queue size and active workers correctly', () async {
@@ -614,7 +615,7 @@ void main() {
         fail('expected ConfigurationFailure');
       }
       expect(excDisposed.message, contains('disposed'));
-      expect(excDisposed.context['reason'], equals('queue_disposed'));
+      expect(excDisposed.context['reason'], equals(SqlPipelineContextConstants.queueDisposedReason));
     });
 
     test('should complete pending requests with error on disposal', () async {
@@ -649,7 +650,7 @@ void main() {
         fail('expected ConfigurationFailure');
       }
       expect(error.message, contains('disposed before request could be processed'));
-      expect(error.context['reason'], equals('queue_disposed'));
+      expect(error.context['reason'], equals(SqlPipelineContextConstants.queueDisposedReason));
       expect((error.context['user_message'] as String?)?.isNotEmpty, isTrue);
     });
 

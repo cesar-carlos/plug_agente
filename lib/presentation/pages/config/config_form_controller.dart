@@ -143,34 +143,36 @@ class ConfigFormController {
   }
 
   void updateAllFieldsToProvider(ConfigProvider configProvider) {
-    configProvider.updateHost(hostController.text);
-    configProvider.updatePort(int.tryParse(portController.text) ?? 1433);
-    configProvider.updateDatabaseName(databaseNameController.text);
-    configProvider.updateUsername(usernameController.text);
-    configProvider.updatePassword(passwordController.text);
-    configProvider.updateDriverName(driverNameController.text);
-    configProvider.updateOdbcDriverName(odbcDriverNameController.text);
-    configProvider.updateServerUrl(serverUrlController.text);
-    configProvider.updateAgentId(agentIdController.text);
-    configProvider.updateAuthUsername(
-      authUsernameController.text.trim().isEmpty ? null : authUsernameController.text.trim(),
-    );
-    configProvider.updateAuthPassword(
-      authPasswordController.text.trim().isEmpty ? null : authPasswordController.text.trim(),
-    );
-    configProvider.updateNome(nomeController.text);
-    configProvider.updateNomeFantasia(nomeFantasiaController.text);
-    configProvider.updateCnaeCnpjCpf(cnaeCnpjCpfController.text);
-    configProvider.updateTelefone(telefoneController.text);
-    configProvider.updateCelular(celularController.text);
-    configProvider.updateEmail(emailController.text);
-    configProvider.updateEndereco(enderecoController.text);
-    configProvider.updateNumeroEndereco(numeroEnderecoController.text);
-    configProvider.updateBairro(bairroController.text);
-    configProvider.updateCep(cepController.text);
-    configProvider.updateNomeMunicipio(nomeMunicipioController.text);
-    configProvider.updateUfMunicipio(ufMunicipioController.text);
-    configProvider.updateObservacao(observacaoController.text);
+    configProvider.batchUpdate(() {
+      configProvider.updateHost(hostController.text);
+      configProvider.updatePort(int.tryParse(portController.text) ?? 1433);
+      configProvider.updateDatabaseName(databaseNameController.text);
+      configProvider.updateUsername(usernameController.text);
+      configProvider.updatePassword(passwordController.text);
+      configProvider.updateDriverName(driverNameController.text);
+      configProvider.updateOdbcDriverName(odbcDriverNameController.text);
+      configProvider.updateServerUrl(serverUrlController.text);
+      configProvider.updateAgentId(agentIdController.text);
+      configProvider.updateAuthUsername(
+        authUsernameController.text.trim().isEmpty ? null : authUsernameController.text.trim(),
+      );
+      configProvider.updateAuthPassword(
+        authPasswordController.text.trim().isEmpty ? null : authPasswordController.text.trim(),
+      );
+      configProvider.updateNome(nomeController.text);
+      configProvider.updateNomeFantasia(nomeFantasiaController.text);
+      configProvider.updateCnaeCnpjCpf(cnaeCnpjCpfController.text);
+      configProvider.updateTelefone(telefoneController.text);
+      configProvider.updateCelular(celularController.text);
+      configProvider.updateEmail(emailController.text);
+      configProvider.updateEndereco(enderecoController.text);
+      configProvider.updateNumeroEndereco(numeroEnderecoController.text);
+      configProvider.updateBairro(bairroController.text);
+      configProvider.updateCep(cepController.text);
+      configProvider.updateNomeMunicipio(nomeMunicipioController.text);
+      configProvider.updateUfMunicipio(ufMunicipioController.text);
+      configProvider.updateObservacao(observacaoController.text);
+    });
   }
 
   void dispose() {

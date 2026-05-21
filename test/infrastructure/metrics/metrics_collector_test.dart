@@ -443,6 +443,33 @@ void main() {
       });
     });
 
+    group('recordRpcAgentActionBatchReadLimitRejected', () {
+      test('should increment batch read limit rejected counter', () {
+        collector.recordRpcAgentActionBatchReadLimitRejected();
+        collector.recordRpcAgentActionBatchReadLimitRejected();
+
+        expect(
+          collector.getSnapshot()['rpc_remote_agent_action_batch_read_limit_rejected'],
+          2,
+        );
+      });
+    });
+
+    group('recordRpcAgentActionRemoteOutcome', () {
+      test('should increment bounded counters for published methods only', () {
+        collector.recordRpcAgentActionRemoteOutcome('agent.action.run', success: true);
+        collector.recordRpcAgentActionRemoteOutcome('agent.action.run', success: false);
+        collector.recordRpcAgentActionRemoteOutcome('agent.action.validateRun', success: true);
+        collector.recordRpcAgentActionRemoteOutcome('unknown.method', success: true);
+
+        final snapshot = collector.getSnapshot();
+        expect(snapshot['rpc_remote_agent_action_run_success'], 1);
+        expect(snapshot['rpc_remote_agent_action_run_error'], 1);
+        expect(snapshot['rpc_remote_agent_action_validate_run_success'], 1);
+        expect(snapshot.containsKey('rpc_remote_agent_action_validate_run_error'), isFalse);
+      });
+    });
+
     group('exportToJson', () {
       test('should export metrics as JSON', () {
         // Arrange

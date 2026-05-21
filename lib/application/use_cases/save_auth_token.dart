@@ -6,7 +6,7 @@ class SaveAuthToken {
   SaveAuthToken(this._service);
   final AuthService _service;
 
-  Future<Result<void>> call(AuthToken token) async {
-    return _service.saveAuthToken(token);
+  Future<Result<void>> call(String configId, AuthToken token) async {
+    return _service.saveAuthToken(configId, token);
   }
 }

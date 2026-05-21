@@ -90,6 +90,12 @@ Antes de mudar areas sensiveis, consulte tambem:
 - configuracao de testes E2E:
   `docs/testing/e2e_setup.md`
   e `test/helpers/e2e_env.dart`
+- acoes agendadas / execucoes (plano e gate local):
+  `docs/implemente/plano_acoes_agendadas_execucoes.md`;
+  homologacao local/CI: `tool/run_agent_actions_operational_gate.ps1` (atalho);
+  ou `tool/preflight_agent_actions_production.ps1 -RunContractTests` /
+  `tool/homologate_hub_agent_actions.ps1 -RunContractTests`
+  (ver `docs/testing/e2e_setup.md`, secao Hub `agent.action.*`)
 
 ## Usage Rules
 

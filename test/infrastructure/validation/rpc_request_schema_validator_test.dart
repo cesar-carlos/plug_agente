@@ -1,5 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -312,6 +314,269 @@ void main() {
           'id': 'req-1',
           'params': {
             'extra': 1,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should accept agent.action.getExecution params with token alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'execution_id': 'execution-1',
+            'auth': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should accept agent.action.getExecution params with output paging fields', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'execution_id': 'execution-1',
+            'include_output': true,
+            'stdout_offset': 0,
+            'stdout_cursor': 0,
+            'output_offset': 0,
+            'stderr_offset': 10,
+            'stderr_cursor': 10,
+            'max_output_bytes': 4096,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject agent.action.getExecution when max_output_bytes is zero', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'execution_id': 'execution-1',
+            'max_output_bytes': 0,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+      });
+
+      test('should reject agent.action.getExecution when max_output_bytes exceeds cap', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'execution_id': 'execution-1',
+            'max_output_bytes': 600000,
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+      });
+
+      test('should reject agent.action.getExecution without execution id', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'auth': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should accept agent.action.run params with optional trace_id and requested_by', () {
+        final result = validator.validateSingle(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'id': 1,
+          'params': <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-1',
+            'trace_id': 'trace-1',
+            'requested_by': 'hub-user',
+          },
+        });
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should accept agent.action.run params with idempotency key and token alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'remote-key-1',
+            'clientToken': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject agent.action.run ad-hoc params', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'remote-key-1',
+            'command': 'dir',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should reject agent.action.run context param with remote_context_not_supported reason', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'remote-key-1',
+            'context_json': <String, dynamic>{'key': 'value'},
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as ActionValidationFailure;
+        expect(err.code, AgentActionFailureCode.remoteContextNotSupported);
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+        expect(err.context['reason'], AgentActionRpcConstants.remoteContextNotSupportedRpcReason);
+        expect(err.context['field'], 'context_json');
+      });
+
+      test('should reject agent.action.run without idempotency key', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should accept agent.action.validateRun params with idempotency key and token alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'remote-key-validate-1',
+            'clientToken': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject agent.action.validateRun ad-hoc params', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+            'idempotency_key': 'remote-key-validate-1',
+            'command': 'dir',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should reject agent.action.validateRun without idempotency key', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'action_id': 'action-1',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isError(), isTrue);
+        final err = result.exceptionOrNull()! as domain.ValidationFailure;
+        expect(err.context['rpc_error_code'], RpcErrorCode.invalidParams);
+      });
+
+      test('should accept agent.action.cancel params with token alias', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionCancelRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'execution_id': 'execution-1',
+            'auth': 'token-abc',
+          },
+        };
+
+        final result = validator.validateSingle(data);
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should reject agent.action.cancel without execution id', () {
+        final data = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionCancelRpcMethodName,
+          'id': 'req-1',
+          'params': {
+            'auth': 'token-abc',
           },
         };
 

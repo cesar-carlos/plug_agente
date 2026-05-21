@@ -23,6 +23,7 @@ Estado implementado atual:
 
 | Item                                                              | Concluido em |
 | ----------------------------------------------------------------- | ------------ |
+| Plug JSON-RPC `agent.action.*` remoto (incl. `validateRun` + `skipped`), OpenRPC `2.11.2`, fixtures `test/fixtures/rpc/` | v2.11.2 |
 | `api_version` + `meta` obrigatorios por contrato                  | v2.1         |
 | Semantica formal de notification JSON-RPC                         | v2.1         |
 | Regras formais de batch (ordem, IDs, atomicidade)                 | v2.1         |

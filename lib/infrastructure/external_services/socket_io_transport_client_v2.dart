@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/actions/agent_actions_remote_capability_builder.dart';
+import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -11,6 +14,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -32,6 +36,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbou
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/stream_emitter_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
@@ -52,11 +57,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
     ProtocolMetricsCollector? protocolMetricsCollector,
     OpenRpcDocumentLoader? openRpcDocumentLoader,
     PayloadLogSummarizer? logSummarizer,
+    AgentActionRuntimeStateGuard? actionRuntimeStateGuard,
+    AgentActionLocalRunnerRegistry? agentActionLocalRunnerRegistry,
+    ElevatedActionRunnerReadinessService? elevatedRunnerReadiness,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
+    MetricsCollector? metricsCollector,
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
+       _actionRuntimeStateGuard = actionRuntimeStateGuard,
+       _agentActionLocalRunnerRegistry = agentActionLocalRunnerRegistry,
+       _elevatedRunnerReadiness = elevatedRunnerReadiness,
+       _metricsCollector = metricsCollector,
        _payloadSigner = payloadSigner,
        _payloadSigningConfig =
            payloadSigningConfig ??
@@ -134,6 +147,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       emitRpcResponse: _emitRpcResponse,
       emitEvent: _emitEventAsync,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
+      metricsCollector: _metricsCollector,
     );
   }
 
@@ -141,6 +155,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final ProtocolNegotiator _negotiator;
   final RpcMethodDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
+  final AgentActionRuntimeStateGuard? _actionRuntimeStateGuard;
+  final AgentActionLocalRunnerRegistry? _agentActionLocalRunnerRegistry;
+  final ElevatedActionRunnerReadinessService? _elevatedRunnerReadiness;
+  final MetricsCollector? _metricsCollector;
   final PayloadSigner? _payloadSigner;
   final PayloadSigningConfig _payloadSigningConfig;
   final ProtocolMetricsCollector? _protocolMetricsCollector;
@@ -235,7 +253,37 @@ class SocketIOTransportClientV2 implements ITransportClient {
       signatureRequired: _localRequiresIncomingSignature,
       signatureAlgorithms: _localSignatureAlgorithms,
       streamingResults: _featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb,
+      agentActions: _featureFlags.enableAgentActions && _featureFlags.enableRemoteAgentActions
+          ? _agentActionsCapability()
+          : null,
     );
+  }
+
+  Map<String, dynamic> _agentActionsCapability() {
+    final runtimeSnapshot = _actionRuntimeStateGuard?.snapshot;
+    final status = runtimeSnapshot?.status.name ?? 'ready';
+    final unavailableTypes =
+        runtimeSnapshot?.unavailableActionTypes.map((type) => type.name).toList(growable: false) ?? const <String>[];
+
+    return AgentActionsRemoteCapabilityBuilder.build(
+      supportedTypes: _agentActionSupportedTypeNames(),
+      status: status,
+      maintenanceMode: _featureFlags.enableAgentActionsMaintenanceMode || status == 'maintenance',
+      unavailableTypes: unavailableTypes,
+      remoteAdHoc: _featureFlags.enableRemoteAdHocAgentActions,
+      elevatedAllowed: _featureFlags.enableElevatedAgentActions,
+      supportsElevated: _featureFlags.enableElevatedAgentActions && (_elevatedRunnerReadiness?.isConfigured ?? false),
+    );
+  }
+
+  /// Types with a registered local runner, aligned with `agent_actions.supported_types` in health payloads.
+  List<String> _agentActionSupportedTypeNames() {
+    final registry = _agentActionLocalRunnerRegistry;
+    if (registry == null) {
+      return const <String>['commandLine'];
+    }
+    final names = registry.supportedTypes.map((type) => type.name).toList(growable: false);
+    return names.isEmpty ? const <String>['commandLine'] : names;
   }
 
   bool get _localShouldSignOutgoing => _featureFlags.enablePayloadSigning && _payloadSigner != null;
