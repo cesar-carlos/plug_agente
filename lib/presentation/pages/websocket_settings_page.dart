@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
@@ -44,13 +42,10 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     super.initState();
     _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.configId != null) {
-        _loadConfig(widget.configId!);
-      }
-      _checkAndInitializeFields();
       _setupAuthListener();
       _setupConnectionListener();
       _setupConfigListener();
+      unawaited(_initializePage());
     });
   }
 
@@ -60,13 +55,27 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     if (oldWidget.configId != widget.configId) {
       _formController.resetForConfig();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (widget.configId != null) {
-          _loadConfig(widget.configId!);
+        if (!mounted) {
+          return;
         }
-        _checkAndInitializeFields();
+        unawaited(_initializePage());
       });
     }
+  }
+
+  Future<void> _initializePage() async {
+    if (!mounted) {
+      return;
+    }
+
+    if (widget.configId != null) {
+      await _loadConfig(widget.configId!);
+      if (!mounted) {
+        return;
+      }
+    }
+
+    _initializeFormIfReady();
   }
 
   Future<void> _loadConfig(String configId) async {
@@ -100,16 +109,21 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     final authProvider = context.read<AuthProvider>();
+    final currentConfigId = context.read<ConfigProvider>().currentConfig?.id;
     final currentStatus = authProvider.status;
     final currentError = authProvider.error;
+    final isCurrentPageConfig = authProvider.activeConfigId == currentConfigId;
 
-    if (_previousAuthStatus != AuthStatus.authenticated &&
+    if (isCurrentPageConfig &&
+        _previousAuthStatus != AuthStatus.authenticated &&
         currentStatus == AuthStatus.authenticated &&
         currentError.isEmpty) {
       _showSuccessModal();
     }
 
-    if (currentError.isNotEmpty && currentError != _previousAuthError) {
+    if (isCurrentPageConfig &&
+        currentError.isNotEmpty &&
+        currentError != _previousAuthError) {
       _showErrorModal(currentError);
     }
 
@@ -123,14 +137,20 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     final connectionProvider = context.read<ConnectionProvider>();
+    final currentConfigId = context.read<ConfigProvider>().currentConfig?.id;
     final currentStatus = connectionProvider.status;
     final currentError = connectionProvider.error;
+    final isCurrentPageConfig = connectionProvider.activeConfigId == currentConfigId;
 
-    if (_previousConnectionStatus != ConnectionStatus.connected && currentStatus == ConnectionStatus.connected) {
+    if (isCurrentPageConfig &&
+        _previousConnectionStatus != ConnectionStatus.connected &&
+        currentStatus == ConnectionStatus.connected) {
       _showConnectionSuccessModal();
     }
 
-    if (currentError.isNotEmpty && currentError != _previousConnectionError) {
+    if (isCurrentPageConfig &&
+        currentError.isNotEmpty &&
+        currentError != _previousConnectionError) {
       _showConnectionErrorModal(currentError);
     }
 
@@ -144,6 +164,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     final configProvider = context.read<ConfigProvider>();
+    _initializeFormIfReady(configProvider: configProvider);
     final currentError = configProvider.error;
 
     if (currentError.isNotEmpty && currentError != _previousConfigError) {
@@ -226,27 +247,16 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     );
   }
 
-  void _checkAndInitializeFields() {
+  void _initializeFormIfReady({
+    ConfigProvider? configProvider,
+  }) {
     if (!mounted) {
       return;
     }
 
-    final configProvider = context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
-      _formController.initializeFromConfig(configProvider.currentConfig);
-    } else if (configProvider.isLoading) {
-      unawaited(
-        Future.delayed(
-          AppConstants.formTransitionDelay,
-          _checkAndInitializeFields,
-        ).catchError(
-          (Object e, StackTrace? s) => AppLogger.warning(
-            'Form field initialization check failed',
-            e,
-            s,
-          ),
-        ),
-      );
+    final provider = configProvider ?? context.read<ConfigProvider>();
+    if (!_formController.fieldsInitialized && !provider.isLoading && provider.currentConfig != null) {
+      _formController.initializeFromConfig(provider.currentConfig);
     }
   }
 
@@ -262,7 +272,6 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final configProvider = context.read<ConfigProvider>();
 
     return ScaffoldPage(
       header: PageHeader(
@@ -276,11 +285,17 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
         child: AppLayout.centeredContent(
           child: _WebSocketSettingsTabbedContent(
             formController: _formController,
-            configProvider: configProvider,
+            onSaveConfig: _saveCurrentConfig,
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _saveCurrentConfig() async {
+    final configProvider = context.read<ConfigProvider>();
+    _formController.updateAllFieldsToProvider(configProvider);
+    await configProvider.saveConfig();
   }
 }
 
@@ -289,11 +304,11 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
 class _WebSocketSettingsTabbedContent extends StatefulWidget {
   const _WebSocketSettingsTabbedContent({
     required this.formController,
-    required this.configProvider,
+    required this.onSaveConfig,
   });
 
   final ConfigFormController formController;
-  final ConfigProvider configProvider;
+  final Future<void> Function() onSaveConfig;
 
   @override
   State<_WebSocketSettingsTabbedContent> createState() => _WebSocketSettingsTabbedContentState();
@@ -317,20 +332,9 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
         AppFluentTabItem(
           icon: FluentIcons.plug_connected,
           text: l10n.tabWebSocketConnection,
-          body: ListenableBuilder(
-            listenable: widget.configProvider,
-            builder: (BuildContext context, Widget? _) {
-              return WebSocketConfigSection(
-                formController: widget.formController,
-                configProvider: widget.configProvider,
-                onSaveConfig: () {
-                  widget.formController.updateAllFieldsToProvider(
-                    widget.configProvider,
-                  );
-                  widget.configProvider.saveConfig();
-                },
-              );
-            },
+          body: WebSocketConfigSection(
+            formController: widget.formController,
+            onSaveConfig: widget.onSaveConfig,
           ),
         ),
         AppFluentTabItem(

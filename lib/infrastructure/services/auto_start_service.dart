@@ -72,7 +72,9 @@ class AutoStartService implements IStartupService {
   }
 
   @override
-  Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration() async {
+  Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
+    bool allowElevation = true,
+  }) async {
     if (!Platform.isWindows) {
       return const Success(StartupLaunchConfigurationStatus.unchanged);
     }
@@ -93,6 +95,14 @@ class AutoStartService implements IStartupService {
         return const Success(StartupLaunchConfigurationStatus.unchanged);
       }
 
+      if (!allowElevation) {
+        developer.log(
+          'Global auto-start entry needs repair, but elevation is disabled for this validation pass.',
+          name: 'startup_service',
+          level: 800,
+        );
+        return const Success(StartupLaunchConfigurationStatus.needsRepair);
+      }
       developer.log(
         'Global auto-start entry is missing launch arguments. Repairing.',
         name: 'startup_service',

@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -33,6 +35,7 @@ final class AdaptiveOdbcConnectionPool
     required OdbcNativeConnectionPool nativePool,
     required FeatureFlags featureFlags,
     required MetricsCollector metricsCollector,
+    ActiveConfigResolver? activeConfigResolver,
     IAgentConfigRepository? configRepository,
     Duration nativeCircuitBreakDuration = const Duration(minutes: 1),
     int nativeCircuitBreakThreshold = 3,
@@ -43,6 +46,7 @@ final class AdaptiveOdbcConnectionPool
        _nativePool = nativePool,
        _featureFlags = featureFlags,
        _metrics = metricsCollector,
+       _activeConfigResolver = activeConfigResolver,
        _configRepository = configRepository,
        _nativeCircuitBreakDuration = nativeCircuitBreakDuration,
        _nativeCircuitBreakThreshold = nativeCircuitBreakThreshold,
@@ -54,6 +58,7 @@ final class AdaptiveOdbcConnectionPool
   final OdbcNativeConnectionPool _nativePool;
   final FeatureFlags _featureFlags;
   final MetricsCollector _metrics;
+  final ActiveConfigResolver? _activeConfigResolver;
   final IAgentConfigRepository? _configRepository;
   final Duration _nativeCircuitBreakDuration;
   final int _nativeCircuitBreakThreshold;
@@ -391,7 +396,7 @@ final class AdaptiveOdbcConnectionPool
         OdbcErrorInspector.isTimeout(error) ||
         _hasFailureReason(error, 'native_pool_custom_options_unsupported') ||
         _hasFailureReason(error, 'buffer_too_small') ||
-        _hasFailureReason(error, 'odbc_worker_busy_connect') ||
+        _hasFailureReason(error, OdbcContextConstants.odbcWorkerBusyConnectReason) ||
         _looksLikePoolHealthFailure(error);
   }
 
@@ -515,12 +520,16 @@ final class AdaptiveOdbcConnectionPool
   }
 
   Future<_AdaptiveDriverInfo?> _loadDriverInfo() async {
-    final repository = _configRepository;
-    if (repository == null) {
+    final resolver = _activeConfigResolver;
+    if (resolver == null && _configRepository == null) {
       return null;
     }
 
-    final configResult = await repository.getCurrentConfig();
+    final configResult = resolver != null
+        ? await resolver.resolveActiveOrFallback(
+            metadataOnly: true,
+          )
+        : await _configRepository!.getCurrentConfigMetadata();
     return configResult.fold(
       (config) {
         final databaseType = _mapDriverNameToDatabaseType(config.driverName);
@@ -544,7 +553,6 @@ final class AdaptiveOdbcConnectionPool
       config.driverName,
       config.odbcDriverName,
       _shortStableHash(config.connectionString),
-      config.updatedAt.millisecondsSinceEpoch,
     ].join('|');
   }
 

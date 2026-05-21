@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
@@ -117,7 +118,7 @@ void main() {
         (_) => fail('Expected failure'),
         (f) {
           final failure = f as domain.Failure;
-          expect(failure.context['reason'], equals('token_revoked'));
+          expect(failure.context['reason'], equals(AuthorizationContextConstants.tokenRevokedReason));
         },
       );
     });
@@ -360,7 +361,7 @@ void main() {
           (_) => fail('Expected failure'),
           (failure) {
             final authFailure = failure as domain.Failure;
-            expect(authFailure.context['reason'], equals('token_revoked'));
+            expect(authFailure.context['reason'], equals(AuthorizationContextConstants.tokenRevokedReason));
           },
         );
         verify(

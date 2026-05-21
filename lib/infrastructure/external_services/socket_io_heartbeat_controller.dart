@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 
 /// Owns Socket.IO hub heartbeat timers and missed-ack counting.
 ///
@@ -92,7 +93,7 @@ final class SocketIoHeartbeatController {
     }
 
     logMessage('ERROR', 'connection_stale', {
-      'reason': 'missed_heartbeat_ack',
+      'reason': RpcStreamingConstants.missedHeartbeatAckReason,
       'missed_heartbeats': _missedHeartbeats,
     });
     stop();

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -242,7 +243,7 @@ void main() {
       if (error is! ConfigurationFailure) {
         fail('expected ConfigurationFailure');
       }
-      expect(error.context['reason'], equals('queue_disposed'));
+      expect(error.context['reason'], equals(SqlPipelineContextConstants.queueDisposedReason));
     });
 
     test('should include source RPC request id in batch queue failures', () async {
@@ -323,7 +324,7 @@ void main() {
       if (error is! ConfigurationFailure) {
         fail('expected ConfigurationFailure');
       }
-      expect(error.context['reason'], equals('queue_disposed'));
+      expect(error.context['reason'], equals(SqlPipelineContextConstants.queueDisposedReason));
     });
   });
 }

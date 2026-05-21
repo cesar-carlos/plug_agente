@@ -2,24 +2,20 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:plug_agente/application/use_cases/login_user.dart';
-import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
-import 'package:plug_agente/application/use_cases/save_auth_token.dart';
+import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
-class MockLoginUser extends Mock implements LoginUser {}
-
-class MockRefreshAuthToken extends Mock implements RefreshAuthToken {}
-
-class MockSaveAuthToken extends Mock implements SaveAuthToken {}
+class MockHubSessionCoordinator extends Mock implements HubSessionCoordinator {}
 
 void main() {
+  const configId = 'cfg-1';
+  const serverUrl = 'server_url';
+
   setUpAll(() {
-    // Register fallback values for mocktail
     registerFallbackValue(AuthCredentials.test());
     registerFallbackValue(
       const AuthToken(
@@ -31,129 +27,115 @@ void main() {
 
   group('AuthProvider', () {
     late AuthProvider provider;
-    late MockLoginUser mockLoginUseCase;
-    late MockRefreshAuthToken mockRefreshUseCase;
-    late MockSaveAuthToken mockSaveUseCase;
+    late MockHubSessionCoordinator mockHubSessionCoordinator;
 
     setUp(() {
-      mockLoginUseCase = MockLoginUser();
-      mockRefreshUseCase = MockRefreshAuthToken();
-      mockSaveUseCase = MockSaveAuthToken();
-      provider = AuthProvider(
-        mockLoginUseCase,
-        mockRefreshUseCase,
-        mockSaveUseCase,
-      );
+      mockHubSessionCoordinator = MockHubSessionCoordinator();
+      provider = AuthProvider(mockHubSessionCoordinator);
     });
 
     group('login', () {
       test('should set authenticated status when login succeeds', () async {
-        // Arrange
         const token = AuthToken(
           token: 'test_token',
           refreshToken: 'test_refresh_token',
         );
         when(
-          () => mockLoginUseCase('server_url', any()),
+          () => mockHubSessionCoordinator.login(
+            configId: configId,
+            serverUrl: serverUrl,
+            credentials: any(named: 'credentials'),
+          ),
         ).thenAnswer((_) async => const Success(token));
-        when(
-          () => mockSaveUseCase(token),
-        ).thenAnswer((_) async => const Success(unit));
 
-        // Act
-        await provider.login('server_url', AuthCredentials.test());
+        await provider.login(
+          configId: configId,
+          serverUrl: serverUrl,
+          credentials: AuthCredentials.test(),
+        );
 
-        // Assert
         expect(provider.isAuthenticated, isTrue);
         expect(provider.status, equals(AuthStatus.authenticated));
+        expect(provider.currentToken, token);
+        expect(provider.activeConfigId, configId);
+        expect(provider.isAuthenticatedForConfig(configId), isTrue);
         expect(provider.error, isEmpty);
       });
 
-      test(
-        'should set error status when login fails with ValidationFailure',
-        () async {
-          // Arrange
-          final failure = domain_errors.ValidationFailure(
-            'Invalid credentials',
-          );
-          when(
-            () => mockLoginUseCase('server_url', any()),
-          ).thenAnswer((_) async => Failure(failure));
-
-          // Act
-          await provider.login('server_url', AuthCredentials.test());
-
-          // Assert
-          expect(provider.isAuthenticated, isFalse);
-          expect(provider.status, equals(AuthStatus.error));
-          expect(provider.error, contains('Invalid credentials'));
-        },
-      );
-
-      test(
-        'should set error status when login fails with NetworkFailure',
-        () async {
-          // Arrange
-          final failure = domain_errors.NetworkFailure('Connection timeout');
-          when(
-            () => mockLoginUseCase('server_url', any()),
-          ).thenAnswer((_) async => Failure(failure));
-
-          // Act
-          await provider.login('server_url', AuthCredentials.test());
-
-          // Assert
-          expect(provider.isAuthenticated, isFalse);
-          expect(provider.status, equals(AuthStatus.error));
-          expect(provider.error, contains('Connection timeout'));
-        },
-      );
-
-      test('should set error status when saving token fails', () async {
-        // Arrange
-        const token = AuthToken(
-          token: 'test_token',
-          refreshToken: 'test_refresh_token',
-        );
+      test('should set error status when login fails', () async {
+        final failure = domain_errors.ValidationFailure('Invalid credentials');
         when(
-          () => mockLoginUseCase('server_url', any()),
-        ).thenAnswer((_) async => const Success(token));
-        when(() => mockSaveUseCase(token)).thenAnswer(
-          (_) async => Failure(domain_errors.DatabaseFailure('Save failed')),
+          () => mockHubSessionCoordinator.login(
+            configId: configId,
+            serverUrl: serverUrl,
+            credentials: any(named: 'credentials'),
+          ),
+        ).thenAnswer((_) async => Failure(failure));
+
+        await provider.login(
+          configId: configId,
+          serverUrl: serverUrl,
+          credentials: AuthCredentials.test(),
         );
 
-        // Act
-        await provider.login('server_url', AuthCredentials.test());
-
-        // Assert
         expect(provider.isAuthenticated, isFalse);
         expect(provider.status, equals(AuthStatus.error));
-        expect(provider.error, contains('Failed to save token'));
+        expect(provider.currentToken, isNull);
+        expect(provider.activeConfigId, isNull);
+        expect(provider.error, contains('Invalid credentials'));
+      });
+
+      test('should clear any in-memory token when persistence fails in coordinator', () async {
+        final failure = domain_errors.DatabaseFailure('Save failed');
+        when(
+          () => mockHubSessionCoordinator.login(
+            configId: configId,
+            serverUrl: serverUrl,
+            credentials: any(named: 'credentials'),
+          ),
+        ).thenAnswer((_) async => Failure(failure));
+
+        await provider.login(
+          configId: configId,
+          serverUrl: serverUrl,
+          credentials: AuthCredentials.test(),
+        );
+
+        expect(provider.isAuthenticated, isFalse);
+        expect(provider.status, equals(AuthStatus.error));
+        expect(provider.currentToken, isNull);
+        expect(provider.activeConfigId, isNull);
+        expect(provider.error, contains('Save failed'));
       });
 
       test('should set authenticating status during login', () async {
-        // Arrange
         final completer = Completer<Result<AuthToken>>();
         when(
-          () => mockLoginUseCase('server_url', any()),
+          () => mockHubSessionCoordinator.login(
+            configId: configId,
+            serverUrl: serverUrl,
+            credentials: any(named: 'credentials'),
+          ),
         ).thenAnswer((_) => completer.future);
 
-        // Act
-        final future = provider.login('server_url', AuthCredentials.test());
+        final future = provider.login(
+          configId: configId,
+          serverUrl: serverUrl,
+          credentials: AuthCredentials.test(),
+        );
 
-        // Assert - status deve ser authenticating imediatamente
         expect(provider.status, equals(AuthStatus.authenticating));
         expect(provider.isAuthenticated, isFalse);
 
-        // Cleanup
-        completer.complete(Failure(domain_errors.ValidationFailure('test')));
+        completer.complete(
+          Failure(domain_errors.ValidationFailure('test')),
+        );
         await future;
       });
     });
 
     group('refreshToken', () {
       test('should refresh token successfully', () async {
-        // Arrange - first login to set a token
         const oldToken = AuthToken(
           token: 'old_token',
           refreshToken: 'old_refresh',
@@ -162,118 +144,137 @@ void main() {
           token: 'new_token',
           refreshToken: 'new_refresh',
         );
-
+        provider.restoreToken(oldToken, configId: configId);
         when(
-          () => mockLoginUseCase(any(), any()),
-        ).thenAnswer((_) async => const Success(oldToken));
-        when(
-          () => mockSaveUseCase(any()),
-        ).thenAnswer((_) async => const Success(unit));
-        await provider.login('server_url', AuthCredentials.test());
-
-        // Now set up refresh mocks
-        when(
-          () => mockRefreshUseCase('server_url', 'old_refresh'),
+          () => mockHubSessionCoordinator.refreshSession(
+            serverUrl,
+            configId: configId,
+            currentToken: oldToken,
+          ),
         ).thenAnswer((_) async => const Success(newToken));
 
-        // Act
-        await provider.refreshToken('server_url');
+        await provider.refreshToken(
+          configId: configId,
+          serverUrl: serverUrl,
+        );
 
-        // Assert
         expect(provider.isAuthenticated, isTrue);
         expect(provider.status, equals(AuthStatus.authenticated));
         expect(provider.currentToken?.token, equals('new_token'));
+        expect(provider.activeConfigId, configId);
       });
 
-      test('should handle refresh failure', () async {
-        // Arrange - first login to set a token
+      test('should handle refresh failure and clear token', () async {
         const oldToken = AuthToken(
           token: 'old_token',
           refreshToken: 'old_refresh',
         );
-
+        provider.restoreToken(oldToken, configId: configId);
         when(
-          () => mockLoginUseCase(any(), any()),
-        ).thenAnswer((_) async => const Success(oldToken));
-        when(
-          () => mockSaveUseCase(any()),
-        ).thenAnswer((_) async => const Success(unit));
-        await provider.login('server_url', AuthCredentials.test());
-
-        // Now set up refresh to fail
-        when(() => mockRefreshUseCase('server_url', 'old_refresh')).thenAnswer(
+          () => mockHubSessionCoordinator.refreshSession(
+            serverUrl,
+            configId: configId,
+            currentToken: oldToken,
+          ),
+        ).thenAnswer(
           (_) async => Failure(domain_errors.NetworkFailure('Network error')),
         );
 
-        // Act
-        await provider.refreshToken('server_url');
+        await provider.refreshToken(
+          configId: configId,
+          serverUrl: serverUrl,
+        );
 
-        // Assert
         expect(provider.isAuthenticated, isFalse);
         expect(provider.status, equals(AuthStatus.unauthenticated));
+        expect(provider.currentToken, isNull);
+        expect(provider.activeConfigId, isNull);
         expect(provider.error, contains('Network error'));
       });
 
       test('should set error when no refresh token available', () async {
-        // Arrange - provider sem token (no login yet)
         expect(provider.currentToken?.refreshToken, isNull);
 
-        // Act
-        await provider.refreshToken('server_url');
+        await provider.refreshToken(
+          configId: configId,
+          serverUrl: serverUrl,
+        );
 
-        // Assert
         expect(provider.isAuthenticated, isFalse);
         expect(provider.status, equals(AuthStatus.unauthenticated));
         expect(provider.error, equals('No refresh token available'));
+      });
+
+      test('should not expose token for a different config id', () async {
+        const oldToken = AuthToken(
+          token: 'old_token',
+          refreshToken: 'old_refresh',
+        );
+        provider.restoreToken(oldToken, configId: configId);
+
+        expect(provider.currentTokenForConfig('cfg-2'), isNull);
+        expect(provider.isAuthenticatedForConfig('cfg-2'), isFalse);
       });
     });
 
     group('logout', () {
       test('should clear token and status', () async {
-        // Arrange - login to set token
         const token = AuthToken(
           token: 'test_token',
           refreshToken: 'test_refresh',
         );
+        provider.restoreToken(token, configId: configId);
 
-        when(
-          () => mockLoginUseCase(any(), any()),
-        ).thenAnswer((_) async => const Success(token));
-        when(
-          () => mockSaveUseCase(any()),
-        ).thenAnswer((_) async => const Success(unit));
-        await provider.login('server_url', AuthCredentials.test());
-
-        // Verify authenticated state before logout
-        expect(provider.isAuthenticated, isTrue);
-        expect(provider.currentToken, isNotNull);
-
-        // Act
         await provider.logout();
 
-        // Assert
         expect(provider.isAuthenticated, isFalse);
         expect(provider.status, equals(AuthStatus.unauthenticated));
         expect(provider.currentToken, isNull);
+        expect(provider.activeConfigId, isNull);
         expect(provider.error, isEmpty);
+      });
+
+      test('should clear stored session by config id', () async {
+        provider.restoreToken(
+          const AuthToken(token: 't', refreshToken: 'r'),
+          configId: configId,
+        );
+        when(
+          () => mockHubSessionCoordinator.clearStoredSession(configId),
+        ).thenAnswer((_) async => const Success(unit));
+
+        await provider.logout(
+          configId: configId,
+          clearStoredSession: true,
+        );
+
+        verify(
+          () => mockHubSessionCoordinator.clearStoredSession(configId),
+        ).called(1);
       });
     });
 
     group('clearError', () {
       test('should clear error message', () async {
-        // Arrange - set error through login failure
-        final failure = domain_errors.ValidationFailure('Test error');
         when(
-          () => mockLoginUseCase(any(), any()),
-        ).thenAnswer((_) async => Failure(failure));
+          () => mockHubSessionCoordinator.login(
+            configId: configId,
+            serverUrl: 'url',
+            credentials: any(named: 'credentials'),
+          ),
+        ).thenAnswer(
+          (_) async => Failure(domain_errors.ValidationFailure('Test error')),
+        );
 
-        // Act - trigger error then clear it
-        await provider.login('url', AuthCredentials.test());
-        expect(provider.error, isNotEmpty); // Verify error was set
+        await provider.login(
+          configId: configId,
+          serverUrl: 'url',
+          credentials: AuthCredentials.test(),
+        );
+        expect(provider.error, isNotEmpty);
 
         provider.clearError();
 
-        // Assert
         expect(provider.error, isEmpty);
       });
     });

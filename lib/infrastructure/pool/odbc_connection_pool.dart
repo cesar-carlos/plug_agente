@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -78,7 +79,7 @@ class OdbcConnectionPool
           context: {
             'timeout': true,
             'timeout_stage': 'pool',
-            'reason': 'pool_wait_timeout',
+            'reason': OdbcContextConstants.poolWaitTimeoutReason,
             'retryable': true,
           },
         ),
@@ -99,7 +100,7 @@ class OdbcConnectionPool
           context: {
             'timeout': true,
             'timeout_stage': 'pool',
-            'reason': 'odbc_worker_busy_connect',
+            'reason': OdbcContextConstants.odbcWorkerBusyConnectReason,
             'retryable': true,
           },
         ),

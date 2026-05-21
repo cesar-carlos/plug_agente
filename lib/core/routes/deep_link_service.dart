@@ -44,7 +44,8 @@ class DeepLinkService {
         }
 
         // Build route
-        final routePath = path.isEmpty ? '/' : '/$path';
+        final normalizedPath = path.replaceFirst(RegExp('^/+'), '');
+        final routePath = normalizedPath.isEmpty ? '/' : '/$normalizedPath';
         if (queryString != null && queryString.isNotEmpty) {
           return '$routePath?$queryString';
         }
@@ -54,7 +55,8 @@ class DeepLinkService {
       // Handle http/https (for web or future use)
       final uri = Uri.parse(deepLink);
       if (uri.scheme == 'http' || uri.scheme == 'https') {
-        return uri.path;
+        final routePath = uri.path.isEmpty ? '/' : uri.path;
+        return uri.hasQuery ? '$routePath?${uri.query}' : routePath;
       }
 
       return null;

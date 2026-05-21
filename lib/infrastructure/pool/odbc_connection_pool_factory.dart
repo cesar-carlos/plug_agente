@@ -1,4 +1,5 @@
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -21,8 +22,14 @@ IConnectionPool createOdbcConnectionPool(
   IOdbcConnectionSettings settings,
   MetricsCollector metricsCollector,
   FeatureFlags featureFlags,
-  IAgentConfigRepository? configRepository,
+  Object? configContext,
 ) {
+  final activeConfigResolver = configContext is ActiveConfigResolver
+      ? configContext
+      : null;
+  final configRepository = configContext is IAgentConfigRepository
+      ? configContext
+      : null;
   if (featureFlags.enableOdbcExperimentalDriverAdaptivePooling) {
     return AdaptiveOdbcConnectionPool(
       leasePool: OdbcConnectionPool(
@@ -37,6 +44,7 @@ IConnectionPool createOdbcConnectionPool(
       ),
       featureFlags: featureFlags,
       metricsCollector: metricsCollector,
+      activeConfigResolver: activeConfigResolver,
       configRepository: configRepository,
     );
   }

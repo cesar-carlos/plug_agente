@@ -51,6 +51,18 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Agent actions production preflight
+        run: dart run tool/preflight_agent_actions_production.dart
+
+      - name: Agent actions homologation gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract_paths=$(grep -v '^\s*#' tool/agent_actions_contract_test_paths.txt | grep -v '^\s*$' | tr '\n' ' ')
+          ui_paths=$(grep -v '^\s*#' tool/agent_actions_ui_test_paths.txt | grep -v '^\s*$' | tr '\n' ' ')
+          flutter test $contract_paths
+          flutter test $ui_paths
+
       - name: Installer setup script test
         run: flutter test test/installer/setup_script_test.dart
 
@@ -134,6 +146,34 @@ jobs:
           path: ${{ runner.temp }}\windows-helper-smoke\*
           if-no-files-found: ignore
 
+      - name: Build elevated action runner helper
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tool/build_elevated_runner.ps1
+
+      - name: Smoke elevated action runner helper
+        shell: pwsh
+        run: |
+          $artifactDir = Join-Path $env:RUNNER_TEMP "elevated-helper-smoke"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          $bundleRoot = Join-Path $PWD "build\windows\x64\runner"
+          $helperFile = Get-ChildItem -Path $bundleRoot -Filter "plug_agente_elevated_runner.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $helperFile) {
+            throw "plug_agente_elevated_runner.exe was not found in the Windows debug bundle."
+          }
+          $helper = $helperFile.FullName
+          $process = Start-Process -FilePath $helper -ArgumentList @() -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 64) {
+            throw "Expected elevated helper exit code 64 for missing arguments, got $($process.ExitCode)."
+          }
+
+      - name: Upload elevated helper smoke diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-elevated-helper-smoke-diagnostics
+          path: ${{ runner.temp }}\elevated-helper-smoke\*
+          if-no-files-found: ignore
+
   transport-benchmark:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -177,9 +217,34 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate live Hub agent.action env
+        env:
+          RUN_LIVE_HUB_TESTS: true
+          RUN_LIVE_HUB_SIGNING_TESTS: true
+          RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS: true
+          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
+          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
+          PAYLOAD_SIGNING_KEY_ID: ${{ secrets.PAYLOAD_SIGNING_KEY_ID }}
+          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
+        run: dart run tool/validate_live_hub_agent_actions_env.dart
+
+      - name: Agent actions production preflight
+        run: dart run tool/preflight_agent_actions_production.dart
+
       - name: Hub Socket.IO live E2E
         env:
           RUN_LIVE_HUB_TESTS: true
           E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
           E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
         run: flutter test test/integration/hub_socket_live_e2e_test.dart
+
+      - name: Hub agent.action live E2E
+        env:
+          RUN_LIVE_HUB_TESTS: true
+          RUN_LIVE_HUB_SIGNING_TESTS: true
+          RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS: true
+          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
+          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
+          PAYLOAD_SIGNING_KEY_ID: ${{ secrets.PAYLOAD_SIGNING_KEY_ID }}
+          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
+        run: flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:jose/jose.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/jwks_key_store_cache.dart';
 import 'package:result_dart/result_dart.dart';
@@ -61,7 +62,7 @@ class JwtJwksVerifier {
           message: 'JWKS verification temporarily unavailable',
           context: {
             'authentication': true,
-            'reason': 'jwks_circuit_open',
+            'reason': AuthorizationContextConstants.jwksCircuitOpenReason,
             'retry_after': _circuitOpenUntil?.toUtc().toIso8601String(),
           },
         ),
@@ -86,7 +87,7 @@ class JwtJwksVerifier {
           message: 'JWKS validation is enabled but JWKS URL is not configured',
           context: {
             'authentication': true,
-            'reason': 'invalid_jwks_config',
+            'reason': AuthorizationContextConstants.invalidJwksConfigReason,
           },
         ),
       );
@@ -102,7 +103,7 @@ class JwtJwksVerifier {
             message: 'Token algorithm "none" or missing is not allowed',
             context: {
               'authentication': true,
-              'reason': 'invalid_token_signature',
+              'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
             },
           ),
         );
@@ -117,7 +118,7 @@ class JwtJwksVerifier {
                 '${config.allowedAlgorithms.join(", ")}',
             context: {
               'authentication': true,
-              'reason': 'invalid_token_signature',
+              'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
             },
           ),
         );
@@ -141,7 +142,7 @@ class JwtJwksVerifier {
             message: 'Token has expired',
             context: {
               'authentication': true,
-              'reason': 'token_expired',
+              'reason': AuthorizationContextConstants.tokenExpiredReason,
             },
           ),
         );
@@ -154,7 +155,7 @@ class JwtJwksVerifier {
             message: 'Token is not yet valid',
             context: {
               'authentication': true,
-              'reason': 'token_not_yet_valid',
+              'reason': AuthorizationContextConstants.tokenNotYetValidReason,
             },
           ),
         );
@@ -172,7 +173,7 @@ class JwtJwksVerifier {
                   'expected "${config.issuer}"',
               context: {
                 'authentication': true,
-                'reason': 'invalid_token_signature',
+                'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
               },
             ),
           );
@@ -188,7 +189,7 @@ class JwtJwksVerifier {
               message: 'Token audience does not contain expected "${config.audience}"',
               context: {
                 'authentication': true,
-                'reason': 'invalid_token_signature',
+                'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
               },
             ),
           );
@@ -207,7 +208,7 @@ class JwtJwksVerifier {
           cause: error,
           context: {
             'authentication': true,
-            'reason': 'invalid_token_signature',
+            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
           },
         ),
       );
@@ -219,7 +220,7 @@ class JwtJwksVerifier {
           cause: error,
           context: {
             'authentication': true,
-            'reason': 'invalid_token_signature',
+            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
           },
         ),
       );

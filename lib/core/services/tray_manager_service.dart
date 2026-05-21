@@ -70,9 +70,8 @@ class TrayManagerService with TrayListener implements ITrayService {
         error: e,
         stackTrace: stackTrace,
       );
-      // Mesmo com erro, marcar como inicializado para evitar loops
-      _isInitialized = true;
-      _enableInteractionsAfterWarmup();
+      await _rollbackFailedInitialization();
+      rethrow;
     }
   }
 
@@ -82,6 +81,22 @@ class TrayManagerService with TrayListener implements ITrayService {
         _interactionsEnabled = true;
       }),
     );
+  }
+
+  Future<void> _rollbackFailedInitialization() async {
+    _isInitialized = false;
+    _interactionsEnabled = false;
+    _onMenuAction = null;
+    trayManager.removeListener(this);
+    try {
+      await trayManager.destroy();
+    } on Object catch (error, stackTrace) {
+      _logger.w(
+        'Falha ao desmontar TrayManager apÃ³s erro de inicializaÃ§Ã£o',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<String> _getTrayIconPath() async {
@@ -284,6 +299,9 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void dispose() {
+    _isInitialized = false;
+    _interactionsEnabled = false;
+    _onMenuAction = null;
     unawaited(
       (trayManager..removeListener(this)).destroy().catchError(
         (Object e, StackTrace? s) => _logger.w(

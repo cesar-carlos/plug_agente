@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
@@ -18,6 +21,8 @@ class MockConfigService extends Mock implements ConfigService {}
 
 class MockUuid extends Mock implements Uuid {}
 
+class MockActiveConfigResolver extends Mock implements ActiveConfigResolver {}
+
 class FakeConfig extends Fake implements Config {}
 
 void main() {
@@ -30,6 +35,7 @@ void main() {
     late MockLoadAgentConfig mockLoad;
     late MockConfigService mockConfigService;
     late MockUuid mockUuid;
+    late MockActiveConfigResolver mockActiveConfigResolver;
     late Config persistedConfig;
 
     setUp(() {
@@ -37,6 +43,7 @@ void main() {
       mockLoad = MockLoadAgentConfig();
       mockConfigService = MockConfigService();
       mockUuid = MockUuid();
+      mockActiveConfigResolver = MockActiveConfigResolver();
       persistedConfig = _baseConfig;
 
       when(() => mockUuid.v4()).thenReturn('generated-id');
@@ -46,6 +53,7 @@ void main() {
       when(() => mockLoad.call(any())).thenAnswer((_) async {
         return Success(persistedConfig);
       });
+      when(() => mockActiveConfigResolver.setActiveConfigId(any())).thenAnswer((_) async {});
       when(() => mockSave.call(any())).thenAnswer((invocation) async {
         persistedConfig = invocation.positionalArguments.first as Config;
         return Success(persistedConfig);
@@ -58,6 +66,7 @@ void main() {
         final provider = ConfigProvider(
           mockSave,
           mockLoad,
+          mockActiveConfigResolver,
           mockConfigService,
           mockUuid,
         );
@@ -96,6 +105,58 @@ void main() {
         expect(reloaded.observacao, equals('Perfil de teste'));
       },
     );
+
+    test('should batch form updates into a single notification', () async {
+      final provider = ConfigProvider(
+        mockSave,
+        mockLoad,
+        mockActiveConfigResolver,
+        mockConfigService,
+        mockUuid,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      var notificationCount = 0;
+      provider.addListener(() {
+        notificationCount++;
+      });
+
+      provider.batchUpdate(() {
+        provider.updateHost('server-a');
+        provider.updatePort(1544);
+        provider.updatePort(1544);
+      });
+
+      expect(notificationCount, 1);
+      expect(provider.currentConfig?.host, 'server-a');
+      expect(provider.currentConfig?.port, 1544);
+    });
+
+    test('should reuse the in-flight save instead of overlapping writes', () async {
+      final saveCompleter = Completer<Result<Config>>();
+      when(() => mockSave.call(any())).thenAnswer((_) => saveCompleter.future);
+
+      final provider = ConfigProvider(
+        mockSave,
+        mockLoad,
+        mockActiveConfigResolver,
+        mockConfigService,
+        mockUuid,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      provider.updateHost('server-b');
+
+      final firstSave = provider.saveConfig();
+      final secondSave = provider.saveConfig();
+
+      expect(identical(firstSave, secondSave), isTrue);
+      verify(() => mockSave.call(any())).called(1);
+
+      saveCompleter.complete(Success(provider.currentConfig!));
+      final result = await secondSave;
+      expect(result.isSuccess(), isTrue);
+    });
   });
 }
 

@@ -1,47 +1,109 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/actions/action_environment_resolver.dart';
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
+import 'package:plug_agente/application/actions/agent_action_remote_lifecycle_audit_recorder.dart';
+import 'package:plug_agente/application/actions/agent_action_remote_rate_limiter.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_execution_validator.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_request_validator.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
+import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
+import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
+import 'package:plug_agente/application/actions/elevated_action_execution_abort_registry.dart';
+import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/actions/elevated_action_status_file_syncer.dart';
+import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/active_config_resolver.dart';
+import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
+import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
+import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
+import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
 import 'package:plug_agente/application/services/health_service.dart';
-import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
+import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
+import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/application/use_cases/backfill_agent_action_execution_correlation.dart';
+import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
+import 'package:plug_agente/application/use_cases/cleanup_agent_action_captured_output.dart';
+import 'package:plug_agente/application/use_cases/cleanup_agent_action_executions.dart';
+import 'package:plug_agente/application/use_cases/cleanup_expired_agent_action_remote_audit.dart';
+import 'package:plug_agente/application/use_cases/cleanup_expired_elevated_bridge_artifacts.dart';
+import 'package:plug_agente/application/use_cases/cleanup_expired_rpc_idempotency_cache.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
+import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
+import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
+import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
+import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
+import 'package:plug_agente/application/use_cases/get_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
+import 'package:plug_agente/application/use_cases/get_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
+import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.dart';
+import 'package:plug_agente/application/use_cases/list_agent_action_definitions.dart';
+import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
+import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
+import 'package:plug_agente/application/use_cases/list_developer_data7_connections.dart';
+import 'package:plug_agente/application/use_cases/list_recent_agent_action_remote_audit.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
+import 'package:plug_agente/application/use_cases/notify_agent_action_execution_if_configured.dart';
+import 'package:plug_agente/application/use_cases/prepare_elevated_action_runner.dart';
+import 'package:plug_agente/application/use_cases/preview_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
+import 'package:plug_agente/application/use_cases/reconcile_agent_action_executions.dart';
 import 'package:plug_agente/application/use_cases/refresh_auth_token.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
+import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
+import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_trigger.dart';
+import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/save_agent_action_execution.dart';
+import 'package:plug_agente/application/use_cases/save_agent_action_secret.dart';
+import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
+import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
+import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
+import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
@@ -49,6 +111,8 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -57,8 +121,16 @@ import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_orphan_process_terminator.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_portable_codec.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
@@ -68,12 +140,17 @@ import 'package:plug_agente/domain/repositories/i_authorization_metrics_collecto
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
+import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_availability_probe.dart';
+import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
@@ -88,6 +165,7 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/actions/actions.dart';
 import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
@@ -114,6 +192,8 @@ import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collecto
 import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
+import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
+import 'package:plug_agente/infrastructure/repositories/agent_action_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
@@ -124,15 +204,20 @@ import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
+import 'package:plug_agente/infrastructure/stores/agent_action_remote_audit_drift_store.dart';
+import 'package:plug_agente/infrastructure/stores/drift_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
+import 'package:plug_agente/infrastructure/stores/flutter_secure_agent_action_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_hub_auth_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_token_secret_store.dart';
+import 'package:plug_agente/infrastructure/stores/hub_session_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_authorization_decision_cache.dart';
-import 'package:plug_agente/infrastructure/stores/in_memory_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_agent_action_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_hub_auth_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
+import 'package:plug_agente/l10n/agent_action_notification_messages_factory.dart';
 import 'package:uuid/uuid.dart';
 
 /// Registers transport, ODBC, auth, and application use-case graph on [getIt].
@@ -208,6 +293,18 @@ void registerPlugDependencyGraph(
         }
       },
     )
+    ..registerLazySingleton<IHubSessionStore>(
+      () => HubSessionStore(
+        getIt<AppDatabase>(),
+        authSecretStore: getIt<IHubAuthSecretStore>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ActiveConfigResolver(
+        getIt<IAgentConfigRepository>(),
+        getIt<IAppSettingsStore>(),
+      ),
+    )
     ..registerLazySingleton(
       () => ClientTokenLocalDataSource(
         getIt<AppDatabase>(),
@@ -228,11 +325,222 @@ void registerPlugDependencyGraph(
       () => AgentConfigRepository(
         getIt<AppDatabase>(),
         authSecretStore: getIt<IHubAuthSecretStore>(),
+        hubSessionStore: getIt<IHubSessionStore>(),
+      ),
+    )
+    ..registerLazySingleton<IAgentActionRepository>(
+      () => AgentActionRepository(getIt<AppDatabase>()),
+    )
+    ..registerLazySingleton(ActionPathValidator.new)
+    ..registerLazySingleton(
+      () => DeveloperData7ConfigLocator(
+        pathValidator: getIt<ActionPathValidator>(),
+      ),
+    )
+    ..registerLazySingleton(DeveloperData7ConnectionCatalog.new)
+    ..registerLazySingleton(
+      () => DeveloperData7DefinitionResolver(
+        pathValidator: getIt<ActionPathValidator>(),
+        configLocator: getIt<DeveloperData7ConfigLocator>(),
+        connectionCatalog: getIt<DeveloperData7ConnectionCatalog>(),
+      ),
+    )
+    ..registerLazySingleton<IDeveloperData7ConnectionGateway>(
+      () => DeveloperData7ConnectionGateway(
+        configLocator: getIt<DeveloperData7ConfigLocator>(),
+        connectionCatalog: getIt<DeveloperData7ConnectionCatalog>(),
+      ),
+    )
+    ..registerLazySingleton<ComObjectInvocationRegistry>(
+      ComObjectInvocationBootstrap.createRegistry,
+    )
+    ..registerLazySingleton<IComObjectInvocationDiagnostics>(
+      () => ComObjectInvocationDiagnostics(getIt<ComObjectInvocationRegistry>()),
+    )
+    ..registerLazySingleton<AgentActionAdapterRegistry>(
+      () => AgentActionAdapterRegistry([
+        CommandLineActionAdapter(
+          pathValidator: getIt<ActionPathValidator>(),
+        ),
+        ExecutableActionAdapter(
+          pathValidator: getIt<ActionPathValidator>(),
+        ),
+        ScriptActionAdapter(
+          pathValidator: getIt<ActionPathValidator>(),
+        ),
+        JarActionAdapter(
+          pathValidator: getIt<ActionPathValidator>(),
+        ),
+        EmailActionAdapter(
+          pathValidator: getIt<ActionPathValidator>(),
+          secretStore: getIt<IAgentActionSecretStore>(),
+        ),
+        ComObjectActionAdapter(
+          invocationRegistry: getIt<ComObjectInvocationRegistry>(),
+          pathValidator: getIt<ActionPathValidator>(),
+        ),
+        DeveloperData7ActionAdapter(
+          definitionResolver: getIt<DeveloperData7DefinitionResolver>(),
+        ),
+      ]),
+    )
+    ..registerLazySingleton<CommandLineActionProcessRunner>(
+      () => CommandLineActionProcessRunner(
+        pathValidator: getIt<ActionPathValidator>(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+      ),
+    )
+    ..registerLazySingleton<ExecutableActionProcessRunner>(
+      () => ExecutableActionProcessRunner(
+        pathValidator: getIt<ActionPathValidator>(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+      ),
+    )
+    ..registerLazySingleton<ScriptActionProcessRunner>(
+      () => ScriptActionProcessRunner(
+        pathValidator: getIt<ActionPathValidator>(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+      ),
+    )
+    ..registerLazySingleton<JarActionProcessRunner>(
+      () => JarActionProcessRunner(
+        pathValidator: getIt<ActionPathValidator>(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+      ),
+    )
+    ..registerLazySingleton<EmailActionMailerRunner>(
+      () => EmailActionMailerRunner(
+        pathValidator: getIt<ActionPathValidator>(),
+        secretStore: getIt<IAgentActionSecretStore>(),
+      ),
+    )
+    ..registerLazySingleton<ComObjectActionRunner>(
+      () => ComObjectActionRunner(
+        invocationRegistry: getIt<ComObjectInvocationRegistry>(),
+        pathValidator: getIt<ActionPathValidator>(),
+      ),
+    )
+    ..registerLazySingleton<DeveloperData7ProcessRunner>(
+      () => DeveloperData7ProcessRunner(
+        definitionResolver: getIt<DeveloperData7DefinitionResolver>(),
+      ),
+    )
+    ..registerLazySingleton<ActionExecutionQueue>(
+      () => ActionExecutionQueue(metrics: getIt<MetricsCollector>()),
+    )
+    ..registerLazySingleton<IAgentActionSecretStore>(
+      () {
+        try {
+          return FlutterSecureAgentActionSecretStore();
+        } on Object catch (e, stackTrace) {
+          developer.log(
+            'FlutterSecureAgentActionSecretStore init failed, using NoopAgentActionSecretStore',
+            name: 'plug_dependency_registrar',
+            level: 900,
+            error: e,
+            stackTrace: stackTrace,
+          );
+          return const NoopAgentActionSecretStore();
+        }
+      },
+    )
+    ..registerLazySingleton(
+      () => AgentActionSecretPlaceholderResolver(
+        secretStore: getIt<IAgentActionSecretStore>(),
       ),
     )
     ..registerLazySingleton(
+      () => ActionEnvironmentResolver(
+        secretPlaceholderResolver: getIt<AgentActionSecretPlaceholderResolver>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => SaveAgentActionSecret(getIt<IAgentActionSecretStore>()),
+    )
+    ..registerLazySingleton(
+      () => DeleteAgentActionSecret(getIt<IAgentActionSecretStore>()),
+    )
+    ..registerLazySingleton<AgentActionRuntimeRequestValidator>(
+      AgentActionRuntimeRequestValidator.new,
+    )
+    ..registerLazySingleton<AgentActionDefinitionSnapshotter>(
+      AgentActionDefinitionSnapshotter.new,
+    )
+    ..registerLazySingleton(
+      () => AgentActionSecretReferenceFingerprinter(getIt<IAgentActionSecretStore>()),
+    )
+    ..registerLazySingleton<AgentActionRuntimeStateGuard>(
+      AgentActionRuntimeStateGuard.new,
+    )
+    ..registerLazySingleton(ElevatedActionRunnerReadinessService.new)
+    ..registerLazySingleton(ElevatedActionExecutionAbortRegistry.new)
+    ..registerLazySingleton(
+      () => ElevatedActionRunnerInstaller(
+        storageContext: getIt<GlobalStorageContext>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => PrepareElevatedActionRunner(
+        getIt<ElevatedActionRunnerInstaller>(),
+        getIt<ElevatedActionRunnerReadinessService>(),
+        getIt<GlobalStorageContext>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedActionRequestProtector(
+        storageContext: getIt<GlobalStorageContext>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedActionExecutionMaterializer(
+        storageContext: getIt<GlobalStorageContext>(),
+      ),
+    )
+    ..registerLazySingleton<IElevatedActionRunnerBridge>(
+      () => ElevatedActionRunnerBridge(
+        requestProtector: getIt<ElevatedActionRequestProtector>(),
+        materializer: getIt<ElevatedActionExecutionMaterializer>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedActionStatusFileSyncer(
+        storageContext: getIt<GlobalStorageContext>(),
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedActionStatusFileWriter(
+        storageContext: getIt<GlobalStorageContext>(),
+      ),
+    )
+    ..registerLazySingleton<IElevatedActionExecutionCanceller>(
+      () => ElevatedActionExecutionCanceller(
+        storageContext: getIt<GlobalStorageContext>(),
+        statusFileWriter: getIt<ElevatedActionStatusFileWriter>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedAgentActionExecutionService(
+        bridge: getIt<IElevatedActionRunnerBridge>(),
+        statusFileSyncer: getIt<ElevatedActionStatusFileSyncer>(),
+        readiness: getIt<ElevatedActionRunnerReadinessService>(),
+        abortRegistry: getIt<ElevatedActionExecutionAbortRegistry>(),
+      ),
+    )
+    ..registerLazySingleton<AgentActionLocalRunnerRegistry>(
+      () => AgentActionLocalRunnerRegistry([
+        getIt<CommandLineActionProcessRunner>(),
+        getIt<ExecutableActionProcessRunner>(),
+        getIt<ScriptActionProcessRunner>(),
+        getIt<JarActionProcessRunner>(),
+        getIt<EmailActionMailerRunner>(),
+        getIt<ComObjectActionRunner>(),
+        getIt<DeveloperData7ProcessRunner>(),
+      ]),
+    )
+    ..registerLazySingleton(
       () => AgentRegisterProfileProvider(
-        configRepository: getIt<IAgentConfigRepository>(),
+        activeConfigResolver: getIt<ActiveConfigResolver>(),
       ),
     )
     ..registerLazySingleton(() => const Uuid())
@@ -242,24 +550,39 @@ void registerPlugDependencyGraph(
         getIt<IOdbcConnectionSettings>(),
         getIt<MetricsCollector>(),
         getIt<FeatureFlags>(),
-        getIt<IAgentConfigRepository>(),
+        getIt<ActiveConfigResolver>(),
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
     ..registerLazySingleton<SqlInvestigationCollector>(SqlInvestigationCollector.new)
     ..registerLazySingleton<ISqlInvestigationCollector>(getIt.get<SqlInvestigationCollector>)
     ..registerLazySingleton(MetricsCollector.new)
+    ..registerLazySingleton<AgentActionRetentionSettings>(
+      () => AgentActionRetentionSettings(getIt<IAppSettingsStore>()),
+    )
     ..registerLazySingleton(
       () => HealthService(
         metricsCollector: getIt<MetricsCollector>(),
         gateway: getIt<IDatabaseGateway>(),
         odbcSettings: getIt<IOdbcConnectionSettings>(),
         connectionPool: getIt<IConnectionPool>(),
-        configRepository: getIt<IAgentConfigRepository>(),
+        activeConfigResolver: getIt<ActiveConfigResolver>(),
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
         featureFlags: getIt<FeatureFlags>(),
         odbcRuntimeTuning: getIt<OdbcRuntimeTuning>(),
+        agentRuntimeIdentity: getIt<AgentRuntimeIdentity>(),
+        agentActionRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
+        agentActionRuntimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+        elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
+        agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
+        agentActionTriggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>()
+            ? getIt<AgentActionTriggerScheduler>()
+            : null,
+        agentActionSchedulerInstanceLock: getIt.isRegistered<IAgentActionSchedulerInstanceLock>()
+            ? getIt<IAgentActionSchedulerInstanceLock>()
+            : null,
+        comObjectInvocationDiagnostics: getIt<IComObjectInvocationDiagnostics>(),
       ),
     )
     ..registerLazySingleton(
@@ -274,7 +597,7 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton(
       () => OdbcNativeMetricsService(
         getIt<odbc.OdbcService>(),
-        configRepository: getIt<IAgentConfigRepository>(),
+        activeConfigResolver: getIt<ActiveConfigResolver>(),
         connectionPool: getIt<IConnectionPool>(),
         settings: getIt<IOdbcConnectionSettings>(),
         runtimeTuning: getIt<OdbcRuntimeTuning>(),
@@ -297,10 +620,32 @@ void registerPlugDependencyGraph(
         ),
       ),
     )
+    ..registerLazySingleton(
+      () => AgentActionRemoteRateLimiter(
+        maxCallsPerMinute: readNonNegativeIntEnv(
+          'AGENT_ACTION_REMOTE_MAX_PER_MINUTE',
+          0,
+        ),
+        maxScopeEntries: readNonNegativeIntEnv(
+          'AGENT_ACTION_REMOTE_MAX_SCOPE_KEYS',
+          8192,
+        ),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionRemoteLifecycleAuditRecorder(
+        featureFlags: getIt<FeatureFlags>(),
+        auditStore: getIt<IAgentActionRemoteAuditStore>(),
+        runtimeIdentity: getIt<AgentRuntimeIdentity>(),
+        uuid: getIt<Uuid>(),
+      ),
+    )
     ..registerLazySingleton<IAuthorizationCacheMetrics>(
       () => AuthorizationCacheMetricsCollector(getIt<MetricsCollector>()),
     )
-    ..registerLazySingleton<IIdempotencyStore>(InMemoryIdempotencyStore.new)
+    ..registerLazySingleton<IIdempotencyStore>(
+      () => DriftIdempotencyStore(getIt<AppDatabase>()),
+    )
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       () => InMemoryAuthorizationDecisionCache(
         maxEntries: readPositiveIntEnv(
@@ -321,6 +666,18 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<ITokenAuditStore>(
       () => getIt<FeatureFlags>().enableTokenAudit ? FileTokenAuditStore() : NoopTokenAuditStore(),
     )
+    ..registerLazySingleton<IAgentActionRemoteAuditStore>(
+      () => AgentActionRemoteAuditDriftStore(getIt<AppDatabase>()),
+    )
+    ..registerLazySingleton(
+      () => AgentActionRemoteAuthorizationService(
+        featureFlags: getIt<FeatureFlags>(),
+        getClientTokenPolicy: getIt<GetClientTokenPolicy>(),
+        authorizeSqlOperation: getIt<AuthorizeSqlOperation>(),
+        authorizationStageBudget: const Duration(seconds: 3),
+        onPermissionDenied: getIt<MetricsCollector>().recordRemotePermissionDenied,
+      ),
+    )
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
@@ -331,15 +688,30 @@ void registerPlugDependencyGraph(
         getClientTokenPolicy: getIt<GetClientTokenPolicy>(),
         getPolicyRateLimiter: getIt<ClientTokenGetPolicyRateLimiter>(),
         featureFlags: getIt<FeatureFlags>(),
-        configRepository: getIt<IAgentConfigRepository>(),
+        activeConfigResolver: getIt<ActiveConfigResolver>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<IAuthorizationMetricsCollector>(),
         deprecationMetrics: getIt<IDeprecationMetricsCollector>(),
         dispatchMetrics: getIt<IRpcDispatchMetricsCollector>(),
         onIdempotencyFingerprintMismatch: getIt<MetricsCollector>().recordIdempotencyFingerprintMismatch,
+        onAgentActionRemoteAuditExecutionCorrelated: getIt<MetricsCollector>().recordRemoteAuditExecutionCorrelated,
+        onAgentActionRemoteRateLimited: getIt<MetricsCollector>().recordRemoteRateLimited,
         sqlInvestigation: getIt<ISqlInvestigationCollector>(),
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         odbcNativeMetricsService: getIt<OdbcNativeMetricsService>(),
+        runAgentActionLocally: getIt<RunAgentActionLocally>(),
+        runAgentActionViaRemoteTrigger: getIt<RunAgentActionViaRemoteTrigger>(),
+        cancelAgentActionExecution: getIt<CancelAgentActionExecution>(),
+        getAgentActionExecution: getIt<GetAgentActionExecution>(),
+        sliceAgentActionCapturedOutput: getIt<SliceAgentActionCapturedOutput>(),
+        getAgentActionDefinition: getIt<GetAgentActionDefinition>(),
+        backfillAgentActionExecutionCorrelation: getIt<BackfillAgentActionExecutionCorrelation>(),
+        agentActionRemoteRateLimiter: getIt<AgentActionRemoteRateLimiter>(),
+        agentActionRemoteAuthorization: getIt<AgentActionRemoteAuthorizationService>(),
+        agentActionRemoteAuditStore: getIt<IAgentActionRemoteAuditStore>(),
+        agentActionRuntimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+        agentRuntimeIdentity: getIt<AgentRuntimeIdentity>(),
+        agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
       ),
     )
     ..registerLazySingleton<ITransportClient>(
@@ -388,6 +760,10 @@ void registerPlugDependencyGraph(
           payloadSigner: payloadSigner,
           payloadSigningConfig: signingConfig,
           protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
+          metricsCollector: getIt<MetricsCollector>(),
+          actionRuntimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+          agentActionLocalRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
+          elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
           registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
         );
       },
@@ -396,7 +772,7 @@ void registerPlugDependencyGraph(
       () {
         // Create base ODBC gateway
         final baseGateway = OdbcDatabaseGateway(
-          getIt<IAgentConfigRepository>(),
+          getIt<ActiveConfigResolver>(),
           getIt<odbc.OdbcService>(),
           getIt<IConnectionPool>(),
           getIt<IRetryManager>(),
@@ -521,7 +897,9 @@ void registerPlugDependencyGraph(
             audience: AppEnvironment.get('JWKS_AUDIENCE'),
           );
         }
-        final configResult = await getIt<IAgentConfigRepository>().getCurrentConfig();
+        final configResult = await getIt<ActiveConfigResolver>().resolveActiveOrFallback(
+          metadataOnly: true,
+        );
         return configResult.fold(
           (config) {
             final base = config.serverUrl.trim();
@@ -547,15 +925,15 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton(
-      () => AuthService(getIt<IAuthClient>(), getIt<IAgentConfigRepository>()),
+      () => AuthService(getIt<IAuthClient>(), getIt<IHubSessionStore>()),
     )
     ..registerLazySingleton(
-      () => HubRecoveryAuthCoordinator(
-        getIt<LoadAgentConfig>(),
+      () => HubSessionCoordinator(
+        getIt<ActiveConfigResolver>(),
         getIt<LoginUser>(),
         getIt<RefreshAuthToken>(),
         getIt<SaveAuthToken>(),
-        getIt<IAgentConfigRepository>(),
+        getIt<IHubSessionStore>(),
       ),
     )
     ..registerLazySingleton(
@@ -581,7 +959,7 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton(
       () => ExecutePlaygroundQuery(
         getIt<IDatabaseGateway>(),
-        getIt<IAgentConfigRepository>(),
+        getIt<ActiveConfigResolver>(),
         getIt<Uuid>(),
       ),
     )
@@ -598,7 +976,254 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton(
-      () => LoadAgentConfig(getIt<IAgentConfigRepository>()),
+      () => LoadAgentConfig(getIt<ActiveConfigResolver>()),
+    )
+    ..registerLazySingleton(
+      () => ValidateAgentActionDefinition(
+        getIt<AgentActionAdapterRegistry>(),
+        secretPlaceholderResolver: getIt<AgentActionSecretPlaceholderResolver>(),
+        runtimeExecutionValidator: const AgentActionRuntimeExecutionValidator(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => TestAgentActionDefinition(
+        getIt<IAgentActionRepository>(),
+        getIt<ValidateAgentActionDefinition>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => PreviewAgentActionDefinition(
+        getIt<IAgentActionRepository>(),
+        getIt<AgentActionAdapterRegistry>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => SaveAgentActionDefinition(
+        getIt<IAgentActionRepository>(),
+        getIt<ValidateAgentActionDefinition>(),
+        getIt<AgentActionDefinitionSnapshotter>(),
+        getIt<FeatureFlags>(),
+        secretReferenceFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => GetAgentActionDefinition(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListAgentActionDefinitions(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListDeveloperData7Connections(
+        getIt<IDeveloperData7ConnectionGateway>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => DeleteAgentActionDefinition(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      ValidateAgentActionTrigger.new,
+    )
+    ..registerLazySingleton(
+      () => SaveAgentActionTrigger(
+        getIt<IAgentActionRepository>(),
+        getIt<ValidateAgentActionTrigger>(),
+        getIt<FeatureFlags>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => GetAgentActionTrigger(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListAgentActionTriggers(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton<IAgentActionPortableCodec>(
+      AgentActionPortableCodec.new,
+    )
+    ..registerLazySingleton(
+      () => AgentActionBackupSanitizer(codec: getIt<IAgentActionPortableCodec>()),
+    )
+    ..registerLazySingleton(
+      () => ExportAgentActionsBundle(
+        getIt<ListAgentActionDefinitions>(),
+        getIt<ListAgentActionTriggers>(),
+        getIt<AgentActionBackupSanitizer>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ImportAgentActionsBundle(
+        getIt<SaveAgentActionDefinition>(),
+        getIt<SaveAgentActionTrigger>(),
+        getIt<AgentActionBackupSanitizer>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => DeleteAgentActionTrigger(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => SaveAgentActionExecution(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => GetAgentActionExecution(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton<SliceAgentActionCapturedOutput>(
+      () => SliceAgentActionCapturedOutput(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => BackfillAgentActionExecutionCorrelation(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListAgentActionExecutions(getIt<IAgentActionRepository>()),
+    )
+    ..registerLazySingleton(
+      () => ListRecentAgentActionRemoteAudit(getIt<IAgentActionRemoteAuditStore>()),
+    )
+    ..registerLazySingleton(
+      () => CleanupExpiredRpcIdempotencyCache(
+        getIt<IIdempotencyStore>(),
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => RpcIdempotencyCachePeriodicPurge(
+        ({DateTime? referenceTime}) => getIt<CleanupExpiredRpcIdempotencyCache>()(referenceTime: referenceTime),
+      ),
+    )
+    ..registerLazySingleton(
+      () => CleanupExpiredAgentActionRemoteAudit(
+        getIt<IAgentActionRemoteAuditStore>(),
+        retention: getIt<AgentActionRetentionSettings>().remoteAuditRetention,
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionRemoteAuditPeriodicPurge(
+        ({DateTime? referenceTime}) => getIt<CleanupExpiredAgentActionRemoteAudit>()(referenceTime: referenceTime),
+      ),
+    )
+    ..registerLazySingleton(
+      () => CleanupExpiredElevatedBridgeArtifacts(
+        storageContext: getIt<GlobalStorageContext>(),
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ElevatedBridgeArtifactsPeriodicPurge(
+        ({DateTime? referenceTime}) => getIt<CleanupExpiredElevatedBridgeArtifacts>()(referenceTime: referenceTime),
+      ),
+    )
+    ..registerLazySingleton(
+      () => CleanupAgentActionCapturedOutput(
+        getIt<IAgentActionRepository>(),
+        retention: getIt<AgentActionRetentionSettings>().capturedOutputRetention,
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionCapturedOutputPeriodicPurge(
+        ({DateTime? now}) => getIt<CleanupAgentActionCapturedOutput>()(now: now),
+      ),
+    )
+    ..registerLazySingleton(
+      () => CleanupAgentActionExecutions(
+        getIt<IAgentActionRepository>(),
+        retention: getIt<AgentActionRetentionSettings>().executionRetention,
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionExecutionPeriodicPurge(
+        ({DateTime? referenceTime}) => getIt<CleanupAgentActionExecutions>()(now: referenceTime),
+      ),
+    )
+    ..registerLazySingleton<IAgentActionOrphanProcessTerminator>(
+      () => const AgentActionOrphanProcessTerminator(),
+    )
+    ..registerLazySingleton(
+      () => ReconcileAgentActionExecutions(
+        getIt<IAgentActionRepository>(),
+        saveExecution: getIt<SaveAgentActionExecution>(),
+        orphanProcessTerminator: getIt<IAgentActionOrphanProcessTerminator>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ApplyAgentActionOnAppExitPolicies(
+        getIt<IAgentActionRepository>(),
+        getIt<CancelAgentActionExecution>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => CancelAgentActionExecution(
+        getIt<IAgentActionRepository>(),
+        getIt<AgentActionLocalRunnerRegistry>(),
+        executionQueue: getIt<ActionExecutionQueue>(),
+        saveExecution: getIt<SaveAgentActionExecution>(),
+        metrics: getIt<MetricsCollector>(),
+        elevatedCanceller: getIt<IElevatedActionExecutionCanceller>(),
+        elevatedAbortRegistry: getIt<ElevatedActionExecutionAbortRegistry>(),
+        remoteLifecycleAudit: getIt<AgentActionRemoteLifecycleAuditRecorder>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => RunAgentActionLocally(
+        getIt<IAgentActionRepository>(),
+        getIt<AgentActionLocalRunnerRegistry>(),
+        getIt<Uuid>(),
+        executionQueue: getIt<ActionExecutionQueue>(),
+        runtimeRequestValidator: getIt<AgentActionRuntimeRequestValidator>(),
+        runtimeExecutionValidator: const AgentActionRuntimeExecutionValidator(),
+        runtimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+        featureFlags: getIt<FeatureFlags>(),
+        saveExecution: getIt<SaveAgentActionExecution>(),
+        runtimeIdentity: getIt<AgentRuntimeIdentity>(),
+        metrics: getIt<MetricsCollector>(),
+        operationalProfileResolver: const AgentOperationalProfileResolver(),
+        notifyExecution: NotifyAgentActionExecutionIfConfigured(
+          getIt<SendNotification>(),
+          resolveMessages: agentActionNotificationMessagesForPlatformLocale,
+          notificationsSupported: () => getIt<RuntimeCapabilities>().supportsNotifications,
+        ),
+        secretPlaceholderResolver: getIt<AgentActionSecretPlaceholderResolver>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
+        elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
+        elevatedExecutionService: getIt<ElevatedAgentActionExecutionService>(),
+        remoteLifecycleAudit: getIt<AgentActionRemoteLifecycleAuditRecorder>(),
+        definitionSnapshotter: getIt<AgentActionDefinitionSnapshotter>(),
+        secretReferenceFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => DispatchAgentActionTrigger(
+        getIt<IAgentActionRepository>(),
+        getIt<RunAgentActionLocally>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => RunAgentActionViaRemoteTrigger(
+        getIt<IAgentActionRepository>(),
+        getIt<DispatchAgentActionTrigger>(),
+      ),
+    )
+    ..registerLazySingleton<IAgentActionSchedulerInstanceLock>(
+      () => AgentActionSchedulerInstanceLock(
+        storageContext: getIt<GlobalStorageContext>(),
+        runtimeIdentity: getIt<AgentRuntimeIdentity>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionTriggerScheduler(
+        getIt<IAgentActionRepository>(),
+        getIt<DispatchAgentActionTrigger>(),
+        featureFlags: getIt<FeatureFlags>(),
+        schedulerInstanceLock: getIt<IAgentActionSchedulerInstanceLock>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => AgentActionSubsystemCoordinator(
+        getIt<AgentActionRuntimeStateGuard>(),
+        getIt<AgentActionTriggerScheduler>(),
+        getIt<FeatureFlags>(),
+      ),
     )
     ..registerLazySingleton<ISilentUpdateInstaller>(
       HttpSilentUpdateInstaller.new,
@@ -612,7 +1237,10 @@ void registerPlugDependencyGraph(
         closeApplicationForSilentUpdate: () async {
           if (getIt.isRegistered<WindowManagerService>()) {
             await getIt<WindowManagerService>().close();
+            return;
           }
+          await shutdownApp();
+          exit(0);
         },
       ),
     )

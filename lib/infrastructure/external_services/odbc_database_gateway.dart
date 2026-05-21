@@ -3,10 +3,14 @@ import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
@@ -116,7 +120,7 @@ class _BatchConnectionState {
 /// - Performance metrics collection
 class OdbcDatabaseGateway implements IDatabaseGateway {
   OdbcDatabaseGateway(
-    this._configRepository,
+    Object configContext,
     this._service,
     IConnectionPool connectionPool,
     this._retryManager,
@@ -125,7 +129,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     FeatureFlags? featureFlags,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     ISqlInvestigationCollector? sqlInvestigation,
-  }) : _featureFlags = featureFlags,
+  }) : _activeConfigResolver = configContext is ActiveConfigResolver
+           ? configContext
+           : null,
+       _configRepository = configContext is IAgentConfigRepository
+           ? configContext
+           : null,
+       _featureFlags = featureFlags,
        _connectionManager = OdbcGatewayConnectionManager(
          service: _service,
          connectionPool: connectionPool,
@@ -145,7 +155,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
        _sqlInvestigation = sqlInvestigation,
        _uuid = const Uuid();
   final OdbcService _service;
-  final IAgentConfigRepository _configRepository;
+  final ActiveConfigResolver? _activeConfigResolver;
+  final IAgentConfigRepository? _configRepository;
   final IRetryManager _retryManager;
   final MetricsCollector _metrics;
   final IOdbcConnectionSettings _settings;
@@ -256,13 +267,42 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             error,
             operation: 'initialize_odbc',
             context: {
-              'reason': 'odbc_initialization_failed',
+              'reason': OdbcContextConstants.odbcInitializationFailedReason,
               'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
             },
           ),
         );
       },
     );
+  }
+
+  Future<Result<Config>> _resolveConfigForQuery(String? configId) {
+    final normalized = configId?.trim();
+    final resolver = _activeConfigResolver;
+    if (resolver != null) {
+      if (normalized != null && normalized.isNotEmpty) {
+        return resolver.resolveExplicit(
+          normalized,
+          metadataOnly: true,
+        );
+      }
+      return _resolveActiveConfig();
+    }
+
+    if (normalized != null && normalized.isNotEmpty) {
+      return _configRepository!.getByIdMetadata(normalized);
+    }
+    return _configRepository!.getCurrentConfigMetadata();
+  }
+
+  Future<Result<Config>> _resolveActiveConfig() {
+    final resolver = _activeConfigResolver;
+    if (resolver != null) {
+      return resolver.resolveActiveOrFallback(
+        metadataOnly: true,
+      );
+    }
+    return _configRepository!.getCurrentConfigMetadata();
   }
 
   String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
@@ -291,7 +331,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _isBufferTooSmallError(Object error) {
-    if (error is domain.Failure && error.context['reason'] == 'buffer_too_small') {
+    if (error is domain.Failure && error.context['reason'] == OdbcContextConstants.bufferTooSmallReason) {
       return true;
     }
     if (error is domain.Failure && OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(error.message)) {
@@ -525,7 +565,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return initResult.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _resolveConfigForQuery(request.configId);
 
         return configResult.fold(
           (config) async {
@@ -560,7 +600,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           error,
           operation: 'initialize_odbc',
           context: {
-            'reason': 'odbc_initialization_failed',
+            'reason': OdbcContextConstants.odbcInitializationFailedReason,
             'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
           },
         ),
@@ -635,7 +675,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               'timeout': true,
               'timeout_stage': 'sql',
               'stage': stage,
-              'reason': '${stage}_budget_exhausted',
+              'reason': OdbcContextConstants.stageBudgetExhaustedReason(stage),
             },
           ),
         );
@@ -668,7 +708,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           domain.QueryExecutionFailure.withContext(
             message: 'SQL execution failed before retry could start',
             context: {
-              'reason': '${stage}_retry_failed',
+              'reason': OdbcContextConstants.stageRetryFailedReason(stage),
               'stage': stage,
             },
           ),
@@ -865,7 +905,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         if (allowAdaptiveRetry && _isBufferTooSmallError(error)) {
           _metrics.recordDiagnosticReason(
             category: 'query',
-            reason: 'buffer_too_small',
+            reason: OdbcContextConstants.bufferTooSmallReason,
           );
           _connectionManager.recordPooledExecutionFailure(
             connectionString: connectionString,
@@ -1002,7 +1042,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             'timeout': true,
             'timeout_stage': 'sql',
             'stage': 'query',
-            'reason': 'query_timeout',
+            'reason': RpcSqlBudgetConstants.queryTimeoutReason,
             if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
           },
         ),
@@ -1249,7 +1289,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             message: 'Batch execution failed unexpectedly',
             cause: error,
             context: {
-              'reason': 'transaction_failed',
+              'reason': OdbcContextConstants.transactionFailedReason,
               'operation': 'transaction_unexpected_error',
               'transaction': options.transaction,
             },
@@ -1284,7 +1324,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       domain.QueryExecutionFailure.withContext(
         message: 'Batch transaction start failed after retry',
         context: {
-          'reason': 'transaction_failed',
+          'reason': OdbcContextConstants.transactionFailedReason,
           'operation': 'transaction_begin',
         },
       ),
@@ -1317,7 +1357,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return Failure(initResult.exceptionOrNull() ?? domain.ConnectionFailure('Failed to initialize ODBC for batch'));
     }
 
-    final configResult = await _configRepository.getCurrentConfig();
+    final configResult = await _resolveActiveConfig();
     if (configResult.isError()) {
       return Failure(
         domain.ConfigurationFailure(
@@ -1387,7 +1427,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
           _metrics.recordDiagnosticReason(
             category: 'batch',
-            reason: 'read_only_parallel_global_wait_timeout',
+            reason: RpcSqlDiagnosticsConstants.readOnlyParallelGlobalWaitTimeoutReason,
           );
           results[index] = SqlCommandResult.failure(
             index: index,
@@ -1507,7 +1547,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final configResult = await _configRepository.getCurrentConfig();
+    final configResult = await _resolveActiveConfig();
     if (configResult.isError()) {
       return Failure(
         domain.ConfigurationFailure(
@@ -1637,7 +1677,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           message: 'Failed to start transaction',
           cause: error,
           context: {
-            'reason': 'transaction_failed',
+            'reason': OdbcContextConstants.transactionFailedReason,
             'operation': 'transaction_begin',
             'error': _odbcErrorMessage(error),
           },
@@ -1671,7 +1711,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           message: 'Failed to commit transaction',
           cause: error,
           context: {
-            'reason': 'transaction_failed',
+            'reason': OdbcContextConstants.transactionFailedReason,
             'operation': 'transaction_commit',
             'error': _odbcErrorMessage(error),
           },
@@ -1714,7 +1754,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 message: 'Transaction aborted due to command validation failure',
                 cause: failure,
                 context: {
-                  'reason': 'transaction_failed',
+                  'reason': OdbcContextConstants.transactionFailedReason,
                   'operation': 'transaction_validation',
                   'failedIndex': i,
                   'detail': failure.message,
@@ -1803,7 +1843,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   message: 'Transaction aborted due to command failure',
                   cause: error,
                   context: {
-                    'reason': 'transaction_failed',
+                    'reason': OdbcContextConstants.transactionFailedReason,
                     'operation': 'transaction_execute',
                     'failedIndex': i,
                     'detail': failure.message,
@@ -1890,7 +1930,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 message: 'Transaction aborted due to timeout',
                 cause: error,
                 context: {
-                  'reason': 'transaction_failed',
+                  'reason': OdbcContextConstants.transactionFailedReason,
                   'operation': 'transaction_timeout',
                   'failedIndex': i,
                   'timeout': true,
@@ -1905,7 +1945,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               message: 'Batch SQL execution timeout',
               cause: error,
               context: {
-                'reason': 'query_timeout',
+                'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                 'timeout': true,
                 'timeout_stage': 'sql',
                 'stage': 'batch',
@@ -2011,7 +2051,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return initResult.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _resolveActiveConfig();
 
         return configResult.fold(
           (config) async {
@@ -2054,7 +2094,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final initResult = await _ensureInitialized();
     return initResult.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _resolveActiveConfig();
         return configResult.fold(
           (config) async {
             final localConfig = _buildDatabaseConfig(config);
@@ -2171,7 +2211,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'bulk_insert',
-                  'reason': 'query_timeout',
+                  'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
                 },
               ),
@@ -2359,7 +2399,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             'timeout': true,
             'timeout_stage': 'sql',
             'stage': 'query',
-            'reason': 'query_timeout',
+            'reason': RpcSqlBudgetConstants.queryTimeoutReason,
             if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
           },
         ),
@@ -2432,7 +2472,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       _metrics.recordQueryTimeout();
       _metrics.recordDiagnosticReason(
         category: 'timeout',
-        reason: 'query_timeout',
+        reason: RpcSqlBudgetConstants.queryTimeoutReason,
       );
       if (!usesPreparedTimeout) {
         await _cancelConnectionForTimeout(connId, connectionString);
@@ -2779,7 +2819,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       _metrics.recordQueryTimeout();
       _metrics.recordDiagnosticReason(
         category: 'timeout',
-        reason: 'query_timeout',
+        reason: RpcSqlBudgetConstants.queryTimeoutReason,
       );
       developer.log(
         'SQL non-query timed out before completion',
@@ -3071,7 +3111,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               if (_isBufferTooSmallError(error)) {
                 _metrics.recordDiagnosticReason(
                   category: 'query',
-                  reason: 'buffer_too_small',
+                  reason: OdbcContextConstants.bufferTooSmallReason,
                 );
                 final currentBufferBytes =
                     effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
@@ -3171,7 +3211,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'query',
-                  'reason': 'query_timeout',
+                  'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
                 },
               ),
@@ -3272,7 +3312,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'query',
-                  'reason': 'query_timeout',
+                  'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
                 },
               ),

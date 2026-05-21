@@ -14,6 +14,17 @@ Atualizacao 2026-05-14:
 - `.env.example`, E2E docs e benchmark wrapper local foram atualizados para
   `ODBC_ASYNC_WORKER_COUNT` e `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 
+Atualizacao 2026-05-21:
+
+- Este arquivo passa a ser lido como resumo historico do rollout inicial das
+  quick wins.
+- O estado tecnico atual do eixo ODBC/performance esta em
+  `performance_reliability_improvements.md` e
+  `odbc_worker_evaluation_criteria.md`.
+- `RetryManager` continua sendo o mecanismo padrao de retry e o caminho de
+  streaming ja esta implementado no app/`odbc_fast`; eles nao devem aparecer
+  como backlog aberto neste resumo.
+
 ## ✅ Melhorias Implementadas
 
 Todas as melhorias de alta prioridade foram implementadas com sucesso:
@@ -206,6 +217,7 @@ Todas as melhorias de alta prioridade foram implementadas com sucesso:
 ### Light Load (< 10 req/s)
 ```env
 ODBC_POOL_SIZE=4
+ODBC_ASYNC_MAX_PENDING_REQUESTS=16
 SQL_QUEUE_MAX_SIZE=20
 SQL_QUEUE_MAX_WORKERS=4
 ```
@@ -213,6 +225,7 @@ SQL_QUEUE_MAX_WORKERS=4
 ### Medium Load (10-50 req/s)
 ```env
 ODBC_POOL_SIZE=8
+ODBC_ASYNC_MAX_PENDING_REQUESTS=32
 SQL_QUEUE_MAX_SIZE=50
 SQL_QUEUE_MAX_WORKERS=8
 ```
@@ -220,6 +233,7 @@ SQL_QUEUE_MAX_WORKERS=8
 ### Heavy Load (> 50 req/s)
 ```env
 ODBC_POOL_SIZE=16
+ODBC_ASYNC_MAX_PENDING_REQUESTS=64
 SQL_QUEUE_MAX_SIZE=100
 SQL_QUEUE_MAX_WORKERS=16
 ```
@@ -234,26 +248,34 @@ CIRCUIT_BREAKER_RESET_SEC=30
 
 ## 📝 Próximos Passos Opcionais
 
-As seguintes melhorias foram planejadas mas não implementadas (baixa prioridade):
+Backlog opcional remanescente do rollout inicial:
+
+Nota de atualizacao: retry, streaming e tuning do worker pool nao sao backlog
+aberto neste repo; o estado atual desses temas esta em
+`performance_reliability_improvements.md` e
+`odbc_worker_evaluation_criteria.md`. Os itens abaixo devem ser lidos como
+historico do rollout inicial.
 
 ### Query Plan Caching
+
+Status atual destes subtemas:
+
+- Retry exponencial: ja implementado; `RetryManager` segue como caminho padrao.
+- Streaming: ja implementado no app; `odbc_fast` tenta streaming batched antes
+  do fallback.
+- Tuning async: medir `ODBC_ASYNC_WORKER_COUNT` e
+  `ODBC_ASYNC_MAX_PENDING_REQUESTS` com benchmark e burst real.
 - Cache de prepared statements para queries parametrizadas
 - Redução de ~10-20% na latência
 - Complexidade: gerenciamento de lifecycle
 
-### Retry com Exponential Backoff
-- Substituir backoff linear por exponencial
-- Melhor comportamento sob carga
-- Reduz "thundering herd" problem
-
-### Query Streaming para RPC
-- Streaming de grandes resultados via protocolo Plug
-- Reduz pico de memória
-- Requer mudanças no hub
-
 ---
 
 ## 🧪 Testes
+
+Os comandos abaixo registram a validação histórica do rollout inicial. Para o
+estado atual, use os gates e testes descritos em
+`performance_reliability_improvements.md`.
 
 Todos os testes unitários dos novos componentes passaram (18/18):
 
@@ -276,6 +298,7 @@ dart analyze lib/application/queue/ lib/application/gateway/ \
 - **Plano Original**: `docs/architecture/odbc_concurrency_plan_e499a5bb.plan.md`
 - **Melhorias Detalhadas**: `docs/architecture/performance_reliability_improvements.md`
 - **Quick Wins**: `docs/architecture/quick_wins_checklist.md`
+- **Runbook Operacional**: `docs/architecture/odbc_operational_validation_runbook.md`
 - **Testes E2E**: `docs/testing/sql_queue_concurrency_tests.md`
 - **Critérios Workers**: `docs/architecture/odbc_worker_evaluation_criteria.md`
 
@@ -283,10 +306,10 @@ dart analyze lib/application/queue/ lib/application/gateway/ \
 
 ## ✨ Resumo
 
-✅ **7 melhorias implementadas**  
-✅ **0 erros de compilação**  
-✅ **18 testes unitários passando**  
-✅ **Sistema pronto para produção**
+✅ **7 quick wins do rollout inicial implementadas**  
+✅ **Circuit breaker, warm-up, health e fila integrados**  
+✅ **Worker pool async documentado nos docs mais novos**  
+✅ **Próximo trabalho real: tuning e validação operacional**
 
 O sistema agora possui:
 - ✅ Proteção contra sobrecarga (fila SQL + backpressure)

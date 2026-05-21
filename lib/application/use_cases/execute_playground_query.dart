@@ -1,5 +1,7 @@
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -12,15 +14,22 @@ import 'package:uuid/uuid.dart';
 class ExecutePlaygroundQuery {
   ExecutePlaygroundQuery(
     this._databaseGateway,
-    this._configRepository,
+    Object configContext,
     this._uuid,
-  );
+  ) : _activeConfigResolver = configContext is ActiveConfigResolver
+           ? configContext
+           : null,
+       _configRepository = configContext is IAgentConfigRepository
+           ? configContext
+           : null;
   final IDatabaseGateway _databaseGateway;
-  final IAgentConfigRepository _configRepository;
+  final ActiveConfigResolver? _activeConfigResolver;
+  final IAgentConfigRepository? _configRepository;
   final Uuid _uuid;
 
   Future<Result<QueryResponse>> call(
     String query, {
+    String? configId,
     QueryPaginationRequest? pagination,
     SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
   }) async {
@@ -44,13 +53,14 @@ class ExecutePlaygroundQuery {
 
     return validation.fold(
       (_) async {
-        final configResult = await _configRepository.getCurrentConfig();
+        final configResult = await _resolveConfig(configId);
 
         return configResult.fold(
           (config) async {
             final request = QueryRequest(
               id: _uuid.v4(),
               agentId: config.agentId,
+              configId: config.id,
               query: query,
               timestamp: DateTime.now(),
               pagination: resolvedPagination,
@@ -74,6 +84,25 @@ class ExecutePlaygroundQuery {
         return Failure(failure);
       },
     );
+  }
+
+  Future<Result<Config>> _resolveConfig(String? configId) {
+    final resolver = _activeConfigResolver;
+    final normalized = configId?.trim();
+    if (resolver != null) {
+      if (normalized != null && normalized.isNotEmpty) {
+        return resolver.resolveExplicit(
+          normalized,
+          metadataOnly: true,
+        );
+      }
+      return resolver.resolveActiveOrFallback(metadataOnly: true);
+    }
+
+    if (normalized != null && normalized.isNotEmpty) {
+      return _configRepository!.getByIdMetadata(normalized);
+    }
+    return _configRepository!.getCurrentConfigMetadata();
   }
 
   QueryPaginationRequest? _resolvePagination(

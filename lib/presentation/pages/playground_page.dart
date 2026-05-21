@@ -61,6 +61,19 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant PlaygroundPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.configId != widget.configId && widget.configId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _loadConfig(widget.configId!);
+      });
+    }
+  }
+
   Future<void> _loadConfig(String configId) async {
     final configProvider = context.read<ConfigProvider>();
     await configProvider.loadConfigById(configId);
@@ -163,7 +176,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
         config.connectionString,
       );
     } else {
-      await provider.executeQuery(resetPagination: true);
+      await provider.executeQuery(
+        resetPagination: true,
+        configId: config?.id ?? widget.configId,
+      );
     }
   }
 

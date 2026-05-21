@@ -41,7 +41,7 @@ void main() {
     });
 
     test('routes eligible SQL Server driver through native pool and reports diagnostics', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -90,11 +90,11 @@ void main() {
       ).called(1);
       verifyNever(() => service.connect(any(), options: any(named: 'options')));
       verify(() => service.poolReleaseConnection('native-1')).called(1);
-      verify(() => configRepository.getCurrentConfig()).called(1);
+      verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
     test('routes to lease pool when custom connection options are required', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -144,7 +144,7 @@ void main() {
     });
 
     test('uses native-compatible acquire and preserves lease options on native fallback', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -205,7 +205,7 @@ void main() {
     });
 
     test('opens native circuit from execution-stage structural failure feedback', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -276,7 +276,7 @@ void main() {
     });
 
     test('opens execution feedback circuit only for the failed connection string', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       var nativeCounter = 0;
@@ -350,7 +350,7 @@ void main() {
     });
 
     test('falls back to lease pool on structured native timeout and records fallback metric', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -406,11 +406,11 @@ void main() {
       expect(metrics.odbcNativePoolFallbackCount, 1);
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(1);
       verify(() => service.disconnect('lease-1')).called(1);
-      verify(() => configRepository.getCurrentConfig()).called(1);
+      verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
     test('opens native circuit after repeated fallback and skips native attempts temporarily', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -469,11 +469,11 @@ void main() {
         () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options')),
       ).called(2);
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(3);
-      verify(() => configRepository.getCurrentConfig()).called(1);
+      verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
     test('warms up eligible SQL Server driver through lease pool by default', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -515,7 +515,7 @@ void main() {
     });
 
     test('can opt into native warm-up for benchmarks and isolated pool validation', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
       when(
@@ -566,7 +566,7 @@ void main() {
     });
 
     test('keeps SQL Anywhere on lease pool and marks native as ineligible', () async {
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlAnywhereConfig()),
       );
       when(
@@ -606,12 +606,12 @@ void main() {
       expect(diagnostics['native_eligible'], isFalse);
       verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options')));
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
-      verify(() => configRepository.getCurrentConfig()).called(1);
+      verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
     test('invalidates cached driver info when configuration changes', () async {
       var config = _sqlServerConfig();
-      when(() => configRepository.getCurrentConfig()).thenAnswer(
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(config),
       );
       when(

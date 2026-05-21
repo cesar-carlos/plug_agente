@@ -229,27 +229,42 @@ def main() -> None:
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
 
+    print("\n2.1. Build elevated action runner helper...", flush=True)
+    elevated_runner_script = PROJECT_ROOT / "tool" / "build_elevated_runner.ps1"
+    if elevated_runner_script.exists():
+        run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(elevated_runner_script)])
+    else:
+        raise SystemExit("Erro: tool/build_elevated_runner.ps1 nao encontrado")
+
     if not (BUILD_DIR / "plug_agente.exe").exists():
         raise SystemExit("Erro: plug_agente.exe nao encontrado no build")
     if not (BUILD_DIR / "plug_update_helper.exe").exists():
         raise SystemExit("Erro: plug_update_helper.exe nao encontrado no build")
+    if not (BUILD_DIR / "plug_agente_elevated_runner.exe").exists():
+        raise SystemExit(
+            "Erro: plug_agente_elevated_runner.exe nao encontrado no build. "
+            "Execute tool/build_elevated_runner.ps1 antes do instalador.",
+        )
 
     app_exe = BUILD_DIR / "plug_agente.exe"
     helper_exe = BUILD_DIR / "plug_update_helper.exe"
+    elevated_helper_exe = BUILD_DIR / "plug_agente_elevated_runner.exe"
     if should_sign_artifacts():
-        print("\n2.1. Assinando executavel Windows...", flush=True)
+        print("\n3.1. Assinando executavel Windows...", flush=True)
         sign_file(app_exe)
-        print("\n2.2. Assinando helper de update Windows...", flush=True)
+        print("\n3.2. Assinando helper de update Windows...", flush=True)
         sign_file(helper_exe)
+        print("\n3.3. Assinando elevated action runner...", flush=True)
+        sign_file(elevated_helper_exe)
 
-    print("\n3. Compilando instalador Inno Setup...", flush=True)
+    print("\n4. Compilando instalador Inno Setup...", flush=True)
     iscc = find_iscc()
     run([iscc, str(SETUP_ISS)], cwd=INSTALLER_DIR)
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     installer_path = find_generated_installer()
     if should_sign_artifacts():
-        print("\n3.1. Assinando instalador Windows...", flush=True)
+        print("\n4.1. Assinando instalador Windows...", flush=True)
         sign_file(installer_path)
     print(f"\nInstalador gerado em: {installer_path}", flush=True)
 

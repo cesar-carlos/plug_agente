@@ -21,6 +21,11 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
     r'Version (\d+)\.(\d+)\.(\d+)',
   );
 
+  static final RegExp _fallbackWindowsServerPattern = RegExp(
+    r'windows\s+server',
+    caseSensitive: false,
+  );
+
   static int _defaultRtlGetVersionInvoker(Pointer<OSVERSIONINFOEX> versionInfo) {
     final rtlGetVersion = DynamicLibrary.open('ntdll.dll')
         .lookupFunction<Int32 Function(Pointer<OSVERSIONINFOEX>), int Function(Pointer<OSVERSIONINFOEX>)>(
@@ -123,7 +128,7 @@ class WindowsRuntimeProbe implements IWindowsRuntimeProbe {
           majorVersion: major,
           minorVersion: minor,
           buildNumber: build,
-          isServer: osVersionLower.contains('server'),
+          isServer: _fallbackWindowsServerPattern.hasMatch(osVersionLower),
           productName: 'Windows (fallback detection)',
         );
         _lastDiagnostics = RuntimeDetectionDiagnostics.detected(

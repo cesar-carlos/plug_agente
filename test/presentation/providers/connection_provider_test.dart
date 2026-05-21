@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:plug_agente/application/services/hub_recovery_auth_coordinator.dart';
+import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
@@ -27,7 +27,7 @@ class _MockCheckOdbcDriver extends Mock implements CheckOdbcDriver {}
 
 class _MockCheckHubAvailability extends Mock implements CheckHubAvailability {}
 
-class _MockHubRecoveryAuthCoordinator extends Mock implements HubRecoveryAuthCoordinator {}
+class _MockHubSessionCoordinator extends Mock implements HubSessionCoordinator {}
 
 class _MockConfigProvider extends Mock implements ConfigProvider {}
 
@@ -89,7 +89,7 @@ void main() {
   late _MockTestDbConnection testDb;
   late _MockCheckOdbcDriver checkDriver;
   late _MockCheckHubAvailability checkHubAvailability;
-  late _MockHubRecoveryAuthCoordinator hubRecoveryAuthCoordinator;
+  late _MockHubSessionCoordinator hubRecoveryAuthCoordinator;
   late _MockConfigProvider configProvider;
   late _FakeTransport transport;
 
@@ -103,7 +103,7 @@ void main() {
     testDb = _MockTestDbConnection();
     checkDriver = _MockCheckOdbcDriver();
     checkHubAvailability = _MockCheckHubAvailability();
-    hubRecoveryAuthCoordinator = _MockHubRecoveryAuthCoordinator();
+    hubRecoveryAuthCoordinator = _MockHubSessionCoordinator();
     configProvider = _MockConfigProvider();
     transport = _FakeTransport();
     when(() => configProvider.currentConfig).thenReturn(null);
@@ -168,13 +168,14 @@ void main() {
       });
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
         const AuthToken(token: 'tok-1', refreshToken: 'refresh-1'),
       );
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer((_) => refreshCompleter.future);
 
@@ -340,8 +341,13 @@ void main() {
       ).thenAnswer((_) async => const Success(unit));
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(null);
-      when(() => mockAuth.refreshToken(any())).thenAnswer((_) async {});
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(null);
+      when(
+        () => mockAuth.refreshToken(
+          configId: any(named: 'configId'),
+          serverUrl: any(named: 'serverUrl'),
+        ),
+      ).thenAnswer((_) async {});
 
       final provider = ConnectionProvider(
         connectToHub,
@@ -380,13 +386,14 @@ void main() {
         });
 
         final mockAuth = _MockAuthProvider();
-        when(() => mockAuth.currentToken).thenReturn(
+        when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
           const AuthToken(token: 'access', refreshToken: 'refresh'),
         );
         when(
           () => hubRecoveryAuthCoordinator.refreshSession(
-            any(),
-            currentToken: any(named: 'currentToken'),
+            any<String>(),
+            configId: any(named: 'configId'),
+            currentToken: any<AuthToken>(named: 'currentToken'),
           ),
         ).thenAnswer(
           (_) async => const Success(
@@ -397,6 +404,7 @@ void main() {
           () => mockAuth.restoreToken(
             any(),
             authenticated: any(named: 'authenticated'),
+            configId: any(named: 'configId'),
           ),
         ).thenReturn(null);
 
@@ -424,8 +432,9 @@ void main() {
 
         verify(
           () => hubRecoveryAuthCoordinator.refreshSession(
-            any(),
-            currentToken: any(named: 'currentToken'),
+            any<String>(),
+            configId: any(named: 'configId'),
+            currentToken: any<AuthToken>(named: 'currentToken'),
           ),
         ).called(greaterThanOrEqualTo(2));
 
@@ -506,27 +515,38 @@ void main() {
 
       final mockAuth = _MockAuthProvider();
       when(
-        () => mockAuth.currentToken,
+        () => mockAuth.currentTokenForConfig(any()),
       ).thenReturn(const AuthToken(token: 'tok-2', refreshToken: 'refresh-2'));
-      when(mockAuth.logout).thenAnswer((_) async {});
+      when(
+        () => mockAuth.logout(
+          configId: any(named: 'configId'),
+          clearStoredSession: any(named: 'clearStoredSession'),
+        ),
+      ).thenAnswer((_) async {});
       when(() => mockAuth.isAuthenticated).thenReturn(true);
       when(() => mockAuth.error).thenReturn('');
       when(
-        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+        ),
       ).thenReturn(null);
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer(
         (_) async => Failure(Exception('refresh failed')),
       );
       when(
         () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
-          any(),
-          any(),
+          any<String>(),
+          any<String>(),
+          configId: any(named: 'configId'),
         ),
       ).thenAnswer(
         (_) async => const Success(
@@ -559,8 +579,9 @@ void main() {
 
       verify(
         () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
-          any(),
-          any(),
+          any<String>(),
+          any<String>(),
+          configId: any(named: 'configId'),
         ),
       ).called(greaterThanOrEqualTo(1));
       expect(callCount, greaterThanOrEqualTo(3));
@@ -575,17 +596,22 @@ void main() {
       when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
         const AuthToken(token: 'access', refreshToken: 'refresh'),
       );
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
       when(
-        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+        ),
       ).thenReturn(null);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer(
         (_) async => Failure(
@@ -630,14 +656,15 @@ void main() {
       when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
         const AuthToken(token: 'access', refreshToken: 'refresh'),
       );
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer(
         (_) async => Failure(domain_failures.ValidationFailure('Refresh token expired or revoked')),
@@ -685,8 +712,9 @@ void main() {
       when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer((_) async {
         refreshCalls++;
@@ -694,11 +722,15 @@ void main() {
       });
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
         const AuthToken(token: 'access', refreshToken: 'refresh'),
       );
       when(
-        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+        ),
       ).thenReturn(null);
 
       final provider = ConnectionProvider(
@@ -741,8 +773,9 @@ void main() {
       when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
       when(
         () => hubRecoveryAuthCoordinator.refreshSession(
-          any(),
-          currentToken: any(named: 'currentToken'),
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       ).thenAnswer(
         (_) async => const Success(
@@ -751,8 +784,9 @@ void main() {
       );
       when(
         () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
-          any(),
-          any(),
+          any<String>(),
+          any<String>(),
+          configId: any(named: 'configId'),
         ),
       ).thenAnswer(
         (_) async => const Success(
@@ -781,13 +815,22 @@ void main() {
       when(() => configProvider.currentConfig).thenReturn(configWithCredentials);
 
       final mockAuth = _MockAuthProvider();
-      when(() => mockAuth.currentToken).thenReturn(
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
         const AuthToken(token: 'access', refreshToken: 'refresh'),
       );
-      when(mockAuth.logout).thenAnswer((_) async {});
+      when(
+        () => mockAuth.logout(
+          configId: any(named: 'configId'),
+          clearStoredSession: any(named: 'clearStoredSession'),
+        ),
+      ).thenAnswer((_) async {});
       when(() => mockAuth.isAuthenticated).thenReturn(true);
       when(
-        () => mockAuth.restoreToken(any(), authenticated: any(named: 'authenticated')),
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+        ),
       ).thenReturn(null);
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
 
@@ -818,8 +861,9 @@ void main() {
 
       verify(
         () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
-          any(),
-          any(),
+          any<String>(),
+          any<String>(),
+          configId: any(named: 'configId'),
         ),
       ).called(greaterThanOrEqualTo(2));
 

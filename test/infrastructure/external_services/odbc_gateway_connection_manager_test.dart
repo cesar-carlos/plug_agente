@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
@@ -45,7 +46,7 @@ void main() {
 
       expect(result.isError(), isTrue);
       final failure = result.exceptionOrNull()! as domain.Failure;
-      expect(failure.context['reason'], equals('pool_wait_timeout'));
+      expect(failure.context['reason'], equals(OdbcContextConstants.poolWaitTimeoutReason));
       expect(metrics.poolAcquireTimeoutCount, equals(1));
     });
 
@@ -57,7 +58,7 @@ void main() {
 
       expect(result.isError(), isTrue);
       final failure = result.exceptionOrNull()! as domain.Failure;
-      expect(failure.context['reason'], equals('direct_connection_limit_timeout'));
+      expect(failure.context['reason'], equals(OdbcContextConstants.directConnectionLimitTimeoutReason));
       expect(metrics.directConnectionAcquireTimeoutCount, equals(1));
     });
 

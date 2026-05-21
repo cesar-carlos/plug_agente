@@ -231,9 +231,107 @@ void main() {
     );
   }
 
+  final runLiveHubSigning = get('RUN_LIVE_HUB_SIGNING_TESTS') == 'true';
+  final runLiveHubAgentActions = get('RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS') == 'true';
+  final hubSigningKey = get('PAYLOAD_SIGNING_KEY');
+  final hubSigningKeyId = get('PAYLOAD_SIGNING_KEY_ID') ?? get('PAYLOAD_SIGNING_ACTIVE_KEY_ID');
+  final hubSigningOk =
+      hubSigningKey != null &&
+      hubSigningKey.trim().isNotEmpty &&
+      hubSigningKeyId != null &&
+      hubSigningKeyId.trim().isNotEmpty;
+  final hubAgentActionReady = runLiveHub && hubUrlOk && hubTokenOk && runLiveHubSigning && hubSigningOk;
+
+  print('');
+  print(
+    'RUN_LIVE_HUB_SIGNING_TESTS: ${runLiveHubSigning ? "OK (true)" : "não definido ou false"}',
+  );
+  print(
+    'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS: ${runLiveHubAgentActions ? "OK (true)" : "não definido ou false"}',
+  );
+  print(
+    'E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY: ${get("E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY") == "true" ? "true" : "não definido ou false"}',
+  );
+  print(
+    'E2E_HUB_EXPECT_AGENT_ACTION_RPC: ${get("E2E_HUB_EXPECT_AGENT_ACTION_RPC") == "true" ? "true" : "não definido ou false"}',
+  );
+  if (runLiveHubAgentActions && hubAgentActionReady) {
+    print('  -> hub_agent_action_rpc_live_e2e_test: será executado');
+  } else if (!runLiveHubAgentActions) {
+    print(
+      '  -> hub_agent_action_rpc_live_e2e_test: ignorado '
+      '(defina RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true)',
+    );
+  } else {
+    print(
+      '  -> hub_agent_action_rpc_live_e2e_test: ignorado '
+      '(requer RUN_LIVE_HUB_TESTS, E2E_HUB_URL/TOKEN, RUN_LIVE_HUB_SIGNING_TESTS e chaves HMAC)',
+    );
+  }
+  if (!hubSigningOk && (runLiveHubSigning || runLiveHubAgentActions)) {
+    print(
+      'PAYLOAD_SIGNING_KEY + PAYLOAD_SIGNING_KEY_ID (ou PAYLOAD_SIGNING_ACTIVE_KEY_ID): '
+      '${hubSigningOk ? "OK" : "incompleto"}',
+    );
+    print(
+      '  -> signing: dart run tool/promote_e2e_signing_from_monorepo_env.dart '
+      'ou dart run tool/generate_dev_e2e_signing.dart --write (mesmo par em plug_server/.env)',
+    );
+    print('  -> validate: dart run tool/validate_live_hub_agent_actions_env.dart');
+  }
+
+  final comStubEnabled = get('AGENT_ACTION_COM_STUB_ENABLED') == 'true';
+  final comStubProgId = get('AGENT_ACTION_COM_STUB_PROG_ID');
+  final comStubMember = get('AGENT_ACTION_COM_STUB_MEMBER_NAME');
+  final comStubProgOk = comStubProgId != null && comStubProgId.trim().isNotEmpty;
+  final comStubMemberOk = comStubMember != null && comStubMember.trim().isNotEmpty;
+  print('');
+  print(
+    'AGENT_ACTION_COM_STUB_ENABLED: ${comStubEnabled ? "true (homologacao DI)" : "não definido ou false"}',
+  );
+  print('AGENT_ACTION_COM_STUB_PROG_ID: ${comStubProgOk ? comStubProgId : "não definido"}');
+  print(
+    'AGENT_ACTION_COM_STUB_MEMBER_NAME: ${comStubMemberOk ? comStubMember : "não definido"}',
+  );
+  if (comStubEnabled && comStubProgOk && comStubMemberOk) {
+    print('  -> COM stub handler: registrado no bootstrap quando o app carregar .env');
+  } else if (comStubEnabled) {
+    print('  -> COM stub: incompleto (defina PROG_ID e MEMBER_NAME)');
+  } else {
+    print('  -> COM stub: desligado (handlers de producao devem ser registrados no codigo)');
+  }
+
+  final elevatedExe = get('ELEVATED_ACTION_RUNNER_EXE');
+  final elevatedExeOk = elevatedExe != null && elevatedExe.isNotEmpty && File(elevatedExe).existsSync();
+  final defaultElevatedBuild = File('$root${Platform.pathSeparator}build${Platform.pathSeparator}elevated_runner${Platform.pathSeparator}plug_agente_elevated_runner.exe');
+  print('');
+  print('ELEVATED_ACTION_RUNNER_EXE: ${elevatedExe ?? "(nao definido — tenta exe ao lado do plug_agente.exe)"}');
+  if (elevatedExeOk) {
+    print('  -> helper elevado: caminho do .env existe');
+  } else if (defaultElevatedBuild.existsSync()) {
+    print('  -> build local encontrado: ${defaultElevatedBuild.path} (defina ELEVATED_ACTION_RUNNER_EXE ou copie para o runner Release)');
+  } else {
+    print(r'  -> helper elevado: rode .\tool\build_elevated_runner.ps1 antes de homologar elevado na UI');
+  }
+  print(r'  -> homologacao elevada: .\tool\homologate_elevated_runner.ps1 -Build [-RunUnitTests]');
+  print('     manual UI/UAC: docs/testing/e2e_setup.md');
+
   print('');
   print(
     'Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart',
+  );
+  print(
+    'Hub agent.action (opt-in): flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live',
+  );
+  print(
+    r'Agent actions local gate (sem Hub): .\tool\homologate_hub_agent_actions.ps1 -RunContractTests',
+  );
+  print('Agent actions live Hub env only: dart run tool/validate_live_hub_agent_actions_env.dart');
+  print(
+    r'Agent actions live Hub full: .\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunContractTests -RunLiveTests',
+  );
+  print(
+    'Elevated (unit): flutter test test/infrastructure/actions/elevated_action_runner_installer_test.dart',
   );
   print('Burst (opt-in): flutter test test/integration/sql_queue_burst_test.dart');
 }

@@ -88,10 +88,13 @@ class OdbcE2eRpcHarness {
 
     final configRepo = MockAgentConfigRepository();
     final cfg = _configFor(dsn, dialect);
-    // ignore: unnecessary_lambdas
-    when(() => configRepo.getCurrentConfig()).thenAnswer(
-      (_) => Future.value(Success(cfg)),
-    );
+    Future<Result<Config>> configAnswer(Invocation _) async => Success(cfg);
+
+    when(configRepo.getCurrentConfig).thenAnswer(configAnswer);
+    // The gateway resolves metadata-only configs for direct ODBC execution.
+    when(configRepo.getCurrentConfigMetadata).thenAnswer(configAnswer);
+    when(() => configRepo.getById(any())).thenAnswer(configAnswer);
+    when(() => configRepo.getByIdMetadata(any())).thenAnswer(configAnswer);
 
     final pool = OdbcConnectionPool(service, settings);
     final retry = RetryManager();
@@ -125,6 +128,7 @@ class OdbcE2eRpcHarness {
     when(() => featureFlags.enableSocketStreamingFromDb).thenReturn(false);
     when(() => featureFlags.enableSocketStreamingChunks).thenReturn(false);
     when(() => featureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
+    when(() => featureFlags.enableAgentActionRemoteAudit).thenReturn(false);
 
     final policyResolver = MockAuthorizationPolicyResolver();
     when(() => policyResolver.resolvePolicy(any())).thenAnswer(

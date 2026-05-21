@@ -193,7 +193,7 @@ class HubSessionCoordinator {
       return Failure(sessionResult.exceptionOrNull()!);
     }
 
-    final legacySaveResult = await _saveAuthToken(token);
+    final legacySaveResult = await _saveAuthToken(configId, token);
     return legacySaveResult.fold(
       (_) => Success(token),
       Failure.new,

@@ -43,6 +43,9 @@ class ArbRpcErrorUserMessageLocalizer implements RpcErrorUserMessageLocalizer {
   String replayDetected() => _l10n.msgRpcReplayDetected;
 
   @override
+  String agentActionsTemporarilyUnavailable() => _l10n.msgRpcAgentActionsTemporarilyUnavailable;
+
+  @override
   String sqlValidationFailed() => _l10n.msgRpcSqlValidationFailed;
 
   @override
@@ -68,8 +71,4 @@ class ArbRpcErrorUserMessageLocalizer implements RpcErrorUserMessageLocalizer {
 
   @override
   String internalError() => _l10n.msgRpcInternalError;
-
-  @override
-  String agentActionsTemporarilyUnavailable() =>
-      _l10n.msgRpcAgentActionsTemporarilyUnavailable;
 }

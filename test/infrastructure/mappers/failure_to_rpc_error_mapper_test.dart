@@ -1,6 +1,13 @@
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
+import 'package:plug_agente/core/constants/rpc_error_data_constants.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
@@ -248,7 +255,7 @@ void main() {
           message: 'Pool de conexoes ODBC esgotado',
           context: {
             'poolExhausted': true,
-            'reason': 'pool_exhausted',
+            'reason': OdbcContextConstants.poolExhaustedReason,
             'user_message': 'O agente esta sem conexoes livres no momento.',
           },
         );
@@ -259,7 +266,7 @@ void main() {
         expect(rpcError.message, equals('Connection pool exhausted'));
         final data = rpcError.data as Map<String, dynamic>;
         expect(data['reason'], equals('connection_pool_exhausted'));
-        expect(data['odbc_reason'], equals('pool_exhausted'));
+        expect(data['odbc_reason'], equals(OdbcContextConstants.poolExhaustedReason));
         expect(
           data['type'],
           equals('https://plugdb.dev/problems/database-error'),
@@ -273,12 +280,28 @@ void main() {
       },
     );
 
+    test('should map missing client token ConfigurationFailure to authenticationFailed', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'Client token is required for remote agent action RPC',
+        context: {
+          'authentication': true,
+          'reason': RpcClientTokenConstants.missingClientTokenReason,
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.authenticationFailed));
+      expect(data['reason'], equals(RpcClientTokenConstants.missingClientTokenReason));
+    });
+
     test('should map sql_queue_full to rateLimited with subreason', () {
       final failure = ConfigurationFailure.withContext(
         message: 'SQL execution queue is full; system is under heavy load',
         context: {
           'rpc_error_code': RpcErrorCode.rateLimited,
-          'reason': 'sql_queue_full',
+          'reason': SqlPipelineContextConstants.sqlQueueFullReason,
           'retryable': true,
           'user_message': 'O agente esta ocupado executando consultas. Aguarde alguns instantes e tente novamente.',
         },
@@ -289,7 +312,7 @@ void main() {
 
       expect(rpcError.code, equals(RpcErrorCode.rateLimited));
       expect(data['reason'], equals('rate_limited'));
-      expect(data['subreason'], equals('sql_queue_full'));
+      expect(data['subreason'], equals(SqlPipelineContextConstants.sqlQueueFullReason));
       expect(data.containsKey('odbc_reason'), isFalse);
       expect(
         data['user_message'],
@@ -302,7 +325,7 @@ void main() {
         message: 'SQL request timed out waiting in queue',
         context: {
           'rpc_error_code': RpcErrorCode.rateLimited,
-          'reason': 'queue_wait_timeout',
+          'reason': SqlPipelineContextConstants.queueWaitTimeoutReason,
           'timeout': true,
           'timeout_stage': 'queue',
           'retryable': true,
@@ -315,7 +338,7 @@ void main() {
 
       expect(rpcError.code, equals(RpcErrorCode.rateLimited));
       expect(data['reason'], equals('rate_limited'));
-      expect(data['subreason'], equals('queue_wait_timeout'));
+      expect(data['subreason'], equals(SqlPipelineContextConstants.queueWaitTimeoutReason));
       expect(data.containsKey('odbc_reason'), isFalse);
       expect(data['timeout_stage'], equals('queue'));
       expect(
@@ -417,7 +440,7 @@ void main() {
         final data = rpcError.data as Map<String, dynamic>;
 
         expect(rpcError.code, equals(RpcErrorCode.internalError));
-        expect(data['reason'], equals('resource_not_found'));
+        expect(data['reason'], equals(RpcErrorDataConstants.resourceNotFoundReason));
       },
     );
 
@@ -468,12 +491,59 @@ void main() {
         final data = rpcError.data as Map<String, dynamic>;
 
         expect(rpcError.code, equals(RpcErrorCode.unauthorized));
-        expect(data['reason'], equals('unauthorized'));
+        expect(data['reason'], equals(AuthorizationContextConstants.unauthorizedReason));
         expect(data['odbc_reason'], equals('sql_permission_denied'));
         expect(data['resource'], equals('dbo.Orders'));
         expect(data['denied_resources'], equals(<String>['dbo.Orders']));
         expect(data['user_message'], equals('Acesso negado para os recursos: dbo.Orders.'));
       },
     );
+
+    test('should map ActionValidationFailure to invalidParams with action category', () {
+      final failure = ActionValidationFailure.withContext(
+        message: 'Remote idempotency key is required',
+        code: AgentActionFailureCode.remoteIdempotencyRequired,
+        context: {'field': 'idempotencyKey'},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.invalidParams));
+      expect(data['category'], equals(RpcErrorCode.categoryAction));
+      expect(data['failure_code'], equals(AgentActionFailureCode.remoteIdempotencyRequired));
+    });
+
+    test('should map ActionValidationFailure remote context to invalidParams with remote_context_not_supported reason', () {
+      final failure = ActionValidationFailure.withContext(
+        message: 'Remote agent action RPC does not accept inline context in MVP.',
+        code: AgentActionFailureCode.remoteContextNotSupported,
+        context: {
+          'field': 'context_json',
+          'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.invalidParams));
+      expect(data['category'], equals(RpcErrorCode.categoryAction));
+      expect(data['reason'], equals(AgentActionRpcConstants.remoteContextNotSupportedRpcReason));
+    });
+
+    test('should map ActionAuthorizationFailure remote disabled to unauthorized with action category', () {
+      final failure = ActionAuthorizationFailure.withContext(
+        message: 'Remote agent actions are disabled',
+        code: AgentActionFailureCode.remoteFeatureDisabled,
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.unauthorized));
+      expect(data['category'], equals(RpcErrorCode.categoryAction));
+      expect(data['reason'], equals('agent_actions_remote_disabled'));
+    });
   });
 }

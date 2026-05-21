@@ -113,13 +113,21 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   void _ensureStartupLaunchConfiguration(IStartupService startupService) {
     unawaited(
-      startupService.ensureLaunchConfiguration().then((result) {
+      startupService.ensureLaunchConfiguration(allowElevation: false).then((result) {
         result.fold(
           (status) {
             if (status == StartupLaunchConfigurationStatus.repaired) {
               _startupError = null;
               _startupNotice = const SystemSettingsNoticeState(
                 code: SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
+              );
+              notifyListeners();
+              return;
+            }
+            if (status == StartupLaunchConfigurationStatus.needsRepair) {
+              _startupError = null;
+              _startupNotice = const SystemSettingsNoticeState(
+                code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
               );
               notifyListeners();
             }
@@ -130,6 +138,7 @@ class SystemSettingsProvider extends ChangeNotifier {
               name: 'system_settings_provider',
               level: 900,
             );
+            _startupError = null;
             _startupNotice = SystemSettingsNoticeState(
               code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
               detail: failure is StartupServiceFailure ? failure.message : null,
@@ -220,9 +229,12 @@ class SystemSettingsProvider extends ChangeNotifier {
       (status) {
         _startupError = null;
         _startupNotice = SystemSettingsNoticeState(
-          code: status == StartupLaunchConfigurationStatus.repaired
-              ? SystemSettingsNoticeCode.startupLaunchConfigurationRepaired
-              : SystemSettingsNoticeCode.startupLaunchConfigurationReady,
+          code: switch (status) {
+            StartupLaunchConfigurationStatus.repaired => SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
+            StartupLaunchConfigurationStatus.unchanged => SystemSettingsNoticeCode.startupLaunchConfigurationReady,
+            StartupLaunchConfigurationStatus.needsRepair =>
+              SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
+          },
         );
         notifyListeners();
       },

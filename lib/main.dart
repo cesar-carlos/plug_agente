@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/widgets.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
 import 'package:plug_agente/presentation/boot/app_root.dart';
@@ -26,6 +27,17 @@ void main(List<String> args) async {
       error: error,
       stackTrace: stackTrace,
     );
+    try {
+      await shutdownApp();
+    } on Object catch (shutdownError, shutdownStackTrace) {
+      developer.log(
+        'Bootstrap failure cleanup also failed',
+        name: 'main',
+        level: 1000,
+        error: shutdownError,
+        stackTrace: shutdownStackTrace,
+      );
+    }
 
     runApp(
       BootstrapFailureApp(

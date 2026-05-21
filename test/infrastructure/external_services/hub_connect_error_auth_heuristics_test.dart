@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/infrastructure/external_services/hub_connect_error_auth_heuristics.dart';
 
 void main() {
@@ -29,7 +30,7 @@ void main() {
   group('isHubConnectAuthRelatedStructured', () {
     test('detects auth via code and reason', () {
       expect(isHubConnectAuthRelatedStructured(code: 'auth_failed'), isTrue);
-      expect(isHubConnectAuthRelatedStructured(reason: 'token_revoked'), isTrue);
+      expect(isHubConnectAuthRelatedStructured(reason: AuthorizationContextConstants.tokenRevokedReason), isTrue);
       expect(isHubConnectAuthRelatedStructured(code: '401'), isTrue);
       expect(isHubConnectAuthRelatedStructured(code: 'invalid_token'), isTrue);
     });

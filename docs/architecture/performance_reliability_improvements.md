@@ -121,6 +121,16 @@ Ou pelo wrapper local:
 .\tool\odbc_async_benchmark.ps1
 ```
 
+No Windows, o fluxo consolidado de validacao operacional pode ser executado via:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1
+.\tool\run_odbc_operational_validation.ps1 -All
+```
+
 Tambem rode `RUN_ODBC_BURST_TESTS=true` com DSN representativo e query longa
 para comparar throughput, p95/p99, queue wait, pending requests dos workers e
 timeouts antes/depois.
+
+Para registrar os resultados observados e a decisao final de tuning, use
+`docs/architecture/odbc_operational_validation_runbook.md`.

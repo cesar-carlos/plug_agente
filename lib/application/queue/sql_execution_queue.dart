@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 import 'dart:math';
 
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:result_dart/result_dart.dart';
@@ -158,7 +159,7 @@ class SqlExecutionQueue {
         domain.ConfigurationFailure.withContext(
           message: 'SQL execution queue is full; system is under heavy load',
           context: _queueBackpressureContext(
-            reason: 'sql_queue_full',
+            reason: SqlPipelineContextConstants.sqlQueueFullReason,
             requestId: requestId,
           ),
         ),
@@ -227,7 +228,7 @@ class SqlExecutionQueue {
           cause: error,
           context: {
             ..._queueBackpressureContext(
-              reason: 'queue_wait_timeout',
+              reason: SqlPipelineContextConstants.queueWaitTimeoutReason,
               requestId: requestId,
             ),
             'timeout': true,
@@ -290,7 +291,7 @@ class SqlExecutionQueue {
           message: 'SQL execution task failed with unexpected error',
           cause: error is Exception ? error : null,
           context: {
-            'reason': 'unexpected_task_error',
+            'reason': SqlPipelineContextConstants.unexpectedTaskErrorReason,
             'request_id': ?request.requestId,
           },
         );
@@ -460,7 +461,7 @@ class SqlExecutionQueue {
     return domain.ConfigurationFailure.withContext(
       message: message,
       context: {
-        'reason': 'queue_disposed',
+        'reason': SqlPipelineContextConstants.queueDisposedReason,
         'request_id': ?requestId,
         'user_message': 'A fila de execucao SQL foi encerrada. Reconecte o agente e tente novamente.',
       },

@@ -251,24 +251,24 @@ class _ActionButtons extends StatelessWidget {
         label: l10n.dbButtonTestConnection,
         isPrimary: false,
         isLoading: isCheckingDriver,
-        onPressed: () {
+        onPressed: () async {
           if (driverNameController.text.isNotEmpty &&
               hostController.text.isNotEmpty &&
               portController.text.isNotEmpty &&
               odbcDriverNameController.text.isNotEmpty) {
-            onTestConnection();
+            await onTestConnection();
           }
         },
       ),
       trailing: AppButton(
         label: l10n.wsButtonSaveConfig,
         isLoading: isLoading || isCheckingDriver,
-        onPressed: () {
+        onPressed: () async {
           if (driverNameController.text.isNotEmpty &&
               hostController.text.isNotEmpty &&
               portController.text.isNotEmpty &&
               odbcDriverNameController.text.isNotEmpty) {
-            onSaveConfig();
+            await onSaveConfig();
           }
         },
       ),
