@@ -12,6 +12,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
@@ -259,6 +260,7 @@ Future<GlobalStorageContext> _resolveGlobalStorageContextOrThrow() async {
 
 Future<void> setupDependencies({
   required RuntimeCapabilities capabilities,
+  RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
 }) async {
   developer.log(
     'Setting up dependencies with runtime mode: ${capabilities.mode.displayName}',
@@ -274,6 +276,11 @@ Future<void> setupDependencies({
 
   // Register capabilities globally
   getIt.registerSingleton<RuntimeCapabilities>(capabilities);
+  if (runtimeDetectionDiagnostics != null) {
+    getIt.registerSingleton<RuntimeDetectionDiagnostics>(
+      runtimeDetectionDiagnostics,
+    );
+  }
 
   final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
   getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);

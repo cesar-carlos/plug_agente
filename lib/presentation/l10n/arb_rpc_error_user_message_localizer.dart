@@ -68,4 +68,8 @@ class ArbRpcErrorUserMessageLocalizer implements RpcErrorUserMessageLocalizer {
 
   @override
   String internalError() => _l10n.msgRpcInternalError;
+
+  @override
+  String agentActionsTemporarilyUnavailable() =>
+      _l10n.msgRpcAgentActionsTemporarilyUnavailable;
 }

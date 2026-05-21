@@ -108,6 +108,7 @@ Future<
   final socket = ds.createSocket(hubUrl, authToken: hubToken);
   final connected = Completer<void>();
   final capabilities = Completer<PayloadFrame>();
+  var registerSent = false;
 
   socket
     ..on('connect', (_) {
@@ -122,6 +123,14 @@ Future<
         );
       }
     })
+    ..on('agent:register_error', (dynamic data) {
+      if (capabilities.isCompleted) {
+        return;
+      }
+      capabilities.completeError(
+        StateError('agent:register_error from hub after signed register: $data'),
+      );
+    })
     ..on('agent:capabilities', (dynamic data) {
       if (capabilities.isCompleted) {
         return;
@@ -134,10 +143,21 @@ Future<
       } on Object catch (error, stackTrace) {
         capabilities.completeError(error, stackTrace);
       }
+    })
+    ..on('disconnect', (dynamic reason) {
+      if (!registerSent || capabilities.isCompleted) {
+        return;
+      }
+      capabilities.completeError(
+        StateError(
+          'socket disconnected before agent:capabilities after signed register: $reason',
+        ),
+      );
     });
 
   socket.connect();
   await connected.future.timeout(const Duration(seconds: 25));
+  registerSent = true;
   socket.emit('agent:register', signedRegister.toJson());
   final responseFrame = await capabilities.future.timeout(
     const Duration(seconds: 25),

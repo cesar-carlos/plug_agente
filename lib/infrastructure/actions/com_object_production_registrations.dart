@@ -1,7 +1,5 @@
-import 'package:plug_agente/infrastructure/actions/actions.dart' show ComObjectInvocationBootstrap;
-import 'package:plug_agente/infrastructure/actions/com_object_invocation_bootstrap.dart' show ComObjectInvocationBootstrap;
-import 'package:plug_agente/infrastructure/actions/com_object_invocation_registry.dart';
-import 'package:plug_agente/infrastructure/infrastructure.dart' show ComObjectInvocationBootstrap;
+import 'package:plug_agente/infrastructure/actions/actions.dart'
+    show ComObjectInvocationBootstrap, RegisteredComObjectInvocation;
 
 /// Site-specific COM handlers for production builds.
 ///

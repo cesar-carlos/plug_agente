@@ -185,8 +185,16 @@ class HubSessionCoordinator {
     required String configId,
     required AuthToken token,
   }) async {
-    final saveResult = await _saveAuthToken(configId, token);
-    return saveResult.fold(
+    final sessionResult = await _hubSessionStore.writeSessionTokens(
+      configId,
+      token,
+    );
+    if (sessionResult.isError()) {
+      return Failure(sessionResult.exceptionOrNull()!);
+    }
+
+    final legacySaveResult = await _saveAuthToken(token);
+    return legacySaveResult.fold(
       (_) => Success(token),
       Failure.new,
     );
