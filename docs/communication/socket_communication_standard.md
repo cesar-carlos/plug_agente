@@ -19,6 +19,10 @@ binario esta documentado em
   - `sql.cancel` (feature flag `enableSocketCancelMethod`)
   - `agent.getProfile`
   - `agent.getHealth`
+  - `agent.action.run` (feature flag `enableRemoteAgentActions`)
+  - `agent.action.validateRun` (feature flag `enableRemoteAgentActions`)
+  - `agent.action.cancel` (feature flag `enableRemoteAgentActions`)
+  - `agent.action.getExecution` (feature flag `enableRemoteAgentActions`)
   - `client_token.getPolicy`
   - `rpc.discover`
 - Catalogo padronizado de erros RPC
@@ -35,6 +39,10 @@ binario esta documentado em
 | Metodo `sql.bulkInsert`                                              | implemented                                                                                                                |
 | Metodo `agent.getProfile`                                            | implemented                                                                                                                |
 | Metodo `agent.getHealth`                                             | implemented                                                                                                                |
+| Metodo `agent.action.run`                                            | implemented (via feature flag `enableRemoteAgentActions`; enfileira apenas acao salva/aprovada, com idempotencia obrigatoria) |
+| Metodo `agent.action.validateRun`                                    | implemented (via feature flag `enableRemoteAgentActions`; preflight remoto sem persistir execucao nem iniciar processo; mesma `idempotency_key` que `run`) |
+| Metodo `agent.action.cancel`                                         | implemented (via feature flag `enableRemoteAgentActions`; cancela fila ou mata apenas processo principal)                  |
+| Metodo `agent.action.getExecution`                                   | implemented (via feature flag `enableRemoteAgentActions`; leitura redigida de execucao de acao)                            |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
@@ -50,7 +58,7 @@ binario esta documentado em
 | Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
 | Garantia de entrega por evento (ack/retry)                           | implemented (via feature flag)                                                                                             |
 | Timeout por etapa (SQL, transporte, ack)                             | implemented (via feature flag)                                                                                             |
-| Idempotencia por `idempotency_key` (sql.execute/batch)               | implemented (via feature flag)                                                                                             |
+| Idempotencia por `idempotency_key` (sql.execute/batch/bulkInsert + extensoes) | implemented (feature flag; cache SQLite com TTL/LRU; chave interna `{method}:{key}`; purge bootstrap e periodico) |
 | Connection state recovery                                            | implemented (agent-side retry/backoff)                                                                                     |
 | Politica de auth no reconnect                                        | implemented (agent-side)                                                                                                   |
 | Rate limiting por evento                                             | implemented (agent-side)                                                                                                   |
@@ -481,10 +489,21 @@ a request e rejeitada com erro de validacao.
 Quando `payload.database` estiver presente na politica resolvida do token,
 este campo passa a ser obrigatorio e deve coincidir com o valor configurado
 apos normalizacao simples (`trim` + case-insensitive).
-- `idempotency_key`: reutilizacao da mesma chave com payload diferente e
-rejeitada com `invalid_params`.
-- Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
-para evitar crescimento sem limite.
+- `idempotency_key`: deduplicacao **por metodo RPC**. O agente persiste o cache
+  como `{method}:{idempotency_key.trim()}` (ex.: `sql.execute:minha-chave`), de
+  modo que a mesma string em **outro** `method` nao reutiliza entrada de cache.
+  Isso e independente de `request.id` (correlacao JSON-RPC 2.0 no envelope da
+  resposta) e de `meta.request_id` (rastreio operacional no `meta` da resposta).
+- Reuso no **mesmo** `method` com `params` diferentes: rejeitado com `invalid_params`
+  (fingerprint mismatch).
+- Com `enableSocketIdempotency` ativo, o cache fica em SQLite local (tabela
+  `rpc_idempotency_cache_table`) com TTL por entrada (padrao 300 s; env
+  `RPC_IDEMPOTENCY_CACHE_TTL_SECONDS`, limitado entre 60 s e 24 h) e LRU
+  (limite tipico 8192 entradas; eviction por `updated_at`); purge best-effort de
+  expirados no bootstrap, depois em intervalo fixo durante a execucao do app
+  (padrao 15 minutos, `ConnectionConstants.rpcIdempotencyExpiredPurgeInterval`;
+  o timer e cancelado em `shutdownApp` antes do fechamento do Drift); linhas
+  expiradas tambem sao removidas em leituras.
 - Cache de decisoes de autorizacao SQL e cache de politica de token (em memoria)
 usam LRU com limite de entradas (padrao 8192 e 2048; configuravel via
 `AUTH_DECISION_CACHE_MAX_ENTRIES` e `AUTH_POLICY_CACHE_MAX_ENTRIES` no `.env`)
@@ -735,10 +754,21 @@ Para scripts com multiplos statements/result sets na mesma execucao, use
 Quando `payload.database` estiver presente na politica resolvida do token,
 este campo passa a ser obrigatorio e deve coincidir com o valor configurado
 apos normalizacao simples (`trim` + case-insensitive).
-- `idempotency_key`: reutilizacao da mesma chave com payload diferente e
-rejeitada com `invalid_params`.
-- Cache de idempotencia e em memoria e limitado (LRU, 1000 entradas maximas)
-para evitar crescimento sem limite.
+- `idempotency_key`: deduplicacao **por metodo RPC**. O agente persiste o cache
+  como `{method}:{idempotency_key.trim()}` (ex.: `sql.execute:minha-chave`), de
+  modo que a mesma string em **outro** `method` nao reutiliza entrada de cache.
+  Isso e independente de `request.id` (correlacao JSON-RPC 2.0 no envelope da
+  resposta) e de `meta.request_id` (rastreio operacional no `meta` da resposta).
+- Reuso no **mesmo** `method` com `params` diferentes: rejeitado com `invalid_params`
+  (fingerprint mismatch).
+- Com `enableSocketIdempotency` ativo, o cache fica em SQLite local (tabela
+  `rpc_idempotency_cache_table`) com TTL por entrada (padrao 300 s; env
+  `RPC_IDEMPOTENCY_CACHE_TTL_SECONDS`, limitado entre 60 s e 24 h) e LRU
+  (limite tipico 8192 entradas; eviction por `updated_at`); purge best-effort de
+  expirados no bootstrap, depois em intervalo fixo durante a execucao do app
+  (padrao 15 minutos, `ConnectionConstants.rpcIdempotencyExpiredPurgeInterval`;
+  o timer e cancelado em `shutdownApp` antes do fechamento do Drift); linhas
+  expiradas tambem sao removidas em leituras.
 
 ### Response de batch (exemplo)
 
@@ -842,6 +872,31 @@ pelo `id` JSON-RPC.
 - `-32012`: Network error
 - `-32013`: Rate limit exceeded
 - `-32014`: Replay detected
+- `-32015`: Agent actions temporarily unavailable (starting, draining, maintenance, degraded runner)
+
+### Dominio acoes (MVP 3 — codigos compartilhados + `category: action`)
+
+No MVP, falhas de `agent.action.*` **nao** usam faixa numerica propria. O agente reutiliza
+codigos de transporte/autorizacao/validacao ja existentes e distingue o dominio por:
+
+- `error.data.category`: `action`
+- `error.data.reason`: identificador estavel (`agent_action_permission_denied`,
+  `agent_actions_remote_disabled`, `remote_idempotency_required`, codigos de
+  `AgentActionFailureCode`, etc.)
+- `error.data.failure_code`: codigo tipado do dominio quando a falha veio de use case
+
+Faixa **reservada** para codigos dedicados futuros: `-32299` .. `-32200` (sem uso no MVP;
+nao colide com SQL `-321xx`). Quando um codigo dedicado for introduzido, sera documentado
+com bump de versao de protocolo.
+
+| Codigo RPC tipico | Cenario agente | `reason` exemplo |
+| --- | --- | --- |
+| `-32602` | params/schema | `remote_idempotency_required`, `remote_context_not_supported` |
+| `-32001` | token ausente/invalido | `missing_client_token` |
+| `-32002` | gate remoto ou policy | `agent_actions_remote_disabled`, `agent_action_permission_denied` |
+| `-32013` | rate limit remoto | `agent_action_remote_rate_limited` |
+| `-32015` | subsistema indisponivel | `agent_actions_draining`, `agent_actions_maintenance_mode` |
+| `-32109` | execucao de acao nao encontrada | `execution_not_found` (reuso do codigo SQL) |
 
 ### Dominio SQL
 
@@ -888,6 +943,8 @@ O objeto `error.data` segue um formato estruturado para UX e troubleshooting:
 - `technical_message`: detalhe tecnico para logs e suporte
 - `correlation_id`: identificador para correlacionar logs
 - `timestamp`: instante UTC da falha
+- `corrective_action`: token opcional e seguro com orientacao corretiva quando o
+  erro vier do subsistema de acoes e ainda nao existir `execution` persistida
 
 ## Metodo `sql.cancel` (via feature flag)
 
@@ -982,11 +1039,231 @@ invalido segue o mesmo mapeamento de erro do fluxo SQL. Params extras sao
 rejeitados pelo schema publicado.
 - **Result:** objeto alinhado a
 `docs/communication/schemas/rpc.result.agent-get-health.schema.json`, com
-`status`, `timestamp`, `version`, `pool`, `sql_queue`, `queries` e
-`uptime_seconds`.
+`status`, `timestamp`, `version`, `pool`, `sql_queue`, `agent_actions`,
+`queries` e `uptime_seconds`. O bloco `agent_actions` e seguro para o Hub e
+inclui feature flags efetivas, estado operacional do subsistema e tipos
+suportados/indisponiveis.
 - **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao
 encontrado que o fluxo de autorizacao SQL, mapeados via
 `FailureToRpcErrorMapper`.
+
+## Metodo `agent.action.run`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` e encaminhado a
+`RunAgentActionViaRemoteTrigger`, que resolve um gatilho logico `remote`
+habilitado e dispara a mesma fila da UI/scheduler via `DispatchAgentActionTrigger`.
+- **Objetivo:** permitir que o Hub solicite a execucao de uma acao local ja
+salva e aprovada para remoto **por meio de um gatilho remoto habilitado**. O
+metodo nao aceita comando livre nem payload ad-hoc nesta fase e nao aguarda o
+processo terminar.
+- **Feature flag:** `enableRemoteAgentActions`. Quando desligada, o metodo
+responde `-32002` com `reason` `agent_actions_remote_disabled`.
+- **Params:** objeto obrigatorio com `action_id` e `idempotency_key`. Opcionalmente
+aceita `trigger_id` quando a acao possui mais de um gatilho `remote` habilitado;
+caso contrario o agente seleciona automaticamente o unico gatilho `remote`
+habilitado. Opcionalmente aceita `trace_id` e `requested_by` para correlacao
+(params tem precedencia sobre `meta.trace_id` / `meta.traceparent` e sobre o
+requester derivado de meta). Aceita
+`client_token` ou aliases `clientToken` / `auth` quando a autorizacao por token
+estiver ativa. Contexto inline, `runtimeParameters` e demais chaves extras sao
+rejeitados (`reason` `remote_context_not_supported`). Parametros de contexto
+inline (`context`, `context_json`, `context_path`, `runtime_parameters`, etc.)
+sao rejeitados no schema RPC antes do use case; `extensions.agentActions.supportsContext`
+permanece `false` no MVP. Limite documentado para evolucao futura:
+`limits.maxContextBytes` (default 256 KiB por acao salva, alinhado a
+`ActionContextPolicy.maxContextBytes`). A chave de idempotencia e obrigatoria
+para execucao remota e **nao** inclui `trace_id`/`requested_by` na fingerprint
+RPC de idempotencia.
+- **Rate limit:** opcional por escopo `agent_id` + metodo + `action_id` +
+requester (`client_token`, `client_id` ou `hub`). Configuravel por env
+`AGENT_ACTION_REMOTE_MAX_PER_MINUTE` (default **0**, sem limite) e
+`AGENT_ACTION_REMOTE_MAX_SCOPE_KEYS` (default **8192**). Excesso retorna
+`-32013` com `reason` `agent_action_remote_rate_limited`, `action_id`,
+`method` e `retry_after_ms`. Retry com a mesma `idempotency_key` e o mesmo
+payload permitido retorna a resposta/execucao cacheada antes de consumir nova
+cota de rate limit.
+- **Idempotencia (duas camadas):** (1) cache RPC SQLite (`{method}:{idempotency_key}`)
+  quando `enableSocketIdempotency` esta ativo — TTL por entrada via
+  `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` (padrao `min(retencao de
+  historico de execucoes, 24 h)`; clamp 60 s..3 dias); (2) dedup de negocio em
+  `agent_action_execution` por `action_id` + `idempotency_key` enquanto a linha
+  existir (retencao `AGENT_ACTION_EXECUTION_RETENTION_DAYS`, padrao 3 dias).
+  Fingerprint RPC inclui `runtime_instance_id` / `runtime_session_id` quando
+  disponivel (evita replay entre boots).
+- **Autorizacao propria:** quando `enableClientTokenAuthorization` estiver
+ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
+`reason` `missing_client_token`. A policy resolvida precisa conter scope de acao `agent_actions.run` em
+`payload.agent_actions.scopes`, `payload.agent_action_scopes` ou
+`payload.token_scope`. A allowlist opcional de acoes pode ser informada em
+`payload.agent_actions.action_ids`; ausente, o scope autoriza qualquer acao que
+tambem esteja aprovada localmente. Tokens sem metadados de escopo de acao
+(payload legado) continuam autorizados apos o SQL sintetico de autorizacao.
+Negacao por escopo/allowlist retorna `-32001` com `reason`
+`agent_action_permission_denied` e `data` incluindo `required_scope` e
+`action_id` quando aplicavel.
+- **Result:** objeto alinhado a
+`docs/communication/schemas/rpc.result.agent-action-get-execution.schema.json`,
+com snapshot seguro da execucao criada/reutilizada. Para nova execucao remota,
+o retorno esperado e o status inicial (`queued` ou estado persistido
+idempotente), e o Hub deve consultar `agent.action.getExecution` para acompanhar
+`running`/terminal.
+- **Erros:** comandos ad-hoc ou parametros extras sao rejeitados pelo schema;
+acao sem gatilho `remote` habilitado retorna `invalid_params` com `reason`
+`remote_trigger_required`; multiplos gatilhos `remote` sem `trigger_id` retorna
+`remote_trigger_ambiguous`; `trigger_id` invalido/desabilitado retorna
+`remote_trigger_action_mismatch`, `remote_trigger_type_mismatch` ou
+`trigger_disabled`. Acao nao aprovada para remoto, idempotencia ausente, fila
+cheia, timeout e falhas de runner retornam erros estruturados via
+`FailureToRpcErrorMapper`.
+Reuso de `idempotency_key` com payload permitido diferente retorna
+`invalid_params` com `reason` `remote_idempotency_fingerprint_mismatch`.
+Excesso de chamadas remotas retorna `rate_limited` com `reason`
+`agent_action_remote_rate_limited`.
+Quando o subsistema de acoes estiver `starting`, `draining`, `maintenance`,
+`disabled` ou `degraded` para o tipo solicitado, a chamada deve falhar antes de
+enfileirar side effect.
+- **Batch:** nao e permitido no MVP. Em JSON-RPC batch, o item retorna
+`-32600` com `reason` `method_not_allowed_in_batch` antes de enfileirar.
+
+## Metodo `agent.action.validateRun`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` e encaminhado ao mesmo use case
+local de execucao de acoes (`validateRemoteRun`), **sem** persistir execucao e
+**sem** iniciar processo.
+- **Objetivo:** permitir que o Hub faca preflight da mesma cadeia de gates de
+`agent.action.run` (validacao de request, feature flags, definicao ativa,
+aprovacao remota, estado operacional do subsistema, runner registrado,
+idempotencia persistida ou em voo, e carga da fila) e receba um resumo seguro
+antes de chamar `agent.action.run`.
+- **Feature flag:** `enableRemoteAgentActions`. Quando desligada, o metodo
+responde `-32002` com `reason` `agent_actions_remote_disabled`.
+- **Params:** objeto obrigatorio com `action_id` e `idempotency_key` (mesma
+semantica que `run`, incluindo `trace_id`/`requested_by` opcionais). Aceita
+`client_token` ou aliases `clientToken` / `auth` quando a autorizacao por token
+estiver ativa. Parametros extras sao rejeitados pelo schema publicado.
+- **Rate limit:** opcional por escopo `agent_id` + metodo + `action_id` +
+requester (`client_token`, `client_id` ou `hub`), com o mesmo mecanismo de
+`agent.action.run` (inclui `metodo` = `agent.action.validateRun` na chave).
+Configuravel por env `AGENT_ACTION_REMOTE_MAX_PER_MINUTE` (default **0**, sem
+limite) e `AGENT_ACTION_REMOTE_MAX_SCOPE_KEYS` (default **8192**). Excesso
+retorna `-32013` com `reason` `agent_action_remote_rate_limited`.
+- **Autorizacao propria:** quando `enableClientTokenAuthorization` estiver
+ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
+`reason` `missing_client_token`. A policy precisa do scope
+`agent_actions.validate_run` (alem de `agent_actions.run` quando for executar de
+fato). Allowlist opcional por `action_id` segue a mesma regra de `run`.
+- **Result:** objeto alinhado a
+`docs/communication/schemas/rpc.result.agent-action-validate-run.schema.json`
+(`valid`, `action_id`, `action_type`, `definition_snapshot_hash` opcional,
+`would_replay_existing_execution`, `existing_execution_id` opcional).
+- **Erros:** mesmos cenarios de negacao de `run` ate a admissao na fila (acao
+inativa, remoto nao aprovado, idempotencia ausente para Hub, subsistema em
+`starting`/`draining`/etc., fila cheia ou politica de concorrencia que rejeitaria
+enqueue), mapeados via `FailureToRpcErrorMapper`. Nao ha cache de idempotencia
+RPC separado para este metodo.
+- **Batch:** permitido em JSON-RPC batch (sem efeito colateral), como
+`agent.action.getExecution`. Itens `run`/`cancel` em batch continuam
+rejeitados com `method_not_allowed_in_batch`.
+
+## Metodo `agent.action.getExecution`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
+- **Objetivo:** retornar ao Hub um snapshot redigido de uma execucao de acao do
+agente, sem expor comando bruto, argumentos sensiveis, stack trace ou valores
+de segredo.
+- **Feature flag:** `enableRemoteAgentActions`. Quando desligada, o metodo
+responde `-32002` com `reason` `agent_actions_remote_disabled`.
+- **Params:** objeto obrigatorio com `execution_id`. Opcionalmente aceita
+`stdout_offset`, `stderr_offset` (offsets UTF-8 em bytes sobre stdout/stderr
+redigidos ja persistidos) e `max_output_bytes` (tamanho maximo da janela por
+stream; default `65536`, teto `524288`). Aceita `client_token` ou aliases
+`clientToken` / `auth` quando a autorizacao por token estiver ativa. Quando
+`enableClientTokenAuthorization` estiver ativa, ausencia de token retorna `-32001`
+com `reason` `missing_client_token`. Com token, exige scope proprio
+`agent_actions.read_execution`.
+- **Batch:** permitido em JSON-RPC batch (read-only). Respeita o mesmo limite
+de itens por batch e a validacao estrita de batch quando habilitados. Diferente
+de `agent.action.run` e `agent.action.cancel`, que retornam `-32600` com
+`reason` `method_not_allowed_in_batch` antes de executar efeito colateral.
+`agent.action.validateRun` tambem e permitido em batch (preflight sem side
+effect). O numero de itens read-only (`getExecution` + `validateRun`) no batch
+nao pode exceder `extensions.agentActions.limits.maxReadMethodsPerBatch`
+(default `32`, env `AGENT_ACTION_MAX_READ_RPC_PER_BATCH`); acima disso o batch
+inteiro e rejeitado com `-32600` e `reason` `agent_action_batch_read_limit_exceeded`
+(um unico erro de batch, sem dispatch parcial).
+- **Result:** objeto alinhado a
+`docs/communication/schemas/rpc.result.agent-action-get-execution.schema.json`,
+com identificadores, status, timestamps, origem, processo, saida capturada ja
+redigida (`output.stdout` / `output.stderr` com `text`, `utf8_total_bytes`,
+`offset`, `next_offset`, `response_truncated` e `truncated` de armazenamento),
+flags e failure segura (`code`, `phase`, `corrective_action`, `message`) quando
+houver falha registrada. O Hub deve paginar com `next_offset` ate
+`response_truncated` ser `false` em cada stream.
+- **Erros:** `execution_not_found` quando a execucao nao existir; erros de
+token e rate limit usam o catalogo RPC padrao. A resposta nunca retorna o
+comando bruto salvo na acao.
+
+## Metadados de policy para `agent.action.*` (client token)
+
+Quando `enableClientTokenAuthorization` estiver ativa, o Hub deve emitir tokens cuja
+policy resolvida (`client_token.getPolicy` / payload persistido) declare escopos de
+acao sem reutilizar `global_permissions` SQL (select/insert/...). Formas suportadas:
+
+| Campinho | Formato | Efeito |
+|--------|---------|--------|
+| `payload.token_scope` | string ou lista | Escopos OAuth-style (`agent_actions.run`, `agent_actions.*`, etc.) |
+| `payload.agent_action_scopes` | lista de strings | Mesma semantica de escopos |
+| `payload.agent_actions.scopes` | lista de strings | Escopos no bloco de acoes |
+| `payload.agent_actions.action_ids` | lista de strings | Allowlist opcional de `action_id`; quando presente, restringe run/validate/cancel/getExecution ao conjunto |
+
+Escopos canonicos publicados em `extensions.agentActions.authorizationScopes` no
+`agent:capabilities`. O agente ainda executa um SQL sintetico por metodo
+(`AgentActionRpcConstants.clientTokenAuthorizationSql*`) para validar o token via
+pipeline SQL existente; a checagem de escopo/allowlist ocorre **antes** desse SQL.
+
+## Auditoria remota append-only (`agent.action.*`)
+
+Quando `enableAgentActionRemoteAudit` estiver ativa, o agente grava linhas locais
+em Drift (sem segredos) para diagnostico do Hub:
+
+- **Por RPC:** `received` na entrada do handler e desfecho final `success`,
+  `rpc_error`, `authorization_denied`, `notification_rejected` ou `rate_limited`
+  (com `client_id`/`token_jti` quando a policy de client token foi resolvida).
+  Negacoes de credencial ou gate remoto (`missing_client_token`,
+  `agent_action_permission_denied`, `agent_actions_remote_disabled`,
+  `agent_actions_feature_disabled`) usam `authorization_denied`; demais erros RPC
+  usam `rpc_error`.
+- **Por execucao remota:** `lifecycle_enqueued`, `lifecycle_started`,
+  `lifecycle_cancel_requested` (cancel) e `lifecycle_finished` (status terminal
+  em `reason_code`), somente para execucoes com origem `remoteHub`.
+
+`trace_id`, `requested_by` e `idempotency_key` (quando presente em `run`/`validateRun`)
+propagam para execucao e auditoria via params (opcional) ou `meta` do envelope RPC
+(`trace_id`/`requested_by` apenas em `meta`; idempotencia de negocio vem de params).
+
+## Metodo `agent.action.cancel`
+
+- **Onde roda:** tratado no `RpcMethodDispatcher` e encaminhado ao use case
+local `CancelAgentActionExecution`.
+- **Objetivo:** cancelar uma execucao de acao `queued` ou `running` ja
+registrada no Plug Agente. Para processos, o cancelamento mira somente o
+processo principal registrado pelo agente.
+- **Feature flag:** `enableRemoteAgentActions`. Quando desligada, o metodo
+responde `-32002` com `reason` `agent_actions_remote_disabled`.
+- **Params:** objeto obrigatorio com `execution_id`. Aceita `client_token` ou
+aliases `clientToken` / `auth` quando a autorizacao por token estiver ativa.
+- **Autorizacao propria:** quando `enableClientTokenAuthorization` estiver
+ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
+`reason` `missing_client_token`. Com token, exige scope `agent_actions.cancel` e
+aplica allowlist opcional por actionId quando disponivel no payload de policy.
+- **Result:** objeto alinhado a
+`docs/communication/schemas/rpc.result.agent-action-cancel.schema.json`, com
+`cancelled`, `execution_id`, `status`, `reason` e snapshot redigido da execucao.
+- **Erros:** diferencia `execution_not_found`, `already_finished`,
+`agent_action_permission_denied` e `kill_failed`; falhas adicionais de fila ou
+runner e rate limit usam o catalogo RPC seguro.
+- **Batch:** nao e permitido no MVP. Em JSON-RPC batch, o item retorna
+`-32600` com `reason` `method_not_allowed_in_batch` antes de cancelar.
 
 ## Metodo `client_token.getPolicy`
 
@@ -1244,7 +1521,66 @@ Exemplo de capacidades anunciadas (alinhado a
     "signatureScope": "transport-frame",
     "signatureAlgorithms": ["hmac-sha256"],
     "streamingResults": true,
-    "plugProfile": "plug-jsonrpc-profile/2.9",
+    "agentActions": {
+      "enabled": true,
+      "version": 1,
+      "methods": [
+        "agent.action.run",
+        "agent.action.validateRun",
+        "agent.action.cancel",
+        "agent.action.getExecution"
+      ],
+      "supportedMethods": [
+        "agent.action.run",
+        "agent.action.validateRun",
+        "agent.action.cancel",
+        "agent.action.getExecution"
+      ],
+      "supportedTypes": ["commandLine"],
+      "supportsRun": true,
+      "supportsValidateRun": true,
+      "supportsDryRun": true,
+      "supportsCancel": true,
+      "supportsGetExecution": true,
+      "supportsOutputPaging": true,
+      "supportsContext": false,
+      "requiresIdempotencyKey": true,
+      "authorizationScopes": [
+        "agent_actions.run",
+        "agent_actions.validate_run",
+        "agent_actions.cancel",
+        "agent_actions.read_execution"
+      ],
+      "remoteAdHoc": false,
+      "elevatedAllowed": false,
+      "supportsElevated": false,
+      "status": "ready",
+      "maintenanceMode": false,
+      "unavailableTypes": [],
+      "defaultQueueLimits": {
+        "maxConcurrent": 1,
+        "maxQueued": 100,
+        "queueTimeoutMs": 300000
+      },
+      "limits": {
+        "maxConcurrentActions": 1,
+        "maxQueuedActions": 100,
+        "maxContextBytes": 262144,
+        "defaultMaxOutputBytesPerStream": 65536,
+        "maxMaxOutputBytesPerStream": 524288,
+        "supportsOutputPaging": true,
+        "maxReadMethodsPerBatch": 32
+      },
+      "batchPolicy": {
+        "run": false,
+        "cancel": false,
+        "validateRun": true,
+        "getExecution": true
+      },
+      "profile": "prod",
+      "agentEnvironment": "prod"
+    },
+    "plugProfile": "plug-jsonrpc-profile/2.11.2",
     "orderedBatchResponses": true,
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset", "cursor-offset"],
@@ -1361,6 +1697,10 @@ grandes ou gzip pesado.
 | `2.7`  | Metodo `client_token.getPolicy` para introspecao de politica do token                                                 | stable |
 | `2.8`  | `getPolicy`: metadata opcional, redacao de payload, rate limit, flag `enableClientTokenPolicyIntrospection`, metricas | stable |
 | `2.9`  | Metodo `agent.getHealth` para saude do processo, pool ODBC, fila SQL e metricas de queries                           | stable |
+| `2.10` | Metodo `sql.bulkInsert` para cargas grandes via bulk insert nativo ODBC                                              | stable |
+| `2.11` | Metodos `agent.action.run`, `agent.action.cancel` e `agent.action.getExecution` para execucao remota conservadora   | experimental |
+| `2.11.1` | Metodo `agent.action.validateRun` (preflight remoto sem side effect) e escopo `agent_actions.validate_run` | experimental |
+| `2.11.2` | Status/flags explicitos de `skipped` em `agent.action.getExecution` e counters de health para terminais `skipped` | experimental |
 
 
 ### Regras de versionamento
@@ -1856,6 +2196,32 @@ schemas, OpenRPC e testes E2E.
 - Schemas JSON dedicados para params e result.
 - OpenRPC `info.version` `2.10.0` e entrada do metodo em `methods`.
 
+### `v2.11` / `v2.11.1` / `v2.11.2` (acoes do agente: execucao remota conservadora)
+
+- Metodo RPC `agent.action.run` para enfileirar acao salva/aprovada no agente,
+com `idempotency_key` obrigatoria, sem comando livre/ad-hoc e sem aguardar o
+processo terminar.
+- Metodo RPC `agent.action.validateRun` (`v2.11.1`) para preflight remoto com
+as mesmas chaves obrigatorias que `run`, sem persistir execucao nem iniciar
+processo; retorna resumo com `would_replay_existing_execution` quando aplicavel.
+- Metodo RPC `agent.action.cancel` para cancelar execucao `queued`/`running`,
+matando somente o processo principal quando aplicavel.
+- Metodo RPC `agent.action.getExecution` para consulta remota de execucao de
+acao salva no agente.
+- Metodos protegidos por `enableRemoteAgentActions`; quando desativados, retornam
+erro seguro sem expor historico.
+- Quando auth por token esta ativa, os metodos usam scopes proprios de acoes
+(`agent_actions.run`, `agent_actions.validate_run`, `agent_actions.cancel` e
+`agent_actions.read_execution`) sem reaproveitar permissao SQL como atalho.
+- Resultado e sempre redigido: nao retorna comando bruto, argumentos sensiveis
+ou stack trace; expoe apenas identidade auxiliar segura, preview redigido,
+status, timestamps, saida capturada ja redigida e failure acionavel.
+- `v2.11.2` adiciona status terminal `skipped`, flags explicitas de skip por
+concorrencia segura no snapshot remoto de execucao e contadores de health para
+execucoes terminais `skipped`.
+- Schemas JSON dedicados para params e result.
+- OpenRPC `info.version` `2.11.2` e entradas dos metodos em `methods`.
+
 ### Alinhamento doc/codigo (pos-v2.5)
 
 - Politica de reconnect do app documentada conforme `ConnectionProvider` /
@@ -1898,6 +2264,10 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.params.sql-cancel.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.params.agent-get-health.schema.json`
+- `docs/communication/schemas/rpc.params.agent-action-run.schema.json`
+- `docs/communication/schemas/rpc.params.agent-action-validate-run.schema.json`
+- `docs/communication/schemas/rpc.params.agent-action-cancel.schema.json`
+- `docs/communication/schemas/rpc.params.agent-action-get-execution.schema.json`
 - `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
 
 ### Result por metodo
@@ -1907,6 +2277,9 @@ de idempotencia para cargas grandes.
 - `docs/communication/schemas/rpc.result.sql-bulk-insert.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-profile.schema.json`
 - `docs/communication/schemas/rpc.result.agent-get-health.schema.json`
+- `docs/communication/schemas/rpc.result.agent-action-cancel.schema.json`
+- `docs/communication/schemas/rpc.result.agent-action-validate-run.schema.json`
+- `docs/communication/schemas/rpc.result.agent-action-get-execution.schema.json`
 - `docs/communication/schemas/rpc.result.client-token-get-policy.schema.json`
 
 ### Streaming
@@ -1922,6 +2295,16 @@ de idempotencia para cargas grandes.
 ### OpenRPC
 
 - `docs/communication/openrpc.json`
+
+### Fixtures de contrato (JSON-RPC)
+
+- Amostras de fio para `agent.action.run`, `validateRun`, `cancel`, `getExecution`
+  e erro remoto desligado: `test/fixtures/rpc/rpc_request_agent_action_*.json`,
+  `test/fixtures/rpc/rpc_response_agent_action_*.json`.
+- Validacao contra os schemas publicados: rode
+  `flutter test test/docs/communication/contract_fixtures_test.dart` (envelope
+  `rpc.request` / `rpc.response`, blocos `params` / `result` por schema de metodo
+  e objeto `error` vs `rpc.error` quando presente).
 
 ## Referencias internas
 

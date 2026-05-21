@@ -26,10 +26,12 @@ class InMemoryIdempotencyStore implements IIdempotencyStore {
   final LinkedHashMap<String, _Entry> _store = LinkedHashMap<String, _Entry>();
 
   @override
-  IdempotencyRecord? getRecord(String key) {
+  Future<IdempotencyRecord?> getRecord(String key) async {
     _evictExpiredEntries();
     final entry = _store[key];
-    if (entry == null) return null;
+    if (entry == null) {
+      return null;
+    }
     if (_nowProvider().isAfter(entry.expiresAt)) {
       _store.remove(key);
       return null;
@@ -42,17 +44,15 @@ class InMemoryIdempotencyStore implements IIdempotencyStore {
   }
 
   @override
-  RpcResponse? get(String key) {
-    return getRecord(key)?.response;
-  }
+  Future<RpcResponse?> get(String key) async => (await getRecord(key))?.response;
 
   @override
-  void set(
+  Future<void> set(
     String key,
     RpcResponse response,
     Duration ttl, {
     String? requestFingerprint,
-  }) {
+  }) async {
     _evictExpiredEntries();
     if (_store.containsKey(key)) {
       _store.remove(key);
@@ -65,6 +65,17 @@ class InMemoryIdempotencyStore implements IIdempotencyStore {
       requestFingerprint: requestFingerprint,
       expiresAt: _nowProvider().add(effectiveTtl),
     );
+  }
+
+  @override
+  Future<int> purgeExpiredEntries({DateTime? referenceTime}) async {
+    final now = referenceTime ?? _nowProvider();
+    final expiredKeys = _store.entries
+        .where((entry) => now.isAfter(entry.value.expiresAt))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    expiredKeys.forEach(_store.remove);
+    return expiredKeys.length;
   }
 
   void _markAsRecentlyUsed(String key, _Entry entry) {

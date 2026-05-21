@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "method": "agent.action.getExecution",
+  "id": "req-get-1",
+  "api_version": "2.11.1",
+  "params": {
+    "execution_id": "exec-queued-1",
+    "max_output_bytes": 65536,
+    "client_token": "opaque-hub-token"
+  }
+}

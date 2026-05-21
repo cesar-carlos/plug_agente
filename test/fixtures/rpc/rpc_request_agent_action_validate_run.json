@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "method": "agent.action.validateRun",
+  "id": "req-validate-1",
+  "api_version": "2.11.1",
+  "meta": {
+    "trace_id": "trace-validate-1",
+    "request_id": "hub-req-validate-1",
+    "timestamp": "2026-05-18T12:00:00.000Z"
+  },
+  "params": {
+    "action_id": "action-1",
+    "idempotency_key": "idem-validate-1",
+    "client_token": "opaque-hub-token"
+  }
+}

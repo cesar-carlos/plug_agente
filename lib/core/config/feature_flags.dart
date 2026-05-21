@@ -40,6 +40,12 @@ class FeatureFlags {
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
   static const _keyHubHardReloginFailureThreshold = 'feature_hub_hard_relogin_failure_threshold';
+  static const _keyEnableAgentActions = 'feature_enable_agent_actions';
+  static const _keyEnableRemoteAgentActions = 'feature_enable_remote_agent_actions';
+  static const _keyEnableRemoteAdHocAgentActions = 'feature_enable_remote_ad_hoc_agent_actions';
+  static const _keyEnableElevatedAgentActions = 'feature_enable_elevated_agent_actions';
+  static const _keyEnableAgentActionRemoteAudit = 'feature_enable_agent_action_remote_audit';
+  static const _keyEnableAgentActionsMaintenanceMode = 'feature_enable_agent_actions_maintenance_mode';
 
   /// Binary PayloadFrame transport is mandatory in the current socket contract.
   bool get enableBinaryPayload => true;
@@ -328,6 +334,56 @@ class FeatureFlags {
     await _prefs.setInt(_keyHubHardReloginFailureThreshold, value);
   }
 
+  /// Whether the local agent actions subsystem is enabled.
+  bool get enableAgentActions => _prefs.getBool(_keyEnableAgentActions) ?? true;
+
+  Future<void> setEnableAgentActions(bool value) async {
+    await _prefs.setBool(_keyEnableAgentActions, value);
+  }
+
+  /// Whether the Hub may run locally approved saved actions.
+  bool get enableRemoteAgentActions => _prefs.getBool(_keyEnableRemoteAgentActions) ?? false;
+
+  Future<void> setEnableRemoteAgentActions(bool value) async {
+    await _prefs.setBool(_keyEnableRemoteAgentActions, value);
+  }
+
+  /// Whether the Hub may send ad-hoc command actions.
+  bool get enableRemoteAdHocAgentActions => _prefs.getBool(_keyEnableRemoteAdHocAgentActions) ?? false;
+
+  Future<void> setEnableRemoteAdHocAgentActions(bool value) async {
+    await _prefs.setBool(_keyEnableRemoteAdHocAgentActions, value);
+  }
+
+  /// Whether elevated actions may use the Windows elevated runner bridge.
+  bool get enableElevatedAgentActions => _prefs.getBool(_keyEnableElevatedAgentActions) ?? false;
+
+  Future<void> setEnableElevatedAgentActions(bool value) async {
+    await _prefs.setBool(_keyEnableElevatedAgentActions, value);
+  }
+
+  /// When true, each completed `agent.action.*` JSON-RPC call appends one row to
+  /// the local Drift audit table (no secrets, no raw command).
+  bool get enableAgentActionRemoteAudit => _prefs.getBool(_keyEnableAgentActionRemoteAudit) ?? true;
+
+  Future<void> setEnableAgentActionRemoteAudit(bool value) async {
+    await _prefs.setBool(_keyEnableAgentActionRemoteAudit, value);
+  }
+
+  /// When true, scheduled/lifecycle/remote action side effects are blocked.
+  bool get enableAgentActionsMaintenanceMode => _prefs.getBool(_keyEnableAgentActionsMaintenanceMode) ?? false;
+
+  Future<void> setEnableAgentActionsMaintenanceMode(bool value) async {
+    await _prefs.setBool(_keyEnableAgentActionsMaintenanceMode, value);
+  }
+
+  /// Rollback helper: keeps local actions UI/scheduling but disables Hub-side effects.
+  Future<void> disableAgentActionsRemoteRollout() async {
+    await setEnableRemoteAgentActions(false);
+    await setEnableRemoteAdHocAgentActions(false);
+    await setEnableElevatedAgentActions(false);
+  }
+
   /// Resets all feature flags to default values.
   Future<void> resetToDefaults() async {
     await setEnableBinaryPayload(true);
@@ -358,6 +414,12 @@ class FeatureFlags {
     await setEnableOdbcExperimentalDriverAdaptivePooling(false);
     await setEnableHubHardReloginRecovery(true);
     await setHubHardReloginFailureThreshold(3);
+    await setEnableAgentActions(true);
+    await setEnableRemoteAgentActions(false);
+    await setEnableRemoteAdHocAgentActions(false);
+    await setEnableElevatedAgentActions(false);
+    await setEnableAgentActionsMaintenanceMode(false);
+    await setEnableAgentActionRemoteAudit(true);
     await resetHubResilienceOverrides();
   }
 }

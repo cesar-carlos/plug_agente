@@ -67,5 +67,53 @@ void main() {
       expect(flags.enableSocketStreamingFromDb, isTrue);
       expect(flags.enableSocketStreamingChunks, isFalse);
     });
+
+    test('uses conservative defaults for agent action rollout flags', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+
+      expect(flags.enableAgentActions, isTrue);
+      expect(flags.enableRemoteAgentActions, isFalse);
+      expect(flags.enableRemoteAdHocAgentActions, isFalse);
+      expect(flags.enableElevatedAgentActions, isFalse);
+      expect(flags.enableAgentActionRemoteAudit, isTrue);
+      expect(flags.enableAgentActionsMaintenanceMode, isFalse);
+
+      await flags.setEnableAgentActions(false);
+      await flags.setEnableRemoteAgentActions(true);
+      await flags.setEnableRemoteAdHocAgentActions(true);
+      await flags.setEnableElevatedAgentActions(true);
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+
+      expect(flags.enableAgentActions, isFalse);
+      expect(flags.enableRemoteAgentActions, isTrue);
+      expect(flags.enableRemoteAdHocAgentActions, isTrue);
+      expect(flags.enableElevatedAgentActions, isTrue);
+      expect(flags.enableAgentActionsMaintenanceMode, isTrue);
+
+      await flags.resetToDefaults();
+
+      expect(flags.enableAgentActions, isTrue);
+      expect(flags.enableRemoteAgentActions, isFalse);
+      expect(flags.enableRemoteAdHocAgentActions, isFalse);
+      expect(flags.enableElevatedAgentActions, isFalse);
+      expect(flags.enableAgentActionRemoteAudit, isTrue);
+      expect(flags.enableAgentActionsMaintenanceMode, isFalse);
+    });
+
+    test('disableAgentActionsRemoteRollout should turn off remote ad-hoc and elevated only', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+
+      await flags.setEnableRemoteAgentActions(true);
+      await flags.setEnableRemoteAdHocAgentActions(true);
+      await flags.setEnableElevatedAgentActions(true);
+
+      await flags.disableAgentActionsRemoteRollout();
+
+      expect(flags.enableAgentActions, isTrue);
+      expect(flags.enableRemoteAgentActions, isFalse);
+      expect(flags.enableRemoteAdHocAgentActions, isFalse);
+      expect(flags.enableElevatedAgentActions, isFalse);
+      expect(flags.enableAgentActionRemoteAudit, isTrue);
+    });
   });
 }

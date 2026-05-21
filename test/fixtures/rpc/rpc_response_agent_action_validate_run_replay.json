@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-validate-2",
+  "result": {
+    "valid": true,
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "definition_snapshot_hash": "sha256:fixture-snapshot",
+    "would_replay_existing_execution": true,
+    "existing_execution_id": "exec-prior-1"
+  }
+}

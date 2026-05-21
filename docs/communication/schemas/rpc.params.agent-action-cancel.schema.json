@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-cancel.v1.json",
+  "title": "agent.action.cancel params",
+  "type": "object",
+  "required": ["execution_id"],
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent action execution identifier to cancel. Only the main process registered by the agent is targeted."
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional distributed trace id for remote audit correlation."
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional hub requester identity for remote audit correlation."
+    },
+    "client_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque token or JWT for authorization when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    }
+  },
+  "additionalProperties": false
+}

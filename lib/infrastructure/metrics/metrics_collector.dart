@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_execution_metrics_collector.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
+import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
@@ -10,7 +15,12 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 /// Servico para coletar e gerenciar metricas de performance.
 ///
 /// Chaves em [_eventCounters] sao estaveis para exportacao (ex.: OpenTelemetry).
-class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCollector {
+class MetricsCollector
+    implements
+        IMetricsCollector,
+        SqlExecutionQueueMetricsCollector,
+        ActionExecutionQueueMetricsCollector,
+        AgentActionExecutionMetricsCollector {
   MetricsCollector();
 
   static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
@@ -68,6 +78,65 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       'rpc_client_token_get_policy_failure_notification';
   static const String _rpcClientTokenGetPolicyFailureOtherCounter = 'rpc_client_token_get_policy_failure_other';
   static const String _rpcClientTokenGetPolicyRateLimitedCounter = 'rpc_client_token_get_policy_rate_limited';
+  static const String _rpcRemoteAgentActionRunSuccessCounter = 'rpc_remote_agent_action_run_success';
+  static const String _rpcRemoteAgentActionRunErrorCounter = 'rpc_remote_agent_action_run_error';
+  static const String _rpcRemoteAgentActionValidateRunSuccessCounter = 'rpc_remote_agent_action_validate_run_success';
+  static const String _rpcRemoteAgentActionValidateRunErrorCounter = 'rpc_remote_agent_action_validate_run_error';
+  static const String _rpcRemoteAgentActionCancelSuccessCounter = 'rpc_remote_agent_action_cancel_success';
+  static const String _rpcRemoteAgentActionCancelErrorCounter = 'rpc_remote_agent_action_cancel_error';
+  static const String _agentActionQueueConcurrencyRejectCounter = 'agent_action_queue_concurrency_reject';
+  static const String _agentActionQueueConcurrencyIgnoreCounter = 'agent_action_queue_concurrency_ignore';
+  static const String _agentActionQueueDepthFullCounter = 'agent_action_queue_depth_full';
+  static const String _agentActionQueuePendingEnqueuedCounter = 'agent_action_queue_pending_enqueued';
+  static const String _agentActionQueueIdempotentReplayCounter = 'agent_action_queue_idempotent_replay';
+  static const String _agentActionQueueRunStartedCounter = 'agent_action_queue_run_started';
+  static const String _agentActionQueuePendingWaitTimeoutCounter = 'agent_action_queue_pending_wait_timeout';
+  static const String _agentActionQueuePendingCancelledCounter = 'agent_action_queue_pending_cancelled';
+  static const String _agentActionExecutionTerminalSucceededCounter = 'agent_action_execution_terminal_succeeded';
+  static const String _agentActionExecutionTerminalFailedCounter = 'agent_action_execution_terminal_failed';
+  static const String _agentActionExecutionTerminalSkippedCounter = 'agent_action_execution_terminal_skipped';
+  static const String _agentActionExecutionTerminalCancelledCounter = 'agent_action_execution_terminal_cancelled';
+  static const String _agentActionExecutionTerminalKilledCounter = 'agent_action_execution_terminal_killed';
+  static const String _agentActionExecutionTerminalTimedOutCounter = 'agent_action_execution_terminal_timed_out';
+  static const String _agentActionExecutionTerminalInterruptedCounter = 'agent_action_execution_terminal_interrupted';
+  static const String _agentActionExecutionTerminalUnknownCounter = 'agent_action_execution_terminal_unknown';
+  static const String _agentActionRemotePermissionDeniedCounter = 'agent_action_remote_permission_denied';
+  static const String _agentActionLocalAuthorizationDeniedCounter = 'agent_action_local_authorization_denied';
+  static const String _agentActionRemoteRateLimitedCounter = 'agent_action_remote_rate_limited';
+  static const String _agentActionExecutionHistoryPurgeCounter = 'agent_action_execution_history_purge';
+  static const String _agentActionRemoteAuditPurgeCounter = 'agent_action_remote_audit_purge';
+  static const String _agentActionRpcIdempotencyCachePurgeCounter = 'agent_action_rpc_idempotency_cache_purge';
+  static const String _agentActionElevatedBridgeArtifactsPurgeCounter = 'agent_action_elevated_bridge_artifacts_purge';
+  static const String _agentActionRemoteAuditExecutionCorrelatedCounter =
+      'agent_action_remote_audit_execution_correlated';
+  static const String _agentActionCancelKillFailedCounter = 'agent_action_cancel_kill_failed';
+  static const String _agentActionCancelKillPermissionDeniedCounter = 'agent_action_cancel_kill_permission_denied';
+  static const String _agentActionCancelProcessNotActiveCounter = 'agent_action_cancel_process_not_active';
+  static const String _agentActionCancelProcessIdMismatchCounter = 'agent_action_cancel_process_id_mismatch';
+  static const String _agentActionCancelProcessIdentityMismatchCounter =
+      'agent_action_cancel_process_identity_mismatch';
+  static const String _agentActionCancelProcessIdentityUnavailableCounter =
+      'agent_action_cancel_process_identity_unavailable';
+  static const String _agentActionCapturedStdoutTruncatedCounter = 'agent_action_captured_output_stdout_truncated';
+  static const String _agentActionCapturedStderrTruncatedCounter = 'agent_action_captured_output_stderr_truncated';
+  static const String _agentActionCapturedStdoutBytesCounter = 'agent_action_captured_output_stdout_bytes';
+  static const String _agentActionCapturedStderrBytesCounter = 'agent_action_captured_output_stderr_bytes';
+  static const String _agentActionCapturedOutputClearedCounter = 'agent_action_captured_output_cleared';
+  static const String _agentActionElevatedStatusFileTerminalCounter = 'agent_action_elevated_status_file_terminal';
+  static const String _agentActionElevatedStatusFileWaitTimeoutCounter =
+      'agent_action_elevated_status_file_wait_timeout';
+  static const String _rpcRemoteAgentActionGetExecutionSuccessCounter = 'rpc_remote_agent_action_get_execution_success';
+  static const String _rpcRemoteAgentActionGetExecutionErrorCounter = 'rpc_remote_agent_action_get_execution_error';
+  static const String _rpcRemoteAgentActionRunNotificationRejectedCounter =
+      'rpc_remote_agent_action_run_notification_rejected';
+  static const String _rpcRemoteAgentActionValidateRunNotificationRejectedCounter =
+      'rpc_remote_agent_action_validate_run_notification_rejected';
+  static const String _rpcRemoteAgentActionCancelNotificationRejectedCounter =
+      'rpc_remote_agent_action_cancel_notification_rejected';
+  static const String _rpcRemoteAgentActionGetExecutionNotificationRejectedCounter =
+      'rpc_remote_agent_action_get_execution_notification_rejected';
+  static const String _rpcRemoteAgentActionBatchReadLimitRejectedCounter =
+      'rpc_remote_agent_action_batch_read_limit_rejected';
   static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';
   static const String _connectTimeoutCounter = 'connect_timeout';
   static const String _queryTimeoutCounter = 'query_timeout';
@@ -109,6 +178,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   int _currentActiveWorkers = 0;
   int _maxActiveWorkers = 0;
   final List<Duration> _queueWaitTimes = [];
+  final List<Duration> _agentActionQueueWaitTimes = [];
+  final List<Duration> _agentActionExecutionDurations = [];
   final List<Duration> _poolWaitTimes = [];
   final List<Duration> _directConnectionWaitTimes = [];
   final List<Duration> _readOnlyBatchParallelWaitTimes = [];
@@ -242,6 +313,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _currentActiveWorkers = 0;
     _maxActiveWorkers = 0;
     _queueWaitTimes.clear();
+    _agentActionQueueWaitTimes.clear();
+    _agentActionExecutionDurations.clear();
     _poolWaitTimes.clear();
     _directConnectionWaitTimes.clear();
     _readOnlyBatchParallelWaitTimes.clear();
@@ -304,6 +377,180 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   @override
   void recordQueueWaitTime(Duration waitTime) {
     _recordDurationSample(_queueWaitTimes, waitTime);
+  }
+
+  @override
+  void recordConcurrencyReject() {
+    _incrementEventCounter(_agentActionQueueConcurrencyRejectCounter);
+  }
+
+  @override
+  void recordConcurrencyIgnore() {
+    _incrementEventCounter(_agentActionQueueConcurrencyIgnoreCounter);
+  }
+
+  @override
+  void recordQueueDepthFull() {
+    _incrementEventCounter(_agentActionQueueDepthFullCounter);
+  }
+
+  @override
+  void recordPendingEnqueued() {
+    _incrementEventCounter(_agentActionQueuePendingEnqueuedCounter);
+  }
+
+  @override
+  void recordIdempotentReplay() {
+    _incrementEventCounter(_agentActionQueueIdempotentReplayCounter);
+  }
+
+  @override
+  void recordRunStarted() {
+    _incrementEventCounter(_agentActionQueueRunStartedCounter);
+  }
+
+  @override
+  void recordPendingWaitTimeout() {
+    _incrementEventCounter(_agentActionQueuePendingWaitTimeoutCounter);
+  }
+
+  @override
+  void recordPendingCancelled() {
+    _incrementEventCounter(_agentActionQueuePendingCancelledCounter);
+  }
+
+  @override
+  void recordPendingDequeueWaitTime(Duration wait) {
+    _recordDurationSample(_agentActionQueueWaitTimes, wait);
+  }
+
+  @override
+  void recordTerminalOutcome(AgentActionExecutionStatus status) {
+    final counter = switch (status) {
+      AgentActionExecutionStatus.succeeded => _agentActionExecutionTerminalSucceededCounter,
+      AgentActionExecutionStatus.failed => _agentActionExecutionTerminalFailedCounter,
+      AgentActionExecutionStatus.skipped => _agentActionExecutionTerminalSkippedCounter,
+      AgentActionExecutionStatus.cancelled => _agentActionExecutionTerminalCancelledCounter,
+      AgentActionExecutionStatus.killed => _agentActionExecutionTerminalKilledCounter,
+      AgentActionExecutionStatus.timedOut => _agentActionExecutionTerminalTimedOutCounter,
+      AgentActionExecutionStatus.interrupted => _agentActionExecutionTerminalInterruptedCounter,
+      AgentActionExecutionStatus.unknown => _agentActionExecutionTerminalUnknownCounter,
+      AgentActionExecutionStatus.queued || AgentActionExecutionStatus.running => null,
+    };
+    if (counter != null) {
+      _incrementEventCounter(counter);
+    }
+  }
+
+  @override
+  void recordExecutionDuration(Duration duration) {
+    if (duration.isNegative) {
+      return;
+    }
+    _recordDurationSample(_agentActionExecutionDurations, duration);
+  }
+
+  @override
+  void recordRemotePermissionDenied() {
+    _incrementEventCounter(_agentActionRemotePermissionDeniedCounter);
+  }
+
+  @override
+  void recordLocalAuthorizationDenied() {
+    _incrementEventCounter(_agentActionLocalAuthorizationDeniedCounter);
+  }
+
+  void recordRemoteRateLimited() {
+    _incrementEventCounter(_agentActionRemoteRateLimitedCounter);
+  }
+
+  @override
+  void recordExecutionHistoryPurge(int removedCount) {
+    _incrementEventCounterBy(_agentActionExecutionHistoryPurgeCounter, removedCount);
+  }
+
+  @override
+  void recordRemoteAuditPurge(int removedCount) {
+    _incrementEventCounterBy(_agentActionRemoteAuditPurgeCounter, removedCount);
+  }
+
+  @override
+  void recordRpcIdempotencyCachePurge(int removedCount) {
+    _incrementEventCounterBy(_agentActionRpcIdempotencyCachePurgeCounter, removedCount);
+  }
+
+  @override
+  void recordElevatedBridgeArtifactsPurge(int removedCount) {
+    _incrementEventCounterBy(_agentActionElevatedBridgeArtifactsPurgeCounter, removedCount);
+  }
+
+  @override
+  void recordRemoteAuditExecutionCorrelated() {
+    _incrementEventCounter(_agentActionRemoteAuditExecutionCorrelatedCounter);
+  }
+
+  @override
+  void recordCancelKillFailed() {
+    _incrementEventCounter(_agentActionCancelKillFailedCounter);
+  }
+
+  @override
+  void recordCancelKillPermissionDenied() {
+    _incrementEventCounter(_agentActionCancelKillPermissionDeniedCounter);
+  }
+
+  @override
+  void recordCancelProcessNotActive() {
+    _incrementEventCounter(_agentActionCancelProcessNotActiveCounter);
+  }
+
+  @override
+  void recordCancelProcessIdMismatch() {
+    _incrementEventCounter(_agentActionCancelProcessIdMismatchCounter);
+  }
+
+  @override
+  void recordCancelProcessIdentityMismatch() {
+    _incrementEventCounter(_agentActionCancelProcessIdentityMismatchCounter);
+  }
+
+  @override
+  void recordCancelProcessIdentityUnavailable() {
+    _incrementEventCounter(_agentActionCancelProcessIdentityUnavailableCounter);
+  }
+
+  @override
+  void recordCapturedOutputPersisted({
+    required bool stdoutCaptured,
+    required bool stderrCaptured,
+    required bool stdoutTruncated,
+    required bool stderrTruncated,
+    int stdoutUtf8Bytes = 0,
+    int stderrUtf8Bytes = 0,
+  }) {
+    if (stdoutCaptured && stdoutTruncated) {
+      _incrementEventCounter(_agentActionCapturedStdoutTruncatedCounter);
+    }
+    if (stderrCaptured && stderrTruncated) {
+      _incrementEventCounter(_agentActionCapturedStderrTruncatedCounter);
+    }
+    _incrementEventCounterBy(_agentActionCapturedStdoutBytesCounter, stdoutUtf8Bytes);
+    _incrementEventCounterBy(_agentActionCapturedStderrBytesCounter, stderrUtf8Bytes);
+  }
+
+  @override
+  void recordCapturedOutputCleared(int executionCount) {
+    _incrementEventCounterBy(_agentActionCapturedOutputClearedCounter, executionCount);
+  }
+
+  @override
+  void recordElevatedStatusFileTerminalRead() {
+    _incrementEventCounter(_agentActionElevatedStatusFileTerminalCounter);
+  }
+
+  @override
+  void recordElevatedStatusFileWaitTimeout() {
+    _incrementEventCounter(_agentActionElevatedStatusFileWaitTimeoutCounter);
   }
 
   void recordPoolWaitTime(Duration waitTime) => _recordDurationSample(_poolWaitTimes, waitTime);
@@ -382,7 +629,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
       _incrementEventCounter(_readOnlyBatchParallelCappedCounter);
       recordDiagnosticReason(
         category: 'batch',
-        reason: 'read_only_parallel_capped',
+        reason: RpcSqlDiagnosticsConstants.readOnlyParallelCappedReason,
       );
     }
   }
@@ -428,7 +675,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _incrementEventCounter(_rpcSqlExecuteAutoStreamingFromDbResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
-      reason: 'auto_db_streaming',
+      reason: RpcSqlDiagnosticsConstants.autoDbStreamingReason,
     );
   }
 
@@ -436,7 +683,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _incrementEventCounter(_rpcSqlExecutePreferDbStreamingResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
-      reason: 'prefer_db_streaming',
+      reason: RpcSqlDiagnosticsConstants.preferDbStreamingReason,
     );
   }
 
@@ -444,7 +691,7 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
     _incrementEventCounter(_rpcSqlExecuteAllowlistDbStreamingResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
-      reason: 'allowlist_db_streaming',
+      reason: RpcSqlDiagnosticsConstants.allowlistDbStreamingReason,
     );
   }
 
@@ -488,6 +735,52 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   }
 
   void recordClientTokenGetPolicyRateLimited() => _incrementEventCounter(_rpcClientTokenGetPolicyRateLimitedCounter);
+
+  void recordRpcAgentActionRemoteOutcome(String rpcMethod, {required bool success}) {
+    if (!AgentActionRpcConstants.remotePublishedRpcMethodNames.contains(rpcMethod)) {
+      return;
+    }
+    final counter = switch ((rpcMethod, success)) {
+      (AgentActionRpcConstants.agentActionRunRpcMethodName, true) => _rpcRemoteAgentActionRunSuccessCounter,
+      (AgentActionRpcConstants.agentActionRunRpcMethodName, false) => _rpcRemoteAgentActionRunErrorCounter,
+      (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, true) =>
+        _rpcRemoteAgentActionValidateRunSuccessCounter,
+      (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, false) =>
+        _rpcRemoteAgentActionValidateRunErrorCounter,
+      (AgentActionRpcConstants.agentActionCancelRpcMethodName, true) => _rpcRemoteAgentActionCancelSuccessCounter,
+      (AgentActionRpcConstants.agentActionCancelRpcMethodName, false) => _rpcRemoteAgentActionCancelErrorCounter,
+      (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, true) =>
+        _rpcRemoteAgentActionGetExecutionSuccessCounter,
+      (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, false) =>
+        _rpcRemoteAgentActionGetExecutionErrorCounter,
+      _ => null,
+    };
+    if (counter != null) {
+      _incrementEventCounter(counter);
+    }
+  }
+
+  void recordRpcAgentActionNotificationRejected(String rpcMethod) {
+    if (!AgentActionRpcConstants.remotePublishedRpcMethodNames.contains(rpcMethod)) {
+      return;
+    }
+    final counter = switch (rpcMethod) {
+      AgentActionRpcConstants.agentActionRunRpcMethodName => _rpcRemoteAgentActionRunNotificationRejectedCounter,
+      AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
+        _rpcRemoteAgentActionValidateRunNotificationRejectedCounter,
+      AgentActionRpcConstants.agentActionCancelRpcMethodName => _rpcRemoteAgentActionCancelNotificationRejectedCounter,
+      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
+        _rpcRemoteAgentActionGetExecutionNotificationRejectedCounter,
+      _ => null,
+    };
+    if (counter != null) {
+      _incrementEventCounter(counter);
+    }
+  }
+
+  void recordRpcAgentActionBatchReadLimitRejected() {
+    _incrementEventCounter(_rpcRemoteAgentActionBatchReadLimitRejectedCounter);
+  }
 
   void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
 
@@ -652,7 +945,14 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
   }
 
   void _incrementEventCounter(String counter) {
-    _eventCounters[counter] = (_eventCounters[counter] ?? 0) + 1;
+    _incrementEventCounterBy(counter, 1);
+  }
+
+  void _incrementEventCounterBy(String counter, int amount) {
+    if (amount <= 0) {
+      return;
+    }
+    _eventCounters[counter] = (_eventCounters[counter] ?? 0) + amount;
   }
 
   /// Exporta metricas para JSON.
@@ -701,6 +1001,8 @@ class MetricsCollector implements IMetricsCollector, SqlExecutionQueueMetricsCol
           : _queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) / _queueWaitTimes.length,
       'sql_queue_p95_wait_time_ms': p95QueueWaitTime?.inMilliseconds ?? 0,
       'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
+      ..._durationStatsSnapshot('agent_action_queue_wait', _agentActionQueueWaitTimes),
+      ..._durationStatsSnapshot('agent_action_execution', _agentActionExecutionDurations),
       ..._durationStatsSnapshot('pool_wait', _poolWaitTimes),
       ..._durationStatsSnapshot('direct_connection_wait', _directConnectionWaitTimes),
       ..._durationStatsSnapshot('read_only_batch_parallel_wait', _readOnlyBatchParallelWaitTimes),

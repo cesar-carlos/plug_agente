@@ -39,6 +39,9 @@ class _StubLocalizer implements RpcErrorUserMessageLocalizer {
   String executionCancelled() => 'STUB_execution_cancelled';
   @override
   String internalError() => 'STUB_internal_error';
+  @override
+  String agentActionsTemporarilyUnavailable() =>
+      'STUB_agent_actions_temporarily_unavailable';
 }
 
 void main() {
@@ -90,6 +93,12 @@ void main() {
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.invalidDatabaseConfig), 'STUB_invalid_db_config');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.executionNotFound), 'STUB_execution_not_found');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.executionCancelled), 'STUB_execution_cancelled');
+      expect(
+        RpcErrorCode.getUserMessage(
+          RpcErrorCode.agentActionsTemporarilyUnavailable,
+        ),
+        'STUB_agent_actions_temporarily_unavailable',
+      );
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.internalError), 'STUB_internal_error');
       expect(RpcErrorCode.getUserMessage(99999), 'STUB_internal_error');
     });

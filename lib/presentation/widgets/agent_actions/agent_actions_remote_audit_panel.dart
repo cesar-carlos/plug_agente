@@ -6,10 +6,12 @@ import 'package:intl/intl.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_remote_audit_labels.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
-class AgentActionsRemoteAuditPanel extends StatelessWidget {
+class AgentActionsRemoteAuditPanel extends StatefulWidget {
   const AgentActionsRemoteAuditPanel({
     required this.provider,
     required this.l10n,
@@ -19,10 +21,28 @@ class AgentActionsRemoteAuditPanel extends StatelessWidget {
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
 
+  @override
+  State<AgentActionsRemoteAuditPanel> createState() => _AgentActionsRemoteAuditPanelState();
+}
+
+class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPanel> {
   static final DateFormat _occurredFormat = DateFormat('yyyy-MM-dd HH:mm');
+
+  AgentActionRemoteAuditViewFilter _filter = AgentActionRemoteAuditViewFilter.all;
+
+  AppLocalizations get l10n => widget.l10n;
+
+  AgentActionsProvider get provider => widget.provider;
+
+  List<AgentActionRemoteAuditRecord> get _visibleEntries => provider.remoteAuditEntries
+      .where((AgentActionRemoteAuditRecord record) => matchesAgentActionRemoteAuditViewFilter(_filter, record.outcome))
+      .toList(growable: false);
 
   @override
   Widget build(BuildContext context) {
+    final visibleEntries = _visibleEntries;
+    final hasAnyRows = provider.remoteAuditEntries.isNotEmpty;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,6 +84,7 @@ class AgentActionsRemoteAuditPanel extends StatelessWidget {
                 onPressed: provider.remoteAuditEntries.isEmpty ? null : () => unawaited(_copyJson(context)),
                 child: Text(l10n.agentActionsRemoteAuditCopyJson),
               ),
+              ..._filterButtons(),
             ],
           ),
           if (provider.remoteAuditLoadError != null) ...[
@@ -76,18 +97,21 @@ class AgentActionsRemoteAuditPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
-          if (provider.remoteAuditEntries.isEmpty && provider.remoteAuditLoadError == null)
+          if (!hasAnyRows && provider.remoteAuditLoadError == null)
             Text(l10n.agentActionsRemoteAuditEmpty, style: context.bodyMuted)
+          else if (visibleEntries.isEmpty)
+            Text(l10n.agentActionsRemoteAuditFilterEmpty, style: context.bodyMuted)
           else
             SizedBox(
-              height: 200,
+              height: 220,
               child: ListView.separated(
-                itemCount: provider.remoteAuditEntries.length,
+                itemCount: visibleEntries.length,
                 separatorBuilder: (BuildContext context, int index) => const Divider(),
                 itemBuilder: (BuildContext context, int index) {
-                  final record = provider.remoteAuditEntries[index];
+                  final record = visibleEntries[index];
                   final when = _occurredFormat.format(record.occurredAtUtc.toLocal());
-                  final subtitle = _subtitle(record);
+                  final outcomeLabel = agentActionRemoteAuditOutcomeLabel(l10n, record.outcome);
+                  final subtitle = formatAgentActionRemoteAuditSubtitle(l10n, record);
                   final actionId = record.actionId?.trim();
                   final canCorrelate = actionId != null && actionId.isNotEmpty;
                   return Padding(
@@ -99,7 +123,7 @@ class AgentActionsRemoteAuditPanel extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${record.rpcMethod} · ${record.outcome} · $when'),
+                              Text('${record.rpcMethod} · $outcomeLabel · $when'),
                               if (subtitle.isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 SelectableText(subtitle, style: context.captionText),
@@ -123,41 +147,65 @@ class AgentActionsRemoteAuditPanel extends StatelessWidget {
     );
   }
 
+  List<Widget> _filterButtons() {
+    return AgentActionRemoteAuditViewFilter.values.map((AgentActionRemoteAuditViewFilter value) {
+      final label = switch (value) {
+        AgentActionRemoteAuditViewFilter.all => l10n.agentActionsRemoteAuditFilterAll,
+        AgentActionRemoteAuditViewFilter.rpc => l10n.agentActionsRemoteAuditFilterRpc,
+        AgentActionRemoteAuditViewFilter.lifecycle => l10n.agentActionsRemoteAuditFilterLifecycle,
+      };
+      final isSelected = _filter == value;
+      return Button(
+        onPressed: isSelected
+            ? null
+            : () {
+                setState(() {
+                  _filter = value;
+                });
+              },
+        child: Text(label),
+      );
+    }).toList(growable: false);
+  }
+
   void _onShowInHistory(BuildContext context, AgentActionRemoteAuditRecord record) {
     unawaited(_showInHistoryAsync(context, record));
   }
 
   Future<void> _showInHistoryAsync(BuildContext context, AgentActionRemoteAuditRecord record) async {
-    final ok = await provider.focusExecutionFromRemoteAudit(record);
+    final result = await provider.focusExecutionFromRemoteAudit(record);
     if (!context.mounted) {
       return;
     }
-    final executionId = record.executionId?.trim();
-    if (!ok && executionId != null && executionId.isNotEmpty) {
-      displayInfoBar(
-        context,
-        builder: (BuildContext closeContext, void Function() close) => InfoBar(
-          title: Text(l10n.agentActionsRemoteAuditExecutionNotInHistory(executionId)),
-          severity: InfoBarSeverity.warning,
-          isLong: true,
-          onClose: close,
-        ),
-      );
+    if (result == AgentActionRemoteAuditFocusResult.succeeded) {
+      return;
     }
-  }
 
-  String _subtitle(AgentActionRemoteAuditRecord record) {
-    final parts = <String>[
-      if (record.actionId != null && record.actionId!.trim().isNotEmpty) 'action: ${record.actionId}',
-      if (record.executionId != null && record.executionId!.trim().isNotEmpty) 'exec: ${record.executionId}',
-      if (record.traceId != null && record.traceId!.trim().isNotEmpty) 'trace: ${record.traceId}',
-      if (record.clientId != null && record.clientId!.trim().isNotEmpty) 'client: ${record.clientId}',
-      if (record.runtimeInstanceId != null && record.runtimeInstanceId!.trim().isNotEmpty)
-        'inst: ${record.runtimeInstanceId}',
-      if (record.runtimeSessionId != null && record.runtimeSessionId!.trim().isNotEmpty)
-        'sess: ${record.runtimeSessionId}',
-    ];
-    return parts.join(' · ');
+    final executionId = record.executionId?.trim();
+    if (executionId == null || executionId.isEmpty) {
+      return;
+    }
+
+    final title = switch (result) {
+      AgentActionRemoteAuditFocusResult.runtimeInstanceMismatch => Text(
+        l10n.agentActionsRemoteAuditRuntimeInstanceMismatch(
+          executionId,
+          record.runtimeInstanceId ?? '',
+        ),
+      ),
+      _ => Text(l10n.agentActionsRemoteAuditExecutionNotInHistory(executionId)),
+    };
+
+    displayInfoBar(
+      context,
+      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+        key: const ValueKey<String>('agent_actions_remote_audit_focus_warning'),
+        title: title,
+        severity: InfoBarSeverity.warning,
+        isLong: true,
+        onClose: close,
+      ),
+    );
   }
 
   Future<void> _copyJson(BuildContext context) async {

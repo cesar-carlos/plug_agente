@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-no-idem",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "remote_idempotency_required",
+      "category": "action",
+      "retryable": false,
+      "user_message": "The request parameters are invalid.",
+      "technical_message": "Remote agent.action.run requires idempotency_key",
+      "correlation_id": "req-run-no-idem",
+      "timestamp": "2026-05-18T15:25:00.000Z",
+      "method": "agent.action.run",
+      "field": "idempotency_key"
+    }
+  }
+}

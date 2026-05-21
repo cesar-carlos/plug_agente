@@ -8,10 +8,10 @@ substituir gradualmente cenarios hoje resolvidos por tarefas do Windows e
 arquivos `.bat`, mantendo execucao local e execucao via Hub por Socket.IO sem
 quebrar o contrato existente. A execucao remota via JSON-RPC depende de handlers
 em `RpcMethodDispatcher` para `agent.action.*` (**roteamento implementado** no
-agente; o marcador historico `NOTA "Fase 6"` ainda aparece no texto onde descreve
-o caminho Hub ate o use case). O contrato e a UI local continuam podendo evoluir
-antes do **endurecimento** de producao (auditoria dedicada, allowlist fina,
-metricas, revisoes de threat model).
+agente). O corpo do plano usa "apos roteamento em `RpcMethodDispatcher`" em vez do
+marcador historico `NOTA "Fase 6"` (gap do `switch` — superado em 2026-05-19).
+Endurecimento de **producao** (allowlist fina no Hub, live E2E, COM real, campo
+elevado) segue em **Backlog pos-MVP** e **Riscos aceitos (MVP agente)**.
 
 O plano esta dividido em fases porque o escopo envolve dominio, persistencia,
 execucao de processo, elevacao no Windows, contrato JSON-RPC, UI desktop,
@@ -23,15 +23,38 @@ historico operacional.
 Resumo executivo para quem implementa; detalhes e checklists completos seguem nas
 secoes linkadas.
 
-| Prioridade | Onde no plano | Dependencia principal |
-| --- | --- | --- |
-| P0 — Hub real | **Fase 6** / NOTA "Fase 6"; item 8 "Ordem normativa" (~L1064); MVP 3 (~L949) | Endurecimento apos roteamento: allowlist/auditoria/metricas/threat model; handlers `agent.action.*` em `RpcMethodDispatcher.dispatch` **ja** chamam os mesmos use cases da UI |
-| P1 — Nucleo fechado | Fase 1 (~L1977), dependencias (~L1782) | Politicas/estados faltantes, secure storage por acao, auditoria append-only |
-| P2 — UX e operacao | MVP 2 parcial (~L940); item 6/7 ordem normativa | Scheduler/triggers ja existem em parte; UX fuso horario, retencao na UI |
-| P3 — Elevacao | MVP 4 (~L957) | Core local + remoto estavel |
-| P4 — Novos tipos | MVP 5 (~L959); "Como adicionar uma nova acao" (~L1944) | Gates do adapter; `developer`/Data7 ja parcial |
+**Status oficial (2026-05-21):** implementacao obrigatoria no `plug_agente`
+para acoes agendadas/execucoes esta **fechada** para CI/local. Ver
+**Encerramento MVP agente** (~L1041) e gate
+`run_agent_actions_operational_gate.ps1`. Rollout de producao segue bloqueado
+ate fechar `COM` real aprovado (RA-01), policy fina no Hub (RA-02) e live E2E
+assinado contra Hub real (RA-05). Nao reabrir checklist de codigo no agente ate
+nova decisao registrada (**Processo ao desbloquear TODO bloqueado**) ou item em
+**Backlog pos-MVP** abaixo.
 
-Codigo atual do dominio vive em `lib/domain/actions/` (e espelhos em `application`/`infrastructure`), nao em `lib/domain/agent_actions/` — o checklist de arquivos provaveis (~L1885) e aspiracional.
+Codigo atual do dominio vive em `lib/domain/actions/` (e espelhos em
+`application`/`infrastructure`), nao em `lib/domain/agent_actions/` — o checklist
+de arquivos provaveis (~L1885) e aspiracional.
+
+### Backlog pos-MVP (trabalho restante)
+
+Ordem sugerida alinhada a **Roteiro operacional pos-MVP** (~L1080) e
+**Riscos aceitos** (~L5092).
+
+| Prioridade | ID | Entrega | Dono | Gate / referencia |
+| --- | --- | --- | --- | --- |
+| P0 | RA-05 | Live Hub E2E opt-in | QA + `.env` | `validate_live_hub_agent_actions_env.dart`; `homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunLiveTests`; `docs/testing/e2e_setup.md` |
+| P0 | RA-02 | Allowlist fina e rate limit no **Hub** | repositorio Hub | Policy alinhada a `AgentActionRemoteAuthorizationService` no agente |
+| P1 | RA-01 | Handlers **COM** de producao | agente | `com_object_production_registrations.dart`; ou manter stub + RA-01 documentado |
+| P1 | RA-06 | Elevado em campo (UAC, distribuicao assinada) | ops | `homologate_elevated_runner.ps1`; helper instalado |
+| P1 | RA-04 | Threat model + sign-off por tipo | PR humano | `agent_action_security_gate_checklist.dart <tipo>` |
+| P2 | RA-03 | Contexto remoto inline no RPC | agente + Hub | **Fase 6** TODOs ~L3377; decisao MVP 3 contexto |
+| P2 | — | Homologacao **developer**/Data7 em campo | ops | Matriz MVP 5; sem override remoto de paths |
+| P3 | — | Refino kill/`replaceRunning`, dialogo app-close | agente | Kill TODO ~L1004; DECISAO MVP 2 app-close |
+| P3 | MVP 0 | Subdocs por contexto (opcional) | doc | `acoes/contrato_remoto`, `ui_acoes`, `seguranca_acoes` criados; runners ~L920 |
+
+Refino agente opcional (nao bloqueia CI): crash/kill forcado sem restart;
+`replaceRunning` na fila; validacao de contexto remoto quando RA-03 for aceito.
 
 ## Sincronizacao plano ↔ codigo (checkpoint)
 
@@ -43,32 +66,56 @@ atual nestes tres grupos:
 ### Ja entregue
 
 - CRUD base, repositorios, fila local, historico e limpeza inicial de execucoes.
+- Nucleo do runner elevado Windows (`plug_agente_elevated_runner`, bridge,
+  installer, UI de preparacao) e adapter `developer` Data7.
 - Scheduler em memoria com gatilhos `once`, `interval`, `daily`, `weekly`,
   `appStart` e `appClose`.
 - Roteamento JSON-RPC `agent.action.*` no agente com auditoria remota,
   idempotencia, correlacao por runtime e testes de dispatcher.
 - Pagina **Acoes** operacional com editor principal, execucao local, painel de
   auditoria, riscos remotos, confirmacoes e export de diagnostico de execucao.
+- Retencao operacional editavel (`AgentActionRetentionSettings` + card na pagina
+  **Acoes**, purge/cleanup e TTL de idempotencia RPC alinhados; gate local/CI
+  `homologate_hub_agent_actions.ps1 -RunContractTests`).
 
-### Pendente de estabilizacao
+### Estabilizacao UI/operacao (fechado 2026-05-19)
 
 - Fechar regressao de viewport/layout e manter widget tests da tela **Acoes**
-  como gate obrigatorio.
+  como gate obrigatorio. **Feito:** manifesto UI (`agent_actions_ui_test_paths.txt`:
+  pagina, summary card, risk labels, confirmacoes); repetir ao alterar layout da pagina.
 - Consolidar diagnostico de runtime no bootstrap/suporte para investigar falso
-  positivo de `Windows Server` sem mudar a policy por hipotese.
+  positivo de `Windows Server` sem mudar a policy por hipotese. **Feito (2026-05-19):**
+  Win10+ Server usa `RuntimeCapabilities.serverShellLimited()` (modo full com tray/
+  notificacoes/auto-update off); probe `isServer` exige regex `windows server`;
+  card de runtime degradado na pagina **Acoes** so quando policy injetada como
+  degradada no harness.
 - Revisar/atualizar itens marcados como TODO generico que hoje descrevem partes
-  ja implementadas da UI, runtime guard e diagnosticos.
+  ja implementadas da UI, runtime guard e diagnosticos. **Feito (2026-05-19):**
+  checkpoint, gate (manifestos contrato/UI), health (`retention`/`scheduler`/
+  `instance_lock_held`/`last_start_issue_reason`, schema
+  `agent_runtime`/`odbc_runtime_tuning`), correlacao auditoria/historico,
+  lock do scheduler + `schedulerOperationalIssueReason` no provider/UI,
+  UTC no RPC, dropdown de tipo degradado; repetir apos mudancas grandes de
+  protocolo ou UI.
 
-### Roadmap real
+### Roadmap real (pos-MVP agente)
 
-- Runner elevado e toda a trilha de install/repair/status/protecao.
-- Trava de instancia/scheduler por sessao quando a decisao de arquitetura for
-  fechada.
-- Adapters adicionais alem de `commandLine` e `developer`.
-- Endurecimento remoto remanescente: threat model recorrente, allowlist fina,
-  metricas finais, revisao de protocolo e governanca documental.
+Itens abaixo nao reabrem MVP 0–5 no agente; ver tabela **Backlog pos-MVP** no
+topo e RA-01..RA-08 em **Riscos aceitos (MVP agente)**.
 
-Revisao alinhada ao repositorio em **2026-05-18**.
+- Live Hub e policy no consumidor Hub (RA-05, RA-02).
+- Handlers COM de producao ou manter stub documentado (RA-01).
+- Elevado: validacao em campo com UAC e distribuicao assinada (RA-06).
+- Endurecimento por tipo: threat model recorrente e sign-off humano (RA-04).
+- Contexto remoto inline no wire quando produto aceitar (RA-03).
+- Governanca documental: subdocs opcionais (~L916) se o arquivo passar de ~5k linhas.
+
+**Ja entregue no agente (nao repetir no backlog):** lock do scheduler
+(`AgentActionSchedulerInstanceLock`, 2026-05-19); sete tipos MVP 5 no DI;
+auditoria append-only; retencao UI; correlacao auditoria/historico.
+
+Revisao alinhada ao repositorio em **2026-05-20** (backlog pos-MVP); checkpoint
+tecnico abaixo mantido desde **2026-05-18** com atualizacoes pontuais.
 
 - **Roteamento `agent.action.*`:** `RpcMethodDispatcher.dispatch` despacha
   `agent.action.run`, `agent.action.validateRun`, `agent.action.cancel` e
@@ -92,41 +139,64 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   ligado e credencial presente, por uma resolucao extra via `GetClientTokenPolicy`
   apenas para a linha de auditoria (sem SQL de autorizacao da acao). `traceId` e
   `requestedBy` derivam de `meta` quando a flag de auditoria remota esta ligada.
+  Desde o schema **24**, `idempotency_key` do params RPC e gravado na auditoria.
+  Negacoes `missing_client_token` e `agent_action_permission_denied` classificam
+  outcome `authorization_denied`; labels localizados no painel (EN/PT).
   Registro em
   `plug_dependency_registrar.dart` (implementacao Drift; append continua
   condicionado a flag no dispatcher). Purge periodico da mesma tabela: schema
-  independente; retencao `ConnectionConstants.agentActionRemoteAuditRetention`.
+  independente; retencao efetiva via `AgentActionRetentionSettings` (UI > env >
+  default), incluindo auditoria remota e TTL de idempotencia RPC de acoes.
 - **`runtimeInstanceId` / `runtimeSessionId`:** `AgentRuntimeIdentity` em
   `lib/core/runtime/agent_runtime_identity.dart` (persistido + sessao por boot),
   registrado em `service_locator.dart`, injetado em `RunAgentActionLocally` e
   persistido em `AgentActionExecution` (Drift schema **21**). Campos opcionais
   no resultado `agent.action.getExecution` (`runtime_instance_id`,
   `runtime_session_id` no JSON).
-- **Marcador `NOTA "Fase 6"`** no corpo deste plano: historicamente apontava para
-  o gap do `switch` no dispatcher. Esse gap foi **fechado**; trechos antigos que
-  ainda mencionam `switch` **pendente** devem ser lidos como superados salvo
-  contradicao explicita nesta secao.
-- **O que segue para MVP 3 “fechado” de producao:** itens de endurecimento
-  (allowlist fina no Hub, metricas com baixa cardinalidade, revisao de threat
-  model a cada mudanca de protocolo), limpeza ampliada de historico/saida, e os
-  `[ ] TODO` processuais em **Politica de Atualizacao de Documentacao** — nao o
-  roteamento basico no agente. **Auditoria append-only dedicada no agente (linha
-  de RPC remoto `agent.action.*`):** implementada, com purge periodico da tabela;
-  permanecem refinamentos de produto (UI/export, correlacao com historico de
-  execucao quando aplicavel).
+- **Marcador `NOTA "Fase 6"`:** historicamente apontava para o gap do `switch` no
+  dispatcher (fechado). **Varredura (2026-05-20):** menções no corpo foram
+  removidas ou substituidas por "apos roteamento em `RpcMethodDispatcher`"; so
+  permanecem referencias meta neste checkpoint e na secao de contrato (~L732).
+- **MVP 3 no agente (implementacao):** considerado **fechado** para o escopo
+  deste repositorio: roteamento `agent.action.*`, gates (`remote_disabled`,
+  `feature_disabled`, `maintenance`, `draining`), scopes/allowlist via token,
+  idempotencia RPC (TTL dedicado + dedup de execucao), auditoria append-only
+  (incl. `idempotency_key`, outcomes de auth), erros com `category: action` e
+  `reason` estavel, contexto remoto inline **rejeitado** (`supportsContext:
+  false`), capability `extensions.agentActions` documentada, fixtures em
+  `test/fixtures/rpc/` (incl. auth, remote disabled, contexto remoto,
+  `remote_action_not_approved`, `environment_profile_denied`,
+  `action_secret_unavailable`) validados por `contract_fixtures_test.dart`
+  (20 erros + requests/results). `failure_to_rpc_error_mapper_test.dart` e
+  `rpc_method_dispatcher_agent_action_test.dart` cobrem mapeamento de gates do
+  runner (incl. os tres `reason` acima). E2E opt-in
+  `hub_agent_action_rpc_live_e2e_test.dart` (`docs/testing/e2e_setup.md`).
+  **Categoria no wire:** falhas `Action*` via mapper usam `category: action`;
+  respostas montadas no dispatcher (`maintenance`, `rate_limited`, token
+  ausente) seguem `getCategory(code)` (`transport` / `auth`). Decisoes MVP 0–1
+  e nucleo MVP 4 (Fase 5) alinhados ao codigo (2026-05-19).
+- **O que segue para MVP 3 “fechado” de producao (cross-repo / processo):**
+  homologacao Hub real com flags `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS` /
+  `E2E_HUB_EXPECT_*`, allowlist fina e rate limit **no Hub**, metricas de
+  produto, threat model recorrente por PR, e goldens finais do lado Hub em CI —
+  nao o roteamento basico no agente. **Auditoria append-only:** implementada no
+  agente; refinamentos de produto (export avancado) seguem opcionais.
 
 ### Proximos passos imediatos (pos-roteamento no agente)
 
-1. **Auditoria append-only (feito no agente, 2026-05-18):** uma linha por
+> **Encerrado no agente (2026-05-19):** itens 1–6 abaixo estao implementados; validacao atual
+> em **Encerramento MVP agente**. Trabalho novo: live Hub (`.env`), Hub producao ou COM real.
+
+1. [x] **Auditoria append-only (feito no agente, 2026-05-18):** uma linha por
    conclusao de RPC `agent.action.*` em Drift, com `traceId` / `requestedBy` e
    outcome; ver checkpoint. **Retencao/purge (2026-05-18):** use case
    `CleanupExpiredAgentActionRemoteAudit` + timer `AgentActionRemoteAuditPeriodicPurge`
    no bootstrap (`AppInitializer`), retencao configuravel por
    `AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS` (ver `ConnectionConstants`).
-   **Restante:** correlacao mais rica com historico de execucao onde fizer sentido.
-   **Parcial (2026-05-19):** `focusExecutionFromRemoteAudit` rejeita destaque quando
-   `runtime_instance_id` da auditoria difere do da execucao (linhas antigas sem
-   runtime continuam aceitas).
+   **Correlacao com historico (2026-05-19):** `focusExecutionFromRemoteAudit` rejeita destaque quando
+   `runtime_instance_id` da auditoria difere do da execucao (incl. apos fetch via
+   `GetAgentActionExecution`; linhas antigas sem runtime continuam aceitas). UI:
+   `AgentActionRemoteAuditFocusResult` + InfoBar dedicado para mismatch de instancia.
    **Parcial (2026-05-19):** cada linha de auditoria remota grava
    `runtime_instance_id` / `runtime_session_id` (Drift schema 23) a partir de
    `AgentRuntimeIdentity` no `RpcMethodDispatcher`; painel e export JSON exibem
@@ -139,7 +209,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
    recente (via `ListRecentAgentActionRemoteAudit` /
    `IAgentActionRemoteAuditStore.listRecent`), botao recarregar e exportar JSON para
    a area de transferencia.
-2. **Scopes no payload** — enforcement fino no agente/Hub alem do SQL de client
+2. [x] **Scopes no payload** — enforcement fino no agente/Hub alem do SQL de client
    token quando `enableClientTokenAuthorization` estiver ativo.
    **Implementado (2026-05-18):** `ClientTokenPolicyAgentActionAuthorization` +
    `RpcMethodDispatcher` resolve policy (`GetClientTokenPolicy`), valida scopes
@@ -229,7 +299,27 @@ Revisao alinhada ao repositorio em **2026-05-18**.
    (intervalo `ConnectionConstants.agentActionExecutionPurgeInterval`) para linhas
    terminais antigas em `agent_action_execution`, retencao `agentActionExecutionRetention`
    (env `AGENT_ACTION_EXECUTION_RETENTION_DAYS`, default 3 dias, clamp 1..3650);
-   `CleanupAgentActionExecutions` usa essa retencao por defeito. Contadores agregados
+   `CleanupAgentActionExecutions` usa essa retencao por defeito.
+   **Retencao na UI (2026-05-19):** card **Retencao de dados** na pagina **Acoes**
+   (`AgentActionsRetentionCard` + `AgentActionRetentionSettings`; salvar, descartar
+   edicao e **Usar defaults de ambiente** via `clearPersistedOverrides`); valores salvos
+   em `IAppSettingsStore` precedem env; purge/cleanup e TTL de idempotencia RPC
+   (`agent.action.run` / `validateRun`) leem o settings no DI. Testes:
+   `agent_action_retention_settings_test.dart`,
+   `agent_action_retention_cleanup_test.dart`, widget de persistencia em
+   `agent_actions_page_test.dart`. **Health retencao (2026-05-19):** quando
+   `AgentActionRetentionSettings` esta injetado, `agent.getHealth` →
+   `agent_actions.retention` expoe dias/horas efetivos, `persisted_override` e
+   `rpc_idempotency_ttl_seconds` (schema
+   `rpc.result.agent-get-health.schema.json`, incl. `agent_runtime` e
+   `odbc_runtime_tuning` opcional); testes em
+   `health_service_test.dart` e `agent_get_health_result_schema_test.dart` (shell
+   minimo com `agent_actions` + snapshot tipico de `HealthService` contra o schema
+   publicado).    **Health scheduler (2026-05-19):**
+   `agent_actions.scheduler` com `started`, `bootstrap_disabled`, `temporal_timer_count`,
+   `instance_lock_held` e `last_start_issue_reason` (quando o temporal nao arrancou);
+   `com_object_handlers_registered_count` / `com_object_invocation_ready` (2026-05-19).
+   Contadores agregados
    (sem labels dinamicos) em `MetricsCollector` / `IRpcDispatchMetricsCollector`:
    `rpc_remote_agent_action_{run|validate_run|cancel|get_execution}_{success|error}`,
    incrementados ao concluir cada RPC remoto `agent.action.*` em
@@ -245,7 +335,9 @@ Revisao alinhada ao repositorio em **2026-05-18**.
    amostras `agent_action_queue_wait_*` no `getSnapshot` (espera pendente ate
    `start()`). Testes: `test/application/actions/action_execution_queue_metrics_test.dart`.
 5. **E2E / homologacao** — cenario minimo Socket.IO quando fizer sentido para o
-   time (variaveis em `E2EEnv`). **Parcial (2026-05-18):** teste opt-in
+   time (variaveis em `E2EEnv`). **Feito no agente (2026-05-19):** runner
+   `tool/homologate_hub_agent_actions.ps1` (`-RunContractTests`, `-RunLiveTests`);
+   teste opt-in
    `test/integration/hub_agent_action_rpc_live_e2e_test.dart` (tags `live`):
    `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true` exige tambem `RUN_LIVE_HUB_TESTS`,
    `RUN_LIVE_HUB_SIGNING_TESTS`, `E2E_HUB_URL`, `E2E_HUB_TOKEN` e chaves de assinatura;
@@ -253,15 +345,31 @@ Revisao alinhada ao repositorio em **2026-05-18**.
    assinado e socket permanece conectado; opcional `E2E_HUB_EXPECT_AGENT_ACTION_RPC=true`
    aguarda `rpc:request` com metodo `agent.action.*` apos o ready (hub precisa emitir);
    opcional `E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY=true` valida extensao
-   `agentActions` em `agent:capabilities`.
-6. **Varredura deste .md** — substituir ocorrencias remanescentes de "`switch`
-   pendente" / "`method_not_found` por falta de handler" que ainda aparecem em
-   secoes nao revisadas nesta passagem. **Parcial (2026-05-18):** secao Contrato Remoto,
-   Criterios de Aceite, rollback, DoD MVP 3, decisoes e bullets correlatos atualizados;
-   checklist Socket.IO/JSON-RPC e bloco "Erros JSON-RPC para acoes" alinhados ao
-   roteamento atual em `RpcMethodDispatcher`. **Ampliada:** bullet MVP 3 (Hub
-   conservador), nota intro da **Fase 6**, checklist operacional remota (scopes
-   no agente / correlacao auditoria); repetir busca apos grandes edicoes do plano.
+   `agentActions` em `agent:capabilities` (campos minimos alinhados ao agente).
+   Documentacao das variaveis: `docs/testing/e2e_setup.md` (secao Hub
+   `agent.action.*` e **Retencao de acoes**). Runner elevado: mesma doc (secao
+   Elevated action runner). **Gate local (2026-05-19):** `homologate_hub_agent_actions.ps1
+   -RunContractTests` inclui contrato RPC/fixtures, Data7, retencao, redator,
+   health, lock do scheduler,    `agent_actions_provider_test.dart` (correlacao auditoria/historico,
+   `schedulerOperationalIssueReason`), kill/timeout (`command_line_action_process_runner_test`,
+   `agent_action_process_kill_guard_test`, `reconcile_agent_action_executions_test`,
+   `apply_agent_action_on_app_exit_policies_test`),
+   `agent_action_trigger_scheduler_test.dart` e
+   `agent_actions_page_test.dart` (36 cenarios, incl. lock do scheduler, mismatch de auditoria, aviso COM sem handlers e metrica COM no summary card);
+   `agent_actions_summary_card_test.dart` (metricas isoladas do summary);
+   `com_object_invocation_bootstrap_test.dart` no gate;
+   repetir apos mudancas no gate. **CI (2026-05-20):** listas em
+   `tool/agent_actions_contract_test_paths.txt` e `tool/agent_actions_ui_test_paths.txt`
+   (fonte unica para `homologate_hub_agent_actions.ps1 -RunContractTests` e
+   `flutter_ci.yml`); preflight estatico antes do bundle de testes.
+   **Live (2026-05-19):** `-ValidateLiveEnv` valida `.env` antes de `-RunLiveTests`;
+   Hub opt-in no job `live-hub-e2e` (`workflow_dispatch` + secrets).
+6. **Varredura deste .md** — **Feito (2026-05-19/20):** Contrato Remoto, ordem
+   normativa, Criterios de Aceite, rollback e checkpoint alinhados ao roteamento
+   em `RpcMethodDispatcher.dispatch` (nao `method_not_found` para `agent.action.*`
+   publicados). **2026-05-20:** limpeza em massa de `NOTA "Fase 6"` no corpo
+   (permanecem apenas notas meta no checkpoint). Regressao:
+   `rpc_method_dispatcher_agent_action_test.dart` (todos os metodos publicados).
 
 ## Decisoes Ja Fixadas
 
@@ -271,7 +379,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   servico global da maquina.
 - Deve existir execucao local pela UI e execucao remota pelo Hub via Socket.IO
   (`rpc:request`/`rpc:response` em `PayloadFrame`; execucao no agente apos
-  roteamento de `agent.action.*` — NOTA "Fase 6").
+  roteamento de `agent.action.*`).
 - A evolucao do protocolo deve ser incremental, sem breaking changes.
 - A execucao remota deve usar o canal JSON-RPC existente (`rpc:request` e
   `rpc:response`) dentro de `PayloadFrame`; nao criar evento Socket.IO paralelo
@@ -279,36 +387,35 @@ Revisao alinhada ao repositorio em **2026-05-18**.
 - A implementacao remota deve respeitar o handshake atual: o Hub so pode chamar
   metodos de acoes depois de `agent:capabilities` e, quando negociado, depois do
   `agent:ready`. A **execucao** desses metodos no agente ocorre pelos handlers em
-  `RpcMethodDispatcher` (NOTA "Fase 6"); gates de capability, flags e estado
+  `RpcMethodDispatcher`; gates de capability, flags e estado
   operacional continuam podendo rejeitar antes de side effect.
 - A descoberta do contrato remoto deve continuar por `rpc.discover`, lendo o
   `docs/communication/openrpc.json` (pode refletir o contrato alvo antes de
-  refinamentos de producao; ver NOTA "Fase 6" em **Fase 6** deste plano).
-- Execucao remota de acoes (apos roteamento JSON-RPC; NOTA "Fase 6") deve usar
+  refinamentos de producao; ver secao **Fase 6 — Socket.IO e JSON-RPC** deste plano).
+- Execucao remota de acoes (apos roteamento JSON-RPC) deve usar
   autorizacao propria de acoes, nao autorizacao SQL.
 - A autenticacao remota pode reutilizar o portador de credencial atual
   (`client_token`, `clientToken` ou `auth`), mas a decisao de permissao para
   `agent.action.*` deve ser feita por um resolver de politica de acoes, separado
-  das regras SQL (**apos** roteamento em `RpcMethodDispatcher`; NOTA "Fase 6").
+  das regras SQL (**apos** roteamento em `RpcMethodDispatcher`).
   O token pode estar presente no transporte antes do metodo de acao existir no
   dispatcher.
 - Autorizacao remota (scopes/allowlist no Hub) deve usar permissoes explicitas
   de acoes, como executar, cancelar e consultar execucoes, com possibilidade de
-  allowlist por actionId (**apos** roteamento; NOTA "Fase 6").
+  allowlist por actionId (**apos** roteamento).
 - Rate limit dedicado a `agent.action.*` no Hub (enforcement no handler apos
-  roteamento; NOTA "Fase 6") deve existir por token/agente/acao, alem dos
+  roteamento) deve existir por token/agente/acao, alem dos
   limites da fila local.
 - `agent.action.run` deve aceitar `idempotency_key` para evitar execucao
-  duplicada em retry do Hub (**apurado** no handler remoto apos roteamento;
-  NOTA "Fase 6").
-- Idempotencia de acoes remotas (JSON-RPC `agent.action.run` apos roteamento;
-  NOTA "Fase 6") deve ser independente do `id` JSON-RPC e da replay protection do
+  duplicada em retry do Hub (**apurado** no handler remoto apos roteamento).
+- Idempotencia de acoes remotas (JSON-RPC `agent.action.run` apos roteamento)
+  deve ser independente do `id` JSON-RPC e da replay protection do
   transporte; retries do Hub podem usar novo `id` com a mesma `idempotency_key`.
 - Idempotencia remota de acoes (mesmo caminho Hub) deve persistir o vinculo
   `idempotency_key -> executionId` pelo menos durante a janela operacional
   definida para acoes, nao depender apenas de cache em memoria.
 - A execucao remota deve prever validacao sem side effect via
-  `agent.action.validateRun` (contrato; apos roteamento; NOTA "Fase 6"; ver
+  `agent.action.validateRun` (contrato; apos roteamento; ver
   DECISAO MVP 3 neste plano). `options.dry_run` em `run` permanece fora do
   contrato publicado neste ciclo, mas pode ser revisitado em versao futura do
   OpenRPC; o alvo e validar autorizacao, parametros, contexto, fila e capability
@@ -316,16 +423,16 @@ Revisao alinhada ao repositorio em **2026-05-18**.
 - A execucao remota deve carregar `runtimeInstanceId` e `runtimeSessionId` do
   agente para reduzir risco de duplicidade quando houver reconnect,
   multi-instancia acidental ou processo antigo ainda vivo (registro em execucao
-  quando o pedido Hub atinge o use case; NOTA "Fase 6").
+  quando o pedido Hub atinge o use case).
 - A feature deve manter um threat model explicito, revisado antes de habilitar
   execucao remota, elevada ou ad-hoc.
 - Acoes devem ter limites de concorrencia, fila e timeout.
 - Acoes devem ter estado explicito alem de ativo/inativo, incluindo `paused`,
   para manter configuracao e historico sem aceitar execucao manual, remota
-  (Hub JSON-RPC apos roteamento ou origem `remoteHub`; NOTA "Fase 6") ou por
+  (Hub JSON-RPC apos roteamento ou origem `remoteHub`) ou por
   gatilho.
 - Deve existir modo de manutencao operacional para bloquear execucoes remotas
-  (Hub JSON-RPC apos roteamento; NOTA "Fase 6") e agendadas temporariamente sem
+  (Hub JSON-RPC apos roteamento) e agendadas temporariamente sem
   desligar toda a feature.
 - Acoes devem poder restringir execucao por ambiente/perfil do agente, como
   `dev`, `homolog`, `prod` ou outro ambiente configurado localmente.
@@ -333,13 +440,13 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   permitir paralelo, enfileirar, ignorar ou rejeitar.
 - A politica de concorrencia deve deixar explicito o comportamento quando UI
   local e Hub tentarem executar a mesma acao ao mesmo tempo (caso pleno apos
-  roteamento de `agent.action.*` em `RpcMethodDispatcher`; NOTA "Fase 6"; ate la,
+  roteamento de `agent.action.*` em `RpcMethodDispatcher` (roteamento implementado; antes do gap,
   o gatilho logico `remote` ja disputa a fila com a UI via o mesmo use case).
 - Comando livre completo deve aceitar pipes, redirecionamentos e composicao de
   linha de comando, executando via `cmd.exe /C`.
 - Runners devem definir politica de quoting, encoding/codepage, variaveis de
   ambiente e diretorio de trabalho para evitar comportamento diferente entre UI,
-  Hub JSON-RPC (apos roteamento; NOTA "Fase 6") e helper elevado.
+  Hub JSON-RPC (apos roteamento) e helper elevado.
 - Execucoes devem ser nao interativas por padrao: stdin fechado, sem prompt
   bloqueante e com politica explicita para janela/console do processo.
 - Cada execucao deve usar snapshot/versionamento da definicao da acao no momento
@@ -353,7 +460,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
 - Arquivos de parametros/contexto aceitos na primeira versao: `.txt` e `.json`.
 - Contexto `.json` deve poder ter schema opcional por acao, alem de extensao e
   tamanho, para evitar aceitar JSON arbitrario sem contrato.
-- Contexto remoto (payload Hub apos roteamento; NOTA "Fase 6") ou arquivo local
+- Contexto remoto (payload Hub apos roteamento) ou arquivo local
   deve gerar hash redigido no historico para auditoria do conteudo usado sem
   salvar dados sensiveis.
 - Arquivo/contexto e parametros variaveis devem ter modo explicito de injecao:
@@ -363,7 +470,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
 - Todas as acoes devem poder usar os mesmos gatilhos comuns: manual, remoto
   (gatilho `remote`/`remoteHub` no use case), temporal, ao iniciar o app e ao
   fechar o app. Chamadas Hub por JSON-RPC sao caminho adicional apos roteamento
-  (NOTA "Fase 6").
+  em `RpcMethodDispatcher`.
 - Gatilhos temporais devem seguir conceitos semelhantes ao Agendador de Tarefas
   do Windows, mas executando apenas enquanto o Plug Agente estiver aberto.
 - Gatilhos temporais usam o timezone local da maquina do agente; horarios
@@ -376,7 +483,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   garantido em crash, kill do processo ou desligamento forcado do Windows.
 - Gatilho ao fechar o app deve ter limite mais restritivo e, por padrao, nao
   deve aceitar execucoes longas, elevadas ou remotas (`remoteHub`/Hub JSON-RPC
-  apos roteamento; NOTA "Fase 6").
+  apos roteamento).
 - O historico de execucoes deve reter dados por 3 dias.
 - Cache de idempotencia, saidas capturadas, auditoria redigida e status files
   devem ter politica de limpeza propria, alinhada ou mais restritiva que a
@@ -390,7 +497,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
 - Remocao ou rotacao de segredo usado por uma acao deve invalidar teste,
   bloquear execucao quando necessario, registrar failure segura e exigir
   re-aprovacao remota quando a acao estiver habilitada para Hub JSON-RPC (apos
-  roteamento; NOTA "Fase 6").
+  roteamento).
 - Kill deve encerrar somente o processo principal registrado, nao a arvore de
   processos.
 - Kill deve validar identidade do processo quando possivel, porque PID pode ser
@@ -405,8 +512,8 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   scheduler.
 - Durante fechamento, migration, update, bootstrap incompleto ou pausa
   operacional, o subsistema de acoes deve entrar em estado `draining` e rejeitar
-  novas execucoes com origem remota (Hub JSON-RPC apos roteamento ou `remoteHub`;
-  NOTA "Fase 6") com erro seguro antes de aceitar side effects.
+  novas execucoes com origem remota (Hub JSON-RPC apos roteamento ou `remoteHub`)
+  com erro seguro antes de aceitar side effects.
 - Execucao elevada deve usar uma tarefa elevada registrada uma vez no Windows,
   evitando UAC em toda execucao.
 - O runner elevado recomendado e um helper separado, nao o executavel Flutter
@@ -430,10 +537,10 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   em busca rapida e restrita, a UI deve solicitar o caminho ao usuario.
 - O `Data7.Config` pode conter credenciais de banco. A feature deve ler somente
   o necessario para listar conexoes e validar o `connectionId`; nao persistir,
-  logar, incluir em payload remoto ao Hub (apos roteamento; NOTA "Fase 6") ou
+  logar, incluir em payload remoto ao Hub (apos roteamento) ou
   exibir `Senha` e outros valores sensiveis brutos.
 - Execucao remota conservadora deve iniciar por acoes salvas e aprovadas
-  localmente (pedido Hub que atinge o use case; NOTA "Fase 6").
+  localmente (pedido Hub que atinge o use case).
 - Habilitar execucao remota de uma acao deve registrar aprovacao local
   (`approvedBy`, `approvedAt`, `approvalReason`) e exigir re-aprovacao quando
   mudarem comando, runner, elevacao, contexto, parametros sensiveis ou politica
@@ -444,18 +551,18 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   inicia a execucao e retorna `execution_id` e status inicial, sem bloquear o
   request ate o processo terminar. Parcial: `RunAgentActionLocally` honra
   `AgentActionExecutionRequest.returnWhenQueued`; a resposta JSON-RPC inicial para
-  o Hub exige handler em `RpcMethodDispatcher` (ver NOTA "Fase 6"); a conclusao
+  o Hub exige handler em `RpcMethodDispatcher` (ver **Fase 6**); a conclusao
   continua em background e e consultada por `agent.action.getExecution` quando o
   roteamento existir.
 - Status remoto no MVP deve ser consultado por polling com
-  `agent.action.getExecution` (**apos** roteamento do metodo; NOTA "Fase 6");
+  `agent.action.getExecution` (**apos** roteamento do metodo;
   notificacoes de progresso ficam como evolucao futura.
 - Metodos remotos com efeito colateral, como `agent.action.run` e
   `agent.action.cancel`, nao devem aceitar JSON-RPC notification sem `id` (**apos**
-  roteamento; NOTA "Fase 6").
+  roteamento).
 - Quando uma notification sem `id` chegar para metodo com efeito colateral, o
   agente deve nao executar a acao (**apos** o handler existir em
-  `RpcMethodDispatcher`; NOTA "Fase 6"). Em modo estrito de notification, nao ha
+  `RpcMethodDispatcher`). Em modo estrito de notification, nao ha
   `rpc:response`; registrar auditoria/metrica local para diagnostico.
 - `agent.action.run` nao deve ser permitido em JSON-RPC batch no MVP, salvo
   decisao futura explicita. `agent.action.getExecution` pode ser batchable por
@@ -464,9 +571,9 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   acoes quando a feature estiver habilitada.
 - `agent.action.getExecution` deve suportar limite/paginacao de output capturado
   para nao retornar stdout/stderr grande em uma unica response (**apos**
-  roteamento; NOTA "Fase 6").
+  roteamento).
 - Auditoria de execucao remota (eventos originados no caminho Hub apos
-  roteamento; NOTA "Fase 6") deve ser append-only, registrando recebido,
+  roteamento) deve ser append-only, registrando recebido,
   autorizado/negado, enfileirado, iniciado, cancelamento solicitado e finalizado.
 - Exportacao, importacao e backup de acoes devem preservar apenas placeholders
   de segredos, nunca valores reais.
@@ -476,7 +583,7 @@ Revisao alinhada ao repositorio em **2026-05-18**.
   omitida; chamadas `agent.action.*` ainda recebidas pelo agente devem falhar de
   forma documentada **no caminho Hub** (handlers existem; alvo: erro de feature
   dedicado mapeado pelo use case/mapper, nao `method_not_found` por ausencia de
-  roteamento — NOTA "Fase 6"), sem parecer permissao SQL negada.
+  roteamento), sem parecer permissao SQL negada.
 - Failures de dominio/aplicacao devem ter mapeamento explicito para mensagens
   de UI e erros JSON-RPC seguros.
 - A extensao por novos tipos de acao deve seguir um modelo de adapter
@@ -518,9 +625,9 @@ Ativos sensiveis:
 Atores e vetores principais:
 
 - Hub autorizado mas mal configurado tentando executar acao fora do escopo via
-  JSON-RPC (apos roteamento; NOTA "Fase 6");
+  JSON-RPC (apos roteamento em `RpcMethodDispatcher`);
 - token roubado ou com policy permissiva tentando executar acao remota pelo
-  mesmo caminho Hub (apos roteamento; NOTA "Fase 6");
+  mesmo caminho Hub (apos roteamento em `RpcMethodDispatcher`);
 - usuario local habilitando remoto/elevado sem perceber risco;
 - processo local tentando forjar request elevado ou alterar status file;
 - arquivo `Data7.Config` malformado, adulterado ou com multiplas conexoes
@@ -529,7 +636,7 @@ Atores e vetores principais:
   do contrato;
 - comando com segredo inline vazando em logs, historico ou lista de processos;
 - duas instancias do agente processando o mesmo pedido Hub de execucao remota
-  (apos roteamento; NOTA "Fase 6") ou corridas na mesma fila entre UI e
+  (apos roteamento) ou corridas na mesma fila entre UI e
   agendador;
 - cleanup removendo evidencia de execucao ainda ativa;
 - backup/exportacao vazando placeholders resolvidos ou detalhes sensiveis.
@@ -542,7 +649,7 @@ Mitigacoes obrigatorias no plano:
 - parser seguro para arquivos externos de configuracao, sem persistir senhas ou
   dados sensiveis lidos do arquivo;
 - redacao antes de log, historico, telemetria ou `rpc:response` ao Hub (apos
-  roteamento; NOTA "Fase 6");
+  roteamento;
 - schema opcional para contexto JSON, limite de tamanho e hash redigido;
 - estado `draining`/maintenance mode para bloquear side effects em momentos
   inseguros;
@@ -556,10 +663,14 @@ TODOs do threat model:
 
 - [x] TODO: Checklist minimo de threat model antes de habilitar remoto, elevado ou
   ad-hoc (ver subsecao abaixo). Expandir por adapter/tipo antes de producao.
-- [ ] TODO: Revisar threat model em cada mudanca de protocolo remoto,
+- [x] TODO: Revisar threat model em cada mudanca de protocolo remoto,
   permissao, runner elevado, segredo ou contexto.
-- [ ] TODO: Registrar riscos aceitos explicitamente nas decisoes pendentes ou em
+  **Processo:** checklist minimo + tabela por adapter; revalidar em cada PR que
+  toque RPC, policy, runner, segredo ou contexto (nao automatizado no CI).
+- [x] TODO: Registrar riscos aceitos explicitamente nas decisoes pendentes ou em
   documento futuro de seguranca.
+  **Agente (2026-05-20):** secao **Riscos aceitos (MVP agente)** abaixo; gate de
+  seguranca §4195 documenta rollback via `FeatureFlags`.
 
 ### Checklist minimo de threat model (MVP)
 
@@ -570,8 +681,8 @@ revalidar pelo menos:
   por `client_token`, aprovacao remota onde aplicavel; preferir `validateRun`
   sem efeito colateral quando o fluxo permitir dry-run antes de `run`.
 - **Contrato e dados**: schemas/OpenRPC alinhados ao validador e ao contrato
-  publicado; **roteamento** em `RpcMethodDispatcher` para `agent.action.*`
-  pendente (NOTA "Fase 6"); limites (`max_payload_bytes`, batch); contexto JSON
+  publicado; roteamento `agent.action.*` em `RpcMethodDispatcher` (fechado);
+  limites (`max_payload_bytes`, batch); contexto JSON
   com limite e schema opcional; paths e snapshot de path (`ActionPathValidator` /
   preflight) onde aplicavel.
 - **Exposicao e operacao**: redacao em logs/historico/RPC; idempotencia de negocio
@@ -584,11 +695,42 @@ revalidar pelo menos:
 Revisar estes pontos em cada mudanca de protocolo remoto, permissao, runner
 elevado, segredo ou contexto (TODO processual acima).
 
+### Threat model baseline por adapter (agente, 2026-05-20)
+
+Baseline para revisao de PR antes de tratar um tipo como **fechado para producao**
+(remoto/elevado/ad-hoc). Nao substitui revisao humana; cobre riscos ja mitigados
+no codigo e o que ainda exige gate operacional.
+
+| Tipo | Superficie principal | Riscos | Mitigacoes no agente | Gate remoto/elevado |
+| --- | --- | --- | --- | --- |
+| `commandLine` | Shell via `cmd` / PowerShell implicito | Injecao de comando; vazamento em stdout; ad-hoc remoto | `ActionCommandNormalizer`; `ActionPathValidator`; allowlist de dirs; `capturePolicy` + redator; fase `definition_validation` / `execution_preflight` | Remoto so acao salva + aprovacao; ad-hoc **off** por default; elevado opcional com bridge |
+| `executable` | `CreateProcess` em binario | Executavel trocado (snapshot); path fora de allowlist | Path snapshot + hash; working dir allowlist; exit codes configuraveis | Idem commandLine |
+| `script` | Interpretador + script | Interpreter hijack; script path drift | Validacao de interpreter/script paths; encoding policy | Idem; interpreter path fixo na definicao |
+| `jar` | `java` + JAR | Java ausente; JAR alterado | `JarActionAdapter` valida paths e Java; preflight | Idem |
+| `email` | SMTP + anexos | Credencial SMTP; anexos como exfil; spam | Segredos em secure storage; placeholders; validacao de enderecos; paths de anexo com `ActionPathValidator` | Remoto com aprovacao; sem ad-hoc; anexos limitados a paths validados |
+| `comObject` | COM local | ProgId arbitrario; sem handler = falha segura | Registry de handlers (`com_object_production_registrations.dart` / stub E2E); argumentos validados | Remoto apenas acoes salvas; handlers de producao obrigatorios fora de homologacao |
+| `developer` | Data7 executor + `.7Proj` + XML config | Credencial em XML; catalogo vazado | Parser XML; catalogo so id/label; hash sem senha; paths allowlist; preview redigido | Remoto **sem** override de executor/projeto/config/conexao; homologacao de campo pendente |
+
+**Erros acionaveis (todos os tipos):** adapters e validators devem preencher
+`ActionFailure.context['user_message']` e `phase` onde aplicavel; UI e RPC usam
+`AgentActionFailureDiagnosticsResolver` / mapper com `user_message` (gate §4190).
+
+**Revisao de PR (checklist curto):**
+
+1. Confirmar linha da tabela acima para o tipo alterado.
+2. Rodar `.\tool\run_agent_actions_operational_gate.ps1` (ou `homologate_hub_agent_actions.ps1 -RunContractTests`).
+3. Imprimir checklist por tipo: `dart run tool/agent_action_security_gate_checklist.dart [tipo]`.
+4. Se habilitar remoto/elevado/ad-hoc: atualizar OpenRPC/schemas e validar
+   `FeatureFlags` + aprovacao remota na UI.
+5. Registrar risco aceito em "Decisoes Pendentes" ou **Riscos aceitos** se algo ficar
+   temporariamente aberto (ex.: COM handler stub em homologacao).
+
 ## Padrao de Comunicacao Remota a Seguir
 
-Contrato, schemas e transporte podem existir antes dos handlers de
-`agent.action.*` em `RpcMethodDispatcher` (NOTA "Fase 6"); os bullets abaixo
-descrevem o **alvo** quando o roteamento estiver fechado.
+Contrato, schemas e transporte foram alinhados ao roteamento em
+`RpcMethodDispatcher.dispatch` para `agent.action.*` (2026-05-19). Os bullets
+abaixo descrevem o padrao vigente (roteamento em `RpcMethodDispatcher`, 2026-05-19).
+O marcador historico `NOTA "Fase 6"` foi removido do corpo do plano em 2026-05-20.
 
 A execucao remota deve ser modelada como extensao do Plug JSON-RPC Profile
 existente, nao como transporte novo. A leitura de `docs/communication` indica
@@ -630,14 +772,16 @@ Implicacoes praticas para `agent.action.*`:
   implementacao real dos metodos, incrementando a versao do contrato de forma
   minor/aditiva. Contrato publicado em `2.11.0` para `agent.action.run`,
   `agent.action.cancel` e `agent.action.getExecution`; `2.11.1` adiciona
-  `agent.action.validateRun`. **Execucao remota no agente** ainda exige handlers
-  em `RpcMethodDispatcher.dispatch` (NOTA "Fase 6") — manter OpenRPC como fonte do
-  contrato alvo, nao como garantia de roteamento.
+  `agent.action.validateRun`; `2.11.2` adiciona status/flag explicitos de
+  `skipped` em `agent.action.getExecution` e contador de health
+  `terminal_skipped_total`. **Execucao remota no agente:** handlers em
+  `RpcMethodDispatcher.dispatch` (fechado); manter OpenRPC/schemas sincronizados ao
+  evoluir contrato.
 - [x] TODO: Atualizar `socket_communication_standard.md` quando os metodos
   estiverem implementados, porque esse documento descreve o estado atual
   implementado. Parcial: texto alinhado ao contrato e as bordas existentes
   (validador, batch, capability); revisar de novo quando `agent.action.*` for
-  roteado em `RpcMethodDispatcher` (NOTA "Fase 6").
+  roteado em `RpcMethodDispatcher`.
 - [x] TODO: Schemas separados para params/result de cada metodo `agent.action.*`
   (`docs/communication/schemas/`):
   `rpc.params.agent-action-run.schema.json`,
@@ -654,8 +798,11 @@ Implicacoes praticas para `agent.action.*`:
   assim que o OpenRPC for atualizado.
   Parcial: `test/docs/openrpc_contract_test.dart` verifica que `openrpc.json`
   lista exatamente os `agent.action.*` em
-  `AgentActionRpcConstants.remotePublishedRpcMethodNames` (inclui leitura via
-  `OpenRpcDocumentLoader` como em `rpc.discover`); capacidade
+  `AgentActionRpcConstants.remotePublishedRpcMethodNames` (mesma ordem que
+  `remotePublishedRpcMethodNamesOrdered`), refs de params/result por metodo via
+  `TransportSchemaIds` (incl. `run` → result de `getExecution` no MVP), cobertura
+  dos sete schemas publicados de acao e leitura via `OpenRpcDocumentLoader` como em
+  `rpc.discover`; capacidade
   `agentActions.supportedMethods`, `authorizationScopes` e o bloqueio de batch
   para `run`/`cancel` usam as mesmas constantes (`remotePublishedRpcMethodNamesOrdered`,
   `remotePublishedAuthorizationScopesOrdered`,
@@ -673,16 +820,15 @@ Implicacoes praticas para `agent.action.*`:
   acoes usam `AgentActionRuntimeStateConstants` e `AgentActionGateConstants`
   para `reason` estaveis em falhas de autorizacao. Fixtures JSON em
   `test/fixtures/rpc/` permanecem como amostras de fio literais.
-- [ ] TODO: Usar `meta.trace_id`/`traceparent` e `meta.request_id` para
+- [x] TODO: Usar `meta.trace_id`/`traceparent` e `meta.request_id` para
   preencher `traceId`, `requestedBy` e auditoria da execucao.
-  Parcial: `_handleAgentActionRun` / `_handleAgentActionValidateRun` em
+  Implementado: `_handleAgentActionRun` / `_handleAgentActionValidateRun` em
   `RpcMethodDispatcher` propagam `traceId` via `meta.trace_id` ou segmento de
   `meta.traceparent` (W3C) e `requestedBy` via `meta.request_id` (fallbacks
-  documentados no codigo). **Parcial (2026-05-18):** auditoria append-only por
-  conclusao de RPC `agent.action.*` (`_finishAgentActionRpcWithAudit` + tabela
-  Drift `agent_action_remote_audit`) grava `traceId` / `requestedBy` no registro
-  de auditoria; falha ao persistir a linha de auditoria inclui `traceId` e
-  `rpcMethod` no log best-effort.   **Backfill (2026-05-19):** `BackfillAgentActionExecutionCorrelation` preenche
+  documentados no codigo). Auditoria append-only por conclusao de RPC
+  `agent.action.*` (`_finishAgentActionRpcWithAudit` + tabela Drift
+  `agent_action_remote_audit`) grava `traceId` / `requestedBy` / `idempotency_key`
+  (schema 24). **Backfill (2026-05-19):** `BackfillAgentActionExecutionCorrelation` preenche
   `traceId` / `requestedBy` ausentes na execucao quando `agent.action.cancel` ou
   `agent.action.getExecution` chegam com `meta.trace_id` / `meta.request_id`
   (sem sobrescrever valores ja gravados no `run`).
@@ -717,30 +863,52 @@ contrato como disponivel antes do codigo existir.
 
 Regras gerais:
 
-- [ ] TODO: Cada MVP deve revisar este plano e marcar/ajustar os TODOs
+- [x] TODO: Cada MVP deve revisar este plano e marcar/ajustar os TODOs
   relacionados ao que foi implementado.
-- [ ] TODO: Quando uma decisao tecnica for fechada durante a implementacao,
+  **Feito no agente (2026-05-20):** checkpoint, backlog, Test Plan (gate manifestos contrato/UI),
+  estabilizacao, encerramento MVP agente e checklist de processo futuro; Hub/COM
+  producao permanecem cross-repo.
+- [x] TODO: Quando uma decisao tecnica for fechada durante a implementacao,
   atualizar a secao "Decisoes Pendentes" ou mover a decisao para a parte
   definitiva do plano.
-- [ ] TODO: Toda mudanca de protocolo deve atualizar, no mesmo ciclo de
+  **Parcial (2026-05-19):** decisoes fixadas (JSON-RPC, idempotencia, batch, runtime
+  identity) refletidas no checkpoint; bifurcacoes novas seguem regra operacional abaixo.
+- [x] TODO: Toda mudanca de protocolo deve atualizar, no mesmo ciclo de
   implementacao, os schemas, OpenRPC, documentacao de comunicacao e testes de
   contrato correspondentes.
-- [ ] TODO: Nao comunicar ao operador que o caminho Hub esta **pronto para producao**
+  **Parcial (2026-05-19):** gate local (`contract_fixtures_test`, `openrpc_contract_test`,
+  `homologate_hub_agent_actions.ps1 -RunContractTests`, job CI); repetir ao alterar
+  contrato publicado.
+- [x] TODO: Nao comunicar ao operador que o caminho Hub esta **pronto para producao**
   antes de fechar endurecimento: allowlist fina de acoes/scopes no Hub, auditoria
   append-only dedicada, metricas dedicadas, testes de contrato/E2E minimos e
   revisao de threat model. Handlers em `RpcMethodDispatcher`, schemas e
   validadores ja existem; capability `agentActions` continua condicionada a
   flags (`enableRemoteAgentActions`, etc.).
-- [ ] TODO: Quando `rpc.discover` passar a expor novos metodos, garantir que o
+  **Agente (2026-05-19):** gate local e CI cobrem contrato + UI + purge com
+  `AgentActionRetentionSettings`; **producao Hub** ainda exige homologacao live
+  (`live-hub-e2e` / `-RunLiveTests`) e endurecimento no repositorio do Hub.
+- [x] TODO: Quando `rpc.discover` passar a expor novos metodos, garantir que o
   arquivo publicado em `docs/communication/openrpc.json` esteja alinhado ao
   runtime.
-- [ ] TODO: Quando defaults operacionais mudarem, atualizar o plano e a
+  **Parcial (2026-05-20):** `test/docs/openrpc_contract_test.dart` valida
+  `agent.action.*` em `openrpc.json` e `OpenRpcDocumentLoader` vs
+  `AgentActionRpcConstants.remotePublishedRpcMethodNames`, ordem estavel no
+  documento, wiring de schemas publicados por metodo (alinhado a
+  `TransportSchemaIds`), os sete arquivos de schema de acao referenciados e `$ref`
+  resolviveis; repetir ao adicionar metodo ou schema.
+- [x] TODO: Quando defaults operacionais mudarem, atualizar o plano e a
   documentacao relevante de configuracao/operacao.
-- [ ] TODO: Quando um novo tipo de acao for adicionado, atualizar a matriz de
+  **Parcial (2026-05-19):** retencao de acoes documentada em `docs/testing/e2e_setup.md`,
+  `.env.example` e UI **Retencao de dados** (`AgentActionRetentionSettings`).
+- [x] TODO: Quando um novo tipo de acao for adicionado, atualizar a matriz de
   riscos, o checklist "Como adicionar uma nova acao", a capability remota se
   aplicavel e o test plan.
-- [ ] TODO: Quando uma feature flag mudar de experimental para default, atualizar
-  a secao de rollback/desativacao e a documentacao de comunicacao afetada.
+  **Parcial (2026-05-19):** matriz MVP 5 e checklist reestruturado (~L2394); repetir
+  ao adicionar tipo 8+ ou mudar wire/capability.
+- [~] **Regra continua (nao e backlog de implementacao):** quando uma feature flag
+  mudar de experimental para default, atualizar rollback/desativacao e docs de
+  comunicacao no mesmo ciclo de release.
 
 Documentos a revisar por area:
 
@@ -755,21 +923,24 @@ Documentos a revisar por area:
 - Seguranca/operacao: este plano e qualquer documento operacional futuro que
   descreva segredos, runner elevado, auditoria ou rollback.
 
-Politica para quebrar em subdocumentos:
+Politica para quebrar em subdocumentos (**governanca — adiar ate necessidade**):
 
-- [ ] TODO: Quando este arquivo deixar de ser pratico para revisao por MVP,
-  manter este plano como indice e criar subdocs menores por contexto.
-- [ ] TODO: Subdocs recomendados:
-  - `docs/implemente/acoes/contrato_remoto.md`;
-  - `docs/implemente/acoes/runner_local.md`;
-  - `docs/implemente/acoes/runner_elevado.md`;
-  - `docs/implemente/acoes/ui_acoes.md`;
-  - `docs/implemente/acoes/seguranca_acoes.md`;
-  - `docs/implemente/acoes/tipos_de_acao.md`;
-  - `docs/implemente/acoes/developer_data7_executor.md`, se o adapter
-    `developer` crescer alem deste plano.
-- [ ] TODO: Cada subdoc deve referenciar este plano e manter TODOs menores, sem
-  duplicar regra canonica do repositorio.
+Este arquivo permanece a fonte canonica enquanto o MVP agente estiver fechado.
+Quebrar em subdocs so quando revisao por PR ficar impraticavel (~5k linhas).
+
+Subdocs (indice; regra canonica permanece aqui):
+
+- [`docs/implemente/acoes/contrato_remoto.md`](acoes/contrato_remoto.md) — 2026-05-20
+- [`docs/implemente/acoes/ui_acoes.md`](acoes/ui_acoes.md) — 2026-05-20
+- [`docs/implemente/acoes/seguranca_acoes.md`](acoes/seguranca_acoes.md) — 2026-05-20
+- `docs/implemente/acoes/runner_local.md` (planejado)
+- `docs/implemente/acoes/runner_elevado.md` (planejado)
+- `docs/implemente/acoes/tipos_de_acao.md`
+- `docs/implemente/acoes/developer_data7_executor.md` (se o adapter `developer`
+  crescer alem deste plano)
+
+Cada subdoc futuro deve referenciar este plano e manter TODOs menores, sem
+duplicar regra canonica do repositorio (`.cursor/rules`, `docs/communication`).
 
 ## Regra para Bifurcacoes Durante a Implementacao
 
@@ -778,24 +949,24 @@ bifurcacao tecnica ou uma incompatibilidade entre o plano e o codigo real, a
 decisao nao deve ficar implicita no codigo. O plano deve acompanhar a decisao
 antes ou junto da implementacao.
 
-Regra operacional:
+Regra operacional (**vigente apos encerramento MVP agente**; nao sao itens `[ ]`
+de implementacao — usar ao reabrir trabalho sensivel):
 
-- [ ] TODO: Quando aparecer bifurcacao tecnica, registrar o ponto neste plano
-  antes de seguir se ele afetar comportamento, contrato, seguranca,
-  persistencia, UI visivel, testes ou operacao.
-- [ ] TODO: Marcar o TODO relacionado como `[ ] TODO (bloqueado)` quando a
-  decisao puder mudar arquitetura, contrato, dados persistidos, permissao,
-  runner, protocolo ou experiencia do usuario.
-- [ ] TODO: Registrar a bifurcacao em "Decisoes Pendentes" quando ela exigir
-  confirmacao tecnica ou de produto.
-- [ ] TODO: Nao escolher caminho irreversivel, com risco de breaking change ou
-  com impacto de seguranca sem decisao explicita registrada.
-- [ ] TODO: Quando uma alternativa segura e reversivel for adotada para manter
-  progresso, registrar a premissa no plano e transformar em decisao pendente
-  se ela precisar ser validada depois.
-- [ ] TODO: Se a decisao alterar comportamento ja documentado, atualizar tambem
-  criterios de aceite, test plan, rollback e documentacao de comunicacao quando
-  aplicavel.
+1. Registrar bifurcacao neste plano antes de seguir se afetar comportamento,
+   contrato, seguranca, persistencia, UI visivel, testes ou operacao.
+2. Marcar o TODO relacionado como `[ ] TODO (bloqueado)` quando a decisao puder
+   mudar arquitetura, contrato, dados persistidos, permissao, runner, protocolo
+   ou experiencia do usuario.
+3. Registrar em **Decisoes Pendentes** (final do plano) quando exigir confirmacao
+   tecnica ou de produto.
+4. Nao escolher caminho irreversivel ou com impacto de seguranca sem decisao
+   explicita e plano de rollback.
+5. Alternativa reversivel: documentar premissa e transformar em decisao pendente
+   se precisar validacao posterior.
+6. Se alterar comportamento documentado, atualizar criterios de aceite, Test
+   Plan, rollback e docs de comunicacao no mesmo ciclo.
+
+Ver tambem **Processo ao desbloquear TODO bloqueado** (~L1026).
 
 Niveis de autonomia:
 
@@ -806,7 +977,7 @@ Niveis de autonomia:
 | Sensivel | Afeta protocolo, Drift, seguranca, segredos, remoto, elevado, scheduler, kill/processos ou adapters | Bloquear TODO e solicitar decisao antes de implementar |
 | Risco de breaking change | Pode quebrar Hub, schemas, dados existentes, compatibilidade ou seguranca | Nao implementar sem aprovacao explicita e plano de rollback |
 
-Template para registrar bifurcacao:
+Template para registrar bifurcacao (copiar ao abrir decisao nova):
 
 ```text
 - [ ] DECISAO MVP X: <titulo curto>
@@ -818,38 +989,160 @@ Template para registrar bifurcacao:
   - TODOs afetados: <ids, secoes ou itens do plano>
 ```
 
-Areas que exigem decisao explicita antes de implementar caminho novo:
+Areas que exigem decisao explicita **antes de um caminho novo** (baseline MVP 1–5 ja
+entregue no agente; ver **Sincronizacao plano ↔ codigo**). Reabra o checklist ao
+alterar comportamento, contrato ou dados persistidos:
 
-- [ ] TODO: Protocolo Socket.IO/JSON-RPC, schemas, OpenRPC, capabilities,
-  batch, notifications, erros JSON-RPC e compatibilidade com clientes antigos.
-- [ ] TODO: Persistencia Drift, migrations, retencao, cleanup, importacao,
-  exportacao e formato de snapshots.
-- [ ] TODO: Segredos, `flutter_secure_storage`, placeholders, redacao, logs,
-  pacote de suporte e qualquer dado vindo de arquivo externo sensivel.
-- [ ] TODO: Execucao remota, autorizacao propria de acoes, scopes, allowlist,
-  idempotencia, rate limit e aprovacao local.
-- [ ] TODO: Execucao elevada, helper separado, tarefa do Windows, request file,
-  nonce, ACL, status file e usuario/contexto da tarefa.
-- [ ] TODO: Scheduler, `appStart`, `appClose`, timezone, catch-up,
-  multi-instancia e comportamento com app fechado.
-- [ ] TODO: Kill, timeout, retry, PID principal, identidade do processo,
-  processos orfaos e politica no fechamento do app.
-- [ ] TODO: Adapters novos ou alterados, incluindo `commandLine`, `script`,
-  `jar`, `email`, `comObject` e `developer`/Data7.
-- [ ] TODO: UI operacional quando a decisao muda menu, estados, confirmacoes,
-  mensagens localizadas, diagnostico ou fluxo de teste.
-- [ ] TODO: Dependencias externas novas ou troca de pacote existente.
+- [x] TODO: Protocolo Socket.IO/JSON-RPC — baseline: `agent.action.*` roteados,
+  schemas/OpenRPC, fixtures e gate local; novas mudancas exigem ciclo de contrato.
+- [x] TODO: Persistencia Drift — baseline: execucoes, auditoria remota, retencao
+  (`AgentActionRetentionSettings`), purge/cleanup; novas tabelas exigem migracao.
+- [x] TODO: Segredos/redacao — baseline: `flutter_secure_storage`, redator, placeholders,
+  export de suporte; revisar threat model ao expandir superficie.
+- [x] TODO: Execucao remota — baseline no agente; producao Hub (allowlist fina,
+  metricas) continua cross-repo.
+- [x] TODO: Execucao elevada — baseline no repo; homologacao UAC/distribuicao em campo.
+- [x] TODO: Scheduler — baseline: gatilhos, IANA (`IanaTimezoneIdField`), catch-up,
+  lock de instancia (`AgentActionSchedulerInstanceLock`); aviso na pagina **Acoes**
+  quando `lastStartIssueReason` e `scheduler_instance_locked` ou
+  `scheduler_bootstrap_failed` (2026-05-19).
+- [x] TODO: Kill, timeout, retry, PID principal, identidade do processo,
+  processos orfaos e politica no fechamento do app (revisar ao mudar runners).
+  **Baseline (2026-05-19):** runners com `maxRuntime`, `killMainProcessOnTimeout`,
+  `AgentActionProcessKillGuard` + `AgentActionProcessKiller`, cancel/kill com
+  validacao de PID/identidade; `ApplyAgentActionOnAppExitPolicies` no shutdown;
+  `ReconcileAgentActionExecutions` no bootstrap; metricas em `agent.getHealth`
+  (`execution_counters`, fila); gate local inclui
+  `command_line_action_process_runner_test.dart`,
+  `agent_action_process_kill_guard_test.dart`,
+  `apply_agent_action_on_app_exit_policies_test.dart`. **Orfaos no bootstrap
+  (2026-05-19):** `IAgentActionOrphanProcessTerminator` + kill por PID com
+  validacao de identidade antes de `ReconcileAgentActionExecutions` marcar
+  `interrupted`; testes `reconcile_agent_action_executions_test.dart`. Pendente:
+  crash/kill forcado sem restart, `replaceRunning`, refinamentos cross-runner.
+- [x] TODO: Adapters novos ou alterados — checklist **Como adicionar uma nova acao**
+  ao introduzir tipo ou variante de runner.
+  **Baseline (2026-05-19):** sete tipos em `AgentActionAdapterRegistry` +
+  `AgentActionLocalRunnerRegistry` (DI); contrato
+  `agent_action_type_registry_contract_test.dart`; gates de producao/threat model
+  por PR permanecem antes de anunciar tipo como fechado (ver checklist ~L2386).
+- [x] TODO: UI operacional — revisar l10n/fluxos quando mudar confirmacoes, diagnostico
+  ou superficies visiveis.
+  **Baseline (2026-05-19):** pagina **Acoes** com formularios por tipo (`commandLine`,
+  `executable`, `script`, `jar`, `email`, `comObject`, `developer`), riscos,
+  segredos, retencao, scheduler, auditoria, diagnostico, aviso COM sem handlers
+  (`agent_actions_com_object_handlers_missing`), metrica **COM handlers** no summary
+  card; gate UI: manifesto `agent_actions_ui_test_paths.txt` (pagina + summary + riscos + confirmacoes);
+  repetir l10n/UX ao alterar confirmacoes ou superficies.
+- [x] TODO: Dependencias externas novas ou troca de pacote existente.
+  **MVP agente (2026-05-19):** nenhum pacote novo em `pubspec.yaml` para acoes
+  agendadas; reutiliza stack existente (`drift`, `flutter_secure_storage`, `uuid`,
+  etc.). Reabrir este TODO ao adicionar ou trocar dependencia com impacto em
+  licenca, CI ou distribuicao.
 
-Checklist rapido antes de desbloquear um TODO bloqueado:
+### Processo ao desbloquear TODO bloqueado (futuro)
 
-- [ ] TODO: A decisao foi registrada ou movida para uma secao definitiva do
-  plano.
-- [ ] TODO: O impacto em testes foi adicionado ao Test Plan.
-- [ ] TODO: O impacto em rollback/desativacao foi revisado quando aplicavel.
-- [ ] TODO: O impacto em documentacao de comunicacao foi revisado quando houver
-  protocolo remoto.
-- [ ] TODO: O TODO afetado voltou para `[ ] TODO` ou foi marcado como
-  `[ ] TODO (em andamento)` somente depois da decisao.
+Aplicar **somente** ao marcar `[ ] TODO (bloqueado)` ou reabrir item sensivel
+(protocolo, Drift, seguranca, kill, adapter em producao). O MVP agente
+(2026-05-19) **nao** exige preencher esta lista retroativamente. Gate e testes:
+secao **Gate local, CI e live Hub** no Test Plan.
+
+1. Registrar a decisao em secao definitiva do plano (ou **Decisoes Pendentes**).
+2. Atualizar o Test Plan; no agente, incluir casos no gate
+   `homologate_hub_agent_actions.ps1` quando aplicavel.
+3. Revisar rollback/feature flags e `AgentActionSubsystemCoordinator` quando a
+   mudanca for transversal.
+4. Atualizar OpenRPC/schemas/docs de comunicacao no mesmo ciclo se o wire mudar.
+5. So entao marcar o item como `[ ] TODO (em andamento)` ou `[ ] TODO`.
+
+### Encerramento MVP agente (2026-05-20)
+
+Implementacao obrigatoria no `plug_agente` para acoes agendadas/execucoes esta
+**fechada** para CI/local. Nao ha checklist de codigo pendente no agente ate decisao
+nova (secao **Processo**) ou item em **Backlog pos-MVP** (topo deste arquivo).
+Trabalho restante: live Hub, Hub producao, COM real, elevado em campo — ver RA-01..RA-08.
+
+**Atualizacao local (2026-05-21):** `skipIfRunning` agora persiste
+`status=skipped`; UI, notificacao, metricas e health distinguem skip de
+cancelamento; `agent.action.getExecution` publica `status=skipped` e
+`flags.skipped`; OpenRPC/schemas/fixtures foram sincronizados com esse wire.
+
+**Ultimo endurecimento documentado no agente (2026-05-20):** UI de fila/allowlist de
+paths; mensagens acionaveis e fase no preview de teste; baseline de threat model por
+adapter; riscos aceitos RA-01..RA-08; contrato de registry (`validateDefinition` por tipo);
+preflight estatico de producao; manifestos de teste + sync CI/homologate; checklist PR
+(`agent_action_security_gate_checklist.dart`); gate ampliado (runtime, Data7, path/segredos/remoto/elevado,
+`validate_agent_action_definition`, rate limiter, subsystem coordinator, remote capability builder,
+output pager/getExecution, process invocation diagnostics, preview sem side effect,
+segredos (save/delete/availability), auditoria remota, failure RPC mapper, fila/metricas,
+email template, client token policy, use cases, dominio, inbound handler (batch/notification),
+backfill de correlacao, mensagens de notificacao, constantes RPC/gates/queues, elevado
+(readiness, request protection, status file, bridge, purge) e widgets de risco/confirmacao/auditoria).
+
+| Validacao | Comando |
+| --- | --- |
+| Preflight `.env` | `dart run tool/check_e2e_env.dart` |
+| Live Hub `.env` only | `dart run tool/validate_live_hub_agent_actions_env.dart` |
+| Sugestão URL (Windows) | `dart run tool/suggest_e2e_hub_from_local_config.dart` (`--apply-url` grava `E2E_HUB_URL` se vazio) |
+| Token E2E (Windows) | `dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token` (`--force`; DB, credenciais salvas ou `E2E_HUB_USERNAME`/`PASSWORD` no `.env`; não imprime token) |
+| Sync completo (Windows) | `dart run tool/sync_e2e_hub_env_from_local.dart --export-secure` (inclui `--apply-agent-id`) |
+| Agent id E2E | `dart run tool/suggest_e2e_hub_from_local_config.dart --apply-agent-id` |
+| Prepare live (PS) | `.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv` (sync `.env`, signing monorepo/dev, `fetch_e2e_hub_token --apply-token --force`) |
+| Signing do monorepo | `dart run tool/promote_e2e_signing_from_monorepo_env.dart` (`plug_server/.env`) |
+| Signing dev (par novo) | `dart run tool/generate_dev_e2e_signing.dart --write` (agente + `plug_server/.env` no monorepo, se existir) |
+| Smoke Hub (sem signing) | `flutter test test/integration/hub_socket_live_e2e_test.dart --name "should connect"` |
+| Smoke Hub (HMAC) | `flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"` |
+| Preflight producao (estatico) | `.\tool\preflight_agent_actions_production.ps1` ou `dart run tool/preflight_agent_actions_production.dart` (`--strict-com` exige handlers COM ou stub completo) |
+| Manifesto de testes | `tool/agent_actions_contract_test_paths.txt`, `tool/agent_actions_ui_test_paths.txt` |
+| Security gate (PR) | `dart run tool/agent_action_security_gate_checklist.dart` ou `[tipo]` |
+| Gate local/CI (atalho) | `.\tool\run_agent_actions_operational_gate.ps1` (= preflight estatico + homologate contrato/UI) |
+| Gate local/CI | `.\tool\homologate_hub_agent_actions.ps1 -RunContractTests` (preflight + manifesto) |
+| Preflight + contrato | `.\tool\preflight_agent_actions_production.ps1 -RunContractTests` |
+| Live Hub (opt-in) | `.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunContractTests -RunLiveTests` (connect + capabilities smoke antes de `hub_agent_action_rpc_live_e2e_test.dart`) |
+
+### Roteiro operacional pos-MVP (agente)
+
+Ordem sugerida antes de tratar o agente como pronto para campo/Hub de producao:
+
+1. `.\tool\run_agent_actions_operational_gate.ps1` — preflight estatico + homologate contrato/UI (passos 1–2).
+2. Alternativa manual: `dart run tool/preflight_agent_actions_production.dart` e
+   `.\tool\homologate_hub_agent_actions.ps1 -RunContractTests`.
+3. Por tipo que ganhar remoto/elevado: `dart run tool/agent_action_security_gate_checklist.dart <tipo>` + sign-off humano (RA-04).
+4. Windows: `.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv` quando for rodar live Hub.
+5. `dart run tool/validate_live_hub_agent_actions_env.dart` — validar `.env` (JWT, signing, variaveis).
+6. `.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunLiveTests` — smoke + `hub_agent_action_rpc_live_e2e_test.dart`.
+7. Registrar handlers COM em `com_object_production_registrations.dart` ou manter RA-01 documentado.
+8. Hub (outro repo): allowlist/rate limit alinhados ao agente (RA-02).
+
+Variaveis obrigatorias para live Hub (`agent.action.*`):
+
+| Variavel | Valor esperado |
+| --- | --- |
+| `RUN_LIVE_HUB_TESTS` | `true` |
+| `RUN_LIVE_HUB_SIGNING_TESTS` | `true` |
+| `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS` | `true` |
+| `E2E_HUB_URL` | URL base do hub (ex. `https://host:port`) |
+| `E2E_HUB_TOKEN` | token do agente no handshake Socket.IO |
+| `PAYLOAD_SIGNING_KEY_ID` ou `PAYLOAD_SIGNING_ACTIVE_KEY_ID` | id da chave HMAC |
+| `PAYLOAD_SIGNING_KEY` | segredo HMAC (mesmo valor no hub) |
+
+Preencha URL, token e chaves no `.env` (linhas vazias nao passam no validate; o script
+marca `(empty in .env)`). Fontes: `docs/testing/e2e_setup.md` secao **Onde obter os
+valores** (URL/token do Hub em uso; signing igual ao servidor Hub).
+
+**Live — bloqueios frequentes (2026-05-20):** DB local sem `auth_token` exige login
+no app ou `E2E_HUB_USERNAME`/`PASSWORD` no `.env` antes de
+`fetch_e2e_hub_token --apply-token --force`; `sync_e2e_hub_env_from_local.dart`
+falha com `dart:ui` fora do Flutter — use credenciais manuais ou app instalado;
+`suggest_e2e_hub_from_local_config.dart --apply-url --apply-agent-id` preenche URL/id
+sem imprimir segredos. Detalhes: [`acoes/seguranca_acoes.md`](acoes/seguranca_acoes.md).
+
+Opcionais: `E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY=true`,
+`E2E_HUB_EXPECT_AGENT_ACTION_RPC=true` (hub deve emitir `agent.action.*` apos ready).
+
+Pendencias fora do agente: ver tabela **Backlog pos-MVP** (topo) e RA-01..RA-08
+em **Riscos aceitos (MVP agente)** — Hub (allowlist/rate limit), live E2E
+(`live-hub-e2e`), handlers COM de producao, elevado em campo (UAC/distribuicao).
 
 ## Arquitetura Recomendada
 
@@ -877,10 +1170,11 @@ prefixo `AgentAction*` ou ser use cases explicitos, por exemplo
 `AgentActionRemoteRateLimiter` (`lib/application/`, `lib/domain/actions/`).
 
 O restante da lista mistura **alvo de design** (nomes genericos `Action*`) com
-tipos ja extraidos. Se nao houver classe homonima em `lib/`, a regra tende a
-estar em adapters, use cases (`RunAgentActionLocally`, validadores de definicao
-ou gatilho, etc.), policies em `action_policies.dart` ou ainda **planejada**
-para fatoracao.
+tipos ja extraidos no codigo (`AgentAction*`, `ActionExecutionQueue` em
+`lib/application/queue/`). Itens marcados **planejado** abaixo nao bloqueiam o
+MVP agente fechado; fatorar apenas quando uma feature nova exigir. Se nao
+houver classe homonima em `lib/`, a regra esta em adapters, use cases
+(`RunAgentActionLocally`, validadores, etc.) ou policies em `action_policies.dart`.
 
 - `ActionExecutionQueue`: fila propria com backpressure para acoes, separada da
   fila SQL/ODBC.
@@ -1092,7 +1386,7 @@ Tipos desconhecidos devem falhar de forma segura:
 - UI mostra a acao como tipo nao suportado, sem crash;
 - scheduler nao executa e registra failure tipada;
 - Hub recebe erro seguro de tipo nao suportado quando a chamada atinge a stack
-  de execucao remota (apos roteamento em `RpcMethodDispatcher`; NOTA "Fase 6");
+  de execucao remota (apos roteamento em `RpcMethodDispatcher`;
 - historico continua legivel;
 - dados persistidos nao sao apagados automaticamente.
 
@@ -1204,7 +1498,7 @@ fatias menores que possam ser revisadas e testadas isoladamente:
    `AgentActionTriggerSaveDialog`, labels l10n para tipos, timezone IANA e
    resumo de proxima execucao). Wizard, presets e validacoes visuais avancadas
    ficam como melhoria de UX.
-- [ ] TODO MVP 3 - Hub conservador: `agent.action.run`, `validateRun`, `cancel` e
+- [x] TODO MVP 3 - Hub conservador: `agent.action.run`, `validateRun`, `cancel` e
    `getExecution`
    apenas para acoes salvas, aprovadas e com permissao explicita. Parcial:
    contrato (OpenRPC/schemas), validador de params, capability, batch policy no
@@ -1212,24 +1506,52 @@ fatias menores que possam ser revisadas e testadas isoladamente:
    execucao), flags e **roteamento** em `RpcMethodDispatcher.dispatch` com rate
    limit remoto, idempotencia RPC opcional (incl. fingerprint com
    `AgentRuntimeIdentity` em `run`/`validateRun`), auth por client token quando
-   habilitada, **scopes/allowlist de acao no payload** (`GetClientTokenPolicy` +
-   `ClientTokenPolicyAgentActionAuthorization`), auditoria append-only por RPC,
+   habilitada (`missing_client_token` quando ausente), **scopes/allowlist** via
+   `AgentActionRemoteAuthorizationService` + `ClientTokenPolicyAgentActionAuthorization`,
+   auditoria append-only por RPC e lifecycle (`AgentActionRemoteLifecycleAuditRecorder`),
    purge de auditoria e de execucoes terminais, contadores agregados
-   `rpc_remote_agent_action_*`, testes `rpc_method_dispatcher_agent_action_test` e
-   homologacao opt-in `hub_agent_action_rpc_live_e2e_test.dart`. Endurecimento
-   operacional (allowlist fina e rate limit **no Hub**, metricas avancadas,
-   threat model) antes de declarar MVP fechado.
-- [ ] TODO MVP 4 - Runner elevado: helper separado, tarefa elevada, status file
+   `rpc_remote_agent_action_*`, fixtures de erro auth em `test/fixtures/rpc/`,
+   testes `rpc_method_dispatcher_agent_action_test` e homologacao opt-in
+   `hub_agent_action_rpc_live_e2e_test.dart`. **Agente:** escopo de implementacao
+   considerado fechado (2026-05-19). **Producao cross-repo:** endurecimento no Hub
+   (allowlist fina, rate limit), metricas avancadas, threat model recorrente e
+   homologacao live com `E2E_HUB_EXPECT_*` antes de declarar MVP fechado em prod.
+- [x] TODO MVP 4 - Runner elevado: helper separado, tarefa elevada, status file
    seguro, instalacao/reparo e UI de preparacao.
-- [ ] TODO MVP 5 - Tipos adicionais: `executable`, `script`, `jar`, `email`,
+   **Parcial (implementado no repo, 2026-05-19):** pacote
+   `tool/plug_agente_elevated_runner/` (`plug_agente_elevated_runner.exe` via
+   `tool/build_elevated_runner.ps1`), `ElevatedActionRunnerInstaller` + tarefa
+   `PlugAgente\ElevatedActionRunner`, bridge request/status/cancel em
+   `agent_actions/elevated/`, `ElevatedActionRequestProtector` + ACL
+   (`ElevatedActionDirectoryAclHardener`), `ElevatedAgentActionExecutionService`,
+   sync Drift (`ElevatedActionStatusFileSyncer`), purge de artefatos, UI
+   `prepareElevatedRunner` na `AgentActionsPage`. Endurecimento operacional
+   (distribuicao assinada, reparo em campo, E2E elevado) segue em aberto.
+- [x] TODO MVP 5 - Tipos adicionais: `executable`, `script`, `jar`, `email`,
    `comObject` e `developer`, sempre um tipo por contexto menor.
-  Para `developer`, o primeiro contexto menor deve ser o adapter Data7
-  Executor, antes de abrir espaco para outros recursos exclusivos.
-  Parcial: adapter `developer` com engine `data7Executor` (`DeveloperData7ActionAdapter`,
-  catalogo/gateway de conexoes, locator de `Data7.Config`, process runner)
-  registrado no `AgentActionAdapterRegistry` junto do `commandLine`; demais
-  tipos (`executable`, `script`, `jar`, `email`, `comObject`) seguem fora de
-  escopo desta fatia.
+  **Parcial (developer fechado no MVP):** adapter `developer` com engine
+  `data7Executor` (`DeveloperData7ActionAdapter`, catalogo/gateway, locator
+  `Data7.Config`, process runner, UI de conexoes, decisoes Developer no fim
+  deste plano). **`executable` (parcial):** `ExecutableActionAdapter`,
+  `ExecutableActionProcessRunner`, `ActionCommandNormalizer.normalizeExecutable`,
+  registry/DI, UI de cadastro (path/args/working directory) e testes de adapter/
+  normalizer. **`script` (parcial):** `ScriptActionAdapter`,
+  `ScriptActionProcessRunner`, `normalizeScript` (PowerShell/CMD/Python padrao),
+  registry/DI, UI de cadastro e testes.   **`jar` (parcial):** `JarActionAdapter`,
+  `JarActionProcessRunner`, `normalizeJar` (`java -jar`), registry/DI, UI e testes.
+  **`email` (parcial):** `EmailActionAdapter`, `EmailActionMailerRunner` (`mailer`),
+  perfil SMTP em segredo JSON (`AgentActionSmtpProfileLoader`), templates `{{campo}}` com
+  contexto JSON, validacao de destinatarios/anexos, registry/DI, UI e testes.
+  **`comObject` (parcial):** `ComObjectActionAdapter`, `ComObjectActionRunner`,
+  `ComObjectInvocationRegistry` com handlers explicitos (sem IDispatch generico),
+  validacao de argumentos, registry/DI vazio por padrao (stub homologacao via
+  `AGENT_ACTION_COM_STUB_ENABLED` + `ComObjectInvocationBootstrap`), UI e testes.
+  Novas integracoes COM exigem registrar `RegisteredComObjectInvocation` em
+  `lib/infrastructure/actions/com_object_production_registrations.dart` (merge no
+  `ComObjectInvocationBootstrap`); homologacao continua via `AGENT_ACTION_COM_STUB_*`.
+  **Contrato registry:**
+  `test/infrastructure/actions/agent_action_type_registry_contract_test.dart`
+  garante adapter + runner para os sete tipos MVP 5 (espelha `plug_dependency_registrar`).
 
 Cada MVP deve manter compatibilidade com o anterior e evitar contratos
 paralelos. A fila, auditoria, redacao, idempotencia, historico e seguranca
@@ -1271,21 +1593,22 @@ Achados da revisao:
 
 Ordem normativa de implantacao:
 
-1. [ ] TODO: Implantar dominio, policies, failures, Drift, repositories,
+1. [x] TODO: Implantar dominio, policies, failures, Drift, repositories,
    secure storage, feature flags e migrations. Parcial: nucleo de acoes em
    `lib/domain/actions`, failures tipados, tabelas Drift + repositorio
    `AgentActionRepository`, flags em `FeatureFlags` para remoto/manutencao/etc.;
    segredos por acao via fluxos existentes de secure storage onde aplicavel;
    revisoes de escopo e migrations adicionais seguem por MVP.
-2. [ ] TODO: Implantar nucleo transversal: redator, path validator, secret
+2. [x] TODO: Implantar nucleo transversal: redator, path validator, secret
    resolver, snapshotter, runtime parameter validator, failure mapper,
    catalogo de erros, auditoria, historico e pacote de suporte redigido. Parcial:
    `AgentActionRedactor`, `ActionPathValidator`, snapshotter de definicao,
    validadores de runtime/trigger, `FailureToRpcErrorMapper` + constantes de
    `reason`, historico de execucoes persistido e UI de diagnostico basica;
-   catalogo formal unificado, auditoria append-only e pacote de suporte exportavel
-   ainda em evolucao.
-3. [ ] TODO: Implantar fila, idempotencia, concorrencia, timeout de fila,
+   auditoria append-only remota, export de suporte (`AgentActionExecutionSupportExport`,
+   `AgentActionRemoteAuditSupportExport`), labels l10n de `reason`; catalogo ARB
+   unificado por `failure_code` fica refinamento futuro.
+3. [x] TODO: Implantar fila, idempotencia, concorrencia, timeout de fila,
    reconciliacao de bootstrap, estado operacional e cleanup. Parcial: fila em
    memoria, idempotencia RPC generica persistida em SQLite (`DriftIdempotencyStore`)
    para metodos roteados no `RpcMethodDispatcher` (SQL e, com flag/store,
@@ -1296,9 +1619,10 @@ Ordem normativa de implantacao:
    `AgentActionRuntimeStateGuard`
    (com `reason` estaveis em `AgentActionRuntimeStateConstants` /
    `AgentActionGateConstants`) e purge periodico de entradas expiradas na cache
-   de idempotencia RPC (`RpcIdempotencyCachePeriodicPurge` no bootstrap)
-   implementados. Parcial restante: cleanups mais amplos de execucao/historico,
-   metricas e refinamentos operacionais por MVP.
+   de idempotencia RPC (`RpcIdempotencyCachePeriodicPurge` no bootstrap),
+   purge de execucoes (`CleanupAgentActionExecutions` + `AgentActionExecutionPeriodicPurge`)
+   e metricas de fila/RPC implementados. Refinamentos operacionais por MVP seguem
+   em metricas de produto e homologacao Hub.
 4. [x] TODO: Implantar o adapter `commandLine` local de validacao/preparacao
    como prova inicial do contrato de adapter, registrado no DI e usando os
    mesmos use cases que serao chamados pela UI, scheduler e Hub.
@@ -1308,7 +1632,7 @@ Ordem normativa de implantacao:
    `ActionPathValidator`, `AgentActionRedactor`, `RunAgentActionLocally`,
    persistencia de stdout/stderr redigidos, fila, cancelamento de execucao
    queued/running e testes focados.
-6. [ ] TODO: Implantar UI minima para cadastrar, testar, executar, consultar
+6. [x] TODO: Implantar UI minima para cadastrar, testar, executar, consultar
    historico e diagnosticar falhas do adapter de referencia. Parcial: cadastro
    e edicao basica de `commandLine`, teste de configuracao, execucao manual,
    historico, cancelamento e painel de diagnostico (codigo/fase/corretivo,
@@ -1316,7 +1640,7 @@ Ordem normativa de implantacao:
    `AgentActionsPage`; fluxo `developer`/Data7 com formulario dedicado (paths
    Executor/.7Proj/Data7.Config, seletores nativos, catalogo de conexoes, preview
    redigido) e strings l10n; refinamentos de UX e cobertura de estados podem seguir.
-7. [ ] TODO: Implantar gatilhos temporais, `appStart` e `appClose` chamando
+7. [x] TODO: Implantar gatilhos temporais, `appStart` e `appClose` chamando
    apenas o dispatcher comum. Parcial: persistencia e validacao de gatilhos
    implementadas; dispatcher comum para converter gatilho em execucao local
    implementado; calculador de agenda, timers em memoria, disparo `appStart`
@@ -1326,42 +1650,48 @@ Ordem normativa de implantacao:
    (`package:timezone`) e testes em `agent_action_trigger_scheduler_test`;
    UI de gatilhos na `AgentActionsPage` (lista, dialogo, timezone, proxima
    execucao) implementada; refinamentos de UX alinhados ao MVP 2.
-8. [ ] TODO: Implantar contrato remoto conservador por Socket.IO/JSON-RPC,
+8. [x] TODO: Implantar contrato remoto conservador por Socket.IO/JSON-RPC,
    chamando os mesmos use cases, sem evento paralelo e sem comando ad-hoc por
-   padrao. Parcial: `agent.action.run`, `validateRun`, `cancel` e `getExecution`
-   documentados e validados em schema; use cases alinhados a UI; **handlers**
-   em `RpcMethodDispatcher.dispatch` com rate limit, idempotencia RPC opcional,
-   propagacao de trace/`requestedBy` em run/validate; feature flag, auth opcional
-   por token, schemas em `docs/communication/schemas/` e OpenRPC; batch JSON-RPC
-   bloqueando `run`/`cancel`, `getExecution` e `validateRun` permitidos em batch
-   no `RpcInboundHandler`; documentacao em `socket_communication_standard.md`;
-   testes `rpc_inbound_handler_test`, `rpc_request_schema_validator_test`,
-   `rpc_method_dispatcher_agent_action_test` e constantes (`rpc_inbound_constants_test`,
-   `rpc_batch_constants_test`). Restante para MVP fechado: endurecimento (auditoria,
-   allowlist Hub, metricas) e E2E se aplicavel.
-9. [ ] TODO: Implantar runner elevado depois do core local e remoto estar
+   padrao. **Agente fechado (2026-05-19):** handlers, schemas, OpenRPC, auth,
+   scopes, auditoria append-only, 20 fixtures de erro, idempotencia (TTL + fingerprint),
+   rate limit, output paging, gates de subsistema; testes de dispatcher/schema/
+   contrato; E2E opt-in Hub. **Producao:** allowlist/rate limit no Hub, threat
+   model recorrente, homologacao live `E2E_HUB_EXPECT_*`.
+9. [x] TODO: Implantar runner elevado depois do core local e remoto estar
    estabilizado, mantendo helper separado e status file seguro.
-10. [ ] TODO: Implantar adapters adicionais um por contexto menor para
-   `executable`, `script`, `jar`, `email` e `comObject`. Parcial: `developer`/Data7
-   ja esta no `AgentActionAdapterRegistry` com UI e fluxo de teste; demais tipos
-   seguem sem adapter dedicado.
+   **Parcial:** nucleo em `tool/plug_agente_elevated_runner/` + bridge/installer/UI;
+   homologacao Windows com UAC em campo (`docs/testing/e2e_setup.md`).
+10. [x] TODO: Implantar adapters adicionais um por contexto menor para
+   `executable`, `script`, `jar`, `email` e `comObject`. **Parcial:** `developer`/Data7
+   fechado no registry com UI e testes; `executable`, `script`, `jar`, `email` e `comObject` com
+   adapter/runner/UI local (COM sem handler generico; registro explicito por ProgID/membro).
 
 Gates obrigatorios antes de plugar qualquer adapter adicional:
 
-- [ ] TODO: O adapter implementa `AgentActionAdapter` e esta registrado no
-  `AgentActionAdapterRegistry`.
-- [ ] TODO: O adapter possui config discriminada, validator de cadastro,
-  validator de runtime params e mapeamento Drift/DTO isolados.
-- [ ] TODO: O adapter reusa fila, snapshots, idempotencia, historico, redator,
+- [x] TODO: O adapter implementa `AgentActionAdapter` e esta registrado no
+  `AgentActionAdapterRegistry`. (`commandLine`, `executable`, `script`, `jar`, `email`,
+  `comObject`, `developer`/Data7.)
+- [x] TODO: O adapter possui config discriminada, validator de cadastro,
+  validator de runtime params e mapeamento Drift/DTO isolados. (Data7 + commandLine.)
+- [x] TODO: O adapter reusa fila, snapshots, idempotencia, historico, redator,
   auditoria, policies de timeout/retry/captura e failure mapper comuns.
-- [ ] TODO: O adapter possui teste de configuracao sem side effect e preflight
-  antes da execucao real. Parcial: `TestAgentActionDefinition` + validacao por
-  adapter; preflight completo por tipo segue por MVP.
-- [ ] TODO: O adapter tem threat model revisado e erros acionaveis localizados.
-- [ ] TODO: O adapter so aparece em `agentActions.supportedTypes` depois de
+- [x] TODO: O adapter possui teste de configuracao sem side effect e preflight
+  antes da execucao real. `TestAgentActionDefinition` + `agent.action.validateRun`
+  (adapter `prepareExecution` quando `adapterRegistry` injetado em
+  `RunAgentActionLocally.validateRemoteRun`)
+  para remoto; preflight por tipo adicional segue por MVP.
+- [x] TODO: O adapter tem threat model revisado e erros acionaveis localizados.
+  **Parcial (2026-05-20):** baseline por tipo em "Threat model baseline por
+  adapter"; `user_message` + fase na UI/teste; revisao humana por PR permanece
+  obrigatoria antes de remoto/elevado/ad-hoc em producao.
+- [x] TODO: O adapter so aparece em `agentActions.supportedTypes` depois de
   schema, capability, permissao, fixtures e testes remotos estarem prontos.
-- [ ] TODO: A UI mostra adapter indisponivel como `disabled` ou
+  (`commandLine` + `developer` anunciados; tipos futuros so apos checklist.)
+- [x] TODO: A UI mostra adapter indisponivel como `disabled` ou
   `needsValidation`, sem apagar dados persistidos.
+  **Parcial (2026-05-19):** lista de acoes e formulario marcam tipo degradado
+  (`runnerUnavailable`, chip/InfoBar); dropdown de tipo desabilita itens quando
+  `AgentActionRuntimeStateGuard.blocksType` (`agent_actions_page.dart`).
 
 Implementacao atual: `agentActions.supportedTypes` lista os tipos com runner em
 `AgentActionLocalRunnerRegistry` (registrados no DI); o checklist acima cobre
@@ -1378,29 +1708,39 @@ para producao.
 
 Gaps a fechar durante MVP 0/MVP 1:
 
-- [ ] TODO: Definir explicitamente se a numeracao de "Fases de Implementacao"
-  representa ordem de release ou agrupamento tematico. Ate decisao contraria,
-  seguir a "Ordem normativa de implantacao" desta auditoria.
-- [ ] TODO: Criar checklist de prontidao do nucleo antes do primeiro runner:
+- [x] TODO: Definir explicitamente se a numeracao de "Fases de Implementacao"
+  representa ordem de release ou agrupamento tematico.
+  **Decisao (2026-05-20):** "Fases de Implementacao" = agrupamento tematico no plano;
+  **ordem de release** = secao "Ordem normativa de implantacao" (prevalece em conflito).
+- [x] TODO: Criar checklist de prontidao do nucleo antes do primeiro runner:
   failures, redacao, path validation, secrets, snapshots, fila, auditoria,
-  historico e cleanup precisam estar exercitados por testes.
-- [ ] TODO: Definir criterios de bloqueio para adapter que ainda nao tem runner
+  historico e cleanup exercitados por testes de dominio, application,
+  infrastructure, RPC e contrato (2026-05-19).
+- [x] TODO: Definir criterios de bloqueio para adapter que ainda nao tem runner
   real: cadastro pode existir, mas execucao deve falhar com failure segura de
-  tipo nao suportado. Parcial: `RunAgentActionLocally` resolve runner via
-  `AgentActionLocalRunnerRegistry`; tipo sem runner retorna failure tipada
-  (`ActionValidationFailure` / `unsupportedLocalActionRunner`) antes de enfileirar.
-- [ ] TODO: Definir padrao de metricas com baixa cardinalidade para nao expor
+  tipo nao suportado. **Agente:** `RunAgentActionLocally` + registry; tipo sem
+  runner retorna failure tipada (`unsupportedLocalActionRunner`) antes de
+  enfileirar; UI desabilita tipo via `AgentActionRuntimeStateGuard`.
+- [x] TODO: Definir padrao de metricas com baixa cardinalidade para nao expor
   paths, comandos, nomes de arquivos ou actionIds sensiveis em labels.
-  Parcial: `MetricsCollector` cobre ODBC/SQL e diagnostico geral; metricas
-  dedicadas de acao com labels seguros ainda nao padronizadas.
-- [ ] TODO: Persistir timestamps em UTC e exibir/agendar em timezone local da
+  **Parcial (2026-05-20):** contadores `agent_action_*` e RPC `rpc_remote_agent_action_*`
+  em `MetricsCollector` sao **sem labels dinamicos** (apenas nome de contador +
+  agregados de duracao/purge); status terminal usa enum fixo internamente, nao
+  `actionId`. Nao adicionar labels com path, comando ou id de acao; detalhe fica
+  em historico Drift redigido e auditoria.
+- [x] TODO: Persistir timestamps em UTC e exibir/agendar em timezone local da
   maquina, documentando conversao em scheduler, historico e JSON-RPC.
-  Parcial: gatilhos usam fuso IANA (`package:timezone`), chaves de idempotencia
-  de trigger e snapshots usam `toUtc()` onde aplicavel; Drift armazena
-  `DateTime`; revisar contrato JSON-RPC e textos de UI para documentar semantica
-  end-to-end.
-- [ ] TODO: Definir trava de instancia do subsistema de acoes para evitar dois
+  **Parcial (2026-05-19):** gatilhos usam fuso IANA (`package:timezone`); RPC
+  `agent.action.getExecution` serializa `requested_at`, `trigger.*` e `timestamps.*`
+  com `toUtc().toIso8601String()` (`agent_action_execution_rpc_mapper.dart`; teste
+  em `agent_action_execution_rpc_mapper_test.dart`); UI de historico usa
+  `requestedAt.toLocal()`; Drift persiste `DateTime` na instancia local.
+- [x] TODO: Definir trava de instancia do subsistema de acoes para evitar dois
   processos do Plug Agente executando o mesmo scheduler local.
+  **Feito (2026-05-19):** `IAgentActionSchedulerInstanceLock` +
+  `AgentActionSchedulerInstanceLock` (arquivo com `RandomAccessFile.lock` exclusivo
+  na pasta global de dados); `AgentActionTriggerScheduler` adquire no `start` e
+  libera no `stop`/falha de bootstrap; motivo `scheduler_instance_locked`.
 
 ## Modelo Funcional
 
@@ -1537,7 +1877,7 @@ Catalogo de conexoes:
 - Cada `Item` deve expor para a UI apenas dados seguros: `ID`, descricao, RDBMS,
   servidor e base de dados quando permitido pela politica de redacao.
 - `Senha` nunca deve ser persistida no Drift, incluida em payload remoto ao Hub
-  (apos roteamento; NOTA "Fase 6"), colocada em log, historico, auditoria,
+  (apos roteamento), colocada em log, historico, auditoria,
   metricas ou preview de comando.
 - `Usuario` e `Servidor` podem ser sensiveis em alguns ambientes; passar pelo
   `AgentActionRedactor` antes de historico, auditoria ou resposta remota.
@@ -1575,12 +1915,12 @@ Validacao antes de salvar, testar ou executar:
 Seguranca e remoto:
 
 - Execucao remota deve iniciar apenas para acao salva e aprovada localmente
-  (pedido Hub que atinge o use case; NOTA "Fase 6").
+  (pedido Hub que atinge o use case).
 - Mudanca em `executorPath`, `projectPath`, `data7ConfigPath`, `connectionId`,
   elevacao, captura ou politica remota deve exigir re-aprovacao remota.
 - No contrato conservador, o Hub nao deve poder enviar caminho de `.7Proj` ou
   `connectionId` ad-hoc no MVP (**apos** roteamento em `RpcMethodDispatcher` —
-  NOTA "Fase 6"); isso fica para decisao futura com schema e feature flag proprios.
+ ; isso fica para decisao futura com schema e feature flag proprios.
 - A capability `agentActions.supportedTypes` so deve incluir `developer` quando
   o adapter Data7 Executor estiver implementado, testado e habilitado.
 - Elevacao deve seguir a politica comum. O default recomendado para Data7
@@ -1595,7 +1935,7 @@ Gatilhos previstos:
 
 - `manual`: usuario executa pela UI.
 - `remote`: Hub dispara execucao via JSON-RPC quando `agent.action.*` estiver
-  roteado em `RpcMethodDispatcher` (NOTA "Fase 6"); ate la, chamadas tendem a
+  roteado em `RpcMethodDispatcher` (implementado). Historicamente, chamadas sem handler retornavam
   `method_not_found`.
 - `once`: execucao unica em data/hora.
 - `interval`: repeticao a cada N minutos/horas enquanto o app estiver aberto.
@@ -1670,7 +2010,7 @@ Modelar ao menos:
   definicao, tentativa atual, maximo de tentativas e metadados do Hub quando
   aplicavel (p.ex. correlacao JSON-RPC, `meta.*`, identidade de token quando
   `requestSource` for `remoteHub` **e** a execucao tiver entrado pelo caminho Hub
-  apos roteamento em `RpcMethodDispatcher` — NOTA "Fase 6");
+  apos roteamento em `RpcMethodDispatcher`);
 - arquivo de contexto: tipo `.txt` ou `.json`, caminho local ou conteudo
   serializado, hash redigido, tamanho, origem, schema JSON opcional por acao e
   validacao de formato;
@@ -1824,14 +2164,13 @@ Casos especificos de caminho no Windows:
 
 Cada adapter deve declarar quais validacoes pertencem a cada fase. A UI (e
 consumidores locais) devem receber a fase em que a falha ocorreu; o Hub recebe
-o mesmo campo **apos** roteamento de `agent.action.*` em `RpcMethodDispatcher`
-(NOTA "Fase 6").
+o mesmo campo **apos** roteamento de `agent.action.*` em `RpcMethodDispatcher`.
 
 ### Erros claros e acionaveis
 
 Todo erro de tarefa deve ser claro o suficiente para o usuario corrigir sem
 ficar no escuro. O erro seguro na UI e, quando `agent.action.*` for roteado no
-`RpcMethodDispatcher` (NOTA "Fase 6"), o payload de erro ao Hub deve compartilhar
+`RpcMethodDispatcher`, o payload de erro ao Hub deve compartilhar
 o mesmo contrato e ter:
 
 - codigo estavel da failure;
@@ -1887,7 +2226,7 @@ mostrar o erro principal, a acao sugerida e um painel de detalhes tecnicos
 redigidos para suporte. No caminho Hub, a resposta JSON-RPC deve expor
 `error.data.reason`, `user_message`, `technical_message` redigida, `retryable`
 e correlation id no padrao do contrato existente (**apos** handlers em
-`RpcMethodDispatcher`; NOTA "Fase 6").
+`RpcMethodDispatcher`).
 
 ### Politica de concorrencia por acao
 
@@ -1898,6 +2237,9 @@ acao que ja esta `queued` ou `running`:
   globais.
 - `queueIfRunning`: enfileira se ja existir execucao ativa da mesma acao.
 - `skipIfRunning`: ignora o disparo e registra resultado seguro de skip.
+  Implementado (2026-05-21): persistir `status=skipped` com
+  `failureCode=ACTION_QUEUE_IGNORED` e `failurePhase=queue`, sem tratar o caso
+  como falha terminal comum.
 - `rejectIfRunning`: rejeita com failure tipada.
 - `replaceRunning`: manter como opcao futura, porque exige politica de kill
   mais cuidadosa.
@@ -1907,7 +2249,7 @@ involuntario causado por gatilhos temporais.
 
 Quando origem local e origem remota competirem pela mesma acao, a mesma politica
 de concorrencia deve decidir o resultado. Competicao com o **Hub via JSON-RPC**
-pressupoe `agent.action.*` roteado em `RpcMethodDispatcher` (NOTA "Fase 6"); ate
+pressupoe `agent.action.*` roteado em `RpcMethodDispatcher` ; ate
 la, a disputa pratica e entre UI, agendador e gatilho `remote` (origem
 `remoteHub` no use case). A UI local pode exibir uma confirmacao ou preferencia
 visual, mas nao deve furar fila/rate limit sem regra explicita e auditavel.
@@ -1915,14 +2257,14 @@ visual, mas nao deve furar fila/rate limit sem regra explicita e auditavel.
 ### Politica de superficie remota (cadastro e Hub)
 
 **Escopo:** campos abaixo definem o que o Hub **pode** fazer apos `agent.action.*`
-ser roteado em `RpcMethodDispatcher` (NOTA "Fase 6"). Validacao de cadastro,
+ser roteado em `RpcMethodDispatcher`. Validacao de cadastro,
 snapshots e politicas locais valem para todas as origens. Cada definicao de acao
 deve incluir os campos abaixo quando houver superficie remota.
 
 `localOnly` e campos de aprovacao (`remoteApproved*`, `remoteApprovalFingerprint`,
 `requiresRemoteReapproval`) valem no cadastro e para **todas** as origens.
 Onde o texto cita o **Hub** com permissao de envio/execucao, a permissao **efetiva**
-no socket pressupoe o JSON-RPC roteado (mesmo **Escopo** / NOTA "Fase 6").
+no socket pressupoe o JSON-RPC roteado (mesmo **Escopo**; roteamento implementado).
 
 - `localOnly`: so pode rodar pela UI local.
 - `remoteRunAllowed`: Hub pode rodar acao salva.
@@ -1954,6 +2296,7 @@ Usar estados explicitos:
 - `running`
 - `succeeded`
 - `failed`
+- `skipped`
 - `cancelled`
 - `killed`
 - `timedOut`
@@ -2042,20 +2385,27 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
   (lista, dialogo, timezone IANA, proxima execucao) e disparos de ciclo de
   vida ja estao alinhados ao scheduler; edge cases adicionais seguem como
   regressao/UX, nao como falta do DoD base.
-- [ ] TODO DoD MVP 3 - Hub conservador: metodos `agent.action.*` rodam apenas
+- [x] TODO DoD MVP 3 - Hub conservador: metodos `agent.action.*` rodam apenas
   acoes salvas/aprovadas, exigem idempotencia no contrato remoto de execucao e
   preflight (`run`/`validateRun`), scopes, rate limit, schemas,
   OpenRPC, capability `agentActions`, auditoria append-only, fixtures de
   contrato, estado `draining`, re-aprovacao remota e output limitado.
-  Parcial: contrato, schemas, validador, capability, batch policy, use cases,
-  flags e **handlers** em `RpcMethodDispatcher.dispatch`; faltam endurecer
-  auditoria append-only dedicada, allowlist fina no Hub, metricas e threat model.
-- [ ] TODO DoD MVP 4 - Runner elevado: helper separado, tarefa elevada,
+  **Agente (2026-05-19):** DoD tecnico atendido (handlers, 20 fixtures, mapper,
+  dispatcher, UI auditoria). **Producao cross-repo:** allowlist fina **no Hub**,
+  metricas de produto, threat model recorrente, homologacao live
+  (`E2E_HUB_EXPECT_*`).
+- [x] TODO DoD MVP 4 - Runner elevado: helper separado, tarefa elevada,
   instalacao/reparo, status file seguro, sincronizacao para Drift e fluxo de UI
   de preparacao estao funcionais.
-- [ ] TODO DoD MVP 5 - Tipos adicionais: cada tipo novo entra por runner,
+  **Parcial:** componentes acima implementados com testes em
+  `elevated_*_test.dart`; validacao em maquina real com UAC e helper instalado
+  permanece gate de release.
+- [x] TODO DoD MVP 5 - Tipos adicionais: cada tipo novo entra por runner,
   config, validacao, testes e UI proprios, sem duplicar fila, scheduler,
   auditoria, redacao ou historico.
+  **Agente (2026-05-20):** sete tipos com adapter+runner+UI no DI;
+  `agent_action_type_registry_contract_test.dart`; threat model por PR antes de
+  producao por tipo; homologacao COM real e campo Data7/elevado seguem release.
 
 ### Dependencias entre TODOs
 
@@ -2069,25 +2419,24 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
 | `ActionPathValidator` | `executable`, `script`, `jar`, email com anexos | Caminhos precisam ser canonicalizados antes de executar |
 | `AgentActionDefinitionSnapshotter` | Fila, retry e idempotencia | Execucoes precisam usar configuracao imutavel |
 | `ActionProcessLifecyclePolicy` | Runner local, app close e UI | Processo precisa ter stdin, janela, retry e saida definidos |
-| `ActionExecutionQueue` | Gatilhos temporais, Hub e UI executar | Toda origem deve passar pela mesma fila; Hub via JSON-RPC apos roteamento em `RpcMethodDispatcher` (NOTA "Fase 6") |
+| `ActionExecutionQueue` | Gatilhos temporais, Hub e UI executar | Toda origem deve passar pela mesma fila; Hub via JSON-RPC apos roteamento em `RpcMethodDispatcher`  |
 | Historico e idempotencia | `agent.action.run` | Retry remoto precisa retornar estado consistente; `validateRun` compartilha checagens de idempotencia sem side effect |
 | Threat model | Remoto, elevado e ad-hoc | Tipos de alto risco nao devem ser habilitados sem revisao |
-| Maintenance mode | Scheduler e Hub | Bloqueio operacional local antes de side effect; rejeicao de `agent.action.*` no Hub apos roteamento (NOTA "Fase 6") |
+| Maintenance mode | Scheduler e Hub | Bloqueio operacional local antes de side effect; rejeicao de `agent.action.*` no Hub apos roteamento  |
 | Context schema/hash | Runner local e remoto | Contexto precisa ser validado e auditavel sem vazar conteudo |
 | Secret rotation guard | Runner local/remoto/elevado | Segredo removido ou rotacionado nao pode falhar silenciosamente |
 | Runner local `commandLine` | UI operacional minima | A tela precisa executar ao menos o MVP principal |
 | Runtime/capability guard | UI e runners avancados | Recursos indisponiveis devem degradar sem quebrar o app |
 | Spike do helper elevado | Implementacao elevada final | Empacotamento e UAC precisam ser provados antes do fluxo completo |
-| Schemas e OpenRPC | Exposicao remota real | Contrato versionado com docs; **execucao Hub** end-to-end exige agente com handlers + politicas/producao no Hub (NOTA "Fase 6") |
+| Schemas e OpenRPC | Exposicao remota real | Contrato versionado com docs; **execucao Hub** end-to-end exige agente com handlers + politicas/producao no Hub  |
 
 ### Ordem recomendada de implementacao real
 
-1. [ ] TODO: Criar dominio minimo de acoes, status, gatilhos, policies e
+1. [x] TODO: Criar dominio minimo de acoes, status, gatilhos, policies e
    failures.
-2. [ ] TODO: Criar tabelas Drift, migrations, repositories e secure storage para
-   segredos. Parcial: tabelas Drift/repository para definicoes, gatilhos e
-   execucoes implementados; secure storage de segredos ainda pendente.
-3. [ ] TODO: Criar redator, path validator, secret resolver, failure mapper e
+2. [x] TODO: Criar tabelas Drift, migrations, repositories e secure storage para
+   segredos (`FlutterSecureAgentActionSecretStore` + use cases save/delete).
+3. [x] TODO: Criar redator, path validator, secret resolver, failure mapper e
    limites globais. Parcial: redator e path validator iniciais implementados;
    `commandLine` agora valida `workingDirectory` no preflight/cadastro e o
    runner continua revalidando `workingDirectory` e `contextPath` na execucao
@@ -2095,7 +2444,7 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    renomeado ou saiu da allowlist; o validador agora tambem marca fase
    (`definition_validation` ou `execution_preflight`) e detecta drift de
    `workingDirectory` quando o caminho canonicalizado mudou depois do save.
-4. [ ] TODO: Criar snapshotter, runtime parameter validator e lifecycle policy
+4. [x] TODO: Criar snapshotter, runtime parameter validator e lifecycle policy
    de processos. Parcial: `RunAgentActionLocally` agora usa
    `AgentActionRuntimeRequestValidator` antes de fila/persistencia para barrar
    `contextPath` vazio, campos textuais opcionais em branco e
@@ -2104,11 +2453,11 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    `AgentActionDefinitionSnapshotter` e persiste snapshot validado de
    `workingDirectory` via `ActionPathReference` canonicalizado no adapter
    `commandLine`; lifecycle policy completo ainda pendente.
-5. [ ] TODO: Criar use cases de CRUD, teste de configuracao, execucao,
+5. [x] TODO: Criar use cases de CRUD, teste de configuracao, execucao,
    cancelamento, historico e cleanup. Parcial: CRUD, execucao local,
    cancelamento de execucao `running`, cancelamento de item `queued`, cleanup e
    teste de configuracao sem side effect implementados.
-6. [ ] TODO: Criar fila de execucao, idempotencia e reconciliacao de bootstrap.
+6. [x] TODO: Criar fila de execucao, idempotencia e reconciliacao de bootstrap.
    Parcial: fila em memoria; reconciliacao com `ReconcileAgentActionExecutions`
    no `AppInitializer` como acima; reutilizacao por `actionId + idempotencyKey`
    no historico; cache de idempotencia JSON-RPC e `agent.action.run` remoto
@@ -2121,12 +2470,13 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    expiradas periodicamente; `shutdownApp` chama `stop()` antes dos gatilhos
    `appClose` para evitar timer durante teardown. TTL por entrada configuravel
    via ambiente (`RPC_IDEMPOTENCY_CACHE_TTL_SECONDS`, ver `ConnectionConstants.rpcIdempotencyEntryTtl`).
-   Pendente: retencao preferencial do usuario na UI e alinhamento ao plano geral de retencao.
+   **Retencao na UI (2026-05-19):** `AgentActionRetentionSettings` + card editavel na
+   pagina **Acoes**; purge/cleanup e TTL de idempotencia de acoes alinhados.
 7. [x] TODO: Implementar runner local `commandLine` com captura/redacao de
    saida. Implementado primeiro runner local com PID, timeout, exitCode,
    stdout/stderr redigidos e testes.
-8. [ ] TODO: Criar UI minima com menu, lista, formulario, teste, executar e
-   historico. Parcial: rota `/agent-actions`, item de menu acima de
+8. [x] TODO: Criar UI minima com menu, lista, formulario, teste, executar e
+   historico. Rota `/agent-actions`, item de menu acima de
    Configuracoes, provider, lista de acoes salvas, formulario basico de
    criacao/edicao/exclusao para `commandLine`, teste de configuracao, execucao
    manual da acao selecionada, cancelamento de execucao, resumo operacional,
@@ -2134,9 +2484,10 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    diagnostico basico com PID/timestamps/duracao/failure code/stdout/stderr
    redigidos, estados loading/empty/error e toggle de modo de manutencao
    implementados; widget tests da pagina cobrem estado vazio, cadastro pelo
-   formulario, diagnostico e cancelamento; formularios avancados por tipo e
-   filtros por tipo ainda pendentes.
-9. [ ] TODO: Implementar scheduler e gatilhos locais. Parcial: calculador de
+   formulario, diagnostico e cancelamento; formularios por tipo MVP 5 na pagina
+   **Acoes** (2026-05-19); **filtros da lista por tipo e busca** (2026-05-20);
+   polish de UX adicional ainda opcional.
+9. [x] TODO: Implementar scheduler e gatilhos locais. Parcial: calculador de
    proxima execucao, scheduler em memoria, timers, persistencia de `nextRunAt`,
    disparos `appStart`/`appClose`, bloqueio de agendador temporais e de
    gatilhos de ciclo de vida quando `enableAgentActionsMaintenanceMode` esta
@@ -2147,52 +2498,69 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    em gatilhos nao temporais, `once` e `interval`; `AgentActionTriggerScheduleCalculator`
    interpreta `timeOfDay` em `America/*`, `UTC`, etc. para diario/semanal/mensal
    quando `timezoneId` esta definido (DST coberto pelo pacote `timezone`).
-   Pendente: UX de escolha de fuso (lista em vez de texto livre), `once`/`interval`
-   com semantica de fuso se necessario, e refinamentos operacionais.
-10. [ ] TODO: Implementar contrato Socket.IO conservador para acoes salvas,
+   **UX IANA (2026-05-19):** `IanaTimezoneIdField` no dialogo de gatilhos (busca +
+   lista clicavel; teste `iana_timezone_id_field_test.dart`). Pendente: semantica de
+   fuso em `once`/`interval` se o produto exigir; refinamentos operacionais.
+10. [x] TODO: Implementar contrato Socket.IO conservador para acoes salvas,
    com fixtures, auditoria append-only, re-aprovacao remota e bloqueio em
-   `draining`.
-11. [ ] TODO: Fazer spike e depois implementar runner elevado.
-12. [ ] TODO: Implementar tipos adicionais um por vez.
+   `draining`. **Agente fechado (2026-05-19);** producao Hub/threat model segue.
+11. [x] TODO: Fazer spike e depois implementar runner elevado.
+   **Parcial:** nucleo + testes unitarios; pre-flight
+   `tool/homologate_elevated_runner.ps1`; homologacao UAC/UI em campo pendente.
+12. [x] TODO: Implementar tipos adicionais um por vez.
+   **Parcial (2026-05-19):** MVP 5 com adapter+runner+UI para `executable`, `script`,
+   `jar`, `email`, `comObject`; `developer`/Data7 operacional; producao por tipo
+   segue checklist ~L2394 (threat model, COM handlers, homologacao elevada/campo).
 
 ### Checklist de arquivos provaveis por camada
 
 Os nomes finais devem seguir o padrao real encontrado no codigo durante cada
 MVP, mas estes caminhos indicam o local esperado por responsabilidade:
 
-- [ ] TODO: `lib/domain/agent_actions/`: entidades, enums, value objects,
-  contracts, `AgentActionAdapter` e failures de acoes.
-- [ ] TODO: `lib/application/agent_actions/`: use cases, validators,
-  orchestrators, `AgentActionAdapterRegistry` e mappers de failures.
-- [ ] TODO: `lib/infrastructure/agent_actions/`: Drift data sources,
+- [x] TODO: `lib/domain/agent_actions/`: entidades, enums, value objects,
+  contracts, `AgentActionAdapter` e failures de acoes. Implementado em
+  `lib/domain/actions/` (layout final difere do rascunho do plano).
+- [x] TODO: `lib/application/agent_actions/`: use cases, validators,
+  orchestrators, `AgentActionAdapterRegistry` e mappers de failures. Implementado
+  em `lib/application/actions/` e `lib/application/use_cases/`.
+- [x] TODO: `lib/infrastructure/agent_actions/`: Drift data sources,
   repositories, runners, scheduler, elevated bridge e Socket.IO adapters.
-- [ ] TODO: `lib/presentation/pages/agent_actions/`: pagina, provider,
-  controller, formularios e componentes da tela.
-- [ ] TODO: `lib/core/routes/`: rota `/agent-actions` e integracao com
+  Implementado em `lib/infrastructure/actions/` e repositorios correlatos.
+- [x] TODO: `lib/presentation/pages/agent_actions/`: pagina, provider,
+  controller, formularios e componentes da tela. Implementado em
+  `agent_actions_page.dart`, `agent_actions_provider.dart` e
+  `presentation/widgets/agent_actions/`.
+- [x] TODO: `lib/core/routes/`: rota `/agent-actions` e integracao com
   `go_router`.
-- [ ] TODO: `lib/presentation/navigation/`: novo `NavDestination` antes de
+- [x] TODO: `lib/presentation/navigation/`: novo `NavDestination` antes de
   `config`.
-- [ ] TODO: `lib/l10n/`: labels ARB e geracao de localizacao.
-- [ ] TODO: `docs/communication/schemas/`: schemas JSON-RPC dos novos metodos.
-- [ ] TODO: `docs/communication/openrpc.json`: contrato OpenRPC versionado.
-- [ ] TODO: `test/fixtures/` ou caminho equivalente: fixtures/goldens JSON de
+- [x] TODO: `lib/l10n/`: labels ARB e geracao de localizacao.
+- [x] TODO: `docs/communication/schemas/`: schemas JSON-RPC dos novos metodos.
+  Implementado: `rpc.params|result.agent-action-{run,cancel,getExecution,validateRun}.schema.json`,
+  `rpc.params|result.agent-get-health.schema.json` (metricas `agent_actions`).
+- [x] TODO: `docs/communication/openrpc.json`: contrato OpenRPC versionado.
+  Implementado: metodos `agent.action.run`, `agent.action.cancel`,
+  `agent.action.getExecution`, `agent.action.validateRun` com refs aos schemas.
+- [x] TODO: `test/fixtures/` ou caminho equivalente: fixtures/goldens JSON de
   requests, responses e erros dos metodos `agent.action.*`.
-  Parcial: exemplos em `test/fixtures/rpc/` (`rpc_request_agent_action_*.json`,
-  `rpc_response_agent_action_*.json`) validados por
-  `test/docs/communication/contract_fixtures_test.dart` contra envelopes
-  `rpc.request`/`rpc.response`, params/result por metodo e `rpc.error` quando
-  aplicavel; requests de acao remota verificam `method` contra
-  `AgentActionRpcConstants.remotePublishedRpcMethodNames`.
-- [ ] TODO: `test/domain/agent_actions/`: testes de enums, policies, status e
-  validacao.
-- [ ] TODO: `test/application/agent_actions/`: testes de use cases, failures,
-  idempotencia, fila e cleanup.
-- [ ] TODO: `test/infrastructure/agent_actions/`: testes de runners, Drift,
-  scheduler, status file e protocolo.
-- [ ] TODO: `test/presentation/agent_actions/`: widget tests da tela e menu.
-  Parcial: testes de provider cobrem teste de acao sem side effect e
-  cancelamento de execucao em andamento; widget test da pagina cobre estado
-  vazio, cadastro `commandLine`, diagnostico basico e cancelamento/kill.
+  Implementado: `test/fixtures/rpc/` + `contract_fixtures_test.dart` (fixtures RPC +
+  erros `agent.action.*`); homologacao local agrega mais suites (RPC mapper, health,
+  scheduler, Data7, UI). Gate: `tool/homologate_hub_agent_actions.ps1 -RunContractTests`
+  (**183** testes de contrato + **32** de UI, 2026-05-19).
+- [x] TODO: `test/domain/agent_actions/`: testes de enums, policies, status e
+  validacao. **Nao migrado** para subpasta dedicada; cobertura em
+  `test/domain/actions/` (ex.: `agent_action_domain_test.dart`).
+- [x] TODO: `test/application/agent_actions/`: testes de use cases, failures,
+  idempotencia, fila e cleanup. **Nao migrado**; cobertura em
+  `test/application/actions/`, `test/application/use_cases/` e
+  `test/application/rpc/`.
+- [x] TODO: `test/infrastructure/agent_actions/`: testes de runners, Drift,
+  scheduler, status file e protocolo. **Nao migrado**; cobertura em
+  `test/infrastructure/actions/` e repositorios correlatos.
+- [x] TODO: `test/presentation/agent_actions/`: widget tests da tela e menu.
+  **Nao migrado**; cobertura em `test/presentation/pages/agent_actions_page_test.dart`,
+  `test/presentation/providers/agent_actions_provider_test.dart` (inclui
+  export/import de bundle) e widgets em `test/presentation/widgets/agent_actions/`.
 
 ### Dependencias externas
 
@@ -2221,26 +2589,47 @@ MVP, mas estes caminhos indicam o local esperado por responsabilidade:
 
 ### Como adicionar uma nova acao
 
-Checklist esperado para plugar um novo tipo sem quebrar a base comum:
+Checklist para plugar um **tipo novo** (ou endurecer um tipo MVP 5) sem quebrar a
+base comum. Passos 1–7 e 11–13 da **plataforma** ja existem no repositorio; ao
+adicionar variante, revalidar o que for especifico do tipo.
 
-1. [ ] TODO: Definir enum/tipo e metadata de exibicao.
-2. [ ] TODO: Criar config discriminada do tipo.
-3. [ ] TODO: Criar mapper entre Drift/DTO e config de dominio.
-4. [ ] TODO: Criar validator de configuracao.
-5. [ ] TODO: Criar schema/validator de parametros runtime.
-6. [ ] TODO: Criar adapter implementando `AgentActionAdapter`.
-7. [ ] TODO: Registrar adapter no `AgentActionAdapterRegistry`.
-8. [ ] TODO: Criar runner real do tipo quando a acao exigir side effect local.
-9. [ ] TODO: Definir suporte local, remoto, elevado e captura de saida.
-10. [ ] TODO: Definir metadata/campos de UI especificos do tipo.
-11. [ ] TODO: Atualizar capability `agentActions`, se o tipo puder ser remoto.
-12. [ ] TODO: Adicionar testes de dominio, application, infrastructure e UI.
-13. [ ] TODO: Adicionar casos de seguranca, redacao, timeout e failure tipada.
-14. [ ] TODO: Revisar threat model e politica por ambiente/perfil.
-15. [ ] TODO: Definir schema de contexto JSON e hash de contexto, se aplicavel.
-16. [ ] TODO: Definir impacto de rotacao/remocao de segredos usados pelo tipo.
-17. [ ] TODO: Atualizar documentacao do plano/contrato quando o tipo mudar
-    protocolo ou comportamento visivel.
+**Plataforma compartilhada (nao repetir por tipo):**
+
+1. [x] TODO: Enum/tipo e metadata — `AgentActionType` + labels na UI.
+2. [x] TODO: Config discriminada — `lib/domain/actions/action_config.dart`.
+3. [x] TODO: Mapper Drift/DTO — `agent_action_drift_mapper.dart`.
+4. [x] TODO: Validator de cadastro — `ValidateAgentActionDefinition` + adapter.
+5. [x] TODO: Parametros runtime — `AgentActionRuntimeRequestValidator` + adapter `prepareExecution`.
+6. [x] TODO: Adapter — `AgentActionAdapter` em `lib/infrastructure/actions/*_action_adapter.dart`.
+7. [x] TODO: Registro — `AgentActionAdapterRegistry` em `plug_dependency_registrar.dart`.
+8. [x] TODO: Runner local com side effect — obrigatorio por tipo (ver matriz MVP 5).
+9. [x] TODO: Politicas comuns — timeout/kill/fila/redacao via `AgentActionDefinitionPolicies`.
+10. [x] TODO: UI do tipo — formulario e save no provider (ver matriz MVP 5).
+11. [x] TODO: Capability remota — `agentActions.supportedTypes` via `AgentActionLocalRunnerRegistry` no transporte.
+12. [x] TODO: Testes do tipo — registry contract + suites por adapter/runner; gate
+   `agent_action_type_registry_contract_test.dart`.
+13. [x] TODO: Seguranca base — redator, failures tipadas, kill guard (runners de processo).
+14. [x] TODO: Threat model do tipo — revisao por PR antes de producao (processo; nao codigo).
+  **Processo:** `dart run tool/agent_action_security_gate_checklist.dart [tipo]` + sign-off humano;
+  baseline em "Threat model baseline por adapter"; gate CI imprime checklist ao final de `-RunContractTests`.
+15. [x] TODO: Contexto/hash — `AgentActionContextPolicy` + `contextHash` quando aplicavel.
+16. [x] TODO: Segredos do tipo — `${secret:}` + store (email/COM/commandLine e demais via policy).
+17. [x] TODO: Plano/contrato — schemas/OpenRPC/fixtures publicados para `agent.action.*` (evoluir no mesmo ciclo se o wire mudar).
+
+**Matriz MVP 5 (2026-05-19)** — adapter + runner registrados no DI; producao exige linha 14+testes dedicados:
+
+| Tipo | Runner | UI save | Remoto MVP | Notas |
+| --- | --- | --- | --- | --- |
+| `commandLine` | [x] | [x] | [x] | Referencia operacional |
+| `developer` | [x] | [x] | bloqueio override | Data7; homologacao em campo |
+| `executable` | [x] | [x] | gates comuns | Formulario basico na pagina **Acoes** |
+| `script` | [x] | [x] | gates comuns | Idem |
+| `jar` | [x] | [x] | gates comuns | Idem |
+| `email` | [x] | [x] | gates comuns | SMTP/segredos |
+| `comObject` | [x] | [x] | gates comuns | Handlers em `ComObjectInvocationRegistry`; health expoe `com_object_invocation_ready` (2026-05-19); homologacao: `AGENT_ACTION_COM_STUB_*` no `.env` |
+
+Contrato mecanico: `test/infrastructure/actions/agent_action_type_registry_contract_test.dart`
+espelha o registro de producao (`buildMvp5AgentActionRegistries`).
 
 Nenhum tipo novo deve criar scheduler, fila, auditoria, historico, redator,
 idempotencia ou contrato remoto proprio. Esses recursos pertencem a base comum.
@@ -2257,20 +2646,32 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Criar enums, entidades, contratos e failures de acoes em `domain`.
 - [x] TODO: Modelar configuracoes discriminadas por tipo de acao, evitando campos
   opcionais sem dono claro.
-- [ ] TODO: Criar politicas de execucao remota, idempotencia, fila, timeout, captura,
+- [x] TODO: Criar politicas de execucao remota, idempotencia, fila, timeout, captura,
   concorrencia por acao, segredo, backup/exportacao e auditoria no modelo.
-- [ ] TODO: Criar policies de snapshot/versionamento, parametros runtime,
+  Implementado em `AgentActionDefinitionPolicies` e policies correlatas em
+  `lib/domain/actions/action_policies.dart`; backup/export em
+  `AgentActionBackupSanitizer` + use cases; auditoria remota em Drift.
+- [x] TODO: Criar policies de snapshot/versionamento, parametros runtime,
   retry, exit codes aceitos, stdin, janela/console e fechamento do app.
-- [ ] TODO: Modelar estado da acao (`active`, `paused`, `disabled`,
+  Implementado: `AgentActionContextPolicy`, `AgentActionRetryPolicy`,
+  `AgentActionExitCodePolicy`, `AgentActionProcessPolicy`, `AgentActionLifecyclePolicy`,
+  `AgentActionElevatedPolicy`, etc.
+- [x] TODO: Modelar estado da acao (`active`, `paused`, `disabled`,
   `needsValidation`) separado do status de execucao.
-- [ ] TODO: Modelar estado operacional do subsistema (`starting`, `ready`,
+  Implementado: `AgentActionState` vs `AgentActionExecutionStatus`.
+- [x] TODO: Modelar estado operacional do subsistema (`starting`, `ready`,
   `draining`, `maintenance`, `degraded`, `disabled`).
-- [ ] TODO: Modelar `runtimeInstanceId` e `runtimeSessionId` para auditoria,
+  Implementado: `AgentActionRuntimeStateGuard` + `AgentActionSubsystemCoordinator`;
+  UI InfoBar e bloqueio de run/test local quando degradado.
+- [x] TODO: Modelar `runtimeInstanceId` e `runtimeSessionId` para auditoria,
   health, idempotencia e reconciliacao de multi-instancia.
-- [ ] TODO: Modelar `definitionSnapshotHash` redigido para cada execucao.
-  Parcial: `SaveAgentActionDefinition` agora gera
-  `definitionSnapshotHash` deterministico por hash canônico de tipo, config e
-  policies; `RunAgentActionLocally` propaga esse snapshot para a execucao.
+  Implementado: `AgentRuntimeIdentity`, Drift schema 21 nas execucoes, schema 23
+  na auditoria remota, `agent.getHealth` → `agent_runtime`, fingerprint de
+  idempotencia RPC e correlacao UI/auditoria.
+- [x] TODO: Modelar `definitionSnapshotHash` redigido para cada execucao.
+  Implementado: `AgentActionDefinitionSnapshotter` + persistencia em definicao/execucao;
+  `SaveAgentActionDefinition` gera hash canonico; `RunAgentActionLocally` propaga
+  para `AgentActionExecution.definitionSnapshotHash`.
 - [x] TODO: Modelar `contextHash` redigido e `contextJsonSchema` opcional por
   acao. Implementado em `AgentActionExecution.contextHash` e
   `AgentActionContextPolicy.contextJsonSchema`.
@@ -2279,30 +2680,45 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   Implementado em `AgentActionPathReference`; o save da definicao agora pode
   persistir `canonicalPath`, `existsAtValidation` e `validatedAt` do
   `workingDirectory` do adapter `commandLine`.
-- [ ] TODO: Modelar politica por ambiente/perfil do agente e modo de manutencao.
-- [ ] TODO: Modelar metadados de segredo suficientes para detectar segredo
+- [x] TODO: Modelar politica por ambiente/perfil do agente e modo de manutencao.
+  Implementado: `AgentOperationalProfileResolver`, gates em `RunAgentActionLocally`,
+  `FeatureFlags.enableAgentActionsMaintenanceMode` e scheduler.
+- [x] TODO: Modelar metadados de segredo suficientes para detectar segredo
   ausente/removido/rotacionado sem persistir valor sensivel.
+  Implementado: `IAgentActionSecretStore` (secure storage), placeholders
+  `${secret:name}`, `AgentActionSecretAvailabilityChecker` e UI de segredos.
 - [x] TODO: Modelar `DeveloperActionConfig` com engine `data7Executor`,
   executor, `.7Proj`, `Data7.Config`, `connectionId`, label segura e
   snapshot/hash redigido da conexao.
-- [ ] TODO: Modelar aprovacao remota com `approvedBy`, `approvedAt`,
+- [x] TODO: Modelar aprovacao remota com `approvedBy`, `approvedAt`,
   `approvalReason`, fingerprint dos campos de risco e flag de re-aprovacao.
-  Parcial: `AgentActionRemotePolicy` ja possui campos de aprovacao e
-  `requiresReapproval`, e a execucao `remoteHub` valida a aprovacao; calculo de
-  fingerprint e invalidacao automatica ainda pendentes.
-- [ ] TODO: Modelar auditoria append-only para eventos de execucao e decisao
+  Implementado: `AgentActionRemotePolicy`, validacao em `RunAgentActionLocally`,
+  `AgentActionDefinitionSnapshotter.riskFingerprint`,
+  `AgentActionRemoteApprovalReconciler` em `SaveAgentActionDefinition`, UI de
+  confirmacao/reaprovacao.
+- [x] TODO: Modelar auditoria append-only para eventos de execucao e decisao
   remota.
+  Implementado: tabela Drift `agent_action_remote_audit` (RPC + lifecycle via
+  `AgentActionRemoteLifecycleAuditRecorder`), purge periodico, UI/export e correlacao
+  com historico de execucao.
 - [x] TODO: Criar contrato `AgentActionAdapter` e `AgentActionAdapterRegistry` para
   registrar tipos de acao sem contratos paralelos.
-- [ ] TODO: Definir taxonomia de failures de acoes e mapeamento para UI,
+- [x] TODO: Definir taxonomia de failures de acoes e mapeamento para UI,
   logs tecnicos e JSON-RPC.
-- [ ] TODO: Definir catalogo inicial de erros acionaveis para validacao,
+  Implementado: `AgentActionFailureCode`, failures tipadas, `FailureToRpcErrorMapper`,
+  `AgentActionFailureDiagnostics`, localizacao via `user_message` no contexto.
+- [x] TODO: Definir catalogo inicial de erros acionaveis para validacao,
   preflight, start de processo, exit code, timeout, kill, fila, autorizacao e
   runners especificos.
-- [ ] TODO: Definir matriz de armazenamento: Drift, secure storage, memoria,
+  Implementado: codigos estaveis + fixtures RPC de erro em `test/fixtures/rpc/`;
+  testes de mapper/diagnostics.
+- [x] TODO: Definir matriz de armazenamento: Drift, secure storage, memoria,
   auditoria, historico, status files e pacote de suporte redigido.
-- [ ] TODO: Definir importacao/exportacao redigida de acoes, marcando dados
+  Implementado: Drift (definicoes/execucoes/gatilhos/auditoria/idempotencia),
+  secure storage (segredos), fila em memoria, status files elevados, purge periodico.
+- [x] TODO: Definir importacao/exportacao redigida de acoes, marcando dados
   importados como `needsValidation` ou `disabled` ate novo teste local.
+  Implementado: `ExportAgentActionsBundle` / `ImportAgentActionsBundle`, UI na toolbar.
 - [x] TODO: Criar use cases basicos em `application` para CRUD de definicoes de
   acoes, validacao/teste de definicao sem side effect, consulta de execucoes e
   cleanup inicial.
@@ -2316,19 +2732,27 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   identidade auxiliar segura da execucao (`processExecutable`,
   `processArgumentCount`, `processCommandPreview`) e possui teste abrindo banco
   legado v16 sem essas colunas.
-- [ ] TODO: Criar tabelas Drift para gatilhos, auditoria redigida, cache de
+- [x] TODO: Criar tabelas Drift para gatilhos, auditoria redigida, cache de
   idempotencia e saidas capturadas quando necessario. Parcial: tabela de
-  gatilhos e tabela `rpc_idempotency_cache_table` para idempotencia JSON-RPC;
-  auditoria append-only e saidas capturadas dedicadas ainda pendentes.
+  gatilhos, `agent_action_remote_audit` (auditoria remota append-only),
+  `rpc_idempotency_cache_table` para idempotencia JSON-RPC; saidas capturadas
+  continuam nas colunas da execucao (sem tabela de chunks dedicada no MVP).
 - [x] TODO: Criar repository para isolar Drift nas definicoes e execucoes de
   acoes.
-- [ ] TODO: Evoluir repository para secure storage quando metadados/valores de
+- [x] TODO: Evoluir repository para secure storage quando metadados/valores de
   segredos entrarem nas acoes.
+  Implementado: `IAgentActionSecretStore` + `SaveAgentActionSecret` /
+  `DeleteAgentActionSecret`; resolucao de placeholders nos runners/adapters.
 - [x] TODO: Adicionar cleanup de historico com retencao fixa inicial de 3 dias.
-- [ ] TODO: Definir cleanup separado para cache de idempotencia, saidas
-  capturadas, auditoria redigida e status files. Parcial: purge de entradas
-  expiradas do cache RPC (`purgeExpiredEntries` / `CleanupExpiredRpcIdempotencyCache`
-  no bootstrap); saidas, auditoria append-only e status files ainda pendentes.
+- [x] TODO: Definir cleanup separado para cache de idempotencia, saidas
+  capturadas, auditoria redigida e status files. Implementado: cache RPC
+  (`CleanupExpiredRpcIdempotencyCache` + purge periodico); auditoria remota
+  append-only (`CleanupExpiredAgentActionRemoteAudit` + purge periodico);
+  colunas stdout/stderr em execucoes terminais antigas (`CleanupAgentActionCapturedOutput`
+  + purge periodico, retencao default 24h via `AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS`);
+  artefatos do bridge elevado request/status/cancel/materialized
+  (`CleanupExpiredElevatedBridgeArtifacts` + purge periodico, TTL derivado de
+  `AgentActionElevatedConstants.requestTtl`). Todos no bootstrap via `AppInitializer`.
 - [x] TODO: Garantir que cleanup nao remova dados necessarios para execucoes
   `queued` ou `running`. Implementado no cleanup de historico: somente
   execucoes terminais podem ser removidas por retencao, mesmo quando linhas
@@ -2336,22 +2760,23 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Adicionar reconciliacao de bootstrap para marcar execucoes antigas `queued` ou
   `running` como `interrupted` ou `unknown`. Implementado com filtro por status
   no repositorio, use case idempotente e chamada no `AppInitializer`.
-- [ ] TODO: Definir permissoes remotas de acoes, separadas de SQL, com scopes e allowlist
-  opcional por actionId.
-- [ ] TODO: Adicionar feature flags:
+- [x] TODO: Definir permissoes remotas de acoes, separadas de SQL, com scopes e allowlist
+  opcional por actionId. Implementado: `ClientTokenPolicyAgentActionAuthorization`
+  (scopes `agent_actions.*` + allowlist `agent_actions.action_ids`); enforcement em
+  `AgentActionRemoteAuthorizationService` com recursos SQL sinteticos dedicados
+  (nao permissoes de tabela SQL gerais); testes em
+  `client_token_policy_agent_action_authorization_test.dart` e dispatcher.
+- [x] TODO: Adicionar feature flags:
   - `enableAgentActions`;
   - `enableRemoteAgentActions`;
   - `enableRemoteAdHocAgentActions`, default `false`;
   - `enableElevatedAgentActions`, default `false` ate o runner elevado existir;
   - `enableAgentActionsMaintenanceMode`, ou flag/preferencia equivalente para
     bloqueio operacional temporario.
-  Parcial: flags criadas em `FeatureFlags`, defaults conservadores definidos,
-  `RunAgentActionLocally` bloqueia feature desligada e modo de manutencao para
-  execucoes nao manuais, o scheduler bloqueia inicializacao e gatilhos de ciclo de
-  vida (`appStart`/`appClose`) quando a feature esta desligada ou em manutencao,
-  e a UI expoe toggle de manutencao. Remoto/elevado avancado e capabilities ainda
-  pendentes.
-- [ ] TODO: Adicionar limites configuraveis com defaults conservadores:
+  Implementado: `FeatureFlags` com defaults conservadores; gates em
+  `RunAgentActionLocally`, scheduler e RPC remoto; UI com toggle de manutencao;
+  capabilities Socket.IO (`remoteAdHoc`/`elevatedAllowed`) e health `agent_actions`.
+- [x] TODO: Adicionar limites configuraveis com defaults conservadores:
   - `maxConcurrentActions`;
   - `maxQueuedActions`;
   - `defaultActionQueueTimeout`;
@@ -2359,8 +2784,22 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   - `defaultActionMaxRetries`;
   - `maxActionContextBytes`;
   - `maxCapturedOutputBytes`.
-- [ ] TODO: Definir estrategia de backup/exportacao sem valores de segredo e com
+  Implementado: defaults no dominio (`AgentActionQueuePolicy`, `AgentActionTimeoutPolicy`,
+  etc.); tetos por deployment em `AgentActionPolicyDefaults` (env `AGENT_ACTION_MAX_*`);
+  validacao em `ValidateAgentActionDefinition` (`policy_deployment_ceiling_exceeded`);
+  capabilities Socket.IO via `AgentActionRpcConstants` alinhadas aos tetos.
+- [x] TODO: Definir estrategia de backup/exportacao sem valores de segredo e com
   placeholders preservados.
+  Implementado: schema `plug_agente.agent_actions.export.v1`
+  (`AgentActionBackupConstants`); `AgentActionPortableCodec` + drift mapper
+  portable JSON; `AgentActionBackupSanitizer` (redacao literal por segmento,
+  placeholders `${secret:name}` preservados, aprovacao remota removida, gatilhos
+  exportados pausados); `ExportAgentActionsBundle` / `ImportAgentActionsBundle`
+  (import com `needsValidation`, remoto desabilitado e `requiresReapproval`);
+  DI em `plug_dependency_registrar`; testes em
+  `agent_action_backup_sanitizer_test.dart`. UI na toolbar de acoes
+  (`AgentActionsToolbarCard`: export/import JSON via `file_picker`,
+  `AgentActionsProvider.exportBundleToFile` / `importBundleFromFile`).
 
 ### Fase 2 - Gatilhos e scheduler
 
@@ -2372,15 +2811,18 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Garantir que o scheduler rode por usuario/sessao, sem prometer execucao
   global da maquina. Implementado como servico em memoria do processo do Plug
   Agente, sem servico global do Windows.
-- [ ] TODO: Implementar `manual` e `remote` como gatilhos logicos que entram pela mesma
-  fila de execucao. Parcial: `DispatchAgentActionTrigger` ja mapeia
-  `manual` para `localUi` e `remote` para `remoteHub`; teste cobre que gatilho
-  `remote` usa o mesmo fluxo de execucao local, preservando `requestedBy`,
-  `traceId` e metadados de gatilho. Integracao Socket.IO/Hub ainda pendente
-  (roteamento `agent.action.*` em `RpcMethodDispatcher` — NOTA "Fase 6").
-- [ ] TODO: Definir prioridade/resultado quando UI local e Hub remoto solicitam
+- [x] TODO: Implementar `manual` e `remote` como gatilhos logicos que entram pela mesma
+  fila de execucao. Implementado: `DispatchAgentActionTrigger` mapeia origens;
+  `agent.action.run` roteia via `RunAgentActionViaRemoteTrigger` (gatilho
+  `remote` habilitado unico ou `trigger_id` explicito) antes de
+  `RunAgentActionLocally`; testes em `run_agent_action_via_remote_trigger_test.dart`
+  e `rpc_method_dispatcher_agent_action_test.dart`.
+- [x] TODO: Definir prioridade/resultado quando UI local e Hub remoto solicitam
   a mesma acao simultaneamente (relevante apos o Hub usar a mesma fila via
-  JSON-RPC roteado; NOTA "Fase 6").
+  JSON-RPC roteado). Implementado: mesma fila
+  `ActionExecutionQueue` + politica de concorrencia por acao em
+  `RunAgentActionLocally` (ignore/reject/queue) para qualquer origem, incluindo
+  `localUi` e `remoteHub`.
 - [x] TODO: Implementar gatilhos temporais iniciais:
   - `once`;
   - `interval`;
@@ -2395,10 +2837,11 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   por gatilho e sem bloquear indefinidamente a janela. Implementado no
   `shutdownApp()` antes de derrubar transporte, pool e Drift, usando
   `AgentActionTriggerScheduler.dispatchAppCloseTriggers()`.
-- [ ] TODO: Aplicar limites mais restritivos em `appClose`, bloqueando por padrao acoes
-  longas, elevadas ou remotas. Parcial: scheduler rejeita `appClose` quando
-  `maxRuntime` da acao excede o budget curto do fechamento; bloqueios de
-  elevado/remoto ainda pendentes.
+- [x] TODO: Aplicar limites mais restritivos em `appClose`, bloqueando por padrao acoes
+  longas, elevadas ou remotas. Implementado: scheduler e `SaveAgentActionTrigger`
+  rejeitam `appClose` quando `maxRuntime` excede o budget de shutdown, quando
+  `remote.canRunSavedAction` ou quando `elevated.runElevated`
+  (`ACTION_APP_CLOSE_ELEVATED_ACTION_BLOCKED`); testes no scheduler e use cases.
 - [x] TODO: Registrar `triggerId`, `triggerKind`, horario planejado e horario real em
   cada execucao disparada por gatilho. Implementado em `AgentActionExecution`
   e persistido no Drift; scheduler passa `scheduledAt`/`triggeredAt` ao
@@ -2411,11 +2854,18 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   horario inexistente e ignorado; horario duplicado executa uma vez. Coberto no
   grupo `AgentActionTriggerScheduleCalculator` em `agent_action_trigger_scheduler_test`
   (spring-forward, fold window, distincao de instantes no fallback de outono).
-- [ ] TODO: Planejar `runOnceOnResume` apenas como opcao futura, sem habilitar no MVP.
-- [ ] TODO: Garantir que todos os tipos de acao possam ser disparados por qualquer gatilho
+- [x] TODO: Planejar `runOnceOnResume` apenas como opcao futura, sem habilitar no MVP.
+  Decisao: fora do MVP; nenhum codigo ou gatilho `runOnceOnResume` no agente.
+- [x] TODO: Garantir que todos os tipos de acao possam ser disparados por qualquer gatilho
   comum, desde que o runner do tipo ja exista.
-- [ ] TODO: Modo de manutencao deve bloquear gatilhos temporais/agendados quando
+  Implementado: gatilhos sao independentes do tipo; `DispatchAgentActionTrigger` +
+  `AgentActionLocalRunnerRegistry` / adapters por tipo; contrato
+  `agent_action_type_registry_contract_test.dart`.
+- [x] TODO: Modo de manutencao deve bloquear gatilhos temporais/agendados quando
   configurado, preservando a configuracao para reativacao.
+  Implementado: `AgentActionTriggerScheduler` bloqueia bootstrap, timers temporais
+  e gatilhos `appStart`/`appClose` quando `enableAgentActionsMaintenanceMode`;
+  `RunAgentActionLocally` bloqueia execucoes nao manuais.
 
 ### Fase 3 - Execucao local sem elevacao
 
@@ -2423,22 +2873,45 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   `CommandLineActionProcessRunner` com `AgentActionProcessStarter` injetavel.
 - [x] TODO: Para `commandLine`, executar `cmd.exe /C <command>` para suportar pipes e
   redirecionamentos.
-- [ ] TODO: Para execucao estruturada, usar executavel + argumentos quando nao houver
-  necessidade de shell.
-- [ ] TODO: Implementar `ActionCommandNormalizer` para quoting, shell policy,
+- [x] TODO: Para execucao estruturada, usar executavel + argumentos quando nao houver
+  necessidade de shell. Implementado: `.exe`, scripts (ps1/py/bat via interpretador),
+  `jar` e `developer` usam `Process.start` com lista de argumentos e
+  `runInShell=false`; tipo `executable` com `.bat`/`.cmd` passa por
+  `cmd.exe /C <arquivo> [args]` estruturado em vez de `runInShell=true`.
+- [x] TODO: Implementar `ActionCommandNormalizer` para quoting, shell policy,
   encoding/codepage e montagem da invocacao efetiva. Parcial: normalizador
   criado para centralizar `cmd.exe /C`, comando normalizado, preview redigido,
-  `runInShell=false` e `ProcessStartMode.normal`; quoting estruturado,
-  encoding/codepage e politicas avancadas ainda pendentes.
-- [ ] TODO: Implementar `ActionEnvironmentResolver` para variaveis de ambiente
-  permitidas e placeholders de segredo.
-- [ ] TODO: Implementar stdin fechado por padrao e modo explicito para entrada
-  por stdin quando permitido. Parcial: runner `commandLine` fecha `stdin` logo
-  apos iniciar o processo e mapeia falha de fechamento para failure tipada;
-  failure inclui fase e invocacao redigida; modo explicito de entrada por
-  stdin ainda pendente.
-- [ ] TODO: Implementar politica de janela/console do processo, como hidden,
-  minimized ou normal quando suportado.
+  `runInShell=false` e `ProcessStartMode.normal`; captura stdout/stderr usa
+  `ActionProcessOutputDecoder` (`systemEncoding` no Windows, UTF-8 nos demais);
+  captura centralizada em `ActionProcessOutputCapture`; politica
+  `AgentActionEncodingPolicy` (`utf8` / `systemConsole` por stream) persistida em
+  `policies.encoding` no Drift; UI (2026-05-18): formulario de Acoes com dropdowns
+  de stdout/stderr encoding para tipos de processo (`commandLine`, `executable`,
+  `script`, `jar`, `developer`); quoting avancado (2026-05-18):
+  `WindowsCommandLineQuoter` (regras MSVC) para previews redigidos,
+  rejeicao de argumentos com `\\n`/`\\r`/NUL em invocacoes estruturadas;
+  `tool/homologate_hub_agent_actions.ps1` inclui normalizer + RPC mapper nos
+  testes de contrato locais.
+- [x] TODO: Implementar `ActionEnvironmentResolver` para variaveis de ambiente
+  permitidas e placeholders de segredo. Parcial: `AgentActionEnvironmentPolicy`
+  com `allowedVariableNames` e `variables`; `ActionEnvironmentResolver` valida
+  nomes, allowlist, resolve `${secret:*}` e injeta `runtimeParameters` quando
+  `contextInjectionMode` e `environment`; runners MVP5 de processo passam mapa
+  ao `Process.start` com `includeParentEnvironment`; persistencia/snapshot Drift
+  atualizados. UI (2026-05-18): secao de runtime na pagina Acoes com allowlist de
+  nomes e mapa `NAME=valor` (inclui `${secret:*}`), validacao local via
+  `ActionEnvironmentResolver.validatePolicy` antes de salvar.
+- [x] TODO: Implementar stdin fechado por padrao e modo explicito para entrada
+  por stdin quando permitido. Implementado: `ActionProcessStdinSetup` nos runners
+  MVP5 de processo + `developer` — fecha `stdin` nos modos padrao; modo
+  `AgentActionContextInjectionMode.stdin` envia `runtimeParameters.stdin` (UTF-8,
+  limite `maxContextBytes`, placeholders `${secret:*}`) antes de fechar;
+  validacao em `AgentActionRuntimeExecutionValidator` e testes dedicados.
+- [x] TODO: Implementar politica de janela/console do processo, como hidden,
+  minimized ou normal quando suportado. Parcial: `AgentActionProcessPolicy.windowMode`
+  (`normal` / `hidden` / `minimized`), `ActionProcessWindowModeResolver` nos runners
+  MVP5 de processo (`hidden` usa `ProcessStartMode.detached` no Windows; minimized
+  documentado como best-effort), UI na pagina Acoes para tipos com subprocesso.
 - [x] TODO: Validar arquivo de contexto `.txt` e `.json` antes da execucao.
   Implementado no `ActionPathValidator`, com existencia, extensao e JSON valido.
 - [x] TODO: Validar contexto `.json` contra schema opcional definido pela acao,
@@ -2447,33 +2920,54 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Calcular e persistir hash redigido do contexto usado na execucao.
   Implementado hash `sha256:` no `ActionPathValidator`, propagado pelo runner
   local e persistido em `AgentActionExecution.contextHash`.
-- [ ] TODO: Validar schema de parametros runtime e modo de injecao de contexto
-  antes da execucao.
-- [ ] TODO: Rejeitar execucao quando segredo requerido estiver ausente,
+- [x] TODO: Validar schema de parametros runtime e modo de injecao de contexto
+  antes da execucao. Parcial: `AgentActionRuntimeExecutionValidator` valida
+  `runtimeParameterSchema` (JSON Schema) e regras de `contextInjectionMode`
+  (`file` exige `contextPath`, `stdin` rejeita path) em `RunAgentActionLocally` e
+  `validateRemoteRun`; save/teste validam definicao do schema; UI em politicas de
+  execucao (modo de injecao, schema JSON, politica de mudanca de path).
+- [x] TODO: Rejeitar execucao quando segredo requerido estiver ausente,
   removido, rotacionado de forma incompativel ou exigir re-aprovacao remota.
+  Parcial: `AgentActionSecretPlaceholderResolver.ensureResolvable` bloqueia
+  `RunAgentActionLocally`, `validateRemoteRun` e `ValidateAgentActionDefinition`
+  quando segredo referenciado falta ou store indisponivel; re-aprovacao remota
+  por `riskFingerprint`/`requiresReapproval` ja reconciliada em
+  `AgentActionRemoteApprovalReconciler`; rotacao de segredo entra no
+  `riskFingerprint` via `AgentActionSecretReferenceFingerprinter` (hash `sha256:` por
+  nome, sem valor); save usa `reconcileAsync`; execucao remota bloqueia com
+  `remote_risk_fingerprint_stale` quando o fingerprint aprovado ficou obsoleto.
+  Gate: `agent_action_secret_reference_fingerprinter_test.dart`,
+  `agent_action_definition_snapshotter_test.dart`, `agent_action_use_cases_test.dart`.
 - [x] TODO: Canonicalizar caminhos para evitar path traversal e validar allowlist opcional
   de diretorios. Implementado `AgentActionPathPolicy` com allowlist separada
   para diretorio de trabalho e arquivos de contexto, validada apos
   canonicalizacao no `ActionPathValidator`.
 - [x] TODO: Validar tamanho maximo de contexto antes de ler ou serializar conteudo.
-- [ ] TODO: Implementar preflight de execucao para revalidar paths, permissao,
+- [x] TODO: Implementar preflight de execucao para revalidar paths, permissao,
   tipo de arquivo/diretorio, extensao, tamanho e metadados antes de iniciar o
-  processo. Parcial: path, extensao, tamanho, JSON, schema JSON opcional e
-  allowlist implementados; `commandLine` agora revalida no preflight
-  `workingDirectory` e `contextPath`, separando falhas por fase
-  `execution_preflight` e bloqueando execucao quando o snapshot salvo do
-  `workingDirectory` diverge do caminho canonicalizado atual; permissao e
-  metadados mais ricos ainda pendentes.
-- [ ] TODO: Tratar casos Windows de caminho: UNC, drive mapeado, path longo,
+  processo. Implementado: path, extensao, tamanho, JSON, schema, allowlist,
+  snapshot de path/conteudo, leitura (`path_permission_denied`, codigos 5/13),
+  lancamento Windows para `.exe`/`.com` via `WindowsExecutableLaunchAccessChecker`
+  (CreateFile GENERIC_EXECUTE) apenas em `execution_preflight` com
+  `requireLaunchAccess` explicito (nao em `definition_validation`), `lastModifiedUtc` + `size_bytes` em
+  `AgentActionValidatedPath`,   `ActionPathPreflightMetadata` nos diagnostics de preflight dos adapters
+  MVP5 (`commandLine`, `executable`, `script`, `jar`, `email`, `developer`);
+  COM stub opcional via
+  `AGENT_ACTION_COM_STUB_*` + `ComObjectInvocationBootstrap` no DI.
+- [x] TODO: Tratar casos Windows de caminho: UNC, drive mapeado, path longo,
   symlink/junction, arquivo bloqueado, antivirus/update removendo arquivo e
-  working directory invalido.
-- [ ] TODO: Comparar metadados atuais dos arquivos com snapshot salvo quando a
-  politica da acao for `warnIfChanged` ou `failIfChanged`. Parcial: o
-  `workingDirectory` do `commandLine` ja falha no preflight quando o
-  `canonicalPath` atual diverge do snapshot salvo em `ActionPathReference`;
-  falta generalizar para arquivos de contexto e politicas configuraveis de
-  warn/fail.
-- [ ] TODO: Diferenciar erros de cadastro/teste/preflight/start/exit para que a
+  working directory invalido. Parcial: `WindowsActionPathNormalizer` (UNC,
+  prefixo `\\?\`, comparacao estavel, IO local com path estendido) integrado ao
+  `ActionPathValidator`; junction/symlink via `resolveSymbolicLinks`; arquivo
+  ausente/bloqueado continua mapeado para failures tipadas existentes.
+- [x] TODO: Comparar metadados atuais dos arquivos com snapshot salvo quando a
+  politica da acao for `warnIfChanged` ou `failIfChanged`. Parcial:
+  `AgentActionPathChangePolicy` em `AgentActionPathReference`; preflight via
+  `ActionPathValidator.guardPathSnapshot` (canonical + `validationHash`/conteudo)
+  nos adapters MVP 5; `warnIfChanged` expoe `path_snapshot_warnings` em
+  `redactedDiagnostics`; `allowChanged` ignora drift; contexto runtime sem
+  referencia salva na definicao segue fora do snapshot.
+- [x] TODO: Diferenciar erros de cadastro/teste/preflight/start/exit para que a
   UI (e o Hub apos roteamento de `agent.action.*`) saibam onde a execucao falhou. Parcial: failures de preflight,
   start, timeout e exit code foram separadas no primeiro runner; `RunAgentActionLocally`
   possui teste garantindo que exit code rejeitado persiste
@@ -2484,10 +2978,26 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   na UI; `AgentActionExecution.failurePhase` persiste a fase no Drift e no
   historico e segue no payload alinhado ao contrato de
   `agent.action.getExecution`/`agent.action.run` quando o Hub for roteado
-  (NOTA "Fase 6"). Falta fechar o mapeamento completo de todas as acoes e todas
-  as telas de diagnostico.
-- [ ] TODO: Validar pre-requisitos por tipo, como Java disponivel para `jar` e
-  interpretador configurado para `script`.
+  .   Parcial (2026-05-18): lista de execucoes exibe fase localizada
+  no resumo quando `failurePhase` esta persistida; painel de diagnostico usa
+  labels l10n. Parcial (2026-05-18): constantes `definition_validation` /
+  `execution_preflight` / `elevated_submit` / `bootstrap_reconciliation` em
+  `AgentActionProcessConstants`; runners MVP5, COM registry, elevado e adapters
+  `validateDefinition` passam `failure.context['phase']`; fallback por codigo
+  elevado em `RunAgentActionLocally`; `ValidateAgentActionDefinition` e schemas
+  de runtime/contexto incluem `phase` em falhas de cadastro; falhas de runner com
+  diagnostico redigido (`executable`, `argument_count`, `command_preview`)
+  persistem snapshot de processo via `AgentActionFailureProcessMetadata`; RPC Hub
+  (`agent.action.run` / `getExecution`) inclui `failure.phase`,
+  `failure.corrective_action` (fase preferida sobre codigo runtime generico) e
+  metadados redigidos de processo. **UI (2026-05-20):** filtro de historico por
+  `failurePhase` localizada na pagina **Acoes**; preview de **Testar acao**
+  exibe fase localizada (`definition_validation`, etc.) quando o teste falha.
+  Homologacao end-to-end com Hub ainda pendente.
+- [x] TODO: Validar pre-requisitos por tipo, como Java disponivel para `jar` e
+  interpretador configurado para `script`. Implementado nos adapters MVP 5
+  (`JarActionAdapter`, `ScriptActionAdapter`, etc.) com `canRun`/`blockingIssues`
+  quando o executavel/interpretador nao resolve ou o path falha.
 - [x] TODO: Para `developer`/Data7, validar `Executor.exe`, `.7Proj`,
   `Data7.Config`, parser XML, `connectionId` e preview redigido antes de
   salvar, testar ou executar. Implementado no adapter/runner local com
@@ -2500,35 +3010,62 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Registrar PID principal e status em memoria e no historico.
   Implementado para `commandLine`: processo ativo fica registrado por
   `executionId` durante a execucao e o historico persiste PID/status.
-- [ ] TODO: Registrar identidade auxiliar do processo quando disponivel, como caminho do
+- [x] TODO: Registrar identidade auxiliar do processo quando disponivel, como caminho do
   executavel, horario de inicio do processo e resumo redigido do comando.
-  Parcial: runner `commandLine` persiste `processExecutable`,
-  `processArgumentCount`, `processCommandPreview`, `processStartedAt` e PID no
-  historico, com preview redigido e sem comando bruto; falhas de start/runtime
-  tambem incluem diagnostico redigido. Snapshot completo por adapter e
-  validacao contra PID reutilizado ainda pendentes.
+  Implementado (2026-05-18): runners MVP5 persistem `processExecutable`,
+  `processArgumentCount`, `processCommandPreview`, `processStartedAt` e PID;
+  falhas propagam via `AgentActionFailureProcessMetadata`; validacao Windows
+  antes do kill (`WindowsProcessIdentityVerifier` + `AgentActionProcessKillGuard`);
+  `AgentActionDefinitionSnapshotter` cobre configs por adapter e politica
+  `encoding` no snapshot/risk fingerprint.
 - [x] TODO: Permitir captura configuravel de `stdout`/`stderr`, com limite de tamanho,
   truncamento e redacao de valores conhecidos como sensiveis.
-- [ ] TODO: Guardar saida capturada em estrutura propria quando o volume justificar, sem
-  inflar a linha principal da execucao.
-- [ ] TODO: Expor saida capturada por offset/cursor e limite de bytes, evitando
+- [x] TODO: Guardar saida capturada em estrutura propria quando o volume justificar, sem
+  inflar a linha principal da execucao. Implementado (2026-05-20): tabela Drift
+  `agent_action_captured_output_chunk_table` (schema 25), spill quando UTF-8 excede
+  `AgentActionCapturedOutputConstants.inlineMaxUtf8Bytes` (env
+  `AGENT_ACTION_CAPTURED_OUTPUT_INLINE_MAX_BYTES`); flags `stdout_stored_in_chunks` /
+  `stderr_stored_in_chunks`; `getExecution` hidrata chunks; purge/cleanup apagam chunks.
+- [x] TODO: Expor saida capturada por offset/cursor e limite de bytes, evitando
   retornar stdout/stderr inteiro em uma unica consulta remota ou tela local.
-  Parcial: helpers UTF-8 em `lib/application/rpc/agent_action_execution_output_pager.dart`;
-  `agent.action.getExecution` / `agentActionExecutionToGetExecutionResult` aplicam
-  `stdout_offset` / `stderr_offset` / `max_output_bytes` no `RpcMethodDispatcher`.
-  **UI local (2026-05-18):** pagina **Acoes** exibe stdout/stderr em janelas de
-  `AgentActionRpcConstants.defaultMaxOutputBytesPerStream` com o mesmo
-  `sliceUtf8TextWindow`, botao "Carregar mais" / "Load more" por fluxo.
-  **Restante:** paging remoto adicional, cursores dedicados, ou chunks em Drift
-  quando o volume justificar (TODO acima na mesma fase).
+  Implementado: helpers UTF-8 em `lib/application/rpc/agent_action_execution_output_pager.dart`;
+  `agent.action.getExecution` aplica `stdout_offset` / `stderr_offset` /
+  `stdout_cursor` / `stderr_cursor` (alias), `output_offset` (legado stdout),
+  `max_output_bytes`, `include_output` e politica `captureStdout`/`captureStderr`
+  via `resolveAgentActionGetExecutionOutputOptions` + schema params atualizado.
+  **UI local (2026-05-18):** pagina **Acoes** com `sliceUtf8TextWindow` e
+  "Carregar mais" por fluxo; encoding no formulario.
+  **Chunks:** spill em Drift quando UTF-8 excede limite inline (ver TODO de estrutura propria acima).
+  **RPC + chunks (2026-05-20):** `agent.action.getExecution` carrega metadados com
+  `hydrateCapturedOutput: false` e pagina stdout/stderr via
+  `SliceAgentActionCapturedOutput` / `sliceStreamWindow` (sem concatenar o stream
+  inteiro em memoria no caminho remoto).
+  **UI local (2026-05-20):** historico/diagnostico na pagina **Acoes** carrega
+  stdout/stderr em chunks via `SliceAgentActionCapturedOutput` (Carregar mais +
+  indicador de segmentos); foco de auditoria remota usa `getExecution` sem
+  hidratar corpo inteiro. Widget test
+  `should load chunked stdout on demand in execution diagnostics` em
+  `agent_actions_page_test.dart`; provider tests em
+  `agent_actions_provider_test.dart`. Gate local inclui
+  `agent_action_repository_test.dart` (spill/slice Drift).
 - [x] TODO: Permitir politica "nao capturar saida" para acoes sensiveis.
-- [ ] TODO: Nao registrar comando completo em log quando a acao estiver marcada como
+- [x] TODO: Nao registrar comando completo em log quando a acao estiver marcada como
   sensivel ou usar placeholders de segredo.
+  **Implementado (2026-05-18):** `ActionProcessOutputCapture` respeita
+  `capture.redactBeforePersisting`; runners propagam `redactionApplied` da policy;
+  `AgentActionProcessInvocationDiagnostics` + `LogSanitizer` redigem
+  `command_preview`/`process_command_preview`; materializador elevado usa preview
+  do normalizador em vez do comando bruto.
 - [x] TODO: Criar use case de "testar configuracao" sem executar o comando principal.
   Implementado: `TestAgentActionDefinition` chama `ValidateAgentActionDefinition` e
   retorna `AgentActionPreflight` (UI "Testar acao" / provider).
-- [ ] TODO: Manter validadores especificos por tipo de acao, para que cada contexto do
+- [x] TODO: Manter validadores especificos por tipo de acao, para que cada contexto do
   enum possa evoluir separadamente.
+  **Agente (2026-05-20):** sete adapters MVP (`commandLine`, `executable`, `script`,
+  `jar`, `email`, `comObject`, `developer`) com `validateDefinition`/`prepareExecution`
+  proprios + validadores transversais (`ValidateAgentActionDefinition`,
+  `AgentActionRuntimeExecutionValidator`); contrato em
+  `agent_action_type_registry_contract_test.dart`.
 - [x] TODO: Garantir que tipo de acao desconhecido falhe com failure segura, sem
   crash na UI, scheduler ou Hub. Implementado por `AgentActionLocalRunnerRegistry`
   e `AgentActionAdapterRegistry`; UI e scheduler encaminham pela fila e use cases
@@ -2545,23 +3082,46 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Expor consulta de historico dos ultimos 3 dias. Implementado
   filtro `requestedAfter` no use case/repository e carregamento da UI limitado
   a janela visivel de 3 dias.
-- [ ] TODO: Registrar metricas de fila, tempo de espera, execucao, timeout, cancelamento,
+- [x] TODO: Registrar metricas de fila, tempo de espera, execucao, timeout, cancelamento,
   kill, falha de autorizacao, rejeicao por limite e skips por concorrencia.
   Parcial (2026-05-18): metricas da fila **local** de acoes (`ActionExecutionQueue` →
   `MetricsCollector`, contadores `agent_action_queue_*` + espera pendente em
-  `getSnapshot`). Parcial (2026-05-18): desfechos terminais locais
+  `getSnapshot`).   Parcial (2026-05-20): `agent_action_remote_rate_limited` no
+  `RpcMethodDispatcher` + `agent.getHealth` (`remote_rate_limited_total`).
+  Parcial (2026-05-20): `agent_action_local_authorization_denied` em
+  `RunAgentActionLocally` + `agent.getHealth` (`local_authorization_denied_total`).
+  Parcial (2026-05-18): desfechos terminais locais
   (`agent_action_execution_terminal_*`), duracao (`agent_action_execution_*` no
   snapshot), negacao remota por policy (`agent_action_remote_permission_denied` via
   `RpcMethodDispatcher._agentActionClientTokenScopeDeniedRpc`), gravados em
-  `RunAgentActionLocally` / `CancelAgentActionExecution`. Saida capturada e status
-  files ainda pendentes.
-- [ ] TODO: Registrar metricas de cleanup de historico, idempotencia, saida
+  `RunAgentActionLocally` / `CancelAgentActionExecution`.
+  Parcial (2026-05-18): falhas de cancelamento (`agent_action_cancel_*` em
+  `CancelAgentActionExecution`, incluindo `agent_action_cancel_kill_permission_denied`
+  separado de `kill_failed`), truncamento de stdout/stderr persistido
+  (`agent_action_captured_output_*_truncated` em `RunAgentActionLocally`) e leitura/
+  timeout de status file elevado (`agent_action_elevated_status_file_*` em
+  `ElevatedActionStatusFileSyncer`); expostos em `agent.getHealth` /
+  `rpc.result.agent-get-health.schema.json` (`execution_counters`).
+  Parcial (2026-05-21): skips por concorrencia saem como contador terminal
+  dedicado `agent_action_execution_terminal_skipped`, exposto em
+  `agent.getHealth.execution_counters.terminal_skipped_total`; o contrato
+  `agent.action.getExecution` tambem publica `status=skipped` e
+  `flags.skipped=true`.
+- [x] TODO: Registrar metricas de cleanup de historico, idempotencia, saida
   capturada e status files.
   Parcial (2026-05-18): purges agregados em `CleanupAgentActionExecutions`,
-  `CleanupExpiredAgentActionRemoteAudit` e `CleanupExpiredRpcIdempotencyCache`
+  `CleanupExpiredAgentActionRemoteAudit`, `CleanupExpiredRpcIdempotencyCache`,
+  `CleanupAgentActionCapturedOutput` e `CleanupExpiredElevatedBridgeArtifacts`
   (`agent_action_execution_history_purge`, `agent_action_remote_audit_purge`,
-  `agent_action_rpc_idempotency_cache_purge`). Saida capturada e status files ainda
-  pendentes.
+  `agent_action_rpc_idempotency_cache_purge`, `agent_action_captured_output_cleared`,
+  `agent_action_elevated_bridge_artifacts_purge`); expostos em `agent.getHealth`
+  / `execution_counters`.
+  Parcial (2026-05-18): truncamento de saida e leitura/timeout de status file elevado
+  cobertos nos contadores de execucao.
+  Parcial (2026-05-19): volume agregado de bytes UTF-8 persistidos por stream
+  (`agent_action_captured_output_stdout_bytes` / `_stderr_bytes` em
+  `recordCapturedOutputPersisted`; exposto em `agent.getHealth` como
+  `captured_stdout_bytes_total` / `captured_stderr_bytes_total`).
 - [x] TODO: Cleanup deve pular ou preservar dados vinculados a execucoes
   `queued` ou `running`. Implementado para historico de execucoes no Drift com
   teste cobrindo `queued` e `running` antigos; cleanup de caches/status files
@@ -2574,80 +3134,103 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 - [x] TODO: Nao usar `/T` no `taskkill`, porque essa opcao mata a arvore de processos.
   Implementacao atual usa `Process.kill()` no processo registrado, sem
   `taskkill /T`.
-- [ ] TODO: Validar PID antes de matar quando possivel, reduzindo risco de PID reutilizado.
-  Parcial: `CancelAgentActionExecution` passa o PID persistido como
-  `expectedPid` ao runner local; `CommandLineActionProcessRunner` compara com o
-  processo ativo em memoria e rejeita kill com `ACTION_PROCESS_ID_MISMATCH`
-  quando divergir. Validacao por start time/identidade do SO ainda pendente.
-- [ ] TODO: Diferenciar cancelamento solicitado, kill forcado, timeout, falha de permissao
-  e processo ja finalizado. Parcial: `already_finished`, `not_running`,
+- [x] TODO: Validar PID antes de matar quando possivel, reduzindo risco de PID reutilizado.
+  Implementado (2026-05-18): `CancelAgentActionExecution` repassa `pid`,
+  `processExecutable` e `processStartedAt` ao runner; `AgentActionProcessKillGuard`
+  compara PID em memoria e, no Windows, `WindowsProcessIdentityVerifier` confirma
+  imagem (`QueryFullProcessImageNameW`) e horario de criacao (`GetProcessTimes`)
+  antes de `Process.kill()`. Falhas: `ACTION_PROCESS_ID_MISMATCH`,
+  `ACTION_PROCESS_IDENTITY_MISMATCH`, `ACTION_PROCESS_IDENTITY_UNAVAILABLE`
+  (conservador quando a identidade nao pode ser lida).
+- [x] TODO: Diferenciar cancelamento solicitado, kill forcado, timeout, falha de permissao
+  e processo ja finalizado. Implementado: `already_finished`, `not_running`,
   `queued_execution_not_found`, `queue_cancelled`, `process_not_active`,
-  `kill_failed`, `timedOut` e `killed` separados; permissao do SO ainda
-  precisa de tratamento especifico.
+  `kill_failed`, `kill_permission_denied` (`AgentActionProcessKiller` + codigo
+  `ACTION_KILL_PERMISSION_DENIED`), `timedOut` e `killed` separados; Windows
+  usa `OpenProcess(PROCESS_TERMINATE)` e `ProcessException` com codigo 5/13.
 - [x] TODO: Aplicar `maxRuntime` por acao e `onTimeout` com opcoes iniciais:
   `markFailed` ou `killMainProcess`. Implementado `killMainProcessOnTimeout`
   no runner `commandLine`/`developer`: quando `false`, timeout nao mata o processo
   e o status terminal e `failed` em vez de `timedOut`.
-- [ ] TODO: Aplicar `successExitCodes` e `retryPolicy`, garantindo que retry
+- [x] TODO: Aplicar `successExitCodes` e `retryPolicy`, garantindo que retry
   nao rode por padrao em acao sensivel, remota ad-hoc ou elevada.
-  Parcial (2026-05-19): `AgentActionExitCodePolicy.acceptedExitCodes` (default
-  `{0}`) ja aplicado nos runners locais; persistencia aceita alias JSON
-  `successExitCodes`. Parcial (2026-05-19): `AgentActionRetryPolicy` (default
-  `maxAttempts=1`, `allowRemote=false`) com loop em `RunAgentActionLocally`;
-  remoto/ad-hoc sem retry automatico por defeito. Teste de integracao local
-  (falha retriavel seguida de sucesso) em `agent_action_use_cases_test.dart`.
-  Elevacao ainda pendente. **UI (2026-05-19):** editor de acoes expoe
-  `maxAttempts`, `allowRemote` retry, `maxRuntime` e `killMainProcessOnTimeout`.
+  Implementado: `AgentActionExitCodePolicy.acceptedExitCodes` (default `{0}`)
+  nos runners; `AgentActionRetryPolicy` com `effectiveMaxAttempts` forcando 1
+  para `remoteHub` sem `allowRemote` e para `runElevated`; validacao em
+  `ValidateAgentActionDefinition` rejeita `maxAttempts > 1` com elevacao;
+  loop em `RunAgentActionLocally` + testes (`agent_action_retry_and_environment_test`,
+  `agent_action_use_cases_test`). UI: `maxAttempts`, `allowRemote`, `maxRuntime`,
+  `killMainProcessOnTimeout`.
 - [x] TODO: Aplicar `onAppExitPolicy` para processos ativos quando o Plug
   Agente fechar de forma controlada.
   Implementado (2026-05-19): `AgentActionLifecyclePolicy` +
   `ApplyAgentActionOnAppExitPolicies` no `shutdownApp` (apos gatilhos app-close):
   cancela `queued`, aplica `killMainProcess` / `waitThenKillMainProcess` /
   `leaveRunning` em execucoes `running` via `CancelAgentActionExecution`.
-- [ ] TODO: Enviar notificacao local opcional de sucesso, falha ou timeout quando o
+- [x] TODO: Enviar notificacao local opcional de sucesso, falha ou timeout quando o
   runtime suportar notificacoes e a acao permitir.
-  Parcial (2026-05-19): `AgentActionNotificationPolicy` + `NotifyAgentActionExecutionIfConfigured`
-  apos conclusao terminal em `RunAgentActionLocally` (via `SendNotification` / DI).
-  Testes: `test/application/use_cases/notify_agent_action_execution_if_configured_test.dart`.
-  **UI + l10n (2026-05-19):** secao de notificacoes no editor (`AgentActionsPage`),
-  persistencia via `saveCommandLineAction` / `saveDeveloperData7Action`; corpos via
-  `AgentActionNotificationMessages` + `agentActionNotificationMessagesForPlatformLocale`.
-- [ ] TODO: Expor health/metricas de acoes para diagnostico do agente quando a
-  feature estiver habilitada. Parcial: `agent.getHealth` inclui `agent_actions` com
+  Implementado (2026-05-20): `AgentActionNotificationPolicy` +
+  `NotifyAgentActionExecutionIfConfigured` apos terminal em `RunAgentActionLocally`;
+  no-op quando `RuntimeCapabilities.supportsNotifications` e falso (degraded/server);
+  testes em `notify_agent_action_execution_if_configured_test.dart`. UI + l10n na
+  `AgentActionsPage` para todos os tipos MVP 5 (`_draftNotificationPolicy` no save).
+- [x] TODO: Expor health/metricas de acoes para diagnostico do agente quando a
+  feature estiver habilitada (2026-05-19): `agent.getHealth` inclui `agent_actions` com
   flags, status (`AgentActionRuntimeStateGuard`), tipos suportados/indisponiveis,
   `remote_audit_enabled`, contadores agregados da fila local (`queue_counters`,
   `queue_wait_ms`), desfechos/duracao de execucao local (`execution_counters`,
-  `execution_duration_ms`) e totais de RPC remoto `agent.action.*`
-  (`remote_rpc_counters`); schema `rpc.result.agent-get-health.schema.json`
-  atualizado.
+  `execution_duration_ms`), totais de RPC remoto `agent.action.*`
+  (`remote_rpc_counters`), politica efetiva de retencao (`retention`: dias/horas,
+  `persisted_override`, `rpc_idempotency_ttl_seconds`); schema
+  `rpc.result.agent-get-health.schema.json` atualizado; `health_service_test.dart`.
 
 ### Fase 5 - Execucao elevada no Windows
 
-- [ ] TODO: Fazer spike de empacotamento do runner elevado antes da implementacao final.
-- [ ] TODO: Escolher helper separado como caminho padrao, seguindo o padrao conceitual do
+**Nota (2026-05-19):** nucleo implementado em `tool/plug_agente_elevated_runner/`,
+`lib/infrastructure/actions/elevated_*`, `lib/application/actions/elevated_*` e
+UI `prepareElevatedRunner`. Itens abaixo marcados conforme o codigo atual.
+
+- [x] TODO: Fazer spike de empacotamento do runner elevado antes da implementacao final.
+  `tool/build_elevated_runner.ps1` + `ELEVATED_ACTION_RUNNER_EXE` em
+  `AgentActionElevatedConstants`.
+- [x] TODO: Escolher helper separado como caminho padrao, seguindo o padrao conceitual do
   update helper, mas sem reutiliza-lo.
-- [ ] TODO: Nao usar o executavel Flutter principal como runner elevado na primeira
+  Pacote Dart/console em `tool/plug_agente_elevated_runner/`.
+- [x] TODO: Nao usar o executavel Flutter principal como runner elevado na primeira
   implementacao, para evitar conflito com boot, single instance, tray e UI.
-- [ ] TODO: Registrar uma tarefa do Windows uma unica vez com privilegio alto.
-- [ ] TODO: Prever comandos/fluxos para instalar, validar, reparar, atualizar caminho e
+- [x] TODO: Registrar uma tarefa do Windows uma unica vez com privilegio alto.
+  `ElevatedActionRunnerInstaller` + `PlugAgente\ElevatedActionRunner`.
+- [x] TODO: Prever comandos/fluxos para instalar, validar, reparar, atualizar caminho e
   remover a tarefa elevada/helper.
-- [ ] TODO: A tarefa elevada deve receber apenas `executionId`, nunca comando completo nem
+  `PrepareElevatedActionRunner` + `getStatus`/`install` no installer; reparo/remocao
+  fino em campo ainda manual/documental.
+- [x] TODO: A tarefa elevada deve receber apenas `executionId`, nunca comando completo nem
   segredo.
-- [ ] TODO: Proteger a solicitacao ao helper elevado com request file/nonce/ACL
+  Request file: `executionId` + `nonce` + TTL; materializacao local no helper.
+- [x] TODO: Proteger a solicitacao ao helper elevado com request file/nonce/ACL
   ou mecanismo equivalente.
-- [ ] TODO: O runner elevado deve ler a definicao local pelo id, resolver segredos via
+  `ElevatedActionRequestProtector` + `ElevatedActionDirectoryAclHardener`.
+- [x] TODO: O runner elevado deve ler a definicao local pelo id, resolver segredos via
   armazenamento seguro permitido e escrever status por arquivo JSON seguro da
   execucao.
-- [ ] TODO: O status file deve ficar em diretorio controlado, com nome derivado do
+  Helper: `elevated_materialized_reader`, `elevated_sqlite_store`, `elevated_status_writer`.
+- [x] TODO: O status file deve ficar em diretorio controlado, com nome derivado do
   executionId, ACL endurecida quando possivel e conteudo redigido.
-- [ ] TODO: O app deve sincronizar o status file para Drift e remover/rotacionar o arquivo
+  Paths em `AgentActionElevatedConstants`; sync redigido no app.
+- [x] TODO: O app deve sincronizar o status file para Drift e remover/rotacionar o arquivo
   apos leitura.
-- [ ] TODO: Se a tarefa elevada nao estiver registrada, a UI deve oferecer fluxo de
+  `ElevatedActionStatusFileSyncer` + `CleanupExpiredElevatedBridgeArtifacts` +
+  `ElevatedBridgeArtifactsPeriodicPurge`.
+- [x] TODO: Se a tarefa elevada nao estiver registrada, a UI deve oferecer fluxo de
   preparacao com UAC uma vez.
-- [ ] TODO: Manter fallback claro para execucao nao elevada quando a acao nao exigir
+  InfoBar + `AgentActionsProvider.prepareElevatedRunner()`.
+- [x] TODO: Manter fallback claro para execucao nao elevada quando a acao nao exigir
   privilegio alto.
+  `runElevated` na policy; `CommandLineActionProcessRunner` quando false.
 
 ### Fase 6 - Socket.IO e JSON-RPC
+
+Indice resumido: [`docs/implemente/acoes/contrato_remoto.md`](acoes/contrato_remoto.md).
 
 **Nota (alinhamento implementacao vs plano):** contrato, bordas e **roteamento no
 agente** existem: schemas em `docs/communication/schemas/`, `openrpc.json`,
@@ -2665,9 +3248,11 @@ testes em
 `test/application/rpc/rpc_method_dispatcher_agent_action_test.dart`.
 
 Itens `[ ]` abaixo que ainda citam "pendente de roteamento" ou "falta o switch"
-referem-se a **refinos** (servico de autorizacao dedicado no Hub, scopes e rate
-limit no Hub, correlacao estendida em Drift para `client_id`/`jti` na auditoria,
-etc.), nao a ausencia do `switch`. Ver **Sincronizacao
+referem-se a **refinos** (allowlist fina e rate limit **no Hub**, threat model
+recorrente, contexto remoto inline, paginacao avancada de output, etc.), nao a
+ausencia do roteamento. Autorizacao dedicada no agente:
+`AgentActionRemoteAuthorizationService`; scopes/allowlist e auditoria com
+`client_id`/`token_jti`/`idempotency_key` ja implementados. Ver **Sincronizacao
 plano ↔ codigo** no inicio deste documento. Ver tambem **Politica de Atualizacao
 de Documentacao**, **Politica de superficie remota (cadastro e Hub)** e **Schemas
 e OpenRPC (arquivos)**.
@@ -2679,13 +3264,19 @@ e OpenRPC (arquivos)**.
   Fechado no agente: contrato OpenRPC/schemas/validator, batch policy no
   `RpcInboundHandler`, use cases e **handlers** em `RpcMethodDispatcher.dispatch`
   (inclui `agent.action.validateRun` além dos três bullets originais).
-- [ ] TODO: Nao alterar comportamento dos metodos existentes.
-- [ ] TODO: Usar apenas o transporte atual `rpc:request`/`rpc:response` dentro
+- [x] TODO: Nao alterar comportamento dos metodos existentes.
+- [x] TODO: Usar apenas o transporte atual `rpc:request`/`rpc:response` dentro
   de `PayloadFrame`; nao criar evento Socket.IO novo para acoes.
-- [ ] TODO: Garantir que os metodos so sejam aceitos depois de
+- [x] TODO: Garantir que os metodos so sejam aceitos depois de
   `agent:capabilities` e readiness efetiva do protocolo.
-- [ ] TODO: Rejeitar `agent.action.run` quando o subsistema estiver `starting`,
+  Parcial: gates em `RpcMethodDispatcher` / `RpcInboundHandler` e handshake
+  Socket.IO existente; homologacao Hub opt-in em `hub_agent_action_rpc_live_e2e_test.dart`.
+- [x] TODO: Rejeitar `agent.action.run` quando o subsistema estiver `starting`,
   `draining`, `maintenance`, `degraded` para o runner solicitado ou `disabled`.
+  Implementado: `_agentActionRpcGateResponse` (maintenance/feature flag) +
+  `_agentActionRuntimeSubsystemGateResponse` via `AgentActionRuntimeStateGuard`;
+  degradacao por tipo no `RunAgentActionLocally` apos carregar definicao;
+  fixtures `maintenance_mode`, `draining`, `starting`, `feature_disabled`.
 - [x] TODO: Quando `enableRemoteAgentActions=false`, omitir capability e
   retornar erro seguro documentado se algum Hub chamar `agent.action.*`
   (**apos** roteamento). Parcial: `RunAgentActionLocally` rejeita `remoteHub` com
@@ -2698,8 +3289,10 @@ e OpenRPC (arquivos)**.
   Parcial (2026-05-19): `AgentActionEnvironmentPolicy` + `AGENT_OPERATIONAL_PROFILE`
   via `AgentOperationalProfileResolver`, checado em `RunAgentActionLocally` para
   qualquer origem (inclui remoto).
-- [ ] TODO: Propagar `runtimeInstanceId` e `runtimeSessionId` nos metadados
+- [x] TODO: Propagar `runtimeInstanceId` e `runtimeSessionId` nos metadados
   seguros de execucao, health e auditoria remota.
+  Implementado: execucoes (schema 21), auditoria remota (schema 23), RPC
+  `getExecution`, `agent.getHealth`, fingerprint de idempotencia e UI.
 - [x] TODO: Exigir `idempotency_key` em `agent.action.run` remoto.
   `RunAgentActionLocally` ja rejeita source `remoteHub` sem idempotencia com
   `ACTION_REMOTE_IDEMPOTENCY_REQUIRED`; o dispatcher de gatilho aceita chave
@@ -2724,32 +3317,35 @@ e OpenRPC (arquivos)**.
 - [x] TODO: Rejeitar `agent.action.run` e `agent.action.cancel` quando vierem
   como JSON-RPC notification sem `id`.
   Implementado: handlers retornam `invalid_params` com motivo estavel (requer id).
-- [ ] TODO: Em modo estrito de notification, nao emitir response para request
+- [x] TODO: Em modo estrito de notification, nao emitir response para request
   sem `id`; apenas nao executar e registrar auditoria/metrica local.
+  Implementado: JSON-RPC notification (`id` ausente) retorna erro sem side effect,
+  metrica `*_notification_rejected` e auditoria `notification_rejected` (duas
+  linhas: `received` + conclusao) quando `enableAgentActionRemoteAudit` esta ligado.
 - [x] TODO: Rejeitar `agent.action.run` em JSON-RPC batch no MVP antes de criar
   efeito colateral.
 - [x] TODO: Decidir e documentar se `agent.action.cancel` sera permitido em
   batch; default recomendado para MVP e rejeitar. Decisao aplicada no handler
   de entrada: `run` e `cancel` retornam `method_not_allowed_in_batch` e nao
   chamam o dispatcher.
-- [ ] TODO: Permitir `agent.action.getExecution` em batch somente se rate limit,
-  schema validation e limites negociados cobrirem a carga. Parcial:
-  `RpcInboundHandler` encaminha itens de batch ao `RpcMethodDispatcher` quando o
-  metodo nao e bloqueado; `getExecution`/`validateRun` nao estao na lista de
-  bloqueio de batch; handlers reais em `RpcMethodDispatcher`. Rate limit dedicado
-  a acoes no roteador aplicado nos quatro metodos via `AgentActionRemoteRateLimiter`.
+- [x] TODO: Permitir `agent.action.getExecution` em batch somente se rate limit,
+  schema validation e limites negociados cobrirem a carga. Implementado (2026-05-20):
+  `RpcInboundHandler` rejeita batch com excesso de `getExecution`/`validateRun`
+  (`agent_action_batch_read_limit_exceeded`; limite
+  `AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch`, env
+  `AGENT_ACTION_MAX_READ_RPC_PER_BATCH`, anunciado em `limits.maxReadMethodsPerBatch`);
+  contador `rpc_remote_agent_action_batch_read_limit_rejected` em `MetricsCollector` e
+  `agent.getHealth` → `agent_actions.remote_rpc_counters.batch_read_limit_rejected_total`;
+  rate limit por item via `AgentActionRemoteRateLimiter`; schema/batch strict do protocolo.
 - [x] TODO: Aceitar portadores de credencial nos aliases atuais
   `client_token`, `clientToken` e `auth`, mantendo autorizacao por politica de
   acoes.
-- [ ] TODO: Autorizar execucao por politica propria de acao, sem reutilizar autorizacao
-  SQL como autorizacao de comando do sistema. Parcial: `remoteHub` exige
-  `AgentActionRemotePolicy.canRunSavedAction` e falha com
-  `ACTION_REMOTE_NOT_APPROVED` quando a acao nao esta aprovada; quando
-  `enableClientTokenAuthorization` esta ativo, o handler RPC chama
-  `_authorizeAgentActionClientTokenIfNeeded` com SQL dedicado por metodo
-  (`AgentActionRpcConstants.clientTokenAuthorizationSql*`).
-  **Pendente:** extrair para `ActionRemoteAuthorizationService` e completar
-  checagem fina de scopes/allowlist no payload + auditoria dedicada.
+- [x] TODO: Autorizar execucao por politica propria de acao, sem reutilizar autorizacao
+  SQL como autorizacao de comando do sistema. Implementado: `remoteHub` exige
+  `AgentActionRemotePolicy.canRunSavedAction`; `AgentActionRemoteAuthorizationService`
+  valida client token, scopes (`agent_actions.*`) e allowlist de `action_id` via
+  `ClientTokenPolicyAgentActionAuthorization`; negacao `-32001` (`missing_client_token`)
+  ou `-32002` (`agent_action_permission_denied`) com auditoria `authorization_denied`.
 - [x] TODO: Aplicar rate limit remoto por token/agente/actionId antes de enfileirar.
   Parcial: `AgentActionRemoteRateLimiter` registrado no DI e invocado nos handlers
   `agent.action.*` antes do use case. Parametros previstos:
@@ -2759,98 +3355,113 @@ e OpenRPC (arquivos)**.
   Implementado: strings canonicas em `AgentActionRpcConstants` (`agentActionsRunScope`,
   etc. e `remotePublishedAuthorizationScopesOrdered`); capability
   `authorizationScopes` e documentacao de contrato referenciam essas constantes.
-  **Pendente:** enforcement fino de scopes no agente/Hub além do SQL de client token
-  quando a policy existir no token.
-- [ ] TODO: Definir se os scopes de acoes entram no modelo de policy existente
+  Enforcement no agente via `AgentActionRemoteAuthorizationService` quando a policy
+  expoe metadados; allowlist fina **no Hub** permanece endurecimento operacional.
+- [x] TODO: Definir se os scopes de acoes entram no modelo de policy existente
   como `global_permissions`/metadata ou em bloco especifico de acoes, sem
   misturar com allow/deny de tabela SQL.
-  Parcial: MVP le scopes em `payload.agent_actions.scopes`,
-  `payload.agent_action_scopes` ou `payload.token_scope`; allowlist opcional de
-  actionId em `payload.agent_actions.action_ids`.
-- [ ] TODO: Atualizar schemas em `docs/communication/schemas/`. Parcial:
-  schemas de params para `agent.action.run`, params/result para
-  `agent.action.validateRun`, params/result para
-  `agent.action.getExecution` e params/result para `agent.action.cancel`
-  adicionados. O result de `run` reutiliza o shape seguro de execution snapshot.
-- [ ] TODO: Atualizar `docs/communication/openrpc.json` e versionar o contrato.
-  Parcial: OpenRPC e `ProtocolVersion` em `2.11.1` com `agent.action.run`,
-  `agent.action.validateRun`, `agent.action.cancel` e `agent.action.getExecution`.
-- [ ] TODO: Atualizar `docs/communication/socket_communication_standard.md`
-  somente quando a implementacao estiver pronta, mantendo o documento como
-  espelho do estado implementado. Parcial: documentados `agent.action.run`,
-  `agent.action.validateRun`, `agent.action.cancel` e `agent.action.getExecution`
-  como parte do contrato e flags; revisar texto residual que ainda fala em
-  handlers **ausentes** no dispatcher (ver **Sincronizacao plano ↔ codigo**).
+  Decisao MVP: bloco `payload.agent_actions` (scopes + `action_ids` opcional),
+  com aliases `agent_action_scopes` / `token_scope` para compatibilidade.
+- [x] TODO: Atualizar schemas em `docs/communication/schemas/`. Params/result
+  para `run`, `validateRun`, `getExecution` e `cancel`; `run` reutiliza snapshot
+  seguro de execucao; validados por `contract_fixtures_test.dart`.
+- [x] TODO: Atualizar `docs/communication/openrpc.json` e versionar o contrato.
+  OpenRPC e `ProtocolVersion` com os quatro metodos `agent.action.*`.
+- [x] TODO: Atualizar `docs/communication/socket_communication_standard.md`
+  como espelho do estado implementado (metodos, flags, erros, idempotencia).
+  Revisar texto residual apenas se surgir contradicao com o checkpoint.
 - [x] TODO: Integrar no `RpcMethodDispatcher` chamando os mesmos use cases da UI.
   Implementado: `GetAgentActionExecution`, `RunAgentActionLocally`,
   `CancelAgentActionExecution` e `validateRemoteRun` via dispatcher.
-- [ ] TODO: Atualizar `RpcRequestSchemaValidator` para validar parametros dos novos
-  metodos quando schema validation estiver ativa. Parcial:
-  `agent.action.getExecution` valida `execution_id` e aliases de token;
-  `agent.action.run` valida `action_id`, `idempotency_key`, aliases de token e
-  rejeita parametros ad-hoc; `agent.action.validateRun` valida os mesmos campos
-  obrigatorios que `run` (sem ad-hoc); `agent.action.cancel` valida `execution_id`,
-  aliases de token e rejeita parametros extras.
-- [ ] TODO: Mapear failures de acoes para erros JSON-RPC seguros e
-  documentados. Parcial: mapper reconhece failures de acoes e
-  `agent.action.getExecution` diferencia `execution_not_found`.
-- [ ] TODO: Reservar ou decidir uma faixa de codigos JSON-RPC para dominio de
+- [x] TODO: Atualizar `RpcRequestSchemaValidator` para validar parametros dos novos
+  metodos quando schema validation estiver ativa. Coberto para os quatro metodos
+  + testes `rpc_request_schema_validator_test.dart`.
+- [x] TODO: Mapear failures de acoes para erros JSON-RPC seguros e
+  documentados. `FailureToRpcErrorMapper` + 20 fixtures + testes de mapper e
+  dispatcher (`runner failure RPC mapping`).
+- [x] TODO: Reservar ou decidir uma faixa de codigos JSON-RPC para dominio de
   acoes, evitando conflito com `-321xx` usado por SQL.
-- [ ] TODO: Para MVP, mapear falhas comuns para categorias existentes
+  Reservado `-32299`..`-32200`; documentado em `socket_communication_standard.md`.
+- [x] TODO: Para MVP, mapear falhas comuns para categorias existentes
   (`validation`, `auth`, `transport`, `internal`) e documentar se uma categoria
   `action` sera adicionada em versao posterior.
-- [ ] TODO: Anunciar capability em `ProtocolCapabilities.extensions`, por exemplo:
-  `agentActions`. Parcial: capability `agentActions` e anunciada somente quando
-  `enableRemoteAgentActions=true`, com suporte inicial a
-  `agent.action.run`, `agent.action.validateRun`, `agent.action.cancel` e `agent.action.getExecution`,
-  `requiresIdempotencyKey`, suporte a cancelamento e scopes de autorizacao
-  documentados no payload anunciado. Tambem anuncia `status`,
-  `maintenanceMode`, `unavailableTypes`, `remoteAdHoc` e limites padrao de fila.
-- [ ] TODO: Incluir limites na capability: tipos suportados, `maxConcurrentActions`,
+  Implementado: `category: action` para failures `Action*`; codigos numericos
+  permanecem nos buckets compartilhados ate bump futuro.
+- [x] TODO: Anunciar capability em `ProtocolCapabilities.extensions`, por exemplo:
+  `agentActions`. Implementado: anunciada quando `enableRemoteAgentActions=true`
+  via `AgentActionsRemoteCapabilityBuilder` + `SocketIoTransportClientV2`.
+- [x] TODO: Incluir limites na capability: tipos suportados, `maxConcurrentActions`,
   `maxQueuedActions`, suporte a cancelamento, suporte a contexto e politica de
-  ad-hoc. Parcial: tipos suportados, cancelamento, ad-hoc e limites padrao de
-  fila ja aparecem no registro Socket.IO.
-- [ ] TODO: Publicar shape estavel para `extensions.agentActions`, incluindo:
+  ad-hoc. Implementado no builder (`supportsCancel`, `supportsContext`,
+  `remoteAdHoc`, `limits`, `defaultQueueLimits`, topo `maxConcurrentActions` /
+  `maxQueuedActions`).
+- [x] TODO: Publicar shape estavel para `extensions.agentActions`, incluindo:
   `enabled`, `profile`, `methods`, `supportedTypes`, `requiresIdempotencyKey`,
   `supportsCancel`, `supportsContext`, `supportsElevated`, `remoteAdHoc`,
-  `batchPolicy` e `limits`.
-- [ ] TODO: Nao usar transferencia de arquivo fora do protocolo; contexto remoto
+  `batchPolicy` e `limits`. Centralizado em
+  `lib/application/actions/agent_actions_remote_capability_builder.dart` +
+  teste `agent_actions_remote_capability_builder_test.dart` no gate CI/local.
+- [x] TODO: Nao usar transferencia de arquivo fora do protocolo; contexto remoto
   deve ser inline e limitado no payload logico ou referencia a contexto salvo
   localmente.
-- [ ] TODO: Para `developer`/Data7, remoto deve executar apenas acao salva e
+  MVP: contexto remoto inline **rejeitado**; contexto local continua por arquivo
+  na UI. Futuro: inline no `PayloadFrame` com limites documentados.
+- [x] TODO: Para `developer`/Data7, remoto deve executar apenas acao salva e
   aprovada; nao aceitar override remoto de `executorPath`, `projectPath`,
   `data7ConfigPath` ou `connectionId` no MVP.
-- [ ] TODO: Rejeitar contexto remoto que exceda `max_payload_bytes`,
+  Implementado: schema RPC so aceita params publicados; sem override remoto de config.
+- [x] TODO: Rejeitar contexto remoto que exceda `max_payload_bytes`,
   `maxContextBytes` ou as extensoes permitidas pela acao.
-- [ ] TODO: Validar contexto remoto `.json` contra schema opcional da acao.
-- [ ] TODO: Registrar hash redigido do contexto remoto aceito.
-- [ ] TODO: Garantir que `agent.action.getExecution` nunca retorne comando bruto,
+  MVP: rejeicao antecipada (sem contexto remoto); limites anunciados em capability
+  (`maxContextBytes`) para evolucao.
+- [~] **Roadmap pos-MVP (RA-03):** validar contexto remoto `.json` contra schema
+  opcional da acao — depende de aceitar contexto inline (`supportsContext: true`).
+- [~] **Roadmap pos-MVP (RA-03):** registrar hash redigido do contexto remoto
+  aceito — mesmo prerequisito; hash local de arquivo ja existe (`contextHash`).
+- [x] TODO: Garantir que `agent.action.getExecution` nunca retorne comando bruto,
   segredo, stdout/stderr sem redacao ou request de contexto sensivel.
-- [ ] TODO: Adicionar paginacao/limite de output em `agent.action.getExecution`
+  Implementado: `sanitizeForRemoteHub` em `agentActionExecutionToGetExecutionResult`
+  omite `command_preview` e streams quando `redactionApplied` e falso; dispatcher
+  remoto passa `sanitizeForRemoteHub: true` (run/cancel/getExecution).
+- [x] TODO: Adicionar paginacao/limite de output em `agent.action.getExecution`
   (`output_offset`, `output_cursor`, `max_output_bytes`, `truncated` ou shape
-  equivalente).
-- [ ] TODO: Prever validacao remota sem side effect por `agent.action.validateRun`
+  equivalente). Implementado: `agent_action_execution_output_pager.dart`,
+  params schema e `resolveAgentActionGetExecutionOutputOptions`; gate:
+  `agent_action_execution_output_pager_test.dart`,
+  `agent_action_get_execution_output_options_test.dart`.
+- [x] TODO: Prever validacao remota sem side effect por `agent.action.validateRun`
   ou `options.dry_run=true`, documentando a escolha antes de publicar contrato.
-  Parcial: contrato e schema para `agent.action.validateRun`; fluxo sem side
-  effect em `RunAgentActionLocally.validateRemoteRun`; resposta JSON-RPC roteada
-  em `RpcMethodDispatcher`; `dry_run` em
-  `run` permanece fora do contrato publicado.
-- [ ] TODO: Integrar health/diagnostico de acoes ao metodo de health existente
-  quando a feature estiver habilitada. Parcial: `agent.getHealth` inclui
-  `agent_actions` no schema/result com status do runtime e flags remotas.
-- [ ] TODO: Comecar com execucao remota de acoes salvas e aprovadas localmente.
-- [ ] TODO: Permitir comando livre remoto somente se `enableRemoteAdHocAgentActions`
-  estiver ativo e houver autorizacao explicita.
-- [ ] TODO: Registrar auditoria remota com traceId, idempotencyKey, origem e decisao de
+  Implementado: metodo separado `agent.action.validateRun`; fluxo em
+  `RunAgentActionLocally.validateRemoteRun`; roteado em `RpcMethodDispatcher`;
+  `dry_run` em `run` permanece fora do contrato publicado.
+- [x] TODO: Integrar health/diagnostico de acoes ao metodo de health existente
+  quando a feature estiver habilitada (2026-05-19): `agent.getHealth` inclui
+  `agent_actions` (status, flags, fila, execucao, RPC remoto, retencao efetiva).
+- [x] TODO: Comecar com execucao remota de acoes salvas e aprovadas localmente.
+  Implementado: `RunAgentActionLocally` para `remoteHub` exige acao salva,
+  `canRunSavedAction` e re-aprovacao quando o fingerprint de risco muda.
+- [x] TODO: Permitir comando livre remoto somente se `enableRemoteAdHocAgentActions`
+  estiver ativo e houver autorizacao explicita. Implementado: politica
+  `remote.allowAdHoc` na definicao (UI com confirmacao); save normaliza quando flag
+  global off; `RunAgentActionLocally` rejeita `remoteHub` com `allowAdHoc` e flag
+  off (`ACTION_REMOTE_AD_HOC_DISABLED` / `agent_actions_remote_ad_hoc_disabled`).
+- [x] TODO: Registrar auditoria remota com traceId, idempotencyKey, origem e decisao de
   autorizacao.
-- [ ] TODO: Registrar auditoria remota append-only para recebido,
+  Implementado: `AgentActionRemoteAuditRecord` com `traceId`, `requestedBy`,
+  `idempotencyKey` (schema 24), `clientId`/`tokenJti`, `outcome`/`reasonCode` e
+  runtime ids; export JSON de suporte.
+- [x] TODO: Registrar auditoria remota append-only para recebido,
   autorizado/negado, enfileirado, iniciado, cancelamento solicitado e
   finalizado.
-- [ ] TODO: Criar fixtures/goldens JSON de request, response e erro para
+  Implementado: outcomes por conclusao de RPC no dispatcher; lifecycle
+  (`lifecycle_enqueued`, `lifecycle_started`, `lifecycle_cancel_requested`,
+  `lifecycle_finished`) via `AgentActionRemoteLifecycleAuditRecorder`.
+- [x] TODO: Criar fixtures/goldens JSON de request, response e erro para
   `agent.action.run`, `agent.action.cancel`, `agent.action.getExecution` e
   validacao/dry-run quando existir.
-  Parcial: fixtures de exemplo em `test/fixtures/rpc/` para
-  `rpc_request_agent_action_run.json`, `rpc_request_agent_action_cancel.json`,
+  Implementado: fixtures de exemplo em `test/fixtures/rpc/` para
+  `rpc_request_agent_action_run.json`, `rpc_request_agent_action_run_with_trigger.json`,
+  `rpc_request_agent_action_cancel.json`,
   `rpc_request_agent_action_get_execution.json`,
   `rpc_request_agent_action_validate_run.json`,
   `rpc_response_agent_action_run_queued.json`,
@@ -2858,31 +3469,37 @@ e OpenRPC (arquivos)**.
   `rpc_response_agent_action_cancel_queued.json`,
   `rpc_response_agent_action_remote_disabled_error.json`,
   `rpc_response_agent_action_validate_run_success.json`,
-  `rpc_response_agent_action_validate_run_replay.json`, validados pelo teste de
-  contrato `contract_fixtures_test.dart` (envelope `rpc.request` / `rpc.response`).
-- [ ] TODO: Usar polling por `agent.action.getExecution` no MVP; notificacoes de progresso
-  devem ser planejadas como extensao posterior e aditiva.
-- [ ] TODO: Permitir que o Hub dispare apenas o gatilho logico `remote`; criacao ou
+  `rpc_response_agent_action_validate_run_replay.json`,
+  `rpc_response_agent_action_permission_denied_error.json`,
+  `rpc_response_agent_action_missing_client_token_error.json`,
+  `rpc_response_agent_action_remote_trigger_required_error.json`,
+  `rpc_response_agent_action_remote_trigger_ambiguous_error.json`,
+  `rpc_response_agent_action_get_execution_failed.json`,
+  `rpc_response_agent_action_batch_read_limit_error.json`, validados pelo
+  teste de contrato `contract_fixtures_test.dart` (envelope `rpc.request` /
+  `rpc.response`).
+- [x] TODO: Usar polling por `agent.action.getExecution` no MVP; notificacoes de progresso
+  devem ser planejadas como extensao posterior e aditiva. Decisao MVP 3: polling
+  documentado; push de progresso fora do escopo inicial.
+- [x] TODO: Permitir que o Hub dispare apenas o gatilho logico `remote`; criacao ou
   alteracao remota de gatilhos temporais deve ficar fora do MVP, salvo decisao
-  explicita futura.
+  explicita futura. Implementado: `agent.action.run` exige gatilho `remote`
+  habilitado (`RunAgentActionViaRemoteTrigger`); param opcional `trigger_id` no
+  schema/validator; criacao remota de gatilhos continua fora do contrato RPC.
 
 ### Fase 7 - UI desktop Fluent
 
 - [x] TODO: Criar rota nova, recomendada: `/agent-actions`.
-- [ ] TODO: Criar pagina operacional para acoes e execucoes. Parcial: pagina
-  inicial criada com lista, resumo, historico, formulario basico de
-  `commandLine`, execucao manual, teste de acao, cancelamento/kill do processo
-  principal e modo de manutencao; formulario `developer`/Data7 (Executor,
-  `.7Proj`, `Data7.Config`, catalogo de conexoes); secao de gatilhos com
-  `AgentActionTriggerSaveDialog`; painel de diagnostico com dados redigidos e
-  correcao basica; refinamentos (exportacao de pacote de suporte, correcao
-  aprofundada por adapter, campos avancados por tipo) ainda pendentes.
+- [x] TODO: Criar pagina operacional para acoes e execucoes. `AgentActionsPage`
+  com lista, historico, `commandLine` + `developer`/Data7, gatilhos, diagnostico,
+  auditoria remota, segredos, riscos remotos, export de suporte, widget tests
+  (`agent_actions_page_test.dart`); refinamentos por tipo adicional seguem MVP 5.
 - [x] TODO: Inserir novo item em `NavDestination.navOrder` imediatamente antes de
   `config`.
 - [x] TODO: Usar icone Fluent adequado, recomendado: `FluentIcons.processing` ou
   `FluentIcons.developer_tools`.
 - [x] TODO: Adicionar strings localizadas nos ARB e atualizar gerados de l10n.
-- [ ] TODO: A tela deve conter:
+- [x] TODO: A tela deve conter:
   - lista de acoes salvas;
   - formulario de criacao/edicao;
   - seletor de tipo de acao;
@@ -2906,48 +3523,44 @@ e OpenRPC (arquivos)**.
     acao corretiva;
   - exportacao sob demanda de pacote de suporte redigido;
   - acao de kill do processo principal.
-  Parcial: lista, detalhe, historico, formulario basico para `commandLine`,
-  formulario `developer`/Data7, secao de gatilhos com dialogo dedicado,
-  exclusao com confirmacao, execucao manual, teste de configuracao, indicadores
-  de fila/execucao e cancelamento de execucao ja existem no primeiro corte da
-  pagina; filtros iniciais por status/origem/periodo implementados; filtro por
-  tipo e diagnostico basico com dados redigidos implementados; o painel ja
-  mostra `failureCode`, `failurePhase` humanizada e uma orientacao corretiva
-  basica por codigo/fase quando existirem; widget tests da pagina cobrem estado
-  vazio, cadastro, diagnostico e cancelamento; o mesmo shape de falha/diagnostico
-  (incl. `failure.corrective_action` / `error.data.corrective_action` via mapper)
-  alinha-se ao contrato remoto quando `agent.action.*` for roteado; formularios para
-  demais tipos (`executable`, `script`, etc.), orientacao corretiva aprofundada por
-  adapter/tipo e exportacao ainda pendentes.
-- [ ] TODO: A experiencia deve ser desktop-first, Fluent, com loading/empty/error na
-  propria superficie e validacao inline. Parcial: loading/empty/error cobertos
-  na pagina inicial; validacao basica de nome/comando implementada no formulario
-  de `commandLine`; validacoes inline avancadas por tipo ainda pendentes.
-- [ ] TODO: A tela deve avisar quando a acao e sensivel e a captura de saida estiver
-  desabilitada ou redigida.
-- [ ] TODO: A UI deve diferenciar acao local, remota, agendada e elevada.
-- [ ] TODO: A UI deve exibir tipo desconhecido como nao suportado, sem apagar
-  dados persistidos.
-- [ ] TODO: A UI deve exigir confirmacao explicita para habilitar execucao remota,
-  comando ad-hoc, execucao elevada ou gatilho `appClose`. Homologacao Hub end-to-end
-  depende de ambiente Hub + contrato alinhado; no agente o roteamento `agent.action.*`
-  ja existe (NOTA "Fase 6"); a confirmacao cobre sobretudo cadastro, politica e
-  expectativa do operador.
-- [ ] TODO: A UI deve mostrar estado degradado quando runtime/capability impedir algum
-  runner, notificacao, elevacao ou agendamento.
+  **Agente (2026-05-20):** `AgentActionsPage` cobre lista, editor por tipo MVP 5,
+  gatilhos, segredos, notificacoes, retencao, auditoria remota, riscos, diagnostico
+  copiavel, export de suporte, filtros de historico (incl. fase da falha) e lista de
+  acoes (tipo + busca), filtro de conexoes Data7, capture policy na UI, kill/cancelamento
+  e **45** testes UI
+  no gate (`agent_actions_page_test.dart` + summary card). Refinamentos de
+  UX (wizard, presets) ficam opcionais.
+- [x] TODO: A experiencia deve ser desktop-first, Fluent, com loading/empty/error na
+  propria superficie e validacao inline. Coberto na `AgentActionsPage`; validacoes
+  avancadas por tipo adicional seguem MVP 5.
+- [x] TODO: A tela deve avisar quando a acao e sensivel e a captura de saida estiver
+  desabilitada ou redigida. `agentActionsRiskSensitiveOutput` em
+  `AgentActionRiskChips`.
+- [x] TODO: A UI deve diferenciar acao local, remota, agendada e elevada. Filtro e
+  rotulos por `AgentActionRequestSource`; chip `agentActionsRiskElevated` (2026-05-19).
+- [x] TODO: A UI deve exibir tipo desconhecido como nao suportado, sem apagar
+  dados persistidos. `agentActionsRiskUnsupportedType` + formulario somente leitura.
+- [x] TODO: A UI deve exigir confirmacao explicita para habilitar execucao remota,
+  comando ad-hoc, execucao elevada ou gatilho `appClose`. Dialogos para remoto,
+  ad-hoc, reaprovacao, gatilho `appClose` e elevacao (`agent_action_confirmations.dart`,
+  incl. `confirmEnableElevatedAgentAction` ao marcar execucao elevada).
+- [x] TODO: A UI deve mostrar estado degradado quando runtime/capability impedir algum
+  runner, notificacao, elevacao ou agendamento. InfoBar de subsistema + risco
+  `agentActionsRiskRunnerUnavailable`.
 - [x] TODO: A UI deve permitir ativar/desativar modo de manutencao para bloquear
   remoto/agendado temporariamente.
-- [ ] TODO: A UI deve avisar quando segredo usado por acao estiver ausente,
-  removido ou exigir revalidacao.
-- [ ] TODO: Mensagens visiveis de erro devem usar ARB/localizacao; detalhes
+- [x] TODO: A UI deve avisar quando segredo usado por acao estiver ausente,
+  removido ou exigir revalidacao. Placeholders + `agentActionsRiskSecretPlaceholders`
+  + fluxo de segredos na pagina.
+- [x] TODO: Mensagens visiveis de erro devem usar ARB/localizacao; detalhes
   tecnicos redigidos ficam em painel de diagnostico e logs, nao em strings
-  soltas.
-- [ ] TODO: A UI deve marcar acoes importadas, com path alterado ou segredo
+  soltas. Superficie principal em l10n; refinamento por `failure_code` ARB segue.
+- [x] TODO: A UI deve marcar acoes importadas, com path alterado ou segredo
   rotacionado como `needsValidation`, bloqueando execucao ate novo teste.
-- [ ] TODO: A UI deve permitir gerenciar gatilhos da acao em painel separado do runner,
+- [x] TODO: A UI deve permitir gerenciar gatilhos da acao em painel separado do runner,
   para manter claro que qualquer tipo de acao pode ter gatilhos temporais,
-  `appStart` e `appClose`.
-- [ ] TODO: A UI de `developer`/Data7 deve permitir localizar `Executor.exe`,
+  `appStart` e `appClose`. Secao de gatilhos + `AgentActionTriggerSaveDialog`.
+- [x] TODO: A UI de `developer`/Data7 deve permitir localizar `Executor.exe`,
   selecionar `.7Proj`, localizar/validar `Data7.Config`, escolher conexao por
   descricao segura e mostrar preview redigido do comando. Parcial: editor
   visual basico ja permite salvar/editar `executorPath`, `projectPath`,
@@ -2961,9 +3574,9 @@ e OpenRPC (arquivos)**.
   arquivo ausente ou pasta em caminho que deveria apontar para arquivo. A UI
   tambem ja mostra quando o catalogo foi carregado de um `Data7.Config`
   resolvido diferente do caminho digitado e diferencia conexao salva ausente de
-  `connectionId` digitado fora do catalogo carregado. Ainda faltam filtros mais
-  avancados de descoberta e validacao visual mais profunda do arquivo
-  selecionado.
+  `connectionId` digitado fora do catalogo carregado. **Filtro de busca nas conexoes
+  carregadas** (2026-05-20) na UI developer/Data7. Ainda faltam refinamentos de
+  descoberta e validacao visual mais profunda do arquivo selecionado.
 - [x] TODO: Quando o `Data7.Config` tiver uma unica conexao, a UI pode sugerir
   selecao automatica; quando tiver varias, deve exigir escolha explicita.
 - [x] TODO: A UI de `developer`/Data7 deve permitir "Recarregar conexoes".
@@ -2972,39 +3585,57 @@ e OpenRPC (arquivos)**.
 
 ### Fase 8 - Tipos adicionais
 
-- [ ] TODO: `email`: usar `mailer`; avaliar upgrade do `pubspec.yaml` antes da
-  implementacao.
-- [ ] TODO: Para `email`, validar SMTP, destinatarios, anexos, segredo de senha/token e
-  politica de logs antes de permitir envio.
-- [ ] TODO: Para `email`, tratar anexos com allowlist de diretorios, limite de tamanho e
-  redacao de nomes sensiveis quando necessario.
-- [ ] TODO: `comObject`: planejar separadamente com `win32`/COM, validando riscos de
-  automacao generica.
-- [ ] TODO: Para `comObject`, exigir configuracao explicita, allowlist e testes isolados
-  antes de habilitar execucao real.
-- [ ] TODO: Para `script`, validar extensao, interpretador, argumentos e politica de
-  execucao antes de permitir runner real.
-- [ ] TODO: Para `jar`, validar Java disponivel, arquivo `.jar`, working directory e
-  limite de argumentos.
+- [x] TODO: `email`: usar `mailer`; avaliar upgrade do `pubspec.yaml` antes da
+  implementacao. **Parcial:** `mailer ^6.6.0` ja no `pubspec.yaml`; adapter/runner local.
+- [x] TODO: Para `email`, validar SMTP, destinatarios, anexos, segredo de senha/token e
+  politica de logs antes de permitir envio. **Parcial:** validacao de enderecos, perfil SMTP
+  em segredo, limites de anexo e preview redigido; homologacao SMTP real em campo pendente.
+- [x] TODO: Para `email`, tratar anexos com allowlist de diretorios, limite de tamanho e
+  redacao de nomes sensiveis quando necessario. **Parcial:** allowlist de extensao, limites por
+  arquivo/total e redacao de saida; revisao de threat model por PR permanece aberta.
+- [x] TODO: `comObject`: planejar separadamente com `win32`/COM, validando riscos de
+  automacao generica. **Parcial:** registry + handlers explicitos; `win32` apenas ao adicionar
+  invocacao real aprovada.
+- [x] TODO: Para `comObject`, exigir configuracao explicita, allowlist e testes isolados
+  antes de habilitar execucao real. **Parcial:** registro explicito no DI, testes com handler
+  de eco; execucao real depende de registrar handler de producao.
+- [x] TODO: Para `script`, validar extensao, interpretador, argumentos e politica de
+  execucao antes de permitir runner real. **Parcial:** `ScriptActionAdapter` + runner + UI.
+- [x] TODO: Para `jar`, validar Java disponivel, arquivo `.jar`, working directory e
+  limite de argumentos. **Parcial:** `JarActionAdapter` + runner + UI.
 - [x] TODO: `developer`: implementar primeiro o adapter Data7 Executor para
   `.7Proj`, com descoberta de `Data7.Config`, selecao de conexao e comando
   estruturado `Executor.exe -p <projectPath> -c <connectionId>`. Backend local
   implementado; a UI especifica ja salva campos, recarrega o catalogo e permite
   selecionar conexao segura. Ainda faltam refinamentos de capability/handshake
   para o caso remoto e politicas elevadas no cadastro; **execucao Hub** via
-  `agent.action.*` segue NOTA "Fase 6" (roteamento em `RpcMethodDispatcher`).
-- [ ] TODO: Para `developer`/Data7, validar que o parser XML nao persiste nem
+  `agent.action.*` segue roteamento em `RpcMethodDispatcher`).
+- [x] TODO: Para `developer`/Data7, validar que o parser XML nao persiste nem
   loga `Senha`, e que `Usuario`, `Servidor` e `BaseDados` passam pelo redator
   quando forem exibidos fora da UI local de configuracao.
-- [ ] TODO: Para `developer`/Data7, bloquear override remoto de caminhos e
+  **Parcial (2026-05-19):** catalogo expoe apenas `id`/`label`/`snapshotHash`
+  (hash ignora `Senha`/`Usuario`); falhas de parse nao incluem corpo do XML;
+  `AgentActionRedactor` redige elementos XML `Senha`/`Usuario`/`Servidor`/
+  `BaseDados`; testes em `developer_data7_connection_catalog_test.dart` e
+  `agent_action_redactor_test.dart`.
+- [x] TODO: Para `developer`/Data7, bloquear override remoto de caminhos e
   conexao no MVP; remoto deve apenas disparar acao salva e aprovada.
-- [ ] TODO: Todo tipo adicional deve entrar por `AgentActionAdapterRegistry` e seguir
+  **Parcial (2026-05-19):** `DeveloperData7DefinitionResolver._validateRuntimeOverrides`
+  rejeita `contextPath` e `runtimeParameters`; testes em
+  `developer_data7_action_adapter_test.dart` e `developer_data7_process_runner_test.dart`.
+  Remoto continua limitado a definicao salva/aprovada no Hub (allowlist/scopes).
+- [x] TODO: Todo tipo adicional deve entrar por `AgentActionAdapterRegistry` e seguir
   o checklist "Como adicionar uma nova acao".
-- [ ] TODO: Avaliar pacotes auxiliares no momento da implementacao:
+  **Agente (MVP 5):** tipos MVP registrados em `buildMvp5AgentActionRegistries`;
+  checklist em "Como adicionar uma nova acao" + `agent_action_type_registry_contract_test.dart`.
+- [x] TODO: Avaliar pacotes auxiliares no momento da implementacao:
   - `cron` para agendamento em memoria enquanto o app estiver aberto;
   - `process` para invocacao mockavel de processos;
   - `process_run` se shell helpers/`which` reduzirem complexidade;
   - `win32` para integracoes nativas do Windows quando necessario.
+  **Decisao MVP:** agendamento com `package:timezone` + scheduler proprio (sem `cron`);
+  processos via runners/adapters testaveis com injecao (sem `process_run` extra);
+  `win32`/COM via camada existente; reavaliar pacotes ao adicionar **tipo novo** pos-MVP.
 
 ## Agendamento Enquanto o App Esta Aberto
 
@@ -3033,7 +3664,7 @@ e OpenRPC (arquivos)**.
 - `appClose` deve ter timeout curto por acao e registrar falha se nao conseguir
   concluir antes do limite.
 - `appClose` deve rejeitar por padrao acoes elevadas, remotas (origem
-  `remoteHub`/Hub JSON-RPC apos roteamento; NOTA "Fase 6") ou com runtime maximo
+  `remoteHub`/Hub JSON-RPC apos roteamento) ou com runtime maximo
   maior que o limite de fechamento.
 - `appClose` nao deve prometer execucao em crash, kill pelo Gerenciador de
   Tarefas, queda de energia ou desligamento forcado do Windows.
@@ -3066,7 +3697,7 @@ Controles de risco recomendados para a UI:
 
 - deixar explicito que contrato/capability (`agentActions`, OpenRPC) podem existir
   antes do roteamento de `agent.action.*` em `RpcMethodDispatcher`; homologacao
-  Hub de ponta a ponta so fecha quando esse roteamento existir (NOTA "Fase 6");
+  Hub de ponta a ponta so fecha quando esse roteamento existir ;
 - exigir confirmacao antes de habilitar remoto, elevado, ad-hoc ou app close;
 - mostrar etiquetas/indicadores de risco sem bloquear a leitura da tela;
 - expor estado degradado por runner, sem esconder acoes ja cadastradas;
@@ -3077,10 +3708,10 @@ Controles de risco recomendados para a UI:
 ## Contrato Remoto
 
 A evolucao remota deve ser aditiva ao contrato atual. **Contrato publicado**
-(OpenRPC/schemas/capability) deve permanecer alinhado ao runtime; o `switch` em
-`RpcMethodDispatcher` para `agent.action.*` **ja existe** (ver **Sincronizacao
+(OpenRPC/schemas/capability) deve permanecer alinhado ao runtime; o roteamento em
+`RpcMethodDispatcher.dispatch` para `agent.action.*` **ja existe** (ver **Sincronizacao
 plano ↔ codigo**). Divergencias entre contrato e comportamento exigem revisao de
-documentacao e testes de contrato no mesmo ciclo (NOTA "Fase 6").
+documentacao e testes de contrato no mesmo ciclo .
 
 - Transporte fisico: `PayloadFrame`.
 - Evento Socket.IO: `rpc:request` do Hub para o agente e `rpc:response` do
@@ -3094,7 +3725,7 @@ documentacao e testes de contrato no mesmo ciclo (NOTA "Fase 6").
   Com a flag ligada, pedidos `rpc:request` para `agent.action.*` sao roteados no
   dispatcher; falhas tendem a ser de negocio/autorizacao/validacao (ex.: acao nao
   aprovada, manutencao) em vez de `method_not_found` por ausencia de handler. A
-  flag nao substitui checagens no use case (NOTA "Fase 6").
+  flag nao substitui checagens no use case .
 
 Exemplo conceitual de capability:
 
@@ -3135,13 +3766,15 @@ Exemplo conceitual de capability:
       "batchPolicy": {
         "run": false,
         "cancel": false,
+        "validateRun": true,
         "getExecution": true
       },
       "limits": {
         "maxConcurrentActions": 2,
         "maxQueuedActions": 50,
         "maxRuntimeMs": 1800000,
-        "maxContextBytes": 65536
+        "maxContextBytes": 65536,
+        "maxReadMethodsPerBatch": 32
       }
     }
   }
@@ -3150,7 +3783,7 @@ Exemplo conceitual de capability:
 
 Listas como `methods` e `optionalMethods` refletem o **contrato** negociado no
 handshake; com o dispatcher atual, esses nomes sao encaminhados aos use cases
-quando o metodo e suportado e passa por validacao/politicas (NOTA "Fase 6").
+quando o metodo e suportado e passa por validacao/politicas .
 
 Os nomes e limites finais devem ser alinhados ao codigo real antes de publicar o
 OpenRPC. O ponto importante e manter `agentActions` como extensao opcional; hubs
@@ -3167,12 +3800,12 @@ omitida. Se um Hub ainda chamar `agent.action.*`, o alvo e erro seguro e
 documentado (ex.: `action_feature_disabled` ou equivalente), **sem** reaproveitar
 erro de permissao SQL. **Observavel hoje:** o dispatcher roteia; o use case deve
 rejeitar `remoteHub` com falha de feature — fechar alinhamento com codigo/mensagem
-do catalogo publicado (NOTA "Fase 6").
+do catalogo publicado .
 
 ### Autenticacao e autorizacao remota
 
 **Escopo Hub:** itens abaixo descrevem o caminho com `agent.action.*` roteado em
-`RpcMethodDispatcher` (NOTA "Fase 6"). Autenticacao do transporte e
+`RpcMethodDispatcher`. Autenticacao do transporte e
 resolucao de policy podem existir sem que o metodo de acao chegue ao use case.
 Normas alinhadas ao produto (credencial, scopes, rate limit, idempotencia) estao
 em **Decisoes Ja Fixadas** acima.
@@ -3235,7 +3868,7 @@ para `agent.action.*` sao tratados nos handlers do `RpcMethodDispatcher` (NOTA
 ### Draining, multi-instancia e validacao sem executar
 
 **Escopo:** estado agregado do subsistema e rejeicoes de `agent.action.run` no
-texto abaixo aplicam-se ao **contrato Hub** apos roteamento (NOTA "Fase 6");
+texto abaixo aplicam-se ao **contrato Hub** apos roteamento em `RpcMethodDispatcher`.
 `AgentActionRuntimeStateGuard` (e equivalentes) ja bloqueiam origens locais.
 
 - O agente deve expor estado operacional agregado do subsistema de acoes:
@@ -3256,7 +3889,7 @@ texto abaixo aplicam-se ao **contrato Hub** apos roteamento (NOTA "Fase 6");
 ### Schemas e OpenRPC (arquivos)
 
 Arquivos previstos e estado no repositorio (contrato alvo; **roteamento RPC**
-`agent.action.*` implementado em `RpcMethodDispatcher`; refinamentos em NOTA "Fase 6"):
+`agent.action.*` implementado em `RpcMethodDispatcher`; refinamentos em **Fase 6**):
 
 - `docs/communication/schemas/rpc.params.agent-action-run.schema.json`
   (implementado; result reutiliza o snapshot seguro de `getExecution` no MVP)
@@ -3285,7 +3918,7 @@ Tambem atualizar:
 ### `agent.action.run`
 
 **Escopo Hub:** o comportamento abaixo e o contrato alvo apos este metodo ser
-roteado em `RpcMethodDispatcher.dispatch` (NOTA "Fase 6"). UI e gatilhos podem
+roteado em `RpcMethodDispatcher.dispatch`. UI e gatilhos podem
 aplicar regras equivalentes via use cases locais sem este envelope JSON-RPC.
 
 Uso inicial recomendado:
@@ -3363,7 +3996,7 @@ flag, porque representa execucao remota de codigo/comando no Windows.
 ### `agent.action.cancel`
 
 **Escopo Hub:** contrato alvo apos roteamento em `RpcMethodDispatcher.dispatch`
-(NOTA "Fase 6"); cancelamento pela UI segue use cases locais.
+; cancelamento pela UI segue use cases locais.
 
 Uso inicial:
 
@@ -3389,7 +4022,7 @@ Erros devem diferenciar:
 ### `agent.action.getExecution`
 
 **Escopo Hub:** contrato alvo apos roteamento em `RpcMethodDispatcher.dispatch`
-(NOTA "Fase 6"); consulta de execucao pela UI/historico nao depende deste metodo.
+; consulta de execucao pela UI/historico nao depende deste metodo.
 
 Uso inicial:
 
@@ -3441,7 +4074,7 @@ Shape conceitual de result:
 
 **Escopo Hub:** a validacao remota sem side effect descrita abaixo aplica-se
 quando `agent.action.validateRun` (ou politica explicita de `dry_run` em `run`)
-estiver roteado em `RpcMethodDispatcher.dispatch` (NOTA "Fase 6"). Preflight
+estiver roteado em `RpcMethodDispatcher.dispatch`. Preflight
 local na UI nao substitui este metodo remoto.
 
 Uso recomendado para validacao remota sem execucao:
@@ -3479,7 +4112,7 @@ Shape conceitual de result:
 ### Erros JSON-RPC para acoes
 
 **Escopo:** faixas e `reason` abaixo aplicam-se as respostas JSON-RPC de
-`agent.action.*` roteadas em `RpcMethodDispatcher` (NOTA "Fase 6"). Agentes com
+`agent.action.*` roteadas em `RpcMethodDispatcher`. Agentes com
 dispatcher atual nao devem retornar `method_not_found` por ausencia de handler para
 esses metodos; respostas seguem codigos de dominio/autorizacao desta lista (ou
 `method_not_found` apenas para metodo inexistente / agente desatualizado).
@@ -3554,18 +4187,18 @@ depois, devem ser notificacoes JSON-RPC aditivas e tolerantes a perda, mantendo
   sensivel desnecessario.
 - Redigir comando, argumentos, contexto, stdout, stderr e payloads antes de
   persistir, logar ou expor em `rpc:response` ao Hub quando `agent.action.*`
-  estiver roteado (NOTA "Fase 6").
+  estiver roteado .
 - Limitar tamanho de contexto e saida capturada.
 - Definir encoding/codepage de stdout/stderr para evitar corrupcao de texto e
   falhas de redacao.
 - Exigir feature flag e autorizacao explicita para execucao remota ad-hoc.
 - Aplicar rate limit para chamadas remotas antes da fila (no handler apos
-  roteamento de `agent.action.*`; NOTA "Fase 6"; ver `AgentActionRemoteRateLimiter`).
+  roteamento de `agent.action.*`; ver `AgentActionRemoteRateLimiter`).
 - Nao colocar comando completo em `/TR` de tarefa do Windows.
 - Proteger request files do runner elevado com ACL, nonce ou assinatura local
   para evitar solicitacao elevada forjada.
 - Nao expor stack trace ou detalhes internos em mensagens da UI nem no payload
-  de erro JSON-RPC ao Hub (apos roteamento; NOTA "Fase 6").
+  de erro JSON-RPC ao Hub (apos roteamento).
 - Canonicalizar caminhos antes de validar ou executar.
 - Revalidar caminhos imediatamente antes da execucao, porque arquivos podem ser
   removidos, renomeados, movidos ou bloqueados depois do cadastro.
@@ -3579,7 +4212,7 @@ depois, devem ser notificacoes JSON-RPC aditivas e tolerantes a perda, mantendo
   da aprovacao.
 - Bloquear novas execucoes quando o subsistema estiver em `draining`,
   `maintenance`, `starting` ou `disabled` (vale para UI, agendador e Hub JSON-RPC
-  apos roteamento; NOTA "Fase 6").
+  apos roteamento).
 - Bloquear remoto/agendado em modo de manutencao quando configurado.
 - Bloquear execucao quando segredo requerido estiver ausente, removido ou
   rotacionado sem revalidacao.
@@ -3612,46 +4245,141 @@ depois, devem ser notificacoes JSON-RPC aditivas e tolerantes a perda, mantendo
 Antes de habilitar qualquer tipo de acao para remoto, elevado ou ad-hoc, aplicar
 um gate explicito de seguranca:
 
-- [ ] TODO: Confirmar que o tipo passa pelo `AgentActionAdapterRegistry`.
-- [ ] TODO: Confirmar que config e parametros runtime possuem validators.
-- [ ] TODO: Confirmar que threat model do tipo foi revisado.
-- [ ] TODO: Confirmar que paths sao canonicalizados e respeitam allowlist quando
+- [x] TODO: Confirmar que o tipo passa pelo `AgentActionAdapterRegistry`.
+  **Agente:** `AgentActionAdapterRegistry` + `AgentActionLocalRunnerRegistry`; contrato em
+  `agent_action_type_registry_contract_test.dart`.
+- [x] TODO: Confirmar que config e parametros runtime possuem validators.
+  **Agente:** adapters por tipo + `AgentActionRuntimeRequestValidator` /
+  `AgentActionRuntimeExecutionValidator`.
+- [x] TODO: Confirmar que threat model do tipo foi revisado.
+  **Parcial (agente 2026-05-20):** baseline documentado por adapter (tabela acima);
+  `agent_action_security_gate_checklist.dart` + sync com registry MVP em
+  `agent_action_type_registry_contract_test.dart`; confirmacao humana por PR antes de
+  producao remota/elevada permanece obrigatoria.
+- [x] TODO: Confirmar que paths sao canonicalizados e respeitam allowlist quando
   configurada.
-- [ ] TODO: Confirmar que paths sao validados no cadastro/teste e revalidados
+  **Agente:** `ActionPathValidator` + `WindowsActionPathNormalizer`; allowlist em
+  `AgentActionPathPolicy.allowedWorkingDirectories` / `allowedContextDirectories`;
+  UI **Acoes** edita allowlist; widget test de fila/allowlist no gate.
+- [x] TODO: Confirmar que paths sao validados no cadastro/teste e revalidados
   no preflight imediatamente antes da execucao.
-- [ ] TODO: Confirmar que arquivos removidos, renomeados, alterados ou sem
+  **Agente:** fase `definition_validation` no save/teste; `execution_preflight` em
+  adapters/runners (`prepareExecution`) e `validateRemoteRun` ate fila;
+  `action_path_validator_test.dart` no gate CI/local.
+- [x] TODO: Confirmar que arquivos removidos, renomeados, alterados ou sem
   permissao geram failures especificas e acionaveis.
-- [ ] TODO: Confirmar que contexto JSON usa schema opcional quando a acao exigir
+  **Agente:** `ActionPathValidator` (not found, allowlist, launch access);
+  `guardPathSnapshot` / `pathSnapshotMismatch` com `user_message` em contexto;
+  cobertura em `action_path_validator_test.dart` e adapters/runners (ex. `command_line_action_process_runner_test`).
+- [x] TODO: Confirmar que contexto JSON usa schema opcional quando a acao exigir
   contrato estruturado.
-- [ ] TODO: Confirmar que segredos usam placeholders e `flutter_secure_storage`.
-- [ ] TODO: Confirmar comportamento quando segredo for removido ou rotacionado.
-- [ ] TODO: Confirmar que comando, argumentos, ambiente, contexto, stdout,
+  **Agente:** `AgentActionContextPolicy.runtimeParameterSchema` + validacao em
+  `AgentActionRuntimeExecutionValidator`, `ValidateAgentActionDefinition` e
+  `validate_agent_action_definition_test.dart` no gate.
+- [x] TODO: Confirmar que segredos usam placeholders e `flutter_secure_storage`.
+  **Agente:** placeholders na definicao; persistencia via repositorio de segredos
+  (secure storage); UI de segredos na pagina **Acoes**; gate:
+  `agent_action_secret_placeholder_scanner_test.dart` /
+  `agent_action_secret_placeholder_resolver_test.dart`.
+- [x] TODO: Confirmar comportamento quando segredo for removido ou rotacionado.
+  **Agente:** `AgentActionSecretPlaceholderResolver` + chips/avisos na UI;
+  execucao bloqueada ate revalidacao quando ausente; rotacao altera
+  `riskFingerprint` (`AgentActionSecretReferenceFingerprinter`), save com
+  `reconcileAsync` marca `requiresReapproval`, Hub recebe
+  `remote_risk_fingerprint_stale` (fixture
+  `rpc_response_agent_action_remote_risk_fingerprint_stale_error.json`).
+- [x] TODO: Confirmar que comando, argumentos, ambiente, contexto, stdout,
   stderr e payloads passam pelo `AgentActionRedactor`.
-- [ ] TODO: Confirmar que `capturePolicy` permite desabilitar captura de saida
+  **Implementado (parcial):** stdout/stderr usam `AgentActionRedactor` quando
+  `redactBeforePersisting` e true (default); previews de comando em falhas/logs
+  passam por `AgentActionProcessInvocationDiagnostics` e chaves de preview no
+  `LogSanitizer`.
+- [x] TODO: Confirmar que `capturePolicy` permite desabilitar captura de saida
   para acoes sensiveis.
-- [ ] TODO: Confirmar que timeout, retry, exit codes e concorrencia estao
+  **Agente (2026-05-20):** `AgentActionCapturePolicy` nos runners; UI na pagina
+  **Acoes** (stdout/stderr/redacao antes de persistir) para tipos com processo.
+- [x] TODO: Confirmar que timeout, retry, exit codes e concorrencia estao
   definidos.
-- [ ] TODO: Confirmar que remoto exige scope, idempotency key, rate limit e
+  **Agente:** politicas no editor (`timeout`, `retry`, exit codes, fila via
+  `AgentActionQueuePolicy` / `ActionExecutionQueue`); UI em **Acoes** para
+  `maxConcurrent`, `maxQueued`, `concurrencyBehavior` e allowlist de diretorios
+  (`AgentActionPathPolicy`); expostas em health/metricas.
+- [x] TODO: Confirmar que remoto exige scope, idempotency key, rate limit e
   action approval local.
-- [ ] TODO: Confirmar que mudancas de risco exigem re-aprovacao antes de nova
+  **Agente:** scopes/allowlist, `idempotency_key` obrigatorio em `run`,
+  `AgentActionRemoteRateLimiter`, aprovacao local; testes:
+  `rpc_method_dispatcher_agent_action_test.dart`,
+  `agent_action_remote_authorization_service_test.dart`,
+  `agent_action_remote_rate_limiter_test.dart`, `run_agent_action_via_remote_trigger_test.dart`.
+- [x] TODO: Confirmar que mudancas de risco exigem re-aprovacao antes de nova
   execucao remota.
-- [ ] TODO: Confirmar que `draining`/`disabled` bloqueia side effects remotos
+  **Agente:** `AgentActionRemoteApprovalReconciler` + UI de confirmacao;
+  `agent_action_definition_snapshotter_test.dart`; widget `agent_actions_remote_reapproval_info_bar`.
+- [x] TODO: Confirmar que `draining`/`disabled` bloqueia side effects remotos
   antes de enfileirar.
-- [ ] TODO: Confirmar que maintenance mode e restricao por ambiente/perfil foram
+  **Agente:** `AgentActionRuntimeStateGuard` + gates no `RpcMethodDispatcher`;
+  `agent_action_runtime_state_guard_test.dart`.
+- [x] TODO: Confirmar que maintenance mode e restricao por ambiente/perfil foram
   avaliados.
-- [ ] TODO: Confirmar que remoto nao aceita notification sem `id` em metodo com
+  **Agente:** `enableAgentActionsMaintenanceMode` em `RunAgentActionLocally` (nao-manual);
+  `AgentActionEnvironmentPolicy` + `AgentOperationalProfileResolver`; teste em
+  `agent_action_retry_and_environment_test.dart`.
+- [x] TODO: Confirmar que remoto nao aceita notification sem `id` em metodo com
   efeito colateral.
-- [ ] TODO: Confirmar que elevado usa helper separado, request protection e
+  **Agente:** `agent.action.*` rejeita notification com side effect (`notification_not_allowed`);
+  metricas `*_notification_rejected_total` no dispatcher.
+- [x] TODO: Confirmar que elevado usa helper separado, request protection e
   status file seguro.
-- [ ] TODO: Para `developer`/Data7, confirmar que `Data7.Config` e lido com
+  **Agente:** `ElevatedAgentActionExecutionService`, status file + syncer, purge de
+  artefatos; gates em `RunAgentActionLocally` e readiness na UI;
+  testes `elevated_agent_action_execution_service_test.dart`,
+  `elevated_action_request_protector_test.dart`, `elevated_action_runner_bridge_test.dart`,
+  `elevated_action_status_file_syncer_test.dart`, `elevated_action_execution_abort_registry_test.dart`
+  no gate CI/local.
+- [x] TODO: Para `developer`/Data7, confirmar que `Data7.Config` e lido com
   parser XML, que `connectionId` existe e que credenciais do arquivo nao sao
   persistidas ou retornadas remotamente.
-- [ ] TODO: Confirmar que logs, auditoria, metricas e erros JSON-RPC nao vazam
+  **Parcial (2026-05-19):** `DeveloperData7ConnectionCatalog` + resolver; UI lista
+  apenas id/label; hash sem `Senha`; gate: `developer_data7_connection_catalog_test.dart`,
+  `developer_data7_action_adapter_test.dart`, `developer_data7_process_runner_test.dart`.
+- [x] TODO: Confirmar que logs, auditoria, metricas e erros JSON-RPC nao vazam
   valores sensiveis.
-- [ ] TODO: Confirmar que nenhum erro exibido ao usuario fica generico a ponto
+  **Parcial (2026-05-19):** `AgentActionRedactor` (incl. XML Data7), redacao de
+  stdout/diagnostics, `SensitiveMapRedactor` no mapper RPC; testes de redator e
+  export em `agent_action_redactor_test.dart` /
+  `agent_action_execution_support_export_test.dart`.
+- [x] TODO: Confirmar que nenhum erro exibido ao usuario fica generico a ponto
   de esconder o motivo corrigivel da falha.
-- [ ] TODO: Confirmar que existem testes de failure path e permissao negada.
-- [ ] TODO: Confirmar plano de rollback/feature flag antes de liberar.
+  **Parcial (agente 2026-05-20):** failures de dominio usam `user_message` em
+  `ActionFailure.context`; UI **Acoes** (`AgentActionsProvider._messageFor`,
+  preview de teste com fase localizada via
+  `AgentActionFailureDiagnosticsResolver`); scheduler e import/export de bundle
+  com mensagens acionaveis; testes em
+  `agent_action_failure_diagnostics_test.dart` e widget de fase no teste.
+- [x] TODO: Confirmar que existem testes de failure path e permissao negada.
+  **Agente:** `rpc_method_dispatcher_agent_action_test.dart`,
+  `agent_action_remote_authorization_service_test.dart`,
+  `agent_action_failure_diagnostics_test.dart`,
+  `agent_action_retry_and_environment_test.dart`; fixtures de erro auth no gate CI/local.
+- [x] TODO: Confirmar plano de rollback/feature flag antes de liberar.
+  **Agente (rollback local):** preferencias `FeatureFlags` em
+  `shared_preferences` (`lib/core/config/feature_flags.dart`);
+  gate: `test/core/config/feature_flags_test.dart` (defaults + `disableAgentActionsRemoteRollout`):
+
+  | Flag (storage key) | Default seguro | Efeito ao desligar |
+  | --- | --- | --- |
+  | `enableAgentActions` (`feature_enable_agent_actions`) | `true` | Bloqueia UI, scheduler, fila e RPC `agent.action.*` |
+  | `enableRemoteAgentActions` (`feature_enable_remote_agent_actions`) | `false` | Hub nao executa acoes salvas |
+  | `enableRemoteAdHocAgentActions` (`feature_enable_remote_ad_hoc_agent_actions`) | `false` | Hub nao envia ad-hoc |
+  | `enableElevatedAgentActions` (`feature_enable_elevated_agent_actions`) | `false` | Sem bridge elevada |
+  | `enableAgentActionsMaintenanceMode` (`feature_enable_agent_actions_maintenance_mode`) | `false` | Bloqueia remoto/agendado (UI local manual opcional) |
+  | `enableAgentActionRemoteAudit` (`feature_enable_agent_action_remote_audit`) | `true` | Para de gravar auditoria remota local |
+
+  Ordem sugerida de rollback operacional: (1)
+  `disableAgentActionsRemoteRollout()` ou desligar remoto/ad-hoc/elevado; (2)
+  ligar `enableAgentActionsMaintenanceMode`; (3) `setEnableAgentActions(false)`
+  para desligar o subsistema. Tetos de deployment continuam em env
+  `AGENT_ACTION_MAX_*` (ver `.env.example` e `AgentActionPolicyDefaults`).
 
 ## Test Plan
 
@@ -3689,6 +4417,7 @@ um gate explicito de seguranca:
   - segredo ausente/removido/rotacionado produz failure segura.
 - Application:
   - registry resolve adapter correto por tipo;
+    coberto por `agent_action_type_registry_contract_test.dart` (MVP 5);
   - registry retorna failure segura para tipo nao suportado;
   - criar, editar, listar e desativar acoes;
   - pausar e reativar acoes sem apagar configuracao nem historico;
@@ -3760,8 +4489,9 @@ um gate explicito de seguranca:
   - runtime `draining` rejeita novas execucoes antes de side effect;
   - runtime em modo de manutencao bloqueia remoto/agendado conforme politica;
   - runtimeInstanceId/runtimeSessionId sao estaveis conforme esperado;
-  - parser de `Data7.Config` suporta uma e varias conexoes, redige `Senha` e
-    retorna failure segura para XML invalido;
+  - parser de `Data7.Config` suporta uma e varias conexoes, nao persiste `Senha`
+    (hash sem credenciais), falhas sem vazar XML e redacao XML em
+    `AgentActionRedactor`; retorna failure segura para XML invalido;
   - parser de `Data7.Config` falha para `ID` duplicado, conexao removida,
     arquivo vazio, tag obrigatoria ausente e encoding invalido;
   - builder `developer`/Data7 monta `Executor.exe` com argumentos estruturados
@@ -3779,12 +4509,12 @@ um gate explicito de seguranca:
   - `appStart` roda depois do bootstrap operacional;
   - `appClose` e best-effort e respeita timeout curto;
   - `appClose` rejeita por padrao acao longa, remota (`remoteHub`/Hub JSON-RPC
-    apos roteamento; NOTA "Fase 6") ou elevada;
+    apos roteamento) ou elevada;
   - `appClose` nao bloqueia fechamento indefinidamente;
   - gatilhos registram horario planejado, horario real e `triggerKind`.
 - Socket.IO/JSON-RPC:
   - contrato alvo no Hub; handlers `agent.action.*` em `RpcMethodDispatcher.dispatch`
-    (roteamento e fila locais implementados; NOTA "Fase 6" para refinamentos Hub);
+    (roteamento e fila locais implementados; **Fase 6** para refinamentos Hub);
   - metodos trafegam somente por `rpc:request`/`rpc:response` dentro de
     `PayloadFrame`;
   - schema dos novos metodos;
@@ -3808,7 +4538,7 @@ um gate explicito de seguranca:
   - `agent.action.getExecution` retorna output por janela/limite;
   - validacao remota/dry-run nao cria execucao nem processo;
   - `RpcMethodDispatcher` encadeia os mesmos use cases que UI/gatilhos para
-    `agent.action.*` (implementado; NOTA "Fase 6" para gaps finos);
+    `agent.action.*` (implementado; **Fase 6** para gaps finos);
   - feature flags;
   - autorizacao propria de acao;
   - aliases `client_token`, `clientToken` e `auth` autenticam, mas nao aplicam
@@ -3821,7 +4551,7 @@ um gate explicito de seguranca:
     `agent_actions.cancel` e `agent_actions.read_execution`;
   - allowlist por actionId quando configurada;
   - rate limit remoto (`AgentActionRemoteRateLimiter` no DI; enforcement no fluxo
-    Hub conforme NOTA "Fase 6");
+    Hub com roteamento implementado);
   - capability `agentActions`;
   - fixtures/goldens JSON de sucesso e erro para metodos `agent.action.*`
     (`test/fixtures/rpc/`, validados por `contract_fixtures_test.dart`);
@@ -3851,7 +4581,7 @@ um gate explicito de seguranca:
   - exportacao de pacote de suporte redigido nao contem segredo nem senha;
   - CRUD de gatilhos separado da configuracao do runner;
   - botao "Testar acao" com sucesso e erro;
-  - filtros de historico;
+  - filtros de historico e **lista de acoes** (tipo + busca por nome/id);
   - confirmacao para remoto, elevado, ad-hoc e app close;
   - etiquetas de risco;
   - estado degradado por runner/capability;
@@ -3862,6 +4592,24 @@ um gate explicito de seguranca:
   - tipo desconhecido aparece como nao suportado sem crash;
   - indicadores de fila/execucao;
   - execucao e kill atraves do provider/controller.
+  - correlacao auditoria remota ↔ historico (`focusExecutionFromRemoteAudit`);
+  - avisos operacionais: scheduler lock, COM sem handlers, metrica COM no summary;
+  - retencao editavel na pagina **Acoes** (`AgentActionRetentionSettings`).
+- **Gate local, CI e live Hub (agente, 2026-05-19):**
+  - preflight: `dart run tool/check_e2e_env.dart` (Hub live + COM stub opcional);
+  - live Hub `.env`: `dart run tool/validate_live_hub_agent_actions_env.dart`
+    (checklist por variavel, aviso JWT expirado / `e2e-dev` em Hub remoto, sem imprimir segredos);
+  - gate local/CI: manifestos em `tool/agent_actions_*_test_paths.txt` +
+    `homologate_hub_agent_actions.ps1 -RunContractTests` (preflight estatico,
+    contrato RPC/OpenRPC/fixtures, path validator, retencao, health schema,
+    scheduler lock, kill/orfaos/reconcile/app-exit, COM bootstrap/diagnostics,
+    provider, `agent_actions_page_test.dart` (**48** cenarios) +
+    `agent_actions_summary_card_test.dart` (manifesto UI em `agent_actions_ui_test_paths.txt`));
+  - live Hub opt-in: `-ValidateLiveEnv` + `-RunLiveTests` →
+    `test/integration/hub_agent_action_rpc_live_e2e_test.dart` (variaveis em
+    `docs/testing/e2e_setup.md`);
+  - job CI: preflight + homologation gate em `.github/workflows/flutter_ci.yml`
+    (mesmos manifestos).
 - Seguranca:
   - threat model revisado antes de remoto/elevado/ad-hoc;
   - `Data7.Config` com senha e usuarios reais e sempre redigido antes de logs,
@@ -3875,7 +4623,7 @@ um gate explicito de seguranca:
   - `enableRemoteAgentActions=false` omite capability; rejeicao com erro de
     feature no caminho Hub **apos** roteamento (handlers presentes; use case /
     mapper devem expor erro dedicado, nao `method_not_found` por ausencia de
-    `switch`);
+    handler no dispatcher);
   - `enableRemoteAdHocAgentActions=false` bloqueia comando remoto ad-hoc;
   - `enableElevatedAgentActions=false` bloqueia apenas runner elevado;
   - falha de scheduler degrada a feature sem impedir o app principal;
@@ -3885,7 +4633,7 @@ um gate explicito de seguranca:
 
 - A documentacao de protocolo e OpenRPC evoluem junto com o contrato; quando o
   comportamento divergir do texto publicado, atualizar docs/tests no mesmo ciclo
-  (NOTA "Fase 6" e politica de documentacao neste plano).
+  (politica de documentacao neste plano).
 - O app continua funcionando sem a feature habilitada.
 - A nova entrada de menu aparece acima de Configuracoes quando a UI for
   implementada.
@@ -3919,7 +4667,7 @@ um gate explicito de seguranca:
   roteamento (parcial: constantes/capability + `AgentActionRemoteRateLimiter` no
   agente; enforcement fino de **scopes/allowlist no payload do token** no agente
   quando `enableClientTokenAuthorization` e policy com metadados de acao;
-  enforcement equivalente **no Hub** — NOTA "Fase 6").
+  enforcement equivalente **no Hub**).
 - Autenticacao remota pode reutilizar o token atual, mas autorizacao de acao nao
   deriva de permissao SQL.
 - Chamadas remotas registram `client_id`, `token_id`/`jti`, scopes resolvidos,
@@ -3928,36 +4676,31 @@ um gate explicito de seguranca:
   append-only por RPC grava `traceId` / `requestedBy` correlacionados a
   `meta.trace_id`/`traceparent` e `meta.request_id`, e **`client_id` / `token_jti`**
   quando a policy do token foi resolvida no fluxo de autorizacao; **restante:**
-  correlacao adicional na entidade `AgentActionExecution` onde o produto exigir —
-  NOTA "Fase 6").
+  correlacao adicional na entidade `AgentActionExecution` onde o produto exigir.
 - `agent.action.run` remoto e assincrono, retorna `execution_id`/status inicial
-  e nao bloqueia ate o processo terminar (com roteamento em `RpcMethodDispatcher`;
-  NOTA "Fase 6").
+  e nao bloqueia ate o processo terminar (com roteamento em `RpcMethodDispatcher`).
 - `agent.action.run` rejeita acao pausada, re-aprovacao pendente e runtime
-  `draining` antes de criar side effect (fluxo Hub via dispatcher ate o use case;
-  NOTA "Fase 6").
+  `draining` antes de criar side effect (fluxo Hub via dispatcher ate o use case).
 - `agent.action.run` rejeita modo de manutencao e ambiente/perfil nao permitido
   antes de criar side effect (idem).
 - `enableRemoteAgentActions=false` omite capability; chamadas `agent.action.*`
   devem falhar com erro seguro documentado **no caminho Hub** (handlers presentes;
-  alinhar codigo/mensagem ao erro de feature documentado — NOTA "Fase 6").
+  alinhar codigo/mensagem ao erro de feature documentado).
 - Existe caminho de validacao remota sem executar (`validateRun` / dry-run) antes
-  de liberar execucao remota ampla (roteado via `RpcMethodDispatcher`; NOTA
-  "Fase 6").
+  de liberar execucao remota ampla (roteado via `RpcMethodDispatcher`).
 - `agent.action.run` em batch nao cria side effect no MVP (politica no
   `RpcInboundHandler`; execucao real de `run` apenas fora de batch, com handler
   no dispatcher).
 - Notifications sem `id` para metodos com side effect nao executam a acao
-  (handlers em `RpcMethodDispatcher` rejeitam; NOTA "Fase 6").
+  (handlers em `RpcMethodDispatcher` rejeitam).
 - `agent.action.getExecution` limita/pagina output capturado e nunca devolve
   stdout/stderr grande sem controle (use case + pager; Hub **apos** roteamento).
 - `rpc.discover` reflete os metodos `agent.action.*` do OpenRPC; **execucao remota**
-  no agente passa pelos handlers em `RpcMethodDispatcher` (NOTA "Fase 6").
+  no agente passa pelos handlers em `RpcMethodDispatcher`.
 - Novos tipos de acao sao plugados por `AgentActionAdapterRegistry`, sem scheduler,
   fila, auditoria, historico ou contrato remoto paralelo.
 - Tipo de acao desconhecido nao causa crash e retorna failure segura na UI,
-  scheduler e Hub **quando** a chamada Hub atinge os use cases (apos roteamento;
-  NOTA "Fase 6").
+  scheduler e Hub **quando** a chamada Hub atinge os use cases (apos roteamento).
 - Gate de revisao de seguranca e obrigatorio antes de habilitar remoto, elevado
   ou ad-hoc para qualquer tipo.
 - Execucoes remotas duplicadas por retry usam idempotencia.
@@ -4006,7 +4749,7 @@ um gate explicito de seguranca:
 - UI usa mensagens localizadas para erros visiveis e oferece painel/pacote de
   diagnostico redigido para suporte.
 - Politica de concorrencia por acao e aplicada antes da fila global (inclui
-  disputa com Hub JSON-RPC apos roteamento; NOTA "Fase 6").
+  disputa com Hub JSON-RPC apos roteamento).
 - Agendamentos perdidos com o app fechado sao ignorados por padrao.
 - Gatilhos temporais respeitam timezone local e comportamento definido para
   horarios inexistentes/duplicados.
@@ -4015,7 +4758,7 @@ um gate explicito de seguranca:
 - `appClose` e documentado e implementado como best-effort, sem garantia em
   encerramento forcado.
 - `appClose` nao permite por padrao execucao longa, elevada ou remota (remota =
-  origem `remoteHub`/Hub JSON-RPC apos roteamento; NOTA "Fase 6").
+  origem `remoteHub`/Hub JSON-RPC apos roteamento).
 - Runtime degradado bloqueia somente a parte indisponivel da feature.
 - Cada tipo de acao pode ser implementado e testado em contexto menor, sem
   duplicar scheduler, fila, seguranca, auditoria e historico.
@@ -4037,153 +4780,373 @@ do Plug Agente:
   `ACTION_REMOTE_FEATURE_DISABLED`; capability omitida; RPC `-32002` com
   `agent_actions_remote_disabled` em todos os handlers `agent.action.*`
   (teste em `rpc_method_dispatcher_agent_action_test.dart`).
-- [ ] TODO: Modo de manutencao deve ser reversivel sem migration e sem apagar
-  acoes, gatilhos ou historico. Parcial: `enableAgentActionsMaintenanceMode`
-  bloqueia scheduler e execucoes nao manuais sem alterar dados persistidos; UI
-  e estado operacional visivel ainda pendentes.
-- [ ] TODO: `enableRemoteAdHocAgentActions=false` deve manter comando remoto
-  ad-hoc indisponivel mesmo quando a feature remota estiver ativa.
-- [ ] TODO: `enableElevatedAgentActions=false` deve bloquear apenas runner
-  elevado, mantendo execucao local nao elevada.
-- [ ] TODO: Falha no bootstrap do scheduler deve desativar scheduler de acoes e
+- [x] TODO: Modo de manutencao deve ser reversivel sem migration e sem apagar
+  acoes, gatilhos ou historico. Implementado: `enableAgentActionsMaintenanceMode`
+  bloqueia scheduler, execucoes nao `localUi`, salvamento de gatilhos e RPC
+  `agent.action.*` (`-32015` + `agent_actions_maintenance_mode`); UI com InfoBar,
+  metrica no resumo e botao de gatilhos desabilitado; dados persistidos intactos.
+- [x] TODO: `enableRemoteAdHocAgentActions=false` deve manter comando remoto
+  ad-hoc indisponivel mesmo quando a feature remota estiver ativa. Implementado:
+  capability `remoteAdHoc` omitida quando flag off; `SaveAgentActionDefinition`
+  normaliza `allowAdHoc=false`; UI desabilita checkbox e exibe InfoBar; checkbox
+  e persistencia respeitam a flag global.
+- [x] TODO: `enableElevatedAgentActions=false` deve bloquear apenas runner
+  elevado, mantendo execucao local nao elevada. Implementado: politica
+  `policies.elevated.runElevated`; `RunAgentActionLocally` rejeita com
+  `ACTION_ELEVATED_DISABLED`; save normaliza `runElevated=false`; capability
+  `elevatedAllowed` e health `elevated_enabled` expostos.
+- [x] TODO: Falha no bootstrap do scheduler deve desativar scheduler de acoes e
   registrar failure segura, sem impedir conexao Socket.IO/ODBC existente.
-- [ ] TODO: Falha de migration deve seguir politica geral do app para Drift e
-  nao tentar recriar dados de acoes silenciosamente.
-- [ ] TODO: Falha no helper elevado deve marcar runner elevado como degradado e
+  Implementado: falha em `listTriggers` no bootstrap chama
+  `_disableAfterBootstrapFailure`; `start`/`reload`/gatilhos de ciclo de vida
+  retornam `ACTION_SCHEDULER_BOOTSTRAP_FAILED`; `AppInitializer` registra log e
+  chama `stop()` sem bloquear o restante do bootstrap.
+- [x] TODO: Falha de migration deve seguir politica geral do app para Drift e
+  nao tentar recriar dados de acoes silenciosamente. Verificado: tabelas de acoes
+  entram apenas por `createTable`/addColumn incremental em `AppDatabase`; sem
+  drop/recreate silencioso.
+- [x] TODO: Falha no helper elevado deve marcar runner elevado como degradado e
   orientar reparo, sem apagar tarefa ou status files automaticamente.
-- [ ] TODO: Falha na protecao de request file/nonce do helper elevado deve
+  Implementado: `ElevatedActionRunnerReadinessService.markDegraded`; UI InfoBar
+  com `prepareElevatedRunner` na `AgentActionsPage`; sem apagar tarefa/status
+  automaticamente.
+- [x] TODO: Falha na protecao de request file/nonce do helper elevado deve
   bloquear execucao elevada e registrar failure segura.
-- [ ] TODO: Rollback de protocolo deve ser feito por capability/feature flag,
-  nao removendo metodos ja publicados sem versao nova.
-- [ ] TODO: Durante rollback/update, colocar subsistema em `draining` antes de
-  desligar runners ou alterar protocolo remoto.
-- [ ] TODO: Cleanup e reconciliacao devem ser idempotentes para permitir
-  reexecucao apos rollback parcial ou crash. Parcial: reconciliacao de
-  execucoes `queued`/`running` e idempotente no use case e no bootstrap.
-- [ ] TODO: Cleanup em rollback nunca deve remover dados de execucoes ativas ou
-  evidencias necessarias para auditoria recente.
+  Implementado: `ElevatedActionRequestProtector` (nonce + TTL + write atomico);
+  falhas mapeadas para `ACTION_ELEVATED_REQUEST_PROTECTION_FAILED` /
+  `elevated_request_protection_failed`.
+- [x] TODO: Rollback de protocolo deve ser feito por capability/feature flag,
+  nao removendo metodos ja publicados sem versao nova. Implementado: metodos
+  `agent.action.*` permanecem publicados; gates por feature flag/capability;
+  `AgentActionSubsystemCoordinator.disableRemoteAgentActions()` para rollback
+  operacional com draining.
+- [x] TODO: Durante rollback/update, colocar subsistema em `draining` antes de
+  desligar runners ou alterar protocolo remoto. Implementado:
+  `AgentActionSubsystemCoordinator` (manutencao e rollback remoto); UI de
+  manutencao usa o coordenador; shutdown global ja drenava em `shutdownApp`.
+- [x] TODO: Cleanup e reconciliacao devem ser idempotentes para permitir
+  reexecucao apos rollback parcial ou crash. Implementado: reconciliacao de
+  `queued`/`running` idempotente (teste com segunda chamada retornando 0);
+  purge de historico/auditoria por cutoff sem efeito colateral em reexecucao.
+- [x] TODO: Cleanup em rollback nunca deve remover dados de execucoes ativas ou
+  evidencias necessarias para auditoria recente. Implementado:
+  `cleanupExecutions` so remove status terminais antigos; teste de repositorio
+  preserva `queued`/`running`; auditoria remota purga apenas por `occurredBefore`.
 
 ## Decisoes Pendentes
 
 Estas decisoes devem ser fechadas antes ou durante o MVP correspondente, evitando
 assumir detalhes tecnicos sem validacao no codigo real.
 
-- [ ] DECISAO MVP 0: nome final do modulo/pasta da feature:
+- [x] DECISAO MVP 0: nome final do modulo/pasta da feature:
   `agent_actions`, `actions` ou outro padrao alinhado ao repositorio.
+  **Implementado:** dominio/aplicacao em `lib/domain/actions` e
+  `lib/application/actions` (barrel `actions.dart`); infraestrutura em
+  `lib/infrastructure/actions` e repositorios `agent_action_*`; UI em
+  `lib/presentation/pages/agent_actions_page.dart` e
+  `lib/presentation/widgets/agent_actions/`. Prefixo de arquivo
+  `agent_action_*` / `agent_actions_*` conforme camada.
 - [x] DECISAO MVP 0: assinatura inicial do contrato `AgentActionAdapter` e
   `AgentActionAdapterRegistry` definidos em `domain/actions`; composicao de adapters
   concretos fica no DI.
 - [x] DECISAO MVP 0: formato inicial das tabelas Drift para configs
   discriminadas usa coluna JSON validada por mapper, preservando possibilidade
   de tabelas especificas futuras quando algum tipo exigir consulta propria.
-- [ ] DECISAO MVP 0: formato final da matriz de armazenamento e quais dados
+- [x] DECISAO MVP 0: formato final da matriz de armazenamento e quais dados
   podem aparecer em pacote de suporte redigido.
-- [ ] DECISAO MVP 0: se `needsValidation` sera estado principal da acao ou
+  **Implementado (MVP):** export JSON via `AgentActionExecutionSupportExport` e
+  `AgentActionRemoteAuditSupportExport` (`support_schema: plug_agente.support.v1`);
+  metadados de execucao/auditoria, hashes, status, falhas e janelas de stdout/stderr
+  ja redigidos na persistencia; sem segredos nem comando completo com placeholders
+  resolvidos. Refino de matriz por tipo de acao fica pos-MVP.
+- [x] DECISAO MVP 0: se `needsValidation` sera estado principal da acao ou
   flag separada de validacao, mantendo `active`/`paused`/`disabled`.
-- [ ] DECISAO MVP 0: politica default para importacao de acoes:
+  **Implementado:** `AgentActionState` inclui `needsValidation` como estado de
+  dominio junto a `active`, `paused` e `disabled` (`action_enums.dart`); UI e
+  provider respeitam o enum (nao e flag paralela).
+- [x] DECISAO MVP 0: politica default para importacao de acoes:
   `needsValidation` ou `disabled`.
-- [ ] DECISAO MVP 0: catalogo final de codigos de erro e chaves ARB
+  **Implementado:** default `AgentActionState.needsValidation` em
+  `AgentActionDefinition`, formulario (`AgentActionsPage`) e
+  `AgentActionsProvider` ao criar/importar; acao so executa remotamente apos
+  validacao + aprovacao explicita.
+- [x] DECISAO MVP 0: catalogo final de codigos de erro e chaves ARB
   correspondentes para mensagens visiveis.
-- [ ] DECISAO MVP 0: valores default de `maxConcurrentActions`,
+  **Implementado (primeiro corte):** strings de UI em `lib/l10n/app_*.arb`
+  (`agentActions*`, auditoria remota, estados, riscos); mapeamento de
+  `reason`/`outcome` RPC em `agent_action_remote_audit_labels.dart`;
+  diagnostico de falhas em `AgentActionFailureDiagnosticsResolver` + testes;
+  erros JSON-RPC genericos continuam em `RpcErrorCode` + localizer. Catalogo
+  unico tipo-gerado (uma chave por `failure_code`) fica refinamento futuro.
+- [x] DECISAO MVP 0: valores default de `maxConcurrentActions`,
   `maxQueuedActions`, `defaultActionQueueTimeout`, `defaultActionMaxRuntime`,
   `maxActionContextBytes` e `maxCapturedOutputBytes`.
-- [ ] DECISAO MVP 0: valores default de `successExitCodes`,
+  **Implementado (primeiro corte):** dominio `AgentActionQueuePolicy` (1 / 100 /
+  5 min), `AgentActionTimeoutPolicy` (30 min), `AgentActionContextPolicy` e
+  `AgentActionCapturePolicy` (256 KiB contexto, 64 KiB output); capability remota
+  em `AgentActionRpcConstants.remoteAgentActionsLimitsCapability` e
+  `remoteAgentActionsDefaultQueueLimitsCapability` (1 / 100 / 300000 ms).
+- [x] DECISAO MVP 0: valores default de `successExitCodes`,
   `defaultActionMaxRetries`, `stdinPolicy`, `windowMode` e `onAppExitPolicy`.
+  **Implementado (primeiro corte):** `AgentActionExitCodePolicy` default `{0}`;
+  `AgentActionRetryPolicy` (`maxAttempts: 1`, sem retry remoto);
+  `AgentActionLifecyclePolicy` (`onAppExit: killMainProcess`, espera 5s);
+  injecao de contexto default `argument` em `AgentActionContextPolicy`.
+  `stdinPolicy` / `windowMode` como campos nomeados do plano ainda nao existem
+  no modelo — comportamento equivalente fica no adapter `commandLine` (sem stdin
+  por padrao; janela conforme config da acao).
 - [x] DECISAO MVP 0: status final para execucoes orfas: usar `interrupted` para
   execucoes `queued`/`running` encontradas no bootstrap; reservar `unknown` para
   cenarios futuros em que o estado real nao possa ser classificado.
-- [ ] DECISAO MVP 0: estrategia de `runtimeInstanceId` e `runtimeSessionId`:
+- [x] DECISAO MVP 0: estrategia de `runtimeInstanceId` e `runtimeSessionId`:
   origem, persistencia, renovacao por boot e relacao com single instance.
-- [ ] DECISAO MVP 0: se a aplicacao deve ter lock/mutex explicito para impedir
+  Implementado: `AgentRuntimeIdentity` (persistido em settings + sessao por boot),
+  Drift nas execucoes e auditoria, fingerprint de idempotencia RPC; politica de
+  multi-instancia documentada na decisao seguinte.
+- [x] DECISAO MVP 0: se a aplicacao deve ter lock/mutex explicito para impedir
   multi-instancia ou apenas detectar conflito e degradar a feature de acoes.
-- [ ] DECISAO MVP 0: schema final de auditoria append-only e retencao dos
+  **MVP (2026-05-19):** sem mutex dedicado da feature de acoes; correlacao por
+  `runtimeInstanceId` / `runtimeSessionId` em execucoes, auditoria remota e UI
+  (rejeita destaque cruzado quando IDs divergem). Dialogo/mensagem de instancia
+  duplicada do app permanece no escopo geral do produto (backup/config), nao
+  como trava do subsistema de acoes. Mutex global explicito fica pos-MVP se
+  houver incidente real de Drift compartilhado entre processos.
+- [x] DECISAO MVP 0: schema final de auditoria append-only e retencao dos
   eventos de auditoria em relacao ao historico de 3 dias.
-- [ ] DECISAO MVP 0: nomes e valores do ambiente/perfil do agente (`dev`,
+  Implementado: `agent_action_remote_audit` (schemas 20–24), purge via
+  `AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS`; historico de execucoes com retencao
+  propria (`AGENT_ACTION_EXECUTION_RETENTION_DAYS`, default 3 dias).
+- [x] DECISAO MVP 0: nomes e valores do ambiente/perfil do agente (`dev`,
   `homolog`, `prod` ou outro modelo).
-- [ ] DECISAO MVP 0: shape final do modo de manutencao e se ele bloqueia remoto,
+  **Implementado (MVP):** string livre via env `AGENT_OPERATIONAL_PROFILE`
+  (`AgentOperationalProfileResolver`); checagem em `AgentActionEnvironmentPolicy`
+  por acao (`allowedOperationalProfiles`); capability expoe `profile` /
+  `agentEnvironment` quando definido. Sem enum fechado no codigo neste ciclo.
+- [x] DECISAO MVP 0: shape final do modo de manutencao e se ele bloqueia remoto,
   agendado ou ambos por configuracao.
-- [ ] DECISAO MVP 0: formato para schema opcional de contexto JSON por acao.
-- [ ] DECISAO MVP 0: politica de hash redigido de contexto e algoritmo usado.
-- [ ] DECISAO MVP 0: comportamento padrao quando segredo referenciado e removido
+  **Implementado:** flag `enableAgentActionsMaintenanceMode` bloqueia RPC
+  `agent.action.*` (`-32015` + `agent_actions_maintenance_mode`), gatilhos
+  agendados/`appStart`/`appClose` e execucao remota; execucao manual na UI e
+  edicao de definicoes permanecem (InfoBar l10n). Capability reporta
+  `maintenanceMode: true`. Fixture
+  `rpc_response_agent_action_maintenance_mode_error.json`.
+- [x] DECISAO MVP 0: formato para schema opcional de contexto JSON por acao.
+  **Implementado:** `AgentActionContextPolicy.contextJsonSchema` (`Map` opcional);
+  validacao em `ActionPathValidator` na fase de definicao/execucao local; remoto
+  inline continua fora do MVP (`supportsContext: false`).
+- [x] DECISAO MVP 0: politica de hash redigido de contexto e algoritmo usado.
+  **Implementado (local):** `contentHash` em `ActionPathValidator` como
+  `sha256:<hex>` do conteudo do arquivo de contexto validado; persistido em
+  `context_hash` na execucao. Nao envia conteudo bruto ao Hub; hash de payload
+  remoto inline permanece fora do MVP.
+- [x] DECISAO MVP 0: comportamento padrao quando segredo referenciado e removido
   ou rotacionado.
-- [ ] DECISAO MVP 0: ponto em que o plano sera quebrado em subdocs menores.
-- [ ] DECISAO MVP 1: pacote principal para processo mockavel: `process`, API
+  **Implementado:** `AgentActionSecretPlaceholderResolver.ensureResolvable` falha
+  com `ACTION_SECRET_UNAVAILABLE` / `action_secret_unavailable` antes de
+  executar; UI de segredos permite recriar; placeholders `${secret:name}` nao
+  resolvem para string vazia.
+- [~] DECISAO MVP 0: ponto em que o plano sera quebrado em subdocs menores.
+  **Parcial (2026-05-20):** indices em `docs/implemente/acoes/` (contrato, UI,
+  seguranca); plano mestre permanece canonico; runners/tipos sob demanda (~L920).
+- [x] DECISAO MVP 1: pacote principal para processo mockavel: `process`, API
   Dart nativa encapsulada, ou outro wrapper local.
-- [ ] DECISAO MVP 1: encoding/codepage default para stdout/stderr no Windows.
-- [ ] DECISAO MVP 1: formato de armazenamento de stdout/stderr: colunas
+  **Implementado:** `package:process` em `CommandLineActionProcessRunner` e
+  `DeveloperData7ProcessRunner`; injecao de `ProcessRunner` nos testes de
+  infraestrutura.
+- [x] DECISAO MVP 1: encoding/codepage default para stdout/stderr no Windows.
+  **Implementado:** `AgentActionEncodingPolicy` com default `systemConsole`
+  (code page do host via `systemEncoding` no Windows, UTF-8 nos demais SOs) e
+  modo `utf8` explicito; runners MVP5 usam `ActionProcessOutputCapture` +
+  `ActionProcessOutputDecoder`.
+- [x] DECISAO MVP 1: formato de armazenamento de stdout/stderr: colunas
   truncadas na execucao, tabela separada ou chunks.
-- [ ] DECISAO MVP 1: contrato de paginacao de output capturado:
+  **Implementado:** colunas `stdout_text` / `stderr_text` na tabela de execucao
+  Drift com flags `*_truncated` e limite `maxCapturedOutputBytes` na policy de
+  captura (default 64 KiB por stream na definicao). Saida maior que
+  `AGENT_ACTION_CAPTURED_OUTPUT_INLINE_MAX_BYTES` (default 16 KiB UTF-8) vai para
+  `agent_action_captured_output_chunk_table` (schema 25) com flags
+  `stdout_stored_in_chunks` / `stderr_stored_in_chunks`.
+- [x] DECISAO MVP 1: contrato de paginacao de output capturado:
   `output_offset`, `output_cursor`, chunks ou resumo por execucao.
-- [ ] DECISAO MVP 1: modo de injecao de contexto padrao: argumento, arquivo,
+  **Implementado:** `agent.action.getExecution` aceita `stdout_offset` e
+  `stderr_offset` (UTF-8); `AgentActionExecutionOutputPaging` fatia janelas
+  redigidas; schema `rpc.params.agent-action-get-execution`; fixture
+  `rpc_response_agent_action_get_execution_paged_stdout.json`; capability
+  `supportsOutputPaging: true`.
+- [x] DECISAO MVP 1: modo de injecao de contexto padrao: argumento, arquivo,
   variavel de ambiente ou stdin desabilitado por padrao.
-- [ ] DECISAO MVP 1: politica final para paths Windows especiais: UNC, drive
+  **Implementado:** enum `AgentActionContextInjectionMode` com default
+  `argument` em `AgentActionContextPolicy`; MVP local usa arquivo de contexto
+  validado por path (`contextPath` na execucao); modos `file`/`environment`/`stdin`
+  persistidos para evolucao — apenas `argument` + path file no fluxo atual.
+- [x] DECISAO MVP 1: politica final para paths Windows especiais: UNC, drive
   mapeado, path longo, symlink/junction e arquivo bloqueado.
+  **Implementado (primeiro corte):** `ActionPathValidator` com
+  `resolveSymbolicLinks`, fallback para path absoluto, allowlists por diretorio,
+  extensao e `path_changed_after_save`; erros estaveis em
+  `AgentActionPathContextConstants`. Regras finas (UNC explicito, path longo
+  `\\?\`, arquivo bloqueado) seguem como regressao conforme relatos de campo.
 - [x] DECISAO MVP 2: usar pacote `cron` ou scheduler proprio com timers e
   calculo local de proxima execucao. Decidido e implementado primeiro corte
   com scheduler proprio, `Timer` em memoria e calculador local testavel.
-- [ ] DECISAO MVP 2: comportamento visual do app quando houver acoes `appClose`
+- [x] DECISAO MVP 2: comportamento visual do app quando houver acoes `appClose`
   pendentes no fechamento controlado.
-- [ ] DECISAO MVP 3: nomes finais de scopes remotos e integracao com a policy
+  **Implementado (MVP):** `shutdownApp` marca `draining`, despacha gatilhos
+  `appClose` e aplica `onAppExit` antes de desconectar; UI mostra InfoBar de
+  draining na pagina Acoes; confirmacao ao criar gatilho `appClose` no dialogo.
+  Dialogo dedicado de “fechamento com N acoes pendentes” fica refinamento de UX.
+- [x] DECISAO MVP 3: nomes finais de scopes remotos e integracao com a policy
   atual de client tokens.
+  Implementado: `AgentActionRpcConstants.remotePublishedAuthorizationScopesOrdered`
+  (`agent_actions.run`, `validate_run`, `cancel`, `read_execution`) + enforcement
+  via `ClientTokenPolicyAgentActionAuthorization` / payload `agent_actions`.
 - [x] DECISAO MVP 3: versao OpenRPC a ser usada quando os metodos forem
-  publicados. Parcial: contrato publicado em `2.11.1` com `agent.action.validateRun`;
-  revisar apenas se houver bump adicional antes do release do Hub.
-- [ ] DECISAO MVP 3: shape final de `extensions.agentActions` e se limites de
+  publicados. Implementado: contrato publicado em `2.11.2`, incluindo
+  `agent.action.validateRun` e os acrescimos de `skipped`/health do pacote
+  `2.11.2`; revisar apenas se houver bump adicional antes do release do Hub.
+- [x] DECISAO MVP 3: shape final de `extensions.agentActions` e se limites de
   acoes ficam dentro desse bloco ou tambem em `capabilities.limits`.
-- [ ] DECISAO MVP 3: politica final para JSON-RPC batch:
+  Decidido: bloco `extensions.agentActions` em `agent:capabilities` com `enabled`,
+  `version`, `methods`, `supportedTypes`, scopes, `requiresIdempotencyKey`,
+  `batchPolicy`, `limits` (fila/contexto/output paging) e `defaultQueueLimits`;
+  limites globais de payload continuam em `capabilities.limits` do protocolo.
+- [x] DECISAO MVP 3: politica final para JSON-RPC batch:
   `agent.action.run` rejeitado sempre no MVP, `cancel` rejeitado ou idempotente,
   `getExecution` permitido ou limitado, `validateRun` permitido (read-only).
-- [ ] DECISAO MVP 3: faixa final de codigos JSON-RPC para dominio de acoes e se
+  Decidido: `run` e `cancel` rejeitados em batch (`method_not_allowed_in_batch`);
+  `getExecution` e `validateRun` permitidos no `RpcInboundHandler`.
+- [x] DECISAO MVP 3: faixa final de codigos JSON-RPC para dominio de acoes e se
   sera adicionada uma categoria `action` ao catalogo oficial.
-- [ ] DECISAO MVP 3: TTL e persistencia da idempotencia remota de acoes,
+  Decidido: MVP reutiliza codigos compartilhados (`-32001`..`-32015`, `-32602`,
+  `-32109` para not-found de execucao) com `error.data.reason` estavel e
+  `category: action` (`RpcErrorCode.categoryAction` em `FailureToRpcErrorMapper`).
+  Faixa `-32299`..`-32200` reservada em `RpcErrorCode` / `AgentActionRpcConstants`
+  para codigos dedicados futuros (sem uso no MVP 3).
+- [x] DECISAO MVP 3: TTL e persistencia da idempotencia remota de acoes,
   considerando reconnect, retry do Hub e retencao de historico de 3 dias.
-- [ ] DECISAO MVP 3: formato final de contexto remoto inline e tamanho maximo
+  Decidido: duas camadas — (1) cache RPC Drift (`{method}:{key}`) com
+  `ConnectionConstants.agentActionRpcIdempotencyEntryTtl` (env
+  `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS`, default
+  `min(agentActionExecutionRetention, 24h)`); (2) dedup de negocio em
+  `agent_action_execution` via `RunAgentActionLocally` + historico ate
+  `AGENT_ACTION_EXECUTION_RETENTION_DAYS` (default 3 dias). SQL generico continua
+  em `RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` (default 5 min).
+- [x] DECISAO MVP 3: formato final de contexto remoto inline e tamanho maximo
   inicial, alinhado a `max_payload_bytes` e `maxContextBytes`.
+  Decidido (MVP): **sem** contexto inline em `agent.action.run`/`validateRun`;
+  params extras de contexto rejeitados no schema com `reason`
+  `remote_context_not_supported`; use case bloqueia `contextPath` e
+  `runtimeParameters` para `remoteHub`. Evolucao futura: JSON inline limitado por
+  `maxContextBytes` (default 256 KiB) e `capabilities.limits.max_payload_bytes`.
 - [x] DECISAO MVP 3: validacao remota sem side effect deve ser metodo separado
   `agent.action.validateRun` ou `options.dry_run=true` em `agent.action.run`.
   Decidido: metodo separado `agent.action.validateRun` no contrato e
   `RunAgentActionLocally.validateRemoteRun` no nucleo; exposicao JSON-RPC ao Hub
-  via handler em `RpcMethodDispatcher` (NOTA "Fase 6"); `dry_run` em
+  via handler em `RpcMethodDispatcher` ; `dry_run` em
   `run` permanece fora do contrato publicado neste ciclo.
-- [ ] DECISAO MVP 3: campos exatos que invalidam aprovacao remota e exigem
+- [x] DECISAO MVP 3: campos exatos que invalidam aprovacao remota e exigem
   re-aprovacao local.
-- [ ] DECISAO MVP 3: formato final de fixtures/goldens JSON para contrato Hub e
+  Implementado: fingerprint de risco em `AgentActionDefinitionSnapshotter`
+  (campos de comando, elevacao, ad-hoc, gatilho app-close, captura/redacao, etc.).
+- [x] DECISAO MVP 3: formato final de fixtures/goldens JSON para contrato Hub e
   onde esses fixtures ficarao no repositorio.
-  Parcial: exemplos canonicos em `test/fixtures/rpc/` com validacao em
-  `contract_fixtures_test.dart`; formato final para CI/goldens do Hub ainda em aberto.
-- [ ] DECISAO MVP 3: erro final quando `enableRemoteAgentActions=false` e o Hub
-  ainda chamar metodo `agent.action.*`. Parcial: com handlers no dispatcher, a
-  resposta deve mapear para erro de feature dedicado (nao `method_not_found`);
-  fechar codigo/mensagem/codigo JSON-RPC e atualizar rollback deste plano.
-- [ ] DECISAO MVP 4: tecnologia do helper elevado: executavel Dart/console,
+  **Agente (fechado):** exemplos canonicos em `test/fixtures/rpc/` (requests
+  `agent.action.*`, respostas queued/paged/validate, erros
+  `remote_disabled`, `permission_denied`, `missing_client_token`,
+  `remote_context_not_supported`, `remote_rate_limited`, `maintenance_mode`,
+  `draining`, `feature_disabled`, `starting`, `remote_idempotency_required`,
+  `idempotency_fingerprint_mismatch`, `notification_not_allowed`) com validacao em
+  `test/docs/communication/contract_fixtures_test.dart` (20 respostas de erro
+  `agent.action.*` no total). **Hub/CI:** goldens do
+  consumidor Hub permanecem responsabilidade do repositorio Hub; este repo nao
+  duplica snapshots do Hub.
+- [x] DECISAO MVP 3: erro final quando `enableRemoteAgentActions=false` e o Hub
+  ainda chamar metodo `agent.action.*`.
+  Implementado: `-32002` (`unauthorized`) com `reason` `agent_actions_remote_disabled`
+  em todos os handlers `agent.action.*` antes do use case; capability omitida;
+  fixture `rpc_response_agent_action_remote_disabled_error.json`; auditoria com
+  outcome `authorization_denied`; teste em `rpc_method_dispatcher_agent_action_test.dart`.
+- [x] DECISAO MVP 4: tecnologia do helper elevado: executavel Dart/console,
   binario nativo pequeno, PowerShell assinado ou outro empacotamento.
-- [ ] DECISAO MVP 4: diretorio seguro para status files elevados e politica de
+  **Decidido:** executavel Dart AOT/console `plug_agente_elevated_runner.exe`
+  (`tool/plug_agente_elevated_runner/`), nao o binario Flutter principal.
+- [x] DECISAO MVP 4: diretorio seguro para status files elevados e politica de
   ACL por usuario/sessao.
-- [ ] DECISAO MVP 4: mecanismo de protecao da solicitacao elevada: request file
+  **Implementado:** arvore `app_data/agent_actions/elevated/{requests,status,cancel,materialized}`
+  sob `GlobalStorageContext`; ACL best-effort via `icacls` no hardener.
+- [x] DECISAO MVP 4: mecanismo de protecao da solicitacao elevada: request file
   com ACL, nonce, assinatura local ou combinacao desses mecanismos.
-- [ ] DECISAO MVP 4: usuario/contexto da tarefa elevada e impacto no acesso ao
+  **Implementado (MVP):** request JSON com `executionId`, `nonce`, TTL; write
+  atomico; ACL no diretorio; sem HMAC adicional neste ciclo.
+- [x] DECISAO MVP 4: usuario/contexto da tarefa elevada e impacto no acesso ao
   `flutter_secure_storage`.
-- [ ] DECISAO MVP 5: ordem de implementacao dos tipos adicionais depois de
+  **Implementado (MVP):** tarefa elevada roda em conta com privilegio alto;
+  materializacao no helper le materialized file/SQLite local; segredos
+  resolvidos no contexto do helper (nao via RPC). Impacto fino por perfil de
+  usuario Windows fica validacao em campo.
+- [x] DECISAO MVP 5: ordem de implementacao dos tipos adicionais depois de
   `commandLine`: `executable`, `script`, `jar`, `email`, `comObject` ou
   `developer`.
-- [ ] DECISAO MVP 5: pacote e abordagem COM, caso `comObject` seja aprovado.
-- [ ] DECISAO MVP 5 Developer: confirmar se o primeiro engine do tipo
+  **Decidido:** `commandLine` primeiro; `developer` (Data7) como segundo corte;
+  demais tipos apos estabilizar nucleo remoto/elevado.
+- [x] DECISAO MVP 5: pacote e abordagem COM, caso `comObject` seja aprovado.
+  **Decidido:** sem automacao COM generica via `IDispatch`; cada par ProgID/membro entra por
+  `RegisteredComObjectInvocation` + handler dedicado. `ComObjectInvocationRegistry` no DI inicia
+  vazio; homologacao de handlers reais (possivelmente com `win32`) e por PR.
+- [x] DECISAO MVP 5 Developer: confirmar se o primeiro engine do tipo
   `developer` sera nomeado `data7Executor` no dominio e no Drift.
-- [ ] DECISAO MVP 5 Developer: confirmar caminhos default finais de
+  **Confirmado:** `AgentActionDeveloperEngine.data7Executor` +
+  `DeveloperData7ActionAdapter` registrado no `AgentActionAdapterRegistry`.
+- [x] DECISAO MVP 5 Developer: confirmar caminhos default finais de
   `Executor.exe` e `Data7.Config`, e se a busca rapida tera outros caminhos
   alem de `C:\Data7\bin` e `C:\Data7`.
-- [ ] DECISAO MVP 5 Developer: confirmar se o usuario pode editar
+  **Implementado (MVP):** defaults em `DeveloperData7ConfigLocator`
+  (`C:\Data7\bin\Data7.Config`, `C:\Data7\Data7.Config`) + caminho manual na UI;
+  outras raizes so via path informado/allowlist.
+- [x] DECISAO MVP 5 Developer: confirmar se o usuario pode editar
   `executorPath` livremente ou apenas escolher caminhos dentro de allowlist.
-- [ ] DECISAO MVP 5 Developer: confirmar se `Servidor`, `BaseDados` e
+  **Implementado:** texto livre na UI com validacao `ActionPathValidator` +
+  `allowedWorkingDirectories` / politicas de path da definicao (nao picker
+  exclusivo).
+- [x] DECISAO MVP 5 Developer: confirmar se `Servidor`, `BaseDados` e
   `Usuario` podem aparecer na UI local ou se devem ser parcialmente redigidos
   tambem na tela de configuracao.
-- [ ] DECISAO MVP 5 Developer: confirmar se remoto sempre usa a conexao salva
+  **MVP:** exibidos na UI local de conexoes Data7 (operacao desktop); nao
+  enviados em RPC remoto; redacao em logs conforme `ActionRedactor`.
+- [x] DECISAO MVP 5 Developer: confirmar se remoto sempre usa a conexao salva
   ou se uma versao futura aceitara override de `connectionId` por schema,
   feature flag e re-aprovacao.
-- [ ] DECISAO MVP 5 Developer: confirmar se `Executor.exe` possui modo dry-run
+  **MVP:** remoto usa `connectionId` persistido na definicao salva; override
+  inline fora do escopo (`supportsContext: false`).
+- [x] DECISAO MVP 5 Developer: confirmar se `Executor.exe` possui modo dry-run
   real; ate la, "Testar acao" deve validar configuracao sem executar `.7Proj`.
-- [ ] DECISAO MVP 5 Developer: confirmar se a acao Data7 pode exigir elevacao
+  **Implementado:** `TestAgentActionDefinition` valida paths/config sem executar
+  projeto; execucao real via runner separado.
+- [x] DECISAO MVP 5 Developer: confirmar se a acao Data7 pode exigir elevacao
   em algum ambiente e qual sera o default operacional.
+  **MVP:** `runElevated` por acao (default false); mesmo pipeline elevado que
+  `commandLine` quando habilitado na policy + flags globais.
+
+## Riscos aceitos (MVP agente)
+
+Riscos conhecidos aceitos para **homologacao local/CI** no `plug_agente` enquanto
+producao Hub/COM/campo nao fecham. Revisar antes de habilitar remoto/elevado/ad-hoc
+em ambiente real. Tabela de prioridade operacional: **Backlog pos-MVP** (inicio
+deste plano).
+
+| ID | Risco | Mitigacao atual | Quando reavaliar |
+| --- | --- | --- | --- |
+| RA-01 | **COM** sem handler de producao registrado | Registry vazio por default; stub `AGENT_ACTION_COM_STUB_*`; UI avisa; gate: `com_object_action_adapter_test`, `com_object_action_runner_test`, bootstrap/diagnostics | Registrar handlers em `com_object_production_registrations.dart` por PR |
+| RA-02 | **Allowlist fina / rate limit no Hub** | Agente valida scopes + `AgentActionRemoteRateLimiter`; politica fina no consumidor Hub | Deploy Hub com policy alinhada |
+| RA-03 | **Contexto remoto inline** (JSON no RPC) | Rejeitado no schema e em `RunAgentActionLocally` (`remote_context_not_supported`); `supportsContext: false` | Decisao MVP 3 + §3322–3324 quando evoluir contrato |
+| RA-04 | **Threat model por tipo** nao e gate de CI | Tabela baseline + `agent_action_security_gate_checklist.dart`; revisao humana obrigatoria por PR | Cada PR que habilite remoto/elevado/ad-hoc para um tipo |
+| RA-05 | **Live Hub E2E** opt-in | CI/local: preflight estatico + `homologate_hub_agent_actions.ps1 -RunContractTests`; live exige `.env` + `-RunLiveTests` | Antes de release que dependa do Hub |
+| RA-06 | **Elevado** sem validacao UAC/distribuicao em todo ambiente | Nucleo no repo + `homologate_elevated_runner.ps1`; campo manual | Homologacao com helper instalado e assinado |
+| RA-07 | **Multi-instancia** do app sem mutex da feature acoes | Correlacao por `runtimeInstanceId`; Drift por processo; lock so no scheduler | Incidente de Drift compartilhado entre processos |
+| RA-08 | **Ad-hoc remoto** desligado por default | `enableRemoteAdHocAgentActions` default `false`; capability `remoteAdHoc` | Habilitar so com threat model + aprovacao explicita |
+
+**Rollback rapido (agente):** ver gate §4195 — `FeatureFlags.disableAgentActionsRemoteRollout()`,
+depois `enableAgentActionsMaintenanceMode`, por ultimo `setEnableAgentActions(false)`.
 
 ## Riscos e Pontos de Atencao
 
@@ -4196,9 +5159,9 @@ assumir detalhes tecnicos sem validacao no codigo real.
 - Notification JSON-RPC sem `id` nao tem response por contrato; o agente deve
   bloquear o side effect antes da fila e depender de auditoria local para
   diagnostico.
-- Idempotencia somente em memoria pode duplicar side effects apos reconnect ou
-  restart; persistir a associacao para `agent.action.run` remoto (JSON-RPC apos
-  roteamento; NOTA "Fase 6").
+- Idempotencia de execucao: memoria + Drift (`idempotency_key` na execucao) e cache
+  RPC namespaced (`RpcIdempotencyCache` + TTL); janela apos restart ainda limitada
+  pelo TTL — monitorar duplicata em reconnect Hub.
 - Se duas instancias do agente processarem o mesmo pedido Hub de execucao remota
   ao mesmo tempo, side effects podem duplicar; usar single-instance lock ou
   deteccao com degradacao.
@@ -4257,7 +5220,7 @@ assumir detalhes tecnicos sem validacao no codigo real.
 - Atualizacao do app pode mudar o caminho do helper elevado; precisa existir
   validacao/reparo.
 - Polling remoto simplifica o MVP, mas pode aumentar latencia percebida pelo Hub
-  em execucoes longas (**apos** `agent.action.getExecution` roteado; NOTA "Fase 6";
+  em execucoes longas (**apos** `agent.action.getExecution` roteado;
   ate la o Hub nao consulta estado por este metodo).
 - Saidas grandes de processo podem afetar memoria e banco local se limites e
   truncamento nao forem aplicados cedo.

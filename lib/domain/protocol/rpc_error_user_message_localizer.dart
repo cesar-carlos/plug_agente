@@ -23,6 +23,7 @@ abstract class RpcErrorUserMessageLocalizer {
   String executionNotFound();
   String executionCancelled();
   String internalError();
+  String agentActionsTemporarilyUnavailable();
 }
 
 /// Built-in PT-BR fallback so the codebase stays self-contained when no
@@ -83,4 +84,8 @@ class DefaultPtRpcErrorUserMessageLocalizer implements RpcErrorUserMessageLocali
 
   @override
   String internalError() => 'Falha interna no processamento da requisição.';
+
+  @override
+  String agentActionsTemporarilyUnavailable() =>
+      'As ações do agente estão indisponíveis no momento. Aguarde e tente novamente.';
 }

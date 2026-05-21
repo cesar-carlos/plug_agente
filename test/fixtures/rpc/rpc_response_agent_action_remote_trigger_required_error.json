@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-no-remote-trigger",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "remote_trigger_required",
+      "category": "action",
+      "retryable": false,
+      "user_message": "The request parameters are invalid.",
+      "technical_message": "Remote agent action run requires an enabled remote trigger",
+      "correlation_id": "req-run-no-remote-trigger",
+      "timestamp": "2026-05-18T15:30:00.000Z",
+      "method": "agent.action.run",
+      "action_id": "action-1"
+    }
+  }
+}

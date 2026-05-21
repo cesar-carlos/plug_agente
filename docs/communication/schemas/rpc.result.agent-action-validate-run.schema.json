@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-validate-run.v1.json",
+  "title": "agent.action.validateRun result",
+  "type": "object",
+  "required": ["valid", "action_id", "action_type", "would_replay_existing_execution"],
+  "properties": {
+    "valid": {
+      "type": "boolean",
+      "const": true,
+      "description": "True when the action would be accepted for agent.action.run at validation time (subject to races)."
+    },
+    "action_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "definition_snapshot_hash": {
+      "type": "string",
+      "description": "Redacted snapshot hash of the action definition at validation time, when available."
+    },
+    "would_replay_existing_execution": {
+      "type": "boolean",
+      "description": "True when the same action_id and idempotency_key would return an existing execution on run without enqueueing a new one."
+    },
+    "existing_execution_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Present when would_replay_existing_execution is true and a persisted execution was found."
+    }
+  },
+  "additionalProperties": false
+}

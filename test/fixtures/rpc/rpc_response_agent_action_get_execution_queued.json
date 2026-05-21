@@ -1,0 +1,45 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-get-1",
+  "result": {
+    "execution_id": "exec-queued-1",
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "status": "queued",
+    "source": "remoteHub",
+    "requested_at": "2026-05-18T14:00:01.000Z",
+    "idempotency_key": "idem-run-1",
+    "requested_by": "hub",
+    "trace_id": "trace-run-1",
+    "timestamps": {
+      "queue_started_at": "2026-05-18T14:00:01.000Z"
+    },
+    "process": {},
+    "output": {
+      "stdout": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      },
+      "stderr": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      }
+    },
+    "flags": {
+      "terminal": false,
+      "skipped": false,
+      "timed_out": false,
+      "cancelled": false,
+      "killed": false,
+      "redaction_applied": true
+    }
+  }
+}

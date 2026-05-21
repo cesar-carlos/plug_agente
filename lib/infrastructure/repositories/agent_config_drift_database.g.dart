@@ -2676,12 +2676,5207 @@ class ClientTokenCacheTableCompanion
   }
 }
 
+class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
+    with
+        TableInfo<$AgentActionDefinitionTableTable, AgentActionDefinitionData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentActionDefinitionTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configJsonMeta = const VerificationMeta(
+    'configJson',
+  );
+  @override
+  late final GeneratedColumn<String> configJson = GeneratedColumn<String>(
+    'config_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _policiesJsonMeta = const VerificationMeta(
+    'policiesJson',
+  );
+  @override
+  late final GeneratedColumn<String> policiesJson = GeneratedColumn<String>(
+    'policies_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _definitionVersionMeta = const VerificationMeta(
+    'definitionVersion',
+  );
+  @override
+  late final GeneratedColumn<int> definitionVersion = GeneratedColumn<int>(
+    'definition_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _definitionSnapshotHashMeta =
+      const VerificationMeta('definitionSnapshotHash');
+  @override
+  late final GeneratedColumn<String> definitionSnapshotHash =
+      GeneratedColumn<String>(
+        'definition_snapshot_hash',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    description,
+    type,
+    state,
+    configJson,
+    policiesJson,
+    definitionVersion,
+    definitionSnapshotHash,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_action_definition_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentActionDefinitionData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('config_json')) {
+      context.handle(
+        _configJsonMeta,
+        configJson.isAcceptableOrUnknown(data['config_json']!, _configJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_configJsonMeta);
+    }
+    if (data.containsKey('policies_json')) {
+      context.handle(
+        _policiesJsonMeta,
+        policiesJson.isAcceptableOrUnknown(
+          data['policies_json']!,
+          _policiesJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_policiesJsonMeta);
+    }
+    if (data.containsKey('definition_version')) {
+      context.handle(
+        _definitionVersionMeta,
+        definitionVersion.isAcceptableOrUnknown(
+          data['definition_version']!,
+          _definitionVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('definition_snapshot_hash')) {
+      context.handle(
+        _definitionSnapshotHashMeta,
+        definitionSnapshotHash.isAcceptableOrUnknown(
+          data['definition_snapshot_hash']!,
+          _definitionSnapshotHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentActionDefinitionData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentActionDefinitionData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      configJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config_json'],
+      )!,
+      policiesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policies_json'],
+      )!,
+      definitionVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}definition_version'],
+      )!,
+      definitionSnapshotHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}definition_snapshot_hash'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AgentActionDefinitionTableTable createAlias(String alias) {
+    return $AgentActionDefinitionTableTable(attachedDatabase, alias);
+  }
+}
+
+class AgentActionDefinitionData extends DataClass
+    implements Insertable<AgentActionDefinitionData> {
+  final String id;
+  final String name;
+  final String? description;
+  final String type;
+  final String state;
+  final String configJson;
+  final String policiesJson;
+  final int definitionVersion;
+  final String? definitionSnapshotHash;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const AgentActionDefinitionData({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.type,
+    required this.state,
+    required this.configJson,
+    required this.policiesJson,
+    required this.definitionVersion,
+    this.definitionSnapshotHash,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['type'] = Variable<String>(type);
+    map['state'] = Variable<String>(state);
+    map['config_json'] = Variable<String>(configJson);
+    map['policies_json'] = Variable<String>(policiesJson);
+    map['definition_version'] = Variable<int>(definitionVersion);
+    if (!nullToAbsent || definitionSnapshotHash != null) {
+      map['definition_snapshot_hash'] = Variable<String>(
+        definitionSnapshotHash,
+      );
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AgentActionDefinitionTableCompanion toCompanion(bool nullToAbsent) {
+    return AgentActionDefinitionTableCompanion(
+      id: Value(id),
+      name: Value(name),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      type: Value(type),
+      state: Value(state),
+      configJson: Value(configJson),
+      policiesJson: Value(policiesJson),
+      definitionVersion: Value(definitionVersion),
+      definitionSnapshotHash: definitionSnapshotHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(definitionSnapshotHash),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AgentActionDefinitionData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentActionDefinitionData(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      description: serializer.fromJson<String?>(json['description']),
+      type: serializer.fromJson<String>(json['type']),
+      state: serializer.fromJson<String>(json['state']),
+      configJson: serializer.fromJson<String>(json['configJson']),
+      policiesJson: serializer.fromJson<String>(json['policiesJson']),
+      definitionVersion: serializer.fromJson<int>(json['definitionVersion']),
+      definitionSnapshotHash: serializer.fromJson<String?>(
+        json['definitionSnapshotHash'],
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'description': serializer.toJson<String?>(description),
+      'type': serializer.toJson<String>(type),
+      'state': serializer.toJson<String>(state),
+      'configJson': serializer.toJson<String>(configJson),
+      'policiesJson': serializer.toJson<String>(policiesJson),
+      'definitionVersion': serializer.toJson<int>(definitionVersion),
+      'definitionSnapshotHash': serializer.toJson<String?>(
+        definitionSnapshotHash,
+      ),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AgentActionDefinitionData copyWith({
+    String? id,
+    String? name,
+    Value<String?> description = const Value.absent(),
+    String? type,
+    String? state,
+    String? configJson,
+    String? policiesJson,
+    int? definitionVersion,
+    Value<String?> definitionSnapshotHash = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => AgentActionDefinitionData(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    description: description.present ? description.value : this.description,
+    type: type ?? this.type,
+    state: state ?? this.state,
+    configJson: configJson ?? this.configJson,
+    policiesJson: policiesJson ?? this.policiesJson,
+    definitionVersion: definitionVersion ?? this.definitionVersion,
+    definitionSnapshotHash: definitionSnapshotHash.present
+        ? definitionSnapshotHash.value
+        : this.definitionSnapshotHash,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  AgentActionDefinitionData copyWithCompanion(
+    AgentActionDefinitionTableCompanion data,
+  ) {
+    return AgentActionDefinitionData(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      type: data.type.present ? data.type.value : this.type,
+      state: data.state.present ? data.state.value : this.state,
+      configJson: data.configJson.present
+          ? data.configJson.value
+          : this.configJson,
+      policiesJson: data.policiesJson.present
+          ? data.policiesJson.value
+          : this.policiesJson,
+      definitionVersion: data.definitionVersion.present
+          ? data.definitionVersion.value
+          : this.definitionVersion,
+      definitionSnapshotHash: data.definitionSnapshotHash.present
+          ? data.definitionSnapshotHash.value
+          : this.definitionSnapshotHash,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionDefinitionData(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('type: $type, ')
+          ..write('state: $state, ')
+          ..write('configJson: $configJson, ')
+          ..write('policiesJson: $policiesJson, ')
+          ..write('definitionVersion: $definitionVersion, ')
+          ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    description,
+    type,
+    state,
+    configJson,
+    policiesJson,
+    definitionVersion,
+    definitionSnapshotHash,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentActionDefinitionData &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.description == this.description &&
+          other.type == this.type &&
+          other.state == this.state &&
+          other.configJson == this.configJson &&
+          other.policiesJson == this.policiesJson &&
+          other.definitionVersion == this.definitionVersion &&
+          other.definitionSnapshotHash == this.definitionSnapshotHash &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AgentActionDefinitionTableCompanion
+    extends UpdateCompanion<AgentActionDefinitionData> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String?> description;
+  final Value<String> type;
+  final Value<String> state;
+  final Value<String> configJson;
+  final Value<String> policiesJson;
+  final Value<int> definitionVersion;
+  final Value<String?> definitionSnapshotHash;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const AgentActionDefinitionTableCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.description = const Value.absent(),
+    this.type = const Value.absent(),
+    this.state = const Value.absent(),
+    this.configJson = const Value.absent(),
+    this.policiesJson = const Value.absent(),
+    this.definitionVersion = const Value.absent(),
+    this.definitionSnapshotHash = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentActionDefinitionTableCompanion.insert({
+    required String id,
+    required String name,
+    this.description = const Value.absent(),
+    required String type,
+    required String state,
+    required String configJson,
+    required String policiesJson,
+    this.definitionVersion = const Value.absent(),
+    this.definitionSnapshotHash = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       type = Value(type),
+       state = Value(state),
+       configJson = Value(configJson),
+       policiesJson = Value(policiesJson),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AgentActionDefinitionData> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? description,
+    Expression<String>? type,
+    Expression<String>? state,
+    Expression<String>? configJson,
+    Expression<String>? policiesJson,
+    Expression<int>? definitionVersion,
+    Expression<String>? definitionSnapshotHash,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (type != null) 'type': type,
+      if (state != null) 'state': state,
+      if (configJson != null) 'config_json': configJson,
+      if (policiesJson != null) 'policies_json': policiesJson,
+      if (definitionVersion != null) 'definition_version': definitionVersion,
+      if (definitionSnapshotHash != null)
+        'definition_snapshot_hash': definitionSnapshotHash,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentActionDefinitionTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String?>? description,
+    Value<String>? type,
+    Value<String>? state,
+    Value<String>? configJson,
+    Value<String>? policiesJson,
+    Value<int>? definitionVersion,
+    Value<String?>? definitionSnapshotHash,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return AgentActionDefinitionTableCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      state: state ?? this.state,
+      configJson: configJson ?? this.configJson,
+      policiesJson: policiesJson ?? this.policiesJson,
+      definitionVersion: definitionVersion ?? this.definitionVersion,
+      definitionSnapshotHash:
+          definitionSnapshotHash ?? this.definitionSnapshotHash,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (configJson.present) {
+      map['config_json'] = Variable<String>(configJson.value);
+    }
+    if (policiesJson.present) {
+      map['policies_json'] = Variable<String>(policiesJson.value);
+    }
+    if (definitionVersion.present) {
+      map['definition_version'] = Variable<int>(definitionVersion.value);
+    }
+    if (definitionSnapshotHash.present) {
+      map['definition_snapshot_hash'] = Variable<String>(
+        definitionSnapshotHash.value,
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionDefinitionTableCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('type: $type, ')
+          ..write('state: $state, ')
+          ..write('configJson: $configJson, ')
+          ..write('policiesJson: $policiesJson, ')
+          ..write('definitionVersion: $definitionVersion, ')
+          ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AgentActionTriggerTableTable extends AgentActionTriggerTable
+    with TableInfo<$AgentActionTriggerTableTable, AgentActionTriggerData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentActionTriggerTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionIdMeta = const VerificationMeta(
+    'actionId',
+  );
+  @override
+  late final GeneratedColumn<String> actionId = GeneratedColumn<String>(
+    'action_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isEnabledMeta = const VerificationMeta(
+    'isEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> isEnabled = GeneratedColumn<bool>(
+    'is_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _scheduleJsonMeta = const VerificationMeta(
+    'scheduleJson',
+  );
+  @override
+  late final GeneratedColumn<String> scheduleJson = GeneratedColumn<String>(
+    'schedule_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastScheduledAtMeta = const VerificationMeta(
+    'lastScheduledAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastScheduledAt =
+      GeneratedColumn<DateTime>(
+        'last_scheduled_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastRunAtMeta = const VerificationMeta(
+    'lastRunAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastRunAt = GeneratedColumn<DateTime>(
+    'last_run_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nextRunAtMeta = const VerificationMeta(
+    'nextRunAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextRunAt = GeneratedColumn<DateTime>(
+    'next_run_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    actionId,
+    type,
+    name,
+    isEnabled,
+    scheduleJson,
+    lastScheduledAt,
+    lastRunAt,
+    nextRunAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_action_trigger_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentActionTriggerData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('action_id')) {
+      context.handle(
+        _actionIdMeta,
+        actionId.isAcceptableOrUnknown(data['action_id']!, _actionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('is_enabled')) {
+      context.handle(
+        _isEnabledMeta,
+        isEnabled.isAcceptableOrUnknown(data['is_enabled']!, _isEnabledMeta),
+      );
+    }
+    if (data.containsKey('schedule_json')) {
+      context.handle(
+        _scheduleJsonMeta,
+        scheduleJson.isAcceptableOrUnknown(
+          data['schedule_json']!,
+          _scheduleJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleJsonMeta);
+    }
+    if (data.containsKey('last_scheduled_at')) {
+      context.handle(
+        _lastScheduledAtMeta,
+        lastScheduledAt.isAcceptableOrUnknown(
+          data['last_scheduled_at']!,
+          _lastScheduledAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_run_at')) {
+      context.handle(
+        _lastRunAtMeta,
+        lastRunAt.isAcceptableOrUnknown(data['last_run_at']!, _lastRunAtMeta),
+      );
+    }
+    if (data.containsKey('next_run_at')) {
+      context.handle(
+        _nextRunAtMeta,
+        nextRunAt.isAcceptableOrUnknown(data['next_run_at']!, _nextRunAtMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentActionTriggerData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentActionTriggerData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      actionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      ),
+      isEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_enabled'],
+      )!,
+      scheduleJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_json'],
+      )!,
+      lastScheduledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_scheduled_at'],
+      ),
+      lastRunAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_run_at'],
+      ),
+      nextRunAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_run_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AgentActionTriggerTableTable createAlias(String alias) {
+    return $AgentActionTriggerTableTable(attachedDatabase, alias);
+  }
+}
+
+class AgentActionTriggerData extends DataClass
+    implements Insertable<AgentActionTriggerData> {
+  final String id;
+  final String actionId;
+  final String type;
+  final String? name;
+  final bool isEnabled;
+  final String scheduleJson;
+  final DateTime? lastScheduledAt;
+  final DateTime? lastRunAt;
+  final DateTime? nextRunAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const AgentActionTriggerData({
+    required this.id,
+    required this.actionId,
+    required this.type,
+    this.name,
+    required this.isEnabled,
+    required this.scheduleJson,
+    this.lastScheduledAt,
+    this.lastRunAt,
+    this.nextRunAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['action_id'] = Variable<String>(actionId);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || name != null) {
+      map['name'] = Variable<String>(name);
+    }
+    map['is_enabled'] = Variable<bool>(isEnabled);
+    map['schedule_json'] = Variable<String>(scheduleJson);
+    if (!nullToAbsent || lastScheduledAt != null) {
+      map['last_scheduled_at'] = Variable<DateTime>(lastScheduledAt);
+    }
+    if (!nullToAbsent || lastRunAt != null) {
+      map['last_run_at'] = Variable<DateTime>(lastRunAt);
+    }
+    if (!nullToAbsent || nextRunAt != null) {
+      map['next_run_at'] = Variable<DateTime>(nextRunAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AgentActionTriggerTableCompanion toCompanion(bool nullToAbsent) {
+    return AgentActionTriggerTableCompanion(
+      id: Value(id),
+      actionId: Value(actionId),
+      type: Value(type),
+      name: name == null && nullToAbsent ? const Value.absent() : Value(name),
+      isEnabled: Value(isEnabled),
+      scheduleJson: Value(scheduleJson),
+      lastScheduledAt: lastScheduledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastScheduledAt),
+      lastRunAt: lastRunAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastRunAt),
+      nextRunAt: nextRunAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextRunAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AgentActionTriggerData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentActionTriggerData(
+      id: serializer.fromJson<String>(json['id']),
+      actionId: serializer.fromJson<String>(json['actionId']),
+      type: serializer.fromJson<String>(json['type']),
+      name: serializer.fromJson<String?>(json['name']),
+      isEnabled: serializer.fromJson<bool>(json['isEnabled']),
+      scheduleJson: serializer.fromJson<String>(json['scheduleJson']),
+      lastScheduledAt: serializer.fromJson<DateTime?>(json['lastScheduledAt']),
+      lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
+      nextRunAt: serializer.fromJson<DateTime?>(json['nextRunAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'actionId': serializer.toJson<String>(actionId),
+      'type': serializer.toJson<String>(type),
+      'name': serializer.toJson<String?>(name),
+      'isEnabled': serializer.toJson<bool>(isEnabled),
+      'scheduleJson': serializer.toJson<String>(scheduleJson),
+      'lastScheduledAt': serializer.toJson<DateTime?>(lastScheduledAt),
+      'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
+      'nextRunAt': serializer.toJson<DateTime?>(nextRunAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AgentActionTriggerData copyWith({
+    String? id,
+    String? actionId,
+    String? type,
+    Value<String?> name = const Value.absent(),
+    bool? isEnabled,
+    String? scheduleJson,
+    Value<DateTime?> lastScheduledAt = const Value.absent(),
+    Value<DateTime?> lastRunAt = const Value.absent(),
+    Value<DateTime?> nextRunAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => AgentActionTriggerData(
+    id: id ?? this.id,
+    actionId: actionId ?? this.actionId,
+    type: type ?? this.type,
+    name: name.present ? name.value : this.name,
+    isEnabled: isEnabled ?? this.isEnabled,
+    scheduleJson: scheduleJson ?? this.scheduleJson,
+    lastScheduledAt: lastScheduledAt.present
+        ? lastScheduledAt.value
+        : this.lastScheduledAt,
+    lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
+    nextRunAt: nextRunAt.present ? nextRunAt.value : this.nextRunAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  AgentActionTriggerData copyWithCompanion(
+    AgentActionTriggerTableCompanion data,
+  ) {
+    return AgentActionTriggerData(
+      id: data.id.present ? data.id.value : this.id,
+      actionId: data.actionId.present ? data.actionId.value : this.actionId,
+      type: data.type.present ? data.type.value : this.type,
+      name: data.name.present ? data.name.value : this.name,
+      isEnabled: data.isEnabled.present ? data.isEnabled.value : this.isEnabled,
+      scheduleJson: data.scheduleJson.present
+          ? data.scheduleJson.value
+          : this.scheduleJson,
+      lastScheduledAt: data.lastScheduledAt.present
+          ? data.lastScheduledAt.value
+          : this.lastScheduledAt,
+      lastRunAt: data.lastRunAt.present ? data.lastRunAt.value : this.lastRunAt,
+      nextRunAt: data.nextRunAt.present ? data.nextRunAt.value : this.nextRunAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionTriggerData(')
+          ..write('id: $id, ')
+          ..write('actionId: $actionId, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('isEnabled: $isEnabled, ')
+          ..write('scheduleJson: $scheduleJson, ')
+          ..write('lastScheduledAt: $lastScheduledAt, ')
+          ..write('lastRunAt: $lastRunAt, ')
+          ..write('nextRunAt: $nextRunAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    actionId,
+    type,
+    name,
+    isEnabled,
+    scheduleJson,
+    lastScheduledAt,
+    lastRunAt,
+    nextRunAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentActionTriggerData &&
+          other.id == this.id &&
+          other.actionId == this.actionId &&
+          other.type == this.type &&
+          other.name == this.name &&
+          other.isEnabled == this.isEnabled &&
+          other.scheduleJson == this.scheduleJson &&
+          other.lastScheduledAt == this.lastScheduledAt &&
+          other.lastRunAt == this.lastRunAt &&
+          other.nextRunAt == this.nextRunAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AgentActionTriggerTableCompanion
+    extends UpdateCompanion<AgentActionTriggerData> {
+  final Value<String> id;
+  final Value<String> actionId;
+  final Value<String> type;
+  final Value<String?> name;
+  final Value<bool> isEnabled;
+  final Value<String> scheduleJson;
+  final Value<DateTime?> lastScheduledAt;
+  final Value<DateTime?> lastRunAt;
+  final Value<DateTime?> nextRunAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const AgentActionTriggerTableCompanion({
+    this.id = const Value.absent(),
+    this.actionId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.name = const Value.absent(),
+    this.isEnabled = const Value.absent(),
+    this.scheduleJson = const Value.absent(),
+    this.lastScheduledAt = const Value.absent(),
+    this.lastRunAt = const Value.absent(),
+    this.nextRunAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentActionTriggerTableCompanion.insert({
+    required String id,
+    required String actionId,
+    required String type,
+    this.name = const Value.absent(),
+    this.isEnabled = const Value.absent(),
+    required String scheduleJson,
+    this.lastScheduledAt = const Value.absent(),
+    this.lastRunAt = const Value.absent(),
+    this.nextRunAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       actionId = Value(actionId),
+       type = Value(type),
+       scheduleJson = Value(scheduleJson),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AgentActionTriggerData> custom({
+    Expression<String>? id,
+    Expression<String>? actionId,
+    Expression<String>? type,
+    Expression<String>? name,
+    Expression<bool>? isEnabled,
+    Expression<String>? scheduleJson,
+    Expression<DateTime>? lastScheduledAt,
+    Expression<DateTime>? lastRunAt,
+    Expression<DateTime>? nextRunAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (actionId != null) 'action_id': actionId,
+      if (type != null) 'type': type,
+      if (name != null) 'name': name,
+      if (isEnabled != null) 'is_enabled': isEnabled,
+      if (scheduleJson != null) 'schedule_json': scheduleJson,
+      if (lastScheduledAt != null) 'last_scheduled_at': lastScheduledAt,
+      if (lastRunAt != null) 'last_run_at': lastRunAt,
+      if (nextRunAt != null) 'next_run_at': nextRunAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentActionTriggerTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? actionId,
+    Value<String>? type,
+    Value<String?>? name,
+    Value<bool>? isEnabled,
+    Value<String>? scheduleJson,
+    Value<DateTime?>? lastScheduledAt,
+    Value<DateTime?>? lastRunAt,
+    Value<DateTime?>? nextRunAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return AgentActionTriggerTableCompanion(
+      id: id ?? this.id,
+      actionId: actionId ?? this.actionId,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      isEnabled: isEnabled ?? this.isEnabled,
+      scheduleJson: scheduleJson ?? this.scheduleJson,
+      lastScheduledAt: lastScheduledAt ?? this.lastScheduledAt,
+      lastRunAt: lastRunAt ?? this.lastRunAt,
+      nextRunAt: nextRunAt ?? this.nextRunAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (actionId.present) {
+      map['action_id'] = Variable<String>(actionId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (isEnabled.present) {
+      map['is_enabled'] = Variable<bool>(isEnabled.value);
+    }
+    if (scheduleJson.present) {
+      map['schedule_json'] = Variable<String>(scheduleJson.value);
+    }
+    if (lastScheduledAt.present) {
+      map['last_scheduled_at'] = Variable<DateTime>(lastScheduledAt.value);
+    }
+    if (lastRunAt.present) {
+      map['last_run_at'] = Variable<DateTime>(lastRunAt.value);
+    }
+    if (nextRunAt.present) {
+      map['next_run_at'] = Variable<DateTime>(nextRunAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionTriggerTableCompanion(')
+          ..write('id: $id, ')
+          ..write('actionId: $actionId, ')
+          ..write('type: $type, ')
+          ..write('name: $name, ')
+          ..write('isEnabled: $isEnabled, ')
+          ..write('scheduleJson: $scheduleJson, ')
+          ..write('lastScheduledAt: $lastScheduledAt, ')
+          ..write('lastRunAt: $lastRunAt, ')
+          ..write('nextRunAt: $nextRunAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AgentActionExecutionTableTable extends AgentActionExecutionTable
+    with TableInfo<$AgentActionExecutionTableTable, AgentActionExecutionData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentActionExecutionTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionIdMeta = const VerificationMeta(
+    'actionId',
+  );
+  @override
+  late final GeneratedColumn<String> actionId = GeneratedColumn<String>(
+    'action_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionTypeMeta = const VerificationMeta(
+    'actionType',
+  );
+  @override
+  late final GeneratedColumn<String> actionType = GeneratedColumn<String>(
+    'action_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestedAtMeta = const VerificationMeta(
+    'requestedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> requestedAt = GeneratedColumn<DateTime>(
+    'requested_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idempotencyKeyMeta = const VerificationMeta(
+    'idempotencyKey',
+  );
+  @override
+  late final GeneratedColumn<String> idempotencyKey = GeneratedColumn<String>(
+    'idempotency_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _requestedByMeta = const VerificationMeta(
+    'requestedBy',
+  );
+  @override
+  late final GeneratedColumn<String> requestedBy = GeneratedColumn<String>(
+    'requested_by',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _traceIdMeta = const VerificationMeta(
+    'traceId',
+  );
+  @override
+  late final GeneratedColumn<String> traceId = GeneratedColumn<String>(
+    'trace_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _runtimeInstanceIdMeta = const VerificationMeta(
+    'runtimeInstanceId',
+  );
+  @override
+  late final GeneratedColumn<String> runtimeInstanceId =
+      GeneratedColumn<String>(
+        'runtime_instance_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _runtimeSessionIdMeta = const VerificationMeta(
+    'runtimeSessionId',
+  );
+  @override
+  late final GeneratedColumn<String> runtimeSessionId = GeneratedColumn<String>(
+    'runtime_session_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _triggerIdMeta = const VerificationMeta(
+    'triggerId',
+  );
+  @override
+  late final GeneratedColumn<String> triggerId = GeneratedColumn<String>(
+    'trigger_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _triggerTypeMeta = const VerificationMeta(
+    'triggerType',
+  );
+  @override
+  late final GeneratedColumn<String> triggerType = GeneratedColumn<String>(
+    'trigger_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _scheduledAtMeta = const VerificationMeta(
+    'scheduledAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> scheduledAt = GeneratedColumn<DateTime>(
+    'scheduled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _triggeredAtMeta = const VerificationMeta(
+    'triggeredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> triggeredAt = GeneratedColumn<DateTime>(
+    'triggered_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _queueStartedAtMeta = const VerificationMeta(
+    'queueStartedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> queueStartedAt =
+      GeneratedColumn<DateTime>(
+        'queue_started_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _processStartedAtMeta = const VerificationMeta(
+    'processStartedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> processStartedAt =
+      GeneratedColumn<DateTime>(
+        'process_started_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _finishedAtMeta = const VerificationMeta(
+    'finishedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> finishedAt = GeneratedColumn<DateTime>(
+    'finished_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timeoutAtMeta = const VerificationMeta(
+    'timeoutAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> timeoutAt = GeneratedColumn<DateTime>(
+    'timeout_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pidMeta = const VerificationMeta('pid');
+  @override
+  late final GeneratedColumn<int> pid = GeneratedColumn<int>(
+    'pid',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _exitCodeMeta = const VerificationMeta(
+    'exitCode',
+  );
+  @override
+  late final GeneratedColumn<int> exitCode = GeneratedColumn<int>(
+    'exit_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _processExecutableMeta = const VerificationMeta(
+    'processExecutable',
+  );
+  @override
+  late final GeneratedColumn<String> processExecutable =
+      GeneratedColumn<String>(
+        'process_executable',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _processArgumentCountMeta =
+      const VerificationMeta('processArgumentCount');
+  @override
+  late final GeneratedColumn<int> processArgumentCount = GeneratedColumn<int>(
+    'process_argument_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _processCommandPreviewMeta =
+      const VerificationMeta('processCommandPreview');
+  @override
+  late final GeneratedColumn<String> processCommandPreview =
+      GeneratedColumn<String>(
+        'process_command_preview',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _stdoutTextMeta = const VerificationMeta(
+    'stdoutText',
+  );
+  @override
+  late final GeneratedColumn<String> stdoutText = GeneratedColumn<String>(
+    'stdout_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stderrTextMeta = const VerificationMeta(
+    'stderrText',
+  );
+  @override
+  late final GeneratedColumn<String> stderrText = GeneratedColumn<String>(
+    'stderr_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stdoutTruncatedMeta = const VerificationMeta(
+    'stdoutTruncated',
+  );
+  @override
+  late final GeneratedColumn<bool> stdoutTruncated = GeneratedColumn<bool>(
+    'stdout_truncated',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("stdout_truncated" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _stderrTruncatedMeta = const VerificationMeta(
+    'stderrTruncated',
+  );
+  @override
+  late final GeneratedColumn<bool> stderrTruncated = GeneratedColumn<bool>(
+    'stderr_truncated',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("stderr_truncated" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _stdoutStoredInChunksMeta =
+      const VerificationMeta('stdoutStoredInChunks');
+  @override
+  late final GeneratedColumn<bool> stdoutStoredInChunks = GeneratedColumn<bool>(
+    'stdout_stored_in_chunks',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("stdout_stored_in_chunks" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _stderrStoredInChunksMeta =
+      const VerificationMeta('stderrStoredInChunks');
+  @override
+  late final GeneratedColumn<bool> stderrStoredInChunks = GeneratedColumn<bool>(
+    'stderr_stored_in_chunks',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("stderr_stored_in_chunks" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _definitionSnapshotHashMeta =
+      const VerificationMeta('definitionSnapshotHash');
+  @override
+  late final GeneratedColumn<String> definitionSnapshotHash =
+      GeneratedColumn<String>(
+        'definition_snapshot_hash',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _contextHashMeta = const VerificationMeta(
+    'contextHash',
+  );
+  @override
+  late final GeneratedColumn<String> contextHash = GeneratedColumn<String>(
+    'context_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _redactionAppliedMeta = const VerificationMeta(
+    'redactionApplied',
+  );
+  @override
+  late final GeneratedColumn<bool> redactionApplied = GeneratedColumn<bool>(
+    'redaction_applied',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("redaction_applied" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _failureCodeMeta = const VerificationMeta(
+    'failureCode',
+  );
+  @override
+  late final GeneratedColumn<String> failureCode = GeneratedColumn<String>(
+    'failure_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _failurePhaseMeta = const VerificationMeta(
+    'failurePhase',
+  );
+  @override
+  late final GeneratedColumn<String> failurePhase = GeneratedColumn<String>(
+    'failure_phase',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _failureMessageMeta = const VerificationMeta(
+    'failureMessage',
+  );
+  @override
+  late final GeneratedColumn<String> failureMessage = GeneratedColumn<String>(
+    'failure_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    actionId,
+    actionType,
+    status,
+    requestedAt,
+    source,
+    idempotencyKey,
+    requestedBy,
+    traceId,
+    runtimeInstanceId,
+    runtimeSessionId,
+    triggerId,
+    triggerType,
+    scheduledAt,
+    triggeredAt,
+    queueStartedAt,
+    processStartedAt,
+    finishedAt,
+    timeoutAt,
+    pid,
+    exitCode,
+    processExecutable,
+    processArgumentCount,
+    processCommandPreview,
+    stdoutText,
+    stderrText,
+    stdoutTruncated,
+    stderrTruncated,
+    stdoutStoredInChunks,
+    stderrStoredInChunks,
+    definitionSnapshotHash,
+    contextHash,
+    redactionApplied,
+    failureCode,
+    failurePhase,
+    failureMessage,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_action_execution_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentActionExecutionData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('action_id')) {
+      context.handle(
+        _actionIdMeta,
+        actionId.isAcceptableOrUnknown(data['action_id']!, _actionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionIdMeta);
+    }
+    if (data.containsKey('action_type')) {
+      context.handle(
+        _actionTypeMeta,
+        actionType.isAcceptableOrUnknown(data['action_type']!, _actionTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionTypeMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('requested_at')) {
+      context.handle(
+        _requestedAtMeta,
+        requestedAt.isAcceptableOrUnknown(
+          data['requested_at']!,
+          _requestedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_requestedAtMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceMeta);
+    }
+    if (data.containsKey('idempotency_key')) {
+      context.handle(
+        _idempotencyKeyMeta,
+        idempotencyKey.isAcceptableOrUnknown(
+          data['idempotency_key']!,
+          _idempotencyKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('requested_by')) {
+      context.handle(
+        _requestedByMeta,
+        requestedBy.isAcceptableOrUnknown(
+          data['requested_by']!,
+          _requestedByMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trace_id')) {
+      context.handle(
+        _traceIdMeta,
+        traceId.isAcceptableOrUnknown(data['trace_id']!, _traceIdMeta),
+      );
+    }
+    if (data.containsKey('runtime_instance_id')) {
+      context.handle(
+        _runtimeInstanceIdMeta,
+        runtimeInstanceId.isAcceptableOrUnknown(
+          data['runtime_instance_id']!,
+          _runtimeInstanceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('runtime_session_id')) {
+      context.handle(
+        _runtimeSessionIdMeta,
+        runtimeSessionId.isAcceptableOrUnknown(
+          data['runtime_session_id']!,
+          _runtimeSessionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trigger_id')) {
+      context.handle(
+        _triggerIdMeta,
+        triggerId.isAcceptableOrUnknown(data['trigger_id']!, _triggerIdMeta),
+      );
+    }
+    if (data.containsKey('trigger_type')) {
+      context.handle(
+        _triggerTypeMeta,
+        triggerType.isAcceptableOrUnknown(
+          data['trigger_type']!,
+          _triggerTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scheduled_at')) {
+      context.handle(
+        _scheduledAtMeta,
+        scheduledAt.isAcceptableOrUnknown(
+          data['scheduled_at']!,
+          _scheduledAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('triggered_at')) {
+      context.handle(
+        _triggeredAtMeta,
+        triggeredAt.isAcceptableOrUnknown(
+          data['triggered_at']!,
+          _triggeredAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('queue_started_at')) {
+      context.handle(
+        _queueStartedAtMeta,
+        queueStartedAt.isAcceptableOrUnknown(
+          data['queue_started_at']!,
+          _queueStartedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('process_started_at')) {
+      context.handle(
+        _processStartedAtMeta,
+        processStartedAt.isAcceptableOrUnknown(
+          data['process_started_at']!,
+          _processStartedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('finished_at')) {
+      context.handle(
+        _finishedAtMeta,
+        finishedAt.isAcceptableOrUnknown(data['finished_at']!, _finishedAtMeta),
+      );
+    }
+    if (data.containsKey('timeout_at')) {
+      context.handle(
+        _timeoutAtMeta,
+        timeoutAt.isAcceptableOrUnknown(data['timeout_at']!, _timeoutAtMeta),
+      );
+    }
+    if (data.containsKey('pid')) {
+      context.handle(
+        _pidMeta,
+        pid.isAcceptableOrUnknown(data['pid']!, _pidMeta),
+      );
+    }
+    if (data.containsKey('exit_code')) {
+      context.handle(
+        _exitCodeMeta,
+        exitCode.isAcceptableOrUnknown(data['exit_code']!, _exitCodeMeta),
+      );
+    }
+    if (data.containsKey('process_executable')) {
+      context.handle(
+        _processExecutableMeta,
+        processExecutable.isAcceptableOrUnknown(
+          data['process_executable']!,
+          _processExecutableMeta,
+        ),
+      );
+    }
+    if (data.containsKey('process_argument_count')) {
+      context.handle(
+        _processArgumentCountMeta,
+        processArgumentCount.isAcceptableOrUnknown(
+          data['process_argument_count']!,
+          _processArgumentCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('process_command_preview')) {
+      context.handle(
+        _processCommandPreviewMeta,
+        processCommandPreview.isAcceptableOrUnknown(
+          data['process_command_preview']!,
+          _processCommandPreviewMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stdout_text')) {
+      context.handle(
+        _stdoutTextMeta,
+        stdoutText.isAcceptableOrUnknown(data['stdout_text']!, _stdoutTextMeta),
+      );
+    }
+    if (data.containsKey('stderr_text')) {
+      context.handle(
+        _stderrTextMeta,
+        stderrText.isAcceptableOrUnknown(data['stderr_text']!, _stderrTextMeta),
+      );
+    }
+    if (data.containsKey('stdout_truncated')) {
+      context.handle(
+        _stdoutTruncatedMeta,
+        stdoutTruncated.isAcceptableOrUnknown(
+          data['stdout_truncated']!,
+          _stdoutTruncatedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stderr_truncated')) {
+      context.handle(
+        _stderrTruncatedMeta,
+        stderrTruncated.isAcceptableOrUnknown(
+          data['stderr_truncated']!,
+          _stderrTruncatedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stdout_stored_in_chunks')) {
+      context.handle(
+        _stdoutStoredInChunksMeta,
+        stdoutStoredInChunks.isAcceptableOrUnknown(
+          data['stdout_stored_in_chunks']!,
+          _stdoutStoredInChunksMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stderr_stored_in_chunks')) {
+      context.handle(
+        _stderrStoredInChunksMeta,
+        stderrStoredInChunks.isAcceptableOrUnknown(
+          data['stderr_stored_in_chunks']!,
+          _stderrStoredInChunksMeta,
+        ),
+      );
+    }
+    if (data.containsKey('definition_snapshot_hash')) {
+      context.handle(
+        _definitionSnapshotHashMeta,
+        definitionSnapshotHash.isAcceptableOrUnknown(
+          data['definition_snapshot_hash']!,
+          _definitionSnapshotHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('context_hash')) {
+      context.handle(
+        _contextHashMeta,
+        contextHash.isAcceptableOrUnknown(
+          data['context_hash']!,
+          _contextHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('redaction_applied')) {
+      context.handle(
+        _redactionAppliedMeta,
+        redactionApplied.isAcceptableOrUnknown(
+          data['redaction_applied']!,
+          _redactionAppliedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failure_code')) {
+      context.handle(
+        _failureCodeMeta,
+        failureCode.isAcceptableOrUnknown(
+          data['failure_code']!,
+          _failureCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failure_phase')) {
+      context.handle(
+        _failurePhaseMeta,
+        failurePhase.isAcceptableOrUnknown(
+          data['failure_phase']!,
+          _failurePhaseMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failure_message')) {
+      context.handle(
+        _failureMessageMeta,
+        failureMessage.isAcceptableOrUnknown(
+          data['failure_message']!,
+          _failureMessageMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentActionExecutionData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentActionExecutionData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      actionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action_id'],
+      )!,
+      actionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action_type'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      requestedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}requested_at'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      idempotencyKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}idempotency_key'],
+      ),
+      requestedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}requested_by'],
+      ),
+      traceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trace_id'],
+      ),
+      runtimeInstanceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}runtime_instance_id'],
+      ),
+      runtimeSessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}runtime_session_id'],
+      ),
+      triggerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trigger_id'],
+      ),
+      triggerType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trigger_type'],
+      ),
+      scheduledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}scheduled_at'],
+      ),
+      triggeredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}triggered_at'],
+      ),
+      queueStartedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}queue_started_at'],
+      ),
+      processStartedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}process_started_at'],
+      ),
+      finishedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}finished_at'],
+      ),
+      timeoutAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}timeout_at'],
+      ),
+      pid: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pid'],
+      ),
+      exitCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}exit_code'],
+      ),
+      processExecutable: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}process_executable'],
+      ),
+      processArgumentCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}process_argument_count'],
+      ),
+      processCommandPreview: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}process_command_preview'],
+      ),
+      stdoutText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stdout_text'],
+      ),
+      stderrText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stderr_text'],
+      ),
+      stdoutTruncated: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}stdout_truncated'],
+      )!,
+      stderrTruncated: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}stderr_truncated'],
+      )!,
+      stdoutStoredInChunks: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}stdout_stored_in_chunks'],
+      )!,
+      stderrStoredInChunks: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}stderr_stored_in_chunks'],
+      )!,
+      definitionSnapshotHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}definition_snapshot_hash'],
+      ),
+      contextHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context_hash'],
+      ),
+      redactionApplied: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}redaction_applied'],
+      )!,
+      failureCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_code'],
+      ),
+      failurePhase: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_phase'],
+      ),
+      failureMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_message'],
+      ),
+    );
+  }
+
+  @override
+  $AgentActionExecutionTableTable createAlias(String alias) {
+    return $AgentActionExecutionTableTable(attachedDatabase, alias);
+  }
+}
+
+class AgentActionExecutionData extends DataClass
+    implements Insertable<AgentActionExecutionData> {
+  final String id;
+  final String actionId;
+  final String actionType;
+  final String status;
+  final DateTime requestedAt;
+  final String source;
+  final String? idempotencyKey;
+  final String? requestedBy;
+  final String? traceId;
+  final String? runtimeInstanceId;
+  final String? runtimeSessionId;
+  final String? triggerId;
+  final String? triggerType;
+  final DateTime? scheduledAt;
+  final DateTime? triggeredAt;
+  final DateTime? queueStartedAt;
+  final DateTime? processStartedAt;
+  final DateTime? finishedAt;
+  final DateTime? timeoutAt;
+  final int? pid;
+  final int? exitCode;
+  final String? processExecutable;
+  final int? processArgumentCount;
+  final String? processCommandPreview;
+  final String? stdoutText;
+  final String? stderrText;
+  final bool stdoutTruncated;
+  final bool stderrTruncated;
+  final bool stdoutStoredInChunks;
+  final bool stderrStoredInChunks;
+  final String? definitionSnapshotHash;
+  final String? contextHash;
+  final bool redactionApplied;
+  final String? failureCode;
+  final String? failurePhase;
+  final String? failureMessage;
+  const AgentActionExecutionData({
+    required this.id,
+    required this.actionId,
+    required this.actionType,
+    required this.status,
+    required this.requestedAt,
+    required this.source,
+    this.idempotencyKey,
+    this.requestedBy,
+    this.traceId,
+    this.runtimeInstanceId,
+    this.runtimeSessionId,
+    this.triggerId,
+    this.triggerType,
+    this.scheduledAt,
+    this.triggeredAt,
+    this.queueStartedAt,
+    this.processStartedAt,
+    this.finishedAt,
+    this.timeoutAt,
+    this.pid,
+    this.exitCode,
+    this.processExecutable,
+    this.processArgumentCount,
+    this.processCommandPreview,
+    this.stdoutText,
+    this.stderrText,
+    required this.stdoutTruncated,
+    required this.stderrTruncated,
+    required this.stdoutStoredInChunks,
+    required this.stderrStoredInChunks,
+    this.definitionSnapshotHash,
+    this.contextHash,
+    required this.redactionApplied,
+    this.failureCode,
+    this.failurePhase,
+    this.failureMessage,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['action_id'] = Variable<String>(actionId);
+    map['action_type'] = Variable<String>(actionType);
+    map['status'] = Variable<String>(status);
+    map['requested_at'] = Variable<DateTime>(requestedAt);
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || idempotencyKey != null) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey);
+    }
+    if (!nullToAbsent || requestedBy != null) {
+      map['requested_by'] = Variable<String>(requestedBy);
+    }
+    if (!nullToAbsent || traceId != null) {
+      map['trace_id'] = Variable<String>(traceId);
+    }
+    if (!nullToAbsent || runtimeInstanceId != null) {
+      map['runtime_instance_id'] = Variable<String>(runtimeInstanceId);
+    }
+    if (!nullToAbsent || runtimeSessionId != null) {
+      map['runtime_session_id'] = Variable<String>(runtimeSessionId);
+    }
+    if (!nullToAbsent || triggerId != null) {
+      map['trigger_id'] = Variable<String>(triggerId);
+    }
+    if (!nullToAbsent || triggerType != null) {
+      map['trigger_type'] = Variable<String>(triggerType);
+    }
+    if (!nullToAbsent || scheduledAt != null) {
+      map['scheduled_at'] = Variable<DateTime>(scheduledAt);
+    }
+    if (!nullToAbsent || triggeredAt != null) {
+      map['triggered_at'] = Variable<DateTime>(triggeredAt);
+    }
+    if (!nullToAbsent || queueStartedAt != null) {
+      map['queue_started_at'] = Variable<DateTime>(queueStartedAt);
+    }
+    if (!nullToAbsent || processStartedAt != null) {
+      map['process_started_at'] = Variable<DateTime>(processStartedAt);
+    }
+    if (!nullToAbsent || finishedAt != null) {
+      map['finished_at'] = Variable<DateTime>(finishedAt);
+    }
+    if (!nullToAbsent || timeoutAt != null) {
+      map['timeout_at'] = Variable<DateTime>(timeoutAt);
+    }
+    if (!nullToAbsent || pid != null) {
+      map['pid'] = Variable<int>(pid);
+    }
+    if (!nullToAbsent || exitCode != null) {
+      map['exit_code'] = Variable<int>(exitCode);
+    }
+    if (!nullToAbsent || processExecutable != null) {
+      map['process_executable'] = Variable<String>(processExecutable);
+    }
+    if (!nullToAbsent || processArgumentCount != null) {
+      map['process_argument_count'] = Variable<int>(processArgumentCount);
+    }
+    if (!nullToAbsent || processCommandPreview != null) {
+      map['process_command_preview'] = Variable<String>(processCommandPreview);
+    }
+    if (!nullToAbsent || stdoutText != null) {
+      map['stdout_text'] = Variable<String>(stdoutText);
+    }
+    if (!nullToAbsent || stderrText != null) {
+      map['stderr_text'] = Variable<String>(stderrText);
+    }
+    map['stdout_truncated'] = Variable<bool>(stdoutTruncated);
+    map['stderr_truncated'] = Variable<bool>(stderrTruncated);
+    map['stdout_stored_in_chunks'] = Variable<bool>(stdoutStoredInChunks);
+    map['stderr_stored_in_chunks'] = Variable<bool>(stderrStoredInChunks);
+    if (!nullToAbsent || definitionSnapshotHash != null) {
+      map['definition_snapshot_hash'] = Variable<String>(
+        definitionSnapshotHash,
+      );
+    }
+    if (!nullToAbsent || contextHash != null) {
+      map['context_hash'] = Variable<String>(contextHash);
+    }
+    map['redaction_applied'] = Variable<bool>(redactionApplied);
+    if (!nullToAbsent || failureCode != null) {
+      map['failure_code'] = Variable<String>(failureCode);
+    }
+    if (!nullToAbsent || failurePhase != null) {
+      map['failure_phase'] = Variable<String>(failurePhase);
+    }
+    if (!nullToAbsent || failureMessage != null) {
+      map['failure_message'] = Variable<String>(failureMessage);
+    }
+    return map;
+  }
+
+  AgentActionExecutionTableCompanion toCompanion(bool nullToAbsent) {
+    return AgentActionExecutionTableCompanion(
+      id: Value(id),
+      actionId: Value(actionId),
+      actionType: Value(actionType),
+      status: Value(status),
+      requestedAt: Value(requestedAt),
+      source: Value(source),
+      idempotencyKey: idempotencyKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(idempotencyKey),
+      requestedBy: requestedBy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestedBy),
+      traceId: traceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(traceId),
+      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runtimeInstanceId),
+      runtimeSessionId: runtimeSessionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runtimeSessionId),
+      triggerId: triggerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(triggerId),
+      triggerType: triggerType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(triggerType),
+      scheduledAt: scheduledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduledAt),
+      triggeredAt: triggeredAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(triggeredAt),
+      queueStartedAt: queueStartedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(queueStartedAt),
+      processStartedAt: processStartedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processStartedAt),
+      finishedAt: finishedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(finishedAt),
+      timeoutAt: timeoutAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeoutAt),
+      pid: pid == null && nullToAbsent ? const Value.absent() : Value(pid),
+      exitCode: exitCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exitCode),
+      processExecutable: processExecutable == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processExecutable),
+      processArgumentCount: processArgumentCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processArgumentCount),
+      processCommandPreview: processCommandPreview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processCommandPreview),
+      stdoutText: stdoutText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stdoutText),
+      stderrText: stderrText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stderrText),
+      stdoutTruncated: Value(stdoutTruncated),
+      stderrTruncated: Value(stderrTruncated),
+      stdoutStoredInChunks: Value(stdoutStoredInChunks),
+      stderrStoredInChunks: Value(stderrStoredInChunks),
+      definitionSnapshotHash: definitionSnapshotHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(definitionSnapshotHash),
+      contextHash: contextHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextHash),
+      redactionApplied: Value(redactionApplied),
+      failureCode: failureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureCode),
+      failurePhase: failurePhase == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failurePhase),
+      failureMessage: failureMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureMessage),
+    );
+  }
+
+  factory AgentActionExecutionData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentActionExecutionData(
+      id: serializer.fromJson<String>(json['id']),
+      actionId: serializer.fromJson<String>(json['actionId']),
+      actionType: serializer.fromJson<String>(json['actionType']),
+      status: serializer.fromJson<String>(json['status']),
+      requestedAt: serializer.fromJson<DateTime>(json['requestedAt']),
+      source: serializer.fromJson<String>(json['source']),
+      idempotencyKey: serializer.fromJson<String?>(json['idempotencyKey']),
+      requestedBy: serializer.fromJson<String?>(json['requestedBy']),
+      traceId: serializer.fromJson<String?>(json['traceId']),
+      runtimeInstanceId: serializer.fromJson<String?>(
+        json['runtimeInstanceId'],
+      ),
+      runtimeSessionId: serializer.fromJson<String?>(json['runtimeSessionId']),
+      triggerId: serializer.fromJson<String?>(json['triggerId']),
+      triggerType: serializer.fromJson<String?>(json['triggerType']),
+      scheduledAt: serializer.fromJson<DateTime?>(json['scheduledAt']),
+      triggeredAt: serializer.fromJson<DateTime?>(json['triggeredAt']),
+      queueStartedAt: serializer.fromJson<DateTime?>(json['queueStartedAt']),
+      processStartedAt: serializer.fromJson<DateTime?>(
+        json['processStartedAt'],
+      ),
+      finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
+      timeoutAt: serializer.fromJson<DateTime?>(json['timeoutAt']),
+      pid: serializer.fromJson<int?>(json['pid']),
+      exitCode: serializer.fromJson<int?>(json['exitCode']),
+      processExecutable: serializer.fromJson<String?>(
+        json['processExecutable'],
+      ),
+      processArgumentCount: serializer.fromJson<int?>(
+        json['processArgumentCount'],
+      ),
+      processCommandPreview: serializer.fromJson<String?>(
+        json['processCommandPreview'],
+      ),
+      stdoutText: serializer.fromJson<String?>(json['stdoutText']),
+      stderrText: serializer.fromJson<String?>(json['stderrText']),
+      stdoutTruncated: serializer.fromJson<bool>(json['stdoutTruncated']),
+      stderrTruncated: serializer.fromJson<bool>(json['stderrTruncated']),
+      stdoutStoredInChunks: serializer.fromJson<bool>(
+        json['stdoutStoredInChunks'],
+      ),
+      stderrStoredInChunks: serializer.fromJson<bool>(
+        json['stderrStoredInChunks'],
+      ),
+      definitionSnapshotHash: serializer.fromJson<String?>(
+        json['definitionSnapshotHash'],
+      ),
+      contextHash: serializer.fromJson<String?>(json['contextHash']),
+      redactionApplied: serializer.fromJson<bool>(json['redactionApplied']),
+      failureCode: serializer.fromJson<String?>(json['failureCode']),
+      failurePhase: serializer.fromJson<String?>(json['failurePhase']),
+      failureMessage: serializer.fromJson<String?>(json['failureMessage']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'actionId': serializer.toJson<String>(actionId),
+      'actionType': serializer.toJson<String>(actionType),
+      'status': serializer.toJson<String>(status),
+      'requestedAt': serializer.toJson<DateTime>(requestedAt),
+      'source': serializer.toJson<String>(source),
+      'idempotencyKey': serializer.toJson<String?>(idempotencyKey),
+      'requestedBy': serializer.toJson<String?>(requestedBy),
+      'traceId': serializer.toJson<String?>(traceId),
+      'runtimeInstanceId': serializer.toJson<String?>(runtimeInstanceId),
+      'runtimeSessionId': serializer.toJson<String?>(runtimeSessionId),
+      'triggerId': serializer.toJson<String?>(triggerId),
+      'triggerType': serializer.toJson<String?>(triggerType),
+      'scheduledAt': serializer.toJson<DateTime?>(scheduledAt),
+      'triggeredAt': serializer.toJson<DateTime?>(triggeredAt),
+      'queueStartedAt': serializer.toJson<DateTime?>(queueStartedAt),
+      'processStartedAt': serializer.toJson<DateTime?>(processStartedAt),
+      'finishedAt': serializer.toJson<DateTime?>(finishedAt),
+      'timeoutAt': serializer.toJson<DateTime?>(timeoutAt),
+      'pid': serializer.toJson<int?>(pid),
+      'exitCode': serializer.toJson<int?>(exitCode),
+      'processExecutable': serializer.toJson<String?>(processExecutable),
+      'processArgumentCount': serializer.toJson<int?>(processArgumentCount),
+      'processCommandPreview': serializer.toJson<String?>(
+        processCommandPreview,
+      ),
+      'stdoutText': serializer.toJson<String?>(stdoutText),
+      'stderrText': serializer.toJson<String?>(stderrText),
+      'stdoutTruncated': serializer.toJson<bool>(stdoutTruncated),
+      'stderrTruncated': serializer.toJson<bool>(stderrTruncated),
+      'stdoutStoredInChunks': serializer.toJson<bool>(stdoutStoredInChunks),
+      'stderrStoredInChunks': serializer.toJson<bool>(stderrStoredInChunks),
+      'definitionSnapshotHash': serializer.toJson<String?>(
+        definitionSnapshotHash,
+      ),
+      'contextHash': serializer.toJson<String?>(contextHash),
+      'redactionApplied': serializer.toJson<bool>(redactionApplied),
+      'failureCode': serializer.toJson<String?>(failureCode),
+      'failurePhase': serializer.toJson<String?>(failurePhase),
+      'failureMessage': serializer.toJson<String?>(failureMessage),
+    };
+  }
+
+  AgentActionExecutionData copyWith({
+    String? id,
+    String? actionId,
+    String? actionType,
+    String? status,
+    DateTime? requestedAt,
+    String? source,
+    Value<String?> idempotencyKey = const Value.absent(),
+    Value<String?> requestedBy = const Value.absent(),
+    Value<String?> traceId = const Value.absent(),
+    Value<String?> runtimeInstanceId = const Value.absent(),
+    Value<String?> runtimeSessionId = const Value.absent(),
+    Value<String?> triggerId = const Value.absent(),
+    Value<String?> triggerType = const Value.absent(),
+    Value<DateTime?> scheduledAt = const Value.absent(),
+    Value<DateTime?> triggeredAt = const Value.absent(),
+    Value<DateTime?> queueStartedAt = const Value.absent(),
+    Value<DateTime?> processStartedAt = const Value.absent(),
+    Value<DateTime?> finishedAt = const Value.absent(),
+    Value<DateTime?> timeoutAt = const Value.absent(),
+    Value<int?> pid = const Value.absent(),
+    Value<int?> exitCode = const Value.absent(),
+    Value<String?> processExecutable = const Value.absent(),
+    Value<int?> processArgumentCount = const Value.absent(),
+    Value<String?> processCommandPreview = const Value.absent(),
+    Value<String?> stdoutText = const Value.absent(),
+    Value<String?> stderrText = const Value.absent(),
+    bool? stdoutTruncated,
+    bool? stderrTruncated,
+    bool? stdoutStoredInChunks,
+    bool? stderrStoredInChunks,
+    Value<String?> definitionSnapshotHash = const Value.absent(),
+    Value<String?> contextHash = const Value.absent(),
+    bool? redactionApplied,
+    Value<String?> failureCode = const Value.absent(),
+    Value<String?> failurePhase = const Value.absent(),
+    Value<String?> failureMessage = const Value.absent(),
+  }) => AgentActionExecutionData(
+    id: id ?? this.id,
+    actionId: actionId ?? this.actionId,
+    actionType: actionType ?? this.actionType,
+    status: status ?? this.status,
+    requestedAt: requestedAt ?? this.requestedAt,
+    source: source ?? this.source,
+    idempotencyKey: idempotencyKey.present
+        ? idempotencyKey.value
+        : this.idempotencyKey,
+    requestedBy: requestedBy.present ? requestedBy.value : this.requestedBy,
+    traceId: traceId.present ? traceId.value : this.traceId,
+    runtimeInstanceId: runtimeInstanceId.present
+        ? runtimeInstanceId.value
+        : this.runtimeInstanceId,
+    runtimeSessionId: runtimeSessionId.present
+        ? runtimeSessionId.value
+        : this.runtimeSessionId,
+    triggerId: triggerId.present ? triggerId.value : this.triggerId,
+    triggerType: triggerType.present ? triggerType.value : this.triggerType,
+    scheduledAt: scheduledAt.present ? scheduledAt.value : this.scheduledAt,
+    triggeredAt: triggeredAt.present ? triggeredAt.value : this.triggeredAt,
+    queueStartedAt: queueStartedAt.present
+        ? queueStartedAt.value
+        : this.queueStartedAt,
+    processStartedAt: processStartedAt.present
+        ? processStartedAt.value
+        : this.processStartedAt,
+    finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
+    timeoutAt: timeoutAt.present ? timeoutAt.value : this.timeoutAt,
+    pid: pid.present ? pid.value : this.pid,
+    exitCode: exitCode.present ? exitCode.value : this.exitCode,
+    processExecutable: processExecutable.present
+        ? processExecutable.value
+        : this.processExecutable,
+    processArgumentCount: processArgumentCount.present
+        ? processArgumentCount.value
+        : this.processArgumentCount,
+    processCommandPreview: processCommandPreview.present
+        ? processCommandPreview.value
+        : this.processCommandPreview,
+    stdoutText: stdoutText.present ? stdoutText.value : this.stdoutText,
+    stderrText: stderrText.present ? stderrText.value : this.stderrText,
+    stdoutTruncated: stdoutTruncated ?? this.stdoutTruncated,
+    stderrTruncated: stderrTruncated ?? this.stderrTruncated,
+    stdoutStoredInChunks: stdoutStoredInChunks ?? this.stdoutStoredInChunks,
+    stderrStoredInChunks: stderrStoredInChunks ?? this.stderrStoredInChunks,
+    definitionSnapshotHash: definitionSnapshotHash.present
+        ? definitionSnapshotHash.value
+        : this.definitionSnapshotHash,
+    contextHash: contextHash.present ? contextHash.value : this.contextHash,
+    redactionApplied: redactionApplied ?? this.redactionApplied,
+    failureCode: failureCode.present ? failureCode.value : this.failureCode,
+    failurePhase: failurePhase.present ? failurePhase.value : this.failurePhase,
+    failureMessage: failureMessage.present
+        ? failureMessage.value
+        : this.failureMessage,
+  );
+  AgentActionExecutionData copyWithCompanion(
+    AgentActionExecutionTableCompanion data,
+  ) {
+    return AgentActionExecutionData(
+      id: data.id.present ? data.id.value : this.id,
+      actionId: data.actionId.present ? data.actionId.value : this.actionId,
+      actionType: data.actionType.present
+          ? data.actionType.value
+          : this.actionType,
+      status: data.status.present ? data.status.value : this.status,
+      requestedAt: data.requestedAt.present
+          ? data.requestedAt.value
+          : this.requestedAt,
+      source: data.source.present ? data.source.value : this.source,
+      idempotencyKey: data.idempotencyKey.present
+          ? data.idempotencyKey.value
+          : this.idempotencyKey,
+      requestedBy: data.requestedBy.present
+          ? data.requestedBy.value
+          : this.requestedBy,
+      traceId: data.traceId.present ? data.traceId.value : this.traceId,
+      runtimeInstanceId: data.runtimeInstanceId.present
+          ? data.runtimeInstanceId.value
+          : this.runtimeInstanceId,
+      runtimeSessionId: data.runtimeSessionId.present
+          ? data.runtimeSessionId.value
+          : this.runtimeSessionId,
+      triggerId: data.triggerId.present ? data.triggerId.value : this.triggerId,
+      triggerType: data.triggerType.present
+          ? data.triggerType.value
+          : this.triggerType,
+      scheduledAt: data.scheduledAt.present
+          ? data.scheduledAt.value
+          : this.scheduledAt,
+      triggeredAt: data.triggeredAt.present
+          ? data.triggeredAt.value
+          : this.triggeredAt,
+      queueStartedAt: data.queueStartedAt.present
+          ? data.queueStartedAt.value
+          : this.queueStartedAt,
+      processStartedAt: data.processStartedAt.present
+          ? data.processStartedAt.value
+          : this.processStartedAt,
+      finishedAt: data.finishedAt.present
+          ? data.finishedAt.value
+          : this.finishedAt,
+      timeoutAt: data.timeoutAt.present ? data.timeoutAt.value : this.timeoutAt,
+      pid: data.pid.present ? data.pid.value : this.pid,
+      exitCode: data.exitCode.present ? data.exitCode.value : this.exitCode,
+      processExecutable: data.processExecutable.present
+          ? data.processExecutable.value
+          : this.processExecutable,
+      processArgumentCount: data.processArgumentCount.present
+          ? data.processArgumentCount.value
+          : this.processArgumentCount,
+      processCommandPreview: data.processCommandPreview.present
+          ? data.processCommandPreview.value
+          : this.processCommandPreview,
+      stdoutText: data.stdoutText.present
+          ? data.stdoutText.value
+          : this.stdoutText,
+      stderrText: data.stderrText.present
+          ? data.stderrText.value
+          : this.stderrText,
+      stdoutTruncated: data.stdoutTruncated.present
+          ? data.stdoutTruncated.value
+          : this.stdoutTruncated,
+      stderrTruncated: data.stderrTruncated.present
+          ? data.stderrTruncated.value
+          : this.stderrTruncated,
+      stdoutStoredInChunks: data.stdoutStoredInChunks.present
+          ? data.stdoutStoredInChunks.value
+          : this.stdoutStoredInChunks,
+      stderrStoredInChunks: data.stderrStoredInChunks.present
+          ? data.stderrStoredInChunks.value
+          : this.stderrStoredInChunks,
+      definitionSnapshotHash: data.definitionSnapshotHash.present
+          ? data.definitionSnapshotHash.value
+          : this.definitionSnapshotHash,
+      contextHash: data.contextHash.present
+          ? data.contextHash.value
+          : this.contextHash,
+      redactionApplied: data.redactionApplied.present
+          ? data.redactionApplied.value
+          : this.redactionApplied,
+      failureCode: data.failureCode.present
+          ? data.failureCode.value
+          : this.failureCode,
+      failurePhase: data.failurePhase.present
+          ? data.failurePhase.value
+          : this.failurePhase,
+      failureMessage: data.failureMessage.present
+          ? data.failureMessage.value
+          : this.failureMessage,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionExecutionData(')
+          ..write('id: $id, ')
+          ..write('actionId: $actionId, ')
+          ..write('actionType: $actionType, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('source: $source, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('traceId: $traceId, ')
+          ..write('runtimeInstanceId: $runtimeInstanceId, ')
+          ..write('runtimeSessionId: $runtimeSessionId, ')
+          ..write('triggerId: $triggerId, ')
+          ..write('triggerType: $triggerType, ')
+          ..write('scheduledAt: $scheduledAt, ')
+          ..write('triggeredAt: $triggeredAt, ')
+          ..write('queueStartedAt: $queueStartedAt, ')
+          ..write('processStartedAt: $processStartedAt, ')
+          ..write('finishedAt: $finishedAt, ')
+          ..write('timeoutAt: $timeoutAt, ')
+          ..write('pid: $pid, ')
+          ..write('exitCode: $exitCode, ')
+          ..write('processExecutable: $processExecutable, ')
+          ..write('processArgumentCount: $processArgumentCount, ')
+          ..write('processCommandPreview: $processCommandPreview, ')
+          ..write('stdoutText: $stdoutText, ')
+          ..write('stderrText: $stderrText, ')
+          ..write('stdoutTruncated: $stdoutTruncated, ')
+          ..write('stderrTruncated: $stderrTruncated, ')
+          ..write('stdoutStoredInChunks: $stdoutStoredInChunks, ')
+          ..write('stderrStoredInChunks: $stderrStoredInChunks, ')
+          ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
+          ..write('contextHash: $contextHash, ')
+          ..write('redactionApplied: $redactionApplied, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('failurePhase: $failurePhase, ')
+          ..write('failureMessage: $failureMessage')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    actionId,
+    actionType,
+    status,
+    requestedAt,
+    source,
+    idempotencyKey,
+    requestedBy,
+    traceId,
+    runtimeInstanceId,
+    runtimeSessionId,
+    triggerId,
+    triggerType,
+    scheduledAt,
+    triggeredAt,
+    queueStartedAt,
+    processStartedAt,
+    finishedAt,
+    timeoutAt,
+    pid,
+    exitCode,
+    processExecutable,
+    processArgumentCount,
+    processCommandPreview,
+    stdoutText,
+    stderrText,
+    stdoutTruncated,
+    stderrTruncated,
+    stdoutStoredInChunks,
+    stderrStoredInChunks,
+    definitionSnapshotHash,
+    contextHash,
+    redactionApplied,
+    failureCode,
+    failurePhase,
+    failureMessage,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentActionExecutionData &&
+          other.id == this.id &&
+          other.actionId == this.actionId &&
+          other.actionType == this.actionType &&
+          other.status == this.status &&
+          other.requestedAt == this.requestedAt &&
+          other.source == this.source &&
+          other.idempotencyKey == this.idempotencyKey &&
+          other.requestedBy == this.requestedBy &&
+          other.traceId == this.traceId &&
+          other.runtimeInstanceId == this.runtimeInstanceId &&
+          other.runtimeSessionId == this.runtimeSessionId &&
+          other.triggerId == this.triggerId &&
+          other.triggerType == this.triggerType &&
+          other.scheduledAt == this.scheduledAt &&
+          other.triggeredAt == this.triggeredAt &&
+          other.queueStartedAt == this.queueStartedAt &&
+          other.processStartedAt == this.processStartedAt &&
+          other.finishedAt == this.finishedAt &&
+          other.timeoutAt == this.timeoutAt &&
+          other.pid == this.pid &&
+          other.exitCode == this.exitCode &&
+          other.processExecutable == this.processExecutable &&
+          other.processArgumentCount == this.processArgumentCount &&
+          other.processCommandPreview == this.processCommandPreview &&
+          other.stdoutText == this.stdoutText &&
+          other.stderrText == this.stderrText &&
+          other.stdoutTruncated == this.stdoutTruncated &&
+          other.stderrTruncated == this.stderrTruncated &&
+          other.stdoutStoredInChunks == this.stdoutStoredInChunks &&
+          other.stderrStoredInChunks == this.stderrStoredInChunks &&
+          other.definitionSnapshotHash == this.definitionSnapshotHash &&
+          other.contextHash == this.contextHash &&
+          other.redactionApplied == this.redactionApplied &&
+          other.failureCode == this.failureCode &&
+          other.failurePhase == this.failurePhase &&
+          other.failureMessage == this.failureMessage);
+}
+
+class AgentActionExecutionTableCompanion
+    extends UpdateCompanion<AgentActionExecutionData> {
+  final Value<String> id;
+  final Value<String> actionId;
+  final Value<String> actionType;
+  final Value<String> status;
+  final Value<DateTime> requestedAt;
+  final Value<String> source;
+  final Value<String?> idempotencyKey;
+  final Value<String?> requestedBy;
+  final Value<String?> traceId;
+  final Value<String?> runtimeInstanceId;
+  final Value<String?> runtimeSessionId;
+  final Value<String?> triggerId;
+  final Value<String?> triggerType;
+  final Value<DateTime?> scheduledAt;
+  final Value<DateTime?> triggeredAt;
+  final Value<DateTime?> queueStartedAt;
+  final Value<DateTime?> processStartedAt;
+  final Value<DateTime?> finishedAt;
+  final Value<DateTime?> timeoutAt;
+  final Value<int?> pid;
+  final Value<int?> exitCode;
+  final Value<String?> processExecutable;
+  final Value<int?> processArgumentCount;
+  final Value<String?> processCommandPreview;
+  final Value<String?> stdoutText;
+  final Value<String?> stderrText;
+  final Value<bool> stdoutTruncated;
+  final Value<bool> stderrTruncated;
+  final Value<bool> stdoutStoredInChunks;
+  final Value<bool> stderrStoredInChunks;
+  final Value<String?> definitionSnapshotHash;
+  final Value<String?> contextHash;
+  final Value<bool> redactionApplied;
+  final Value<String?> failureCode;
+  final Value<String?> failurePhase;
+  final Value<String?> failureMessage;
+  final Value<int> rowid;
+  const AgentActionExecutionTableCompanion({
+    this.id = const Value.absent(),
+    this.actionId = const Value.absent(),
+    this.actionType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.requestedAt = const Value.absent(),
+    this.source = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    this.requestedBy = const Value.absent(),
+    this.traceId = const Value.absent(),
+    this.runtimeInstanceId = const Value.absent(),
+    this.runtimeSessionId = const Value.absent(),
+    this.triggerId = const Value.absent(),
+    this.triggerType = const Value.absent(),
+    this.scheduledAt = const Value.absent(),
+    this.triggeredAt = const Value.absent(),
+    this.queueStartedAt = const Value.absent(),
+    this.processStartedAt = const Value.absent(),
+    this.finishedAt = const Value.absent(),
+    this.timeoutAt = const Value.absent(),
+    this.pid = const Value.absent(),
+    this.exitCode = const Value.absent(),
+    this.processExecutable = const Value.absent(),
+    this.processArgumentCount = const Value.absent(),
+    this.processCommandPreview = const Value.absent(),
+    this.stdoutText = const Value.absent(),
+    this.stderrText = const Value.absent(),
+    this.stdoutTruncated = const Value.absent(),
+    this.stderrTruncated = const Value.absent(),
+    this.stdoutStoredInChunks = const Value.absent(),
+    this.stderrStoredInChunks = const Value.absent(),
+    this.definitionSnapshotHash = const Value.absent(),
+    this.contextHash = const Value.absent(),
+    this.redactionApplied = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.failurePhase = const Value.absent(),
+    this.failureMessage = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentActionExecutionTableCompanion.insert({
+    required String id,
+    required String actionId,
+    required String actionType,
+    required String status,
+    required DateTime requestedAt,
+    required String source,
+    this.idempotencyKey = const Value.absent(),
+    this.requestedBy = const Value.absent(),
+    this.traceId = const Value.absent(),
+    this.runtimeInstanceId = const Value.absent(),
+    this.runtimeSessionId = const Value.absent(),
+    this.triggerId = const Value.absent(),
+    this.triggerType = const Value.absent(),
+    this.scheduledAt = const Value.absent(),
+    this.triggeredAt = const Value.absent(),
+    this.queueStartedAt = const Value.absent(),
+    this.processStartedAt = const Value.absent(),
+    this.finishedAt = const Value.absent(),
+    this.timeoutAt = const Value.absent(),
+    this.pid = const Value.absent(),
+    this.exitCode = const Value.absent(),
+    this.processExecutable = const Value.absent(),
+    this.processArgumentCount = const Value.absent(),
+    this.processCommandPreview = const Value.absent(),
+    this.stdoutText = const Value.absent(),
+    this.stderrText = const Value.absent(),
+    this.stdoutTruncated = const Value.absent(),
+    this.stderrTruncated = const Value.absent(),
+    this.stdoutStoredInChunks = const Value.absent(),
+    this.stderrStoredInChunks = const Value.absent(),
+    this.definitionSnapshotHash = const Value.absent(),
+    this.contextHash = const Value.absent(),
+    this.redactionApplied = const Value.absent(),
+    this.failureCode = const Value.absent(),
+    this.failurePhase = const Value.absent(),
+    this.failureMessage = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       actionId = Value(actionId),
+       actionType = Value(actionType),
+       status = Value(status),
+       requestedAt = Value(requestedAt),
+       source = Value(source);
+  static Insertable<AgentActionExecutionData> custom({
+    Expression<String>? id,
+    Expression<String>? actionId,
+    Expression<String>? actionType,
+    Expression<String>? status,
+    Expression<DateTime>? requestedAt,
+    Expression<String>? source,
+    Expression<String>? idempotencyKey,
+    Expression<String>? requestedBy,
+    Expression<String>? traceId,
+    Expression<String>? runtimeInstanceId,
+    Expression<String>? runtimeSessionId,
+    Expression<String>? triggerId,
+    Expression<String>? triggerType,
+    Expression<DateTime>? scheduledAt,
+    Expression<DateTime>? triggeredAt,
+    Expression<DateTime>? queueStartedAt,
+    Expression<DateTime>? processStartedAt,
+    Expression<DateTime>? finishedAt,
+    Expression<DateTime>? timeoutAt,
+    Expression<int>? pid,
+    Expression<int>? exitCode,
+    Expression<String>? processExecutable,
+    Expression<int>? processArgumentCount,
+    Expression<String>? processCommandPreview,
+    Expression<String>? stdoutText,
+    Expression<String>? stderrText,
+    Expression<bool>? stdoutTruncated,
+    Expression<bool>? stderrTruncated,
+    Expression<bool>? stdoutStoredInChunks,
+    Expression<bool>? stderrStoredInChunks,
+    Expression<String>? definitionSnapshotHash,
+    Expression<String>? contextHash,
+    Expression<bool>? redactionApplied,
+    Expression<String>? failureCode,
+    Expression<String>? failurePhase,
+    Expression<String>? failureMessage,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (actionId != null) 'action_id': actionId,
+      if (actionType != null) 'action_type': actionType,
+      if (status != null) 'status': status,
+      if (requestedAt != null) 'requested_at': requestedAt,
+      if (source != null) 'source': source,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (requestedBy != null) 'requested_by': requestedBy,
+      if (traceId != null) 'trace_id': traceId,
+      if (runtimeInstanceId != null) 'runtime_instance_id': runtimeInstanceId,
+      if (runtimeSessionId != null) 'runtime_session_id': runtimeSessionId,
+      if (triggerId != null) 'trigger_id': triggerId,
+      if (triggerType != null) 'trigger_type': triggerType,
+      if (scheduledAt != null) 'scheduled_at': scheduledAt,
+      if (triggeredAt != null) 'triggered_at': triggeredAt,
+      if (queueStartedAt != null) 'queue_started_at': queueStartedAt,
+      if (processStartedAt != null) 'process_started_at': processStartedAt,
+      if (finishedAt != null) 'finished_at': finishedAt,
+      if (timeoutAt != null) 'timeout_at': timeoutAt,
+      if (pid != null) 'pid': pid,
+      if (exitCode != null) 'exit_code': exitCode,
+      if (processExecutable != null) 'process_executable': processExecutable,
+      if (processArgumentCount != null)
+        'process_argument_count': processArgumentCount,
+      if (processCommandPreview != null)
+        'process_command_preview': processCommandPreview,
+      if (stdoutText != null) 'stdout_text': stdoutText,
+      if (stderrText != null) 'stderr_text': stderrText,
+      if (stdoutTruncated != null) 'stdout_truncated': stdoutTruncated,
+      if (stderrTruncated != null) 'stderr_truncated': stderrTruncated,
+      if (stdoutStoredInChunks != null)
+        'stdout_stored_in_chunks': stdoutStoredInChunks,
+      if (stderrStoredInChunks != null)
+        'stderr_stored_in_chunks': stderrStoredInChunks,
+      if (definitionSnapshotHash != null)
+        'definition_snapshot_hash': definitionSnapshotHash,
+      if (contextHash != null) 'context_hash': contextHash,
+      if (redactionApplied != null) 'redaction_applied': redactionApplied,
+      if (failureCode != null) 'failure_code': failureCode,
+      if (failurePhase != null) 'failure_phase': failurePhase,
+      if (failureMessage != null) 'failure_message': failureMessage,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentActionExecutionTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? actionId,
+    Value<String>? actionType,
+    Value<String>? status,
+    Value<DateTime>? requestedAt,
+    Value<String>? source,
+    Value<String?>? idempotencyKey,
+    Value<String?>? requestedBy,
+    Value<String?>? traceId,
+    Value<String?>? runtimeInstanceId,
+    Value<String?>? runtimeSessionId,
+    Value<String?>? triggerId,
+    Value<String?>? triggerType,
+    Value<DateTime?>? scheduledAt,
+    Value<DateTime?>? triggeredAt,
+    Value<DateTime?>? queueStartedAt,
+    Value<DateTime?>? processStartedAt,
+    Value<DateTime?>? finishedAt,
+    Value<DateTime?>? timeoutAt,
+    Value<int?>? pid,
+    Value<int?>? exitCode,
+    Value<String?>? processExecutable,
+    Value<int?>? processArgumentCount,
+    Value<String?>? processCommandPreview,
+    Value<String?>? stdoutText,
+    Value<String?>? stderrText,
+    Value<bool>? stdoutTruncated,
+    Value<bool>? stderrTruncated,
+    Value<bool>? stdoutStoredInChunks,
+    Value<bool>? stderrStoredInChunks,
+    Value<String?>? definitionSnapshotHash,
+    Value<String?>? contextHash,
+    Value<bool>? redactionApplied,
+    Value<String?>? failureCode,
+    Value<String?>? failurePhase,
+    Value<String?>? failureMessage,
+    Value<int>? rowid,
+  }) {
+    return AgentActionExecutionTableCompanion(
+      id: id ?? this.id,
+      actionId: actionId ?? this.actionId,
+      actionType: actionType ?? this.actionType,
+      status: status ?? this.status,
+      requestedAt: requestedAt ?? this.requestedAt,
+      source: source ?? this.source,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      requestedBy: requestedBy ?? this.requestedBy,
+      traceId: traceId ?? this.traceId,
+      runtimeInstanceId: runtimeInstanceId ?? this.runtimeInstanceId,
+      runtimeSessionId: runtimeSessionId ?? this.runtimeSessionId,
+      triggerId: triggerId ?? this.triggerId,
+      triggerType: triggerType ?? this.triggerType,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      triggeredAt: triggeredAt ?? this.triggeredAt,
+      queueStartedAt: queueStartedAt ?? this.queueStartedAt,
+      processStartedAt: processStartedAt ?? this.processStartedAt,
+      finishedAt: finishedAt ?? this.finishedAt,
+      timeoutAt: timeoutAt ?? this.timeoutAt,
+      pid: pid ?? this.pid,
+      exitCode: exitCode ?? this.exitCode,
+      processExecutable: processExecutable ?? this.processExecutable,
+      processArgumentCount: processArgumentCount ?? this.processArgumentCount,
+      processCommandPreview:
+          processCommandPreview ?? this.processCommandPreview,
+      stdoutText: stdoutText ?? this.stdoutText,
+      stderrText: stderrText ?? this.stderrText,
+      stdoutTruncated: stdoutTruncated ?? this.stdoutTruncated,
+      stderrTruncated: stderrTruncated ?? this.stderrTruncated,
+      stdoutStoredInChunks: stdoutStoredInChunks ?? this.stdoutStoredInChunks,
+      stderrStoredInChunks: stderrStoredInChunks ?? this.stderrStoredInChunks,
+      definitionSnapshotHash:
+          definitionSnapshotHash ?? this.definitionSnapshotHash,
+      contextHash: contextHash ?? this.contextHash,
+      redactionApplied: redactionApplied ?? this.redactionApplied,
+      failureCode: failureCode ?? this.failureCode,
+      failurePhase: failurePhase ?? this.failurePhase,
+      failureMessage: failureMessage ?? this.failureMessage,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (actionId.present) {
+      map['action_id'] = Variable<String>(actionId.value);
+    }
+    if (actionType.present) {
+      map['action_type'] = Variable<String>(actionType.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (requestedAt.present) {
+      map['requested_at'] = Variable<DateTime>(requestedAt.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (idempotencyKey.present) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey.value);
+    }
+    if (requestedBy.present) {
+      map['requested_by'] = Variable<String>(requestedBy.value);
+    }
+    if (traceId.present) {
+      map['trace_id'] = Variable<String>(traceId.value);
+    }
+    if (runtimeInstanceId.present) {
+      map['runtime_instance_id'] = Variable<String>(runtimeInstanceId.value);
+    }
+    if (runtimeSessionId.present) {
+      map['runtime_session_id'] = Variable<String>(runtimeSessionId.value);
+    }
+    if (triggerId.present) {
+      map['trigger_id'] = Variable<String>(triggerId.value);
+    }
+    if (triggerType.present) {
+      map['trigger_type'] = Variable<String>(triggerType.value);
+    }
+    if (scheduledAt.present) {
+      map['scheduled_at'] = Variable<DateTime>(scheduledAt.value);
+    }
+    if (triggeredAt.present) {
+      map['triggered_at'] = Variable<DateTime>(triggeredAt.value);
+    }
+    if (queueStartedAt.present) {
+      map['queue_started_at'] = Variable<DateTime>(queueStartedAt.value);
+    }
+    if (processStartedAt.present) {
+      map['process_started_at'] = Variable<DateTime>(processStartedAt.value);
+    }
+    if (finishedAt.present) {
+      map['finished_at'] = Variable<DateTime>(finishedAt.value);
+    }
+    if (timeoutAt.present) {
+      map['timeout_at'] = Variable<DateTime>(timeoutAt.value);
+    }
+    if (pid.present) {
+      map['pid'] = Variable<int>(pid.value);
+    }
+    if (exitCode.present) {
+      map['exit_code'] = Variable<int>(exitCode.value);
+    }
+    if (processExecutable.present) {
+      map['process_executable'] = Variable<String>(processExecutable.value);
+    }
+    if (processArgumentCount.present) {
+      map['process_argument_count'] = Variable<int>(processArgumentCount.value);
+    }
+    if (processCommandPreview.present) {
+      map['process_command_preview'] = Variable<String>(
+        processCommandPreview.value,
+      );
+    }
+    if (stdoutText.present) {
+      map['stdout_text'] = Variable<String>(stdoutText.value);
+    }
+    if (stderrText.present) {
+      map['stderr_text'] = Variable<String>(stderrText.value);
+    }
+    if (stdoutTruncated.present) {
+      map['stdout_truncated'] = Variable<bool>(stdoutTruncated.value);
+    }
+    if (stderrTruncated.present) {
+      map['stderr_truncated'] = Variable<bool>(stderrTruncated.value);
+    }
+    if (stdoutStoredInChunks.present) {
+      map['stdout_stored_in_chunks'] = Variable<bool>(
+        stdoutStoredInChunks.value,
+      );
+    }
+    if (stderrStoredInChunks.present) {
+      map['stderr_stored_in_chunks'] = Variable<bool>(
+        stderrStoredInChunks.value,
+      );
+    }
+    if (definitionSnapshotHash.present) {
+      map['definition_snapshot_hash'] = Variable<String>(
+        definitionSnapshotHash.value,
+      );
+    }
+    if (contextHash.present) {
+      map['context_hash'] = Variable<String>(contextHash.value);
+    }
+    if (redactionApplied.present) {
+      map['redaction_applied'] = Variable<bool>(redactionApplied.value);
+    }
+    if (failureCode.present) {
+      map['failure_code'] = Variable<String>(failureCode.value);
+    }
+    if (failurePhase.present) {
+      map['failure_phase'] = Variable<String>(failurePhase.value);
+    }
+    if (failureMessage.present) {
+      map['failure_message'] = Variable<String>(failureMessage.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionExecutionTableCompanion(')
+          ..write('id: $id, ')
+          ..write('actionId: $actionId, ')
+          ..write('actionType: $actionType, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('source: $source, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('traceId: $traceId, ')
+          ..write('runtimeInstanceId: $runtimeInstanceId, ')
+          ..write('runtimeSessionId: $runtimeSessionId, ')
+          ..write('triggerId: $triggerId, ')
+          ..write('triggerType: $triggerType, ')
+          ..write('scheduledAt: $scheduledAt, ')
+          ..write('triggeredAt: $triggeredAt, ')
+          ..write('queueStartedAt: $queueStartedAt, ')
+          ..write('processStartedAt: $processStartedAt, ')
+          ..write('finishedAt: $finishedAt, ')
+          ..write('timeoutAt: $timeoutAt, ')
+          ..write('pid: $pid, ')
+          ..write('exitCode: $exitCode, ')
+          ..write('processExecutable: $processExecutable, ')
+          ..write('processArgumentCount: $processArgumentCount, ')
+          ..write('processCommandPreview: $processCommandPreview, ')
+          ..write('stdoutText: $stdoutText, ')
+          ..write('stderrText: $stderrText, ')
+          ..write('stdoutTruncated: $stdoutTruncated, ')
+          ..write('stderrTruncated: $stderrTruncated, ')
+          ..write('stdoutStoredInChunks: $stdoutStoredInChunks, ')
+          ..write('stderrStoredInChunks: $stderrStoredInChunks, ')
+          ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
+          ..write('contextHash: $contextHash, ')
+          ..write('redactionApplied: $redactionApplied, ')
+          ..write('failureCode: $failureCode, ')
+          ..write('failurePhase: $failurePhase, ')
+          ..write('failureMessage: $failureMessage, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RpcIdempotencyCacheTableTable extends RpcIdempotencyCacheTable
+    with TableInfo<$RpcIdempotencyCacheTableTable, RpcIdempotencyCacheData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RpcIdempotencyCacheTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
+    'cacheKey',
+  );
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+    'cache_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responseJsonMeta = const VerificationMeta(
+    'responseJson',
+  );
+  @override
+  late final GeneratedColumn<String> responseJson = GeneratedColumn<String>(
+    'response_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestFingerprintMeta =
+      const VerificationMeta('requestFingerprint');
+  @override
+  late final GeneratedColumn<String> requestFingerprint =
+      GeneratedColumn<String>(
+        'request_fingerprint',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    cacheKey,
+    responseJson,
+    requestFingerprint,
+    expiresAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rpc_idempotency_cache_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RpcIdempotencyCacheData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('cache_key')) {
+      context.handle(
+        _cacheKeyMeta,
+        cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('response_json')) {
+      context.handle(
+        _responseJsonMeta,
+        responseJson.isAcceptableOrUnknown(
+          data['response_json']!,
+          _responseJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_responseJsonMeta);
+    }
+    if (data.containsKey('request_fingerprint')) {
+      context.handle(
+        _requestFingerprintMeta,
+        requestFingerprint.isAcceptableOrUnknown(
+          data['request_fingerprint']!,
+          _requestFingerprintMeta,
+        ),
+      );
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cacheKey};
+  @override
+  RpcIdempotencyCacheData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RpcIdempotencyCacheData(
+      cacheKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cache_key'],
+      )!,
+      responseJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}response_json'],
+      )!,
+      requestFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}request_fingerprint'],
+      ),
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RpcIdempotencyCacheTableTable createAlias(String alias) {
+    return $RpcIdempotencyCacheTableTable(attachedDatabase, alias);
+  }
+}
+
+class RpcIdempotencyCacheData extends DataClass
+    implements Insertable<RpcIdempotencyCacheData> {
+  final String cacheKey;
+  final String responseJson;
+  final String? requestFingerprint;
+  final DateTime expiresAt;
+  final DateTime updatedAt;
+  const RpcIdempotencyCacheData({
+    required this.cacheKey,
+    required this.responseJson,
+    this.requestFingerprint,
+    required this.expiresAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['response_json'] = Variable<String>(responseJson);
+    if (!nullToAbsent || requestFingerprint != null) {
+      map['request_fingerprint'] = Variable<String>(requestFingerprint);
+    }
+    map['expires_at'] = Variable<DateTime>(expiresAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  RpcIdempotencyCacheTableCompanion toCompanion(bool nullToAbsent) {
+    return RpcIdempotencyCacheTableCompanion(
+      cacheKey: Value(cacheKey),
+      responseJson: Value(responseJson),
+      requestFingerprint: requestFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestFingerprint),
+      expiresAt: Value(expiresAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory RpcIdempotencyCacheData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RpcIdempotencyCacheData(
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      responseJson: serializer.fromJson<String>(json['responseJson']),
+      requestFingerprint: serializer.fromJson<String?>(
+        json['requestFingerprint'],
+      ),
+      expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'responseJson': serializer.toJson<String>(responseJson),
+      'requestFingerprint': serializer.toJson<String?>(requestFingerprint),
+      'expiresAt': serializer.toJson<DateTime>(expiresAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  RpcIdempotencyCacheData copyWith({
+    String? cacheKey,
+    String? responseJson,
+    Value<String?> requestFingerprint = const Value.absent(),
+    DateTime? expiresAt,
+    DateTime? updatedAt,
+  }) => RpcIdempotencyCacheData(
+    cacheKey: cacheKey ?? this.cacheKey,
+    responseJson: responseJson ?? this.responseJson,
+    requestFingerprint: requestFingerprint.present
+        ? requestFingerprint.value
+        : this.requestFingerprint,
+    expiresAt: expiresAt ?? this.expiresAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  RpcIdempotencyCacheData copyWithCompanion(
+    RpcIdempotencyCacheTableCompanion data,
+  ) {
+    return RpcIdempotencyCacheData(
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      responseJson: data.responseJson.present
+          ? data.responseJson.value
+          : this.responseJson,
+      requestFingerprint: data.requestFingerprint.present
+          ? data.requestFingerprint.value
+          : this.requestFingerprint,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RpcIdempotencyCacheData(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('responseJson: $responseJson, ')
+          ..write('requestFingerprint: $requestFingerprint, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    cacheKey,
+    responseJson,
+    requestFingerprint,
+    expiresAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RpcIdempotencyCacheData &&
+          other.cacheKey == this.cacheKey &&
+          other.responseJson == this.responseJson &&
+          other.requestFingerprint == this.requestFingerprint &&
+          other.expiresAt == this.expiresAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class RpcIdempotencyCacheTableCompanion
+    extends UpdateCompanion<RpcIdempotencyCacheData> {
+  final Value<String> cacheKey;
+  final Value<String> responseJson;
+  final Value<String?> requestFingerprint;
+  final Value<DateTime> expiresAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const RpcIdempotencyCacheTableCompanion({
+    this.cacheKey = const Value.absent(),
+    this.responseJson = const Value.absent(),
+    this.requestFingerprint = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RpcIdempotencyCacheTableCompanion.insert({
+    required String cacheKey,
+    required String responseJson,
+    this.requestFingerprint = const Value.absent(),
+    required DateTime expiresAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : cacheKey = Value(cacheKey),
+       responseJson = Value(responseJson),
+       expiresAt = Value(expiresAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<RpcIdempotencyCacheData> custom({
+    Expression<String>? cacheKey,
+    Expression<String>? responseJson,
+    Expression<String>? requestFingerprint,
+    Expression<DateTime>? expiresAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (responseJson != null) 'response_json': responseJson,
+      if (requestFingerprint != null) 'request_fingerprint': requestFingerprint,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RpcIdempotencyCacheTableCompanion copyWith({
+    Value<String>? cacheKey,
+    Value<String>? responseJson,
+    Value<String?>? requestFingerprint,
+    Value<DateTime>? expiresAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return RpcIdempotencyCacheTableCompanion(
+      cacheKey: cacheKey ?? this.cacheKey,
+      responseJson: responseJson ?? this.responseJson,
+      requestFingerprint: requestFingerprint ?? this.requestFingerprint,
+      expiresAt: expiresAt ?? this.expiresAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (responseJson.present) {
+      map['response_json'] = Variable<String>(responseJson.value);
+    }
+    if (requestFingerprint.present) {
+      map['request_fingerprint'] = Variable<String>(requestFingerprint.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RpcIdempotencyCacheTableCompanion(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('responseJson: $responseJson, ')
+          ..write('requestFingerprint: $requestFingerprint, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AgentActionRemoteAuditTableTable extends AgentActionRemoteAuditTable
+    with
+        TableInfo<
+          $AgentActionRemoteAuditTableTable,
+          AgentActionRemoteAuditData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentActionRemoteAuditTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtMeta = const VerificationMeta(
+    'occurredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAt = GeneratedColumn<DateTime>(
+    'occurred_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rpcMethodMeta = const VerificationMeta(
+    'rpcMethod',
+  );
+  @override
+  late final GeneratedColumn<String> rpcMethod = GeneratedColumn<String>(
+    'rpc_method',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionIdMeta = const VerificationMeta(
+    'actionId',
+  );
+  @override
+  late final GeneratedColumn<String> actionId = GeneratedColumn<String>(
+    'action_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _executionIdMeta = const VerificationMeta(
+    'executionId',
+  );
+  @override
+  late final GeneratedColumn<String> executionId = GeneratedColumn<String>(
+    'execution_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _traceIdMeta = const VerificationMeta(
+    'traceId',
+  );
+  @override
+  late final GeneratedColumn<String> traceId = GeneratedColumn<String>(
+    'trace_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _requestedByMeta = const VerificationMeta(
+    'requestedBy',
+  );
+  @override
+  late final GeneratedColumn<String> requestedBy = GeneratedColumn<String>(
+    'requested_by',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _outcomeMeta = const VerificationMeta(
+    'outcome',
+  );
+  @override
+  late final GeneratedColumn<String> outcome = GeneratedColumn<String>(
+    'outcome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
+  );
+  @override
+  late final GeneratedColumn<String> reasonCode = GeneratedColumn<String>(
+    'reason_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rpcErrorCodeMeta = const VerificationMeta(
+    'rpcErrorCode',
+  );
+  @override
+  late final GeneratedColumn<int> rpcErrorCode = GeneratedColumn<int>(
+    'rpc_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _credentialPresentMeta = const VerificationMeta(
+    'credentialPresent',
+  );
+  @override
+  late final GeneratedColumn<bool> credentialPresent = GeneratedColumn<bool>(
+    'credential_present',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("credential_present" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tokenJtiMeta = const VerificationMeta(
+    'tokenJti',
+  );
+  @override
+  late final GeneratedColumn<String> tokenJti = GeneratedColumn<String>(
+    'token_jti',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _runtimeInstanceIdMeta = const VerificationMeta(
+    'runtimeInstanceId',
+  );
+  @override
+  late final GeneratedColumn<String> runtimeInstanceId =
+      GeneratedColumn<String>(
+        'runtime_instance_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _runtimeSessionIdMeta = const VerificationMeta(
+    'runtimeSessionId',
+  );
+  @override
+  late final GeneratedColumn<String> runtimeSessionId = GeneratedColumn<String>(
+    'runtime_session_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _idempotencyKeyMeta = const VerificationMeta(
+    'idempotencyKey',
+  );
+  @override
+  late final GeneratedColumn<String> idempotencyKey = GeneratedColumn<String>(
+    'idempotency_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    occurredAt,
+    rpcMethod,
+    actionId,
+    executionId,
+    traceId,
+    requestedBy,
+    outcome,
+    reasonCode,
+    rpcErrorCode,
+    credentialPresent,
+    clientId,
+    tokenJti,
+    runtimeInstanceId,
+    runtimeSessionId,
+    idempotencyKey,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_action_remote_audit_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentActionRemoteAuditData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('occurred_at')) {
+      context.handle(
+        _occurredAtMeta,
+        occurredAt.isAcceptableOrUnknown(data['occurred_at']!, _occurredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtMeta);
+    }
+    if (data.containsKey('rpc_method')) {
+      context.handle(
+        _rpcMethodMeta,
+        rpcMethod.isAcceptableOrUnknown(data['rpc_method']!, _rpcMethodMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rpcMethodMeta);
+    }
+    if (data.containsKey('action_id')) {
+      context.handle(
+        _actionIdMeta,
+        actionId.isAcceptableOrUnknown(data['action_id']!, _actionIdMeta),
+      );
+    }
+    if (data.containsKey('execution_id')) {
+      context.handle(
+        _executionIdMeta,
+        executionId.isAcceptableOrUnknown(
+          data['execution_id']!,
+          _executionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trace_id')) {
+      context.handle(
+        _traceIdMeta,
+        traceId.isAcceptableOrUnknown(data['trace_id']!, _traceIdMeta),
+      );
+    }
+    if (data.containsKey('requested_by')) {
+      context.handle(
+        _requestedByMeta,
+        requestedBy.isAcceptableOrUnknown(
+          data['requested_by']!,
+          _requestedByMeta,
+        ),
+      );
+    }
+    if (data.containsKey('outcome')) {
+      context.handle(
+        _outcomeMeta,
+        outcome.isAcceptableOrUnknown(data['outcome']!, _outcomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_outcomeMeta);
+    }
+    if (data.containsKey('reason_code')) {
+      context.handle(
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
+      );
+    }
+    if (data.containsKey('rpc_error_code')) {
+      context.handle(
+        _rpcErrorCodeMeta,
+        rpcErrorCode.isAcceptableOrUnknown(
+          data['rpc_error_code']!,
+          _rpcErrorCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('credential_present')) {
+      context.handle(
+        _credentialPresentMeta,
+        credentialPresent.isAcceptableOrUnknown(
+          data['credential_present']!,
+          _credentialPresentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    }
+    if (data.containsKey('token_jti')) {
+      context.handle(
+        _tokenJtiMeta,
+        tokenJti.isAcceptableOrUnknown(data['token_jti']!, _tokenJtiMeta),
+      );
+    }
+    if (data.containsKey('runtime_instance_id')) {
+      context.handle(
+        _runtimeInstanceIdMeta,
+        runtimeInstanceId.isAcceptableOrUnknown(
+          data['runtime_instance_id']!,
+          _runtimeInstanceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('runtime_session_id')) {
+      context.handle(
+        _runtimeSessionIdMeta,
+        runtimeSessionId.isAcceptableOrUnknown(
+          data['runtime_session_id']!,
+          _runtimeSessionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('idempotency_key')) {
+      context.handle(
+        _idempotencyKeyMeta,
+        idempotencyKey.isAcceptableOrUnknown(
+          data['idempotency_key']!,
+          _idempotencyKeyMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentActionRemoteAuditData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentActionRemoteAuditData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      occurredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at'],
+      )!,
+      rpcMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rpc_method'],
+      )!,
+      actionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action_id'],
+      ),
+      executionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}execution_id'],
+      ),
+      traceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trace_id'],
+      ),
+      requestedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}requested_by'],
+      ),
+      outcome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}outcome'],
+      )!,
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_code'],
+      ),
+      rpcErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rpc_error_code'],
+      ),
+      credentialPresent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}credential_present'],
+      )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
+      tokenJti: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token_jti'],
+      ),
+      runtimeInstanceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}runtime_instance_id'],
+      ),
+      runtimeSessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}runtime_session_id'],
+      ),
+      idempotencyKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}idempotency_key'],
+      ),
+    );
+  }
+
+  @override
+  $AgentActionRemoteAuditTableTable createAlias(String alias) {
+    return $AgentActionRemoteAuditTableTable(attachedDatabase, alias);
+  }
+}
+
+class AgentActionRemoteAuditData extends DataClass
+    implements Insertable<AgentActionRemoteAuditData> {
+  final String id;
+  final DateTime occurredAt;
+  final String rpcMethod;
+  final String? actionId;
+  final String? executionId;
+  final String? traceId;
+  final String? requestedBy;
+  final String outcome;
+  final String? reasonCode;
+  final int? rpcErrorCode;
+  final bool credentialPresent;
+  final String? clientId;
+  final String? tokenJti;
+  final String? runtimeInstanceId;
+  final String? runtimeSessionId;
+  final String? idempotencyKey;
+  const AgentActionRemoteAuditData({
+    required this.id,
+    required this.occurredAt,
+    required this.rpcMethod,
+    this.actionId,
+    this.executionId,
+    this.traceId,
+    this.requestedBy,
+    required this.outcome,
+    this.reasonCode,
+    this.rpcErrorCode,
+    required this.credentialPresent,
+    this.clientId,
+    this.tokenJti,
+    this.runtimeInstanceId,
+    this.runtimeSessionId,
+    this.idempotencyKey,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['occurred_at'] = Variable<DateTime>(occurredAt);
+    map['rpc_method'] = Variable<String>(rpcMethod);
+    if (!nullToAbsent || actionId != null) {
+      map['action_id'] = Variable<String>(actionId);
+    }
+    if (!nullToAbsent || executionId != null) {
+      map['execution_id'] = Variable<String>(executionId);
+    }
+    if (!nullToAbsent || traceId != null) {
+      map['trace_id'] = Variable<String>(traceId);
+    }
+    if (!nullToAbsent || requestedBy != null) {
+      map['requested_by'] = Variable<String>(requestedBy);
+    }
+    map['outcome'] = Variable<String>(outcome);
+    if (!nullToAbsent || reasonCode != null) {
+      map['reason_code'] = Variable<String>(reasonCode);
+    }
+    if (!nullToAbsent || rpcErrorCode != null) {
+      map['rpc_error_code'] = Variable<int>(rpcErrorCode);
+    }
+    map['credential_present'] = Variable<bool>(credentialPresent);
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
+    }
+    if (!nullToAbsent || tokenJti != null) {
+      map['token_jti'] = Variable<String>(tokenJti);
+    }
+    if (!nullToAbsent || runtimeInstanceId != null) {
+      map['runtime_instance_id'] = Variable<String>(runtimeInstanceId);
+    }
+    if (!nullToAbsent || runtimeSessionId != null) {
+      map['runtime_session_id'] = Variable<String>(runtimeSessionId);
+    }
+    if (!nullToAbsent || idempotencyKey != null) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey);
+    }
+    return map;
+  }
+
+  AgentActionRemoteAuditTableCompanion toCompanion(bool nullToAbsent) {
+    return AgentActionRemoteAuditTableCompanion(
+      id: Value(id),
+      occurredAt: Value(occurredAt),
+      rpcMethod: Value(rpcMethod),
+      actionId: actionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actionId),
+      executionId: executionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(executionId),
+      traceId: traceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(traceId),
+      requestedBy: requestedBy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestedBy),
+      outcome: Value(outcome),
+      reasonCode: reasonCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reasonCode),
+      rpcErrorCode: rpcErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rpcErrorCode),
+      credentialPresent: Value(credentialPresent),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
+      tokenJti: tokenJti == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tokenJti),
+      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runtimeInstanceId),
+      runtimeSessionId: runtimeSessionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runtimeSessionId),
+      idempotencyKey: idempotencyKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(idempotencyKey),
+    );
+  }
+
+  factory AgentActionRemoteAuditData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentActionRemoteAuditData(
+      id: serializer.fromJson<String>(json['id']),
+      occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
+      rpcMethod: serializer.fromJson<String>(json['rpcMethod']),
+      actionId: serializer.fromJson<String?>(json['actionId']),
+      executionId: serializer.fromJson<String?>(json['executionId']),
+      traceId: serializer.fromJson<String?>(json['traceId']),
+      requestedBy: serializer.fromJson<String?>(json['requestedBy']),
+      outcome: serializer.fromJson<String>(json['outcome']),
+      reasonCode: serializer.fromJson<String?>(json['reasonCode']),
+      rpcErrorCode: serializer.fromJson<int?>(json['rpcErrorCode']),
+      credentialPresent: serializer.fromJson<bool>(json['credentialPresent']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
+      tokenJti: serializer.fromJson<String?>(json['tokenJti']),
+      runtimeInstanceId: serializer.fromJson<String?>(
+        json['runtimeInstanceId'],
+      ),
+      runtimeSessionId: serializer.fromJson<String?>(json['runtimeSessionId']),
+      idempotencyKey: serializer.fromJson<String?>(json['idempotencyKey']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'occurredAt': serializer.toJson<DateTime>(occurredAt),
+      'rpcMethod': serializer.toJson<String>(rpcMethod),
+      'actionId': serializer.toJson<String?>(actionId),
+      'executionId': serializer.toJson<String?>(executionId),
+      'traceId': serializer.toJson<String?>(traceId),
+      'requestedBy': serializer.toJson<String?>(requestedBy),
+      'outcome': serializer.toJson<String>(outcome),
+      'reasonCode': serializer.toJson<String?>(reasonCode),
+      'rpcErrorCode': serializer.toJson<int?>(rpcErrorCode),
+      'credentialPresent': serializer.toJson<bool>(credentialPresent),
+      'clientId': serializer.toJson<String?>(clientId),
+      'tokenJti': serializer.toJson<String?>(tokenJti),
+      'runtimeInstanceId': serializer.toJson<String?>(runtimeInstanceId),
+      'runtimeSessionId': serializer.toJson<String?>(runtimeSessionId),
+      'idempotencyKey': serializer.toJson<String?>(idempotencyKey),
+    };
+  }
+
+  AgentActionRemoteAuditData copyWith({
+    String? id,
+    DateTime? occurredAt,
+    String? rpcMethod,
+    Value<String?> actionId = const Value.absent(),
+    Value<String?> executionId = const Value.absent(),
+    Value<String?> traceId = const Value.absent(),
+    Value<String?> requestedBy = const Value.absent(),
+    String? outcome,
+    Value<String?> reasonCode = const Value.absent(),
+    Value<int?> rpcErrorCode = const Value.absent(),
+    bool? credentialPresent,
+    Value<String?> clientId = const Value.absent(),
+    Value<String?> tokenJti = const Value.absent(),
+    Value<String?> runtimeInstanceId = const Value.absent(),
+    Value<String?> runtimeSessionId = const Value.absent(),
+    Value<String?> idempotencyKey = const Value.absent(),
+  }) => AgentActionRemoteAuditData(
+    id: id ?? this.id,
+    occurredAt: occurredAt ?? this.occurredAt,
+    rpcMethod: rpcMethod ?? this.rpcMethod,
+    actionId: actionId.present ? actionId.value : this.actionId,
+    executionId: executionId.present ? executionId.value : this.executionId,
+    traceId: traceId.present ? traceId.value : this.traceId,
+    requestedBy: requestedBy.present ? requestedBy.value : this.requestedBy,
+    outcome: outcome ?? this.outcome,
+    reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
+    rpcErrorCode: rpcErrorCode.present ? rpcErrorCode.value : this.rpcErrorCode,
+    credentialPresent: credentialPresent ?? this.credentialPresent,
+    clientId: clientId.present ? clientId.value : this.clientId,
+    tokenJti: tokenJti.present ? tokenJti.value : this.tokenJti,
+    runtimeInstanceId: runtimeInstanceId.present
+        ? runtimeInstanceId.value
+        : this.runtimeInstanceId,
+    runtimeSessionId: runtimeSessionId.present
+        ? runtimeSessionId.value
+        : this.runtimeSessionId,
+    idempotencyKey: idempotencyKey.present
+        ? idempotencyKey.value
+        : this.idempotencyKey,
+  );
+  AgentActionRemoteAuditData copyWithCompanion(
+    AgentActionRemoteAuditTableCompanion data,
+  ) {
+    return AgentActionRemoteAuditData(
+      id: data.id.present ? data.id.value : this.id,
+      occurredAt: data.occurredAt.present
+          ? data.occurredAt.value
+          : this.occurredAt,
+      rpcMethod: data.rpcMethod.present ? data.rpcMethod.value : this.rpcMethod,
+      actionId: data.actionId.present ? data.actionId.value : this.actionId,
+      executionId: data.executionId.present
+          ? data.executionId.value
+          : this.executionId,
+      traceId: data.traceId.present ? data.traceId.value : this.traceId,
+      requestedBy: data.requestedBy.present
+          ? data.requestedBy.value
+          : this.requestedBy,
+      outcome: data.outcome.present ? data.outcome.value : this.outcome,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
+      rpcErrorCode: data.rpcErrorCode.present
+          ? data.rpcErrorCode.value
+          : this.rpcErrorCode,
+      credentialPresent: data.credentialPresent.present
+          ? data.credentialPresent.value
+          : this.credentialPresent,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      tokenJti: data.tokenJti.present ? data.tokenJti.value : this.tokenJti,
+      runtimeInstanceId: data.runtimeInstanceId.present
+          ? data.runtimeInstanceId.value
+          : this.runtimeInstanceId,
+      runtimeSessionId: data.runtimeSessionId.present
+          ? data.runtimeSessionId.value
+          : this.runtimeSessionId,
+      idempotencyKey: data.idempotencyKey.present
+          ? data.idempotencyKey.value
+          : this.idempotencyKey,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionRemoteAuditData(')
+          ..write('id: $id, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('rpcMethod: $rpcMethod, ')
+          ..write('actionId: $actionId, ')
+          ..write('executionId: $executionId, ')
+          ..write('traceId: $traceId, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('outcome: $outcome, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('rpcErrorCode: $rpcErrorCode, ')
+          ..write('credentialPresent: $credentialPresent, ')
+          ..write('clientId: $clientId, ')
+          ..write('tokenJti: $tokenJti, ')
+          ..write('runtimeInstanceId: $runtimeInstanceId, ')
+          ..write('runtimeSessionId: $runtimeSessionId, ')
+          ..write('idempotencyKey: $idempotencyKey')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    occurredAt,
+    rpcMethod,
+    actionId,
+    executionId,
+    traceId,
+    requestedBy,
+    outcome,
+    reasonCode,
+    rpcErrorCode,
+    credentialPresent,
+    clientId,
+    tokenJti,
+    runtimeInstanceId,
+    runtimeSessionId,
+    idempotencyKey,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentActionRemoteAuditData &&
+          other.id == this.id &&
+          other.occurredAt == this.occurredAt &&
+          other.rpcMethod == this.rpcMethod &&
+          other.actionId == this.actionId &&
+          other.executionId == this.executionId &&
+          other.traceId == this.traceId &&
+          other.requestedBy == this.requestedBy &&
+          other.outcome == this.outcome &&
+          other.reasonCode == this.reasonCode &&
+          other.rpcErrorCode == this.rpcErrorCode &&
+          other.credentialPresent == this.credentialPresent &&
+          other.clientId == this.clientId &&
+          other.tokenJti == this.tokenJti &&
+          other.runtimeInstanceId == this.runtimeInstanceId &&
+          other.runtimeSessionId == this.runtimeSessionId &&
+          other.idempotencyKey == this.idempotencyKey);
+}
+
+class AgentActionRemoteAuditTableCompanion
+    extends UpdateCompanion<AgentActionRemoteAuditData> {
+  final Value<String> id;
+  final Value<DateTime> occurredAt;
+  final Value<String> rpcMethod;
+  final Value<String?> actionId;
+  final Value<String?> executionId;
+  final Value<String?> traceId;
+  final Value<String?> requestedBy;
+  final Value<String> outcome;
+  final Value<String?> reasonCode;
+  final Value<int?> rpcErrorCode;
+  final Value<bool> credentialPresent;
+  final Value<String?> clientId;
+  final Value<String?> tokenJti;
+  final Value<String?> runtimeInstanceId;
+  final Value<String?> runtimeSessionId;
+  final Value<String?> idempotencyKey;
+  final Value<int> rowid;
+  const AgentActionRemoteAuditTableCompanion({
+    this.id = const Value.absent(),
+    this.occurredAt = const Value.absent(),
+    this.rpcMethod = const Value.absent(),
+    this.actionId = const Value.absent(),
+    this.executionId = const Value.absent(),
+    this.traceId = const Value.absent(),
+    this.requestedBy = const Value.absent(),
+    this.outcome = const Value.absent(),
+    this.reasonCode = const Value.absent(),
+    this.rpcErrorCode = const Value.absent(),
+    this.credentialPresent = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.tokenJti = const Value.absent(),
+    this.runtimeInstanceId = const Value.absent(),
+    this.runtimeSessionId = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentActionRemoteAuditTableCompanion.insert({
+    required String id,
+    required DateTime occurredAt,
+    required String rpcMethod,
+    this.actionId = const Value.absent(),
+    this.executionId = const Value.absent(),
+    this.traceId = const Value.absent(),
+    this.requestedBy = const Value.absent(),
+    required String outcome,
+    this.reasonCode = const Value.absent(),
+    this.rpcErrorCode = const Value.absent(),
+    this.credentialPresent = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.tokenJti = const Value.absent(),
+    this.runtimeInstanceId = const Value.absent(),
+    this.runtimeSessionId = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       occurredAt = Value(occurredAt),
+       rpcMethod = Value(rpcMethod),
+       outcome = Value(outcome);
+  static Insertable<AgentActionRemoteAuditData> custom({
+    Expression<String>? id,
+    Expression<DateTime>? occurredAt,
+    Expression<String>? rpcMethod,
+    Expression<String>? actionId,
+    Expression<String>? executionId,
+    Expression<String>? traceId,
+    Expression<String>? requestedBy,
+    Expression<String>? outcome,
+    Expression<String>? reasonCode,
+    Expression<int>? rpcErrorCode,
+    Expression<bool>? credentialPresent,
+    Expression<String>? clientId,
+    Expression<String>? tokenJti,
+    Expression<String>? runtimeInstanceId,
+    Expression<String>? runtimeSessionId,
+    Expression<String>? idempotencyKey,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (occurredAt != null) 'occurred_at': occurredAt,
+      if (rpcMethod != null) 'rpc_method': rpcMethod,
+      if (actionId != null) 'action_id': actionId,
+      if (executionId != null) 'execution_id': executionId,
+      if (traceId != null) 'trace_id': traceId,
+      if (requestedBy != null) 'requested_by': requestedBy,
+      if (outcome != null) 'outcome': outcome,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (rpcErrorCode != null) 'rpc_error_code': rpcErrorCode,
+      if (credentialPresent != null) 'credential_present': credentialPresent,
+      if (clientId != null) 'client_id': clientId,
+      if (tokenJti != null) 'token_jti': tokenJti,
+      if (runtimeInstanceId != null) 'runtime_instance_id': runtimeInstanceId,
+      if (runtimeSessionId != null) 'runtime_session_id': runtimeSessionId,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentActionRemoteAuditTableCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? occurredAt,
+    Value<String>? rpcMethod,
+    Value<String?>? actionId,
+    Value<String?>? executionId,
+    Value<String?>? traceId,
+    Value<String?>? requestedBy,
+    Value<String>? outcome,
+    Value<String?>? reasonCode,
+    Value<int?>? rpcErrorCode,
+    Value<bool>? credentialPresent,
+    Value<String?>? clientId,
+    Value<String?>? tokenJti,
+    Value<String?>? runtimeInstanceId,
+    Value<String?>? runtimeSessionId,
+    Value<String?>? idempotencyKey,
+    Value<int>? rowid,
+  }) {
+    return AgentActionRemoteAuditTableCompanion(
+      id: id ?? this.id,
+      occurredAt: occurredAt ?? this.occurredAt,
+      rpcMethod: rpcMethod ?? this.rpcMethod,
+      actionId: actionId ?? this.actionId,
+      executionId: executionId ?? this.executionId,
+      traceId: traceId ?? this.traceId,
+      requestedBy: requestedBy ?? this.requestedBy,
+      outcome: outcome ?? this.outcome,
+      reasonCode: reasonCode ?? this.reasonCode,
+      rpcErrorCode: rpcErrorCode ?? this.rpcErrorCode,
+      credentialPresent: credentialPresent ?? this.credentialPresent,
+      clientId: clientId ?? this.clientId,
+      tokenJti: tokenJti ?? this.tokenJti,
+      runtimeInstanceId: runtimeInstanceId ?? this.runtimeInstanceId,
+      runtimeSessionId: runtimeSessionId ?? this.runtimeSessionId,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (occurredAt.present) {
+      map['occurred_at'] = Variable<DateTime>(occurredAt.value);
+    }
+    if (rpcMethod.present) {
+      map['rpc_method'] = Variable<String>(rpcMethod.value);
+    }
+    if (actionId.present) {
+      map['action_id'] = Variable<String>(actionId.value);
+    }
+    if (executionId.present) {
+      map['execution_id'] = Variable<String>(executionId.value);
+    }
+    if (traceId.present) {
+      map['trace_id'] = Variable<String>(traceId.value);
+    }
+    if (requestedBy.present) {
+      map['requested_by'] = Variable<String>(requestedBy.value);
+    }
+    if (outcome.present) {
+      map['outcome'] = Variable<String>(outcome.value);
+    }
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<String>(reasonCode.value);
+    }
+    if (rpcErrorCode.present) {
+      map['rpc_error_code'] = Variable<int>(rpcErrorCode.value);
+    }
+    if (credentialPresent.present) {
+      map['credential_present'] = Variable<bool>(credentialPresent.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (tokenJti.present) {
+      map['token_jti'] = Variable<String>(tokenJti.value);
+    }
+    if (runtimeInstanceId.present) {
+      map['runtime_instance_id'] = Variable<String>(runtimeInstanceId.value);
+    }
+    if (runtimeSessionId.present) {
+      map['runtime_session_id'] = Variable<String>(runtimeSessionId.value);
+    }
+    if (idempotencyKey.present) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionRemoteAuditTableCompanion(')
+          ..write('id: $id, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('rpcMethod: $rpcMethod, ')
+          ..write('actionId: $actionId, ')
+          ..write('executionId: $executionId, ')
+          ..write('traceId: $traceId, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('outcome: $outcome, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('rpcErrorCode: $rpcErrorCode, ')
+          ..write('credentialPresent: $credentialPresent, ')
+          ..write('clientId: $clientId, ')
+          ..write('tokenJti: $tokenJti, ')
+          ..write('runtimeInstanceId: $runtimeInstanceId, ')
+          ..write('runtimeSessionId: $runtimeSessionId, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AgentActionCapturedOutputChunkTableTable
+    extends AgentActionCapturedOutputChunkTable
+    with
+        TableInfo<
+          $AgentActionCapturedOutputChunkTableTable,
+          AgentActionCapturedOutputChunkData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentActionCapturedOutputChunkTableTable(
+    this.attachedDatabase, [
+    this._alias,
+  ]);
+  static const VerificationMeta _executionIdMeta = const VerificationMeta(
+    'executionId',
+  );
+  @override
+  late final GeneratedColumn<String> executionId = GeneratedColumn<String>(
+    'execution_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _streamMeta = const VerificationMeta('stream');
+  @override
+  late final GeneratedColumn<String> stream = GeneratedColumn<String>(
+    'stream',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chunkIndexMeta = const VerificationMeta(
+    'chunkIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chunkIndex = GeneratedColumn<int>(
+    'chunk_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _utf8OffsetMeta = const VerificationMeta(
+    'utf8Offset',
+  );
+  @override
+  late final GeneratedColumn<int> utf8Offset = GeneratedColumn<int>(
+    'utf8_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    executionId,
+    stream,
+    chunkIndex,
+    utf8Offset,
+    payload,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_action_captured_output_chunk_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentActionCapturedOutputChunkData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('execution_id')) {
+      context.handle(
+        _executionIdMeta,
+        executionId.isAcceptableOrUnknown(
+          data['execution_id']!,
+          _executionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_executionIdMeta);
+    }
+    if (data.containsKey('stream')) {
+      context.handle(
+        _streamMeta,
+        stream.isAcceptableOrUnknown(data['stream']!, _streamMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_streamMeta);
+    }
+    if (data.containsKey('chunk_index')) {
+      context.handle(
+        _chunkIndexMeta,
+        chunkIndex.isAcceptableOrUnknown(data['chunk_index']!, _chunkIndexMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chunkIndexMeta);
+    }
+    if (data.containsKey('utf8_offset')) {
+      context.handle(
+        _utf8OffsetMeta,
+        utf8Offset.isAcceptableOrUnknown(data['utf8_offset']!, _utf8OffsetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_utf8OffsetMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {executionId, stream, chunkIndex};
+  @override
+  AgentActionCapturedOutputChunkData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentActionCapturedOutputChunkData(
+      executionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}execution_id'],
+      )!,
+      stream: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stream'],
+      )!,
+      chunkIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}chunk_index'],
+      )!,
+      utf8Offset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}utf8_offset'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      )!,
+    );
+  }
+
+  @override
+  $AgentActionCapturedOutputChunkTableTable createAlias(String alias) {
+    return $AgentActionCapturedOutputChunkTableTable(attachedDatabase, alias);
+  }
+}
+
+class AgentActionCapturedOutputChunkData extends DataClass
+    implements Insertable<AgentActionCapturedOutputChunkData> {
+  final String executionId;
+  final String stream;
+  final int chunkIndex;
+  final int utf8Offset;
+  final String payload;
+  const AgentActionCapturedOutputChunkData({
+    required this.executionId,
+    required this.stream,
+    required this.chunkIndex,
+    required this.utf8Offset,
+    required this.payload,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['execution_id'] = Variable<String>(executionId);
+    map['stream'] = Variable<String>(stream);
+    map['chunk_index'] = Variable<int>(chunkIndex);
+    map['utf8_offset'] = Variable<int>(utf8Offset);
+    map['payload'] = Variable<String>(payload);
+    return map;
+  }
+
+  AgentActionCapturedOutputChunkTableCompanion toCompanion(bool nullToAbsent) {
+    return AgentActionCapturedOutputChunkTableCompanion(
+      executionId: Value(executionId),
+      stream: Value(stream),
+      chunkIndex: Value(chunkIndex),
+      utf8Offset: Value(utf8Offset),
+      payload: Value(payload),
+    );
+  }
+
+  factory AgentActionCapturedOutputChunkData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentActionCapturedOutputChunkData(
+      executionId: serializer.fromJson<String>(json['executionId']),
+      stream: serializer.fromJson<String>(json['stream']),
+      chunkIndex: serializer.fromJson<int>(json['chunkIndex']),
+      utf8Offset: serializer.fromJson<int>(json['utf8Offset']),
+      payload: serializer.fromJson<String>(json['payload']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'executionId': serializer.toJson<String>(executionId),
+      'stream': serializer.toJson<String>(stream),
+      'chunkIndex': serializer.toJson<int>(chunkIndex),
+      'utf8Offset': serializer.toJson<int>(utf8Offset),
+      'payload': serializer.toJson<String>(payload),
+    };
+  }
+
+  AgentActionCapturedOutputChunkData copyWith({
+    String? executionId,
+    String? stream,
+    int? chunkIndex,
+    int? utf8Offset,
+    String? payload,
+  }) => AgentActionCapturedOutputChunkData(
+    executionId: executionId ?? this.executionId,
+    stream: stream ?? this.stream,
+    chunkIndex: chunkIndex ?? this.chunkIndex,
+    utf8Offset: utf8Offset ?? this.utf8Offset,
+    payload: payload ?? this.payload,
+  );
+  AgentActionCapturedOutputChunkData copyWithCompanion(
+    AgentActionCapturedOutputChunkTableCompanion data,
+  ) {
+    return AgentActionCapturedOutputChunkData(
+      executionId: data.executionId.present
+          ? data.executionId.value
+          : this.executionId,
+      stream: data.stream.present ? data.stream.value : this.stream,
+      chunkIndex: data.chunkIndex.present
+          ? data.chunkIndex.value
+          : this.chunkIndex,
+      utf8Offset: data.utf8Offset.present
+          ? data.utf8Offset.value
+          : this.utf8Offset,
+      payload: data.payload.present ? data.payload.value : this.payload,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionCapturedOutputChunkData(')
+          ..write('executionId: $executionId, ')
+          ..write('stream: $stream, ')
+          ..write('chunkIndex: $chunkIndex, ')
+          ..write('utf8Offset: $utf8Offset, ')
+          ..write('payload: $payload')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(executionId, stream, chunkIndex, utf8Offset, payload);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentActionCapturedOutputChunkData &&
+          other.executionId == this.executionId &&
+          other.stream == this.stream &&
+          other.chunkIndex == this.chunkIndex &&
+          other.utf8Offset == this.utf8Offset &&
+          other.payload == this.payload);
+}
+
+class AgentActionCapturedOutputChunkTableCompanion
+    extends UpdateCompanion<AgentActionCapturedOutputChunkData> {
+  final Value<String> executionId;
+  final Value<String> stream;
+  final Value<int> chunkIndex;
+  final Value<int> utf8Offset;
+  final Value<String> payload;
+  final Value<int> rowid;
+  const AgentActionCapturedOutputChunkTableCompanion({
+    this.executionId = const Value.absent(),
+    this.stream = const Value.absent(),
+    this.chunkIndex = const Value.absent(),
+    this.utf8Offset = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentActionCapturedOutputChunkTableCompanion.insert({
+    required String executionId,
+    required String stream,
+    required int chunkIndex,
+    required int utf8Offset,
+    required String payload,
+    this.rowid = const Value.absent(),
+  }) : executionId = Value(executionId),
+       stream = Value(stream),
+       chunkIndex = Value(chunkIndex),
+       utf8Offset = Value(utf8Offset),
+       payload = Value(payload);
+  static Insertable<AgentActionCapturedOutputChunkData> custom({
+    Expression<String>? executionId,
+    Expression<String>? stream,
+    Expression<int>? chunkIndex,
+    Expression<int>? utf8Offset,
+    Expression<String>? payload,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (executionId != null) 'execution_id': executionId,
+      if (stream != null) 'stream': stream,
+      if (chunkIndex != null) 'chunk_index': chunkIndex,
+      if (utf8Offset != null) 'utf8_offset': utf8Offset,
+      if (payload != null) 'payload': payload,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentActionCapturedOutputChunkTableCompanion copyWith({
+    Value<String>? executionId,
+    Value<String>? stream,
+    Value<int>? chunkIndex,
+    Value<int>? utf8Offset,
+    Value<String>? payload,
+    Value<int>? rowid,
+  }) {
+    return AgentActionCapturedOutputChunkTableCompanion(
+      executionId: executionId ?? this.executionId,
+      stream: stream ?? this.stream,
+      chunkIndex: chunkIndex ?? this.chunkIndex,
+      utf8Offset: utf8Offset ?? this.utf8Offset,
+      payload: payload ?? this.payload,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (executionId.present) {
+      map['execution_id'] = Variable<String>(executionId.value);
+    }
+    if (stream.present) {
+      map['stream'] = Variable<String>(stream.value);
+    }
+    if (chunkIndex.present) {
+      map['chunk_index'] = Variable<int>(chunkIndex.value);
+    }
+    if (utf8Offset.present) {
+      map['utf8_offset'] = Variable<int>(utf8Offset.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentActionCapturedOutputChunkTableCompanion(')
+          ..write('executionId: $executionId, ')
+          ..write('stream: $stream, ')
+          ..write('chunkIndex: $chunkIndex, ')
+          ..write('utf8Offset: $utf8Offset, ')
+          ..write('payload: $payload, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
   late final $ClientTokenCacheTableTable clientTokenCacheTable =
       $ClientTokenCacheTableTable(this);
+  late final $AgentActionDefinitionTableTable agentActionDefinitionTable =
+      $AgentActionDefinitionTableTable(this);
+  late final $AgentActionTriggerTableTable agentActionTriggerTable =
+      $AgentActionTriggerTableTable(this);
+  late final $AgentActionExecutionTableTable agentActionExecutionTable =
+      $AgentActionExecutionTableTable(this);
+  late final $RpcIdempotencyCacheTableTable rpcIdempotencyCacheTable =
+      $RpcIdempotencyCacheTableTable(this);
+  late final $AgentActionRemoteAuditTableTable agentActionRemoteAuditTable =
+      $AgentActionRemoteAuditTableTable(this);
+  late final $AgentActionCapturedOutputChunkTableTable
+  agentActionCapturedOutputChunkTable =
+      $AgentActionCapturedOutputChunkTableTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2689,6 +7884,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     configTable,
     clientTokenCacheTable,
+    agentActionDefinitionTable,
+    agentActionTriggerTable,
+    agentActionExecutionTable,
+    rpcIdempotencyCacheTable,
+    agentActionRemoteAuditTable,
+    agentActionCapturedOutputChunkTable,
   ];
 }
 
@@ -3890,6 +9091,2442 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
       ClientTokenCacheData,
       PrefetchHooks Function()
     >;
+typedef $$AgentActionDefinitionTableTableCreateCompanionBuilder =
+    AgentActionDefinitionTableCompanion Function({
+      required String id,
+      required String name,
+      Value<String?> description,
+      required String type,
+      required String state,
+      required String configJson,
+      required String policiesJson,
+      Value<int> definitionVersion,
+      Value<String?> definitionSnapshotHash,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$AgentActionDefinitionTableTableUpdateCompanionBuilder =
+    AgentActionDefinitionTableCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String?> description,
+      Value<String> type,
+      Value<String> state,
+      Value<String> configJson,
+      Value<String> policiesJson,
+      Value<int> definitionVersion,
+      Value<String?> definitionSnapshotHash,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$AgentActionDefinitionTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentActionDefinitionTableTable> {
+  $$AgentActionDefinitionTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policiesJson => $composableBuilder(
+    column: $table.policiesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get definitionVersion => $composableBuilder(
+    column: $table.definitionVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentActionDefinitionTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentActionDefinitionTableTable> {
+  $$AgentActionDefinitionTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policiesJson => $composableBuilder(
+    column: $table.policiesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get definitionVersion => $composableBuilder(
+    column: $table.definitionVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentActionDefinitionTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentActionDefinitionTableTable> {
+  $$AgentActionDefinitionTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get policiesJson => $composableBuilder(
+    column: $table.policiesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get definitionVersion => $composableBuilder(
+    column: $table.definitionVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AgentActionDefinitionTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentActionDefinitionTableTable,
+          AgentActionDefinitionData,
+          $$AgentActionDefinitionTableTableFilterComposer,
+          $$AgentActionDefinitionTableTableOrderingComposer,
+          $$AgentActionDefinitionTableTableAnnotationComposer,
+          $$AgentActionDefinitionTableTableCreateCompanionBuilder,
+          $$AgentActionDefinitionTableTableUpdateCompanionBuilder,
+          (
+            AgentActionDefinitionData,
+            BaseReferences<
+              _$AppDatabase,
+              $AgentActionDefinitionTableTable,
+              AgentActionDefinitionData
+            >,
+          ),
+          AgentActionDefinitionData,
+          PrefetchHooks Function()
+        > {
+  $$AgentActionDefinitionTableTableTableManager(
+    _$AppDatabase db,
+    $AgentActionDefinitionTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentActionDefinitionTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AgentActionDefinitionTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AgentActionDefinitionTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<String> configJson = const Value.absent(),
+                Value<String> policiesJson = const Value.absent(),
+                Value<int> definitionVersion = const Value.absent(),
+                Value<String?> definitionSnapshotHash = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionDefinitionTableCompanion(
+                id: id,
+                name: name,
+                description: description,
+                type: type,
+                state: state,
+                configJson: configJson,
+                policiesJson: policiesJson,
+                definitionVersion: definitionVersion,
+                definitionSnapshotHash: definitionSnapshotHash,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<String?> description = const Value.absent(),
+                required String type,
+                required String state,
+                required String configJson,
+                required String policiesJson,
+                Value<int> definitionVersion = const Value.absent(),
+                Value<String?> definitionSnapshotHash = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionDefinitionTableCompanion.insert(
+                id: id,
+                name: name,
+                description: description,
+                type: type,
+                state: state,
+                configJson: configJson,
+                policiesJson: policiesJson,
+                definitionVersion: definitionVersion,
+                definitionSnapshotHash: definitionSnapshotHash,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentActionDefinitionTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentActionDefinitionTableTable,
+      AgentActionDefinitionData,
+      $$AgentActionDefinitionTableTableFilterComposer,
+      $$AgentActionDefinitionTableTableOrderingComposer,
+      $$AgentActionDefinitionTableTableAnnotationComposer,
+      $$AgentActionDefinitionTableTableCreateCompanionBuilder,
+      $$AgentActionDefinitionTableTableUpdateCompanionBuilder,
+      (
+        AgentActionDefinitionData,
+        BaseReferences<
+          _$AppDatabase,
+          $AgentActionDefinitionTableTable,
+          AgentActionDefinitionData
+        >,
+      ),
+      AgentActionDefinitionData,
+      PrefetchHooks Function()
+    >;
+typedef $$AgentActionTriggerTableTableCreateCompanionBuilder =
+    AgentActionTriggerTableCompanion Function({
+      required String id,
+      required String actionId,
+      required String type,
+      Value<String?> name,
+      Value<bool> isEnabled,
+      required String scheduleJson,
+      Value<DateTime?> lastScheduledAt,
+      Value<DateTime?> lastRunAt,
+      Value<DateTime?> nextRunAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$AgentActionTriggerTableTableUpdateCompanionBuilder =
+    AgentActionTriggerTableCompanion Function({
+      Value<String> id,
+      Value<String> actionId,
+      Value<String> type,
+      Value<String?> name,
+      Value<bool> isEnabled,
+      Value<String> scheduleJson,
+      Value<DateTime?> lastScheduledAt,
+      Value<DateTime?> lastRunAt,
+      Value<DateTime?> nextRunAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$AgentActionTriggerTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+  $$AgentActionTriggerTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isEnabled => $composableBuilder(
+    column: $table.isEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scheduleJson => $composableBuilder(
+    column: $table.scheduleJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastScheduledAt => $composableBuilder(
+    column: $table.lastScheduledAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastRunAt => $composableBuilder(
+    column: $table.lastRunAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextRunAt => $composableBuilder(
+    column: $table.nextRunAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentActionTriggerTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+  $$AgentActionTriggerTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isEnabled => $composableBuilder(
+    column: $table.isEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scheduleJson => $composableBuilder(
+    column: $table.scheduleJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastScheduledAt => $composableBuilder(
+    column: $table.lastScheduledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastRunAt => $composableBuilder(
+    column: $table.lastRunAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextRunAt => $composableBuilder(
+    column: $table.nextRunAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentActionTriggerTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+  $$AgentActionTriggerTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get actionId =>
+      $composableBuilder(column: $table.actionId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get isEnabled =>
+      $composableBuilder(column: $table.isEnabled, builder: (column) => column);
+
+  GeneratedColumn<String> get scheduleJson => $composableBuilder(
+    column: $table.scheduleJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastScheduledAt => $composableBuilder(
+    column: $table.lastScheduledAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastRunAt =>
+      $composableBuilder(column: $table.lastRunAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextRunAt =>
+      $composableBuilder(column: $table.nextRunAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AgentActionTriggerTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentActionTriggerTableTable,
+          AgentActionTriggerData,
+          $$AgentActionTriggerTableTableFilterComposer,
+          $$AgentActionTriggerTableTableOrderingComposer,
+          $$AgentActionTriggerTableTableAnnotationComposer,
+          $$AgentActionTriggerTableTableCreateCompanionBuilder,
+          $$AgentActionTriggerTableTableUpdateCompanionBuilder,
+          (
+            AgentActionTriggerData,
+            BaseReferences<
+              _$AppDatabase,
+              $AgentActionTriggerTableTable,
+              AgentActionTriggerData
+            >,
+          ),
+          AgentActionTriggerData,
+          PrefetchHooks Function()
+        > {
+  $$AgentActionTriggerTableTableTableManager(
+    _$AppDatabase db,
+    $AgentActionTriggerTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentActionTriggerTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AgentActionTriggerTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AgentActionTriggerTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> actionId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String?> name = const Value.absent(),
+                Value<bool> isEnabled = const Value.absent(),
+                Value<String> scheduleJson = const Value.absent(),
+                Value<DateTime?> lastScheduledAt = const Value.absent(),
+                Value<DateTime?> lastRunAt = const Value.absent(),
+                Value<DateTime?> nextRunAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionTriggerTableCompanion(
+                id: id,
+                actionId: actionId,
+                type: type,
+                name: name,
+                isEnabled: isEnabled,
+                scheduleJson: scheduleJson,
+                lastScheduledAt: lastScheduledAt,
+                lastRunAt: lastRunAt,
+                nextRunAt: nextRunAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String actionId,
+                required String type,
+                Value<String?> name = const Value.absent(),
+                Value<bool> isEnabled = const Value.absent(),
+                required String scheduleJson,
+                Value<DateTime?> lastScheduledAt = const Value.absent(),
+                Value<DateTime?> lastRunAt = const Value.absent(),
+                Value<DateTime?> nextRunAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionTriggerTableCompanion.insert(
+                id: id,
+                actionId: actionId,
+                type: type,
+                name: name,
+                isEnabled: isEnabled,
+                scheduleJson: scheduleJson,
+                lastScheduledAt: lastScheduledAt,
+                lastRunAt: lastRunAt,
+                nextRunAt: nextRunAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentActionTriggerTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentActionTriggerTableTable,
+      AgentActionTriggerData,
+      $$AgentActionTriggerTableTableFilterComposer,
+      $$AgentActionTriggerTableTableOrderingComposer,
+      $$AgentActionTriggerTableTableAnnotationComposer,
+      $$AgentActionTriggerTableTableCreateCompanionBuilder,
+      $$AgentActionTriggerTableTableUpdateCompanionBuilder,
+      (
+        AgentActionTriggerData,
+        BaseReferences<
+          _$AppDatabase,
+          $AgentActionTriggerTableTable,
+          AgentActionTriggerData
+        >,
+      ),
+      AgentActionTriggerData,
+      PrefetchHooks Function()
+    >;
+typedef $$AgentActionExecutionTableTableCreateCompanionBuilder =
+    AgentActionExecutionTableCompanion Function({
+      required String id,
+      required String actionId,
+      required String actionType,
+      required String status,
+      required DateTime requestedAt,
+      required String source,
+      Value<String?> idempotencyKey,
+      Value<String?> requestedBy,
+      Value<String?> traceId,
+      Value<String?> runtimeInstanceId,
+      Value<String?> runtimeSessionId,
+      Value<String?> triggerId,
+      Value<String?> triggerType,
+      Value<DateTime?> scheduledAt,
+      Value<DateTime?> triggeredAt,
+      Value<DateTime?> queueStartedAt,
+      Value<DateTime?> processStartedAt,
+      Value<DateTime?> finishedAt,
+      Value<DateTime?> timeoutAt,
+      Value<int?> pid,
+      Value<int?> exitCode,
+      Value<String?> processExecutable,
+      Value<int?> processArgumentCount,
+      Value<String?> processCommandPreview,
+      Value<String?> stdoutText,
+      Value<String?> stderrText,
+      Value<bool> stdoutTruncated,
+      Value<bool> stderrTruncated,
+      Value<bool> stdoutStoredInChunks,
+      Value<bool> stderrStoredInChunks,
+      Value<String?> definitionSnapshotHash,
+      Value<String?> contextHash,
+      Value<bool> redactionApplied,
+      Value<String?> failureCode,
+      Value<String?> failurePhase,
+      Value<String?> failureMessage,
+      Value<int> rowid,
+    });
+typedef $$AgentActionExecutionTableTableUpdateCompanionBuilder =
+    AgentActionExecutionTableCompanion Function({
+      Value<String> id,
+      Value<String> actionId,
+      Value<String> actionType,
+      Value<String> status,
+      Value<DateTime> requestedAt,
+      Value<String> source,
+      Value<String?> idempotencyKey,
+      Value<String?> requestedBy,
+      Value<String?> traceId,
+      Value<String?> runtimeInstanceId,
+      Value<String?> runtimeSessionId,
+      Value<String?> triggerId,
+      Value<String?> triggerType,
+      Value<DateTime?> scheduledAt,
+      Value<DateTime?> triggeredAt,
+      Value<DateTime?> queueStartedAt,
+      Value<DateTime?> processStartedAt,
+      Value<DateTime?> finishedAt,
+      Value<DateTime?> timeoutAt,
+      Value<int?> pid,
+      Value<int?> exitCode,
+      Value<String?> processExecutable,
+      Value<int?> processArgumentCount,
+      Value<String?> processCommandPreview,
+      Value<String?> stdoutText,
+      Value<String?> stderrText,
+      Value<bool> stdoutTruncated,
+      Value<bool> stderrTruncated,
+      Value<bool> stdoutStoredInChunks,
+      Value<bool> stderrStoredInChunks,
+      Value<String?> definitionSnapshotHash,
+      Value<String?> contextHash,
+      Value<bool> redactionApplied,
+      Value<String?> failureCode,
+      Value<String?> failurePhase,
+      Value<String?> failureMessage,
+      Value<int> rowid,
+    });
+
+class $$AgentActionExecutionTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentActionExecutionTableTable> {
+  $$AgentActionExecutionTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actionType => $composableBuilder(
+    column: $table.actionType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get traceId => $composableBuilder(
+    column: $table.traceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get triggerId => $composableBuilder(
+    column: $table.triggerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get scheduledAt => $composableBuilder(
+    column: $table.scheduledAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get triggeredAt => $composableBuilder(
+    column: $table.triggeredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get queueStartedAt => $composableBuilder(
+    column: $table.queueStartedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get processStartedAt => $composableBuilder(
+    column: $table.processStartedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get timeoutAt => $composableBuilder(
+    column: $table.timeoutAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pid => $composableBuilder(
+    column: $table.pid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get exitCode => $composableBuilder(
+    column: $table.exitCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processExecutable => $composableBuilder(
+    column: $table.processExecutable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get processArgumentCount => $composableBuilder(
+    column: $table.processArgumentCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processCommandPreview => $composableBuilder(
+    column: $table.processCommandPreview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stdoutText => $composableBuilder(
+    column: $table.stdoutText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stderrText => $composableBuilder(
+    column: $table.stderrText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get stdoutTruncated => $composableBuilder(
+    column: $table.stdoutTruncated,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get stderrTruncated => $composableBuilder(
+    column: $table.stderrTruncated,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get stdoutStoredInChunks => $composableBuilder(
+    column: $table.stdoutStoredInChunks,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get stderrStoredInChunks => $composableBuilder(
+    column: $table.stderrStoredInChunks,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contextHash => $composableBuilder(
+    column: $table.contextHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get redactionApplied => $composableBuilder(
+    column: $table.redactionApplied,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failurePhase => $composableBuilder(
+    column: $table.failurePhase,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureMessage => $composableBuilder(
+    column: $table.failureMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentActionExecutionTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentActionExecutionTableTable> {
+  $$AgentActionExecutionTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actionType => $composableBuilder(
+    column: $table.actionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get traceId => $composableBuilder(
+    column: $table.traceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get triggerId => $composableBuilder(
+    column: $table.triggerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get scheduledAt => $composableBuilder(
+    column: $table.scheduledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get triggeredAt => $composableBuilder(
+    column: $table.triggeredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get queueStartedAt => $composableBuilder(
+    column: $table.queueStartedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get processStartedAt => $composableBuilder(
+    column: $table.processStartedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get timeoutAt => $composableBuilder(
+    column: $table.timeoutAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pid => $composableBuilder(
+    column: $table.pid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get exitCode => $composableBuilder(
+    column: $table.exitCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processExecutable => $composableBuilder(
+    column: $table.processExecutable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get processArgumentCount => $composableBuilder(
+    column: $table.processArgumentCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processCommandPreview => $composableBuilder(
+    column: $table.processCommandPreview,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stdoutText => $composableBuilder(
+    column: $table.stdoutText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stderrText => $composableBuilder(
+    column: $table.stderrText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get stdoutTruncated => $composableBuilder(
+    column: $table.stdoutTruncated,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get stderrTruncated => $composableBuilder(
+    column: $table.stderrTruncated,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get stdoutStoredInChunks => $composableBuilder(
+    column: $table.stdoutStoredInChunks,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get stderrStoredInChunks => $composableBuilder(
+    column: $table.stderrStoredInChunks,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contextHash => $composableBuilder(
+    column: $table.contextHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get redactionApplied => $composableBuilder(
+    column: $table.redactionApplied,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failurePhase => $composableBuilder(
+    column: $table.failurePhase,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get failureMessage => $composableBuilder(
+    column: $table.failureMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentActionExecutionTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentActionExecutionTableTable> {
+  $$AgentActionExecutionTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get actionId =>
+      $composableBuilder(column: $table.actionId, builder: (column) => column);
+
+  GeneratedColumn<String> get actionType => $composableBuilder(
+    column: $table.actionType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get traceId =>
+      $composableBuilder(column: $table.traceId, builder: (column) => column);
+
+  GeneratedColumn<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get triggerId =>
+      $composableBuilder(column: $table.triggerId, builder: (column) => column);
+
+  GeneratedColumn<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get scheduledAt => $composableBuilder(
+    column: $table.scheduledAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get triggeredAt => $composableBuilder(
+    column: $table.triggeredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get queueStartedAt => $composableBuilder(
+    column: $table.queueStartedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get processStartedAt => $composableBuilder(
+    column: $table.processStartedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get timeoutAt =>
+      $composableBuilder(column: $table.timeoutAt, builder: (column) => column);
+
+  GeneratedColumn<int> get pid =>
+      $composableBuilder(column: $table.pid, builder: (column) => column);
+
+  GeneratedColumn<int> get exitCode =>
+      $composableBuilder(column: $table.exitCode, builder: (column) => column);
+
+  GeneratedColumn<String> get processExecutable => $composableBuilder(
+    column: $table.processExecutable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get processArgumentCount => $composableBuilder(
+    column: $table.processArgumentCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processCommandPreview => $composableBuilder(
+    column: $table.processCommandPreview,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stdoutText => $composableBuilder(
+    column: $table.stdoutText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stderrText => $composableBuilder(
+    column: $table.stderrText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get stdoutTruncated => $composableBuilder(
+    column: $table.stdoutTruncated,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get stderrTruncated => $composableBuilder(
+    column: $table.stderrTruncated,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get stdoutStoredInChunks => $composableBuilder(
+    column: $table.stdoutStoredInChunks,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get stderrStoredInChunks => $composableBuilder(
+    column: $table.stderrStoredInChunks,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get definitionSnapshotHash => $composableBuilder(
+    column: $table.definitionSnapshotHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contextHash => $composableBuilder(
+    column: $table.contextHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get redactionApplied => $composableBuilder(
+    column: $table.redactionApplied,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get failurePhase => $composableBuilder(
+    column: $table.failurePhase,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get failureMessage => $composableBuilder(
+    column: $table.failureMessage,
+    builder: (column) => column,
+  );
+}
+
+class $$AgentActionExecutionTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentActionExecutionTableTable,
+          AgentActionExecutionData,
+          $$AgentActionExecutionTableTableFilterComposer,
+          $$AgentActionExecutionTableTableOrderingComposer,
+          $$AgentActionExecutionTableTableAnnotationComposer,
+          $$AgentActionExecutionTableTableCreateCompanionBuilder,
+          $$AgentActionExecutionTableTableUpdateCompanionBuilder,
+          (
+            AgentActionExecutionData,
+            BaseReferences<
+              _$AppDatabase,
+              $AgentActionExecutionTableTable,
+              AgentActionExecutionData
+            >,
+          ),
+          AgentActionExecutionData,
+          PrefetchHooks Function()
+        > {
+  $$AgentActionExecutionTableTableTableManager(
+    _$AppDatabase db,
+    $AgentActionExecutionTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentActionExecutionTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AgentActionExecutionTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AgentActionExecutionTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> actionId = const Value.absent(),
+                Value<String> actionType = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> requestedAt = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> idempotencyKey = const Value.absent(),
+                Value<String?> requestedBy = const Value.absent(),
+                Value<String?> traceId = const Value.absent(),
+                Value<String?> runtimeInstanceId = const Value.absent(),
+                Value<String?> runtimeSessionId = const Value.absent(),
+                Value<String?> triggerId = const Value.absent(),
+                Value<String?> triggerType = const Value.absent(),
+                Value<DateTime?> scheduledAt = const Value.absent(),
+                Value<DateTime?> triggeredAt = const Value.absent(),
+                Value<DateTime?> queueStartedAt = const Value.absent(),
+                Value<DateTime?> processStartedAt = const Value.absent(),
+                Value<DateTime?> finishedAt = const Value.absent(),
+                Value<DateTime?> timeoutAt = const Value.absent(),
+                Value<int?> pid = const Value.absent(),
+                Value<int?> exitCode = const Value.absent(),
+                Value<String?> processExecutable = const Value.absent(),
+                Value<int?> processArgumentCount = const Value.absent(),
+                Value<String?> processCommandPreview = const Value.absent(),
+                Value<String?> stdoutText = const Value.absent(),
+                Value<String?> stderrText = const Value.absent(),
+                Value<bool> stdoutTruncated = const Value.absent(),
+                Value<bool> stderrTruncated = const Value.absent(),
+                Value<bool> stdoutStoredInChunks = const Value.absent(),
+                Value<bool> stderrStoredInChunks = const Value.absent(),
+                Value<String?> definitionSnapshotHash = const Value.absent(),
+                Value<String?> contextHash = const Value.absent(),
+                Value<bool> redactionApplied = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> failurePhase = const Value.absent(),
+                Value<String?> failureMessage = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionExecutionTableCompanion(
+                id: id,
+                actionId: actionId,
+                actionType: actionType,
+                status: status,
+                requestedAt: requestedAt,
+                source: source,
+                idempotencyKey: idempotencyKey,
+                requestedBy: requestedBy,
+                traceId: traceId,
+                runtimeInstanceId: runtimeInstanceId,
+                runtimeSessionId: runtimeSessionId,
+                triggerId: triggerId,
+                triggerType: triggerType,
+                scheduledAt: scheduledAt,
+                triggeredAt: triggeredAt,
+                queueStartedAt: queueStartedAt,
+                processStartedAt: processStartedAt,
+                finishedAt: finishedAt,
+                timeoutAt: timeoutAt,
+                pid: pid,
+                exitCode: exitCode,
+                processExecutable: processExecutable,
+                processArgumentCount: processArgumentCount,
+                processCommandPreview: processCommandPreview,
+                stdoutText: stdoutText,
+                stderrText: stderrText,
+                stdoutTruncated: stdoutTruncated,
+                stderrTruncated: stderrTruncated,
+                stdoutStoredInChunks: stdoutStoredInChunks,
+                stderrStoredInChunks: stderrStoredInChunks,
+                definitionSnapshotHash: definitionSnapshotHash,
+                contextHash: contextHash,
+                redactionApplied: redactionApplied,
+                failureCode: failureCode,
+                failurePhase: failurePhase,
+                failureMessage: failureMessage,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String actionId,
+                required String actionType,
+                required String status,
+                required DateTime requestedAt,
+                required String source,
+                Value<String?> idempotencyKey = const Value.absent(),
+                Value<String?> requestedBy = const Value.absent(),
+                Value<String?> traceId = const Value.absent(),
+                Value<String?> runtimeInstanceId = const Value.absent(),
+                Value<String?> runtimeSessionId = const Value.absent(),
+                Value<String?> triggerId = const Value.absent(),
+                Value<String?> triggerType = const Value.absent(),
+                Value<DateTime?> scheduledAt = const Value.absent(),
+                Value<DateTime?> triggeredAt = const Value.absent(),
+                Value<DateTime?> queueStartedAt = const Value.absent(),
+                Value<DateTime?> processStartedAt = const Value.absent(),
+                Value<DateTime?> finishedAt = const Value.absent(),
+                Value<DateTime?> timeoutAt = const Value.absent(),
+                Value<int?> pid = const Value.absent(),
+                Value<int?> exitCode = const Value.absent(),
+                Value<String?> processExecutable = const Value.absent(),
+                Value<int?> processArgumentCount = const Value.absent(),
+                Value<String?> processCommandPreview = const Value.absent(),
+                Value<String?> stdoutText = const Value.absent(),
+                Value<String?> stderrText = const Value.absent(),
+                Value<bool> stdoutTruncated = const Value.absent(),
+                Value<bool> stderrTruncated = const Value.absent(),
+                Value<bool> stdoutStoredInChunks = const Value.absent(),
+                Value<bool> stderrStoredInChunks = const Value.absent(),
+                Value<String?> definitionSnapshotHash = const Value.absent(),
+                Value<String?> contextHash = const Value.absent(),
+                Value<bool> redactionApplied = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
+                Value<String?> failurePhase = const Value.absent(),
+                Value<String?> failureMessage = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionExecutionTableCompanion.insert(
+                id: id,
+                actionId: actionId,
+                actionType: actionType,
+                status: status,
+                requestedAt: requestedAt,
+                source: source,
+                idempotencyKey: idempotencyKey,
+                requestedBy: requestedBy,
+                traceId: traceId,
+                runtimeInstanceId: runtimeInstanceId,
+                runtimeSessionId: runtimeSessionId,
+                triggerId: triggerId,
+                triggerType: triggerType,
+                scheduledAt: scheduledAt,
+                triggeredAt: triggeredAt,
+                queueStartedAt: queueStartedAt,
+                processStartedAt: processStartedAt,
+                finishedAt: finishedAt,
+                timeoutAt: timeoutAt,
+                pid: pid,
+                exitCode: exitCode,
+                processExecutable: processExecutable,
+                processArgumentCount: processArgumentCount,
+                processCommandPreview: processCommandPreview,
+                stdoutText: stdoutText,
+                stderrText: stderrText,
+                stdoutTruncated: stdoutTruncated,
+                stderrTruncated: stderrTruncated,
+                stdoutStoredInChunks: stdoutStoredInChunks,
+                stderrStoredInChunks: stderrStoredInChunks,
+                definitionSnapshotHash: definitionSnapshotHash,
+                contextHash: contextHash,
+                redactionApplied: redactionApplied,
+                failureCode: failureCode,
+                failurePhase: failurePhase,
+                failureMessage: failureMessage,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentActionExecutionTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentActionExecutionTableTable,
+      AgentActionExecutionData,
+      $$AgentActionExecutionTableTableFilterComposer,
+      $$AgentActionExecutionTableTableOrderingComposer,
+      $$AgentActionExecutionTableTableAnnotationComposer,
+      $$AgentActionExecutionTableTableCreateCompanionBuilder,
+      $$AgentActionExecutionTableTableUpdateCompanionBuilder,
+      (
+        AgentActionExecutionData,
+        BaseReferences<
+          _$AppDatabase,
+          $AgentActionExecutionTableTable,
+          AgentActionExecutionData
+        >,
+      ),
+      AgentActionExecutionData,
+      PrefetchHooks Function()
+    >;
+typedef $$RpcIdempotencyCacheTableTableCreateCompanionBuilder =
+    RpcIdempotencyCacheTableCompanion Function({
+      required String cacheKey,
+      required String responseJson,
+      Value<String?> requestFingerprint,
+      required DateTime expiresAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder =
+    RpcIdempotencyCacheTableCompanion Function({
+      Value<String> cacheKey,
+      Value<String> responseJson,
+      Value<String?> requestFingerprint,
+      Value<DateTime> expiresAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$RpcIdempotencyCacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
+  $$RpcIdempotencyCacheTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestFingerprint => $composableBuilder(
+    column: $table.requestFingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RpcIdempotencyCacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
+  $$RpcIdempotencyCacheTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get requestFingerprint => $composableBuilder(
+    column: $table.requestFingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RpcIdempotencyCacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
+  $$RpcIdempotencyCacheTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get requestFingerprint => $composableBuilder(
+    column: $table.requestFingerprint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$RpcIdempotencyCacheTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RpcIdempotencyCacheTableTable,
+          RpcIdempotencyCacheData,
+          $$RpcIdempotencyCacheTableTableFilterComposer,
+          $$RpcIdempotencyCacheTableTableOrderingComposer,
+          $$RpcIdempotencyCacheTableTableAnnotationComposer,
+          $$RpcIdempotencyCacheTableTableCreateCompanionBuilder,
+          $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder,
+          (
+            RpcIdempotencyCacheData,
+            BaseReferences<
+              _$AppDatabase,
+              $RpcIdempotencyCacheTableTable,
+              RpcIdempotencyCacheData
+            >,
+          ),
+          RpcIdempotencyCacheData,
+          PrefetchHooks Function()
+        > {
+  $$RpcIdempotencyCacheTableTableTableManager(
+    _$AppDatabase db,
+    $RpcIdempotencyCacheTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RpcIdempotencyCacheTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$RpcIdempotencyCacheTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$RpcIdempotencyCacheTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> cacheKey = const Value.absent(),
+                Value<String> responseJson = const Value.absent(),
+                Value<String?> requestFingerprint = const Value.absent(),
+                Value<DateTime> expiresAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RpcIdempotencyCacheTableCompanion(
+                cacheKey: cacheKey,
+                responseJson: responseJson,
+                requestFingerprint: requestFingerprint,
+                expiresAt: expiresAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String cacheKey,
+                required String responseJson,
+                Value<String?> requestFingerprint = const Value.absent(),
+                required DateTime expiresAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RpcIdempotencyCacheTableCompanion.insert(
+                cacheKey: cacheKey,
+                responseJson: responseJson,
+                requestFingerprint: requestFingerprint,
+                expiresAt: expiresAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RpcIdempotencyCacheTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RpcIdempotencyCacheTableTable,
+      RpcIdempotencyCacheData,
+      $$RpcIdempotencyCacheTableTableFilterComposer,
+      $$RpcIdempotencyCacheTableTableOrderingComposer,
+      $$RpcIdempotencyCacheTableTableAnnotationComposer,
+      $$RpcIdempotencyCacheTableTableCreateCompanionBuilder,
+      $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder,
+      (
+        RpcIdempotencyCacheData,
+        BaseReferences<
+          _$AppDatabase,
+          $RpcIdempotencyCacheTableTable,
+          RpcIdempotencyCacheData
+        >,
+      ),
+      RpcIdempotencyCacheData,
+      PrefetchHooks Function()
+    >;
+typedef $$AgentActionRemoteAuditTableTableCreateCompanionBuilder =
+    AgentActionRemoteAuditTableCompanion Function({
+      required String id,
+      required DateTime occurredAt,
+      required String rpcMethod,
+      Value<String?> actionId,
+      Value<String?> executionId,
+      Value<String?> traceId,
+      Value<String?> requestedBy,
+      required String outcome,
+      Value<String?> reasonCode,
+      Value<int?> rpcErrorCode,
+      Value<bool> credentialPresent,
+      Value<String?> clientId,
+      Value<String?> tokenJti,
+      Value<String?> runtimeInstanceId,
+      Value<String?> runtimeSessionId,
+      Value<String?> idempotencyKey,
+      Value<int> rowid,
+    });
+typedef $$AgentActionRemoteAuditTableTableUpdateCompanionBuilder =
+    AgentActionRemoteAuditTableCompanion Function({
+      Value<String> id,
+      Value<DateTime> occurredAt,
+      Value<String> rpcMethod,
+      Value<String?> actionId,
+      Value<String?> executionId,
+      Value<String?> traceId,
+      Value<String?> requestedBy,
+      Value<String> outcome,
+      Value<String?> reasonCode,
+      Value<int?> rpcErrorCode,
+      Value<bool> credentialPresent,
+      Value<String?> clientId,
+      Value<String?> tokenJti,
+      Value<String?> runtimeInstanceId,
+      Value<String?> runtimeSessionId,
+      Value<String?> idempotencyKey,
+      Value<int> rowid,
+    });
+
+class $$AgentActionRemoteAuditTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentActionRemoteAuditTableTable> {
+  $$AgentActionRemoteAuditTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rpcMethod => $composableBuilder(
+    column: $table.rpcMethod,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get traceId => $composableBuilder(
+    column: $table.traceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rpcErrorCode => $composableBuilder(
+    column: $table.rpcErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get credentialPresent => $composableBuilder(
+    column: $table.credentialPresent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tokenJti => $composableBuilder(
+    column: $table.tokenJti,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentActionRemoteAuditTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentActionRemoteAuditTableTable> {
+  $$AgentActionRemoteAuditTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rpcMethod => $composableBuilder(
+    column: $table.rpcMethod,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actionId => $composableBuilder(
+    column: $table.actionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get traceId => $composableBuilder(
+    column: $table.traceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rpcErrorCode => $composableBuilder(
+    column: $table.rpcErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get credentialPresent => $composableBuilder(
+    column: $table.credentialPresent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tokenJti => $composableBuilder(
+    column: $table.tokenJti,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentActionRemoteAuditTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentActionRemoteAuditTableTable> {
+  $$AgentActionRemoteAuditTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get rpcMethod =>
+      $composableBuilder(column: $table.rpcMethod, builder: (column) => column);
+
+  GeneratedColumn<String> get actionId =>
+      $composableBuilder(column: $table.actionId, builder: (column) => column);
+
+  GeneratedColumn<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get traceId =>
+      $composableBuilder(column: $table.traceId, builder: (column) => column);
+
+  GeneratedColumn<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get outcome =>
+      $composableBuilder(column: $table.outcome, builder: (column) => column);
+
+  GeneratedColumn<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get rpcErrorCode => $composableBuilder(
+    column: $table.rpcErrorCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get credentialPresent => $composableBuilder(
+    column: $table.credentialPresent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get tokenJti =>
+      $composableBuilder(column: $table.tokenJti, builder: (column) => column);
+
+  GeneratedColumn<String> get runtimeInstanceId => $composableBuilder(
+    column: $table.runtimeInstanceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get runtimeSessionId => $composableBuilder(
+    column: $table.runtimeSessionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => column,
+  );
+}
+
+class $$AgentActionRemoteAuditTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentActionRemoteAuditTableTable,
+          AgentActionRemoteAuditData,
+          $$AgentActionRemoteAuditTableTableFilterComposer,
+          $$AgentActionRemoteAuditTableTableOrderingComposer,
+          $$AgentActionRemoteAuditTableTableAnnotationComposer,
+          $$AgentActionRemoteAuditTableTableCreateCompanionBuilder,
+          $$AgentActionRemoteAuditTableTableUpdateCompanionBuilder,
+          (
+            AgentActionRemoteAuditData,
+            BaseReferences<
+              _$AppDatabase,
+              $AgentActionRemoteAuditTableTable,
+              AgentActionRemoteAuditData
+            >,
+          ),
+          AgentActionRemoteAuditData,
+          PrefetchHooks Function()
+        > {
+  $$AgentActionRemoteAuditTableTableTableManager(
+    _$AppDatabase db,
+    $AgentActionRemoteAuditTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentActionRemoteAuditTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AgentActionRemoteAuditTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AgentActionRemoteAuditTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> occurredAt = const Value.absent(),
+                Value<String> rpcMethod = const Value.absent(),
+                Value<String?> actionId = const Value.absent(),
+                Value<String?> executionId = const Value.absent(),
+                Value<String?> traceId = const Value.absent(),
+                Value<String?> requestedBy = const Value.absent(),
+                Value<String> outcome = const Value.absent(),
+                Value<String?> reasonCode = const Value.absent(),
+                Value<int?> rpcErrorCode = const Value.absent(),
+                Value<bool> credentialPresent = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
+                Value<String?> tokenJti = const Value.absent(),
+                Value<String?> runtimeInstanceId = const Value.absent(),
+                Value<String?> runtimeSessionId = const Value.absent(),
+                Value<String?> idempotencyKey = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionRemoteAuditTableCompanion(
+                id: id,
+                occurredAt: occurredAt,
+                rpcMethod: rpcMethod,
+                actionId: actionId,
+                executionId: executionId,
+                traceId: traceId,
+                requestedBy: requestedBy,
+                outcome: outcome,
+                reasonCode: reasonCode,
+                rpcErrorCode: rpcErrorCode,
+                credentialPresent: credentialPresent,
+                clientId: clientId,
+                tokenJti: tokenJti,
+                runtimeInstanceId: runtimeInstanceId,
+                runtimeSessionId: runtimeSessionId,
+                idempotencyKey: idempotencyKey,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime occurredAt,
+                required String rpcMethod,
+                Value<String?> actionId = const Value.absent(),
+                Value<String?> executionId = const Value.absent(),
+                Value<String?> traceId = const Value.absent(),
+                Value<String?> requestedBy = const Value.absent(),
+                required String outcome,
+                Value<String?> reasonCode = const Value.absent(),
+                Value<int?> rpcErrorCode = const Value.absent(),
+                Value<bool> credentialPresent = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
+                Value<String?> tokenJti = const Value.absent(),
+                Value<String?> runtimeInstanceId = const Value.absent(),
+                Value<String?> runtimeSessionId = const Value.absent(),
+                Value<String?> idempotencyKey = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionRemoteAuditTableCompanion.insert(
+                id: id,
+                occurredAt: occurredAt,
+                rpcMethod: rpcMethod,
+                actionId: actionId,
+                executionId: executionId,
+                traceId: traceId,
+                requestedBy: requestedBy,
+                outcome: outcome,
+                reasonCode: reasonCode,
+                rpcErrorCode: rpcErrorCode,
+                credentialPresent: credentialPresent,
+                clientId: clientId,
+                tokenJti: tokenJti,
+                runtimeInstanceId: runtimeInstanceId,
+                runtimeSessionId: runtimeSessionId,
+                idempotencyKey: idempotencyKey,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentActionRemoteAuditTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentActionRemoteAuditTableTable,
+      AgentActionRemoteAuditData,
+      $$AgentActionRemoteAuditTableTableFilterComposer,
+      $$AgentActionRemoteAuditTableTableOrderingComposer,
+      $$AgentActionRemoteAuditTableTableAnnotationComposer,
+      $$AgentActionRemoteAuditTableTableCreateCompanionBuilder,
+      $$AgentActionRemoteAuditTableTableUpdateCompanionBuilder,
+      (
+        AgentActionRemoteAuditData,
+        BaseReferences<
+          _$AppDatabase,
+          $AgentActionRemoteAuditTableTable,
+          AgentActionRemoteAuditData
+        >,
+      ),
+      AgentActionRemoteAuditData,
+      PrefetchHooks Function()
+    >;
+typedef $$AgentActionCapturedOutputChunkTableTableCreateCompanionBuilder =
+    AgentActionCapturedOutputChunkTableCompanion Function({
+      required String executionId,
+      required String stream,
+      required int chunkIndex,
+      required int utf8Offset,
+      required String payload,
+      Value<int> rowid,
+    });
+typedef $$AgentActionCapturedOutputChunkTableTableUpdateCompanionBuilder =
+    AgentActionCapturedOutputChunkTableCompanion Function({
+      Value<String> executionId,
+      Value<String> stream,
+      Value<int> chunkIndex,
+      Value<int> utf8Offset,
+      Value<String> payload,
+      Value<int> rowid,
+    });
+
+class $$AgentActionCapturedOutputChunkTableTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentActionCapturedOutputChunkTableTable> {
+  $$AgentActionCapturedOutputChunkTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stream => $composableBuilder(
+    column: $table.stream,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chunkIndex => $composableBuilder(
+    column: $table.chunkIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get utf8Offset => $composableBuilder(
+    column: $table.utf8Offset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentActionCapturedOutputChunkTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentActionCapturedOutputChunkTableTable> {
+  $$AgentActionCapturedOutputChunkTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stream => $composableBuilder(
+    column: $table.stream,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chunkIndex => $composableBuilder(
+    column: $table.chunkIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get utf8Offset => $composableBuilder(
+    column: $table.utf8Offset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentActionCapturedOutputChunkTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentActionCapturedOutputChunkTableTable> {
+  $$AgentActionCapturedOutputChunkTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get executionId => $composableBuilder(
+    column: $table.executionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stream =>
+      $composableBuilder(column: $table.stream, builder: (column) => column);
+
+  GeneratedColumn<int> get chunkIndex => $composableBuilder(
+    column: $table.chunkIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get utf8Offset => $composableBuilder(
+    column: $table.utf8Offset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+}
+
+class $$AgentActionCapturedOutputChunkTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentActionCapturedOutputChunkTableTable,
+          AgentActionCapturedOutputChunkData,
+          $$AgentActionCapturedOutputChunkTableTableFilterComposer,
+          $$AgentActionCapturedOutputChunkTableTableOrderingComposer,
+          $$AgentActionCapturedOutputChunkTableTableAnnotationComposer,
+          $$AgentActionCapturedOutputChunkTableTableCreateCompanionBuilder,
+          $$AgentActionCapturedOutputChunkTableTableUpdateCompanionBuilder,
+          (
+            AgentActionCapturedOutputChunkData,
+            BaseReferences<
+              _$AppDatabase,
+              $AgentActionCapturedOutputChunkTableTable,
+              AgentActionCapturedOutputChunkData
+            >,
+          ),
+          AgentActionCapturedOutputChunkData,
+          PrefetchHooks Function()
+        > {
+  $$AgentActionCapturedOutputChunkTableTableTableManager(
+    _$AppDatabase db,
+    $AgentActionCapturedOutputChunkTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentActionCapturedOutputChunkTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AgentActionCapturedOutputChunkTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AgentActionCapturedOutputChunkTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> executionId = const Value.absent(),
+                Value<String> stream = const Value.absent(),
+                Value<int> chunkIndex = const Value.absent(),
+                Value<int> utf8Offset = const Value.absent(),
+                Value<String> payload = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionCapturedOutputChunkTableCompanion(
+                executionId: executionId,
+                stream: stream,
+                chunkIndex: chunkIndex,
+                utf8Offset: utf8Offset,
+                payload: payload,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String executionId,
+                required String stream,
+                required int chunkIndex,
+                required int utf8Offset,
+                required String payload,
+                Value<int> rowid = const Value.absent(),
+              }) => AgentActionCapturedOutputChunkTableCompanion.insert(
+                executionId: executionId,
+                stream: stream,
+                chunkIndex: chunkIndex,
+                utf8Offset: utf8Offset,
+                payload: payload,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentActionCapturedOutputChunkTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentActionCapturedOutputChunkTableTable,
+      AgentActionCapturedOutputChunkData,
+      $$AgentActionCapturedOutputChunkTableTableFilterComposer,
+      $$AgentActionCapturedOutputChunkTableTableOrderingComposer,
+      $$AgentActionCapturedOutputChunkTableTableAnnotationComposer,
+      $$AgentActionCapturedOutputChunkTableTableCreateCompanionBuilder,
+      $$AgentActionCapturedOutputChunkTableTableUpdateCompanionBuilder,
+      (
+        AgentActionCapturedOutputChunkData,
+        BaseReferences<
+          _$AppDatabase,
+          $AgentActionCapturedOutputChunkTableTable,
+          AgentActionCapturedOutputChunkData
+        >,
+      ),
+      AgentActionCapturedOutputChunkData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3898,4 +11535,37 @@ class $AppDatabaseManager {
       $$ConfigTableTableTableManager(_db, _db.configTable);
   $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
       $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
+  $$AgentActionDefinitionTableTableTableManager
+  get agentActionDefinitionTable =>
+      $$AgentActionDefinitionTableTableTableManager(
+        _db,
+        _db.agentActionDefinitionTable,
+      );
+  $$AgentActionTriggerTableTableTableManager get agentActionTriggerTable =>
+      $$AgentActionTriggerTableTableTableManager(
+        _db,
+        _db.agentActionTriggerTable,
+      );
+  $$AgentActionExecutionTableTableTableManager get agentActionExecutionTable =>
+      $$AgentActionExecutionTableTableTableManager(
+        _db,
+        _db.agentActionExecutionTable,
+      );
+  $$RpcIdempotencyCacheTableTableTableManager get rpcIdempotencyCacheTable =>
+      $$RpcIdempotencyCacheTableTableTableManager(
+        _db,
+        _db.rpcIdempotencyCacheTable,
+      );
+  $$AgentActionRemoteAuditTableTableTableManager
+  get agentActionRemoteAuditTable =>
+      $$AgentActionRemoteAuditTableTableTableManager(
+        _db,
+        _db.agentActionRemoteAuditTable,
+      );
+  $$AgentActionCapturedOutputChunkTableTableTableManager
+  get agentActionCapturedOutputChunkTable =>
+      $$AgentActionCapturedOutputChunkTableTableTableManager(
+        _db,
+        _db.agentActionCapturedOutputChunkTable,
+      );
 }

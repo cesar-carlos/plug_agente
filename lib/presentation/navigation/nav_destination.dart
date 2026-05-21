@@ -8,6 +8,7 @@ enum NavDestination {
   playground(AppRoutes.playground, FluentIcons.table),
   databaseSettings(AppRoutes.databaseSettings, FluentIcons.database),
   websocketSettings(AppRoutes.websocketSettings, FluentIcons.plug_connected),
+  agentActions(AppRoutes.agentActions, FluentIcons.processing),
   config(AppRoutes.config, FluentIcons.settings)
   ;
 
@@ -22,6 +23,7 @@ enum NavDestination {
     playground,
     databaseSettings,
     websocketSettings,
+    agentActions,
     config,
   ];
 
@@ -36,6 +38,9 @@ enum NavDestination {
     }
     if (route.startsWith(AppRoutes.websocketSettings)) {
       return NavDestination.websocketSettings;
+    }
+    if (route.startsWith(AppRoutes.agentActions)) {
+      return NavDestination.agentActions;
     }
     if (route.startsWith(AppRoutes.config)) {
       return NavDestination.config;
@@ -63,6 +68,8 @@ extension NavDestinationLocalization on NavDestination {
         return l10n.navDatabaseSettings;
       case NavDestination.websocketSettings:
         return l10n.navWebSocketSettings;
+      case NavDestination.agentActions:
+        return l10n.navAgentActions;
       case NavDestination.config:
         return l10n.navSettings;
     }

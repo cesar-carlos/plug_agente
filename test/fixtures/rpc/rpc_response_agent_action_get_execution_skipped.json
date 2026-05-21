@@ -1,0 +1,49 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-get-skipped-1",
+  "result": {
+    "execution_id": "exec-skipped-1",
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "status": "skipped",
+    "source": "scheduler",
+    "requested_at": "2026-05-20T12:00:00.000Z",
+    "timestamps": {
+      "queue_started_at": "2026-05-20T12:00:00.000Z",
+      "finished_at": "2026-05-20T12:00:01.000Z"
+    },
+    "process": {},
+    "output": {
+      "stdout": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      },
+      "stderr": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      }
+    },
+    "flags": {
+      "terminal": true,
+      "skipped": true,
+      "timed_out": false,
+      "cancelled": false,
+      "killed": false,
+      "redaction_applied": true
+    },
+    "failure": {
+      "code": "ACTION_QUEUE_IGNORED",
+      "phase": "queue",
+      "corrective_action": "review_queue",
+      "message": "Action execution was ignored because another execution is already running."
+    }
+  }
+}

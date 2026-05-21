@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "notification_not_allowed",
+      "category": "validation",
+      "retryable": false,
+      "user_message": "The request parameters are invalid.",
+      "technical_message": "agent.action.run requires a JSON-RPC id",
+      "correlation_id": "notification-rejected",
+      "timestamp": "2026-05-18T14:35:00.000Z"
+    }
+  }
+}

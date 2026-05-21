@@ -49,7 +49,7 @@
     },
     "idempotency_key": {
       "type": "string",
-      "description": "Unique key for request deduplication (TTL 5min). Reusing the same key with a different request payload is rejected."
+      "description": "Unique key for request deduplication (default entry TTL 300s; agent env RPC_IDEMPOTENCY_CACHE_TTL_SECONDS). Reusing the same key with a different request payload is rejected. When socket idempotency is enabled, the agent stores keys internally as `{method}:{idempotency_key}`, independent of the JSON-RPC `id` field."
     },
     "options": {
       "type": "object",
