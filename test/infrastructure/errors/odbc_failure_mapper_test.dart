@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -21,7 +23,7 @@ void main() {
         );
 
         expect(failure, isA<ConnectionFailure>());
-        expect(failure.context['reason'], 'authentication_failed');
+        expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
         expect(failure.context['odbc_sql_state'], '28000');
         expect(failure.context['odbc_native_code'], 18456);
         expect(
@@ -41,7 +43,7 @@ void main() {
       );
 
       expect(failure, isA<ConfigurationFailure>());
-      expect(failure.context['reason'], 'odbc_driver_not_found');
+      expect(failure.context['reason'], OdbcContextConstants.odbcDriverNotFoundReason);
       expect(failure.context['odbc_sql_state'], 'IM002');
     });
 
@@ -56,7 +58,7 @@ void main() {
       );
 
       expect(failure, isA<ConnectionFailure>());
-      expect(failure.context['reason'], 'server_unreachable');
+      expect(failure.context['reason'], OdbcContextConstants.serverUnreachableReason);
       expect(failure.context['retryable'], isTrue);
     });
 
@@ -73,7 +75,7 @@ void main() {
         );
 
         expect(failure, isA<ConnectionFailure>());
-        expect(failure.context['reason'], 'server_unreachable');
+        expect(failure.context['reason'], OdbcContextConstants.serverUnreachableReason);
         expect(failure.context['odbc_sql_state'], '08001');
       },
     );
@@ -88,7 +90,7 @@ void main() {
       );
 
       expect(failure, isA<ConnectionFailure>());
-      expect(failure.context['reason'], 'connection_timeout');
+      expect(failure.context['reason'], OdbcContextConstants.connectionTimeoutReason);
       expect(failure.context['timeout'], isTrue);
       expect(failure.context['timeout_stage'], 'connect');
     });
@@ -102,7 +104,7 @@ void main() {
       expect(failure, isA<ConnectionFailure>());
       expect(failure.context['poolExhausted'], isTrue);
       expect(failure.context['retryable'], isTrue);
-      expect(failure.context['reason'], 'pool_exhausted');
+      expect(failure.context['reason'], OdbcContextConstants.poolExhaustedReason);
     });
 
     test('preserves explicit pool timeout reason and stage', () {
@@ -112,13 +114,13 @@ void main() {
         context: {
           'timeout': true,
           'timeout_stage': 'pool',
-          'reason': 'pool_wait_timeout',
+          'reason': OdbcContextConstants.poolWaitTimeoutReason,
           'retryable': true,
         },
       );
 
       expect(failure, isA<ConnectionFailure>());
-      expect(failure.context['reason'], 'pool_wait_timeout');
+      expect(failure.context['reason'], OdbcContextConstants.poolWaitTimeoutReason);
       expect(failure.context['timeout'], isTrue);
       expect(failure.context['timeout_stage'], 'pool');
       expect(failure.context['retryable'], isTrue);
@@ -147,7 +149,7 @@ void main() {
 
       expect(failure, isA<ValidationFailure>());
       expect(failure.context['operation'], 'sql_validation');
-      expect(failure.context['reason'], 'sql_validation_failed');
+      expect(failure.context['reason'], SqlPipelineContextConstants.sqlValidationFailedReason);
       expect(failure.context['odbc_sql_state'], '42000');
     });
 
@@ -161,7 +163,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'sql_permission_denied');
+      expect(failure.context['reason'], OdbcContextConstants.sqlPermissionDeniedReason);
       expect(failure.context.containsKey('denied_resources'), isFalse);
     });
 
@@ -175,7 +177,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'sql_permission_denied');
+      expect(failure.context['reason'], OdbcContextConstants.sqlPermissionDeniedReason);
       expect(failure.context['resource'], 'dbo.Orders');
       expect(failure.context['denied_resources'], ['dbo.Orders']);
       expect(
@@ -195,7 +197,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'transient_query_failure');
+      expect(failure.context['reason'], OdbcContextConstants.transientQueryFailureReason);
       expect(failure.context['retryable'], isTrue);
     });
 
@@ -206,7 +208,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'execution_cancelled');
+      expect(failure.context['reason'], OdbcContextConstants.executionCancelledReason);
       expect(failure.context['rpc_error_code'], RpcErrorCode.executionCancelled);
       expect(failure.context['odbc_error_category'], ErrorCategory.fatal.name);
     });
@@ -218,7 +220,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'odbc_worker_crashed');
+      expect(failure.context['reason'], OdbcContextConstants.odbcWorkerCrashedReason);
       expect(failure.context['connectionFailed'], isTrue);
       expect(failure.context['retryable'], isTrue);
     });
@@ -230,7 +232,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'odbc_malformed_payload');
+      expect(failure.context['reason'], OdbcContextConstants.odbcMalformedPayloadReason);
       expect(failure.context['odbc_error_category'], ErrorCategory.validation.name);
     });
 
@@ -248,7 +250,7 @@ void main() {
 
         expect(failure, isA<QueryExecutionFailure>());
         expect(failure.context['connectionFailed'], isTrue);
-        expect(failure.context['reason'], 'connection_lost_during_query');
+        expect(failure.context['reason'], OdbcContextConstants.connectionLostDuringQueryReason);
         expect(failure.context['odbc_sql_state'], '08S01');
       },
     );
@@ -261,7 +263,7 @@ void main() {
       );
 
       expect(failure, isA<QueryExecutionFailure>());
-      expect(failure.context['reason'], 'execution_cancelled');
+      expect(failure.context['reason'], OdbcContextConstants.executionCancelledReason);
       expect(
         failure.context['rpc_error_code'],
         RpcErrorCode.executionCancelled,

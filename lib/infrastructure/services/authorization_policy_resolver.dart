@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
@@ -58,7 +59,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         message: 'Token revoked',
         context: {
           'authorization': true,
-          'reason': 'token_revoked',
+          'reason': AuthorizationContextConstants.tokenRevokedReason,
         },
       );
       await _recordAuthorizationDeniedAudit(failure);
@@ -87,7 +88,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       }
       final localFailure = localResult.exceptionOrNull()! as domain.Failure;
       final shouldFallbackToJwks =
-          localFailure.context['reason'] == 'token_not_found' &&
+          localFailure.context['reason'] == AuthorizationContextConstants.tokenNotFoundReason &&
           _featureFlags.enableSocketJwksValidation &&
           _jwksVerifier != null;
       if (!shouldFallbackToJwks) {
@@ -148,7 +149,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           message: 'Token not found in local store',
           context: {
             'authorization': true,
-            'reason': 'token_not_found',
+            'reason': AuthorizationContextConstants.tokenNotFoundReason,
           },
         ),
       );
@@ -159,7 +160,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         message: 'Token revoked',
         context: {
           'authorization': true,
-          'reason': 'token_revoked',
+          'reason': AuthorizationContextConstants.tokenRevokedReason,
           'client_id': summary.clientId,
           'token_id': summary.id,
         },
@@ -205,7 +206,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           message: 'Invalid token format',
           context: {
             'authentication': true,
-            'reason': 'invalid_token_signature',
+            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
           },
         ),
       );
@@ -224,7 +225,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           cause: error,
           context: {
             'authentication': true,
-            'reason': 'invalid_token_signature',
+            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
           },
         ),
       );
@@ -235,7 +236,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           cause: error,
           context: {
             'authentication': true,
-            'reason': 'invalid_policy',
+            'reason': AuthorizationContextConstants.invalidPolicyReason,
           },
         ),
       );
@@ -268,7 +269,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           message: 'Invalid policy payload: client_id is required',
           context: {
             'authentication': true,
-            'reason': 'invalid_policy',
+            'reason': AuthorizationContextConstants.invalidPolicyReason,
           },
         ),
       );
@@ -280,7 +281,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           message: 'Token revoked',
           context: {
             'authorization': true,
-            'reason': 'token_revoked',
+            'reason': AuthorizationContextConstants.tokenRevokedReason,
             'client_id': merged.clientId,
           },
         ),
@@ -305,7 +306,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       return;
     }
     final reason = failure.context['reason'] as String?;
-    if (reason == 'token_revoked') {
+    if (reason == AuthorizationContextConstants.tokenRevokedReason) {
       _revokedTokenStore.add(token);
       final clientId = failure.context['client_id'] as String?;
       _tokenAuditStore?.record(
@@ -313,7 +314,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           eventType: TokenAuditEventType.revokedInSession,
           timestamp: DateTime.now().toUtc(),
           clientId: clientId,
-          metadata: {'reason': 'token_revoked'},
+          metadata: {'reason': AuthorizationContextConstants.tokenRevokedReason},
         ),
       );
     }
@@ -332,7 +333,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           clientId: failure.context['client_id'] as String?,
           tokenId: failure.context['token_id'] as String?,
           metadata: {
-            'reason': failure.context['reason'] ?? 'authorization_denied',
+            'reason': failure.context['reason'] ?? AuthorizationContextConstants.authorizationDeniedReason,
             'message': failure.message,
           },
         ),

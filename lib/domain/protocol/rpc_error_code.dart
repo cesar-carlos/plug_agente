@@ -54,6 +54,24 @@ abstract class RpcErrorCode {
   /// Duplicate request detected within replay window.
   static const int replayDetected = -32014;
 
+  /// Agent actions subsystem is starting or draining; the client should retry later.
+  static const int agentActionsTemporarilyUnavailable = -32015;
+
+  // ============================================================================
+  // Agent Actions Domain (reserved -32299 to -32200, not used in MVP 3)
+  //
+  // MVP maps agent-action failures to shared transport/auth/validation codes
+  // (-32001..-32015, -32602) with stable `error.data.reason` strings and
+  // `category: action`. Dedicated numeric codes in this band are reserved for
+  // a future breaking bump without colliding with SQL (-321xx).
+  // ============================================================================
+
+  /// First code in the reserved agent-actions band (inclusive).
+  static const int agentActionsDomainErrorCodeMin = -32299;
+
+  /// Last code in the reserved agent-actions band (inclusive).
+  static const int agentActionsDomainErrorCodeMax = -32200;
+
   // ============================================================================
   // SQL Domain Errors (-32199 to -32100)
   // ============================================================================
@@ -100,6 +118,9 @@ abstract class RpcErrorCode {
   static const String categoryDatabase = 'database';
   static const String categoryInternal = 'internal';
 
+  /// Agent action validation, authorization, queue, runtime and lookup failures.
+  static const String categoryAction = 'action';
+
   /// Use in [buildErrorData] `reason` when [-32001] is due to bad HMAC/signature.
   static const String reasonInvalidSignature = 'invalid_signature';
 
@@ -124,6 +145,7 @@ abstract class RpcErrorCode {
       networkError => 'Network error',
       rateLimited => 'Rate limit exceeded',
       replayDetected => 'Replay detected',
+      agentActionsTemporarilyUnavailable => 'Agent actions temporarily unavailable',
       sqlValidationFailed => 'SQL validation failed',
       sqlExecutionFailed => 'SQL execution failed',
       transactionFailed => 'Transaction failed',
@@ -144,6 +166,7 @@ abstract class RpcErrorCode {
       timeout ||
       networkError ||
       rateLimited ||
+      agentActionsTemporarilyUnavailable ||
       connectionPoolExhausted ||
       queryTimeout ||
       databaseConnectionFailed => true,
@@ -161,6 +184,7 @@ abstract class RpcErrorCode {
       unauthorized ||
       rateLimited ||
       replayDetected ||
+      agentActionsTemporarilyUnavailable ||
       invalidPayload ||
       sqlValidationFailed ||
       invalidDatabaseConfig => true,
@@ -179,6 +203,7 @@ abstract class RpcErrorCode {
       timeout || queryTimeout => 408,
       rateLimited => 429,
       replayDetected => 409,
+      agentActionsTemporarilyUnavailable => 503,
       internalError ||
       sqlExecutionFailed ||
       transactionFailed ||
@@ -200,7 +225,8 @@ abstract class RpcErrorCode {
       parseError || invalidRequest || methodNotFound || invalidParams => categoryValidation,
       authenticationFailed || unauthorized => categoryAuth,
       timeout || networkError => categoryNetwork,
-      invalidPayload || decodingFailed || compressionFailed || rateLimited || replayDetected => categoryTransport,
+      invalidPayload || decodingFailed || compressionFailed || rateLimited || replayDetected || agentActionsTemporarilyUnavailable =>
+        categoryTransport,
       sqlValidationFailed || sqlExecutionFailed || transactionFailed || resultTooLarge || queryTimeout => categorySql,
       connectionPoolExhausted ||
       databaseConnectionFailed ||
@@ -231,6 +257,7 @@ abstract class RpcErrorCode {
       networkError => 'network_error',
       rateLimited => 'rate_limited',
       replayDetected => 'replay_detected',
+      agentActionsTemporarilyUnavailable => 'agent_actions_temporarily_unavailable',
       sqlValidationFailed => 'sql_validation_failed',
       sqlExecutionFailed => 'sql_execution_failed',
       transactionFailed => 'transaction_failed',
@@ -263,6 +290,7 @@ abstract class RpcErrorCode {
       networkError => l.networkError(),
       rateLimited => l.rateLimited(),
       replayDetected => l.replayDetected(),
+      agentActionsTemporarilyUnavailable => l.agentActionsTemporarilyUnavailable(),
       sqlValidationFailed => l.sqlValidationFailed(),
       sqlExecutionFailed || transactionFailed => l.sqlExecutionFailed(),
       connectionPoolExhausted => l.connectionPoolExhausted(),

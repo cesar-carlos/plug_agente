@@ -55,6 +55,10 @@ void main() {
         expect(service.deepLinkToRoute('plugdb://'), equals('/'));
       });
 
+      test('should convert dashboard example link with triple slash to route', () {
+        expect(service.deepLinkToRoute('plugdb:///'), equals('/'));
+      });
+
       test('should convert config link to route', () {
         expect(service.deepLinkToRoute('plugdb://config'), equals('/config'));
       });
@@ -98,6 +102,13 @@ void main() {
         expect(
           service.deepLinkToRoute('https://example.com/playground'),
           equals('/playground'),
+        );
+      });
+
+      test('should preserve query string for https links', () {
+        expect(
+          service.deepLinkToRoute('https://example.com/playground?id=123&tab=main'),
+          equals('/playground?id=123&tab=main'),
         );
       });
 

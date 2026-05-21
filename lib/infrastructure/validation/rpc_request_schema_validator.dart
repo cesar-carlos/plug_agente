@@ -1,3 +1,5 @@
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -66,6 +68,12 @@ class RpcRequestSchemaValidator {
       'sql.cancel' => _validateSqlCancelParams(data['params']),
       'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       'agent.getHealth' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getHealth'),
+      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
+        _validateAgentActionGetExecutionParams(data['params']),
+      AgentActionRpcConstants.agentActionRunRpcMethodName => _validateAgentActionRunParams(data['params']),
+      AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
+        _validateAgentActionValidateRunParams(data['params']),
+      AgentActionRpcConstants.agentActionCancelRpcMethodName => _validateAgentActionCancelParams(data['params']),
       'client_token.getPolicy' => _validateOptionalClientTokenAliasParams(data['params'], 'client_token.getPolicy'),
       _ => const Success(unit),
     };
@@ -599,6 +607,215 @@ class RpcRequestSchemaValidator {
     return _validateTokenAliases(params);
   }
 
+  Result<void> _validateAgentActionGetExecutionParams(dynamic params) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method ${AgentActionRpcConstants.agentActionGetExecutionRpcMethodName}',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object for method ${AgentActionRpcConstants.agentActionGetExecutionRpcMethodName}',
+      );
+    }
+    const allowedKeys = {
+      'execution_id',
+      'include_output',
+      'stdout_offset',
+      'stdout_cursor',
+      'output_offset',
+      'stderr_offset',
+      'stderr_cursor',
+      'max_output_bytes',
+      AgentActionRpcConstants.agentActionRpcParamTraceId,
+      AgentActionRpcConstants.agentActionRpcParamRequestedBy,
+      'client_token',
+      'clientToken',
+      'auth',
+    };
+    final extraKeys = params.keys.where(
+      (String key) => !allowedKeys.contains(key),
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    final executionId = params['execution_id'];
+    if (executionId is! String || executionId.trim().isEmpty) {
+      return _invalidParams(
+        'Field "params.execution_id" must be a non-empty string',
+      );
+    }
+    final includeOutput = params['include_output'];
+    if (includeOutput != null && includeOutput is! bool) {
+      return _invalidParams('Field "params.include_output" must be a boolean');
+    }
+    for (final key in <String>[
+      'stdout_offset',
+      'stdout_cursor',
+      'output_offset',
+      'stderr_offset',
+      'stderr_cursor',
+    ]) {
+      if (!params.containsKey(key)) {
+        continue;
+      }
+      if (_tryParseNonNegativeInt(params[key]) == null) {
+        return _invalidParams('Field "params.$key" must be a non-negative integer');
+      }
+    }
+    if (params.containsKey('max_output_bytes')) {
+      final parsed = _tryParsePositiveInt(params['max_output_bytes']);
+      if (parsed == null) {
+        return _invalidParams('Field "params.max_output_bytes" must be a positive integer');
+      }
+      if (parsed > AgentActionRpcConstants.maxMaxOutputBytesPerStream) {
+        return _invalidParams(
+          'Field "params.max_output_bytes" must be at most '
+          '${AgentActionRpcConstants.maxMaxOutputBytesPerStream}',
+        );
+      }
+    }
+    final correlationResult = _validateOptionalAgentActionCorrelationParams(params);
+    if (correlationResult.isError()) {
+      return correlationResult;
+    }
+    return _validateTokenAliases(params);
+  }
+
+  Result<void> _validateAgentActionRunParams(dynamic params) {
+    return _validateAgentActionRunOrValidateParams(
+      params,
+      rpcMethod: AgentActionRpcConstants.agentActionRunRpcMethodName,
+    );
+  }
+
+  Result<void> _validateAgentActionValidateRunParams(dynamic params) {
+    return _validateAgentActionRunOrValidateParams(
+      params,
+      rpcMethod: AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+    );
+  }
+
+  Result<void> _validateAgentActionRunOrValidateParams(
+    dynamic params, {
+    required String rpcMethod,
+  }) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method $rpcMethod',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object for method $rpcMethod',
+      );
+    }
+    const allowedKeys = {
+      'action_id',
+      'idempotency_key',
+      AgentActionRpcConstants.agentActionRpcParamTriggerId,
+      AgentActionRpcConstants.agentActionRpcParamTraceId,
+      AgentActionRpcConstants.agentActionRpcParamRequestedBy,
+      'client_token',
+      'clientToken',
+      'auth',
+    };
+    final extraKeys = params.keys.where((String key) => !allowedKeys.contains(key)).toList();
+    if (extraKeys.isNotEmpty) {
+      final contextKey = extraKeys
+          .where(AgentActionRpcConstants.remoteContextRpcParamKeys.contains)
+          .firstOrNull;
+      if (contextKey != null) {
+        return Failure(
+          ActionValidationFailure.withContext(
+            message: 'Remote agent action RPC does not accept inline context in MVP.',
+            code: AgentActionFailureCode.remoteContextNotSupported,
+            context: {
+              'rpc_error_code': RpcErrorCode.invalidParams,
+              'field': contextKey,
+              'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
+            },
+          ),
+        );
+      }
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    final actionId = params['action_id'];
+    if (actionId is! String || actionId.trim().isEmpty) {
+      return _invalidParams(
+        'Field "params.action_id" must be a non-empty string',
+      );
+    }
+    final idempotencyKey = params['idempotency_key'];
+    if (idempotencyKey is! String || idempotencyKey.trim().isEmpty) {
+      return _invalidParams(
+        'Field "params.idempotency_key" must be a non-empty string',
+      );
+    }
+    final correlationResult = _validateOptionalAgentActionCorrelationParams(params);
+    if (correlationResult.isError()) {
+      return correlationResult;
+    }
+    return _validateTokenAliases(params);
+  }
+
+  Result<void> _validateAgentActionCancelParams(dynamic params) {
+    if (params == null) {
+      return _invalidParams(
+        'Field "params" is required for method ${AgentActionRpcConstants.agentActionCancelRpcMethodName}',
+      );
+    }
+    if (params is! Map<String, dynamic>) {
+      return _invalidParams(
+        'Field "params" must be an object for method ${AgentActionRpcConstants.agentActionCancelRpcMethodName}',
+      );
+    }
+    const allowedKeys = {
+      'execution_id',
+      AgentActionRpcConstants.agentActionRpcParamTraceId,
+      AgentActionRpcConstants.agentActionRpcParamRequestedBy,
+      'client_token',
+      'clientToken',
+      'auth',
+    };
+    final extraKeys = params.keys.where(
+      (String key) => !allowedKeys.contains(key),
+    );
+    if (extraKeys.isNotEmpty) {
+      return _invalidParams(
+        'Field "params" contains unsupported properties: '
+        '${extraKeys.join(", ")}',
+      );
+    }
+    final executionId = params['execution_id'];
+    if (executionId is! String || executionId.trim().isEmpty) {
+      return _invalidParams(
+        'Field "params.execution_id" must be a non-empty string',
+      );
+    }
+    final correlationResult = _validateOptionalAgentActionCorrelationParams(params);
+    if (correlationResult.isError()) {
+      return correlationResult;
+    }
+    return _validateTokenAliases(params);
+  }
+
+  Result<void> _validateOptionalAgentActionCorrelationParams(Map<String, dynamic> params) {
+    for (final key in AgentActionRpcConstants.agentActionRpcCorrelationOnlyParamKeys) {
+      final value = params[key];
+      if (value != null && (value is! String || value.trim().isEmpty)) {
+        return _invalidParams('Field "params.$key" must be a non-empty string');
+      }
+    }
+    return const Success(unit);
+  }
+
   Result<void> _validateTokenAliases(Map<String, dynamic> params) {
     for (final key in ['client_token', 'clientToken', 'auth']) {
       final value = params[key];
@@ -757,6 +974,34 @@ class RpcRequestSchemaValidator {
     }
 
     return const Success(unit);
+  }
+
+  int? _tryParseNonNegativeInt(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw is int) {
+      return raw < 0 ? null : raw;
+    }
+    if (raw is double) {
+      if (raw.isNaN || raw.isInfinite) {
+        return null;
+      }
+      final rounded = raw.round();
+      if ((raw - rounded).abs() > 1e-9) {
+        return null;
+      }
+      return rounded < 0 ? null : rounded;
+    }
+    return null;
+  }
+
+  int? _tryParsePositiveInt(Object? raw) {
+    final parsed = _tryParseNonNegativeInt(raw);
+    if (parsed == null || parsed < 1) {
+      return null;
+    }
+    return parsed;
   }
 
   Result<void> _invalidRequest(String message) {

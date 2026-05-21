@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart';
 import 'package:plug_agente/core/utils/sql_dangerous_pattern_scan.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -412,7 +413,7 @@ class SqlValidator {
       message: message,
       context: <String, dynamic>{
         'operation': 'sql_validation',
-        'reason': 'sql_validation_failed',
+        'reason': SqlPipelineContextConstants.sqlValidationFailedReason,
         'user_message': userMessage,
       },
     );

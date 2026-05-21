@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-validate-1",
+  "api_version": "2.11.1",
+  "meta": {
+    "trace_id": "trace-validate-1",
+    "timestamp": "2026-05-18T12:00:00.100Z"
+  },
+  "result": {
+    "valid": true,
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "definition_snapshot_hash": "sha256:fixture-snapshot",
+    "would_replay_existing_execution": false
+  }
+}

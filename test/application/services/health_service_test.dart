@@ -1,13 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
+import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
+import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -27,8 +37,214 @@ class _MockAgentConfigRepository extends Mock implements IAgentConfigRepository 
 
 class _MockStreamingGateway extends Mock implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {}
 
+class _MockAgentActionTriggerScheduler extends Mock implements AgentActionTriggerScheduler {}
+
+class _MockAgentActionSchedulerInstanceLock extends Mock implements IAgentActionSchedulerInstanceLock {}
+
+class _MockComObjectInvocationDiagnostics extends Mock implements IComObjectInvocationDiagnostics {}
+
 void main() {
   group('HealthService', () {
+    test('should omit agent_actions when feature flags are not wired', () {
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+      );
+
+      final status = service.getHealthStatus();
+      expect(status.containsKey('agent_actions'), isFalse);
+    });
+
+    test('should expose agent_actions with queue and remote rpc counters when feature flags are wired', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final metrics = MetricsCollector()
+        ..recordConcurrencyReject()
+        ..recordTerminalOutcome(AgentActionExecutionStatus.succeeded)
+        ..recordTerminalOutcome(AgentActionExecutionStatus.skipped)
+        ..recordExecutionDuration(const Duration(milliseconds: 250))
+        ..recordRemotePermissionDenied()
+        ..recordLocalAuthorizationDenied()
+        ..recordRemoteRateLimited()
+        ..recordRemoteAuditExecutionCorrelated()
+        ..recordRpcAgentActionRemoteOutcome(AgentActionRpcConstants.agentActionRunRpcMethodName, success: true)
+        ..recordRpcAgentActionNotificationRejected(AgentActionRpcConstants.agentActionCancelRpcMethodName)
+        ..recordRpcAgentActionBatchReadLimitRejected();
+      final guard = AgentActionRuntimeStateGuard();
+      guard.markDegraded(unavailableActionTypes: {AgentActionType.developer});
+      final service = HealthService(
+        metricsCollector: metrics,
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        agentActionRuntimeStateGuard: guard,
+      );
+
+      final status = service.getHealthStatus();
+      final agentActions = status['agent_actions']! as Map<String, Object?>;
+      expect(agentActions['enabled'], isTrue);
+      expect(agentActions['status'], 'degraded');
+      expect(agentActions['unavailable_types'], ['developer']);
+      final queueCounters = agentActions['queue_counters']! as Map<String, Object?>;
+      expect(queueCounters['concurrency_reject_total'], 1);
+      final remoteRpc = agentActions['remote_rpc_counters']! as Map<String, Object?>;
+      expect(remoteRpc['run_success_total'], 1);
+      expect(remoteRpc['cancel_notification_rejected_total'], 1);
+      expect(remoteRpc['batch_read_limit_rejected_total'], 1);
+      expect(agentActions['queue_wait_ms'], isA<Map<String, Object?>>());
+      final executionCounters = agentActions['execution_counters']! as Map<String, Object?>;
+      expect(executionCounters['terminal_succeeded_total'], 1);
+      expect(executionCounters['terminal_skipped_total'], 1);
+      expect(executionCounters['remote_permission_denied_total'], 1);
+      expect(executionCounters['local_authorization_denied_total'], 1);
+      expect(executionCounters['remote_rate_limited_total'], 1);
+      expect(executionCounters['remote_audit_execution_correlated_total'], 1);
+      final executionDuration = agentActions['execution_duration_ms']! as Map<String, Object?>;
+      expect(executionDuration['sample_count'], 1);
+      expect(executionDuration['avg_time_ms'], 250.0);
+    });
+
+    test('should expose scheduler diagnostics in agent_actions when scheduler is wired', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final scheduler = _MockAgentActionTriggerScheduler();
+      when(() => scheduler.isTemporalSchedulerStarted).thenReturn(true);
+      when(() => scheduler.isBootstrapDisabled).thenReturn(false);
+      when(() => scheduler.scheduledTimerCount).thenReturn(3);
+      final lock = _MockAgentActionSchedulerInstanceLock();
+      when(() => lock.isHeld).thenReturn(true);
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        agentActionTriggerScheduler: scheduler,
+        agentActionSchedulerInstanceLock: lock,
+      );
+
+      final status = service.getHealthStatus();
+      final agentActions = status['agent_actions']! as Map<String, Object?>;
+      final schedulerHealth = agentActions['scheduler']! as Map<String, Object?>;
+      expect(schedulerHealth['started'], isTrue);
+      expect(schedulerHealth['bootstrap_disabled'], isFalse);
+      expect(schedulerHealth['temporal_timer_count'], 3);
+      expect(schedulerHealth['instance_lock_held'], isTrue);
+    });
+
+    test('should expose last_start_issue_reason when temporal scheduler did not start', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final scheduler = _MockAgentActionTriggerScheduler();
+      when(() => scheduler.isTemporalSchedulerStarted).thenReturn(false);
+      when(() => scheduler.isBootstrapDisabled).thenReturn(false);
+      when(() => scheduler.scheduledTimerCount).thenReturn(0);
+      when(() => scheduler.lastStartIssueReason).thenReturn(
+        AgentActionTriggerConstants.schedulerInstanceLockedReason,
+      );
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        agentActionTriggerScheduler: scheduler,
+      );
+
+      final agentActions = service.getHealthStatus()['agent_actions']! as Map<String, Object?>;
+      final schedulerHealth = agentActions['scheduler']! as Map<String, Object?>;
+      expect(schedulerHealth['started'], isFalse);
+      expect(
+        schedulerHealth['last_start_issue_reason'],
+        AgentActionTriggerConstants.schedulerInstanceLockedReason,
+      );
+    });
+
+    test('should expose com object invocation readiness in agent_actions', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final comDiagnostics = _MockComObjectInvocationDiagnostics();
+      when(() => comDiagnostics.registeredHandlerCount).thenReturn(0);
+      final serviceWithoutHandlers = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        comObjectInvocationDiagnostics: comDiagnostics,
+      );
+
+      final withoutHandlers = serviceWithoutHandlers.getHealthStatus()['agent_actions']! as Map<String, Object?>;
+      expect(withoutHandlers['com_object_handlers_registered_count'], 0);
+      expect(withoutHandlers['com_object_invocation_ready'], isFalse);
+
+      when(() => comDiagnostics.registeredHandlerCount).thenReturn(2);
+      final serviceWithHandlers = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        comObjectInvocationDiagnostics: comDiagnostics,
+      );
+      final withHandlers = serviceWithHandlers.getHealthStatus()['agent_actions']! as Map<String, Object?>;
+      expect(withHandlers['com_object_handlers_registered_count'], 2);
+      expect(withHandlers['com_object_invocation_ready'], isTrue);
+    });
+
+    test('should expose retention policy in agent_actions when retention settings are wired', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final retention = AgentActionRetentionSettings(InMemoryAppSettingsStore());
+      await retention.save(
+        executionDays: 14,
+        remoteAuditDays: 21,
+        capturedOutputHours: 48,
+      );
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        agentActionRetentionSettings: retention,
+      );
+
+      final status = service.getHealthStatus();
+      final agentActions = status['agent_actions']! as Map<String, Object?>;
+      final retentionHealth = agentActions['retention']! as Map<String, Object?>;
+      expect(retentionHealth['execution_days'], 14);
+      expect(retentionHealth['remote_audit_days'], 21);
+      expect(retentionHealth['captured_output_hours'], 48);
+      expect(retentionHealth['persisted_override'], isTrue);
+      expect(retentionHealth['rpc_idempotency_ttl_seconds'], greaterThan(0));
+    });
+
+    test('should expose elevated readiness and purge counters in agent_actions', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableElevatedAgentActions(true);
+      final readiness = ElevatedActionRunnerReadinessService()..markDegraded(reason: 'helper timeout');
+      final metrics = MetricsCollector()
+        ..recordElevatedBridgeArtifactsPurge(3)
+        ..recordCapturedOutputCleared(2);
+      final service = HealthService(
+        metricsCollector: metrics,
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        elevatedRunnerReadiness: readiness,
+      );
+
+      final status = service.getHealthStatus();
+      final agentActions = status['agent_actions']! as Map<String, Object?>;
+      expect(agentActions['elevated_enabled'], isTrue);
+      expect(agentActions['elevated_runner_configured'], isFalse);
+      expect(agentActions['elevated_runner_degraded'], isTrue);
+      final executionCounters = agentActions['execution_counters']! as Map<String, Object?>;
+      expect(executionCounters['elevated_bridge_artifacts_purge_total'], 3);
+      expect(executionCounters['captured_output_cleared_total'], 2);
+    });
+
+    test('should expose agent_runtime when identity is provided', () {
+      const identity = AgentRuntimeIdentity(
+        runtimeInstanceId: 'inst-test',
+        runtimeSessionId: 'sess-test',
+      );
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        agentRuntimeIdentity: identity,
+      );
+
+      final status = service.getHealthStatus();
+      final runtime = status['agent_runtime']! as Map<String, Object?>;
+      expect(runtime['instance_id'], 'inst-test');
+      expect(runtime['session_id'], 'sess-test');
+    });
+
     test('should report persisted ODBC pool size and actual queue limits', () async {
       final settings = MockOdbcConnectionSettings(poolSize: 7);
       const tuning = OdbcRuntimeTuning(
@@ -117,7 +333,7 @@ void main() {
           'native_eligible': true,
         },
       );
-      when(configRepository.getCurrentConfig).thenAnswer(
+      when(configRepository.getCurrentConfigMetadata).thenAnswer(
         (_) async => Success(
           Config(
             id: 'cfg-1',
@@ -153,7 +369,7 @@ void main() {
       expect(second['pool'], equals(first['pool']));
       verify(pool.getActiveCount).called(1);
       verify(pool.getHealthDiagnostics).called(1);
-      verify(configRepository.getCurrentConfig).called(1);
+      verify(configRepository.getCurrentConfigMetadata).called(1);
     });
 
     test('should expose streaming and direct connection diagnostics', () async {

@@ -685,7 +685,16 @@ class _BenchmarkConfigRepository implements IAgentConfigRepository {
   Future<Result<List<Config>>> getAll() async => Success([_config()]);
 
   @override
+  Future<Result<List<Config>>> getAllMetadata() async => Success([_config()]);
+
+  @override
   Future<Result<Config>> getById(String id) async => Success(_config().copyWith(id: id));
+
+  @override
+  Future<Result<Config>> getByIdMetadata(String id) async => Success(_config().copyWith(id: id));
+
+  @override
+  Future<Result<Config>> getCurrentConfigMetadata() async => Success(_config());
 
   @override
   Future<Result<Config>> save(Config config) async => Success(config);

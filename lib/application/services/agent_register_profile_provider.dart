@@ -1,26 +1,36 @@
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 
 class AgentRegisterProfileProvider {
   AgentRegisterProfileProvider({
-    required IAgentConfigRepository configRepository,
+    ActiveConfigResolver? activeConfigResolver,
+    IAgentConfigRepository? configRepository,
     Duration cacheTtl = const Duration(seconds: 2),
     DateTime Function()? now,
-  }) : _configRepository = configRepository,
+  }) : _activeConfigResolver = activeConfigResolver,
+       _configRepository = configRepository,
        _cacheTtl = cacheTtl,
        _now = now ?? DateTime.now;
 
-  final IAgentConfigRepository _configRepository;
+  final ActiveConfigResolver? _activeConfigResolver;
+  final IAgentConfigRepository? _configRepository;
   final Duration _cacheTtl;
   final DateTime Function() _now;
   Future<Map<String, dynamic>?>? _pendingSnapshot;
   Map<String, dynamic>? _cachedSnapshot;
   DateTime? _cachedSnapshotExpiresAt;
+  String? _cachedConfigId;
 
   Future<Map<String, dynamic>?> loadSnapshot() {
     final pending = _pendingSnapshot;
     if (pending != null) {
       return pending;
+    }
+
+    final activeConfigId = _activeConfigResolver?.getActiveConfigId();
+    if (_activeConfigResolver != null && _cachedConfigId != activeConfigId) {
+      clearCache();
     }
 
     final cachedSnapshot = _cachedSnapshot;
@@ -40,7 +50,16 @@ class AgentRegisterProfileProvider {
   }
 
   Future<Map<String, dynamic>?> _loadSnapshot() async {
-    final result = await _configRepository.getCurrentConfig();
+    final resolver = _activeConfigResolver;
+    final repository = _configRepository;
+    if (resolver == null && repository == null) {
+      return null;
+    }
+    final result = resolver != null
+        ? await resolver.resolveActiveOrFallback(
+            metadataOnly: true,
+          )
+        : await repository!.getCurrentConfigMetadata();
     if (result.isError()) {
       return null;
     }
@@ -61,6 +80,7 @@ class AgentRegisterProfileProvider {
     if (_cacheTtl > Duration.zero) {
       _cachedSnapshot = snapshot;
       _cachedSnapshotExpiresAt = _now().add(_cacheTtl);
+      _cachedConfigId = config.id;
     }
     return snapshot;
   }
@@ -68,5 +88,6 @@ class AgentRegisterProfileProvider {
   void clearCache() {
     _cachedSnapshot = null;
     _cachedSnapshotExpiresAt = null;
+    _cachedConfigId = null;
   }
 }

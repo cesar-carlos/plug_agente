@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -75,15 +76,13 @@ class AuthorizeSqlOperation {
             continue;
           }
           deniedNames.add(name);
-          if (clientIdFromCache == null &&
-              entry.clientId != null &&
-              entry.clientId!.isNotEmpty) {
+          if (clientIdFromCache == null && entry.clientId != null && entry.clientId!.isNotEmpty) {
             clientIdFromCache = entry.clientId;
           }
           _recordReasonForName(
             reasonByDeniedName: reasonByDeniedName,
             name: name,
-            reason: entry.reason ?? 'missing_permission',
+            reason: entry.reason ?? AuthorizationContextConstants.missingPermissionReason,
           );
         }
 
@@ -111,8 +110,7 @@ class AuthorizeSqlOperation {
               classification: classification,
             );
             if (databaseConstraintFailure != null) {
-              final reason =
-                  databaseConstraintFailure.context['reason'] as String?;
+              final reason = databaseConstraintFailure.context['reason'] as String?;
               for (final i in missIndices) {
                 _cacheDecision(
                   key: decisionKeys[i],
@@ -143,8 +141,8 @@ class AuthorizeSqlOperation {
               } else {
                 final name = resource.normalizedName;
                 final reason = policy.isRevoked
-                    ? 'token_revoked'
-                    : 'missing_permission';
+                    ? AuthorizationContextConstants.tokenRevokedReason
+                    : AuthorizationContextConstants.missingPermissionReason;
                 _cacheDecision(
                   key: decisionKeys[i],
                   allowed: false,
@@ -181,7 +179,7 @@ class AuthorizeSqlOperation {
                     message: failure.toString(),
                     context: const {
                       'authorization': true,
-                      'reason': 'unexpected_failure_type',
+                      'reason': AuthorizationContextConstants.unexpectedFailureTypeReason,
                     },
                   );
             for (final i in missIndices) {
@@ -204,9 +202,8 @@ class AuthorizeSqlOperation {
             message: 'Authorization denied: unsupported SQL classification',
             context: {
               'authorization': true,
-              'reason': 'invalid_policy',
-              'user_message':
-                  'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
+              'reason': AuthorizationContextConstants.invalidPolicyReason,
+              'user_message': 'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
             },
           ),
         );
@@ -220,8 +217,9 @@ class AuthorizeSqlOperation {
     required String reason,
   }) {
     final existing = reasonByDeniedName[name];
-    if (existing == 'token_revoked' || reason == 'token_revoked') {
-      reasonByDeniedName[name] = 'token_revoked';
+    if (existing == AuthorizationContextConstants.tokenRevokedReason ||
+        reason == AuthorizationContextConstants.tokenRevokedReason) {
+      reasonByDeniedName[name] = AuthorizationContextConstants.tokenRevokedReason;
       return;
     }
     if (existing == null) {
@@ -248,14 +246,13 @@ class AuthorizeSqlOperation {
     final opName = classification.operation.name;
     final resourceList = _formatNameListForMessage(sorted);
     final userMessage = switch (topReason) {
-      'token_revoked' =>
+      AuthorizationContextConstants.tokenRevokedReason =>
         'Token revogado. Gere um novo token para continuar. Recursos na consulta: $resourceList.',
-      'database_required' =>
+      AuthorizationContextConstants.databaseRequiredReason =>
         'Este token exige que a request informe o database configurado no payload antes de ${_operationLabel(classification.operation)}: $resourceList.',
-      'database_mismatch' =>
+      AuthorizationContextConstants.databaseMismatchReason =>
         'O database enviado na request nao corresponde ao database configurado no token para ${_operationLabel(classification.operation)}: $resourceList.',
-      _ =>
-        'Acesso negado para ${_operationLabel(classification.operation)} nos recursos: $resourceList.',
+      _ => 'Acesso negado para ${_operationLabel(classification.operation)} nos recursos: $resourceList.',
     };
 
     return domain.ConfigurationFailure.withContext(
@@ -280,17 +277,18 @@ class AuthorizeSqlOperation {
     required ClientTokenPolicy? policy,
   }) {
     if (policy != null && policy.isRevoked) {
-      return 'token_revoked';
+      return AuthorizationContextConstants.tokenRevokedReason;
     }
     for (final reason in reasonByDeniedName.values) {
-      if (reason == 'token_revoked') {
-        return 'token_revoked';
+      if (reason == AuthorizationContextConstants.tokenRevokedReason) {
+        return AuthorizationContextConstants.tokenRevokedReason;
       }
-      if (reason == 'database_required' || reason == 'database_mismatch') {
+      if (reason == AuthorizationContextConstants.databaseRequiredReason ||
+          reason == AuthorizationContextConstants.databaseMismatchReason) {
         return reason;
       }
     }
-    return 'missing_permission';
+    return AuthorizationContextConstants.missingPermissionReason;
   }
 
   String? _resolveClientId({
@@ -320,9 +318,7 @@ class AuthorizeSqlOperation {
     if (resourceNames.length <= _kMaxResourceNamesInTechnicalMessage) {
       return 'Authorization denied for $operation on ${resourceNames.join(', ')}';
     }
-    final head = resourceNames
-        .take(_kMaxResourceNamesInTechnicalMessage)
-        .join(', ');
+    final head = resourceNames.take(_kMaxResourceNamesInTechnicalMessage).join(', ');
     final rest = resourceNames.length - _kMaxResourceNamesInTechnicalMessage;
     return 'Authorization denied for $operation on $head (+$rest more)';
   }
@@ -385,11 +381,10 @@ class AuthorizeSqlOperation {
 
     if (requestDatabase == null) {
       return domain.ConfigurationFailure.withContext(
-        message:
-            'Authorization denied: database is required and must match token payload.database',
+        message: 'Authorization denied: database is required and must match token payload.database',
         context: {
           'authorization': true,
-          'reason': 'database_required',
+          'reason': AuthorizationContextConstants.databaseRequiredReason,
           'client_id': policy.clientId,
           'operation': classification.operation.name,
           'resource': classification.resources.first.normalizedName,
@@ -397,8 +392,7 @@ class AuthorizeSqlOperation {
               .map((resource) => resource.normalizedName)
               .toList(growable: false),
           'expected_database': expectedDatabase,
-          'user_message':
-              'Este token exige que a request informe o database "$expectedDatabase".',
+          'user_message': 'Este token exige que a request informe o database "$expectedDatabase".',
         },
       );
     }
@@ -412,13 +406,11 @@ class AuthorizeSqlOperation {
           'Authorization denied: request database "$requestDatabase" does not match token payload.database "$expectedDatabase"',
       context: {
         'authorization': true,
-        'reason': 'database_mismatch',
+        'reason': AuthorizationContextConstants.databaseMismatchReason,
         'client_id': policy.clientId,
         'operation': classification.operation.name,
         'resource': classification.resources.first.normalizedName,
-        'denied_resources': classification.resources
-            .map((resource) => resource.normalizedName)
-            .toList(growable: false),
+        'denied_resources': classification.resources.map((resource) => resource.normalizedName).toList(growable: false),
         'expected_database': expectedDatabase,
         'request_database': requestDatabase,
         'user_message':

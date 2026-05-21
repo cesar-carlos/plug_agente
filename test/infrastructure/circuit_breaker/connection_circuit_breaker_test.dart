@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:result_dart/result_dart.dart';
@@ -18,7 +19,7 @@ void main() {
             message: 'Pool de conexoes ODBC esgotado',
             context: {
               'poolExhausted': true,
-              'reason': 'pool_wait_timeout',
+              'reason': OdbcContextConstants.poolWaitTimeoutReason,
             },
           ),
         ),

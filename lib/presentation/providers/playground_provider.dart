@@ -134,6 +134,7 @@ class PlaygroundProvider extends ChangeNotifier {
   }
 
   String _query = '';
+  String? _currentConfigId;
   List<Map<String, dynamic>> _results = [];
   List<QueryResultSet> _resultSets = [];
   bool _isLoading = false;
@@ -224,7 +225,12 @@ class PlaygroundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> executeQuery({bool resetPagination = false}) async {
+  Future<void> executeQuery({
+    bool resetPagination = false,
+    String? configId,
+  }) async {
+    final effectiveConfigId = configId ?? _currentConfigId;
+    _currentConfigId = effectiveConfigId;
     if (resetPagination) {
       _currentPage = 1;
     }
@@ -252,6 +258,7 @@ class PlaygroundProvider extends ChangeNotifier {
     try {
       final result = await _executePlaygroundQuery(
         _query,
+        configId: effectiveConfigId,
         pagination: QueryPaginationRequest(
           page: _currentPage,
           pageSize: _pageSize,

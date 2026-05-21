@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-starting",
+  "error": {
+    "code": -32015,
+    "message": "Agent actions temporarily unavailable",
+    "data": {
+      "reason": "agent_actions_starting",
+      "category": "action",
+      "retryable": true,
+      "user_message": "Agent actions are still starting. Please try again shortly.",
+      "technical_message": "Agent actions subsystem is not ready to accept this execution.",
+      "correlation_id": "req-run-starting",
+      "timestamp": "2026-05-18T15:30:00.000Z",
+      "method": "agent.action.run",
+      "status": "starting"
+    }
+  }
+}

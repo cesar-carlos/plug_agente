@@ -48,4 +48,12 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
 
   @override
   void recordClientTokenGetPolicyRateLimited() => _metrics.recordClientTokenGetPolicyRateLimited();
+
+  @override
+  void recordRpcAgentActionRemoteOutcome(String rpcMethod, {required bool success}) =>
+      _metrics.recordRpcAgentActionRemoteOutcome(rpcMethod, success: success);
+
+  @override
+  void recordRpcAgentActionNotificationRejected(String rpcMethod) =>
+      _metrics.recordRpcAgentActionNotificationRejected(rpcMethod);
 }

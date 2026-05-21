@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jose/jose.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 
@@ -85,7 +86,7 @@ void main() {
         expect(second.isError(), isTrue);
         expect(third.isError(), isTrue);
         final failure = third.exceptionOrNull()! as domain.Failure;
-        expect(failure.context['reason'], equals('jwks_circuit_open'));
+        expect(failure.context['reason'], equals(AuthorizationContextConstants.jwksCircuitOpenReason));
       },
     );
 
@@ -111,10 +112,10 @@ void main() {
         expect(afterWindow.isError(), isTrue);
         final openFailure = open.exceptionOrNull()! as domain.Failure;
         final afterWindowFailure = afterWindow.exceptionOrNull()! as domain.Failure;
-        expect(openFailure.context['reason'], equals('jwks_circuit_open'));
+        expect(openFailure.context['reason'], equals(AuthorizationContextConstants.jwksCircuitOpenReason));
         expect(
           afterWindowFailure.context['reason'],
-          isNot('jwks_circuit_open'),
+          isNot(AuthorizationContextConstants.jwksCircuitOpenReason),
         );
       },
     );

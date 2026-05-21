@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -14,18 +15,21 @@ import 'package:result_dart/result_dart.dart';
 class OdbcNativeMetricsService {
   OdbcNativeMetricsService(
     this._service, {
+    ActiveConfigResolver? activeConfigResolver,
     IAgentConfigRepository? configRepository,
     IConnectionPool? connectionPool,
     IOdbcConnectionSettings? settings,
     OdbcRuntimeTuning? runtimeTuning,
     MetricsCollector? metricsCollector,
-  }) : _configRepository = configRepository,
+  }) : _activeConfigResolver = activeConfigResolver,
+       _configRepository = configRepository,
        _connectionPool = connectionPool,
        _settings = settings,
        _runtimeTuning = runtimeTuning,
        _metricsCollector = metricsCollector;
 
   final OdbcService _service;
+  final ActiveConfigResolver? _activeConfigResolver;
   final IAgentConfigRepository? _configRepository;
   final IConnectionPool? _connectionPool;
   final IOdbcConnectionSettings? _settings;
@@ -111,12 +115,16 @@ class OdbcNativeMetricsService {
   }
 
   Future<String?> _resolveConnectionString() async {
-    final repository = _configRepository;
-    if (repository == null) {
+    final resolver = _activeConfigResolver;
+    if (resolver == null && _configRepository == null) {
       return null;
     }
 
-    final configResult = await repository.getCurrentConfig();
+    final configResult = resolver != null
+        ? await resolver.resolveActiveOrFallback(
+            metadataOnly: true,
+          )
+        : await _configRepository!.getCurrentConfigMetadata();
     return configResult.fold(
       (config) {
         final resolved = config.resolveConnectionString().trim();

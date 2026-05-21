@@ -89,7 +89,7 @@ void main() {
     test('should fail when config is not found', () async {
       // Arrange
       const validQuery = 'SELECT * FROM users';
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer(
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Failure(domain.NotFoundFailure('Config not found')),
       );
 
@@ -135,7 +135,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfig(),
+        () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(any()),
@@ -170,7 +170,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfig(),
+        () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(() => mockDatabaseGateway.executeQuery(any())).thenAnswer(
         (_) async => Failure(domain.QueryExecutionFailure('SQL error')),
@@ -216,7 +216,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfig(),
+        () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(any()),
@@ -274,7 +274,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfig(),
+        () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(any()),
@@ -320,7 +320,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfig(),
+        () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(any()),
@@ -360,7 +360,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfig(),
+          () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(any()),
@@ -411,7 +411,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfig(),
+          () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(any()),
@@ -459,7 +459,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfig(),
+          () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(any()),

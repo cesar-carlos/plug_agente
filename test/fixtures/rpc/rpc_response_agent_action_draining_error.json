@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-draining",
+  "error": {
+    "code": -32015,
+    "message": "Agent actions temporarily unavailable",
+    "data": {
+      "reason": "agent_actions_draining",
+      "category": "action",
+      "retryable": true,
+      "user_message": "The agent is finishing operations and cannot accept new runs right now.",
+      "technical_message": "Agent actions subsystem is not ready to accept this execution.",
+      "correlation_id": "req-run-draining",
+      "timestamp": "2026-05-18T15:15:00.000Z",
+      "method": "agent.action.run",
+      "status": "draining"
+    }
+  }
+}

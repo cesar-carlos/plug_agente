@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 
@@ -139,7 +140,7 @@ void main() {
         error: const RpcError(
           code: RpcErrorCode.unauthorized,
           message: 'Unauthorized',
-          data: {'reason': 'token_revoked', 'client_id': 'c1'},
+          data: {'reason': AuthorizationContextConstants.tokenRevokedReason, 'client_id': 'c1'},
         ),
       );
 
@@ -148,7 +149,7 @@ void main() {
       expect(refreshCalls, 1);
       final denied = logs.singleWhere((l) => l.event == 'authorization.denied');
       final data = denied.data as Map<String, dynamic>;
-      expect(data['reason'], 'token_revoked');
+      expect(data['reason'], AuthorizationContextConstants.tokenRevokedReason);
       expect(data['client_id'], 'c1');
     });
 
@@ -174,7 +175,7 @@ void main() {
           code: RpcErrorCode.unauthorized,
           message: 'Unauthorized',
           data: {
-            'reason': 'unauthorized',
+            'reason': AuthorizationContextConstants.unauthorizedReason,
             'resource': 'dbo.t1',
             'denied_resources': <String>['dbo.t1', 'dbo.t2'],
           },

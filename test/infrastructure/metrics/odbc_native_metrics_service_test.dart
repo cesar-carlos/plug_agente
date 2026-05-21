@@ -119,7 +119,7 @@ void main() {
         updatedAt: DateTime.now(),
       );
       when(
-        mockConfigRepository.getCurrentConfig,
+        mockConfigRepository.getCurrentConfigMetadata,
       ).thenAnswer((_) async => Success(config));
       when(() => mockService.getMetrics()).thenAnswer(
         (_) async => const Success(

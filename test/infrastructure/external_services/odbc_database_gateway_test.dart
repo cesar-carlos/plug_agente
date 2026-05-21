@@ -171,7 +171,7 @@ void main() {
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -260,7 +260,7 @@ void main() {
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -318,7 +318,7 @@ void main() {
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -400,7 +400,7 @@ void main() {
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -493,7 +493,7 @@ void main() {
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -569,7 +569,7 @@ void main() {
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -630,7 +630,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -692,7 +692,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -749,7 +749,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -830,7 +830,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         final capturedRetryBuffers = <int>[];
@@ -920,7 +920,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -1003,7 +1003,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1072,7 +1072,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1117,7 +1117,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1165,7 +1165,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1216,7 +1216,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -1283,7 +1283,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1348,7 +1348,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1385,7 +1385,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1452,7 +1452,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -1531,7 +1531,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1597,7 +1597,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       when(() => mockService.initialize()).thenAnswer((_) async {
         return const Success(unit);
       });
-      when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
         return Success(config);
       });
       when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -1679,7 +1679,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1786,7 +1786,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1853,7 +1853,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((
           _,
         ) async {
           return Success(config);
@@ -1944,7 +1944,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -2057,7 +2057,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -2170,7 +2170,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
@@ -2263,7 +2263,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
@@ -2332,7 +2332,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
@@ -2400,7 +2400,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         var peakExecutions = 0;
 
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
         when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
           acquireCount++;
           return Success('global-parallel-$acquireCount');
@@ -2484,7 +2484,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
         when(
           () => nativePool.acquireNativeCompatible(
             connectionString,
@@ -2550,7 +2550,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
         when(
           () => nativePool.acquireNativeCompatible(
             connectionString,
@@ -2610,7 +2610,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
         when(
           () => nativePool.acquireNativeCompatible(
             connectionString,
@@ -2693,7 +2693,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
         when(
           () => nativePool.acquire(
             connectionString,
@@ -2755,7 +2755,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -2856,7 +2856,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -2956,7 +2956,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(
@@ -3022,7 +3022,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3099,7 +3099,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3161,7 +3161,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3226,7 +3226,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3280,7 +3280,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3350,7 +3350,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3407,7 +3407,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockService.initialize()).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConfigRepository.getCurrentConfig()).thenAnswer((_) async {
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
           return Success(config);
         });
         when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
@@ -3486,3 +3486,4 @@ Config _buildConfig(
     agentId: 'agent-1',
   );
 }
+

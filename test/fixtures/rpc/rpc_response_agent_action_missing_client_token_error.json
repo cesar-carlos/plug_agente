@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-no-token",
+  "error": {
+    "code": -32001,
+    "message": "Authentication failed",
+    "data": {
+      "reason": "missing_client_token",
+      "category": "auth",
+      "retryable": false,
+      "user_message": "Authentication failed. Check your credentials and try again.",
+      "technical_message": "Client token is required for remote agent action RPC",
+      "correlation_id": "req-run-no-token",
+      "timestamp": "2026-05-18T14:30:00.000Z",
+      "method": "agent.action.run"
+    }
+  }
+}

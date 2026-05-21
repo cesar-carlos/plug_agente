@@ -1,0 +1,278 @@
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
+import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:result_dart/result_dart.dart';
+
+class MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvider {}
+
+class MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider {}
+
+class MockConnectionProvider extends Mock with ChangeNotifier implements ConnectionProvider {}
+
+void main() {
+  late AppLocalizations ptL10n;
+
+  setUpAll(() async {
+    registerFallbackValue(AuthCredentials.test());
+    ptL10n = await AppLocalizations.delegate.load(const Locale('pt'));
+  });
+
+  setUp(() async {
+    await getIt.reset();
+    getIt.registerSingleton<FeatureFlags>(
+      FeatureFlags(InMemoryAppSettingsStore()),
+    );
+  });
+
+  tearDown(() async {
+    await getIt.reset();
+  });
+
+  testWidgets('login persists current form before authenticating', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final formController = ConfigFormController();
+    addTearDown(formController.dispose);
+    formController.serverUrlController.text = 'https://hub.test';
+    formController.agentIdController.text = 'agent-1';
+    formController.authUsernameController.text = 'agent_user';
+    formController.authPasswordController.text = 'agent_pass';
+
+    final configProvider = MockConfigProvider();
+    final authProvider = MockAuthProvider();
+    final connectionProvider = MockConnectionProvider();
+    final savedConfig = _savedConfig;
+
+    when(configProvider.saveConfig).thenAnswer(
+      (_) async => Success(savedConfig),
+    );
+    when(() => configProvider.isLoading).thenReturn(false);
+    when(() => configProvider.currentConfig).thenReturn(savedConfig);
+    when(() => authProvider.status).thenReturn(AuthStatus.unauthenticated);
+    when(
+      () => authProvider.isAuthenticatedForConfig(savedConfig.id),
+    ).thenReturn(false);
+    when(() => authProvider.error).thenReturn('');
+    when(
+      () => authProvider.login(
+        configId: savedConfig.id,
+        serverUrl: savedConfig.serverUrl,
+        credentials: any(named: 'credentials'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => connectionProvider.status).thenReturn(ConnectionStatus.disconnected);
+    when(() => connectionProvider.isReconnecting).thenReturn(false);
+    when(() => connectionProvider.isConnected).thenReturn(false);
+    when(() => connectionProvider.isDbConnected).thenReturn(false);
+
+    await tester.pumpWidget(
+      _buildWidget(
+        formController: formController,
+        configProvider: configProvider,
+        authProvider: authProvider,
+        connectionProvider: connectionProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(ptL10n.wsButtonLogin));
+    await tester.pumpAndSettle();
+
+    verifyInOrder([
+      configProvider.saveConfig,
+      () => authProvider.login(
+        configId: savedConfig.id,
+        serverUrl: savedConfig.serverUrl,
+        credentials: any(named: 'credentials'),
+      ),
+    ]);
+  });
+
+  testWidgets('connect persists current form before opening socket', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final formController = ConfigFormController();
+    addTearDown(formController.dispose);
+    formController.serverUrlController.text = 'https://hub.test';
+    formController.agentIdController.text = 'agent-1';
+
+    final configProvider = MockConfigProvider();
+    final authProvider = MockAuthProvider();
+    final connectionProvider = MockConnectionProvider();
+    final savedConfig = _savedConfig;
+
+    when(configProvider.saveConfig).thenAnswer(
+      (_) async => Success(savedConfig),
+    );
+    when(() => configProvider.isLoading).thenReturn(false);
+    when(() => configProvider.currentConfig).thenReturn(savedConfig);
+    when(() => authProvider.status).thenReturn(AuthStatus.authenticated);
+    when(
+      () => authProvider.isAuthenticatedForConfig(savedConfig.id),
+    ).thenReturn(true);
+    when(
+      () => authProvider.tokenForConfig(savedConfig.id),
+    ).thenReturn(const AuthToken(token: 'access', refreshToken: 'refresh'));
+    when(() => authProvider.error).thenReturn('');
+    when(() => connectionProvider.status).thenReturn(ConnectionStatus.disconnected);
+    when(() => connectionProvider.isReconnecting).thenReturn(false);
+    when(() => connectionProvider.isConnected).thenReturn(false);
+    when(() => connectionProvider.isDbConnected).thenReturn(false);
+    when(
+      () => connectionProvider.connect(
+        savedConfig.serverUrl,
+        savedConfig.agentId,
+        configId: savedConfig.id,
+        authToken: 'access',
+      ),
+    ).thenAnswer((_) async => const Success(unit));
+
+    await tester.pumpWidget(
+      _buildWidget(
+        formController: formController,
+        configProvider: configProvider,
+        authProvider: authProvider,
+        connectionProvider: connectionProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(ptL10n.wsButtonConnect));
+    await tester.tap(find.text(ptL10n.wsButtonConnect));
+    await tester.pumpAndSettle();
+
+    verifyInOrder([
+      configProvider.saveConfig,
+      () => connectionProvider.connect(
+        savedConfig.serverUrl,
+        savedConfig.agentId,
+        configId: savedConfig.id,
+        authToken: 'access',
+      ),
+    ]);
+  });
+
+  testWidgets('connect does not reuse token from another config', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final formController = ConfigFormController();
+    addTearDown(formController.dispose);
+    formController.serverUrlController.text = 'https://hub.test';
+    formController.agentIdController.text = 'agent-1';
+
+    final configProvider = MockConfigProvider();
+    final authProvider = MockAuthProvider();
+    final connectionProvider = MockConnectionProvider();
+    final savedConfig = _savedConfig;
+
+    when(configProvider.saveConfig).thenAnswer(
+      (_) async => Success(savedConfig),
+    );
+    when(() => configProvider.isLoading).thenReturn(false);
+    when(() => configProvider.currentConfig).thenReturn(savedConfig);
+    when(() => authProvider.status).thenReturn(AuthStatus.authenticated);
+    when(
+      () => authProvider.isAuthenticatedForConfig(savedConfig.id),
+    ).thenReturn(false);
+    when(() => authProvider.tokenForConfig(savedConfig.id)).thenReturn(null);
+    when(() => authProvider.error).thenReturn('');
+    when(() => connectionProvider.status).thenReturn(ConnectionStatus.disconnected);
+    when(() => connectionProvider.isReconnecting).thenReturn(false);
+    when(() => connectionProvider.isConnected).thenReturn(false);
+    when(() => connectionProvider.isDbConnected).thenReturn(false);
+
+    await tester.pumpWidget(
+      _buildWidget(
+        formController: formController,
+        configProvider: configProvider,
+        authProvider: authProvider,
+        connectionProvider: connectionProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(ptL10n.wsButtonConnect));
+    await tester.tap(find.text(ptL10n.wsButtonConnect));
+    await tester.pumpAndSettle();
+
+    verify(configProvider.saveConfig).called(1);
+    verifyNever(
+      () => connectionProvider.connect(
+        any(),
+        any(),
+        configId: any(named: 'configId'),
+        authToken: any(named: 'authToken'),
+      ),
+    );
+  });
+}
+
+Widget _buildWidget({
+  required ConfigFormController formController,
+  required ConfigProvider configProvider,
+  required AuthProvider authProvider,
+  required ConnectionProvider connectionProvider,
+}) {
+  return FluentApp(
+    locale: const Locale('pt'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
+        ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+        ChangeNotifierProvider<ConnectionProvider>.value(
+          value: connectionProvider,
+        ),
+      ],
+      child: MediaQuery(
+        data: const MediaQueryData(
+          textScaler: TextScaler.linear(0.72),
+        ),
+        child: ScaffoldPage(
+          content: WebSocketConfigSection(
+            formController: formController,
+            onSaveConfig: () async {},
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+final Config _savedConfig = Config(
+  id: 'cfg-1',
+  serverUrl: 'https://hub.test',
+  agentId: 'agent-1',
+  driverName: 'SQL Server',
+  odbcDriverName: 'ODBC Driver 17 for SQL Server',
+  connectionString: '',
+  username: '',
+  databaseName: '',
+  host: 'localhost',
+  port: 1433,
+  createdAt: DateTime.utc(2025),
+  updatedAt: DateTime.utc(2025),
+  authUsername: 'agent_user',
+  authPassword: 'agent_pass',
+);

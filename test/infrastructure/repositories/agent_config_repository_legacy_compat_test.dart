@@ -4,6 +4,7 @@ import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
+import 'package:plug_agente/infrastructure/stores/hub_session_store.dart';
 
 class _FakeHubAuthSecretStore implements IHubAuthSecretStore {
   final Map<String, HubAuthSecrets> _storage = <String, HubAuthSecrets>{};
@@ -69,9 +70,14 @@ void main() {
         ],
       );
 
+      final authSecretStore = _FakeHubAuthSecretStore();
       final repository = AgentConfigRepository(
         database,
-        authSecretStore: _FakeHubAuthSecretStore(),
+        authSecretStore: authSecretStore,
+        hubSessionStore: HubSessionStore(
+          database,
+          authSecretStore: authSecretStore,
+        ),
       );
       final result = await repository.getCurrentConfig();
 
@@ -140,6 +146,10 @@ void main() {
       final repository = AgentConfigRepository(
         database,
         authSecretStore: secretStore,
+        hubSessionStore: HubSessionStore(
+          database,
+          authSecretStore: secretStore,
+        ),
       );
 
       final result = await repository.getCurrentConfig();

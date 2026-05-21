@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-cancel.v1.json",
+  "title": "agent.action.cancel result",
+  "type": "object",
+  "required": ["cancelled", "execution_id", "status", "reason", "execution"],
+  "properties": {
+    "cancelled": {
+      "type": "boolean",
+      "description": "True when the queued item was cancelled or the main process was killed/cancelled."
+    },
+    "execution_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "succeeded", "failed", "cancelled", "killed", "timedOut", "interrupted", "unknown"]
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["cancelled", "killed", "cancel_requested"]
+    },
+    "execution": {
+      "$ref": "./rpc.result.agent-action-get-execution.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

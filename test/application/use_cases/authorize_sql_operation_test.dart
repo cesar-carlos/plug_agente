@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -76,7 +77,7 @@ void main() {
         (_) => fail('Expected failure'),
         (failure) {
           final authFailure = failure as ConfigurationFailure;
-          expect(authFailure.context['reason'], equals('missing_permission'));
+          expect(authFailure.context['reason'], equals(AuthorizationContextConstants.missingPermissionReason));
           expect(
             authFailure.context['denied_resources'],
             equals(<String>['dbo.users']),
@@ -191,7 +192,7 @@ void main() {
               message: 'Token not found',
               context: const {
                 'authorization': true,
-                'reason': 'token_not_found',
+                'reason': AuthorizationContextConstants.tokenNotFoundReason,
               },
             ),
           ),
@@ -253,7 +254,7 @@ void main() {
         (_) => fail('Expected failure'),
         (failure) {
           final authFailure = failure as ConfigurationFailure;
-          expect(authFailure.context['reason'], equals('database_required'));
+          expect(authFailure.context['reason'], equals(AuthorizationContextConstants.databaseRequiredReason));
           expect(authFailure.context['expected_database'], equals('erp_main'));
         },
       );
@@ -275,7 +276,7 @@ void main() {
         (_) => fail('Expected failure'),
         (failure) {
           final authFailure = failure as ConfigurationFailure;
-          expect(authFailure.context['reason'], equals('database_mismatch'));
+          expect(authFailure.context['reason'], equals(AuthorizationContextConstants.databaseMismatchReason));
           expect(authFailure.context['expected_database'], equals('erp_main'));
           expect(
             authFailure.context['request_database'],

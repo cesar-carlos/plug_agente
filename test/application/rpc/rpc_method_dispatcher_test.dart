@@ -12,6 +12,7 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -181,6 +182,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
       when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
+      when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
       when(() => mockOdbcNativeMetricsService.collectSnapshot()).thenAnswer(
         (_) async => const Success(<String, dynamic>{
           'engine': <String, dynamic>{'query_count': 2},
@@ -338,7 +340,7 @@ void main() {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
-      when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+      when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -633,7 +635,7 @@ void main() {
         updatedAt: configUpdatedAt,
       );
       when(
-        mockConfigRepo.getCurrentConfig,
+        mockConfigRepo.getCurrentConfigMetadata,
       ).thenAnswer((_) async => Success(config));
 
       dispatcher = RpcMethodDispatcher(
@@ -718,7 +720,7 @@ void main() {
         updatedAt: DateTime.utc(2026, 4, 8, 12),
       );
       when(
-        mockConfigRepo.getCurrentConfig,
+        mockConfigRepo.getCurrentConfigMetadata,
       ).thenAnswer((_) async => Success(config));
 
       dispatcher = RpcMethodDispatcher(
@@ -1575,7 +1577,7 @@ void main() {
           updatedAt: DateTime.now(),
         );
         when(
-          mockConfigRepo.getCurrentConfig,
+          mockConfigRepo.getCurrentConfigMetadata,
         ).thenAnswer((_) async => Success(config));
 
         when(
@@ -1667,7 +1669,7 @@ void main() {
           updatedAt: DateTime.now(),
         );
         when(
-          mockConfigRepo.getCurrentConfig,
+          mockConfigRepo.getCurrentConfigMetadata,
         ).thenAnswer((_) async => Success(config));
 
         Duration? capturedTimeout;
@@ -1745,7 +1747,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
         when(
           () => mockStreamingGateway.executeQueryStream(
             any(),
@@ -1919,7 +1921,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
@@ -1991,7 +1993,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfig).thenAnswer((_) async => Success(config));
+        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
@@ -2205,7 +2207,7 @@ void main() {
           updatedAt: DateTime.now(),
         );
         when(
-          mockConfigRepo.getCurrentConfig,
+          mockConfigRepo.getCurrentConfigMetadata,
         ).thenAnswer((_) async => Success(config));
 
         when(
@@ -2291,7 +2293,7 @@ void main() {
           updatedAt: DateTime.now(),
         );
         when(
-          mockConfigRepo.getCurrentConfig,
+          mockConfigRepo.getCurrentConfigMetadata,
         ).thenAnswer((_) async => Success(config));
 
         dispatcher = RpcMethodDispatcher(
@@ -3018,7 +3020,7 @@ void main() {
         expect(response.isError, isTrue);
         expect(response.error!.code, equals(RpcErrorCode.unauthorized));
         final data = response.error!.data as Map<String, dynamic>;
-        expect(data['reason'], equals('unauthorized'));
+        expect(data['reason'], equals(AuthorizationContextConstants.unauthorizedReason));
         expect(data['odbc_reason'], equals('missing_permission'));
         expect(data['category'], equals('auth'));
         expect(data['client_id'], equals('client-acme'));
@@ -3197,7 +3199,7 @@ void main() {
       expect(response.isError, isTrue);
       expect(response.error!.code, equals(RpcErrorCode.unauthorized));
       final data = response.error!.data as Map<String, dynamic>;
-      expect(data['reason'], equals('unauthorized'));
+      expect(data['reason'], equals(AuthorizationContextConstants.unauthorizedReason));
       expect(data['odbc_reason'], equals('authorization_timeout'));
       verifyNever(() => mockGateway.executeQuery(any()));
     });
@@ -3269,16 +3271,32 @@ void main() {
           () => mockNormalizer.normalize(any()),
         ).thenAnswer((_) => queryResponse);
 
-        when(() => mockStore.getRecord(any())).thenReturn(null);
+        when(() => mockStore.getRecord(any())).thenAnswer((_) async => null);
+        when(
+          () => mockStore.set(
+            any(),
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).thenAnswer((_) async {});
 
         final first = await dispatcher.dispatch(request, 'agent-1');
 
         expect(first.isSuccess, isTrue);
+        verify(
+          () => mockStore.set(
+            'sql.execute:key-abc',
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).called(1);
 
         when(
           () => mockStore.getRecord(any()),
-        ).thenReturn(
-          IdempotencyRecord(
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
             response: first,
             requestFingerprint: null,
           ),
@@ -3324,8 +3342,8 @@ void main() {
 
         when(
           () => mockStore.getRecord(any()),
-        ).thenReturn(
-          IdempotencyRecord(
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
             response: RpcResponse.success(
               id: 'req-1',
               result: const <String, dynamic>{'x': 1},
@@ -3532,7 +3550,7 @@ void main() {
             updatedAt: DateTime.now(),
           );
           when(
-            mockConfigRepo.getCurrentConfig,
+            mockConfigRepo.getCurrentConfigMetadata,
           ).thenAnswer((_) async => Success(config));
 
           final completer = Completer<Result<void>>();
@@ -3629,7 +3647,7 @@ void main() {
             updatedAt: DateTime.now(),
           );
           when(
-            mockConfigRepo.getCurrentConfig,
+            mockConfigRepo.getCurrentConfigMetadata,
           ).thenAnswer((_) async => Success(config));
 
           final completer = Completer<Result<void>>();
@@ -3769,6 +3787,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
       when(() => mockFeatureFlags.enableSocketCancelMethod).thenReturn(false);
       when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
+      when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,

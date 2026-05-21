@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
@@ -93,7 +94,7 @@ class ClientTokenRepository implements IClientTokenRepository {
       final context = <String, dynamic>{
         'operation': 'update_local_client_token',
         'token_id': tokenId,
-        'reason': 'token_version_conflict',
+        'reason': AuthorizationContextConstants.tokenVersionConflictReason,
         'current_version': error.currentVersion,
       };
       if (expectedVersion != null) {

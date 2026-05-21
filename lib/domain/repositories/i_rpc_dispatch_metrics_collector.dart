@@ -34,4 +34,12 @@ abstract class IRpcDispatchMetricsCollector {
   void recordClientTokenGetPolicyFailure(Failure failure);
 
   void recordClientTokenGetPolicyRateLimited();
+
+  /// Counts remote `agent.action.*` outcomes. [rpcMethod] must be a published
+  /// remote agent action JSON-RPC method name; unknown values are ignored.
+  void recordRpcAgentActionRemoteOutcome(String rpcMethod, {required bool success});
+
+  /// Counts `agent.action.*` calls rejected because they were sent as JSON-RPC
+  /// notifications (no `id`). Does not increment success/error RPC counters.
+  void recordRpcAgentActionNotificationRejected(String rpcMethod);
 }

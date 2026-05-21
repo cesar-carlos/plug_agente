@@ -1,9 +1,14 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/routes/routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -24,7 +29,10 @@ class PlugAgentApp extends StatefulWidget {
 }
 
 class _PlugAgentAppState extends State<PlugAgentApp> {
+  static const MethodChannel _runtimeChannel = MethodChannel('plug_agente/runtime');
+
   late final GoRouter _router;
+  final DeepLinkService _deepLinkService = DeepLinkService();
 
   @override
   void initState() {
@@ -33,6 +41,41 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
       capabilities: widget.capabilities,
       initialLocation: widget.initialRoute,
     );
+    _runtimeChannel.setMethodCallHandler(_handleRuntimeMethodCall);
+  }
+
+  @override
+  void dispose() {
+    _runtimeChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  Future<void> _handleRuntimeMethodCall(MethodCall call) async {
+    if (call.method != 'deliverDeepLink') {
+      return;
+    }
+
+    final deepLink = call.arguments;
+    if (deepLink is! String || deepLink.trim().isEmpty) {
+      AppLogger.warning('Ignoring runtime deep link with invalid payload');
+      return;
+    }
+
+    final route = _deepLinkService.deepLinkToRoute(deepLink);
+    if (route == null) {
+      AppLogger.warning('Ignoring runtime deep link because it could not be parsed: $deepLink');
+      return;
+    }
+
+    if (getIt.isRegistered<IWindowManagerService>()) {
+      try {
+        await getIt<IWindowManagerService>().show();
+      } on Object catch (error) {
+        AppLogger.warning('Failed to show window for runtime deep link', error);
+      }
+    }
+
+    _router.go(route);
   }
 
   @override

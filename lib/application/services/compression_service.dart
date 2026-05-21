@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_compressor.dart';
@@ -30,7 +31,7 @@ class CompressionService {
           domain.CompressionFailure.withContext(
             message: 'Failed to compress response data',
             cause: compressedRows.exceptionOrNull(),
-            context: {'reason': 'result_set_compression_failed'},
+            context: {'reason': SqlPipelineContextConstants.resultSetCompressionFailedReason},
           ),
         );
       }
@@ -95,7 +96,7 @@ class CompressionService {
           domain.CompressionFailure.withContext(
             message: 'Failed to decompress response data',
             cause: decompressedRows.exceptionOrNull(),
-            context: {'reason': 'result_set_decompression_failed'},
+            context: {'reason': SqlPipelineContextConstants.resultSetDecompressionFailedReason},
           ),
         );
       }

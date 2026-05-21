@@ -31,6 +31,13 @@ void main() {
       expect(buildScript, contains('helper de update'));
     });
 
+    test('installer build preflight requires elevated action runner in bundle', () {
+      final buildScript = File('installer/build_installer.py').readAsStringSync();
+
+      expect(buildScript, contains('plug_agente_elevated_runner.exe'));
+      expect(buildScript, contains('build_elevated_runner.ps1'));
+    });
+
     test('installer build injects auto update channel and signature defines', () {
       final buildScript = File('installer/build_installer.py').readAsStringSync();
 

@@ -1,0 +1,47 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-get-page-1",
+  "result": {
+    "execution_id": "exec-succeeded-1",
+    "action_id": "action-1",
+    "action_type": "commandLine",
+    "status": "succeeded",
+    "source": "remoteHub",
+    "requested_at": "2026-05-18T14:10:00.000Z",
+    "timestamps": {
+      "queue_started_at": "2026-05-18T14:10:01.000Z",
+      "process_started_at": "2026-05-18T14:10:02.000Z",
+      "finished_at": "2026-05-18T14:10:05.000Z"
+    },
+    "process": {
+      "exit_code": 0
+    },
+    "output": {
+      "stdout": {
+        "captured": true,
+        "truncated": false,
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "utf8_total_bytes": 200,
+        "offset": 0,
+        "next_offset": 50,
+        "response_truncated": true
+      },
+      "stderr": {
+        "captured": false,
+        "truncated": false,
+        "utf8_total_bytes": 0,
+        "offset": 0,
+        "next_offset": 0,
+        "response_truncated": false
+      }
+    },
+    "flags": {
+      "terminal": true,
+      "skipped": false,
+      "timed_out": false,
+      "cancelled": false,
+      "killed": false,
+      "redaction_applied": true
+    }
+  }
+}

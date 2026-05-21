@@ -3,12 +3,15 @@ import 'package:result_dart/result_dart.dart';
 enum StartupLaunchConfigurationStatus {
   unchanged,
   repaired,
+  needsRepair,
 }
 
 abstract interface class IStartupService {
   Future<Result<bool>> isEnabled();
 
-  Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration();
+  Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
+    bool allowElevation = true,
+  });
 
   Future<Result<Unit>> enable();
 

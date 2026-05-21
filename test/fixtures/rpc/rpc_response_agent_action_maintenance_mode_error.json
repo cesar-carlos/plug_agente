@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-run-maintenance",
+  "error": {
+    "code": -32015,
+    "message": "Agent actions temporarily unavailable",
+    "data": {
+      "reason": "agent_actions_maintenance_mode",
+      "category": "transport",
+      "retryable": true,
+      "user_message": "Agent actions are temporarily unavailable. Please try again later.",
+      "technical_message": "Agent actions are in maintenance mode",
+      "correlation_id": "req-run-maintenance",
+      "timestamp": "2026-05-18T15:10:00.000Z",
+      "method": "agent.action.run"
+    }
+  }
+}

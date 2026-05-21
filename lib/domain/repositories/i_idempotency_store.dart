@@ -15,17 +15,16 @@ class IdempotencyRecord {
 /// When a request includes `idempotency_key`, a duplicate request
 /// within the TTL window returns the cached response without re-executing.
 abstract class IIdempotencyStore {
-  /// Returns cached record for [key], or null if not found or expired.
-  IdempotencyRecord? getRecord(String key);
+  Future<IdempotencyRecord?> getRecord(String key);
 
-  /// Returns cached response for [key], or null if not found or expired.
-  RpcResponse? get(String key) => getRecord(key)?.response;
+  Future<RpcResponse?> get(String key);
 
-  /// Stores [response] for [key] with [ttl] duration.
-  void set(
+  Future<void> set(
     String key,
     RpcResponse response,
     Duration ttl, {
     String? requestFingerprint,
   });
+
+  Future<int> purgeExpiredEntries({DateTime? referenceTime});
 }

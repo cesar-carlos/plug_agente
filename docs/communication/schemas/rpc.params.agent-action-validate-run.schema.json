@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-validate-run.v1.json",
+  "title": "agent.action.validateRun params",
+  "type": "object",
+  "required": ["action_id", "idempotency_key"],
+  "properties": {
+    "action_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of a saved local action to validate for remote execution (no process is started)."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Same idempotency key semantics as agent.action.run; used to detect would-replay without executing. RPC cache TTL uses AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS (see agent.action.run idempotency_key)."
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional distributed trace id (same precedence as agent.action.run)."
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional hub requester identity (same precedence as agent.action.run)."
+    },
+    "client_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque token or JWT for authorization when enableClientTokenAuthorization is active. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias for client_token"
+    }
+  },
+  "additionalProperties": false
+}

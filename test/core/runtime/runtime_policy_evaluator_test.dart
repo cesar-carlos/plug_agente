@@ -104,8 +104,7 @@ void main() {
     });
 
     group('Windows Server 2016+', () {
-      test('should return degraded capabilities for Server 2016+', () {
-        // Arrange
+      test('should return full core with shell limits for Server 2016+', () {
         const versionInfo = WindowsVersionInfo(
           majorVersion: 10,
           minorVersion: 0,
@@ -114,17 +113,15 @@ void main() {
           productName: 'Windows Server 2016',
         );
 
-        // Act
         final capabilities = evaluator.evaluate(versionInfo);
 
-        // Assert
-        expect(capabilities.isDegraded, isTrue);
+        expect(capabilities.mode, RuntimeMode.full);
+        expect(capabilities.isDegraded, isFalse);
         expect(capabilities.supportsTray, isFalse);
         expect(capabilities.supportsNotifications, isFalse);
-        expect(
-          capabilities.degradationReasons.any((r) => r.contains('Server')),
-          isTrue,
-        );
+        expect(capabilities.supportsAutoUpdate, isFalse);
+        expect(capabilities.supportsWindowManager, isTrue);
+        expect(capabilities.degradationReasons, isEmpty);
       });
     });
 

@@ -1,5 +1,10 @@
 # Quick Wins: Performance & Reliability Checklist
 
+Este documento registra o checklist historico do rollout inicial das quick
+wins. Para o estado tecnico atual e tuning vigente, prefira
+`performance_reliability_improvements.md`,
+`odbc_worker_evaluation_criteria.md` e `QUICKSTART.md`.
+
 ## Implementações Rápidas (< 1 dia cada)
 
 ### ✅ 1. Ativar Fila SQL no Fluxo de Produção
@@ -7,6 +12,10 @@
 **Tempo estimado**: 2-3 horas  
 **Impacto**: ALTO  
 **Arquivo**: `lib/core/di/dependencies.dart` (ou equivalente)
+
+Status atual: implementado no bootstrap real do repositorio em
+`lib/core/di/plug_dependency_registrar.dart`. O snippet abaixo e historico do
+rollout inicial.
 
 ```dart
 // Substituir registro direto do gateway:
@@ -42,6 +51,10 @@ flutter test test/application/rpc/rpc_method_dispatcher_test.dart
 **Impacto**: ALTO  
 **Arquivo**: `lib/core/constants/connection_constants.dart`
 
+Status atual: implementado. O shape real tambem inclui tuning do worker pool
+async (`ODBC_ASYNC_WORKER_COUNT`, `ODBC_ASYNC_MAX_PENDING_REQUESTS`) e
+limites derivados por pool size.
+
 ```dart
 class ConnectionConstants {
   // Adicionar getters configuráveis:
@@ -65,6 +78,7 @@ class ConnectionConstants {
 ```env
 # ODBC Performance Tuning
 ODBC_POOL_SIZE=4
+ODBC_ASYNC_MAX_PENDING_REQUESTS=16
 SQL_QUEUE_MAX_SIZE=50
 SQL_QUEUE_MAX_WORKERS=4
 SQL_QUEUE_TIMEOUT_SEC=5
@@ -88,6 +102,10 @@ flutter run --debug
 **Tempo estimado**: 2 horas  
 **Impacto**: MÉDIO  
 **Arquivo**: `lib/infrastructure/pool/odbc_connection_pool.dart`
+
+Status atual: `warmUp()` permanece no pool, mas a integracao de boot real fica
+em `lib/presentation/boot/app_initializer.dart`
+(`AppInitializer._warmUpConnectionPool`), nao em `main()`.
 
 ```dart
 class OdbcConnectionPool implements IConnectionPool {
@@ -133,7 +151,7 @@ class OdbcConnectionPool implements IConnectionPool {
 }
 ```
 
-**Integração no boot**:
+**Integração no boot** (histórico do rollout inicial):
 ```dart
 // In lib/main.dart or boot sequence
 Future<void> main() async {
@@ -166,6 +184,11 @@ Future<void> main() async {
 **Tempo estimado**: 1-2 horas  
 **Impacto**: MÉDIO  
 **Arquivo**: Criar `lib/presentation/api/health_endpoint.dart` (se não existe)
+
+Status atual: o repositorio usa `lib/application/services/health_service.dart`
+e o RPC `agent.getHealth` e servido por `RpcMethodDispatcher` com
+`getHealthStatusAsync()`. O snippet abaixo e uma referencia historica do
+primeiro desenho, nao a implementacao vigente.
 
 ```dart
 class HealthEndpoint {
@@ -210,7 +233,7 @@ class HealthEndpoint {
 ```dart
 // Método RPC: "agent.getHealth"
 Future<RpcResponse> handleGetHealth(RpcRequest request) async {
-  final health = _healthEndpoint.getHealthStatus();
+  final health = await _healthService.getHealthStatusAsync();
   return RpcResponse.success(
     id: request.id,
     result: health,
@@ -229,6 +252,10 @@ Future<RpcResponse> handleGetHealth(RpcRequest request) async {
 **Tempo estimado**: 1 hora  
 **Impacto**: MÉDIO (facilita troubleshooting)  
 **Arquivo**: `lib/application/queue/sql_execution_queue.dart`
+
+Status atual: implementado. O snippet abaixo registra a ideia original do
+rollout; a instrumentacao real deve ser lida no arquivo atual e nas metricas do
+`HealthService`.
 
 ```dart
 class SqlExecutionQueue {
@@ -299,6 +326,9 @@ class SqlExecutionQueue {
 **Impacto**: ALTO (previne deadlocks)  
 **Arquivo**: `lib/infrastructure/pool/odbc_connection_pool.dart`
 
+Status atual: implementado. Esta secao fica como checklist historico para
+confirmar o comportamento defensivo de acquire.
+
 **Verificar se já implementado**:
 ```dart
 @override
@@ -315,7 +345,7 @@ Future<Result<String>> acquire(String connectionString) async {
 }
 ```
 
-**Se não estiver**, adicionar:
+**Se não estiver** (histórico do rollout inicial), adicionar:
 ```dart
 await _semaphore.acquire(
   timeout: _acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
@@ -329,6 +359,10 @@ await _semaphore.acquire(
 **Tempo estimado**: 1 hora  
 **Impacto**: MÉDIO (previne resource leaks)  
 **Arquivo**: DI container ou lifecycle manager
+
+Status atual: implementado no lifecycle real do repositorio. O snippet abaixo e
+historico do rollout inicial; a sequencia vigente envolve `QueuedDatabaseGateway`
+e o shutdown central em `service_locator.dart`.
 
 ```dart
 class AppLifecycleManager {
@@ -349,7 +383,7 @@ class AppLifecycleManager {
 }
 ```
 
-**Adicionar em `QueuedDatabaseGateway`**:
+**Adicionar em `QueuedDatabaseGateway`** (histórico do rollout inicial):
 ```dart
 class QueuedDatabaseGateway implements IDatabaseGateway {
   void dispose() {
@@ -366,7 +400,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
 ## Verificação de Sanidade (Smoke Tests)
 
-Após implementar quick wins, executar:
+Para validar o rollout atual em ambiente representativo, executar:
 
 ### 1. Teste de Requisição Única
 ```bash
@@ -464,14 +498,30 @@ SQL_QUEUE_MAX_WORKERS=16
 
 ## Próximos Passos Pós Quick Wins
 
-1. **Implementar Circuit Breaker** (ver `performance_reliability_improvements.md`)
-2. **Testes de Carga E2E** (seguir `sql_queue_concurrency_tests.md`)
-3. **Otimizar Buffer Adaptativo** com dados reais
-4. **Avaliar Query Streaming** para datasets grandes
+1. **Executar smoke tests e burst tests** (seguir `sql_queue_concurrency_tests.md`)
+2. **Medir tuning do worker pool async** com DSN representativo
+3. **Otimizar limites** (`ODBC_POOL_SIZE`, `ODBC_ASYNC_MAX_PENDING_REQUESTS`, `SQL_QUEUE_MAX_SIZE`) com dados reais
+4. **Avaliar ganhos adicionais opt-in** como `ResultEncoding.columnar` e tuning de streaming
 
 ---
 
 ## Checklist Final
+
+Status atual do repositorio:
+
+- [x] Fila SQL integrada no DI e ativa em producao
+- [x] Variaveis de ambiente documentadas em `.env.example`
+- [x] Pool warm-up executando no startup
+- [x] Endpoint de health expondo metricas de fila
+- [x] Logging estruturado para debugging de performance
+- [x] Disposal correto de recursos no shutdown
+- [ ] Smoke tests executados e passando
+- [x] Documentacao atualizada com novos limites configuraveis
+
+Checklist historico original:
+
+Nao use a lista abaixo como fonte de verdade para status atual; ela foi
+preservada apenas para rastreabilidade do rollout inicial.
 
 Antes de considerar quick wins completos:
 

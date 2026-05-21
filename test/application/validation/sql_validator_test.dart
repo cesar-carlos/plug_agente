@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 
 void main() {
@@ -196,7 +197,7 @@ void main() {
           (failure) {
             final f = failure as ValidationFailure;
             expect(f.context['operation'], equals('sql_validation'));
-            expect(f.context['reason'], equals('sql_validation_failed'));
+            expect(f.context['reason'], equals(SqlPipelineContextConstants.sqlValidationFailedReason));
             expect((f.context['user_message'] as String?)?.isNotEmpty, isTrue);
           },
         );

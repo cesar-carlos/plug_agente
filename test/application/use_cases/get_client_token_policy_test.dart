@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure;
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
@@ -40,7 +41,7 @@ void main() {
         (_) async => Failure(
           ConfigurationFailure.withContext(
             message: 'Token revoked',
-            context: {'authorization': true, 'reason': 'token_revoked'},
+            context: {'authorization': true, 'reason': AuthorizationContextConstants.tokenRevokedReason},
           ),
         ),
       );

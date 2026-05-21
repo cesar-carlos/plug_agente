@@ -39,6 +39,9 @@ class _StubLocalizer implements RpcErrorUserMessageLocalizer {
   String executionCancelled() => 'STUB_execution_cancelled';
   @override
   String internalError() => 'STUB_internal_error';
+
+  @override
+  String agentActionsTemporarilyUnavailable() => 'STUB_agent_actions_unavailable';
 }
 
 void main() {
@@ -81,6 +84,10 @@ void main() {
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.networkError), 'STUB_network_error');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.rateLimited), 'STUB_rate_limited');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.replayDetected), 'STUB_replay_detected');
+      expect(
+        RpcErrorCode.getUserMessage(RpcErrorCode.agentActionsTemporarilyUnavailable),
+        'STUB_agent_actions_unavailable',
+      );
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.sqlValidationFailed), 'STUB_sql_validation_failed');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.sqlExecutionFailed), 'STUB_sql_execution_failed');
       expect(RpcErrorCode.getUserMessage(RpcErrorCode.transactionFailed), 'STUB_sql_execution_failed');

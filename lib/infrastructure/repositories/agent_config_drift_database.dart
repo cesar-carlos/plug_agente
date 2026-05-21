@@ -21,7 +21,18 @@ abstract class AgentConfigDataSource {
   Future<void> deleteConfig(String id);
 }
 
-@DriftDatabase(tables: [ConfigTable, ClientTokenCacheTable])
+@DriftDatabase(
+  tables: [
+    ConfigTable,
+    ClientTokenCacheTable,
+    AgentActionDefinitionTable,
+    AgentActionTriggerTable,
+    AgentActionExecutionTable,
+    RpcIdempotencyCacheTable,
+    AgentActionRemoteAuditTable,
+    AgentActionCapturedOutputChunkTable,
+  ],
+)
 class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   AppDatabase({
     QueryExecutor? executor,
@@ -39,13 +50,17 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
       await _createClientTokenIndexes();
+      await _createAgentActionIndexes();
+      await _createRpcIdempotencyIndexes();
+      await _createAgentActionRemoteAuditIndexes();
+      await _createAgentActionCapturedOutputChunkIndexes();
     },
     onUpgrade: (Migrator m, int from, int to) async {
       if (from < 2) {
@@ -153,7 +168,51 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
           ''',
         );
       }
+      // Agent action tables are additive-only: never drop or recreate them on upgrade.
+      // Failed migrations follow the global Drift policy (app startup fails safely).
+      if (from < 14) {
+        await m.createTable(agentActionDefinitionTable);
+        await m.createTable(agentActionExecutionTable);
+      }
+      if (from < 15) {
+        await m.createTable(agentActionTriggerTable);
+      }
+      if (from < 16) {
+        await _addAgentActionExecutionTriggerColumnsIfMissing(m);
+      }
+      if (from < 17) {
+        await _addAgentActionExecutionProcessIdentityColumnsIfMissing(m);
+      }
+      if (from < 18) {
+        await _addAgentActionExecutionFailurePhaseColumnIfMissing(m);
+      }
+      if (from < 19) {
+        await m.createTable(rpcIdempotencyCacheTable);
+      }
+      if (from < 20) {
+        await m.createTable(agentActionRemoteAuditTable);
+      }
+      if (from < 21) {
+        await _addAgentActionExecutionRuntimeIdentityColumnsIfMissing(m);
+      }
+      if (from < 22) {
+        await _addAgentActionRemoteAuditClientColumnsIfMissing(m);
+      }
+      if (from < 23) {
+        await _addAgentActionRemoteAuditRuntimeIdentityColumnsIfMissing(m);
+      }
+      if (from < 24) {
+        await _addAgentActionRemoteAuditIdempotencyKeyColumnIfMissing(m);
+      }
+      if (from < 25) {
+        await m.createTable(agentActionCapturedOutputChunkTable);
+        await _addAgentActionExecutionCapturedOutputChunkColumnsIfMissing(m);
+      }
       await _createClientTokenIndexes();
+      await _createAgentActionIndexes();
+      await _createRpcIdempotencyIndexes();
+      await _createAgentActionRemoteAuditIndexes();
+      await _createAgentActionCapturedOutputChunkIndexes();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -233,6 +292,175 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
     return {for (final row in rows) row.read<String>('name')};
   }
 
+  Future<void> _addAgentActionExecutionTriggerColumnsIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionExecutionTableColumnNames();
+    final triggerColumns = <GeneratedColumn<Object>>[
+      agentActionExecutionTable.triggerId as GeneratedColumn<Object>,
+      agentActionExecutionTable.triggerType as GeneratedColumn<Object>,
+      agentActionExecutionTable.scheduledAt as GeneratedColumn<Object>,
+      agentActionExecutionTable.triggeredAt as GeneratedColumn<Object>,
+    ];
+    for (final column in triggerColumns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionExecutionTable, column);
+      existing.add(sqlName);
+    }
+  }
+
+  Future<void> _addAgentActionExecutionProcessIdentityColumnsIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionExecutionTableColumnNames();
+    final identityColumns = <GeneratedColumn<Object>>[
+      agentActionExecutionTable.processExecutable as GeneratedColumn<Object>,
+      agentActionExecutionTable.processArgumentCount as GeneratedColumn<Object>,
+      agentActionExecutionTable.processCommandPreview as GeneratedColumn<Object>,
+    ];
+    for (final column in identityColumns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionExecutionTable, column);
+      existing.add(sqlName);
+    }
+  }
+
+  Future<void> _addAgentActionExecutionFailurePhaseColumnIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionExecutionTableColumnNames();
+    final failurePhaseColumn = agentActionExecutionTable.failurePhase as GeneratedColumn<Object>;
+    final sqlName = failurePhaseColumn.name;
+    if (!existing.contains(sqlName)) {
+      await m.addColumn(agentActionExecutionTable, failurePhaseColumn);
+    }
+  }
+
+  Future<void> _addAgentActionExecutionRuntimeIdentityColumnsIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionExecutionTableColumnNames();
+    final columns = <GeneratedColumn<Object>>[
+      agentActionExecutionTable.runtimeInstanceId as GeneratedColumn<Object>,
+      agentActionExecutionTable.runtimeSessionId as GeneratedColumn<Object>,
+    ];
+    for (final column in columns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionExecutionTable, column);
+      existing.add(sqlName);
+    }
+  }
+
+  Future<Set<String>> _readAgentActionExecutionTableColumnNames() async {
+    final rows = await customSelect(
+      'PRAGMA table_info("agent_action_execution_table")',
+      readsFrom: {agentActionExecutionTable},
+    ).get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
+
+  Future<void> _addAgentActionExecutionCapturedOutputChunkColumnsIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionExecutionTableColumnNames();
+    final columns = <GeneratedColumn<Object>>[
+      agentActionExecutionTable.stdoutStoredInChunks as GeneratedColumn<Object>,
+      agentActionExecutionTable.stderrStoredInChunks as GeneratedColumn<Object>,
+    ];
+    for (final column in columns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionExecutionTable, column);
+      existing.add(sqlName);
+    }
+  }
+
+  Future<Set<String>> _readAgentActionRemoteAuditTableColumnNames() async {
+    final rows = await customSelect(
+      'PRAGMA table_info("agent_action_remote_audit_table")',
+      readsFrom: {agentActionRemoteAuditTable},
+    ).get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
+
+  Future<void> _addAgentActionRemoteAuditClientColumnsIfMissing(Migrator m) async {
+    var existing = await _readAgentActionRemoteAuditTableColumnNames();
+    final columns = <GeneratedColumn<Object>>[
+      agentActionRemoteAuditTable.clientId as GeneratedColumn<Object>,
+      agentActionRemoteAuditTable.tokenJti as GeneratedColumn<Object>,
+    ];
+    for (final column in columns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionRemoteAuditTable, column);
+      existing = {...existing, sqlName};
+    }
+  }
+
+  Future<void> _addAgentActionRemoteAuditRuntimeIdentityColumnsIfMissing(
+    Migrator m,
+  ) async {
+    var existing = await _readAgentActionRemoteAuditTableColumnNames();
+    final columns = <GeneratedColumn<Object>>[
+      agentActionRemoteAuditTable.runtimeInstanceId as GeneratedColumn<Object>,
+      agentActionRemoteAuditTable.runtimeSessionId as GeneratedColumn<Object>,
+    ];
+    for (final column in columns) {
+      final sqlName = column.name;
+      if (existing.contains(sqlName)) {
+        continue;
+      }
+      await m.addColumn(agentActionRemoteAuditTable, column);
+      existing = {...existing, sqlName};
+    }
+  }
+
+  Future<void> _addAgentActionRemoteAuditIdempotencyKeyColumnIfMissing(Migrator m) async {
+    final existing = await _readAgentActionRemoteAuditTableColumnNames();
+    final column = agentActionRemoteAuditTable.idempotencyKey as GeneratedColumn<Object>;
+    if (existing.contains(column.name)) {
+      return;
+    }
+    await m.addColumn(agentActionRemoteAuditTable, column);
+  }
+
+  Future<void> _createRpcIdempotencyIndexes() async {
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_rpc_idempotency_expires
+      ON rpc_idempotency_cache_table(expires_at)
+      ''',
+    );
+  }
+
+  Future<void> _createAgentActionRemoteAuditIndexes() async {
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_remote_audit_occurred
+      ON agent_action_remote_audit_table(occurred_at DESC)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_remote_audit_method_occurred
+      ON agent_action_remote_audit_table(rpc_method, occurred_at DESC)
+      ''',
+    );
+  }
+
   Future<void> _createClientTokenIndexes() async {
     await customStatement(
       '''
@@ -244,6 +472,62 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       '''
       CREATE INDEX IF NOT EXISTS idx_client_token_status_created
       ON client_token_cache_table(is_revoked, created_at DESC)
+      ''',
+    );
+  }
+
+  Future<void> _createAgentActionCapturedOutputChunkIndexes() async {
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_captured_output_execution_stream
+      ON agent_action_captured_output_chunk_table(execution_id, stream, chunk_index)
+      ''',
+    );
+  }
+
+  Future<void> _createAgentActionIndexes() async {
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_definition_type_state
+      ON agent_action_definition_table(type, state)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_execution_action_requested
+      ON agent_action_execution_table(action_id, requested_at DESC)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_execution_status_requested
+      ON agent_action_execution_table(status, requested_at DESC)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_execution_idempotency
+      ON agent_action_execution_table(idempotency_key)
+      WHERE idempotency_key IS NOT NULL
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_execution_trigger
+      ON agent_action_execution_table(trigger_id, scheduled_at)
+      WHERE trigger_id IS NOT NULL
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_trigger_action_enabled
+      ON agent_action_trigger_table(action_id, is_enabled)
+      ''',
+    );
+    await customStatement(
+      '''
+      CREATE INDEX IF NOT EXISTS idx_agent_action_trigger_type_next
+      ON agent_action_trigger_table(type, next_run_at)
       ''',
     );
   }

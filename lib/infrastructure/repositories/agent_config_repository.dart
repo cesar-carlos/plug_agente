@@ -3,6 +3,7 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
@@ -11,10 +12,13 @@ class AgentConfigRepository implements IAgentConfigRepository {
   AgentConfigRepository(
     this._database, {
     required IHubAuthSecretStore authSecretStore,
-  }) : _authSecretStore = authSecretStore;
+    required IHubSessionStore hubSessionStore,
+  }) : _authSecretStore = authSecretStore,
+       _hubSessionStore = hubSessionStore;
 
   final AppDatabase _database;
   final IHubAuthSecretStore _authSecretStore;
+  final IHubSessionStore _hubSessionStore;
 
   domain.DatabaseFailure _buildDatabaseFailure(
     String message, {
@@ -41,6 +45,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = await _mapDataToEntity(configData);
       return Success(config);
+    } on domain.Failure catch (failure) {
+      return Failure(failure);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
@@ -48,6 +54,32 @@ class AgentConfigRepository implements IAgentConfigRepository {
           cause: error,
           context: {
             'operation': 'getById',
+            'configId': id,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<Config>> getByIdMetadata(String id) async {
+    try {
+      final configData = await (_database.select(
+        _database.configTable,
+      )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+
+      if (configData == null) {
+        return Failure(domain.NotFoundFailure('Config not found'));
+      }
+
+      return Success(_mapDataToEntityMetadata(configData));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to load configuration metadata',
+          cause: error,
+          context: {
+            'operation': 'getByIdMetadata',
             'configId': id,
           },
         ),
@@ -64,12 +96,30 @@ class AgentConfigRepository implements IAgentConfigRepository {
         configsData.map(_mapDataToEntity),
       );
       return Success(configs);
+    } on domain.Failure catch (failure) {
+      return Failure(failure);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
           'Failed to load configurations',
           cause: error,
           context: {'operation': 'getAll'},
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<List<Config>>> getAllMetadata() async {
+    try {
+      final configsData = await _database.select(_database.configTable).get();
+      return Success(configsData.map(_mapDataToEntityMetadata).toList(growable: false));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to load configuration metadata list',
+          cause: error,
+          context: {'operation': 'getAllMetadata'},
         ),
       );
     }
@@ -83,6 +133,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
       await _database.into(_database.configTable).insertOnConflictUpdate(configData);
 
       return Success(config);
+    } on domain.Failure catch (failure) {
+      return Failure(failure);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
@@ -100,13 +152,15 @@ class AgentConfigRepository implements IAgentConfigRepository {
   @override
   Future<Result<void>> delete(String id) async {
     try {
+      final clearSecretsResult = await _hubSessionStore.deleteAllSecrets(id);
+      if (clearSecretsResult.isError()) {
+        return Failure(clearSecretsResult.exceptionOrNull()!);
+      }
+
       await (_database.delete(
         _database.configTable,
       )..where((tbl) => tbl.id.equals(id))).go();
-      await _authSecretStore.deleteSecrets(id);
-
-      // For Result<void>, we use a unit value
-      return const Success<Object, Exception>(Object());
+      return const Success(unit);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
@@ -136,12 +190,39 @@ class AgentConfigRepository implements IAgentConfigRepository {
 
       final config = await _mapDataToEntity(configData);
       return Success(config);
+    } on domain.Failure catch (failure) {
+      return Failure(failure);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
           'Failed to load current configuration',
           cause: error,
           context: {'operation': 'getCurrentConfig'},
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<Config>> getCurrentConfigMetadata() async {
+    try {
+      final configData =
+          await (_database.select(_database.configTable)
+                ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)])
+                ..limit(1))
+              .getSingleOrNull();
+
+      if (configData == null) {
+        return Failure(domain.NotFoundFailure('No config found'));
+      }
+
+      return Success(_mapDataToEntityMetadata(configData));
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to load current configuration metadata',
+          cause: error,
+          context: {'operation': 'getCurrentConfigMetadata'},
         ),
       );
     }
@@ -194,15 +275,33 @@ class AgentConfigRepository implements IAgentConfigRepository {
   }
 
   Future<Config> _mapDataToEntity(ConfigData data) async {
-    final secrets = await _loadSecrets(data);
+    final metadataConfig = _mapDataToEntityMetadata(data);
+    final sessionResult = await _hubSessionStore.readSession(data.id);
+    if (sessionResult.isError()) {
+      throw sessionResult.exceptionOrNull()!;
+    }
+    final credentialsResult = await _hubSessionStore.readStoredCredentials(data.id);
+    if (credentialsResult.isError()) {
+      throw credentialsResult.exceptionOrNull()!;
+    }
+    final session = sessionResult.getOrThrow();
+    final credentials = credentialsResult.getOrThrow();
+    return metadataConfig.copyWith(
+      authToken: session.token?.token,
+      refreshToken: session.token?.refreshToken,
+      authPassword: credentials.credentials?.password,
+    );
+  }
+
+  Config _mapDataToEntityMetadata(ConfigData data) {
     return Config(
       id: data.id,
       serverUrl: data.serverUrl,
       agentId: data.agentId,
-      authToken: secrets.authToken,
-      refreshToken: secrets.refreshToken,
+      authToken: data.authToken,
+      refreshToken: data.refreshToken,
       authUsername: data.authUsername,
-      authPassword: secrets.authPassword,
+      authPassword: data.authPassword,
       driverName: data.driverName,
       odbcDriverName: data.odbcDriverName,
       connectionString: data.connectionString,
@@ -246,60 +345,16 @@ class AgentConfigRepository implements IAgentConfigRepository {
         await _authSecretStore.deleteSecrets(configId);
       }
       return const HubAuthSecrets();
-    } on Exception {
-      return secrets;
+    } on Exception catch (error) {
+      throw domain.DatabaseFailure.withContext(
+        message: 'Failed to persist hub authentication secrets securely',
+        cause: error,
+        context: {
+          'operation': 'persistHubAuthSecrets',
+          'configId': configId,
+        },
+      );
     }
   }
 
-  Future<HubAuthSecrets> _loadSecrets(ConfigData data) async {
-    final legacySecrets = HubAuthSecrets(
-      authToken: data.authToken,
-      refreshToken: data.refreshToken,
-      authPassword: data.authPassword,
-    );
-    if (!_authSecretStore.isAvailable) {
-      return legacySecrets;
-    }
-
-    try {
-      final storedSecrets = await _authSecretStore.readSecrets(data.id);
-      final mergedSecrets = storedSecrets.mergeMissingFrom(legacySecrets);
-      if (_needsSecureMigration(storedSecrets, legacySecrets)) {
-        await _authSecretStore.saveSecrets(data.id, mergedSecrets);
-        await _clearLegacySecretColumns(data.id);
-      }
-      return mergedSecrets;
-    } on Exception {
-      return legacySecrets;
-    }
-  }
-
-  Future<void> _clearLegacySecretColumns(String configId) async {
-    await (_database.update(_database.configTable)..where((tbl) => tbl.id.equals(configId))).write(
-      const ConfigTableCompanion(
-        authToken: Value<String?>(null),
-        refreshToken: Value<String?>(null),
-        authPassword: Value<String?>(null),
-      ),
-    );
-  }
-
-  bool _needsSecureMigration(
-    HubAuthSecrets storedSecrets,
-    HubAuthSecrets legacySecrets,
-  ) {
-    if (!legacySecrets.hasAny) {
-      return false;
-    }
-
-    final needsAuthToken =
-        (legacySecrets.authToken?.trim().isNotEmpty ?? false) && !(storedSecrets.authToken?.trim().isNotEmpty ?? false);
-    final needsRefreshToken =
-        (legacySecrets.refreshToken?.trim().isNotEmpty ?? false) &&
-        !(storedSecrets.refreshToken?.trim().isNotEmpty ?? false);
-    final needsPassword =
-        (legacySecrets.authPassword?.trim().isNotEmpty ?? false) &&
-        !(storedSecrets.authPassword?.trim().isNotEmpty ?? false);
-    return needsAuthToken || needsRefreshToken || needsPassword;
-  }
 }

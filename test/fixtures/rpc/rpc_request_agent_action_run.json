@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "method": "agent.action.run",
+  "id": "req-run-1",
+  "api_version": "2.11.1",
+  "meta": {
+    "trace_id": "trace-run-1",
+    "timestamp": "2026-05-18T14:00:00.000Z"
+  },
+  "params": {
+    "action_id": "action-1",
+    "idempotency_key": "idem-run-1",
+    "client_token": "opaque-hub-token"
+  }
+}

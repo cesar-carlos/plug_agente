@@ -27,6 +27,1787 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navWebSocketSettings => 'WebSocket connection';
 
   @override
+  String get navAgentActions => 'System Actions';
+
+  @override
+  String get agentActionsRefresh => 'Refresh';
+
+  @override
+  String get agentActionsRunSelected => 'Run selected';
+
+  @override
+  String get agentActionsTestSelected => 'Test action';
+
+  @override
+  String get agentActionsCancelExecution => 'Cancel execution';
+
+  @override
+  String get agentActionsDeleteSelected => 'Delete action';
+
+  @override
+  String get agentActionsDeleteConfirmTitle => 'Delete action';
+
+  @override
+  String agentActionsDeleteConfirmMessage(Object actionName) {
+    return 'Delete \"$actionName\"? Execution history is preserved, but this action can no longer be run.';
+  }
+
+  @override
+  String get agentActionsDeleteConfirm => 'Delete';
+
+  @override
+  String get agentActionsDeleteCancel => 'Cancel';
+
+  @override
+  String get agentActionsExportBundle => 'Export actions…';
+
+  @override
+  String get agentActionsImportBundle => 'Import actions…';
+
+  @override
+  String get agentActionsExportBundleDefaultFileName => 'plug_agente_actions.json';
+
+  @override
+  String get agentActionsExportBundleSuccessTitle => 'Actions exported';
+
+  @override
+  String get agentActionsExportBundleSuccessMessage =>
+      'The sanitized action bundle was saved. Secret values were not included; configure placeholders on the target machine.';
+
+  @override
+  String get agentActionsImportBundleSuccessTitle => 'Actions imported';
+
+  @override
+  String agentActionsImportBundleSuccessMessage(int definitionCount, int triggerCount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      definitionCount,
+      locale: localeName,
+      other: '$definitionCount actions',
+      one: '1 action',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      triggerCount,
+      locale: localeName,
+      other: '$triggerCount triggers',
+      one: '1 trigger',
+    );
+    return 'Imported $_temp0 and $_temp1. Definitions need validation before run.';
+  }
+
+  @override
+  String agentActionsImportBundleSecretsMessage(Object secretNames) {
+    return 'Configure these secret placeholders on this machine: $secretNames.';
+  }
+
+  @override
+  String get agentActionsConfirmImportBundleTitle => 'Import actions';
+
+  @override
+  String get agentActionsConfirmImportBundleMessage =>
+      'Import actions from a JSON bundle? Existing actions with the same id will be updated. Triggers are imported paused and remote execution requires reapproval.';
+
+  @override
+  String get agentActionsConfirmImportBundleConfirm => 'Import';
+
+  @override
+  String get agentActionsConfirmImportBundleCancel => 'Cancel';
+
+  @override
+  String get agentActionsBundleTransferFailedTitle => 'Action bundle transfer failed';
+
+  @override
+  String get agentActionsBundlePickerError => 'Could not open the file picker.';
+
+  @override
+  String get agentActionsTestSuccessTitle => 'Action test completed';
+
+  @override
+  String get agentActionsTestCanRunMessage => 'The action configuration is valid and the action can run.';
+
+  @override
+  String get agentActionsTestValidButInactiveMessage =>
+      'The action configuration is valid, but the action is not active.';
+
+  @override
+  String get agentActionsTestPreviewTitle => 'Redacted test preview';
+
+  @override
+  String get agentActionsTestPreviewCommandLabel => 'Prepared command';
+
+  @override
+  String get agentActionsTestPreviewUnavailableTitle => 'Preview unavailable';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticEngine => 'Engine';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticConnectionLabel => 'Connection';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticCatalogCount => 'Catalog connections';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticDefaultConfig => 'Used default config';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticYes => 'Yes';
+
+  @override
+  String get agentActionsTestPreviewDiagnosticNo => 'No';
+
+  @override
+  String get agentActionsFormCreateTitle => 'New command line action';
+
+  @override
+  String get agentActionsFormEditTitle => 'Command line action';
+
+  @override
+  String get agentActionsFormCreateDeveloperTitle => 'New developer action';
+
+  @override
+  String get agentActionsFormEditDeveloperTitle => 'Developer action';
+
+  @override
+  String get agentActionsFormCreateExecutableTitle => 'New executable action';
+
+  @override
+  String get agentActionsFormEditExecutableTitle => 'Executable action';
+
+  @override
+  String get agentActionsFormExecutablePath => 'Executable path';
+
+  @override
+  String get agentActionsFormArguments => 'Arguments';
+
+  @override
+  String get agentActionsFormArgumentsHint => 'Enter one argument per line.';
+
+  @override
+  String get agentActionsFormBrowseExecutablePath => 'Browse executable';
+
+  @override
+  String get agentActionsFormCreateScriptTitle => 'New script action';
+
+  @override
+  String get agentActionsFormEditScriptTitle => 'Script action';
+
+  @override
+  String get agentActionsFormScriptPath => 'Script path';
+
+  @override
+  String get agentActionsFormInterpreterPath => 'Interpreter path (optional)';
+
+  @override
+  String get agentActionsFormInterpreterPathHint =>
+      'Leave empty to use the default interpreter for the script extension.';
+
+  @override
+  String get agentActionsFormBrowseScriptPath => 'Browse script';
+
+  @override
+  String get agentActionsFormBrowseInterpreterPath => 'Browse interpreter';
+
+  @override
+  String get agentActionsFormCreateJarTitle => 'New JAR action';
+
+  @override
+  String get agentActionsFormEditJarTitle => 'JAR action';
+
+  @override
+  String get agentActionsFormJarPath => 'JAR file path';
+
+  @override
+  String get agentActionsFormJavaExecutablePath => 'Java executable path (optional)';
+
+  @override
+  String get agentActionsFormJavaExecutablePathHint => 'Leave empty to use java.exe from PATH.';
+
+  @override
+  String get agentActionsFormBrowseJarPath => 'Browse JAR file';
+
+  @override
+  String get agentActionsFormBrowseJavaExecutablePath => 'Browse java.exe';
+
+  @override
+  String get agentActionsFormCreateEmailTitle => 'New email action';
+
+  @override
+  String get agentActionsFormEditEmailTitle => 'Email action';
+
+  @override
+  String get agentActionsFormSmtpProfileId => 'SMTP profile secret name';
+
+  @override
+  String get agentActionsFormSmtpProfileIdHint => 'Name of the secret that stores the SMTP JSON profile.';
+
+  @override
+  String get agentActionsFormEmailFrom => 'From address';
+
+  @override
+  String get agentActionsFormEmailTo => 'To recipients';
+
+  @override
+  String get agentActionsFormEmailToHint => 'One email address per line.';
+
+  @override
+  String get agentActionsFormEmailCc => 'Cc recipients (optional)';
+
+  @override
+  String get agentActionsFormEmailCcHint => 'One email address per line.';
+
+  @override
+  String get agentActionsFormEmailBcc => 'Bcc recipients (optional)';
+
+  @override
+  String get agentActionsFormEmailBccHint => 'One email address per line.';
+
+  @override
+  String get agentActionsFormEmailSubject => 'Subject template';
+
+  @override
+  String get agentActionsFormEmailSubjectHint => 'Use context tokens resolved from the optional context JSON file.';
+
+  @override
+  String get agentActionsFormEmailBody => 'Body template';
+
+  @override
+  String get agentActionsFormEmailBodyHint =>
+      'Plain text body. Use context tokens resolved from the optional context JSON file.';
+
+  @override
+  String get agentActionsFormEmailAttachments => 'Attachment paths (optional)';
+
+  @override
+  String get agentActionsFormEmailAttachmentsHint =>
+      'One file path per line. Allowed types are validated by the action policy.';
+
+  @override
+  String get agentActionsFormCreateComObjectTitle => 'New COM object action';
+
+  @override
+  String get agentActionsFormEditComObjectTitle => 'COM object action';
+
+  @override
+  String get agentActionsFormComProgId => 'COM ProgID';
+
+  @override
+  String get agentActionsFormComMemberName => 'COM member';
+
+  @override
+  String get agentActionsFormComArguments => 'Arguments (JSON object)';
+
+  @override
+  String get agentActionsFormComArgumentsHint => 'Use a flat JSON object with string, number, or boolean values.';
+
+  @override
+  String get agentActionsFormInvalidComArguments => 'Arguments must be a valid JSON object.';
+
+  @override
+  String get agentActionsFormNew => 'New';
+
+  @override
+  String get agentActionsFormSave => 'Save action';
+
+  @override
+  String get agentActionsFormName => 'Name';
+
+  @override
+  String get agentActionsFormDescription => 'Description';
+
+  @override
+  String get agentActionsFormType => 'Type';
+
+  @override
+  String get agentActionsFormCommand => 'Command';
+
+  @override
+  String get agentActionsFormWorkingDirectory => 'Working directory';
+
+  @override
+  String get agentActionsFormExecutorPath => 'Executor.exe path';
+
+  @override
+  String get agentActionsFormProjectPath => '.7Proj file path';
+
+  @override
+  String get agentActionsFormData7ConfigPath => 'Data7.Config path';
+
+  @override
+  String get agentActionsFormBrowseExecutorPath => 'Browse Executor.exe';
+
+  @override
+  String get agentActionsFormBrowseProjectPath => 'Browse .7Proj file';
+
+  @override
+  String get agentActionsFormBrowseData7ConfigPath => 'Browse Data7.Config';
+
+  @override
+  String get agentActionsFormBrowseFileError => 'Could not open the file picker for this action.';
+
+  @override
+  String get agentActionsFormUseDefaultExecutorPath => 'Use default Executor';
+
+  @override
+  String get agentActionsFormUseDefaultConfigBinPath => 'Use default config (bin)';
+
+  @override
+  String get agentActionsFormUseDefaultConfigRootPath => 'Use default config (root)';
+
+  @override
+  String get agentActionsFormExecutorPathHintExpectedFileName => 'The executor path must end with Executor.exe.';
+
+  @override
+  String get agentActionsFormExecutorPathHintDefault => 'The executor is pointing to the default Data7 path.';
+
+  @override
+  String get agentActionsFormExecutorPathHintMissing => 'The selected Executor.exe was not found at this path.';
+
+  @override
+  String get agentActionsFormExecutorPathHintDirectory =>
+      'The executor path points to a directory, not an Executor.exe file.';
+
+  @override
+  String get agentActionsFormProjectPathHintExpectedExtension => 'The project must point to a .7Proj file.';
+
+  @override
+  String get agentActionsFormProjectPathHintMissing => 'The selected .7Proj file was not found at this path.';
+
+  @override
+  String get agentActionsFormProjectPathHintDirectory => 'The project path points to a directory, not a .7Proj file.';
+
+  @override
+  String get agentActionsFormData7ConfigPathHintExpectedFileName => 'The config path must end with Data7.Config.';
+
+  @override
+  String get agentActionsFormData7ConfigPathHintDefaultBin =>
+      'The Data7.Config path is using the default C:\\Data7\\bin location.';
+
+  @override
+  String get agentActionsFormData7ConfigPathHintDefaultRoot =>
+      'The Data7.Config path is using the default C:\\Data7 location.';
+
+  @override
+  String get agentActionsFormData7ConfigPathHintMissing => 'The selected Data7.Config was not found at this path.';
+
+  @override
+  String get agentActionsFormData7ConfigPathHintDirectory =>
+      'The config path points to a directory, not a Data7.Config file.';
+
+  @override
+  String get agentActionsFormPathHintInspectionFailed =>
+      'Could not inspect this local path right now. Review permissions, links, or disk availability.';
+
+  @override
+  String get agentActionsFormReloadConnections => 'Reload connections';
+
+  @override
+  String get agentActionsFormDefaultConfigResolved => 'Using the Data7.Config found in the default location.';
+
+  @override
+  String agentActionsFormResolvedConfigPath(Object path) {
+    return 'Resolved config: $path';
+  }
+
+  @override
+  String agentActionsFormLoadedConfigPath(Object path) {
+    return 'Connections loaded from: $path';
+  }
+
+  @override
+  String get agentActionsFormConnectionId => 'Connection ID';
+
+  @override
+  String get agentActionsFormConnectionSelector => 'Loaded connection';
+
+  @override
+  String get agentActionsFormConnectionSelectorPlaceholder => 'Select a loaded connection';
+
+  @override
+  String get agentActionsFormConnectionSearch => 'Filter loaded connections';
+
+  @override
+  String get agentActionsFormConnectionFilterEmpty => 'No loaded connection matches this filter.';
+
+  @override
+  String get agentActionsFormConnectionLabel => 'Safe connection label';
+
+  @override
+  String get agentActionsFormConnectionMissingTitle => 'Saved connection not found';
+
+  @override
+  String get agentActionsFormConnectionMissingMessage =>
+      'The saved connection no longer exists in the loaded Data7.Config. Reload the connections, select another valid connection, and save the action again.';
+
+  @override
+  String get agentActionsFormConnectionUnknownTitle => 'Connection ID is outside the loaded catalog';
+
+  @override
+  String get agentActionsFormConnectionUnknownMessage =>
+      'The entered ID does not belong to the catalog loaded right now. Select a valid connection from the list or reload the connections before saving.';
+
+  @override
+  String get agentActionsFormConnectionChangedTitle => 'Connection changed since the last validation';
+
+  @override
+  String get agentActionsFormConnectionChangedMessage =>
+      'The loaded connection changed since the saved snapshot. Review the configuration and save the action again before running it.';
+
+  @override
+  String get agentActionsFormUnsupportedType =>
+      'The visual editor for this action type is not available on this screen yet.';
+
+  @override
+  String get agentActionsFormState => 'State';
+
+  @override
+  String get agentActionsFormNotificationsTitle => 'Desktop notifications';
+
+  @override
+  String get agentActionsFormNotificationsDescription =>
+      'Show a Windows notification when a local run reaches a terminal state.';
+
+  @override
+  String get agentActionsFormNotifyOnSuccess => 'Notify on success';
+
+  @override
+  String get agentActionsFormNotifyOnFailure => 'Notify on failure';
+
+  @override
+  String get agentActionsFormNotifyOnTimeout => 'Notify on timeout';
+
+  @override
+  String get agentActionNotificationSuccessBody => 'Execution finished successfully.';
+
+  @override
+  String get agentActionNotificationTimeoutBody => 'Execution exceeded the configured maximum runtime.';
+
+  @override
+  String get agentActionNotificationFailureFallbackBody => 'Execution finished with a failure.';
+
+  @override
+  String get agentActionsFormExecutionPoliciesTitle => 'Execution policies';
+
+  @override
+  String get agentActionsFormExecutionPoliciesDescription =>
+      'Timeout and retry apply to local runs and scheduled triggers. Remote Hub runs stay at one attempt unless remote retry is enabled.';
+
+  @override
+  String get agentActionsFormPathChangePolicy => 'Path change policy';
+
+  @override
+  String get agentActionsFormPathChangePolicyFail => 'Fail if path or file content changed';
+
+  @override
+  String get agentActionsFormPathChangePolicyWarn => 'Warn if path or file content changed';
+
+  @override
+  String get agentActionsFormPathChangePolicyAllow => 'Allow path and content changes';
+
+  @override
+  String get agentActionsFormContextInjectionMode => 'Context injection mode';
+
+  @override
+  String get agentActionsFormContextInjectionArgument => 'Argument (default)';
+
+  @override
+  String get agentActionsFormContextInjectionFile => 'Context file (required at run)';
+
+  @override
+  String get agentActionsFormContextInjectionEnvironment => 'Environment variables';
+
+  @override
+  String get agentActionsFormContextInjectionStdin => 'Standard input';
+
+  @override
+  String get agentActionsFormRuntimeParameterSchema => 'Runtime parameters JSON schema (optional)';
+
+  @override
+  String get agentActionsFormRuntimeParameterSchemaHint =>
+      'JSON Schema object validated against runtimeParameters on each run. Leave empty to skip.';
+
+  @override
+  String get agentActionsTestPreviewPathSnapshotWarnings => 'Path snapshot warnings';
+
+  @override
+  String get agentActionsFormMaxRuntimeMinutes => 'Maximum runtime (minutes)';
+
+  @override
+  String get agentActionsFormKillOnTimeout => 'Kill main process on timeout';
+
+  @override
+  String get agentActionsFormMaxAttempts => 'Maximum attempts';
+
+  @override
+  String get agentActionsFormAllowRemoteRetry => 'Allow retry on remote Hub runs';
+
+  @override
+  String get agentActionsFormRuntimePoliciesTitle => 'Runtime constraints';
+
+  @override
+  String get agentActionsFormRuntimePoliciesDescription =>
+      'Operational profile gate, child-process environment, accepted exit codes, and behavior when the Plug agent closes. Empty allowed profiles means any profile.';
+
+  @override
+  String get agentActionsFormAllowedProfiles => 'Allowed operational profiles';
+
+  @override
+  String get agentActionsFormAllowedProfilesHint =>
+      'Comma-separated (e.g. prod, homolog). Leave empty for any profile.';
+
+  @override
+  String get agentActionsFormAllowedEnvironmentVariableNames => 'Allowed environment variable names';
+
+  @override
+  String get agentActionsFormAllowedEnvironmentVariableNamesHint =>
+      'Comma-separated (e.g. PLUG_API_URL, PLUG_TOKEN). Leave empty to allow any name used below or at runtime.';
+
+  @override
+  String get agentActionsFormEnvironmentVariables => 'Process environment variables';
+
+  @override
+  String get agentActionsFormEnvironmentVariablesHint =>
+      'One NAME=value per line. Reference action secrets with the placeholder convention documented in the secrets section. Applied when the action starts a process; environment injection mode adds runtime parameters from the run request.';
+
+  @override
+  String get agentActionsFormEnvironmentVariablesInvalid =>
+      'Environment variables must use one NAME=value per line with a valid variable name.';
+
+  @override
+  String agentActionsFormCurrentOperationalProfile(String profile) {
+    return 'Current agent profile: $profile';
+  }
+
+  @override
+  String get agentActionsFormCurrentOperationalProfileUnset =>
+      'Current agent profile is not set (AGENT_OPERATIONAL_PROFILE).';
+
+  @override
+  String get agentActionsFormAcceptedExitCodes => 'Accepted exit codes';
+
+  @override
+  String get agentActionsFormAcceptedExitCodesHint => 'Comma-separated integers (default 0).';
+
+  @override
+  String get agentActionsFormInvalidExitCodes => 'Enter comma-separated integers for exit codes (e.g. 0, 1).';
+
+  @override
+  String get agentActionsFormProcessWindowMode => 'Process window';
+
+  @override
+  String get agentActionsFormProcessWindowModeNormal => 'Normal console';
+
+  @override
+  String get agentActionsFormProcessWindowModeHidden => 'Hidden (best effort)';
+
+  @override
+  String get agentActionsFormProcessWindowModeMinimized => 'Minimized (normal start)';
+
+  @override
+  String get agentActionsFormCapturePolicyDescription =>
+      'Control whether process output is stored and redacted before persistence.';
+
+  @override
+  String get agentActionsFormCaptureStdout => 'Capture stdout';
+
+  @override
+  String get agentActionsFormCaptureStderr => 'Capture stderr';
+
+  @override
+  String get agentActionsFormRedactBeforePersisting => 'Redact output before saving';
+
+  @override
+  String get agentActionsFormQueuePolicyDescription =>
+      'Limits concurrent runs and queue behavior for this action definition.';
+
+  @override
+  String get agentActionsFormMaxConcurrent => 'Max concurrent runs';
+
+  @override
+  String get agentActionsFormMaxQueued => 'Max queued runs';
+
+  @override
+  String get agentActionsFormInvalidQueueLimits => 'Enter positive integers for max concurrent and max queued runs.';
+
+  @override
+  String get agentActionsFormConcurrencyBehavior => 'When limit is reached';
+
+  @override
+  String get agentActionsFormConcurrencyAllowParallel => 'Allow parallel (no limit)';
+
+  @override
+  String get agentActionsFormConcurrencyEnqueue => 'Enqueue and wait';
+
+  @override
+  String get agentActionsFormConcurrencyReject => 'Reject new runs';
+
+  @override
+  String get agentActionsFormConcurrencyIgnore => 'Run anyway (ignore limit)';
+
+  @override
+  String get agentActionsFormPathAllowlistDescription =>
+      'Optional directory allowlists. Leave empty to allow any path validated at runtime.';
+
+  @override
+  String get agentActionsFormAllowedWorkingDirectories => 'Allowed working directories';
+
+  @override
+  String get agentActionsFormAllowedContextDirectories => 'Allowed context directories';
+
+  @override
+  String get agentActionsFormPathAllowlistHint => 'Comma-separated absolute paths (e.g. C:\\\\Data7\\\\bin).';
+
+  @override
+  String get agentActionsFormOutputEncodingDescription =>
+      'How captured stdout and stderr are decoded during execution.';
+
+  @override
+  String get agentActionsFormStdoutEncoding => 'Stdout encoding';
+
+  @override
+  String get agentActionsFormStderrEncoding => 'Stderr encoding';
+
+  @override
+  String get agentActionsFormOutputEncodingUtf8 => 'UTF-8';
+
+  @override
+  String get agentActionsFormOutputEncodingSystemConsole => 'System console (Windows)';
+
+  @override
+  String get agentActionsFormOnAppExit => 'When the agent closes';
+
+  @override
+  String get agentActionsFormOnAppExitKill => 'Kill main process';
+
+  @override
+  String get agentActionsFormOnAppExitWaitThenKill => 'Wait, then kill main process';
+
+  @override
+  String get agentActionsFormOnAppExitLeaveRunning => 'Leave process running';
+
+  @override
+  String get agentActionsFormRemotePoliciesTitle => 'Remote execution';
+
+  @override
+  String get agentActionsFormRemotePoliciesDescription =>
+      'Allow the Hub to run this saved action over Socket.IO JSON-RPC. Requires explicit local approval.';
+
+  @override
+  String get agentActionsFormRemoteExecutionEnabled => 'Allow remote Hub execution';
+
+  @override
+  String get agentActionsFormRemoteAdHocEnabled => 'Allow remote ad-hoc commands';
+
+  @override
+  String get agentActionsFormRemoteApprovedHint => 'Remote execution is approved for this definition.';
+
+  @override
+  String get agentActionsFormRemoteApprovalRequired => 'Confirm remote execution before saving.';
+
+  @override
+  String get agentActionsFormRemoteReapprovalRequiredTitle => 'Remote re-approval required';
+
+  @override
+  String get agentActionsFormRemoteReapprovalRequiredMessage =>
+      'Risk-bearing fields changed since the last remote approval. Confirm remote execution again before saving.';
+
+  @override
+  String get agentActionsConfirmRemoteReapprovalTitle => 'Re-approve remote execution?';
+
+  @override
+  String get agentActionsConfirmRemoteReapprovalMessage =>
+      'Command, paths, or runtime policies changed. The Hub cannot run this action remotely until you confirm again.';
+
+  @override
+  String get agentActionsConfirmRemoteReapprovalConfirm => 'Re-approve';
+
+  @override
+  String get agentActionsConfirmRemoteReapprovalCancel => 'Cancel';
+
+  @override
+  String get agentActionsFormRemoteFeatureDisabledTitle => 'Remote agent actions are off';
+
+  @override
+  String get agentActionsFormRemoteFeatureDisabledMessage =>
+      'Enable the remote agent actions feature flag before the Hub can call agent.action.* for this agent.';
+
+  @override
+  String get agentActionsFormRemoteAdHocFeatureDisabledTitle => 'Remote ad-hoc disabled';
+
+  @override
+  String get agentActionsFormRemoteAdHocFeatureDisabledMessage =>
+      'Enable the remote ad-hoc feature flag to allow free-form hub commands on this agent.';
+
+  @override
+  String get agentActionsRiskRemote => 'Remote';
+
+  @override
+  String get agentActionsRiskRemoteAdHoc => 'Remote ad-hoc';
+
+  @override
+  String get agentActionsRiskRemoteReapproval => 'Re-approval required';
+
+  @override
+  String get agentActionsRiskAppCloseTrigger => 'App close trigger';
+
+  @override
+  String get agentActionsRiskSensitiveOutput => 'Unredacted output';
+
+  @override
+  String get agentActionsRiskLeaveProcessRunning => 'Leaves process running';
+
+  @override
+  String get agentActionsRiskUnsupportedType => 'Unsupported editor';
+
+  @override
+  String get agentActionsRiskNeedsValidation => 'Needs validation';
+
+  @override
+  String get agentActionsRiskSecretPlaceholders => 'Uses secrets';
+
+  @override
+  String get agentActionsNeedsValidationTitle => 'Validation required';
+
+  @override
+  String get agentActionsNeedsValidationMessage =>
+      'Test this action locally before running or enabling remote execution.';
+
+  @override
+  String get agentActionsSecretPlaceholdersTitle => 'Secret placeholders referenced';
+
+  @override
+  String agentActionsSecretPlaceholdersMessage(String secretNames) {
+    return 'This action references secrets: $secretNames. Configure them in secure storage before running.';
+  }
+
+  @override
+  String get agentActionsMissingSecretsTitle => 'Missing secrets';
+
+  @override
+  String agentActionsMissingSecretsMessage(String secretNames) {
+    return 'These secrets are not available locally: $secretNames.';
+  }
+
+  @override
+  String get agentActionsSecretsSectionTitle => 'Action secrets';
+
+  @override
+  String get agentActionsSecretsSectionMessage =>
+      'Configure values for each secret placeholder referenced by this action. Values are stored only in secure local storage.';
+
+  @override
+  String get agentActionsSecretStatusConfigured => 'Configured';
+
+  @override
+  String get agentActionsSecretStatusMissing => 'Missing';
+
+  @override
+  String get agentActionsSecretConfigure => 'Configure';
+
+  @override
+  String get agentActionsSecretUpdate => 'Update';
+
+  @override
+  String get agentActionsSecretRemove => 'Remove';
+
+  @override
+  String agentActionsSecretConfigureTitle(String secretName) {
+    return 'Configure secret $secretName';
+  }
+
+  @override
+  String get agentActionsSecretConfigureMessage =>
+      'Enter the secret value. It will not appear in action definitions, logs, or execution history.';
+
+  @override
+  String get agentActionsSecretConfigureValueLabel => 'Secret value';
+
+  @override
+  String get agentActionsSecretConfigureValueHint => 'Enter value';
+
+  @override
+  String get agentActionsSecretConfigureSave => 'Save';
+
+  @override
+  String get agentActionsSecretConfigureCancel => 'Cancel';
+
+  @override
+  String get agentActionsSecretConfigureErrorTitle => 'Could not save secret';
+
+  @override
+  String get agentActionsSecretDeleteTitle => 'Remove secret?';
+
+  @override
+  String agentActionsSecretDeleteMessage(String secretName) {
+    return 'Remove the locally stored value for \"$secretName\"? The action will fail until the secret is configured again.';
+  }
+
+  @override
+  String get agentActionsSecretDeleteConfirm => 'Remove';
+
+  @override
+  String get agentActionsSecretDeleteCancel => 'Cancel';
+
+  @override
+  String get agentActionsSecretOperationErrorTitle => 'Secret operation failed';
+
+  @override
+  String get agentActionsHistoryFilterSearch => 'Search execution';
+
+  @override
+  String get agentActionsRiskRunnerUnavailable => 'Runner unavailable';
+
+  @override
+  String get agentActionsRiskElevated => 'Elevated execution';
+
+  @override
+  String get agentActionsActionTypeUnavailableTitle => 'Runner unavailable for this action type';
+
+  @override
+  String agentActionsActionTypeUnavailableMessage(String actionType) {
+    return 'The agent subsystem is degraded and cannot run $actionType actions until the runner or capability is restored.';
+  }
+
+  @override
+  String agentActionsQueueActiveIndicator(int pending, int running) {
+    return '$pending pending · $running running in queue';
+  }
+
+  @override
+  String get agentActionsConfirmRemoteTitle => 'Enable remote execution?';
+
+  @override
+  String get agentActionsConfirmRemoteMessage =>
+      'The Hub will be able to run this saved action when scopes, token policy and feature flags allow it.';
+
+  @override
+  String get agentActionsConfirmRemoteConfirm => 'Enable remote';
+
+  @override
+  String get agentActionsConfirmRemoteCancel => 'Cancel';
+
+  @override
+  String get agentActionsConfirmRemoteAdHocTitle => 'Enable remote ad-hoc commands?';
+
+  @override
+  String get agentActionsConfirmRemoteAdHocMessage =>
+      'Ad-hoc remote commands are high risk and should stay disabled unless you explicitly need them.';
+
+  @override
+  String get agentActionsConfirmRemoteAdHocConfirm => 'Enable ad-hoc';
+
+  @override
+  String get agentActionsConfirmRemoteAdHocCancel => 'Cancel';
+
+  @override
+  String get agentActionsConfirmAppCloseTriggerTitle => 'Add app-close trigger?';
+
+  @override
+  String get agentActionsConfirmAppCloseTriggerMessage =>
+      'This trigger runs when the Plug agent closes and may start or stop processes while the app shuts down.';
+
+  @override
+  String get agentActionsConfirmAppCloseTriggerConfirm => 'Use app close';
+
+  @override
+  String get agentActionsConfirmAppCloseTriggerCancel => 'Cancel';
+
+  @override
+  String get agentActionsConfirmElevatedTitle => 'Enable elevated execution?';
+
+  @override
+  String get agentActionsConfirmElevatedMessage =>
+      'Runs use the elevated helper and administrator privileges on this machine. Install and prepare the helper before enabling.';
+
+  @override
+  String get agentActionsConfirmElevatedConfirm => 'Enable elevated';
+
+  @override
+  String get agentActionsConfirmElevatedCancel => 'Cancel';
+
+  @override
+  String get agentActionsValidationTitle => 'Check the action fields';
+
+  @override
+  String get agentActionsMaintenanceMode => 'Maintenance mode';
+
+  @override
+  String get agentActionsMaintenanceModeInfoTitle => 'Maintenance mode is on';
+
+  @override
+  String get agentActionsMaintenanceModeInfoMessage =>
+      'Scheduled runs, app start/close triggers, and remote runs are paused. You can still run actions from this screen and edit definitions.';
+
+  @override
+  String get agentActionsElevatedRunnerNotReadyTitle => 'Elevated runner not prepared';
+
+  @override
+  String get agentActionsElevatedRunnerNotReadyMessage =>
+      'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once.';
+
+  @override
+  String get agentActionsElevatedRunnerDegradedTitle => 'Elevated runner unavailable';
+
+  @override
+  String get agentActionsElevatedRunnerDegradedMessage =>
+      'The elevated helper failed recently. Prepare it again before running actions with high privilege.';
+
+  @override
+  String get agentActionsElevatedRunnerPrepare => 'Prepare elevated runner';
+
+  @override
+  String get agentActionsElevatedRunnerPreparing => 'Preparing elevated runner...';
+
+  @override
+  String get agentActionsFormRunElevated => 'Run with elevated privilege (Windows helper)';
+
+  @override
+  String get agentActionsFormRunElevatedHint =>
+      'Requires the helper executable and a prepared scheduled task on this agent.';
+
+  @override
+  String get agentActionsSubsystemStatusStartingTitle => 'Agent actions are starting';
+
+  @override
+  String get agentActionsSubsystemStatusStartingMessage =>
+      'The subsystem is still initializing. Local run and test stay disabled until it is ready.';
+
+  @override
+  String get agentActionsSubsystemStatusDrainingTitle => 'Agent actions are shutting down';
+
+  @override
+  String get agentActionsSubsystemStatusDrainingMessage =>
+      'New runs are blocked while the Plug agent closes. App-close triggers may still run.';
+
+  @override
+  String get agentActionsSubsystemStatusDegradedTitle => 'Some action types are unavailable';
+
+  @override
+  String agentActionsSubsystemStatusDegradedMessage(String types) {
+    return 'Unavailable types: $types. Other actions may still run from this screen.';
+  }
+
+  @override
+  String get agentActionsSubsystemStatusDisabledTitle => 'Agent actions subsystem disabled';
+
+  @override
+  String get agentActionsSubsystemStatusDisabledMessage =>
+      'The runtime guard reports the subsystem as disabled. Check feature flags and restart the agent if needed.';
+
+  @override
+  String get agentActionsSchedulerOperationalIssueTitle => 'Scheduled triggers are not running';
+
+  @override
+  String get agentActionsSchedulerInstanceLockedMessage =>
+      'Another Plug Agente process is already running the action scheduler for this data folder. Close the other instance or use a separate data directory. Manual runs and remote actions may still work in this window.';
+
+  @override
+  String get agentActionsSchedulerBootstrapFailedMessage =>
+      'The action scheduler stopped after a startup failure. Restart the agent or review saved triggers. Manual runs may still work until you fix the schedule configuration.';
+
+  @override
+  String get agentActionsComObjectHandlersMissingTitle => 'COM actions are not ready';
+
+  @override
+  String get agentActionsComObjectHandlersMissingMessage =>
+      'No COM ProgID/member handlers are registered in this agent. COM actions will fail until handlers are added to ComObjectInvocationRegistry or homologation stub env vars are set (AGENT_ACTION_COM_STUB_ENABLED). See agent.getHealth com_object_invocation_ready.';
+
+  @override
+  String get agentActionsDisabledTitle => 'Actions disabled';
+
+  @override
+  String get agentActionsDisabledMessage => 'Agent actions are disabled by feature flag.';
+
+  @override
+  String get agentActionsErrorTitle => 'Action operation failed';
+
+  @override
+  String get agentActionsSummaryActions => 'Actions';
+
+  @override
+  String get agentActionsSummaryQueued => 'Queued';
+
+  @override
+  String get agentActionsSummaryRunning => 'Running';
+
+  @override
+  String get agentActionsSummaryFailed => 'Failed';
+
+  @override
+  String get agentActionsSummaryMaintenance => 'Maintenance';
+
+  @override
+  String get agentActionsSummaryMaintenanceActive => 'On';
+
+  @override
+  String get agentActionsSummaryComHandlers => 'COM handlers';
+
+  @override
+  String get agentActionsSummaryComHandlersNone => 'None';
+
+  @override
+  String get agentActionsRetentionTitle => 'Data retention';
+
+  @override
+  String get agentActionsRetentionDescription =>
+      'Periodic purge removes local rows older than the windows below. Saved values here take precedence over environment variables for this installation.';
+
+  @override
+  String get agentActionsRetentionExecutionHistory => 'Terminal execution history';
+
+  @override
+  String agentActionsRetentionExecutionHistoryValue(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get agentActionsRetentionRemoteAudit => 'Remote agent.action audit';
+
+  @override
+  String agentActionsRetentionRemoteAuditValue(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get agentActionsRetentionCapturedOutput => 'Captured stdout/stderr on terminal rows';
+
+  @override
+  String agentActionsRetentionCapturedOutputValue(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hours hours',
+      one: '1 hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get agentActionsRetentionEnvVariables =>
+      'Environment variables (fallback): AGENT_ACTION_EXECUTION_RETENTION_DAYS, AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS, AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS';
+
+  @override
+  String get agentActionsRetentionSave => 'Save retention';
+
+  @override
+  String get agentActionsRetentionReset => 'Discard changes';
+
+  @override
+  String get agentActionsRetentionUseEnvDefaults => 'Use environment defaults';
+
+  @override
+  String get agentActionsRetentionClearedTitle => 'Retention restored';
+
+  @override
+  String get agentActionsRetentionClearedMessage =>
+      'Custom values were removed. Cleanup windows now follow environment variables or agent defaults.';
+
+  @override
+  String get agentActionsRetentionSavedTitle => 'Retention saved';
+
+  @override
+  String get agentActionsRetentionSavedMessage => 'Cleanup windows were updated for this installation.';
+
+  @override
+  String get agentActionsRetentionInvalidValue => 'Enter valid whole numbers in every field.';
+
+  @override
+  String get agentActionsRetentionPersistedHint =>
+      'Custom values are stored locally and override the environment fallback.';
+
+  @override
+  String get agentActionsEmptyActions => 'No actions registered.';
+
+  @override
+  String get agentActionsListFilterType => 'Action type';
+
+  @override
+  String get agentActionsListFilterSearch => 'Search actions';
+
+  @override
+  String get agentActionsListFilterEmpty => 'No actions match the current filters.';
+
+  @override
+  String get agentActionsEmptySelection => 'Select an action to inspect execution details.';
+
+  @override
+  String get agentActionsHistoryTitle => 'Execution history';
+
+  @override
+  String get agentActionsHistoryFilterStatus => 'Status';
+
+  @override
+  String get agentActionsHistoryFilterSource => 'Source';
+
+  @override
+  String get agentActionsHistoryFilterPeriod => 'Period';
+
+  @override
+  String get agentActionsHistoryFilterFailurePhase => 'Failure phase';
+
+  @override
+  String get agentActionsHistoryFilterAll => 'All';
+
+  @override
+  String get agentActionsHistoryPeriodAll => 'All';
+
+  @override
+  String get agentActionsHistoryPeriodLast24Hours => 'Last 24 hours';
+
+  @override
+  String get agentActionsHistoryPeriodLast3Days => 'Last 3 days';
+
+  @override
+  String get agentActionsRemoteAuditTitle => 'Remote agent.action audit';
+
+  @override
+  String get agentActionsRemoteAuditDescription =>
+      'Recent Hub JSON-RPC and execution lifecycle rows for agent.action.* (append-only; retention and purge still apply).';
+
+  @override
+  String get agentActionsRemoteAuditFilterAll => 'All';
+
+  @override
+  String get agentActionsRemoteAuditFilterRpc => 'RPC';
+
+  @override
+  String get agentActionsRemoteAuditFilterLifecycle => 'Lifecycle';
+
+  @override
+  String get agentActionsRemoteAuditFilterEmpty => 'No rows match this filter.';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeReceived => 'Received';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeSuccess => 'Success';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeRpcError => 'RPC error';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeAuthorizationDenied => 'Authorization denied';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeNotificationRejected => 'Notification rejected';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeRateLimited => 'Rate limited';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeLifecycleEnqueued => 'Enqueued';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeLifecycleStarted => 'Started';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeLifecycleCancelRequested => 'Cancel requested';
+
+  @override
+  String get agentActionsRemoteAuditOutcomeLifecycleFinished => 'Finished';
+
+  @override
+  String get agentActionsRemoteAuditEmpty => 'No remote audit rows recorded yet.';
+
+  @override
+  String get agentActionsRemoteAuditRefresh => 'Reload';
+
+  @override
+  String get agentActionsRemoteAuditCopyJson => 'Copy as JSON';
+
+  @override
+  String get agentActionsRemoteAuditCopiedToast => 'Audit copied to the clipboard.';
+
+  @override
+  String get agentActionsRemoteAuditShowInHistory => 'Show in history';
+
+  @override
+  String agentActionsRemoteAuditExecutionNotInHistory(Object executionId) {
+    return 'Execution $executionId is not in the loaded history. It may be outside the retention window or list limit.';
+  }
+
+  @override
+  String agentActionsRemoteAuditRuntimeInstanceMismatch(Object executionId, Object auditInstanceId) {
+    return 'Execution $executionId belongs to another agent installation (audit instance $auditInstanceId). Local history only highlights when the runtime instance matches.';
+  }
+
+  @override
+  String get agentActionsRemoteAuditFieldAction => 'Action';
+
+  @override
+  String get agentActionsRemoteAuditFieldExecution => 'Execution';
+
+  @override
+  String get agentActionsRemoteAuditFieldTrace => 'Trace';
+
+  @override
+  String get agentActionsRemoteAuditFieldRequestedBy => 'Requester';
+
+  @override
+  String get agentActionsRemoteAuditFieldIdempotencyKey => 'Idempotency';
+
+  @override
+  String get agentActionsRemoteAuditFieldReason => 'Reason';
+
+  @override
+  String get agentActionsRemoteAuditFieldClient => 'Client';
+
+  @override
+  String get agentActionsRemoteAuditFieldRuntimeInstance => 'Instance';
+
+  @override
+  String get agentActionsRemoteAuditFieldRuntimeSession => 'Session';
+
+  @override
+  String get agentActionsRemoteAuditReasonMissingClientToken => 'Client token missing';
+
+  @override
+  String get agentActionsRemoteAuditReasonPermissionDenied => 'Permission denied';
+
+  @override
+  String get agentActionsRemoteAuditReasonRemoteRateLimited => 'Remote rate limit';
+
+  @override
+  String get agentActionsRemoteAuditReasonRemoteDisabled => 'Remote actions disabled';
+
+  @override
+  String get agentActionsRemoteAuditReasonFeatureDisabled => 'Agent actions disabled';
+
+  @override
+  String get agentActionsRemoteAuditReasonMaintenanceMode => 'Maintenance mode';
+
+  @override
+  String get agentActionsRemoteAuditReasonNotificationNotAllowed => 'Notification not allowed';
+
+  @override
+  String get agentActionsRemoteAuditReasonRemoteContextNotSupported => 'Remote context not supported';
+
+  @override
+  String get agentActionsRemoteAuditReasonIdempotencyRequired => 'Idempotency key required';
+
+  @override
+  String get agentActionsRemoteAuditReasonIdempotencyMismatch => 'Idempotency fingerprint mismatch';
+
+  @override
+  String get agentActionsRemoteAuditReasonBatchNotAllowed => 'Method not allowed in batch';
+
+  @override
+  String get agentActionsRemoteAuditReasonExecutionNotFound => 'Execution not found';
+
+  @override
+  String get agentActionsRemoteAuditReasonAlreadyFinished => 'Already finished';
+
+  @override
+  String get agentActionsRemoteAuditReasonKillFailed => 'Kill failed';
+
+  @override
+  String get agentActionsEmptyHistory => 'No executions recorded for this action.';
+
+  @override
+  String get agentActionsTriggersTitle => 'Schedules and triggers';
+
+  @override
+  String get agentActionsTriggersEmpty => 'No triggers saved for this action.';
+
+  @override
+  String get agentActionsTriggersLoading => 'Loading triggers…';
+
+  @override
+  String get agentActionsTriggerEnabled => 'Enabled';
+
+  @override
+  String get agentActionsTriggerDisabled => 'Disabled';
+
+  @override
+  String get agentActionsTriggerUnnamed => 'Unnamed trigger';
+
+  @override
+  String get agentActionsTriggerNotScheduled => 'Not scheduled';
+
+  @override
+  String agentActionsTriggerNextRun(Object when) {
+    return 'Next run: $when';
+  }
+
+  @override
+  String agentActionsTriggerSummaryTimeZone(Object ianaId) {
+    return 'Time zone: $ianaId';
+  }
+
+  @override
+  String get agentActionsTriggerSummaryCatchUpEnabled => 'Catch-up for missed runs enabled';
+
+  @override
+  String get agentActionsTriggerTypeManual => 'Manual';
+
+  @override
+  String get agentActionsTriggerTypeRemote => 'Remote';
+
+  @override
+  String get agentActionsTriggerTypeOnce => 'Once';
+
+  @override
+  String get agentActionsTriggerTypeInterval => 'Interval';
+
+  @override
+  String get agentActionsTriggerTypeDaily => 'Daily';
+
+  @override
+  String get agentActionsTriggerTypeWeekly => 'Weekly';
+
+  @override
+  String get agentActionsTriggerTypeMonthly => 'Monthly';
+
+  @override
+  String get agentActionsTriggerTypeAppStart => 'App start';
+
+  @override
+  String get agentActionsTriggerTypeAppClose => 'App close';
+
+  @override
+  String get agentActionsTriggerDelete => 'Delete trigger';
+
+  @override
+  String get agentActionsTriggerDeleteConfirmTitle => 'Delete trigger';
+
+  @override
+  String agentActionsTriggerDeleteConfirmMessage(Object triggerLabel) {
+    return 'Delete \"$triggerLabel\"? Scheduled runs stop for this trigger.';
+  }
+
+  @override
+  String get agentActionsTriggerDeleteConfirm => 'Delete';
+
+  @override
+  String get agentActionsTriggerDeleteCancel => 'Cancel';
+
+  @override
+  String get agentActionsTriggerAdd => 'Add trigger';
+
+  @override
+  String get agentActionsTriggerEdit => 'Edit trigger';
+
+  @override
+  String get agentActionsTriggerSave => 'Save trigger';
+
+  @override
+  String get agentActionsTriggerCancel => 'Cancel';
+
+  @override
+  String get agentActionsTriggerEditorTitleNew => 'New trigger';
+
+  @override
+  String get agentActionsTriggerEditorTitleEdit => 'Edit trigger';
+
+  @override
+  String get agentActionsTriggerFieldName => 'Display name';
+
+  @override
+  String get agentActionsTriggerFieldType => 'Trigger type';
+
+  @override
+  String get agentActionsTriggerFieldTimezone => 'IANA time zone (optional)';
+
+  @override
+  String get agentActionsTriggerFieldTimezoneFilter => 'Filter IANA zones';
+
+  @override
+  String get agentActionsTriggerHintTimezoneFilter => 'e.g. America, Europe, UTC';
+
+  @override
+  String get agentActionsTriggerHintTimezonePick =>
+      'Tap a row to fill the field above. Leave empty to use the device default.';
+
+  @override
+  String get agentActionsTriggerHintTimezoneSearchEmpty => 'Type in the filter to search IANA time zones.';
+
+  @override
+  String get agentActionsTriggerTimezoneNoMatches => 'No time zone matches the filter.';
+
+  @override
+  String agentActionsTriggerTimezoneMatchesTruncated(int count) {
+    return 'Showing the first $count matches. Refine the filter.';
+  }
+
+  @override
+  String get agentActionsTriggerFieldStartAt => 'Start date and time';
+
+  @override
+  String get agentActionsTriggerFieldStartAtOptional => 'Active from (optional)';
+
+  @override
+  String get agentActionsTriggerFieldEndAtOptional => 'Active until (optional)';
+
+  @override
+  String get agentActionsTriggerFieldIntervalMinutes => 'Interval (minutes)';
+
+  @override
+  String get agentActionsTriggerFieldTimeOfDay => 'Time of day';
+
+  @override
+  String get agentActionsTriggerHintTimeOfDay => 'HH:mm (24-hour)';
+
+  @override
+  String get agentActionsTriggerFieldWeekdays => 'Weekdays';
+
+  @override
+  String get agentActionsTriggerFieldDayOfMonth => 'Day of month (1-31)';
+
+  @override
+  String get agentActionsTriggerHintDateTime => 'Format: yyyy-MM-dd HH:mm (local)';
+
+  @override
+  String get agentActionsTriggerFieldIgnoreMissedRuns => 'Ignore missed runs during downtime';
+
+  @override
+  String get agentActionsTriggerHintIgnoreMissedRuns =>
+      'Turn off to run schedules that were missed while the app was closed, when the trigger type supports catch-up.';
+
+  @override
+  String get agentActionsTriggerValidationTitle => 'Check the trigger fields';
+
+  @override
+  String get agentActionsTriggerValidationInvalidStartAt => 'Enter a valid start date and time.';
+
+  @override
+  String get agentActionsTriggerValidationInvalidIntervalMinutes => 'Enter a positive whole number of minutes.';
+
+  @override
+  String get agentActionsTriggerValidationInvalidTimeOfDay => 'Enter the time as HH:mm using a 24-hour clock.';
+
+  @override
+  String get agentActionsTriggerValidationWeekdaysRequired => 'Select at least one weekday.';
+
+  @override
+  String get agentActionsTriggerValidationInvalidDayOfMonth => 'Enter a day of month between 1 and 31.';
+
+  @override
+  String get agentActionsTriggerWeekdayMon => 'Mon';
+
+  @override
+  String get agentActionsTriggerWeekdayTue => 'Tue';
+
+  @override
+  String get agentActionsTriggerWeekdayWed => 'Wed';
+
+  @override
+  String get agentActionsTriggerWeekdayThu => 'Thu';
+
+  @override
+  String get agentActionsTriggerWeekdayFri => 'Fri';
+
+  @override
+  String get agentActionsTriggerWeekdaySat => 'Sat';
+
+  @override
+  String get agentActionsTriggerWeekdaySun => 'Sun';
+
+  @override
+  String get agentActionsRequestedAt => 'Requested at';
+
+  @override
+  String get agentActionsExitCode => 'Exit code';
+
+  @override
+  String get agentActionsSourceLocalUi => 'Local UI';
+
+  @override
+  String get agentActionsSourceScheduler => 'Scheduler';
+
+  @override
+  String get agentActionsSourceRemoteHub => 'Hub';
+
+  @override
+  String get agentActionsSourceAppLifecycle => 'App lifecycle';
+
+  @override
+  String get agentActionsDiagnosticsCopySupport => 'Copy support JSON';
+
+  @override
+  String get agentActionsDiagnosticsCopiedToast => 'Diagnostics copied to the clipboard.';
+
+  @override
+  String get agentActionsDiagnosticsTitle => 'Diagnostics';
+
+  @override
+  String get agentActionsDiagnosticsExecutionId => 'Execution';
+
+  @override
+  String get agentActionsDiagnosticsSource => 'Source';
+
+  @override
+  String get agentActionsDiagnosticsPid => 'PID';
+
+  @override
+  String get agentActionsDiagnosticsStartedAt => 'Started';
+
+  @override
+  String get agentActionsDiagnosticsFinishedAt => 'Finished';
+
+  @override
+  String get agentActionsDiagnosticsTimeoutAt => 'Timeout';
+
+  @override
+  String get agentActionsDiagnosticsDuration => 'Duration';
+
+  @override
+  String get agentActionsDiagnosticsExecutable => 'Executable';
+
+  @override
+  String get agentActionsDiagnosticsArgumentCount => 'Arguments';
+
+  @override
+  String get agentActionsDiagnosticsCommandPreview => 'Command preview';
+
+  @override
+  String get agentActionsDiagnosticsFailureCode => 'Failure code';
+
+  @override
+  String get agentActionsDiagnosticsFailurePhase => 'Failure phase';
+
+  @override
+  String get agentActionsFailurePhaseExecutionPreflight => 'Execution preflight';
+
+  @override
+  String get agentActionsFailurePhaseDefinitionValidation => 'Definition validation';
+
+  @override
+  String get agentActionsFailurePhaseStartProcess => 'Process start';
+
+  @override
+  String get agentActionsFailurePhaseStdinSetup => 'Stdin setup';
+
+  @override
+  String get agentActionsFailurePhaseProcessRuntime => 'Process runtime';
+
+  @override
+  String get agentActionsFailurePhaseProcessExit => 'Process exit';
+
+  @override
+  String get agentActionsFailurePhaseQueue => 'Queue';
+
+  @override
+  String get agentActionsFailurePhaseTimeout => 'Timeout';
+
+  @override
+  String get agentActionsFailurePhaseAuthorization => 'Authorization';
+
+  @override
+  String get agentActionsFailurePhaseValidation => 'Validation';
+
+  @override
+  String get agentActionsFailurePhaseLookup => 'Lookup';
+
+  @override
+  String get agentActionsFailurePhaseCancel => 'Cancellation';
+
+  @override
+  String get agentActionsFailurePhasePlatformCheck => 'Platform check';
+
+  @override
+  String get agentActionsFailurePhaseSmtpSend => 'SMTP send';
+
+  @override
+  String get agentActionsFailurePhaseExecutionSend => 'Send preparation';
+
+  @override
+  String get agentActionsFailurePhaseElevatedSubmit => 'Elevated submit';
+
+  @override
+  String get agentActionsFailurePhaseBootstrapReconciliation => 'Bootstrap reconciliation';
+
+  @override
+  String agentActionsExecutionFailurePhaseLabel(String phase) {
+    return 'Failed during: $phase';
+  }
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveAction => 'Corrective action';
+
+  @override
+  String get agentActionsDiagnosticsCorrectivePath =>
+      'Review the saved path, validate the file or directory again, and update the action before running it.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveRunner =>
+      'Check the configured executable, interpreter, or runner path and validate the action again.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveExitCode =>
+      'Review the exit code and the redacted output. Adjust accepted exit codes or fix the executed command.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveQueue =>
+      'Wait for the queue to drain or adjust the action concurrency and queue limits.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveTimeout =>
+      'Review the configured timeout and investigate why the process did not finish within the expected window.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveKill =>
+      'Verify whether the main process is still running and try canceling again after reviewing PID and permissions.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveDefinitionValidation =>
+      'Review required fields and validate the action definition again before running it.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectivePreflight =>
+      'Revalidate paths, permissions, context, and local prerequisites before starting the execution.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveStartProcess =>
+      'Check executable, arguments, and working directory before trying to start the process again.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveRuntime =>
+      'Inspect the redacted output and operational details to identify the failure that happened during execution.';
+
+  @override
+  String get agentActionsDiagnosticsStdout => 'stdout';
+
+  @override
+  String get agentActionsDiagnosticsStderr => 'stderr';
+
+  @override
+  String get agentActionsDiagnosticsTruncated => 'truncated';
+
+  @override
+  String get agentActionsDiagnosticsStoredInChunks => 'stored in segments';
+
+  @override
+  String get agentActionsExecutionOutputInChunks => 'large output in segments';
+
+  @override
+  String get agentActionsDiagnosticsOutputLoadFailed => 'Could not load captured output';
+
+  @override
+  String get agentActionsDiagnosticsLoadMoreStdout => 'Load more stdout';
+
+  @override
+  String get agentActionsDiagnosticsLoadMoreStderr => 'Load more stderr';
+
+  @override
+  String get agentActionsDiagnosticsDefinitionSnapshotHash => 'Definition snapshot hash';
+
+  @override
+  String get agentActionsDiagnosticsContextHash => 'Context hash';
+
+  @override
+  String get agentActionsDiagnosticsRedactionApplied => 'Redaction applied';
+
+  @override
+  String get agentActionsDiagnosticsValueYes => 'Yes';
+
+  @override
+  String get agentActionsDiagnosticsValueNo => 'No';
+
+  @override
+  String get agentActionsDiagnosticsQueueStartedAt => 'Queue started';
+
+  @override
+  String get agentActionsDiagnosticsIdempotencyKey => 'Idempotency key';
+
+  @override
+  String get agentActionsDiagnosticsRequestedBy => 'Requested by';
+
+  @override
+  String get agentActionsDiagnosticsTraceId => 'Trace id';
+
+  @override
+  String get agentActionsDiagnosticsRuntimeInstanceId => 'Runtime instance id';
+
+  @override
+  String get agentActionsDiagnosticsRuntimeSessionId => 'Runtime session id';
+
+  @override
+  String get agentActionsDiagnosticsTriggerId => 'Trigger';
+
+  @override
+  String get agentActionsDiagnosticsTriggerType => 'Trigger type';
+
+  @override
+  String get agentActionsDiagnosticsScheduledAt => 'Scheduled for';
+
+  @override
+  String get agentActionsDiagnosticsTriggeredAt => 'Triggered at';
+
+  @override
+  String get agentActionsTypeCommandLine => 'Command line';
+
+  @override
+  String get agentActionsTypeExecutable => 'Executable';
+
+  @override
+  String get agentActionsTypeScript => 'Script';
+
+  @override
+  String get agentActionsTypeJar => 'JAR';
+
+  @override
+  String get agentActionsTypeEmail => 'Email';
+
+  @override
+  String get agentActionsTypeComObject => 'COM object';
+
+  @override
+  String get agentActionsTypeDeveloper => 'Developer';
+
+  @override
+  String get agentActionsStateActive => 'Active';
+
+  @override
+  String get agentActionsStatePaused => 'Paused';
+
+  @override
+  String get agentActionsStateDisabled => 'Disabled';
+
+  @override
+  String get agentActionsStateNeedsValidation => 'Needs validation';
+
+  @override
+  String get agentActionsStatusQueued => 'Queued';
+
+  @override
+  String get agentActionsStatusRunning => 'Running';
+
+  @override
+  String get agentActionsStatusSucceeded => 'Succeeded';
+
+  @override
+  String get agentActionsStatusFailed => 'Failed';
+
+  @override
+  String get agentActionsStatusSkipped => 'Skipped';
+
+  @override
+  String get agentActionsStatusCancelled => 'Cancelled';
+
+  @override
+  String get agentActionsStatusKilled => 'Killed';
+
+  @override
+  String get agentActionsStatusTimedOut => 'Timed out';
+
+  @override
+  String get agentActionsStatusInterrupted => 'Interrupted';
+
+  @override
+  String get agentActionsStatusUnknown => 'Unknown';
+
+  @override
   String formFieldRequired(String fieldLabel) {
     return '$fieldLabel is required.';
   }
@@ -1168,6 +2949,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get msgRpcRateLimited => 'Too many requests in a short time. Wait and try again.';
+
+  @override
+  String get msgRpcAgentActionsTemporarilyUnavailable =>
+      'Agent actions are temporarily unavailable. Wait and try again.';
 
   @override
   String get msgRpcReplayDetected => 'Duplicate request detected. Generate a new ID and try again.';

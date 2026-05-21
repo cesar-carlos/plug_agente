@@ -1,5 +1,10 @@
 # Quick Start: Melhorias de Performance e Confiabilidade
 
+## Status Atual
+
+As quick wins deste eixo ja estao implementadas no codigo. O restante deste
+guia cobre tuning opcional e validacao operacional apos deploy.
+
 ## 🚀 Ativação Imediata
 
 As melhorias estão **ativas por padrão** após merge/pull. Não é necessário configuração adicional para funcionamento básico.
@@ -17,6 +22,7 @@ Editar `.env` e descomentar/ajustar:
 ```env
 # Para carga média (10-50 req/s) - RECOMENDADO PARA MAIORIA
 ODBC_POOL_SIZE=8
+ODBC_ASYNC_MAX_PENDING_REQUESTS=32
 SQL_QUEUE_MAX_SIZE=50
 SQL_QUEUE_MAX_WORKERS=8
 SQL_QUEUE_TIMEOUT_SEC=5
@@ -62,7 +68,7 @@ O serviço está registrado no DI e pode ser acessado:
 
 ```dart
 final healthService = getIt<HealthService>();
-final status = healthService.getHealthStatus();
+final status = await healthService.getHealthStatusAsync();
 print(status);
 ```
 
@@ -71,16 +77,32 @@ Output esperado:
 {
   "status": "healthy",
   "timestamp": "2026-04-28T19:45:00.000Z",
-  "pool": {"size": 8},
+  "odbc_runtime_tuning": {
+    "pool_size": 8,
+    "async_worker_count": 8,
+    "async_max_pending_requests": 32
+  },
+  "pool": {
+    "size": 8,
+    "active_count": 2,
+    "strategy": "lease",
+    "acquire_timeout_seconds": 30,
+    "fallbacks_total": 0
+  },
   "sql_queue": {
     "enabled": true,
     "current_size": 2,
     "max_size": 50,
     "active_workers": 3,
     "max_workers": 8,
+    "active_batch_workers": 0,
+    "max_batch_workers": 4,
+    "enqueue_timeout_seconds": 5,
     "rejections_total": 0,
     "timeouts_total": 0,
-    "avg_wait_time_ms": 45
+    "avg_wait_time_ms": 45,
+    "p95_wait_time_ms": 80,
+    "pool_wait_timeouts_total": 0
   },
   "queries": {
     "total": 1523,
@@ -89,6 +111,10 @@ Output esperado:
     "avg_latency_ms": 156,
     "p95_latency_ms": 298,
     "p99_latency_ms": 456
+  },
+  "timeouts": {
+    "sql_total": 0,
+    "pool_total": 0
   }
 }
 ```
@@ -195,6 +221,20 @@ for (var i = 0; i < 50; i++) {
 ### Teste E2E Completo
 Ver `docs/testing/sql_queue_concurrency_tests.md` para testes detalhados.
 
+### Atalho Operacional
+No Windows, use o wrapper para rodar preflight e gerar uma worksheet pronta
+para validacao:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1
+```
+
+Para executar smoke, burst e benchmark em sequencia:
+
+```powershell
+.\tool\run_odbc_operational_validation.ps1 -All
+```
+
 ## 🐛 Troubleshooting
 
 ### Problema: "Circuit breaker open" mas banco está UP
@@ -205,10 +245,8 @@ Ver `docs/testing/sql_queue_concurrency_tests.md` para testes detalhados.
 **Solução Imediata** (apenas desenvolvimento):
 ```dart
 // Resetar manualmente (não fazer em produção!)
-final gateway = getIt<IDatabaseGateway>();
-if (gateway is OdbcDatabaseGateway) {
-  gateway._circuitBreakers[connectionString]?.reset();
-}
+// Nao ha reset publico suportado.
+// Aguarde o reset timeout ou reinicie o app em desenvolvimento.
 ```
 
 ### Problema: Pool warm-up falhando
@@ -247,7 +285,7 @@ if (gateway is OdbcDatabaseGateway) {
 ### Métricas para Reportar
 Ao reportar problemas, incluir:
 ```dart
-final health = getIt<HealthService>().getHealthStatus();
+final health = await getIt<HealthService>().getHealthStatusAsync();
 print(JsonEncoder.withIndent('  ').convert(health));
 ```
 
@@ -270,3 +308,5 @@ Após deploy em produção:
 ---
 
 **Dúvidas?** Ver `docs/architecture/performance_reliability_improvements.md` para detalhes técnicos completos.
+Para registrar resultados reais de validação, use também
+`docs/architecture/odbc_operational_validation_runbook.md`.

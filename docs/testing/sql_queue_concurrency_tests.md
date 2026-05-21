@@ -179,4 +179,5 @@ been measured and exhausted.
 
 - Main plan: `Plano Para Concorrência ODBC` (plan file)
 - E2E setup: `docs/testing/e2e_setup.md`
+- Operational validation runbook: `docs/architecture/odbc_operational_validation_runbook.md`
 - Project specifics: `.cursor/rules/project_specifics.mdc`

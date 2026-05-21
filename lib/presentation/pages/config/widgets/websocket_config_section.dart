@@ -8,6 +8,8 @@ import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
+import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
@@ -28,14 +30,12 @@ import 'package:provider/provider.dart';
 class WebSocketConfigSection extends StatelessWidget {
   const WebSocketConfigSection({
     required this.formController,
-    required this.configProvider,
     required this.onSaveConfig,
     super.key,
   });
 
   final ConfigFormController formController;
-  final ConfigProvider configProvider;
-  final VoidCallback onSaveConfig;
+  final Future<void> Function() onSaveConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +49,9 @@ class WebSocketConfigSection extends StatelessWidget {
             children: [
               _ServerSection(
                 formController: formController,
-                onLoginOrLogout: () => unawaited(_handleLoginOrLogout(context)),
+                onLoginOrLogout: () async {
+                  await _handleLoginOrLogout(context);
+                },
               ),
               const SizedBox(height: 24),
               const _OutboundCompressionSection(),
@@ -60,7 +62,6 @@ class WebSocketConfigSection extends StatelessWidget {
               const SizedBox(height: 24),
               _WebSocketActionButtons(
                 formController: formController,
-                configProvider: configProvider,
                 onSaveConfig: onSaveConfig,
               ),
               const SizedBox(height: 16),
@@ -75,10 +76,19 @@ class WebSocketConfigSection extends StatelessWidget {
   Future<void> _handleLoginOrLogout(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
+    final connectionProvider = Provider.of<ConnectionProvider>(
+      context,
+      listen: false,
+    );
+    final currentConfigId = configProvider.currentConfig?.id;
 
-    if (authProvider.isAuthenticated) {
-      await Provider.of<ConnectionProvider>(context, listen: false).disconnect();
-      await authProvider.logout(clearStoredSession: true);
+    if (authProvider.isAuthenticatedForConfig(currentConfigId)) {
+      await connectionProvider.disconnect();
+      await authProvider.logout(
+        configId: currentConfigId,
+        clearStoredSession: true,
+      );
     } else {
       final serverUrl = normalizeServerUrl(
         formController.serverUrlController.text,
@@ -103,12 +113,20 @@ class WebSocketConfigSection extends StatelessWidget {
 
       if (formController.authUsernameController.text.isNotEmpty &&
           formController.authPasswordController.text.isNotEmpty) {
+        final savedConfig = await _persistCurrentConfig(context);
+        if (savedConfig == null) {
+          return;
+        }
         final credentials = AuthCredentials(
           username: formController.authUsernameController.text.trim(),
           password: formController.authPasswordController.text.trim(),
-          agentId: agentId,
+          agentId: savedConfig.agentId.trim(),
         );
-        authProvider.login(serverUrl, credentials);
+        await authProvider.login(
+          configId: savedConfig.id,
+          serverUrl: savedConfig.serverUrl.trim(),
+          credentials: credentials,
+        );
       } else {
         SettingsFeedback.showError(
           context: context,
@@ -117,6 +135,29 @@ class WebSocketConfigSection extends StatelessWidget {
         );
       }
     }
+  }
+
+  Future<Config?> _persistCurrentConfig(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
+    formController.updateAllFieldsToProvider(configProvider);
+    final saveResult = await configProvider.saveConfig();
+    if (!context.mounted) {
+      return null;
+    }
+
+    Config? savedConfig;
+    saveResult.fold(
+      (config) => savedConfig = config,
+      (failure) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleErrorSaving,
+          message: failure.toDisplayMessage(),
+        );
+      },
+    );
+    return savedConfig;
   }
 }
 
@@ -278,8 +319,18 @@ class _ServerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, _) {
+    return Consumer3<AuthProvider, ConnectionProvider, ConfigProvider>(
+      builder: (context, authProvider, connectionProvider, configProvider, _) {
+        final currentConfigId = configProvider.currentConfig?.id;
+        final isAuthenticatedForConfig = authProvider.isAuthenticatedForConfig(
+          currentConfigId,
+        );
+        final isAuthenticating = authProvider.status == AuthStatus.authenticating;
+        final isConnectionBusy =
+            connectionProvider.status == ConnectionStatus.connecting ||
+            connectionProvider.status == ConnectionStatus.negotiating ||
+            connectionProvider.isReconnecting;
+        final canSubmit = isAuthenticatedForConfig || (!isAuthenticating && !isConnectionBusy);
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,25 +372,15 @@ class _ServerSection extends StatelessWidget {
                       hint: l10n.wsHintPassword,
                     ),
                     const SizedBox(height: 16),
-                    Consumer<ConnectionProvider>(
-                      builder: (context, connectionProvider, _) {
-                        final isAuthenticating = authProvider.status == AuthStatus.authenticating;
-                        final isConnectionBusy =
-                            connectionProvider.status == ConnectionStatus.connecting ||
-                            connectionProvider.status == ConnectionStatus.negotiating ||
-                            connectionProvider.isReconnecting;
-                        final canSubmit = authProvider.isAuthenticated || (!isAuthenticating && !isConnectionBusy);
-                        return AppButton(
-                          label: isAuthenticating
-                              ? l10n.wsButtonAuthenticating
-                              : authProvider.isAuthenticated
-                              ? l10n.wsButtonLogout
-                              : l10n.wsButtonLogin,
-                          isPrimary: false,
-                          isLoading: isAuthenticating,
-                          onPressed: canSubmit ? onLoginOrLogout : null,
-                        );
-                      },
+                    AppButton(
+                      label: isAuthenticating
+                          ? l10n.wsButtonAuthenticating
+                          : isAuthenticatedForConfig
+                          ? l10n.wsButtonLogout
+                          : l10n.wsButtonLogin,
+                      isPrimary: false,
+                      isLoading: isAuthenticating,
+                      onPressed: canSubmit ? onLoginOrLogout : null,
                     ),
                   ],
                 ),
@@ -477,59 +518,57 @@ class _OutboundCompressionSectionState extends State<_OutboundCompressionSection
 class _WebSocketActionButtons extends StatelessWidget {
   const _WebSocketActionButtons({
     required this.formController,
-    required this.configProvider,
     required this.onSaveConfig,
   });
 
   final ConfigFormController formController;
-  final ConfigProvider configProvider;
-  final VoidCallback onSaveConfig;
+  final Future<void> Function() onSaveConfig;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Consumer<ConnectionProvider>(
-      builder: (context, connectionProvider, _) {
-        return Consumer<AuthProvider>(
-          builder: (context, authProvider, _) {
-            final isConnecting = connectionProvider.status == ConnectionStatus.connecting;
-            final isNegotiating = connectionProvider.status == ConnectionStatus.negotiating;
-            final isReconnecting = connectionProvider.status == ConnectionStatus.reconnecting;
-            final isConnectionBusy = isConnecting || isNegotiating || isReconnecting;
-            return SettingsActionRow(
-              leading: AppButton(
-                label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
-                isLoading: isConnectionBusy,
-                onPressed: () => _handleConnectOrDisconnect(
-                  context,
-                  connectionProvider,
-                  authProvider,
-                ),
-              ),
-              trailing: AppButton(
-                label: l10n.wsButtonSaveConfig,
-                isLoading: configProvider.isLoading,
-                onPressed: onSaveConfig,
-              ),
-            );
-          },
+    return Consumer3<ConnectionProvider, AuthProvider, ConfigProvider>(
+      builder: (context, connectionProvider, authProvider, configProvider, _) {
+        final isConnecting = connectionProvider.status == ConnectionStatus.connecting;
+        final isNegotiating = connectionProvider.status == ConnectionStatus.negotiating;
+        final isReconnecting = connectionProvider.status == ConnectionStatus.reconnecting;
+        final isConnectionBusy = isConnecting || isNegotiating || isReconnecting;
+        return SettingsActionRow(
+          leading: AppButton(
+            label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
+            isLoading: isConnectionBusy,
+            onPressed: () async {
+              await _handleConnectOrDisconnect(
+                context,
+                connectionProvider,
+                authProvider,
+              );
+            },
+          ),
+          trailing: AppButton(
+            label: l10n.wsButtonSaveConfig,
+            isLoading: configProvider.isLoading,
+            onPressed: () async {
+              await onSaveConfig();
+            },
+          ),
         );
       },
     );
   }
 
-  void _handleConnectOrDisconnect(
+  Future<void> _handleConnectOrDisconnect(
     BuildContext context,
     ConnectionProvider connectionProvider,
     AuthProvider authProvider,
-  ) {
+  ) async {
     if (connectionProvider.status == ConnectionStatus.connecting ||
         connectionProvider.status == ConnectionStatus.negotiating ||
         connectionProvider.status == ConnectionStatus.reconnecting) {
       return;
     }
     if (connectionProvider.isConnected) {
-      connectionProvider.disconnect();
+      await connectionProvider.disconnect();
       return;
     }
     final l10n = AppLocalizations.of(context)!;
@@ -540,8 +579,12 @@ class _WebSocketActionButtons extends StatelessWidget {
     if (serverUrl.isEmpty || agentId.isEmpty) {
       return;
     }
-    final authToken = authProvider.currentToken?.token.trim();
-    if (!authProvider.isAuthenticated || authToken == null || authToken.isEmpty) {
+    final savedConfig = await _persistConfigBeforeConnect(context);
+    if (!context.mounted || savedConfig == null) {
+      return;
+    }
+    final authToken = authProvider.tokenForConfig(savedConfig.id)?.token.trim();
+    if (!authProvider.isAuthenticatedForConfig(savedConfig.id) || authToken == null || authToken.isEmpty) {
       SettingsFeedback.showError(
         context: context,
         title: l10n.modalTitleError,
@@ -549,9 +592,35 @@ class _WebSocketActionButtons extends StatelessWidget {
       );
       return;
     }
-    configProvider.updateServerUrl(serverUrl);
-    configProvider.updateAgentId(agentId);
-    connectionProvider.connect(serverUrl, agentId, authToken: authToken);
+    await connectionProvider.connect(
+      savedConfig.serverUrl.trim(),
+      savedConfig.agentId.trim(),
+      configId: savedConfig.id,
+      authToken: authToken,
+    );
+  }
+
+  Future<Config?> _persistConfigBeforeConnect(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
+    formController.updateAllFieldsToProvider(configProvider);
+    final saveResult = await configProvider.saveConfig();
+    if (!context.mounted) {
+      return null;
+    }
+
+    Config? savedConfig;
+    saveResult.fold(
+      (config) => savedConfig = config,
+      (failure) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleErrorSaving,
+          message: failure.toDisplayMessage(),
+        );
+      },
+    );
+    return savedConfig;
   }
 }
 

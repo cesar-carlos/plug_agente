@@ -48,6 +48,21 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant DatabaseSettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.configId != widget.configId && widget.configId != null) {
+      _formController.resetForConfig();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _loadConfig(widget.configId!);
+        _checkAndInitializeFields();
+      });
+    }
+  }
+
   Future<void> _loadConfig(String configId) async {
     final configProvider = context.read<ConfigProvider>();
     await configProvider.loadConfigById(configId);
