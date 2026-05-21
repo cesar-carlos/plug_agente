@@ -6,6 +6,7 @@ class AppRoutes {
   static const String dashboard = '/';
   static const String playground = '/playground';
   static const String config = '/config';
+  static const String agentActions = '/agent-actions';
   static const String configEdit = '/config/:id';
   static const String agentProfile = '/agent-profile';
   static const String agentProfileEdit = '/agent-profile/:id';
@@ -48,6 +49,12 @@ class ConfigRoute extends GoRouteData {
     }
     return buf.toString();
   }
+}
+
+class AgentActionsRoute extends GoRouteData {
+  const AgentActionsRoute();
+
+  static const String $location = AppRoutes.agentActions;
 }
 
 class DatabaseSettingsRoute extends GoRouteData {

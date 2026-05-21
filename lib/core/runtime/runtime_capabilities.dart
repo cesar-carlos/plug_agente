@@ -22,7 +22,18 @@ class RuntimeCapabilities {
     );
   }
 
-  /// Capacidades degradadas (Server 2012/2012 R2, Server 2016+).
+  /// Windows Server 2016+ com app desktop: nucleo completo; tray/notificacao/update limitados.
+  factory RuntimeCapabilities.serverShellLimited() {
+    return const RuntimeCapabilities(
+      mode: RuntimeMode.full,
+      supportsTray: false,
+      supportsNotifications: false,
+      supportsAutoUpdate: false,
+      supportsWindowManager: true,
+    );
+  }
+
+  /// Capacidades degradadas (Windows 8/8.1, Server 2012/2012 R2).
   factory RuntimeCapabilities.degraded({
     required List<String> reasons,
   }) {

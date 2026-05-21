@@ -1,3 +1,4 @@
+export 'agent_action_remote_audit_record.dart';
 export 'auth_token.dart';
 export 'authorization_metric.dart';
 export 'authorization_metrics_summary.dart';
@@ -5,6 +6,7 @@ export 'cancellation_token.dart';
 export 'client_token_create_request.dart';
 export 'client_token_list_query.dart';
 export 'client_token_policy.dart';
+export 'client_token_policy_agent_action_authorization.dart';
 export 'client_token_rule.dart';
 export 'client_token_summary.dart';
 export 'client_token_update_result.dart';

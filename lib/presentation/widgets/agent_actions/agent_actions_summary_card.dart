@@ -25,6 +25,18 @@ class AgentActionsSummaryCard extends StatelessWidget {
           _Metric(label: l10n.agentActionsSummaryQueued, value: provider.summaryQueuedCount.toString()),
           _Metric(label: l10n.agentActionsSummaryRunning, value: provider.summaryRunningCount.toString()),
           _Metric(label: l10n.agentActionsSummaryFailed, value: provider.failedCount.toString()),
+          if (provider.isMaintenanceMode)
+            _Metric(
+              label: l10n.agentActionsSummaryMaintenance,
+              value: l10n.agentActionsSummaryMaintenanceActive,
+            ),
+          if (provider.comObjectHandlersRegisteredCount case final int count)
+            _Metric(
+              label: l10n.agentActionsSummaryComHandlers,
+              value: count > 0
+                  ? count.toString()
+                  : l10n.agentActionsSummaryComHandlersNone,
+            ),
         ],
       ),
     );
