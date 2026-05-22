@@ -998,6 +998,438 @@ abstract class AppLocalizations {
   /// **'State'**
   String get agentActionsFormState;
 
+  /// No description provided for @agentActionsHelpTypeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action type'**
+  String get agentActionsHelpTypeTitle;
+
+  /// No description provided for @agentActionsHelpTypeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Defines the runner and internal contract used to save and run this action. After the action is created, the type becomes read-only to avoid accidental runner changes.'**
+  String get agentActionsHelpTypeMessage;
+
+  /// No description provided for @agentActionsHelpStateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action state'**
+  String get agentActionsHelpStateTitle;
+
+  /// No description provided for @agentActionsHelpStateMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls whether the action can run. Actions that need validation remain visible, but should not run automatically until reviewed.'**
+  String get agentActionsHelpStateMessage;
+
+  /// No description provided for @agentActionsHelpCommandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get agentActionsHelpCommandTitle;
+
+  /// No description provided for @agentActionsHelpCommandMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Line sent directly to the command-line runner. Include the executable and arguments as they would be called on Windows; secret placeholders stay in text for secure runtime resolution.'**
+  String get agentActionsHelpCommandMessage;
+
+  /// No description provided for @agentActionsHelpPowerShellModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell mode'**
+  String get agentActionsHelpPowerShellModeTitle;
+
+  /// No description provided for @agentActionsHelpPowerShellModeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Command saves a generated PowerShell wrapper as a command line action. Script .ps1 saves as a script action and reuses the script runner.'**
+  String get agentActionsHelpPowerShellModeMessage;
+
+  /// No description provided for @agentActionsHelpPowerShellExecutableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell executable'**
+  String get agentActionsHelpPowerShellExecutableTitle;
+
+  /// No description provided for @agentActionsHelpPowerShellExecutableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose powershell.exe for Windows PowerShell or pwsh.exe for PowerShell 7. The executable must be available on PATH or in the process environment.'**
+  String get agentActionsHelpPowerShellExecutableMessage;
+
+  /// No description provided for @agentActionsHelpPowerShellCommandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell command'**
+  String get agentActionsHelpPowerShellCommandTitle;
+
+  /// No description provided for @agentActionsHelpPowerShellCommandMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Content passed to PowerShell through -Command. The editor builds the persisted wrapper and preserves secret placeholders for the current scanner.'**
+  String get agentActionsHelpPowerShellCommandMessage;
+
+  /// No description provided for @agentActionsHelpPowerShellScriptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell script'**
+  String get agentActionsHelpPowerShellScriptTitle;
+
+  /// No description provided for @agentActionsHelpPowerShellScriptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Path to a local .ps1 file. In PowerShell 7 mode, pwsh.exe is automatically stored as the script interpreter.'**
+  String get agentActionsHelpPowerShellScriptMessage;
+
+  /// No description provided for @agentActionsHelpPathTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Main path'**
+  String get agentActionsHelpPathTitle;
+
+  /// No description provided for @agentActionsHelpPathMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Main local path used by the runner, such as an executable, script, or input file. Prefer absolute paths; later changes may block execution according to the path change policy.'**
+  String get agentActionsHelpPathMessage;
+
+  /// No description provided for @agentActionsHelpArgumentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments'**
+  String get agentActionsHelpArgumentsTitle;
+
+  /// No description provided for @agentActionsHelpArgumentsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter one argument per line. Each line becomes one argument list item, so do not combine multiple options on one line unless the target program expects that format.'**
+  String get agentActionsHelpArgumentsMessage;
+
+  /// No description provided for @agentActionsHelpWorkingDirectoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get agentActionsHelpWorkingDirectoryTitle;
+
+  /// No description provided for @agentActionsHelpWorkingDirectoryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial process directory. Leave empty to use the runner default or enter an absolute path allowed by the path policy.'**
+  String get agentActionsHelpWorkingDirectoryMessage;
+
+  /// No description provided for @agentActionsHelpInterpreterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Interpreter'**
+  String get agentActionsHelpInterpreterTitle;
+
+  /// No description provided for @agentActionsHelpInterpreterMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Executable used to open scripts. When empty, the runner chooses the default interpreter for the extension; fill it to force a specific version such as pwsh.exe or python.exe.'**
+  String get agentActionsHelpInterpreterMessage;
+
+  /// No description provided for @agentActionsHelpJarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'JAR file'**
+  String get agentActionsHelpJarTitle;
+
+  /// No description provided for @agentActionsHelpJarMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The .jar file that Java will execute. The path is stored in the definition and participates in the path change policy.'**
+  String get agentActionsHelpJarMessage;
+
+  /// No description provided for @agentActionsHelpEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email field'**
+  String get agentActionsHelpEmailTitle;
+
+  /// No description provided for @agentActionsHelpEmailMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration used by the email runner. Recipient and attachment fields accept one item per line; the SMTP profile must exist in local configuration.'**
+  String get agentActionsHelpEmailMessage;
+
+  /// No description provided for @agentActionsHelpComTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'COM object'**
+  String get agentActionsHelpComTitle;
+
+  /// No description provided for @agentActionsHelpComMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Identifies the COM object ProgID, the method or property called, and the arguments sent. Use only COM automations installed and tested on the local Windows machine.'**
+  String get agentActionsHelpComMessage;
+
+  /// No description provided for @agentActionsHelpDeveloperTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer Data7'**
+  String get agentActionsHelpDeveloperTitle;
+
+  /// No description provided for @agentActionsHelpDeveloperMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Configures the Executor.exe, .7Proj project, Data7.Config, and connection used to run the Developer action.'**
+  String get agentActionsHelpDeveloperMessage;
+
+  /// No description provided for @agentActionsHelpMaxAttemptsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum attempts'**
+  String get agentActionsHelpMaxAttemptsTitle;
+
+  /// No description provided for @agentActionsHelpMaxAttemptsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum attempts for local runs and triggers. Remote runs stay at one attempt unless remote retry is enabled.'**
+  String get agentActionsHelpMaxAttemptsMessage;
+
+  /// No description provided for @agentActionsHelpTimeoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum runtime'**
+  String get agentActionsHelpTimeoutTitle;
+
+  /// No description provided for @agentActionsHelpTimeoutMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Local execution timeout in minutes. When reached, execution fails as timed out and the policy below decides whether the main process should be killed.'**
+  String get agentActionsHelpTimeoutMessage;
+
+  /// No description provided for @agentActionsHelpKillOnTimeoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill on timeout'**
+  String get agentActionsHelpKillOnTimeoutTitle;
+
+  /// No description provided for @agentActionsHelpKillOnTimeoutMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, the runner tries to kill the main process if execution exceeds the configured maximum runtime.'**
+  String get agentActionsHelpKillOnTimeoutMessage;
+
+  /// No description provided for @agentActionsHelpRemoteRetryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote retry'**
+  String get agentActionsHelpRemoteRetryTitle;
+
+  /// No description provided for @agentActionsHelpRemoteRetryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Allows Hub-started executions to use the retry policy. Enable only when repeating this action is safe.'**
+  String get agentActionsHelpRemoteRetryMessage;
+
+  /// No description provided for @agentActionsHelpRunElevatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated execution'**
+  String get agentActionsHelpRunElevatedTitle;
+
+  /// No description provided for @agentActionsHelpRunElevatedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs through the elevated helper when available. Requires local helper installation and scheduled task setup.'**
+  String get agentActionsHelpRunElevatedMessage;
+
+  /// No description provided for @agentActionsHelpContextInjectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Context injection'**
+  String get agentActionsHelpContextInjectionTitle;
+
+  /// No description provided for @agentActionsHelpContextInjectionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Defines how runtime parameters enter the execution: argument, file, environment variables, or stdin.'**
+  String get agentActionsHelpContextInjectionMessage;
+
+  /// No description provided for @agentActionsHelpPathChangePolicyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Path change policy'**
+  String get agentActionsHelpPathChangePolicyTitle;
+
+  /// No description provided for @agentActionsHelpPathChangePolicyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls what happens when paths or content snapshots change after validation: fail, warn, or allow.'**
+  String get agentActionsHelpPathChangePolicyMessage;
+
+  /// No description provided for @agentActionsHelpRuntimeSchemaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime schema'**
+  String get agentActionsHelpRuntimeSchemaTitle;
+
+  /// No description provided for @agentActionsHelpRuntimeSchemaMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'JSON Schema object used to validate runtimeParameters before execution. Use it when the Hub or triggers send parameters; leave empty to accept any object.'**
+  String get agentActionsHelpRuntimeSchemaMessage;
+
+  /// No description provided for @agentActionsHelpAllowedProfilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed profiles'**
+  String get agentActionsHelpAllowedProfilesTitle;
+
+  /// No description provided for @agentActionsHelpAllowedProfilesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Restricts the action to the listed operational profiles. Empty means any agent profile is allowed.'**
+  String get agentActionsHelpAllowedProfilesMessage;
+
+  /// No description provided for @agentActionsHelpAllowedEnvironmentVariablesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed variable names'**
+  String get agentActionsHelpAllowedEnvironmentVariablesTitle;
+
+  /// No description provided for @agentActionsHelpAllowedEnvironmentVariablesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Lists variable names that may be injected into the process. Use it to block unexpected names from runtime parameters or later edits.'**
+  String get agentActionsHelpAllowedEnvironmentVariablesMessage;
+
+  /// No description provided for @agentActionsHelpEnvironmentVariablesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment variables'**
+  String get agentActionsHelpEnvironmentVariablesTitle;
+
+  /// No description provided for @agentActionsHelpEnvironmentVariablesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Variables added to the child process as NAME=value, one per line. Secret placeholders remain resolved at runtime.'**
+  String get agentActionsHelpEnvironmentVariablesMessage;
+
+  /// No description provided for @agentActionsHelpQueueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Concurrency and queue'**
+  String get agentActionsHelpQueueTitle;
+
+  /// No description provided for @agentActionsHelpQueueMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Defines how many runs of this action may execute simultaneously, how many wait in queue, and whether new requests fail, wait, or replace a full queue.'**
+  String get agentActionsHelpQueueMessage;
+
+  /// No description provided for @agentActionsHelpPathAllowlistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Directory allowlist'**
+  String get agentActionsHelpPathAllowlistTitle;
+
+  /// No description provided for @agentActionsHelpPathAllowlistMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist.'**
+  String get agentActionsHelpPathAllowlistMessage;
+
+  /// No description provided for @agentActionsHelpProcessWindowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Process window'**
+  String get agentActionsHelpProcessWindowTitle;
+
+  /// No description provided for @agentActionsHelpProcessWindowMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls the locally started process window: normal, hidden, or minimized, according to Windows support.'**
+  String get agentActionsHelpProcessWindowMessage;
+
+  /// No description provided for @agentActionsHelpCaptureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Output capture'**
+  String get agentActionsHelpCaptureTitle;
+
+  /// No description provided for @agentActionsHelpCaptureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls whether stdout and stderr are stored in history. Redaction tries to mask secrets before persistence, but sensitive output should still be avoided.'**
+  String get agentActionsHelpCaptureMessage;
+
+  /// No description provided for @agentActionsHelpEncodingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Output encoding'**
+  String get agentActionsHelpEncodingTitle;
+
+  /// No description provided for @agentActionsHelpEncodingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Defines how captured stdout and stderr are decoded, using UTF-8 or the Windows system console.'**
+  String get agentActionsHelpEncodingMessage;
+
+  /// No description provided for @agentActionsHelpAcceptedExitCodesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit codes'**
+  String get agentActionsHelpAcceptedExitCodesTitle;
+
+  /// No description provided for @agentActionsHelpAcceptedExitCodesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Codes that count as success. The default is 0; additional values must be comma-separated.'**
+  String get agentActionsHelpAcceptedExitCodesMessage;
+
+  /// No description provided for @agentActionsHelpOnAppExitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When agent closes'**
+  String get agentActionsHelpOnAppExitTitle;
+
+  /// No description provided for @agentActionsHelpOnAppExitMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Defines what to do with still-running processes when Plug Agent closes: try to stop them, leave them running, or block according to runner support.'**
+  String get agentActionsHelpOnAppExitMessage;
+
+  /// No description provided for @agentActionsHelpRemoteExecutionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote execution'**
+  String get agentActionsHelpRemoteExecutionTitle;
+
+  /// No description provided for @agentActionsHelpRemoteExecutionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Allows the Hub to execute this saved action over Socket.IO JSON-RPC. Requires local approval and should be enabled only for reviewed actions.'**
+  String get agentActionsHelpRemoteExecutionMessage;
+
+  /// No description provided for @agentActionsHelpRemoteAdHocTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote ad-hoc'**
+  String get agentActionsHelpRemoteAdHocTitle;
+
+  /// No description provided for @agentActionsHelpRemoteAdHocMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Allows free-form commands sent by the Hub when the global feature is enabled. Keep it disabled except in controlled environments because it greatly increases risk exposure.'**
+  String get agentActionsHelpRemoteAdHocMessage;
+
+  /// No description provided for @agentActionsHelpNotificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get agentActionsHelpNotificationsTitle;
+
+  /// No description provided for @agentActionsHelpNotificationsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls desktop notifications shown when local runs finish with success, failure, or timeout.'**
+  String get agentActionsHelpNotificationsMessage;
+
   /// No description provided for @agentActionsFormNotificationsTitle.
   ///
   /// In en, this message translates to:

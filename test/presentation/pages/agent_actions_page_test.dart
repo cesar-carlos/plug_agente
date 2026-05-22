@@ -56,6 +56,8 @@ import 'package:plug_agente/infrastructure/repositories/agent_action_portable_co
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions_page.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -70,6 +72,45 @@ Finder _agentActionFormTextBox(String label) {
   );
 }
 
+Finder _formComboBox(String label) {
+  return find.descendant(
+    of: find.byWidgetPredicate(
+      (widget) => widget is AppDropdown<dynamic> && widget.label == label,
+    ),
+    matching: find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString().startsWith('ComboBox<'),
+    ),
+  );
+}
+
+Finder _agentActionFormHelpButton(String label) {
+  final field = find.byWidgetPredicate(
+    (widget) {
+      return (widget is AppTextField && widget.label == label) ||
+          (widget is AppDropdown<dynamic> && widget.label == label);
+    },
+  );
+  return find.descendant(
+    of: field,
+    matching: find.byType(AppHelpButton),
+  );
+}
+
+Finder _agentActionFormHelpButtonByKey(String label) {
+  return find.byKey(ValueKey<String>('app_help_button_${_helpButtonKeyToken(label)}'));
+}
+
+String _helpButtonKeyToken(String label) {
+  var token = label.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
+  while (token.startsWith('_')) {
+    token = token.substring(1);
+  }
+  while (token.endsWith('_')) {
+    token = token.substring(0, token.length - 1);
+  }
+  return token;
+}
+
 Finder _agentActionFormComboBox(String label) {
   final key = switch (label) {
     'Tipo' || 'Type' => 'agent_action_editor_type_dropdown',
@@ -78,6 +119,10 @@ Finder _agentActionFormComboBox(String label) {
     _ => throw StateError('Unknown action form combo box label: $label'),
   };
 
+  return _agentActionFormComboBoxByKey(key);
+}
+
+Finder _agentActionFormComboBoxByKey(String key) {
   return find.descendant(
     of: find.byKey(ValueKey<String>(key)),
     matching: find.byWidgetPredicate(
@@ -86,11 +131,22 @@ Finder _agentActionFormComboBox(String label) {
   );
 }
 
+Finder _agentActionFormTextBoxByKey(String key) {
+  return find.descendant(
+    of: find.byKey(ValueKey<String>(key)),
+    matching: find.byType(TextBox),
+  );
+}
+
 Finder _filledButtonWithText(String text) {
   return find.ancestor(
     of: find.text(text),
     matching: find.byType(FilledButton),
   );
+}
+
+void _drainPendingFlutterErrors(WidgetTester tester) {
+  while (tester.takeException() != null) {}
 }
 
 Future<void> _openTab(WidgetTester tester, String label) async {
@@ -142,6 +198,45 @@ Future<void> _openActionDetailsDialog(WidgetTester tester, String actionId) asyn
   await tester.tap(find.byKey(ValueKey<String>('agent_action_definition_details_$actionId')));
   await tester.pumpAndSettle();
   expect(find.byType(ContentDialog), findsOneWidget);
+}
+
+Future<void> _setResponsiveTestWindow(WidgetTester tester, Size size) async {
+  await tester.binding.setSurfaceSize(size);
+  tester.view
+    ..physicalSize = size
+    ..devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view
+      ..resetPhysicalSize()
+      ..resetDevicePixelRatio();
+  });
+}
+
+Future<void> _openCreateTriggerDialog(WidgetTester tester, AppLocalizations l10n) async {
+  await tester.tap(find.widgetWithText(Button, l10n.agentActionsTriggerAdd).last);
+  await tester.pumpAndSettle();
+  expect(find.text(l10n.agentActionsTriggerEditorTitleNew), findsOneWidget);
+}
+
+Future<void> _selectTriggerType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
+  await tester.tap(_formComboBox(l10n.agentActionsTriggerFieldType));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(typeLabel).last);
+  await tester.pumpAndSettle();
+}
+
+String _triggerTypeTestLabel(AgentActionTriggerType type, AppLocalizations l10n) {
+  return switch (type) {
+    AgentActionTriggerType.manual => l10n.agentActionsTriggerTypeManual,
+    AgentActionTriggerType.remote => l10n.agentActionsTriggerTypeRemote,
+    AgentActionTriggerType.once => l10n.agentActionsTriggerTypeOnce,
+    AgentActionTriggerType.interval => l10n.agentActionsTriggerTypeInterval,
+    AgentActionTriggerType.daily => l10n.agentActionsTriggerTypeDaily,
+    AgentActionTriggerType.weekly => l10n.agentActionsTriggerTypeWeekly,
+    AgentActionTriggerType.monthly => l10n.agentActionsTriggerTypeMonthly,
+    AgentActionTriggerType.appStart => l10n.agentActionsTriggerTypeAppStart,
+    AgentActionTriggerType.appClose => l10n.agentActionsTriggerTypeAppClose,
+  };
 }
 
 void main() {
@@ -197,6 +292,53 @@ void main() {
     expect(find.text(ptL10n.agentActionsRetentionTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionEnvVariables), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionSave), findsOneWidget);
+  });
+
+  testWidgets('action editor shows help flyouts for critical fields', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    expect(_agentActionFormHelpButton(ptL10n.agentActionsFormType), findsOneWidget);
+    expect(_agentActionFormHelpButton(ptL10n.agentActionsFormState), findsOneWidget);
+    expect(_agentActionFormHelpButton(ptL10n.agentActionsFormCommand), findsOneWidget);
+    expect(_agentActionFormHelpButton(ptL10n.agentActionsFormName), findsNothing);
+    expect(_agentActionFormHelpButtonByKey(ptL10n.agentActionsFormType), findsOneWidget);
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == '${ptL10n.agentActionsFormType}. ${ptL10n.agentActionsHelpTypeTitle}' &&
+            widget.properties.hint == ptL10n.agentActionsHelpTypeMessage,
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(_agentActionFormHelpButtonByKey(ptL10n.agentActionsFormType));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FlyoutContent), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsHelpTypeTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsHelpTypeMessage), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsHelpTypeTitle), findsNothing);
+
+    await tester.tap(_agentActionFormHelpButtonByKey(ptL10n.agentActionsFormType));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FlyoutContent), findsOneWidget);
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FlyoutContent), findsNothing);
   });
 
   testWidgets('should persist retention values when saved', (tester) async {
@@ -512,15 +654,178 @@ void main() {
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
 
+    await _openActionDetailsDialog(tester, 'action-1');
     await harness.provider.refreshTriggersForSelection();
     await tester.pumpAndSettle();
-    await _openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsTriggersTitle), findsOneWidget);
     expect(find.text('Morning'), findsOneWidget);
     expect(find.textContaining('America/Sao_Paulo'), findsOneWidget);
     expect(find.textContaining(ptL10n.agentActionsTriggerSummaryCatchUpEnabled), findsOneWidget);
   });
+
+  testWidgets('trigger dialog uses larger desktop surface with fixed footer', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await _setResponsiveTestWindow(tester, const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
+    await _openCreateTriggerDialog(tester, ptL10n);
+
+    final surface = find.byKey(const ValueKey<String>('agent_action_trigger_dialog_surface'));
+    expect(surface, findsOneWidget);
+    expect(tester.getSize(surface).width, greaterThan(650));
+    expect(tester.getSize(surface).height, greaterThan(540));
+    expect(find.widgetWithText(FilledButton, ptL10n.agentActionsTriggerSave), findsOneWidget);
+  });
+
+  testWidgets('trigger dialog places paired fields side by side on desktop', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await _setResponsiveTestWindow(tester, const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
+    await _openCreateTriggerDialog(tester, ptL10n);
+    _drainPendingFlutterErrors(tester);
+    await _selectTriggerType(tester, ptL10n, ptL10n.agentActionsTriggerTypeInterval);
+
+    final intervalTopLeft = tester.getTopLeft(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldIntervalMinutes));
+    final startTopLeft = tester.getTopLeft(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldStartAtOptional));
+    expect((intervalTopLeft.dy - startTopLeft.dy).abs(), lessThan(20));
+    expect(startTopLeft.dx, greaterThan(intervalTopLeft.dx));
+  });
+
+  testWidgets('trigger dialog stacks paired fields in compact width', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    harness.repository.triggers['trig-1'] = const AgentActionTrigger(
+      id: 'trig-1',
+      actionId: 'action-1',
+      type: AgentActionTriggerType.interval,
+      name: 'Every 15 minutes',
+      schedule: AgentActionTriggerSchedule(interval: Duration(minutes: 15)),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(920, 700));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await harness.provider.refreshTriggersForSelection();
+    await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
+    _drainPendingFlutterErrors(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('agent_action_trigger_edit_trig-1')));
+    await tester.pumpAndSettle();
+    _drainPendingFlutterErrors(tester);
+
+    final intervalTopLeft = tester.getTopLeft(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldIntervalMinutes));
+    final startTopLeft = tester.getTopLeft(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldStartAtOptional));
+    expect((intervalTopLeft.dx - startTopLeft.dx).abs(), lessThan(4));
+    expect(startTopLeft.dy, greaterThan(intervalTopLeft.dy));
+  });
+
+  testWidgets('trigger dialog keeps save action visible while content scrolls', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await _setResponsiveTestWindow(tester, const Size(900, 560));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openActionDetailsDialog(tester, 'action-1');
+    await _openCreateTriggerDialog(tester, ptL10n);
+    _drainPendingFlutterErrors(tester);
+    await _selectTriggerType(tester, ptL10n, ptL10n.agentActionsTriggerTypeWeekly);
+
+    await tester.drag(
+      find.byKey(const ValueKey<String>('agent_action_trigger_dialog_scroll')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, ptL10n.agentActionsTriggerSave), findsOneWidget);
+    _drainPendingFlutterErrors(tester);
+  });
+
+  for (final scenario in <({String label, AgentActionTriggerType type, Future<void> Function(WidgetTester) fill})>[
+    (
+      label: 'manual',
+      type: AgentActionTriggerType.manual,
+      fill: (tester) async {},
+    ),
+    (
+      label: 'interval',
+      type: AgentActionTriggerType.interval,
+      fill: (tester) async {
+        await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldIntervalMinutes), '15');
+      },
+    ),
+    (
+      label: 'weekly',
+      type: AgentActionTriggerType.weekly,
+      fill: (tester) async {
+        await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldTimeOfDay), '08:30');
+        await tester.tap(find.widgetWithText(Checkbox, ptL10n.agentActionsTriggerWeekdayMon));
+      },
+    ),
+    (
+      label: 'monthly',
+      type: AgentActionTriggerType.monthly,
+      fill: (tester) async {
+        await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldTimeOfDay), '08:30');
+        await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsTriggerFieldDayOfMonth), '15');
+      },
+    ),
+  ]) {
+    testWidgets('saves ${scenario.label} trigger after layout changes', (tester) async {
+      final harness = _AgentActionsPageHarness();
+      harness.repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+
+      await _setResponsiveTestWindow(tester, const Size(1400, 900));
+      await tester.pumpWidget(harness.buildWidget());
+      await tester.pumpAndSettle();
+      await _openActionDetailsDialog(tester, 'action-1');
+      await _openCreateTriggerDialog(tester, ptL10n);
+      await _selectTriggerType(tester, ptL10n, _triggerTypeTestLabel(scenario.type, ptL10n));
+      await scenario.fill(tester);
+
+      await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsTriggerSave));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      expect(harness.repository.triggers, hasLength(1));
+      expect(harness.repository.triggers.values.single.type, scenario.type);
+      expect(find.text(ptL10n.agentActionsTriggerEditorTitleNew), findsNothing);
+    });
+  }
 
   testWidgets('saves a command line action from the form', (tester) async {
     final harness = _AgentActionsPageHarness();
@@ -712,6 +1017,30 @@ void main() {
     expect(scriptPathField.controller?.text, r'C:\Jobs\backup.ps1');
   });
 
+  testWidgets('shows action type as read-only when editing existing action', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Command line',
+      config: CommandLineActionConfig(command: 'whoami'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1800));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+
+    expect(
+      _agentActionFormComboBoxByKey('agent_action_editor_type_dropdown'),
+      findsNothing,
+    );
+    final typeField = tester.widget<TextBox>(
+      _agentActionFormTextBoxByKey('agent_action_editor_type_dropdown'),
+    );
+    expect(typeField.readOnly, isTrue);
+    expect(typeField.controller?.text, ptL10n.agentActionsTypeCommandLine);
+  });
+
   testWidgets('opens generated PowerShell command line action in inline mode', (tester) async {
     final harness = _AgentActionsPageHarness();
     harness.repository.definitions['action-1'] = AgentActionDefinition(
@@ -729,6 +1058,15 @@ void main() {
 
     expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
+    expect(
+      _agentActionFormComboBoxByKey('agent_action_editor_powershell_mode_dropdown'),
+      findsNothing,
+    );
+    final modeField = tester.widget<TextBox>(
+      _agentActionFormTextBoxByKey('agent_action_editor_powershell_mode_dropdown'),
+    );
+    expect(modeField.readOnly, isTrue);
+    expect(modeField.controller?.text, ptL10n.agentActionsFormPowerShellModeCommand);
     final commandField = tester.widget<TextBox>(
       _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
     );

@@ -502,6 +502,258 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormState => 'Estado';
 
   @override
+  String get agentActionsHelpTypeTitle => 'Tipo da acao';
+
+  @override
+  String get agentActionsHelpTypeMessage =>
+      'Define o runner e o contrato interno usado para salvar e executar a acao. Depois que a acao e criada, o tipo fica somente leitura para evitar troca acidental de runner.';
+
+  @override
+  String get agentActionsHelpStateTitle => 'Estado da acao';
+
+  @override
+  String get agentActionsHelpStateMessage =>
+      'Controla se a acao pode executar. Acoes que precisam validar aparecem na lista, mas nao devem ser executadas automaticamente ate serem revisadas.';
+
+  @override
+  String get agentActionsHelpCommandTitle => 'Comando';
+
+  @override
+  String get agentActionsHelpCommandMessage =>
+      'Linha enviada diretamente ao runner de linha de comando. Inclua o executavel e argumentos como seriam chamados no Windows; placeholders de segredo permanecem em texto para resolucao segura no runtime.';
+
+  @override
+  String get agentActionsHelpPowerShellModeTitle => 'Modo PowerShell';
+
+  @override
+  String get agentActionsHelpPowerShellModeMessage =>
+      'Comando salva um wrapper de PowerShell como linha de comando. Script .ps1 salva como acao de script, reaproveitando o runner de scripts.';
+
+  @override
+  String get agentActionsHelpPowerShellExecutableTitle => 'Executavel PowerShell';
+
+  @override
+  String get agentActionsHelpPowerShellExecutableMessage =>
+      'Escolha powershell.exe para Windows PowerShell ou pwsh.exe para PowerShell 7. O executavel precisa estar disponivel no PATH ou no ambiente do processo.';
+
+  @override
+  String get agentActionsHelpPowerShellCommandTitle => 'Comando PowerShell';
+
+  @override
+  String get agentActionsHelpPowerShellCommandMessage =>
+      'Conteudo passado ao PowerShell via -Command. O editor monta o wrapper persistido e preserva placeholders de segredo para o scanner atual.';
+
+  @override
+  String get agentActionsHelpPowerShellScriptTitle => 'Script PowerShell';
+
+  @override
+  String get agentActionsHelpPowerShellScriptMessage =>
+      'Caminho para um arquivo .ps1 local. No modo PowerShell 7, o interpretador pwsh.exe e preenchido automaticamente na configuracao de script.';
+
+  @override
+  String get agentActionsHelpPathTitle => 'Caminho principal';
+
+  @override
+  String get agentActionsHelpPathMessage =>
+      'Caminho local principal usado pelo runner, como executavel, script ou arquivo de entrada. Prefira caminho absoluto; alteracoes futuras podem bloquear a execucao conforme a politica de mudanca de path.';
+
+  @override
+  String get agentActionsHelpArgumentsTitle => 'Argumentos';
+
+  @override
+  String get agentActionsHelpArgumentsMessage =>
+      'Informe um argumento por linha. Cada linha vira um item da lista de argumentos, entao nao misture varias opcoes na mesma linha a menos que o programa espere esse formato.';
+
+  @override
+  String get agentActionsHelpWorkingDirectoryTitle => 'Diretorio de trabalho';
+
+  @override
+  String get agentActionsHelpWorkingDirectoryMessage =>
+      'Diretorio inicial do processo. Deixe vazio para usar o padrao do runner ou preencha um caminho absoluto permitido pela politica de path.';
+
+  @override
+  String get agentActionsHelpInterpreterTitle => 'Interpretador';
+
+  @override
+  String get agentActionsHelpInterpreterMessage =>
+      'Executavel usado para abrir scripts. Quando vazio, o runner escolhe o interpretador padrao da extensao; preencha para forcar uma versao especifica, como pwsh.exe ou python.exe.';
+
+  @override
+  String get agentActionsHelpJarTitle => 'Arquivo JAR';
+
+  @override
+  String get agentActionsHelpJarMessage =>
+      'Arquivo .jar que sera executado pelo Java. O caminho e salvo na definicao e participa da politica de mudanca de path.';
+
+  @override
+  String get agentActionsHelpEmailTitle => 'Campo de e-mail';
+
+  @override
+  String get agentActionsHelpEmailMessage =>
+      'Configuracao usada pelo runner de e-mail. Campos de destinatarios e anexos aceitam um item por linha; o perfil SMTP precisa existir na configuracao local.';
+
+  @override
+  String get agentActionsHelpComTitle => 'Objeto COM';
+
+  @override
+  String get agentActionsHelpComMessage =>
+      'Identifica o ProgID do objeto COM, o metodo ou propriedade chamada e os argumentos enviados. Use apenas automacoes COM instaladas e testadas no Windows local.';
+
+  @override
+  String get agentActionsHelpDeveloperTitle => 'Developer Data7';
+
+  @override
+  String get agentActionsHelpDeveloperMessage =>
+      'Configura o Executor.exe, projeto .7Proj, Data7.Config e conexao que serao usados para executar a acao Developer.';
+
+  @override
+  String get agentActionsHelpMaxAttemptsTitle => 'Maximo de tentativas';
+
+  @override
+  String get agentActionsHelpMaxAttemptsMessage =>
+      'Quantidade maxima de tentativas para execucoes locais e gatilhos. Execucoes remotas continuam em uma tentativa, salvo se retry remoto estiver habilitado.';
+
+  @override
+  String get agentActionsHelpTimeoutTitle => 'Tempo maximo';
+
+  @override
+  String get agentActionsHelpTimeoutMessage =>
+      'Tempo limite da execucao local em minutos. Ao atingir o limite, a execucao falha por timeout e a politica abaixo decide se o processo principal deve ser encerrado.';
+
+  @override
+  String get agentActionsHelpKillOnTimeoutTitle => 'Encerrar no timeout';
+
+  @override
+  String get agentActionsHelpKillOnTimeoutMessage =>
+      'Quando marcado, o runner tenta encerrar o processo principal se a execucao ultrapassar o tempo maximo configurado.';
+
+  @override
+  String get agentActionsHelpRemoteRetryTitle => 'Retry remoto';
+
+  @override
+  String get agentActionsHelpRemoteRetryMessage =>
+      'Permite que execucoes iniciadas pelo Hub usem a politica de retry. Use apenas quando repetir a acao for seguro.';
+
+  @override
+  String get agentActionsHelpRunElevatedTitle => 'Execucao elevada';
+
+  @override
+  String get agentActionsHelpRunElevatedMessage =>
+      'Executa por helper elevado quando disponivel. Requer instalacao e configuracao local do helper e da tarefa agendada.';
+
+  @override
+  String get agentActionsHelpContextInjectionTitle => 'Injecao de contexto';
+
+  @override
+  String get agentActionsHelpContextInjectionMessage =>
+      'Define como parametros runtime entram na execucao: argumento, arquivo, variaveis de ambiente ou stdin.';
+
+  @override
+  String get agentActionsHelpPathChangePolicyTitle => 'Mudanca de path';
+
+  @override
+  String get agentActionsHelpPathChangePolicyMessage =>
+      'Controla o que acontece quando caminhos ou snapshots de conteudo mudam depois da validacao: falhar, avisar ou permitir.';
+
+  @override
+  String get agentActionsHelpRuntimeSchemaTitle => 'Schema runtime';
+
+  @override
+  String get agentActionsHelpRuntimeSchemaMessage =>
+      'Objeto JSON Schema usado para validar runtimeParameters antes da execucao. Use quando o Hub ou gatilhos enviarem parametros; deixe vazio para aceitar qualquer objeto.';
+
+  @override
+  String get agentActionsHelpAllowedProfilesTitle => 'Perfis permitidos';
+
+  @override
+  String get agentActionsHelpAllowedProfilesMessage =>
+      'Limita a acao aos perfis operacionais informados. Campo vazio permite qualquer perfil do agente.';
+
+  @override
+  String get agentActionsHelpAllowedEnvironmentVariablesTitle => 'Nomes de variaveis permitidos';
+
+  @override
+  String get agentActionsHelpAllowedEnvironmentVariablesMessage =>
+      'Lista os nomes de variaveis que podem ser injetadas no processo. Use para impedir nomes inesperados vindos de parametros runtime ou edicoes futuras.';
+
+  @override
+  String get agentActionsHelpEnvironmentVariablesTitle => 'Variaveis de ambiente';
+
+  @override
+  String get agentActionsHelpEnvironmentVariablesMessage =>
+      'Variaveis adicionadas ao processo filho no formato NAME=valor, uma por linha. Placeholders de segredo continuam resolvidos no runtime.';
+
+  @override
+  String get agentActionsHelpQueueTitle => 'Concorrencia e fila';
+
+  @override
+  String get agentActionsHelpQueueMessage =>
+      'Define quantas execucoes desta acao podem rodar ao mesmo tempo, quantas aguardam fila e se novas solicitacoes devem falhar, esperar ou substituir fila cheia.';
+
+  @override
+  String get agentActionsHelpPathAllowlistTitle => 'Allowlist de diretorios';
+
+  @override
+  String get agentActionsHelpPathAllowlistMessage =>
+      'Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra.';
+
+  @override
+  String get agentActionsHelpProcessWindowTitle => 'Janela do processo';
+
+  @override
+  String get agentActionsHelpProcessWindowMessage =>
+      'Controla a janela do processo iniciado localmente: normal, oculta ou minimizada, conforme suporte do Windows.';
+
+  @override
+  String get agentActionsHelpCaptureTitle => 'Captura de saida';
+
+  @override
+  String get agentActionsHelpCaptureMessage =>
+      'Define se stdout e stderr sao armazenados no historico. A redacao tenta mascarar segredos antes de persistir, mas saida sensivel ainda deve ser evitada.';
+
+  @override
+  String get agentActionsHelpEncodingTitle => 'Encoding de saida';
+
+  @override
+  String get agentActionsHelpEncodingMessage =>
+      'Define como stdout e stderr capturados serao decodificados, usando UTF-8 ou o console do sistema Windows.';
+
+  @override
+  String get agentActionsHelpAcceptedExitCodesTitle => 'Codigos de saida';
+
+  @override
+  String get agentActionsHelpAcceptedExitCodesMessage =>
+      'Lista de codigos que contam como sucesso. O padrao e 0; outros valores devem ser separados por virgula.';
+
+  @override
+  String get agentActionsHelpOnAppExitTitle => 'Ao fechar o agente';
+
+  @override
+  String get agentActionsHelpOnAppExitMessage =>
+      'Define o que fazer com processos ainda em execucao quando o Plug Agente for fechado: tentar encerrar, deixar continuar ou bloquear conforme suporte do runner.';
+
+  @override
+  String get agentActionsHelpRemoteExecutionTitle => 'Execucao remota';
+
+  @override
+  String get agentActionsHelpRemoteExecutionMessage =>
+      'Permite que o Hub execute esta acao salva via Socket.IO JSON-RPC. Exige aprovacao local e deve ficar ativo somente em acoes revisadas.';
+
+  @override
+  String get agentActionsHelpRemoteAdHocTitle => 'Ad-hoc remoto';
+
+  @override
+  String get agentActionsHelpRemoteAdHocMessage =>
+      'Permite comandos livres enviados pelo Hub quando a feature global esta habilitada. Mantenha desativado salvo em ambientes controlados, pois amplia bastante a superficie de risco.';
+
+  @override
+  String get agentActionsHelpNotificationsTitle => 'Notificacoes';
+
+  @override
+  String get agentActionsHelpNotificationsMessage =>
+      'Controla notificacoes desktop exibidas quando execucoes locais terminam com sucesso, falha ou timeout.';
+
+  @override
   String get agentActionsFormNotificationsTitle => 'Notificacoes desktop';
 
   @override

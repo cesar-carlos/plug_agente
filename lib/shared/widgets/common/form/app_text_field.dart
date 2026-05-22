@@ -25,6 +25,10 @@ class AppTextField extends StatefulWidget {
     this.autofocus = false,
     this.textInputAction,
     this.onSubmitted,
+    this.helpTitle,
+    this.helpMessage,
+    this.helpTooltip,
+    this.helpButtonKey,
   });
 
   final String label;
@@ -45,6 +49,10 @@ class AppTextField extends StatefulWidget {
   final bool autofocus;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final String? helpTitle;
+  final String? helpMessage;
+  final String? helpTooltip;
+  final Key? helpButtonKey;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -160,6 +168,10 @@ class _AppTextFieldState extends State<AppTextField> {
     return AppLabeledField(
       label: widget.label,
       errorText: _errorText,
+      helpTitle: widget.helpTitle,
+      helpMessage: widget.helpMessage,
+      helpTooltip: widget.helpTooltip,
+      helpButtonKey: widget.helpButtonKey,
       child: textBox,
     );
   }

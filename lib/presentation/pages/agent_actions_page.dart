@@ -38,6 +38,7 @@ import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_too
 import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
@@ -1635,6 +1636,7 @@ class _AgentActionTriggerRow extends StatelessWidget {
             button: true,
             label: l10n.agentActionsTriggerEdit,
             child: IconButton(
+              key: ValueKey<String>('agent_action_trigger_edit_${trigger.id}'),
               icon: const Icon(FluentIcons.edit),
               onPressed: provider.canManageTriggers && !provider.isSavingTrigger
                   ? () {
@@ -1659,6 +1661,7 @@ class _AgentActionTriggerRow extends StatelessWidget {
             button: true,
             label: l10n.agentActionsTriggerDelete,
             child: IconButton(
+              key: ValueKey<String>('agent_action_trigger_delete_${trigger.id}'),
               icon: provider.isDeletingTrigger(trigger.id)
                   ? const SizedBox.square(
                       dimension: 14,

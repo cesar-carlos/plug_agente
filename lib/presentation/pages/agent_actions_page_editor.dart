@@ -94,6 +94,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   final TextEditingController _maxQueuedController = TextEditingController(text: '100');
   final TextEditingController _allowedWorkingDirectoriesController = TextEditingController();
   final TextEditingController _allowedContextDirectoriesController = TextEditingController();
+  final TextEditingController _actionTypeDisplayController = TextEditingController();
+  final TextEditingController _powerShellModeDisplayController = TextEditingController();
   final ScrollController _dialogScrollController = ScrollController();
 
   String? _editingActionId;
@@ -144,6 +146,9 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       _loadDefinition(widget.definition);
       _resetVisibleDialogSections();
     }
+    if (oldWidget.l10n != widget.l10n) {
+      _syncReadOnlyDisplayControllers();
+    }
   }
 
   @override
@@ -185,6 +190,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     _maxQueuedController.dispose();
     _allowedWorkingDirectoriesController.dispose();
     _allowedContextDirectoriesController.dispose();
+    _actionTypeDisplayController.dispose();
+    _powerShellModeDisplayController.dispose();
     _dialogScrollController.dispose();
     super.dispose();
   }
@@ -270,11 +277,25 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       _powerShellMode = _defaultAvailablePowerShellMode();
     }
     _draftType = _actionTypeForDraftKind(draftKind);
+    _syncReadOnlyDisplayControllers();
   }
 
   void _setPowerShellMode(_PowerShellDraftMode mode) {
     _powerShellMode = mode;
     _draftType = _actionTypeForDraftKind(_AgentActionDraftKind.powerShell);
+    _syncReadOnlyDisplayControllers();
+  }
+
+  void _syncReadOnlyDisplayControllers() {
+    _setControllerText(_actionTypeDisplayController, _draftKindLabel(_draftKind));
+    _setControllerText(_powerShellModeDisplayController, _powerShellModeLabel(_powerShellMode));
+  }
+
+  void _setControllerText(TextEditingController controller, String text) {
+    if (controller.text == text) {
+      return;
+    }
+    controller.text = text;
   }
 
   String _powerShellExecutableName(_PowerShellExecutable executable) {
@@ -1120,38 +1141,54 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
               );
-              final typeField = AppDropdown<_AgentActionDraftKind>(
-                key: _AgentActionEditorKeys.actionTypeDropdown,
-                label: widget.l10n.agentActionsFormType,
-                value: _draftKind,
-                items: _editableDraftKinds
-                    .map(
-                      (draftKind) {
-                        final unavailable = _isDraftKindUnavailable(draftKind);
-                        final label = _draftKindLabel(draftKind);
-                        return ComboBoxItem<_AgentActionDraftKind>(
-                          value: draftKind,
-                          enabled: !unavailable,
-                          child: Text(
-                            unavailable ? '$label (${widget.l10n.agentActionsRiskRunnerUnavailable})' : label,
-                          ),
-                        );
-                      },
+              final isEditing = _editingActionId != null;
+              final typeField = isEditing
+                  ? AppTextField(
+                      key: _AgentActionEditorKeys.actionTypeDropdown,
+                      label: widget.l10n.agentActionsFormType,
+                      helpTitle: widget.l10n.agentActionsHelpTypeTitle,
+                      helpMessage: widget.l10n.agentActionsHelpTypeMessage,
+                      controller: _actionTypeDisplayController,
+                      enabled: !saving,
+                      readOnly: true,
+                      textInputAction: TextInputAction.next,
                     )
-                    .toList(growable: false),
-                onChanged: saving || _editingActionId != null
-                    ? null
-                    : (value) {
-                        if (value == null || value == _draftKind) {
-                          return;
-                        }
-                        setState(() {
-                          _clearDraft(value);
-                        });
-                      },
-              );
+                  : AppDropdown<_AgentActionDraftKind>(
+                      key: _AgentActionEditorKeys.actionTypeDropdown,
+                      label: widget.l10n.agentActionsFormType,
+                      helpTitle: widget.l10n.agentActionsHelpTypeTitle,
+                      helpMessage: widget.l10n.agentActionsHelpTypeMessage,
+                      value: _draftKind,
+                      items: _editableDraftKinds
+                          .map(
+                            (draftKind) {
+                              final unavailable = _isDraftKindUnavailable(draftKind);
+                              final label = _draftKindLabel(draftKind);
+                              return ComboBoxItem<_AgentActionDraftKind>(
+                                value: draftKind,
+                                enabled: !unavailable,
+                                child: Text(
+                                  unavailable ? '$label (${widget.l10n.agentActionsRiskRunnerUnavailable})' : label,
+                                ),
+                              );
+                            },
+                          )
+                          .toList(growable: false),
+                      onChanged: saving
+                          ? null
+                          : (value) {
+                              if (value == null || value == _draftKind) {
+                                return;
+                              }
+                              setState(() {
+                                _clearDraft(value);
+                              });
+                            },
+                    );
               final stateField = AppDropdown<AgentActionState>(
                 label: widget.l10n.agentActionsFormState,
+                helpTitle: widget.l10n.agentActionsHelpStateTitle,
+                helpMessage: widget.l10n.agentActionsHelpStateMessage,
                 value: _state,
                 items: AgentActionState.values
                     .map(
@@ -1291,6 +1328,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
               width: 220,
               child: AppDropdown<int>(
                 label: widget.l10n.agentActionsFormMaxAttempts,
+                helpTitle: widget.l10n.agentActionsHelpMaxAttemptsTitle,
+                helpMessage: widget.l10n.agentActionsHelpMaxAttemptsMessage,
                 value: _maxAttempts,
                 items: List<ComboBoxItem<int>>.generate(
                   5,
@@ -1319,6 +1358,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             Expanded(
               child: AppTextField(
                 label: widget.l10n.agentActionsFormMaxRuntimeMinutes,
+                helpTitle: widget.l10n.agentActionsHelpTimeoutTitle,
+                helpMessage: widget.l10n.agentActionsHelpTimeoutMessage,
                 controller: _maxRuntimeMinutesController,
                 enabled: enabled,
                 keyboardType: TextInputType.number,
@@ -1350,7 +1391,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: Text(widget.l10n.agentActionsFormKillOnTimeout),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormKillOnTimeout,
+                helpTitle: widget.l10n.agentActionsHelpKillOnTimeoutTitle,
+                helpMessage: widget.l10n.agentActionsHelpKillOnTimeoutMessage,
+              ),
             ),
             Checkbox(
               checked: _allowRemoteRetry,
@@ -1361,7 +1406,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: Text(widget.l10n.agentActionsFormAllowRemoteRetry),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormAllowRemoteRetry,
+                helpTitle: widget.l10n.agentActionsHelpRemoteRetryTitle,
+                helpMessage: widget.l10n.agentActionsHelpRemoteRetryMessage,
+              ),
             ),
             if (widget.provider.isElevatedAgentActionsEnabled)
               Checkbox(
@@ -1372,7 +1421,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         unawaited(_onRunElevatedChanged(value ?? false));
                       }
                     : null,
-                content: Text(widget.l10n.agentActionsFormRunElevated),
+                content: _HelpCheckboxLabel(
+                  label: widget.l10n.agentActionsFormRunElevated,
+                  helpTitle: widget.l10n.agentActionsHelpRunElevatedTitle,
+                  helpMessage: widget.l10n.agentActionsHelpRunElevatedMessage,
+                ),
               ),
           ],
         ),
@@ -1386,6 +1439,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.md),
         AppDropdown<AgentActionContextInjectionMode>(
           label: widget.l10n.agentActionsFormContextInjectionMode,
+          helpTitle: widget.l10n.agentActionsHelpContextInjectionTitle,
+          helpMessage: widget.l10n.agentActionsHelpContextInjectionMessage,
           value: _contextInjectionMode,
           items: [
             ComboBoxItem(
@@ -1419,6 +1474,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppDropdown<AgentActionPathChangePolicy>(
           label: widget.l10n.agentActionsFormPathChangePolicy,
+          helpTitle: widget.l10n.agentActionsHelpPathChangePolicyTitle,
+          helpMessage: widget.l10n.agentActionsHelpPathChangePolicyMessage,
           value: _pathChangePolicy,
           items: [
             ComboBoxItem(
@@ -1448,6 +1505,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormRuntimeParameterSchema,
+          helpTitle: widget.l10n.agentActionsHelpRuntimeSchemaTitle,
+          helpMessage: widget.l10n.agentActionsHelpRuntimeSchemaMessage,
           controller: _runtimeParameterSchemaController,
           enabled: enabled,
           maxLines: 6,
@@ -1480,6 +1539,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormAllowedProfiles,
+          helpTitle: widget.l10n.agentActionsHelpAllowedProfilesTitle,
+          helpMessage: widget.l10n.agentActionsHelpAllowedProfilesMessage,
           controller: _allowedProfilesController,
           enabled: enabled,
           hint: widget.l10n.agentActionsFormAllowedProfilesHint,
@@ -1488,6 +1549,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormAllowedEnvironmentVariableNames,
+          helpTitle: widget.l10n.agentActionsHelpAllowedEnvironmentVariablesTitle,
+          helpMessage: widget.l10n.agentActionsHelpAllowedEnvironmentVariablesMessage,
           controller: _allowedEnvironmentVariableNamesController,
           enabled: enabled,
           hint: widget.l10n.agentActionsFormAllowedEnvironmentVariableNamesHint,
@@ -1496,6 +1559,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEnvironmentVariables,
+          helpTitle: widget.l10n.agentActionsHelpEnvironmentVariablesTitle,
+          helpMessage: widget.l10n.agentActionsHelpEnvironmentVariablesMessage,
           controller: _environmentVariablesController,
           enabled: enabled,
           maxLines: 6,
@@ -1512,6 +1577,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             final stackFields = constraints.maxWidth < 720;
             final maxConcurrentField = AppTextField(
               label: widget.l10n.agentActionsFormMaxConcurrent,
+              helpTitle: widget.l10n.agentActionsHelpQueueTitle,
+              helpMessage: widget.l10n.agentActionsHelpQueueMessage,
               controller: _maxConcurrentController,
               enabled: enabled,
               keyboardType: TextInputType.number,
@@ -1519,6 +1586,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             );
             final maxQueuedField = AppTextField(
               label: widget.l10n.agentActionsFormMaxQueued,
+              helpTitle: widget.l10n.agentActionsHelpQueueTitle,
+              helpMessage: widget.l10n.agentActionsHelpQueueMessage,
               controller: _maxQueuedController,
               enabled: enabled,
               keyboardType: TextInputType.number,
@@ -1549,6 +1618,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppDropdown<AgentActionConcurrencyBehavior>(
           label: widget.l10n.agentActionsFormConcurrencyBehavior,
+          helpTitle: widget.l10n.agentActionsHelpQueueTitle,
+          helpMessage: widget.l10n.agentActionsHelpQueueMessage,
           value: _concurrencyBehavior,
           items: AgentActionConcurrencyBehavior.values
               .map(
@@ -1577,6 +1648,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormAllowedWorkingDirectories,
+          helpTitle: widget.l10n.agentActionsHelpPathAllowlistTitle,
+          helpMessage: widget.l10n.agentActionsHelpPathAllowlistMessage,
           controller: _allowedWorkingDirectoriesController,
           enabled: enabled,
           maxLines: 3,
@@ -1586,6 +1659,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormAllowedContextDirectories,
+          helpTitle: widget.l10n.agentActionsHelpPathAllowlistTitle,
+          helpMessage: widget.l10n.agentActionsHelpPathAllowlistMessage,
           controller: _allowedContextDirectoriesController,
           enabled: enabled,
           maxLines: 3,
@@ -1596,6 +1671,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         if (_draftCapturesProcessOutput) ...[
           AppDropdown<AgentActionProcessWindowMode>(
             label: widget.l10n.agentActionsFormProcessWindowMode,
+            helpTitle: widget.l10n.agentActionsHelpProcessWindowTitle,
+            helpMessage: widget.l10n.agentActionsHelpProcessWindowMessage,
             value: _processWindowMode,
             items: AgentActionProcessWindowMode.values
                 .map(
@@ -1636,7 +1713,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: Text(widget.l10n.agentActionsFormCaptureStdout),
+                content: _HelpCheckboxLabel(
+                  label: widget.l10n.agentActionsFormCaptureStdout,
+                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
+                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
+                ),
               ),
               Checkbox(
                 checked: _captureStderr,
@@ -1647,7 +1728,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: Text(widget.l10n.agentActionsFormCaptureStderr),
+                content: _HelpCheckboxLabel(
+                  label: widget.l10n.agentActionsFormCaptureStderr,
+                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
+                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
+                ),
               ),
               Checkbox(
                 checked: _redactBeforePersisting,
@@ -1658,7 +1743,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: Text(widget.l10n.agentActionsFormRedactBeforePersisting),
+                content: _HelpCheckboxLabel(
+                  label: widget.l10n.agentActionsFormRedactBeforePersisting,
+                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
+                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
+                ),
               ),
             ],
           ),
@@ -1674,6 +1763,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
               Expanded(
                 child: AppDropdown<AgentActionOutputEncodingMode>(
                   label: widget.l10n.agentActionsFormStdoutEncoding,
+                  helpTitle: widget.l10n.agentActionsHelpEncodingTitle,
+                  helpMessage: widget.l10n.agentActionsHelpEncodingMessage,
                   value: _stdoutEncodingMode,
                   items: AgentActionOutputEncodingMode.values
                       .map(
@@ -1699,6 +1790,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
               Expanded(
                 child: AppDropdown<AgentActionOutputEncodingMode>(
                   label: widget.l10n.agentActionsFormStderrEncoding,
+                  helpTitle: widget.l10n.agentActionsHelpEncodingTitle,
+                  helpMessage: widget.l10n.agentActionsHelpEncodingMessage,
                   value: _stderrEncodingMode,
                   items: AgentActionOutputEncodingMode.values
                       .map(
@@ -1729,6 +1822,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             final stackFields = constraints.maxWidth < 720;
             final exitCodesField = AppTextField(
               label: widget.l10n.agentActionsFormAcceptedExitCodes,
+              helpTitle: widget.l10n.agentActionsHelpAcceptedExitCodesTitle,
+              helpMessage: widget.l10n.agentActionsHelpAcceptedExitCodesMessage,
               controller: _acceptedExitCodesController,
               enabled: enabled,
               hint: widget.l10n.agentActionsFormAcceptedExitCodesHint,
@@ -1737,6 +1832,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             );
             final onAppExitField = AppDropdown<AgentActionOnAppExitBehavior>(
               label: widget.l10n.agentActionsFormOnAppExit,
+              helpTitle: widget.l10n.agentActionsHelpOnAppExitTitle,
+              helpMessage: widget.l10n.agentActionsHelpOnAppExitMessage,
               value: _onAppExit,
               items: AgentActionOnAppExitBehavior.values
                   .map(
@@ -1857,7 +1954,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                   : (bool? value) {
                       unawaited(_onRemoteEnabledChanged(value ?? false));
                     },
-              content: Text(widget.l10n.agentActionsFormRemoteExecutionEnabled),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormRemoteExecutionEnabled,
+                helpTitle: widget.l10n.agentActionsHelpRemoteExecutionTitle,
+                helpMessage: widget.l10n.agentActionsHelpRemoteExecutionMessage,
+              ),
             ),
             Checkbox(
               checked: _remoteAdHoc,
@@ -1866,7 +1967,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                   : (bool? value) {
                       unawaited(_onRemoteAdHocChanged(value ?? false));
                     },
-              content: Text(widget.l10n.agentActionsFormRemoteAdHocEnabled),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormRemoteAdHocEnabled,
+                helpTitle: widget.l10n.agentActionsHelpRemoteAdHocTitle,
+                helpMessage: widget.l10n.agentActionsHelpRemoteAdHocMessage,
+              ),
             ),
           ],
         ),
@@ -1999,7 +2104,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnSuccess),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormNotifyOnSuccess,
+                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
+                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
+              ),
             ),
             Checkbox(
               checked: _notifyOnFailure,
@@ -2010,7 +2119,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnFailure),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormNotifyOnFailure,
+                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
+                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
+              ),
             ),
             Checkbox(
               checked: _notifyOnTimeout,
@@ -2021,7 +2134,11 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: Text(widget.l10n.agentActionsFormNotifyOnTimeout),
+              content: _HelpCheckboxLabel(
+                label: widget.l10n.agentActionsFormNotifyOnTimeout,
+                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
+                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
+              ),
             ),
           ],
         ),
@@ -2038,6 +2155,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.commandLine => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormCommand,
+          helpTitle: widget.l10n.agentActionsHelpCommandTitle,
+          helpMessage: widget.l10n.agentActionsHelpCommandMessage,
           controller: _commandController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 2,
@@ -2046,6 +2165,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormWorkingDirectory,
+          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
+          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
           controller: _workingDirectoryController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.done,
@@ -2057,6 +2178,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.executable => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormExecutablePath,
+          helpTitle: widget.l10n.agentActionsHelpPathTitle,
+          helpMessage: widget.l10n.agentActionsHelpPathMessage,
           controller: _executableTargetPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2069,6 +2192,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormArguments,
+          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
+          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
           controller: _executableArgumentsController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 4,
@@ -2078,6 +2203,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormWorkingDirectory,
+          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
+          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
           controller: _workingDirectoryController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.done,
@@ -2089,6 +2216,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.comObject => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormComProgId,
+          helpTitle: widget.l10n.agentActionsHelpComTitle,
+          helpMessage: widget.l10n.agentActionsHelpComMessage,
           controller: _comProgIdController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2096,6 +2225,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormComMemberName,
+          helpTitle: widget.l10n.agentActionsHelpComTitle,
+          helpMessage: widget.l10n.agentActionsHelpComMessage,
           controller: _comMemberNameController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2103,6 +2234,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormComArguments,
+          helpTitle: widget.l10n.agentActionsHelpComTitle,
+          helpMessage: widget.l10n.agentActionsHelpComMessage,
           controller: _comArgumentsController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 8,
@@ -2116,6 +2249,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.email => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormSmtpProfileId,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _smtpProfileIdController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2124,6 +2259,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailFrom,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailFromController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2131,6 +2268,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailTo,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailToController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 4,
@@ -2140,6 +2279,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailCc,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailCcController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 3,
@@ -2149,6 +2290,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailBcc,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailBccController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 3,
@@ -2158,6 +2301,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailSubject,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailSubjectController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2166,6 +2311,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailBody,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailBodyController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 8,
@@ -2175,6 +2322,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormEmailAttachments,
+          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
+          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
           controller: _emailAttachmentsController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 4,
@@ -2188,6 +2337,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.jar => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormJarPath,
+          helpTitle: widget.l10n.agentActionsHelpJarTitle,
+          helpMessage: widget.l10n.agentActionsHelpJarMessage,
           controller: _jarPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2200,6 +2351,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormJavaExecutablePath,
+          helpTitle: widget.l10n.agentActionsHelpInterpreterTitle,
+          helpMessage: widget.l10n.agentActionsHelpInterpreterMessage,
           controller: _javaExecutablePathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2213,6 +2366,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormArguments,
+          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
+          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
           controller: _executableArgumentsController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 4,
@@ -2222,6 +2377,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormWorkingDirectory,
+          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
+          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
           controller: _workingDirectoryController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.done,
@@ -2233,6 +2390,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       AgentActionType.script => <Widget>[
         AppTextField(
           label: widget.l10n.agentActionsFormScriptPath,
+          helpTitle: widget.l10n.agentActionsHelpPathTitle,
+          helpMessage: widget.l10n.agentActionsHelpPathMessage,
           controller: _scriptPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2245,6 +2404,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormInterpreterPath,
+          helpTitle: widget.l10n.agentActionsHelpInterpreterTitle,
+          helpMessage: widget.l10n.agentActionsHelpInterpreterMessage,
           controller: _scriptInterpreterPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
@@ -2258,6 +2419,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormArguments,
+          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
+          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
           controller: _executableArgumentsController,
           enabled: !saving && widget.provider.canSaveAction,
           maxLines: 4,
@@ -2267,6 +2430,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormWorkingDirectory,
+          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
+          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
           controller: _workingDirectoryController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.done,
@@ -2282,6 +2447,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             Expanded(
               child: AppTextField(
                 label: widget.l10n.agentActionsFormExecutorPath,
+                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
                 controller: _executorPathController,
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
@@ -2297,6 +2464,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             Expanded(
               child: AppTextField(
                 label: widget.l10n.agentActionsFormProjectPath,
+                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
                 controller: _projectPathController,
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
@@ -2371,6 +2540,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             Expanded(
               child: AppTextField(
                 label: widget.l10n.agentActionsFormData7ConfigPath,
+                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
                 controller: _data7ConfigPathController,
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
@@ -2386,6 +2557,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             Expanded(
               child: AppTextField(
                 label: widget.l10n.agentActionsFormConnectionId,
+                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
                 controller: _connectionIdController,
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
@@ -2409,6 +2582,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           const SizedBox(height: AppSpacing.sm),
           AppTextField(
             label: widget.l10n.agentActionsFormConnectionSearch,
+            helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+            helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
             controller: _developerConnectionSearchController,
             enabled: !saving && widget.provider.canSaveAction,
             onChanged: (value) {
@@ -2429,6 +2604,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppDropdown<String>(
           label: widget.l10n.agentActionsFormConnectionSelector,
+          helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+          helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
           value:
               _developerConnectionsForSelector().any(
                 (option) => option.id == _connectionIdController.text.trim(),
@@ -2449,6 +2626,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormConnectionLabel,
+          helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
+          helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
           controller: _connectionLabelController,
           enabled: false,
           readOnly: true,
@@ -2463,39 +2642,55 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
   List<Widget> _buildPowerShellDraftFields(bool saving) {
     final enabled = !saving && widget.provider.canSaveAction;
-    final modeField = AppDropdown<_PowerShellDraftMode>(
-      key: _AgentActionEditorKeys.powerShellModeDropdown,
-      label: widget.l10n.agentActionsFormPowerShellMode,
-      value: _powerShellMode,
-      items: _PowerShellDraftMode.values
-          .map(
-            (mode) {
-              final unavailable = _isPowerShellModeUnavailable(mode);
-              final label = _powerShellModeLabel(mode);
-              return ComboBoxItem<_PowerShellDraftMode>(
-                value: mode,
-                enabled: !unavailable,
-                child: Text(
-                  unavailable ? '$label (${widget.l10n.agentActionsRiskRunnerUnavailable})' : label,
-                ),
-              );
-            },
+    final isEditing = _editingActionId != null;
+    final modeField = isEditing
+        ? AppTextField(
+            key: _AgentActionEditorKeys.powerShellModeDropdown,
+            label: widget.l10n.agentActionsFormPowerShellMode,
+            helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
+            helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
+            controller: _powerShellModeDisplayController,
+            enabled: !saving,
+            readOnly: true,
+            textInputAction: TextInputAction.next,
           )
-          .toList(growable: false),
-      onChanged: enabled
-          ? (value) {
-              if (value == null || value == _powerShellMode || _isPowerShellModeUnavailable(value)) {
-                return;
-              }
-              setState(() {
-                _setPowerShellMode(value);
-              });
-            }
-          : null,
-    );
+        : AppDropdown<_PowerShellDraftMode>(
+            key: _AgentActionEditorKeys.powerShellModeDropdown,
+            label: widget.l10n.agentActionsFormPowerShellMode,
+            helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
+            helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
+            value: _powerShellMode,
+            items: _PowerShellDraftMode.values
+                .map(
+                  (mode) {
+                    final unavailable = _isPowerShellModeUnavailable(mode);
+                    final label = _powerShellModeLabel(mode);
+                    return ComboBoxItem<_PowerShellDraftMode>(
+                      value: mode,
+                      enabled: !unavailable,
+                      child: Text(
+                        unavailable ? '$label (${widget.l10n.agentActionsRiskRunnerUnavailable})' : label,
+                      ),
+                    );
+                  },
+                )
+                .toList(growable: false),
+            onChanged: enabled
+                ? (value) {
+                    if (value == null || value == _powerShellMode || _isPowerShellModeUnavailable(value)) {
+                      return;
+                    }
+                    setState(() {
+                      _setPowerShellMode(value);
+                    });
+                  }
+                : null,
+          );
     final executableField = AppDropdown<_PowerShellExecutable>(
       key: _AgentActionEditorKeys.powerShellExecutableDropdown,
       label: widget.l10n.agentActionsFormPowerShellExecutable,
+      helpTitle: widget.l10n.agentActionsHelpPowerShellExecutableTitle,
+      helpMessage: widget.l10n.agentActionsHelpPowerShellExecutableMessage,
       value: _powerShellExecutable,
       items: _PowerShellExecutable.values
           .map(
@@ -2530,6 +2725,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       if (_powerShellMode == _PowerShellDraftMode.inline) ...[
         AppTextField(
           label: widget.l10n.agentActionsFormPowerShellCommand,
+          helpTitle: widget.l10n.agentActionsHelpPowerShellCommandTitle,
+          helpMessage: widget.l10n.agentActionsHelpPowerShellCommandMessage,
           controller: _commandController,
           enabled: enabled,
           maxLines: 4,
@@ -2539,6 +2736,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       ] else ...[
         AppTextField(
           label: widget.l10n.agentActionsFormPowerShellScriptPath,
+          helpTitle: widget.l10n.agentActionsHelpPowerShellScriptTitle,
+          helpMessage: widget.l10n.agentActionsHelpPowerShellScriptMessage,
           controller: _scriptPathController,
           enabled: enabled,
           textInputAction: TextInputAction.next,
@@ -2551,6 +2750,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: widget.l10n.agentActionsFormArguments,
+          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
+          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
           controller: _executableArgumentsController,
           enabled: enabled,
           maxLines: 4,
@@ -2561,6 +2762,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       ],
       AppTextField(
         label: widget.l10n.agentActionsFormWorkingDirectory,
+        helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
+        helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
         controller: _workingDirectoryController,
         enabled: enabled,
         textInputAction: TextInputAction.done,
@@ -3632,5 +3835,45 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         ),
       ];
     }
+  }
+}
+
+class _HelpCheckboxLabel extends StatelessWidget {
+  const _HelpCheckboxLabel({
+    required this.label,
+    required this.helpTitle,
+    required this.helpMessage,
+  });
+
+  final String label;
+  final String helpTitle;
+  final String helpMessage;
+
+  String get _helpKeyToken {
+    var token = label.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
+    while (token.startsWith('_')) {
+      token = token.substring(1);
+    }
+    while (token.endsWith('_')) {
+      token = token.substring(0, token.length - 1);
+    }
+    return token;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(label),
+        AppHelpButton(
+          key: ValueKey<String>('app_help_button_$_helpKeyToken'),
+          title: helpTitle,
+          message: helpMessage,
+          semanticLabel: '$label. $helpTitle',
+        ),
+      ],
+    );
   }
 }

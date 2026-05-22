@@ -11,6 +11,10 @@ class AppDropdown<T> extends StatefulWidget {
     this.onChanged,
     this.validator,
     this.placeholder,
+    this.helpTitle,
+    this.helpMessage,
+    this.helpTooltip,
+    this.helpButtonKey,
   });
 
   final String label;
@@ -19,6 +23,10 @@ class AppDropdown<T> extends StatefulWidget {
   final ValueChanged<T?>? onChanged;
   final String? Function(T?)? validator;
   final Widget? placeholder;
+  final String? helpTitle;
+  final String? helpMessage;
+  final String? helpTooltip;
+  final Key? helpButtonKey;
 
   @override
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
@@ -58,6 +66,10 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
     return AppLabeledField(
       label: widget.label,
       errorText: _errorText,
+      helpTitle: widget.helpTitle,
+      helpMessage: widget.helpMessage,
+      helpTooltip: widget.helpTooltip,
+      helpButtonKey: widget.helpButtonKey,
       child: dropdown,
     );
   }

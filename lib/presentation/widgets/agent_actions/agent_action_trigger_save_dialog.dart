@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -11,6 +12,11 @@ import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:uuid/uuid.dart';
+
+abstract final class _AgentActionTriggerDialogKeys {
+  static const ValueKey<String> surface = ValueKey<String>('agent_action_trigger_dialog_surface');
+  static const ValueKey<String> scroll = ValueKey<String>('agent_action_trigger_dialog_scroll');
+}
 
 Future<void> showAgentActionTriggerSaveDialog({
   required BuildContext context,
@@ -51,6 +57,13 @@ class AgentActionTriggerSaveDialog extends StatefulWidget {
 }
 
 class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDialog> {
+  static const double _baseContentWidth = 720;
+  static const double _baseContentHeight = 560;
+  static const double _compactDialogMargin = 64;
+  static const double _dialogChromeWidth = 176;
+  static const double _dialogChromeHeight = 180;
+  static const double _twoColumnBreakpoint = 640;
+
   late final TextEditingController _nameController;
   late final TextEditingController _timezoneController;
   late final TextEditingController _startAtController;
@@ -361,11 +374,421 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     }
   }
 
+  Size _dialogContentSize(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final maxWidthCandidate = screenSize.width - (_compactDialogMargin * 2) - _dialogChromeWidth;
+    final maxHeightCandidate = screenSize.height - _dialogChromeHeight - _compactDialogMargin;
+    final maxWidth = maxWidthCandidate < 360 ? 360.toDouble() : maxWidthCandidate;
+    final maxHeight = maxHeightCandidate < 320 ? 320.toDouble() : maxHeightCandidate;
+
+    return Size(
+      math.min(_baseContentWidth, maxWidth),
+      math.min(_baseContentHeight, maxHeight),
+    );
+  }
+
+  Widget _buildDialogContent({
+    required String? remoteError,
+    required AppLocalizations l10n,
+    required AgentActionsProvider provider,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final useTwoColumns = screenWidth >= 900 && constraints.maxWidth >= _twoColumnBreakpoint;
+        return SingleChildScrollView(
+          key: _AgentActionTriggerDialogKeys.scroll,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _buildDialogFields(
+              remoteError: remoteError,
+              l10n: l10n,
+              provider: provider,
+              useTwoColumns: useTwoColumns,
+              availableWidth: constraints.maxWidth,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildDialogFields({
+    required String? remoteError,
+    required AppLocalizations l10n,
+    required AgentActionsProvider provider,
+    required bool useTwoColumns,
+    required double availableWidth,
+  }) {
+    final children = <Widget>[];
+
+    void addField(Widget field, {double spacing = AppSpacing.sm}) {
+      if (children.isNotEmpty) {
+        children.add(SizedBox(height: spacing));
+      }
+      children.add(field);
+    }
+
+    if (_parseError != null) {
+      addField(
+        InfoBar(
+          title: Text(l10n.agentActionsTriggerValidationTitle),
+          content: Text(_parseError!),
+          severity: InfoBarSeverity.warning,
+        ),
+        spacing: 0,
+      );
+    }
+
+    if (remoteError != null) {
+      addField(
+        InfoBar(
+          title: Text(l10n.agentActionsErrorTitle),
+          content: Text(remoteError),
+          severity: InfoBarSeverity.error,
+        ),
+      );
+    }
+
+    addField(
+      Checkbox(
+        checked: _isEnabled,
+        onChanged: provider.isSavingTrigger
+            ? null
+            : (bool? value) {
+                setState(() {
+                  _isEnabled = value ?? false;
+                });
+              },
+        content: Text(l10n.agentActionsTriggerEnabled),
+      ),
+      spacing: children.isEmpty ? 0 : AppSpacing.sm,
+    );
+
+    addField(
+      AppTextField(
+        controller: _nameController,
+        label: l10n.agentActionsTriggerFieldName,
+        enabled: !provider.isSavingTrigger,
+      ),
+    );
+    addField(
+      AppDropdown<AgentActionTriggerType>(
+        label: l10n.agentActionsTriggerFieldType,
+        value: _type,
+        items: AgentActionTriggerType.values
+            .map(
+              (AgentActionTriggerType value) => ComboBoxItem<AgentActionTriggerType>(
+                value: value,
+                child: Text(_triggerTypeLabel(value, l10n)),
+              ),
+            )
+            .toList(growable: false),
+        onChanged: provider.isSavingTrigger
+            ? null
+            : (AgentActionTriggerType? value) {
+                if (value == null) {
+                  return;
+                }
+
+                unawaited(_onTriggerTypeChanged(value));
+              },
+      ),
+    );
+
+    _buildScheduleFields(
+      l10n: l10n,
+      provider: provider,
+      useTwoColumns: useTwoColumns,
+    ).forEach(addField);
+
+    if (_supportsMissedRunPolicy) {
+      addField(
+        Checkbox(
+          checked: _ignoreMissedRuns,
+          onChanged: provider.isSavingTrigger
+              ? null
+              : (bool? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _ignoreMissedRuns = value;
+                  });
+                },
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.agentActionsTriggerFieldIgnoreMissedRuns),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: math.max(
+                  0,
+                  math.min(availableWidth - 128, 360),
+                ),
+                child: Text(
+                  l10n.agentActionsTriggerHintIgnoreMissedRuns,
+                  style: context.bodyMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return children;
+  }
+
+  List<Widget> _buildScheduleFields({
+    required AppLocalizations l10n,
+    required AgentActionsProvider provider,
+    required bool useTwoColumns,
+  }) {
+    final enabled = !provider.isSavingTrigger;
+    final fields = <Widget>[];
+
+    switch (_type) {
+      case AgentActionTriggerType.manual:
+      case AgentActionTriggerType.remote:
+      case AgentActionTriggerType.appStart:
+      case AgentActionTriggerType.appClose:
+        return fields;
+      case AgentActionTriggerType.once:
+        fields.add(
+          _fieldPair(
+            useTwoColumns: useTwoColumns,
+            first: AppTextField(
+              controller: _startAtController,
+              label: l10n.agentActionsTriggerFieldStartAt,
+              enabled: enabled,
+              hint: l10n.agentActionsTriggerHintDateTime,
+            ),
+            second: AppTextField(
+              controller: _endAtController,
+              label: l10n.agentActionsTriggerFieldEndAtOptional,
+              enabled: enabled,
+              hint: l10n.agentActionsTriggerHintDateTime,
+            ),
+          ),
+        );
+      case AgentActionTriggerType.interval:
+        fields
+          ..add(
+            _fieldPair(
+              useTwoColumns: useTwoColumns,
+              first: AppTextField(
+                controller: _intervalMinutesController,
+                label: l10n.agentActionsTriggerFieldIntervalMinutes,
+                enabled: enabled,
+              ),
+              second: AppTextField(
+                controller: _startAtController,
+                label: l10n.agentActionsTriggerFieldStartAtOptional,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintDateTime,
+              ),
+            ),
+          )
+          ..add(
+            AppTextField(
+              controller: _endAtController,
+              label: l10n.agentActionsTriggerFieldEndAtOptional,
+              enabled: enabled,
+              hint: l10n.agentActionsTriggerHintDateTime,
+            ),
+          );
+      case AgentActionTriggerType.daily:
+        fields
+          ..add(
+            _fieldPair(
+              useTwoColumns: useTwoColumns,
+              first: AppTextField(
+                controller: _timeOfDayController,
+                label: l10n.agentActionsTriggerFieldTimeOfDay,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintTimeOfDay,
+              ),
+              second: AppTextField(
+                controller: _startAtController,
+                label: l10n.agentActionsTriggerFieldStartAtOptional,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintDateTime,
+              ),
+            ),
+          )
+          ..add(
+            AppTextField(
+              controller: _endAtController,
+              label: l10n.agentActionsTriggerFieldEndAtOptional,
+              enabled: enabled,
+              hint: l10n.agentActionsTriggerHintDateTime,
+            ),
+          )
+          ..add(
+            IanaTimezoneIdField(
+              controller: _timezoneController,
+              enabled: enabled,
+              l10n: l10n,
+            ),
+          );
+      case AgentActionTriggerType.weekly:
+        fields
+          ..add(
+            _fieldPair(
+              useTwoColumns: useTwoColumns,
+              first: AppTextField(
+                controller: _timeOfDayController,
+                label: l10n.agentActionsTriggerFieldTimeOfDay,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintTimeOfDay,
+              ),
+              second: AppTextField(
+                controller: _startAtController,
+                label: l10n.agentActionsTriggerFieldStartAtOptional,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintDateTime,
+              ),
+            ),
+          )
+          ..add(_buildWeekdaySelector(l10n, provider))
+          ..add(
+            AppTextField(
+              controller: _endAtController,
+              label: l10n.agentActionsTriggerFieldEndAtOptional,
+              enabled: enabled,
+              hint: l10n.agentActionsTriggerHintDateTime,
+            ),
+          )
+          ..add(
+            IanaTimezoneIdField(
+              controller: _timezoneController,
+              enabled: enabled,
+              l10n: l10n,
+            ),
+          );
+      case AgentActionTriggerType.monthly:
+        fields
+          ..add(
+            _fieldPair(
+              useTwoColumns: useTwoColumns,
+              first: AppTextField(
+                controller: _timeOfDayController,
+                label: l10n.agentActionsTriggerFieldTimeOfDay,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintTimeOfDay,
+              ),
+              second: AppTextField(
+                controller: _dayOfMonthController,
+                label: l10n.agentActionsTriggerFieldDayOfMonth,
+                enabled: enabled,
+              ),
+            ),
+          )
+          ..add(
+            _fieldPair(
+              useTwoColumns: useTwoColumns,
+              first: AppTextField(
+                controller: _startAtController,
+                label: l10n.agentActionsTriggerFieldStartAtOptional,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintDateTime,
+              ),
+              second: AppTextField(
+                controller: _endAtController,
+                label: l10n.agentActionsTriggerFieldEndAtOptional,
+                enabled: enabled,
+                hint: l10n.agentActionsTriggerHintDateTime,
+              ),
+            ),
+          )
+          ..add(
+            IanaTimezoneIdField(
+              controller: _timezoneController,
+              enabled: enabled,
+              l10n: l10n,
+            ),
+          );
+    }
+
+    return _withVerticalGaps(fields);
+  }
+
+  Widget _buildWeekdaySelector(AppLocalizations l10n, AgentActionsProvider provider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.agentActionsTriggerFieldWeekdays, style: context.bodyText),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: <Widget>[
+            for (final int day in const <int>[1, 2, 3, 4, 5, 6, 7])
+              Checkbox(
+                checked: _weekdays.contains(day),
+                onChanged: provider.isSavingTrigger
+                    ? null
+                    : (bool? checked) {
+                        setState(() {
+                          if (checked ?? false) {
+                            _weekdays.add(day);
+                          } else {
+                            _weekdays.remove(day);
+                          }
+                        });
+                      },
+                content: Text(_weekdayLabel(day, l10n)),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _fieldPair({
+    required bool useTwoColumns,
+    required Widget first,
+    required Widget second,
+  }) {
+    if (!useTwoColumns) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          first,
+          const SizedBox(height: AppSpacing.sm),
+          second,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: first),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(child: second),
+      ],
+    );
+  }
+
+  List<Widget> _withVerticalGaps(List<Widget> fields) {
+    final spaced = <Widget>[];
+    for (final field in fields) {
+      if (spaced.isNotEmpty) {
+        spaced.add(const SizedBox(height: AppSpacing.sm));
+      }
+      spaced.add(field);
+    }
+    return spaced;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
     final isEditing = widget.existing != null;
     final provider = widget.provider;
+    final contentSize = _dialogContentSize(context);
 
     return ListenableBuilder(
       listenable: provider,
@@ -373,6 +796,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         final remoteError = provider.errorMessage;
 
         return ContentDialog(
+          constraints: BoxConstraints(
+            minWidth: contentSize.width + _dialogChromeWidth,
+            maxWidth: contentSize.width + _dialogChromeWidth,
+            maxHeight: contentSize.height + _dialogChromeHeight,
+          ),
           title: AppDialogTitleBar(
             title: Text(isEditing ? l10n.agentActionsTriggerEditorTitleEdit : l10n.agentActionsTriggerEditorTitleNew),
             closeTooltip: l10n.btnClose,
@@ -380,203 +808,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             onClose: () => Navigator.pop(context),
           ),
           content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_parseError != null) ...[
-                    InfoBar(
-                      title: Text(l10n.agentActionsTriggerValidationTitle),
-                      content: Text(_parseError!),
-                      severity: InfoBarSeverity.warning,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  if (remoteError != null) ...[
-                    InfoBar(
-                      title: Text(l10n.agentActionsErrorTitle),
-                      content: Text(remoteError),
-                      severity: InfoBarSeverity.error,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  Checkbox(
-                    checked: _isEnabled,
-                    onChanged: provider.isSavingTrigger
-                        ? null
-                        : (bool? value) {
-                            setState(() {
-                              _isEnabled = value ?? false;
-                            });
-                          },
-                    content: Text(l10n.agentActionsTriggerEnabled),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  AppTextField(
-                    controller: _nameController,
-                    label: l10n.agentActionsTriggerFieldName,
-                    enabled: !provider.isSavingTrigger,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  AppDropdown<AgentActionTriggerType>(
-                    label: l10n.agentActionsTriggerFieldType,
-                    value: _type,
-                    items: AgentActionTriggerType.values
-                        .map(
-                          (AgentActionTriggerType value) => ComboBoxItem<AgentActionTriggerType>(
-                            value: value,
-                            child: Text(_triggerTypeLabel(value, l10n)),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: provider.isSavingTrigger
-                        ? null
-                        : (AgentActionTriggerType? value) {
-                            if (value == null) {
-                              return;
-                            }
-
-                            unawaited(_onTriggerTypeChanged(value));
-                          },
-                  ),
-                  if (_type == AgentActionTriggerType.once) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _startAtController,
-                      label: l10n.agentActionsTriggerFieldStartAt,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _endAtController,
-                      label: l10n.agentActionsTriggerFieldEndAtOptional,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                  ],
-                  if (_type == AgentActionTriggerType.interval) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _intervalMinutesController,
-                      label: l10n.agentActionsTriggerFieldIntervalMinutes,
-                      enabled: !provider.isSavingTrigger,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _startAtController,
-                      label: l10n.agentActionsTriggerFieldStartAtOptional,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _endAtController,
-                      label: l10n.agentActionsTriggerFieldEndAtOptional,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                  ],
-                  if (_type == AgentActionTriggerType.daily ||
-                      _type == AgentActionTriggerType.weekly ||
-                      _type == AgentActionTriggerType.monthly) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _timeOfDayController,
-                      label: l10n.agentActionsTriggerFieldTimeOfDay,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintTimeOfDay,
-                    ),
-                  ],
-                  if (_type == AgentActionTriggerType.weekly) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(l10n.agentActionsTriggerFieldWeekdays, style: context.bodyText),
-                    const SizedBox(height: AppSpacing.xs),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.xs,
-                      children: <Widget>[
-                        for (final int day in const <int>[1, 2, 3, 4, 5, 6, 7])
-                          Checkbox(
-                            checked: _weekdays.contains(day),
-                            onChanged: provider.isSavingTrigger
-                                ? null
-                                : (bool? checked) {
-                                    setState(() {
-                                      if (checked ?? false) {
-                                        _weekdays.add(day);
-                                      } else {
-                                        _weekdays.remove(day);
-                                      }
-                                    });
-                                  },
-                            content: Text(_weekdayLabel(day, l10n)),
-                          ),
-                      ],
-                    ),
-                  ],
-                  if (_type == AgentActionTriggerType.monthly) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _dayOfMonthController,
-                      label: l10n.agentActionsTriggerFieldDayOfMonth,
-                      enabled: !provider.isSavingTrigger,
-                    ),
-                  ],
-                  if (_type == AgentActionTriggerType.daily ||
-                      _type == AgentActionTriggerType.weekly ||
-                      _type == AgentActionTriggerType.monthly) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _startAtController,
-                      label: l10n.agentActionsTriggerFieldStartAtOptional,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppTextField(
-                      controller: _endAtController,
-                      label: l10n.agentActionsTriggerFieldEndAtOptional,
-                      enabled: !provider.isSavingTrigger,
-                      hint: l10n.agentActionsTriggerHintDateTime,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    IanaTimezoneIdField(
-                      controller: _timezoneController,
-                      enabled: !provider.isSavingTrigger,
-                      l10n: l10n,
-                    ),
-                  ],
-                  if (_supportsMissedRunPolicy) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Checkbox(
-                      checked: _ignoreMissedRuns,
-                      onChanged: provider.isSavingTrigger
-                          ? null
-                          : (bool? value) {
-                              if (value == null) {
-                                return;
-                              }
-                              setState(() {
-                                _ignoreMissedRuns = value;
-                              });
-                            },
-                      content: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(l10n.agentActionsTriggerFieldIgnoreMissedRuns),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            l10n.agentActionsTriggerHintIgnoreMissedRuns,
-                            style: context.bodyMuted,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+            key: _AgentActionTriggerDialogKeys.surface,
+            width: contentSize.width,
+            height: contentSize.height,
+            child: _buildDialogContent(
+              remoteError: remoteError,
+              l10n: l10n,
+              provider: provider,
             ),
           ),
           actions: [
