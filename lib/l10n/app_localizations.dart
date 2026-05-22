@@ -446,6 +446,84 @@ abstract class AppLocalizations {
   /// **'Browse interpreter'**
   String get agentActionsFormBrowseInterpreterPath;
 
+  /// No description provided for @agentActionsFormCreatePowerShellTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New PowerShell action'**
+  String get agentActionsFormCreatePowerShellTitle;
+
+  /// No description provided for @agentActionsFormEditPowerShellTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell action'**
+  String get agentActionsFormEditPowerShellTitle;
+
+  /// No description provided for @agentActionsFormPowerShellMode.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell mode'**
+  String get agentActionsFormPowerShellMode;
+
+  /// No description provided for @agentActionsFormPowerShellModeCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get agentActionsFormPowerShellModeCommand;
+
+  /// No description provided for @agentActionsFormPowerShellModeScript.
+  ///
+  /// In en, this message translates to:
+  /// **'Script .ps1'**
+  String get agentActionsFormPowerShellModeScript;
+
+  /// No description provided for @agentActionsFormPowerShellExecutable.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell executable'**
+  String get agentActionsFormPowerShellExecutable;
+
+  /// No description provided for @agentActionsFormPowerShellExecutableWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows PowerShell'**
+  String get agentActionsFormPowerShellExecutableWindows;
+
+  /// No description provided for @agentActionsFormPowerShellExecutablePwsh.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell 7'**
+  String get agentActionsFormPowerShellExecutablePwsh;
+
+  /// No description provided for @agentActionsFormPowerShellCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell command'**
+  String get agentActionsFormPowerShellCommand;
+
+  /// No description provided for @agentActionsFormPowerShellScriptPath.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell script path'**
+  String get agentActionsFormPowerShellScriptPath;
+
+  /// No description provided for @agentActionsFormBrowsePowerShellScriptPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse PowerShell script'**
+  String get agentActionsFormBrowsePowerShellScriptPath;
+
+  /// No description provided for @agentActionsFormPowerShellScriptPathInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a .ps1 file for PowerShell script mode.'**
+  String get agentActionsFormPowerShellScriptPathInvalid;
+
+  /// No description provided for @agentActionsFormPowerShellModeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected PowerShell mode is unavailable in the current runtime.'**
+  String get agentActionsFormPowerShellModeUnavailable;
+
   /// No description provided for @agentActionsFormCreateJarTitle.
   ///
   /// In en, this message translates to:
@@ -3283,6 +3361,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Command line'**
   String get agentActionsTypeCommandLine;
+
+  /// No description provided for @agentActionsTypePowerShell.
+  ///
+  /// In en, this message translates to:
+  /// **'PowerShell'**
+  String get agentActionsTypePowerShell;
 
   /// No description provided for @agentActionsTypeExecutable.
   ///

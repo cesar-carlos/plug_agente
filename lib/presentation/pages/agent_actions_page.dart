@@ -18,6 +18,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -88,6 +89,7 @@ class AgentActionsPage extends StatefulWidget {
 class _AgentActionsPageState extends State<AgentActionsPage> {
   int _selectedTabIndex = 0;
   bool _restoredUiPreferences = false;
+  bool _isActionEditorDialogPendingOrOpen = false;
 
   @override
   void initState() {
@@ -125,7 +127,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
               const widgets.SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
                 _runPageShortcut(() {
                   if (provider.canSaveAction) {
-                    unawaited(_showActionEditorDialog(context, provider, l10n));
+                    _scheduleActionEditorDialog(context, provider, l10n);
                   }
                 });
               },
@@ -211,14 +213,14 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         body: _AgentActionsActionsTab(
           provider: provider,
           l10n: l10n,
-          onCreateAction: () => _showActionEditorDialog(context, provider, l10n),
+          onCreateAction: () => _scheduleActionEditorDialog(context, provider, l10n),
           onShowDetails: (definition) => _showActionDetailsDialog(
             context,
             provider,
             l10n,
             definition,
           ),
-          onEditAction: (definition) => _showActionEditorDialog(
+          onEditAction: (definition) => _scheduleActionEditorDialog(
             context,
             provider,
             l10n,
@@ -329,7 +331,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     if (definition == null || !isAgentActionTypeEditableInUi(definition.type)) {
       return;
     }
-    unawaited(_showActionEditorDialog(context, provider, l10n, definition: definition));
+    _scheduleActionEditorDialog(context, provider, l10n, definition: definition);
   }
 
   void _deleteSelectedAction(
@@ -354,11 +356,10 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       context: context,
       builder: (dialogContext) {
         return AgentActionDefinitionDialog(
-          child: _AgentActionEditor(
+          child: _DeferredActionEditor(
             provider: provider,
             definition: definition,
             l10n: l10n,
-            showChrome: false,
             onSaved: () {
               Navigator.pop(dialogContext);
             },
@@ -366,6 +367,35 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         );
       },
     );
+  }
+
+  void _scheduleActionEditorDialog(
+    BuildContext context,
+    AgentActionsProvider provider,
+    AppLocalizations l10n, {
+    AgentActionDefinition? definition,
+  }) {
+    if (_isActionEditorDialogPendingOrOpen) {
+      return;
+    }
+    _isActionEditorDialogPendingOrOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !context.mounted) {
+        _isActionEditorDialogPendingOrOpen = false;
+        return;
+      }
+      unawaited(
+        _showActionEditorDialog(
+          context,
+          provider,
+          l10n,
+          definition: definition,
+        ).whenComplete(() {
+          _isActionEditorDialogPendingOrOpen = false;
+        }),
+      );
+    });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   Future<void> _showActionDetailsDialog(
@@ -410,13 +440,11 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                     lastTestCanRun: provider.lastTestCanRun ?? false,
                     onEditAction: (definition) {
                       Navigator.pop(dialogContext);
-                      unawaited(
-                        _showActionEditorDialog(
-                          context,
-                          provider,
-                          l10n,
-                          definition: definition,
-                        ),
+                      _scheduleActionEditorDialog(
+                        context,
+                        provider,
+                        l10n,
+                        definition: definition,
                       );
                     },
                   ),
@@ -426,6 +454,55 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DeferredActionEditor extends StatefulWidget {
+  const _DeferredActionEditor({
+    required this.provider,
+    required this.l10n,
+    required this.onSaved,
+    this.definition,
+  });
+
+  final AgentActionsProvider provider;
+  final AgentActionDefinition? definition;
+  final AppLocalizations l10n;
+  final VoidCallback onSaved;
+
+  @override
+  State<_DeferredActionEditor> createState() => _DeferredActionEditorState();
+}
+
+class _DeferredActionEditorState extends State<_DeferredActionEditor> {
+  bool _showEditor = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showEditor = true;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showEditor) {
+      return const Center(child: ProgressRing());
+    }
+
+    return _AgentActionEditor(
+      provider: widget.provider,
+      definition: widget.definition,
+      l10n: widget.l10n,
+      showChrome: false,
+      onSaved: widget.onSaved,
     );
   }
 }
@@ -920,7 +997,7 @@ class _AgentActionsList extends StatelessWidget {
                 );
                 return [
                   _DefinitionNameCell(definition: definition, l10n: l10n),
-                  Text(_typeLabel(definition.type, l10n), overflow: TextOverflow.ellipsis),
+                  Text(_definitionTypeLabel(definition, l10n), overflow: TextOverflow.ellipsis),
                   Text(_stateLabel(definition.state, l10n), overflow: TextOverflow.ellipsis),
                   if (riskDescriptors.isEmpty)
                     Text(_actionSubtitle(definition, l10n), style: context.captionText)
@@ -957,7 +1034,7 @@ class _DefinitionNameCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(_iconFor(definition.type), size: 16),
+        Icon(_definitionIconFor(definition), size: 16),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Column(
@@ -1225,7 +1302,7 @@ class _SelectedActionDetailContent extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(_iconFor(definition.type), size: 20),
+            Icon(_definitionIconFor(definition), size: 20),
             const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(definition.name, style: context.sectionTitle)),
             Text(_stateLabel(definition.state, l10n), style: context.bodyMuted),
@@ -1291,7 +1368,7 @@ class _SelectedActionDetailContent extends StatelessWidget {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.xs,
           children: [
-            _Pill(text: _typeLabel(definition.type, l10n)),
+            _Pill(text: _definitionTypeLabel(definition, l10n)),
             _Pill(text: definition.id),
           ],
         ),
@@ -1376,7 +1453,7 @@ class _SelectedActionDetailContent extends StatelessWidget {
             title: Text(l10n.agentActionsActionTypeUnavailableTitle),
             content: Text(
               l10n.agentActionsActionTypeUnavailableMessage(
-                _typeLabel(definition.type, l10n),
+                _definitionTypeLabel(definition, l10n),
               ),
             ),
             severity: InfoBarSeverity.warning,
@@ -2732,14 +2809,15 @@ class _Pill extends StatelessWidget {
   }
 }
 
-const List<AgentActionType> _editableDraftTypes = <AgentActionType>[
-  AgentActionType.commandLine,
-  AgentActionType.executable,
-  AgentActionType.script,
-  AgentActionType.jar,
-  AgentActionType.email,
-  AgentActionType.comObject,
-  AgentActionType.developer,
+const List<_AgentActionDraftKind> _editableDraftKinds = <_AgentActionDraftKind>[
+  _AgentActionDraftKind.commandLine,
+  _AgentActionDraftKind.executable,
+  _AgentActionDraftKind.script,
+  _AgentActionDraftKind.jar,
+  _AgentActionDraftKind.email,
+  _AgentActionDraftKind.comObject,
+  _AgentActionDraftKind.developer,
+  _AgentActionDraftKind.powerShell,
 ];
 
 IconData _iconFor(AgentActionType type) {
@@ -2752,6 +2830,10 @@ IconData _iconFor(AgentActionType type) {
     AgentActionType.comObject => FluentIcons.code,
     AgentActionType.developer => FluentIcons.developer_tools,
   };
+}
+
+IconData _definitionIconFor(AgentActionDefinition definition) {
+  return _isPowerShellDefinition(definition) ? FluentIcons.command_prompt : _iconFor(definition.type);
 }
 
 IconData _statusIcon(AgentActionExecutionStatus status) {
@@ -2770,7 +2852,7 @@ IconData _statusIcon(AgentActionExecutionStatus status) {
 }
 
 String _actionSubtitle(AgentActionDefinition definition, AppLocalizations l10n) {
-  return '${_typeLabel(definition.type, l10n)} - ${_stateLabel(definition.state, l10n)}';
+  return '${_definitionTypeLabel(definition, l10n)} - ${_stateLabel(definition.state, l10n)}';
 }
 
 String _executionSubtitle(AgentActionExecution execution, AppLocalizations l10n) {
@@ -2790,6 +2872,18 @@ String _typeLabel(AgentActionType type, AppLocalizations l10n) {
     AgentActionType.email => l10n.agentActionsTypeEmail,
     AgentActionType.comObject => l10n.agentActionsTypeComObject,
     AgentActionType.developer => l10n.agentActionsTypeDeveloper,
+  };
+}
+
+String _definitionTypeLabel(AgentActionDefinition definition, AppLocalizations l10n) {
+  return _isPowerShellDefinition(definition) ? l10n.agentActionsTypePowerShell : _typeLabel(definition.type, l10n);
+}
+
+bool _isPowerShellDefinition(AgentActionDefinition definition) {
+  return switch (definition.config) {
+    CommandLineActionConfig(:final command) => PowerShellCommandLine.tryUnwrapInlineCommand(command) != null,
+    ScriptActionConfig(:final scriptPath) => PowerShellCommandLine.isPowerShellScriptPath(scriptPath.originalPath),
+    _ => false,
   };
 }
 

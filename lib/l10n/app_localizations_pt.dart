@@ -207,6 +207,46 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormBrowseInterpreterPath => 'Procurar interpretador';
 
   @override
+  String get agentActionsFormCreatePowerShellTitle => 'Nova acao PowerShell';
+
+  @override
+  String get agentActionsFormEditPowerShellTitle => 'Acao PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellMode => 'Modo PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellModeCommand => 'Comando';
+
+  @override
+  String get agentActionsFormPowerShellModeScript => 'Script .ps1';
+
+  @override
+  String get agentActionsFormPowerShellExecutable => 'Executavel PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellExecutableWindows => 'Windows PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellExecutablePwsh => 'PowerShell 7';
+
+  @override
+  String get agentActionsFormPowerShellCommand => 'Comando PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellScriptPath => 'Caminho do script PowerShell';
+
+  @override
+  String get agentActionsFormBrowsePowerShellScriptPath => 'Procurar script PowerShell';
+
+  @override
+  String get agentActionsFormPowerShellScriptPathInvalid => 'Use um arquivo .ps1 no modo de script PowerShell.';
+
+  @override
+  String get agentActionsFormPowerShellModeUnavailable =>
+      'O modo PowerShell selecionado esta indisponivel no runtime atual.';
+
+  @override
   String get agentActionsFormCreateJarTitle => 'Nova acao JAR';
 
   @override
@@ -1747,6 +1787,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsTypeCommandLine => 'Linha de comando';
+
+  @override
+  String get agentActionsTypePowerShell => 'PowerShell';
 
   @override
   String get agentActionsTypeExecutable => 'Executavel';

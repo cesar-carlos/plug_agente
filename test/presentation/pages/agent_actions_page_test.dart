@@ -43,6 +43,7 @@ import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
@@ -69,6 +70,22 @@ Finder _agentActionFormTextBox(String label) {
   );
 }
 
+Finder _agentActionFormComboBox(String label) {
+  final key = switch (label) {
+    'Tipo' || 'Type' => 'agent_action_editor_type_dropdown',
+    'Modo PowerShell' || 'PowerShell mode' => 'agent_action_editor_powershell_mode_dropdown',
+    'Executavel PowerShell' || 'PowerShell executable' => 'agent_action_editor_powershell_executable_dropdown',
+    _ => throw StateError('Unknown action form combo box label: $label'),
+  };
+
+  return find.descendant(
+    of: find.byKey(ValueKey<String>(key)),
+    matching: find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString().startsWith('ComboBox<'),
+    ),
+  );
+}
+
 Finder _filledButtonWithText(String text) {
   return find.ancestor(
     of: find.text(text),
@@ -88,6 +105,27 @@ Future<void> _openCreateActionDialog(
   await tester.tap(find.widgetWithText(FilledButton, l10n.agentActionsFormNew).first);
   await tester.pumpAndSettle();
   expect(find.byType(ContentDialog), findsOneWidget);
+}
+
+Future<void> _selectActionFormType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
+  await tester.tap(_agentActionFormComboBox(l10n.agentActionsFormType));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(typeLabel).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectPowerShellMode(WidgetTester tester, AppLocalizations l10n, String modeLabel) async {
+  await tester.tap(_agentActionFormComboBox(l10n.agentActionsFormPowerShellMode));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(modeLabel).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectPowerShellExecutable(WidgetTester tester, AppLocalizations l10n, String executableLabel) async {
+  await tester.tap(_agentActionFormComboBox(l10n.agentActionsFormPowerShellExecutable));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(executableLabel).last);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openSelectedActionDialog(WidgetTester tester) async {
@@ -251,6 +289,39 @@ void main() {
     expect(find.text(ptL10n.agentActionsSummaryMaintenanceActive), findsOneWidget);
   });
 
+  testWidgets('opens new action editor from empty state while maintenance mode is enabled', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    await harness.featureFlags.setEnableAgentActionsMaintenanceMode(true);
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsFormNew).last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ContentDialog), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens only one action editor when create is triggered twice before next frame', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    final createButton = find.widgetWithText(FilledButton, ptL10n.agentActionsFormNew).first;
+    await tester.tap(createButton);
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ContentDialog), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('disables trigger add button while maintenance mode is enabled', (tester) async {
     final harness = _AgentActionsPageHarness();
     harness.repository.definitions['action-1'] = const AgentActionDefinition(
@@ -388,6 +459,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('action editor dialog scrolls with a dedicated controller', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    final dialog = find.byType(ContentDialog);
+    final scrollbarFinder = find.descendant(
+      of: dialog,
+      matching: find.byType(Scrollbar),
+    );
+    final listViewFinder = find.descendant(
+      of: dialog,
+      matching: find.byType(ListView),
+    );
+
+    expect(scrollbarFinder, findsOneWidget);
+    expect(listViewFinder, findsOneWidget);
+
+    final scrollbar = tester.widget<Scrollbar>(scrollbarFinder);
+    final listView = tester.widget<ListView>(listViewFinder);
+
+    expect(scrollbar.controller, isNotNull);
+    expect(listView.controller, same(scrollbar.controller));
+    expect(listView.primary, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('renders triggers section when triggers exist', (tester) async {
     final harness = _AgentActionsPageHarness();
     harness.repository.definitions['action-1'] = const AgentActionDefinition(
@@ -446,6 +547,239 @@ void main() {
     expect(harness.repository.definitions, hasLength(1));
     expect(find.text('Run dir'), findsWidgets);
     expect(find.byType(ContentDialog), findsNothing);
+  });
+
+  testWidgets('shows PowerShell in action type dropdown', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    await tester.tap(_agentActionFormComboBox(ptL10n.agentActionsFormType));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsTypePowerShell), findsOneWidget);
+  });
+
+  testWidgets('saves a PowerShell inline action as command line config', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run PowerShell');
+    await tester.enterText(
+      _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
+      'Write-Output "ok" | Out-String',
+    );
+
+    tester.widget<FilledButton>(_filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.definitions, hasLength(1));
+    final definition = harness.repository.definitions.values.single;
+    expect(definition.type, AgentActionType.commandLine);
+    final config = definition.config;
+    expect(config, isA<CommandLineActionConfig>());
+    expect(
+      (config as CommandLineActionConfig).command,
+      PowerShellCommandLine.wrapInlineCommand('Write-Output "ok" | Out-String'),
+    );
+    expect(find.text(ptL10n.agentActionsTypePowerShell), findsWidgets);
+    expect(find.byType(ContentDialog), findsNothing);
+  });
+
+  testWidgets('saves a PowerShell 7 inline action as command line config', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await _selectPowerShellExecutable(tester, ptL10n, ptL10n.agentActionsFormPowerShellExecutablePwsh);
+
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run pwsh');
+    await tester.enterText(
+      _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
+      'Write-Output "ok" & whoami',
+    );
+
+    tester.widget<FilledButton>(_filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.definitions, hasLength(1));
+    final definition = harness.repository.definitions.values.single;
+    final config = definition.config;
+    expect(config, isA<CommandLineActionConfig>());
+    expect(
+      (config as CommandLineActionConfig).command,
+      PowerShellCommandLine.wrapInlineCommand(
+        'Write-Output "ok" & whoami',
+        executable: PowerShellCommandLine.powerShell7Executable,
+      ),
+    );
+  });
+
+  testWidgets('saves a PowerShell script action as script config', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await _selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
+
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run script');
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormPowerShellScriptPath), r'C:\Jobs\backup.ps1');
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormArguments), '-Verbose');
+
+    tester.widget<FilledButton>(_filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.definitions, hasLength(1));
+    final definition = harness.repository.definitions.values.single;
+    expect(definition.type, AgentActionType.script);
+    final config = definition.config;
+    expect(config, isA<ScriptActionConfig>());
+    expect((config as ScriptActionConfig).scriptPath.originalPath, r'C:\Jobs\backup.ps1');
+    expect(config.arguments, ['-Verbose']);
+    expect(config.interpreterPath, isNull);
+    expect(find.byType(ContentDialog), findsNothing);
+  });
+
+  testWidgets('saves a PowerShell 7 script action as script config with pwsh interpreter', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await _selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
+    await _selectPowerShellExecutable(tester, ptL10n, ptL10n.agentActionsFormPowerShellExecutablePwsh);
+
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run pwsh script');
+    await tester.enterText(_agentActionFormTextBox(ptL10n.agentActionsFormPowerShellScriptPath), r'C:\Jobs\backup.ps1');
+
+    tester.widget<FilledButton>(_filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    final definition = harness.repository.definitions.values.single;
+    final config = definition.config;
+    expect(config, isA<ScriptActionConfig>());
+    expect(
+      (config as ScriptActionConfig).interpreterPath?.originalPath,
+      PowerShellCommandLine.powerShell7Executable,
+    );
+  });
+
+  testWidgets('opens existing ps1 script action in PowerShell script mode', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'PowerShell script',
+      config: ScriptActionConfig(
+        scriptPath: AgentActionPathReference(originalPath: r'C:\Jobs\backup.ps1'),
+        arguments: ['-Verbose'],
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1800));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
+    final scriptPathField = tester.widget<TextBox>(
+      _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellScriptPath),
+    );
+    expect(scriptPathField.controller?.text, r'C:\Jobs\backup.ps1');
+  });
+
+  testWidgets('opens generated PowerShell command line action in inline mode', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = AgentActionDefinition(
+      id: 'action-1',
+      name: 'PowerShell inline',
+      config: CommandLineActionConfig(
+        command: PowerShellCommandLine.wrapInlineCommand('Write-Output "ok" & whoami'),
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1800));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
+    final commandField = tester.widget<TextBox>(
+      _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
+    );
+    expect(commandField.controller?.text, 'Write-Output "ok" & whoami');
+  });
+
+  testWidgets('opens generated PowerShell 7 command line action in inline mode', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = AgentActionDefinition(
+      id: 'action-1',
+      name: 'PowerShell 7 inline',
+      config: CommandLineActionConfig(
+        command: PowerShellCommandLine.wrapInlineCommand(
+          'Write-Output "ok"',
+          executable: PowerShellCommandLine.powerShell7Executable,
+        ),
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1800));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormPowerShellExecutablePwsh), findsOneWidget);
+    final commandField = tester.widget<TextBox>(
+      _agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
+    );
+    expect(commandField.controller?.text, 'Write-Output "ok"');
+  });
+
+  testWidgets('opens existing ps1 script action with pwsh interpreter in PowerShell 7 script mode', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'PowerShell 7 script',
+      config: ScriptActionConfig(
+        scriptPath: AgentActionPathReference(originalPath: r'C:\Jobs\backup.ps1'),
+        interpreterPath: AgentActionPathReference(originalPath: 'pwsh.exe'),
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1800));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormPowerShellExecutablePwsh), findsOneWidget);
   });
 
   testWidgets('keeps action dialog open when validation fails', (tester) async {
@@ -1113,7 +1447,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openCreateActionDialog(tester, ptL10n);
 
-    final typeCombo = find.byWidgetPredicate((widget) => widget is ComboBox<AgentActionType>);
+    final typeCombo = _agentActionFormComboBox(ptL10n.agentActionsFormType);
     expect(typeCombo, findsOneWidget);
 
     await tester.tap(typeCombo);
@@ -1122,6 +1456,80 @@ void main() {
     expect(
       find.text(
         '${ptL10n.agentActionsTypeDeveloper} (${ptL10n.agentActionsRiskRunnerUnavailable})',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('PowerShell create form defaults to script mode when command line runner is unavailable', (tester) async {
+    final guard = AgentActionRuntimeStateGuard()
+      ..markDegraded(
+        unavailableActionTypes: {AgentActionType.commandLine},
+        reason: 'command-runner-missing',
+      );
+    final harness = _AgentActionsPageHarness(runtimeStateGuard: guard);
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+
+    expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
+    await tester.tap(_agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        '${ptL10n.agentActionsFormPowerShellModeCommand} (${ptL10n.agentActionsRiskRunnerUnavailable})',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('PowerShell create form defaults to command mode when script runner is unavailable', (tester) async {
+    final guard = AgentActionRuntimeStateGuard()
+      ..markDegraded(
+        unavailableActionTypes: {AgentActionType.script},
+        reason: 'script-runner-missing',
+      );
+    final harness = _AgentActionsPageHarness(runtimeStateGuard: guard);
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+    await _selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+
+    expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
+    await tester.tap(_agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        '${ptL10n.agentActionsFormPowerShellModeScript} (${ptL10n.agentActionsRiskRunnerUnavailable})',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('PowerShell action type is unavailable when both underlying runners are unavailable', (tester) async {
+    final guard = AgentActionRuntimeStateGuard()
+      ..markDegraded(
+        unavailableActionTypes: {AgentActionType.commandLine, AgentActionType.script},
+        reason: 'powershell-runners-missing',
+      );
+    final harness = _AgentActionsPageHarness(runtimeStateGuard: guard);
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1600));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+    await _openCreateActionDialog(tester, ptL10n);
+
+    await tester.tap(_agentActionFormComboBox(ptL10n.agentActionsFormType));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        '${ptL10n.agentActionsTypePowerShell} (${ptL10n.agentActionsRiskRunnerUnavailable})',
       ),
       findsOneWidget,
     );
@@ -1962,6 +2370,7 @@ class _AgentActionsPageHarness {
     final validateDefinition = ValidateAgentActionDefinition(
       AgentActionAdapterRegistry([
         const _FakeCommandLineActionAdapter(),
+        const _FakeScriptActionAdapter(),
         const _FakeDeveloperActionAdapter(),
       ]),
     );
@@ -1969,6 +2378,7 @@ class _AgentActionsPageHarness {
       repository,
       AgentActionAdapterRegistry([
         const _FakeCommandLineActionAdapter(),
+        const _FakeScriptActionAdapter(),
         const _FakeDeveloperActionAdapter(),
       ]),
     );
@@ -2117,6 +2527,45 @@ class _FakeCommandLineActionAdapter implements AgentActionAdapter {
       AgentActionPreparedExecution(
         actionType: type,
         redactedCommandPreview: 'cmd.exe /C ***',
+      ),
+    );
+  }
+
+  @override
+  Future<Result<AgentActionDefinition>> normalizeDefinition(
+    AgentActionDefinition definition,
+  ) async {
+    return Success(definition);
+  }
+}
+
+class _FakeScriptActionAdapter implements AgentActionAdapter {
+  const _FakeScriptActionAdapter();
+
+  @override
+  AgentActionType get type => AgentActionType.script;
+
+  @override
+  Future<Result<AgentActionPreflight>> validateDefinition(
+    AgentActionDefinition definition,
+  ) async {
+    return Success(
+      AgentActionPreflight(
+        actionType: type,
+        canRun: definition.canRun,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<AgentActionPreparedExecution>> prepareExecution({
+    required AgentActionDefinition definition,
+    required AgentActionExecutionRequest request,
+  }) async {
+    return Success(
+      AgentActionPreparedExecution(
+        actionType: type,
+        redactedCommandPreview: 'powershell.exe -File ***',
       ),
     );
   }
