@@ -32,6 +32,7 @@ class UpdateCheckDiagnostics {
     this.completionSource,
     this.probeSucceeded,
     this.appcastProbeVersion,
+    this.appcastProbeOs,
     this.appcastProbeItemCount,
     this.updateAvailable,
     this.remoteVersion,
@@ -68,6 +69,7 @@ class UpdateCheckDiagnostics {
     this.rolloutEligible,
     this.automaticFailureCount,
     this.automaticCooldownUntil,
+    this.validationErrorCode,
     this.errorMessage,
     this.probeErrorMessage,
   });
@@ -83,6 +85,7 @@ class UpdateCheckDiagnostics {
   final UpdateCheckCompletionSource? completionSource;
   final bool? probeSucceeded;
   final String? appcastProbeVersion;
+  final String? appcastProbeOs;
   final int? appcastProbeItemCount;
   final bool? updateAvailable;
   final String? remoteVersion;
@@ -119,6 +122,7 @@ class UpdateCheckDiagnostics {
   final bool? rolloutEligible;
   final int? automaticFailureCount;
   final DateTime? automaticCooldownUntil;
+  final String? validationErrorCode;
   final String? errorMessage;
   final String? probeErrorMessage;
 
@@ -135,6 +139,7 @@ class UpdateCheckDiagnostics {
       'completionSource': completionSource?.name,
       'probeSucceeded': probeSucceeded,
       'appcastProbeVersion': appcastProbeVersion,
+      'appcastProbeOs': appcastProbeOs,
       'appcastProbeItemCount': appcastProbeItemCount,
       'updateAvailable': updateAvailable,
       'remoteVersion': remoteVersion,
@@ -171,6 +176,7 @@ class UpdateCheckDiagnostics {
       'rolloutEligible': rolloutEligible,
       'automaticFailureCount': automaticFailureCount,
       'automaticCooldownUntil': automaticCooldownUntil?.toIso8601String(),
+      'validationErrorCode': validationErrorCode,
       'errorMessage': errorMessage,
       'probeErrorMessage': probeErrorMessage,
     };
@@ -201,6 +207,7 @@ class UpdateCheckDiagnostics {
       completionSource: _parseCompletionSource(json['completionSource']),
       probeSucceeded: json['probeSucceeded'] as bool?,
       appcastProbeVersion: json['appcastProbeVersion'] as String?,
+      appcastProbeOs: json['appcastProbeOs'] as String?,
       appcastProbeItemCount: _parseInt(json['appcastProbeItemCount']),
       updateAvailable: json['updateAvailable'] as bool?,
       remoteVersion: json['remoteVersion'] as String?,
@@ -237,6 +244,7 @@ class UpdateCheckDiagnostics {
       rolloutEligible: json['rolloutEligible'] as bool?,
       automaticFailureCount: _parseInt(json['automaticFailureCount']),
       automaticCooldownUntil: _parseDateTime(json['automaticCooldownUntil']),
+      validationErrorCode: json['validationErrorCode'] as String?,
       errorMessage: json['errorMessage'] as String?,
       probeErrorMessage: json['probeErrorMessage'] as String?,
     );
@@ -254,6 +262,7 @@ class UpdateCheckDiagnostics {
     UpdateCheckCompletionSource? completionSource,
     bool? probeSucceeded,
     String? appcastProbeVersion,
+    String? appcastProbeOs,
     int? appcastProbeItemCount,
     bool? updateAvailable,
     String? remoteVersion,
@@ -290,6 +299,7 @@ class UpdateCheckDiagnostics {
     bool? rolloutEligible,
     int? automaticFailureCount,
     DateTime? automaticCooldownUntil,
+    String? validationErrorCode,
     String? errorMessage,
     String? probeErrorMessage,
   }) {
@@ -305,6 +315,7 @@ class UpdateCheckDiagnostics {
       completionSource: completionSource ?? this.completionSource,
       probeSucceeded: probeSucceeded ?? this.probeSucceeded,
       appcastProbeVersion: appcastProbeVersion ?? this.appcastProbeVersion,
+      appcastProbeOs: appcastProbeOs ?? this.appcastProbeOs,
       appcastProbeItemCount: appcastProbeItemCount ?? this.appcastProbeItemCount,
       updateAvailable: updateAvailable ?? this.updateAvailable,
       remoteVersion: remoteVersion ?? this.remoteVersion,
@@ -341,6 +352,7 @@ class UpdateCheckDiagnostics {
       rolloutEligible: rolloutEligible ?? this.rolloutEligible,
       automaticFailureCount: automaticFailureCount ?? this.automaticFailureCount,
       automaticCooldownUntil: automaticCooldownUntil ?? this.automaticCooldownUntil,
+      validationErrorCode: validationErrorCode ?? this.validationErrorCode,
       errorMessage: errorMessage ?? this.errorMessage,
       probeErrorMessage: probeErrorMessage ?? this.probeErrorMessage,
     );

@@ -106,36 +106,63 @@ class AppcastProbeService implements IAppcastProbeService {
         );
       }
 
-      final latestItem = items.first;
-      final enclosure = _firstChildElementByName(latestItem, 'enclosure');
-      if (enclosure == null) {
-        return AppcastProbeResult(
-          requestUrl: feedUrl,
+      _ProbeCandidate? legacyCandidate;
+      _ProbeCandidate? unsupportedOsCandidate;
+      String? firstCandidateError;
+      for (final item in items) {
+        final enclosure = _firstChildElementByName(item, 'enclosure');
+        if (enclosure == null) {
+          firstCandidateError ??= 'Latest appcast item is missing enclosure';
+          continue;
+        }
+
+        final latestVersion = _sparkleVersionFromEnclosure(enclosure);
+        if (latestVersion == null || latestVersion.isEmpty) {
+          firstCandidateError ??= 'Latest appcast item is missing sparkle:version';
+          continue;
+        }
+
+        final os = _sparkleOsFromEnclosure(enclosure);
+        final candidate = _ProbeCandidate(
+          enclosure: enclosure,
+          latestVersion: latestVersion,
+          os: os,
+        );
+        if (os == 'windows') {
+          return _resultFromCandidate(
+            feedUrl: feedUrl,
+            itemCount: items.length,
+            candidate: candidate,
+          );
+        }
+        if (os == null || os.isEmpty) {
+          legacyCandidate ??= candidate;
+          continue;
+        }
+        unsupportedOsCandidate ??= candidate;
+      }
+
+      final selectedCandidate = legacyCandidate ?? unsupportedOsCandidate;
+      if (selectedCandidate != null) {
+        return _resultFromCandidate(
+          feedUrl: feedUrl,
           itemCount: items.length,
-          errorMessage: 'Latest appcast item is missing enclosure',
+          candidate: selectedCandidate,
         );
       }
 
-      final latestVersion = _sparkleVersionFromEnclosure(enclosure);
-      if (latestVersion == null || latestVersion.isEmpty) {
+      if (firstCandidateError != null) {
         return AppcastProbeResult(
           requestUrl: feedUrl,
           itemCount: items.length,
-          errorMessage: 'Latest appcast item is missing sparkle:version',
+          errorMessage: firstCandidateError,
         );
       }
 
       return AppcastProbeResult(
         requestUrl: feedUrl,
-        latestVersion: latestVersion,
-        assetUrl: _attributeValue(enclosure, 'url'),
-        assetSize: _assetSizeFromEnclosure(enclosure),
-        assetName: _assetNameFromUrl(_attributeValue(enclosure, 'url')),
-        sha256: _plugSha256FromEnclosure(enclosure),
-        os: _sparkleOsFromEnclosure(enclosure),
-        channel: _plugChannelFromEnclosure(enclosure),
-        rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
         itemCount: items.length,
+        errorMessage: 'Appcast missing supported item',
       );
     } on Exception catch (e) {
       return AppcastProbeResult(
@@ -158,6 +185,27 @@ class AppcastProbeService implements IAppcastProbeService {
 
   static bool _matchesLocalName(XmlElement element, String expected) {
     return element.name.local.toLowerCase() == expected.toLowerCase();
+  }
+
+  static AppcastProbeResult _resultFromCandidate({
+    required String feedUrl,
+    required int itemCount,
+    required _ProbeCandidate candidate,
+  }) {
+    final enclosure = candidate.enclosure;
+    final assetUrl = _attributeValue(enclosure, 'url');
+    return AppcastProbeResult(
+      requestUrl: feedUrl,
+      latestVersion: candidate.latestVersion,
+      assetUrl: assetUrl,
+      assetSize: _assetSizeFromEnclosure(enclosure),
+      assetName: _assetNameFromUrl(assetUrl),
+      sha256: _plugSha256FromEnclosure(enclosure),
+      os: candidate.os,
+      channel: _plugChannelFromEnclosure(enclosure),
+      rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
+      itemCount: itemCount,
+    );
   }
 
   static String? _sparkleVersionFromEnclosure(XmlElement enclosure) {
@@ -266,4 +314,16 @@ class AppcastProbeService implements IAppcastProbeService {
     final name = uri.pathSegments.last.trim();
     return name.isEmpty ? null : name;
   }
+}
+
+class _ProbeCandidate {
+  const _ProbeCandidate({
+    required this.enclosure,
+    required this.latestVersion,
+    required this.os,
+  });
+
+  final XmlElement enclosure;
+  final String latestVersion;
+  final String? os;
 }

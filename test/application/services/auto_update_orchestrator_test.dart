@@ -266,6 +266,7 @@ void main() {
             assetSize: 5,
             assetName: 'PlugAgente-Setup-99.0.0.exe',
             sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            os: 'windows',
             itemCount: 1,
           );
         final fakeInstaller = FakeSilentUpdateInstaller();
@@ -314,6 +315,7 @@ void main() {
         expect(orchestrator.lastAutomaticDiagnostics?.appPid, 1234);
         expect(orchestrator.lastAutomaticDiagnostics?.updateDirectorySecurityStatus, 'restricted');
         expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isFalse);
+        expect(orchestrator.lastAutomaticDiagnostics?.appcastProbeOs, 'windows');
       });
 
       test('runs only one probe and install for concurrent silent checks', () async {
@@ -386,12 +388,14 @@ void main() {
           orchestrator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticValidationFailure,
         );
+        expect(orchestrator.lastAutomaticDiagnostics?.validationErrorCode, 'invalid_asset_url');
         result.fold(
           (_) => fail('Expected failure'),
           (failure) {
             expect(failure, isA<domain.ValidationFailure>());
             final typedFailure = failure as domain.Failure;
             expect(typedFailure.message, contains('invalid installer URL'));
+            expect(typedFailure.context['validation_code'], 'invalid_asset_url');
           },
         );
       });
@@ -426,12 +430,15 @@ void main() {
           orchestrator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticValidationFailure,
         );
+        expect(orchestrator.lastAutomaticDiagnostics?.appcastProbeOs, 'macos');
+        expect(orchestrator.lastAutomaticDiagnostics?.validationErrorCode, 'unsupported_os');
         result.fold(
           (_) => fail('Expected failure'),
           (failure) {
             expect(failure, isA<domain.ValidationFailure>());
             final typedFailure = failure as domain.Failure;
             expect(typedFailure.message, contains('unsupported operating system'));
+            expect(typedFailure.context['validation_code'], 'unsupported_os');
           },
         );
       });

@@ -129,11 +129,11 @@ void main() {
     });
 
     test('returns network failure when download does not finish before timeout', () async {
-      final server = await _serveNeverEndingBytes(utf8.encode('h'));
-      addTearDown(() => server.close(force: true));
       var processStarted = false;
+      final httpClient = _NeverCompletingHttpClient();
       final installer = HttpSilentUpdateInstaller(
         downloadTimeout: const Duration(milliseconds: 50),
+        httpClientFactory: () => httpClient,
         downloadDirectoryResolver: () async => tempDir.path,
         installDirectoryResolver: () async => tempDir.path,
         installDirectoryWritableProbe: (_) async => true,
@@ -145,9 +145,9 @@ void main() {
       );
 
       final result = await installer.install(
-        SilentUpdateInstallRequest(
+        const SilentUpdateInstallRequest(
           version: '99.0.0+1',
-          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
           assetSize: 5,
           assetName: 'PlugAgente-Setup-99.0.0.exe',
           sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
@@ -157,6 +157,7 @@ void main() {
 
       expect(result.isError(), isTrue);
       expect(processStarted, isFalse);
+      expect(httpClient.closedWithForce, isTrue);
       result.fold(
         (_) => fail('Expected failure'),
         (failure) {
@@ -416,18 +417,6 @@ Future<HttpServer> _serveBytes(List<int> bytes) async {
   return server;
 }
 
-Future<HttpServer> _serveNeverEndingBytes(List<int> bytes) async {
-  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-  server.listen((request) async {
-    request.response
-      ..statusCode = HttpStatus.ok
-      ..headers.contentLength = 5
-      ..add(bytes);
-    await request.response.flush();
-  });
-  return server;
-}
-
 class _FakeProcess implements Process {
   final StreamController<List<int>> _stdout = StreamController<List<int>>();
   final StreamController<List<int>> _stderr = StreamController<List<int>>();
@@ -450,4 +439,24 @@ class _FakeProcess implements Process {
 
   @override
   Stream<List<int>> get stdout => _stdout.stream;
+}
+
+class _NeverCompletingHttpClient implements HttpClient {
+  @override
+  Duration? connectionTimeout;
+
+  bool closedWithForce = false;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) {
+    return Completer<HttpClientRequest>().future;
+  }
+
+  @override
+  void close({bool force = false}) {
+    closedWithForce = closedWithForce || force;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -76,6 +76,53 @@ void main() {
       expect(result.errorMessage, contains('HTTP 404'));
     });
 
+    test('selects first explicit windows item when latest item targets another os', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+
+      server.listen((request) async {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType('application', 'rss+xml', charset: 'utf-8')
+          ..write('''
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:plug="https://plug.se7esistemas.com/appcast">
+  <channel>
+    <item>
+      <enclosure
+        url="https://example.com/downloads/PlugAgente-macos.zip"
+        sparkle:version="2.0.0+2"
+        sparkle:os="macos"
+        length="10"
+        plug:sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />
+    </item>
+    <item>
+      <enclosure
+        url="https://example.com/downloads/PlugAgente-Setup-2.0.0.exe"
+        sparkle:version="2.0.0+1"
+        sparkle:os="windows"
+        length="20"
+        plug:sha256="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" />
+    </item>
+  </channel>
+</rss>''');
+        await request.response.close();
+      });
+
+      const service = AppcastProbeService();
+      final result = await service.probeLatest(
+        feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
+      );
+
+      expect(result.errorMessage, isNull);
+      expect(result.latestVersion, '2.0.0+1');
+      expect(result.assetName, 'PlugAgente-Setup-2.0.0.exe');
+      expect(result.os, 'windows');
+      expect(result.itemCount, 2);
+    });
+
     test('reads single quoted uppercase appcast attributes', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() async {

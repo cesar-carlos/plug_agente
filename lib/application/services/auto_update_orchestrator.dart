@@ -881,6 +881,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         probeRequestUrl: probeResult.requestUrl,
         probeSucceeded: probeResult.errorMessage == null,
         appcastProbeVersion: probeResult.latestVersion,
+        appcastProbeOs: probeResult.os,
         appcastProbeItemCount: probeResult.itemCount,
         remoteVersion: probeResult.latestVersion,
         remoteDisplayVersion: probeResult.latestVersion,
@@ -926,15 +927,17 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
           automaticFailureCount: failureState.failureCount,
           automaticCooldownUntil: failureState.cooldownUntil,
-          errorMessage: validationError,
+          validationErrorCode: validationError.code,
+          errorMessage: validationError.message,
         );
         await _persistLastAutomaticDiagnostics();
         return Failure<bool, Exception>(
           domain.ValidationFailure.withContext(
-            message: validationError,
+            message: validationError.message,
             context: <String, dynamic>{
               'operation': 'checkSilently',
               'feed_url': feedUrl,
+              'validation_code': validationError.code,
             },
           ),
         );
@@ -1097,37 +1100,61 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     }
   }
 
-  String? _validateSilentProbeResult(AppcastProbeResult result) {
+  _SilentProbeValidationError? _validateSilentProbeResult(AppcastProbeResult result) {
     final version = result.latestVersion?.trim();
     if (version == null || version.isEmpty) {
-      return 'Silent update appcast is missing the latest version';
+      return const _SilentProbeValidationError(
+        code: 'missing_latest_version',
+        message: 'Silent update appcast is missing the latest version',
+      );
     }
     final assetUrl = result.assetUrl?.trim();
     if (assetUrl == null || assetUrl.isEmpty) {
-      return 'Silent update appcast is missing the installer URL';
+      return const _SilentProbeValidationError(
+        code: 'missing_asset_url',
+        message: 'Silent update appcast is missing the installer URL',
+      );
     }
     if (!isAutoUpdateInstallerUrl(assetUrl)) {
-      return 'Silent update appcast has an invalid installer URL';
+      return const _SilentProbeValidationError(
+        code: 'invalid_asset_url',
+        message: 'Silent update appcast has an invalid installer URL',
+      );
     }
     final os = result.os?.trim().toLowerCase();
     if (os != null && os.isNotEmpty && os != 'windows') {
-      return 'Silent update appcast targets an unsupported operating system';
+      return const _SilentProbeValidationError(
+        code: 'unsupported_os',
+        message: 'Silent update appcast targets an unsupported operating system',
+      );
     }
     final assetSize = result.assetSize;
     if (assetSize == null || assetSize <= 0) {
-      return 'Silent update appcast is missing a valid installer size';
+      return const _SilentProbeValidationError(
+        code: 'invalid_asset_size',
+        message: 'Silent update appcast is missing a valid installer size',
+      );
     }
     final assetName = result.assetName?.trim();
     if (assetName == null || assetName.isEmpty || !assetName.toLowerCase().endsWith('.exe')) {
-      return 'Silent update appcast is missing a valid installer name';
+      return const _SilentProbeValidationError(
+        code: 'invalid_asset_name',
+        message: 'Silent update appcast is missing a valid installer name',
+      );
     }
     final sha256 = result.sha256?.trim().toLowerCase();
     if (sha256 == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) {
-      return 'Silent update appcast is missing a valid plug:sha256 digest';
+      return const _SilentProbeValidationError(
+        code: 'invalid_sha256',
+        message: 'Silent update appcast is missing a valid plug:sha256 digest',
+      );
     }
     final rolloutPercentage = result.rolloutPercentage;
     if (rolloutPercentage != null && (rolloutPercentage < 0 || rolloutPercentage > 100)) {
-      return 'Silent update appcast has an invalid plug:rolloutPercentage value';
+      return const _SilentProbeValidationError(
+        code: 'invalid_rollout_percentage',
+        message: 'Silent update appcast has an invalid plug:rolloutPercentage value',
+      );
     }
     return null;
   }
@@ -1446,6 +1473,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         probeRequestUrl: probeResult.requestUrl,
         probeSucceeded: probeResult.errorMessage == null,
         appcastProbeVersion: probeResult.latestVersion,
+        appcastProbeOs: probeResult.os,
         appcastProbeItemCount: probeResult.itemCount,
         probeErrorMessage: probeResult.errorMessage,
       );
@@ -1718,10 +1746,41 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       checkId: _activeCheckId,
     );
     final allowQuitForUpdate = _allowQuitForUpdate;
-    if (allowQuitForUpdate != null) {
-      unawaited(allowQuitForUpdate());
+    if (allowQuitForUpdate == null) {
+      return;
+    }
+    try {
+      unawaited(
+        allowQuitForUpdate().catchError((Object error, StackTrace stackTrace) {
+          developer.log(
+            'Failed to allow quit for update',
+            name: 'auto_update_orchestrator',
+            level: 900,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }),
+      );
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to allow quit for update',
+        name: 'auto_update_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
+}
+
+class _SilentProbeValidationError {
+  const _SilentProbeValidationError({
+    required this.code,
+    required this.message,
+  });
+
+  final String code;
+  final String message;
 }
 
 class _PendingSilentUpdate {
