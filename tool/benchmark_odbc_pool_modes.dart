@@ -430,7 +430,7 @@ Future<_ExecutionResult> _executeOneNativeCompatible({
     final INativeCompatibleConnectionPoolAcquire nativeCompatiblePool =>
       await nativeCompatiblePool.acquireNativeCompatible(
         connectionString,
-        leaseFallbackOptions: const ConnectionOptions(),
+        leaseFallbackOptions: const ConnectionAcquireOptions(),
       ),
     _ => await pool.acquire(connectionString),
   };

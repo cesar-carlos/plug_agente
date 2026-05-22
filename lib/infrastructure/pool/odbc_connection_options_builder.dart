@@ -1,10 +1,10 @@
 import 'dart:math';
 
-import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 
-/// Builds [ConnectionOptions] aligned with UI limits (8–128 MB) and safe
+/// Builds connection acquire options aligned with UI limits (8-128 MB) and safe
 /// fallbacks when persisted settings are missing or invalid (e.g. 0 MB).
 class OdbcConnectionOptionsBuilder {
   OdbcConnectionOptionsBuilder._();
@@ -24,14 +24,14 @@ class OdbcConnectionOptionsBuilder {
   }
 
   /// Options for pooled / standard query execution (matches gateway defaults).
-  static ConnectionOptions forQueryExecution(IOdbcConnectionSettings settings) {
+  static ConnectionAcquireOptions forQueryExecution(IOdbcConnectionSettings settings) {
     return forQueryExecutionWithTimeout(
       settings,
       queryTimeout: ConnectionConstants.defaultQueryTimeout,
     );
   }
 
-  static ConnectionOptions forQueryExecutionWithTimeout(
+  static ConnectionAcquireOptions forQueryExecutionWithTimeout(
     IOdbcConnectionSettings settings, {
     required Duration queryTimeout,
   }) {
@@ -41,7 +41,7 @@ class OdbcConnectionOptionsBuilder {
       ConnectionConstants.defaultInitialResultBufferBytes,
       maxBytes,
     );
-    return ConnectionOptions(
+    return ConnectionAcquireOptions(
       loginTimeout: Duration(seconds: settings.loginTimeoutSeconds),
       queryTimeout: queryTimeout,
       maxResultBufferBytes: maxBytes,

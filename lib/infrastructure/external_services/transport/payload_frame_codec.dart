@@ -167,7 +167,10 @@ class PayloadFrameCodec {
       throw domain.ValidationFailure.withContext(
         message: 'Failed to decode transport frame',
         cause: error,
-        context: {'payloadType': payload.runtimeType.toString()},
+        context: {
+          'payloadType': payload.runtimeType.toString(),
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
       );
     }
   }
@@ -202,7 +205,10 @@ class PayloadFrameCodec {
       throw domain.ValidationFailure.withContext(
         message: 'Failed to decode transport frame',
         cause: error,
-        context: {'payloadType': payload.runtimeType.toString()},
+        context: {
+          'payloadType': payload.runtimeType.toString(),
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
       );
     }
   }
@@ -211,7 +217,10 @@ class PayloadFrameCodec {
     if (!looksLikePayloadFrame(payload)) {
       throw domain.ValidationFailure.withContext(
         message: 'Application payload must be a PayloadFrame',
-        context: {'payloadType': payload.runtimeType.toString()},
+        context: {
+          'payloadType': payload.runtimeType.toString(),
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
       );
     }
   }
@@ -221,16 +230,43 @@ class PayloadFrameCodec {
     String? sourceEvent,
   }) {
     final localCapabilities = _localCapabilitiesProvider();
+    final schemaVersionSegments = frame.schemaVersion.split('.');
+    final majorVersion = schemaVersionSegments.length == 2 ? int.tryParse(schemaVersionSegments.first) : null;
+    final minorVersion = schemaVersionSegments.length == 2 ? int.tryParse(schemaVersionSegments.last) : null;
+    if (majorVersion != 1 || minorVersion == null) {
+      throw domain.ValidationFailure.withContext(
+        message: 'Unsupported PayloadFrame schema version: ${frame.schemaVersion}',
+        context: {
+          'schemaVersion': frame.schemaVersion,
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
+      );
+    }
+    if (frame.contentType != 'application/json') {
+      throw domain.ValidationFailure.withContext(
+        message: 'Unsupported PayloadFrame content type: ${frame.contentType}',
+        context: {
+          'contentType': frame.contentType,
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
+      );
+    }
     if (!localCapabilities.supportsEncoding(frame.enc)) {
       throw domain.ValidationFailure.withContext(
         message: 'Unsupported payload encoding: ${frame.enc}',
-        context: {'encoding': frame.enc},
+        context: {
+          'encoding': frame.enc,
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
       );
     }
     if (!localCapabilities.supportsCompression(frame.cmp)) {
       throw domain.ValidationFailure.withContext(
         message: 'Unsupported payload compression: ${frame.cmp}',
-        context: {'compression': frame.cmp},
+        context: {
+          'compression': frame.cmp,
+          'rpc_error_code': RpcErrorCode.invalidPayload,
+        },
       );
     }
     if (!_verifyFrameSignature(frame, sourceEvent: sourceEvent)) {

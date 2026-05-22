@@ -33,7 +33,7 @@ final class OdbcGatewayConnectionManager {
 
   Future<Result<String>> acquirePooledConnection(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     DateTime? deadline,
     Map<String, dynamic> context = const {},
   }) async {
@@ -72,7 +72,7 @@ final class OdbcGatewayConnectionManager {
 
   Future<Result<String>> acquireNativeCompatiblePooledConnection(
     String connectionString, {
-    required ConnectionOptions leaseFallbackOptions,
+    required ConnectionAcquireOptions leaseFallbackOptions,
     DateTime? deadline,
     Map<String, dynamic> context = const {},
   }) async {

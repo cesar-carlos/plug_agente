@@ -89,14 +89,7 @@
       "result": {
         "name": "result",
         "schema": {
-          "type": "object",
-          "properties": {
-            "cancelled": { "type": "boolean" },
-            "execution_id": { "type": "string" },
-            "request_id": { "type": "string" }
-          },
-          "required": ["cancelled"],
-          "additionalProperties": false
+          "$ref": "./schemas/rpc.result.sql-cancel.schema.json"
         }
       }
     },

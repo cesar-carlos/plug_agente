@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -9,6 +12,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
@@ -186,6 +190,78 @@ void main() {
         data['technical_message'],
         RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(ConnectionConstants.maxConcurrentRpcHandlers),
       );
+    });
+
+    test('emitConcurrencyLimitedError unwraps framed payload and calls socket ack once', () async {
+      var ackCount = 0;
+      final requestBytes = Uint8List.fromList(
+        utf8.encode('{"jsonrpc":"2.0","id":"req-frame","method":"sql.execute"}'),
+      );
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: requestBytes.length,
+        compressedSize: requestBytes.length,
+        payload: requestBytes,
+        requestId: 'req-frame',
+      ).toJson();
+
+      await handler.emitConcurrencyLimitedError([
+        frame,
+        () {
+          ackCount++;
+        },
+      ]);
+
+      expect(ackCount, 1);
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, 'req-frame');
+      expect(response.error?.code, RpcErrorCode.rateLimited);
+    });
+  });
+
+  group('transport decode errors', () {
+    test('maps invalid JSON payloads to decodingFailed', () async {
+      final invalidJsonBytes = Uint8List.fromList(utf8.encode('{not-json'));
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: invalidJsonBytes.length,
+        compressedSize: invalidJsonBytes.length,
+        payload: invalidJsonBytes,
+        requestId: 'bad-json',
+      ).toJson();
+
+      await handler.handleRequest(frame);
+
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, 'bad-json');
+      expect(response.error?.code, RpcErrorCode.decodingFailed);
+    });
+
+    test('maps invalid gzip payloads to compressionFailed', () async {
+      final invalidGzipBytes = Uint8List.fromList(const <int>[1, 2, 3, 4]);
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'gzip',
+        contentType: 'application/json',
+        originalSize: 128,
+        compressedSize: invalidGzipBytes.length,
+        payload: invalidGzipBytes,
+        requestId: 'bad-gzip',
+      ).toJson();
+
+      await handler.handleRequest(frame);
+
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, 'bad-gzip');
+      expect(response.error?.code, RpcErrorCode.compressionFailed);
     });
   });
 

@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
@@ -15,6 +16,46 @@ import 'package:uuid/uuid.dart';
 const int gzipIsolateThresholdBytes = 32 * 1024;
 const int defaultTransportCompressionThresholdBytes = 4096;
 const double defaultTransportMaxInflationRatio = 10;
+
+Map<String, dynamic> _transportContext(
+  int rpcErrorCode,
+  Map<String, dynamic> context,
+) {
+  return <String, dynamic>{
+    ...context,
+    'rpc_error_code': rpcErrorCode,
+  };
+}
+
+domain.Failure _withTransportRpcErrorCode(
+  domain.Failure failure,
+  int rpcErrorCode,
+) {
+  if (failure.context['rpc_error_code'] is int) {
+    return failure;
+  }
+  final context = _transportContext(rpcErrorCode, failure.context);
+  return switch (failure) {
+    domain.CompressionFailure() => domain.CompressionFailure.withContext(
+      message: failure.message,
+      cause: failure.cause,
+      timestamp: failure.timestamp,
+      context: context,
+    ),
+    domain.ValidationFailure() => domain.ValidationFailure.withContext(
+      message: failure.message,
+      cause: failure.cause,
+      timestamp: failure.timestamp,
+      context: context,
+    ),
+    _ => domain.ValidationFailure.withContext(
+      message: failure.message,
+      cause: failure.cause,
+      timestamp: failure.timestamp,
+      context: context,
+    ),
+  };
+}
 
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
   final jsonString = utf8.decode(bytes);
@@ -398,7 +439,10 @@ class TransportPipeline {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
-            context: {'expected': encoding, 'actual': frame.enc},
+            context: _transportContext(
+              RpcErrorCode.invalidPayload,
+              {'expected': encoding, 'actual': frame.enc},
+            ),
           ),
         );
       }
@@ -414,7 +458,10 @@ class TransportPipeline {
           return Failure(
             domain.ValidationFailure.withContext(
               message: 'Frame payload is not binary data',
-              context: {'payloadType': payloadType},
+              context: _transportContext(
+                RpcErrorCode.invalidPayload,
+                {'payloadType': payloadType},
+              ),
             ),
           );
         }
@@ -429,6 +476,7 @@ class TransportPipeline {
             context: {
               'expectedCompressedSize': frame.compressedSize,
               'actualCompressedSize': bytes.length,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -440,6 +488,7 @@ class TransportPipeline {
             context: {
               'compressedSize': frame.compressedSize,
               'limit': maxCompressedBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -451,6 +500,7 @@ class TransportPipeline {
             context: {
               'originalSize': frame.originalSize,
               'limit': maxOriginalBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -466,7 +516,12 @@ class TransportPipeline {
         final decompressResult = compressionCodec.decompress(bytes);
 
         if (decompressResult.isError()) {
-          return Failure(decompressResult.exceptionOrNull()!);
+          return Failure(
+            _withTransportRpcErrorCode(
+              decompressResult.exceptionOrNull()! as domain.Failure,
+              RpcErrorCode.compressionFailed,
+            ),
+          );
         }
 
         decodableBytes = decompressResult.getOrThrow();
@@ -483,6 +538,7 @@ class TransportPipeline {
             context: {
               'expectedOriginalSize': frame.originalSize,
               'actualOriginalSize': decodableBytes.length,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -494,6 +550,7 @@ class TransportPipeline {
             context: {
               'decodedSize': decodableBytes.length,
               'limit': maxOriginalBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -506,6 +563,7 @@ class TransportPipeline {
               'decodedSize': decodableBytes.length,
               'compressedSize': bytes.length,
               'maxInflationRatio': inflationRatioLimit,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -517,7 +575,12 @@ class TransportPipeline {
       final decodeResult = codec.decode(decodableBytes);
 
       if (decodeResult.isError()) {
-        return Failure(decodeResult.exceptionOrNull()!);
+        return Failure(
+          _withTransportRpcErrorCode(
+            decodeResult.exceptionOrNull()! as domain.Failure,
+            RpcErrorCode.decodingFailed,
+          ),
+        );
       }
 
       final decoded = decodeResult.getOrThrow();
@@ -543,6 +606,7 @@ class TransportPipeline {
             'operation': 'receiveProcess',
             'frameEncoding': frame.enc,
             'frameCompression': frame.cmp,
+            'rpc_error_code': RpcErrorCode.compressionFailed,
           },
         ),
       );
@@ -565,7 +629,10 @@ class TransportPipeline {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Frame encoding mismatch: expected $encoding, got ${frame.enc}',
-            context: {'expected': encoding, 'actual': frame.enc},
+            context: _transportContext(
+              RpcErrorCode.invalidPayload,
+              {'expected': encoding, 'actual': frame.enc},
+            ),
           ),
         );
       }
@@ -580,7 +647,10 @@ class TransportPipeline {
           return Failure(
             domain.ValidationFailure.withContext(
               message: 'Frame payload is not binary data',
-              context: {'payloadType': payloadType},
+              context: _transportContext(
+                RpcErrorCode.invalidPayload,
+                {'payloadType': payloadType},
+              ),
             ),
           );
         }
@@ -595,6 +665,7 @@ class TransportPipeline {
             context: {
               'expectedCompressedSize': frame.compressedSize,
               'actualCompressedSize': bytes.length,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -606,6 +677,7 @@ class TransportPipeline {
             context: {
               'compressedSize': frame.compressedSize,
               'limit': maxCompressedBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -617,6 +689,7 @@ class TransportPipeline {
             context: {
               'originalSize': frame.originalSize,
               'limit': maxOriginalBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -637,7 +710,10 @@ class TransportPipeline {
               domain.CompressionFailure.withContext(
                 message: 'Failed to decompress with GZIP',
                 cause: error,
-                context: {'operation': 'decompress', 'algorithm': 'gzip'},
+                context: _transportContext(
+                  RpcErrorCode.compressionFailed,
+                  {'operation': 'decompress', 'algorithm': 'gzip'},
+                ),
               ),
             );
           }
@@ -646,7 +722,12 @@ class TransportPipeline {
           final decompressResult = compressionCodec.decompress(bytes);
 
           if (decompressResult.isError()) {
-            return Failure(decompressResult.exceptionOrNull()!);
+            return Failure(
+              _withTransportRpcErrorCode(
+                decompressResult.exceptionOrNull()! as domain.Failure,
+                RpcErrorCode.compressionFailed,
+              ),
+            );
           }
 
           decodableBytes = decompressResult.getOrThrow();
@@ -664,6 +745,7 @@ class TransportPipeline {
             context: {
               'expectedOriginalSize': frame.originalSize,
               'actualOriginalSize': decodableBytes.length,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -675,6 +757,7 @@ class TransportPipeline {
             context: {
               'decodedSize': decodableBytes.length,
               'limit': maxOriginalBytes,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -687,6 +770,7 @@ class TransportPipeline {
               'decodedSize': decodableBytes.length,
               'compressedSize': bytes.length,
               'maxInflationRatio': inflationRatioLimit,
+              'rpc_error_code': RpcErrorCode.invalidPayload,
             },
           ),
         );
@@ -707,7 +791,10 @@ class TransportPipeline {
             domain.CompressionFailure.withContext(
               message: 'Failed to decode JSON payload',
               cause: error,
-              context: {'operation': 'jsonDecode', 'encoding': 'json'},
+              context: _transportContext(
+                RpcErrorCode.decodingFailed,
+                {'operation': 'jsonDecode', 'encoding': 'json'},
+              ),
             ),
           );
         }
@@ -716,7 +803,12 @@ class TransportPipeline {
         final decodeResult = codec.decode(decodableBytes);
 
         if (decodeResult.isError()) {
-          return Failure(decodeResult.exceptionOrNull()!);
+          return Failure(
+            _withTransportRpcErrorCode(
+              decodeResult.exceptionOrNull()! as domain.Failure,
+              RpcErrorCode.decodingFailed,
+            ),
+          );
         }
 
         decoded = decodeResult.getOrThrow() as Object;
@@ -746,6 +838,7 @@ class TransportPipeline {
             'operation': 'receiveProcessAsync',
             'frameEncoding': frame.enc,
             'frameCompression': frame.cmp,
+            'rpc_error_code': RpcErrorCode.compressionFailed,
           },
         ),
       );

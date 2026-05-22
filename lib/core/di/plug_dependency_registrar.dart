@@ -217,6 +217,7 @@ import 'package:plug_agente/infrastructure/stores/noop_agent_action_secret_store
 import 'package:plug_agente/infrastructure/stores/noop_hub_auth_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/l10n/agent_action_notification_messages_factory.dart';
 import 'package:uuid/uuid.dart';
 
@@ -765,6 +766,9 @@ void registerPlugDependencyGraph(
           agentActionLocalRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
           elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
           registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
+          jsonSchemaValidator: getIt.isRegistered<JsonSchemaContractValidator>()
+              ? getIt<JsonSchemaContractValidator>()
+              : null,
         );
       },
     )

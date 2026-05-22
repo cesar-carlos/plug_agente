@@ -127,6 +127,27 @@ class E2EEnv {
   /// Whether live hub `agent.action.*` integration tests can run.
   static bool get isLiveHubAgentActionReady => liveHubAgentActionReadinessSkipMessage == null;
 
+  static String? liveHubBlockingPreflightFailureMessage({
+    bool requireSigning = false,
+  }) {
+    if (!runLiveHubTests) {
+      return null;
+    }
+    if (requireSigning && !runLiveHubSigningTests) {
+      return null;
+    }
+    final failures = live_hub_env.blockingLiveHubEnvFailures(
+      runLiveHubTests: runLiveHubTests,
+      hubUrl: e2eHubUrl,
+      hubToken: e2eHubToken,
+      payloadSigningKeyId: requireSigning ? e2ePayloadSigningKeyId : null,
+    );
+    if (failures.isEmpty) {
+      return null;
+    }
+    return 'Live Hub preflight failed before Socket.IO connect:\n${failures.join('\n')}';
+  }
+
   /// Skip reason for live hub agent.action tests; `null` when [isLiveHubAgentActionReady].
   static String? get liveHubAgentActionReadinessSkipMessage {
     if (!runLiveHubTests) {

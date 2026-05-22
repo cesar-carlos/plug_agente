@@ -37,6 +37,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connec
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
@@ -167,7 +168,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   final PoolSemaphore _readOnlyBatchParallelSemaphore;
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
-  final Map<String, ConnectionOptions> _connectionOptionsCache = <String, ConnectionOptions>{};
+  final Map<String, ConnectionAcquireOptions> _connectionOptionsCache = <String, ConnectionAcquireOptions>{};
   final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
   String? _cachedNativeCompatibleSqlAllowlistRaw;
   Set<String> _cachedNativeCompatibleSqlAllowlist = const <String>{};
@@ -214,9 +215,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  ConnectionOptions get _connectionOptions => _connectionOptionsForTimeout(null);
+  ConnectionAcquireOptions get _connectionOptions => _connectionOptionsForTimeout(null);
 
-  ConnectionOptions _connectionOptionsForTimeout(Duration? timeout) {
+  ConnectionAcquireOptions _connectionOptionsForTimeout(Duration? timeout) {
     final key = [
       timeout?.inMilliseconds ?? 0,
       _settings.loginTimeoutSeconds,
@@ -520,7 +521,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
       final connResult = await _service.connect(
         connectionString,
-        options: _connectionOptions,
+        options: _connectionOptions.toOdbcConnectionOptions(),
       );
 
       return connResult.fold(
@@ -799,7 +800,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Stopwatch stopwatch, {
     required OdbcPreparedQueryExecution preparedExecution,
     required Duration? timeout,
-    ConnectionOptions? acquireOptions,
+    ConnectionAcquireOptions? acquireOptions,
     bool allowAdaptiveRetry = true,
     bool allowNativeCompatibleAcquire = false,
     DateTime? deadline,
@@ -888,6 +889,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
           await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(connectionString);
+          _metrics.recordOdbcInvalidConnectionRecycle();
           _metrics.recordDirectConnectionFallback();
           developer.log(
             'Pool returned invalid connection id ($connId), falling back to direct connection',
@@ -904,6 +906,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         }
 
         if (allowAdaptiveRetry && _isBufferTooSmallError(error)) {
+          _metrics.recordOdbcBufferExpansion();
           _metrics.recordDiagnosticReason(
             category: 'query',
             reason: OdbcContextConstants.bufferTooSmallReason,
@@ -1059,7 +1062,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required DatabaseConfig databaseConfig,
     required QueryRequest request,
     required OdbcPreparedQueryExecution preparedExecution,
-    required ConnectionOptions? acquireOptions,
+    required ConnectionAcquireOptions? acquireOptions,
     required Duration? timeout,
   }) {
     if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false)) {
@@ -1764,7 +1767,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionString,
         options: _connectionOptionsForTimeout(
           _remainingTimeoutFromDeadline(deadline) ?? timeout,
-        ),
+        ).toOdbcConnectionOptions(),
       );
       return connectResult.fold(
         (connection) {
@@ -2367,7 +2370,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionString,
         options: _connectionOptionsForTimeout(
           _remainingTimeoutFromDeadline(deadline) ?? timeout,
-        ),
+        ).toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
         (connection) async {
@@ -2554,6 +2557,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
           await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(connectionString);
+          _metrics.recordOdbcInvalidConnectionRecycle();
           _metrics.recordDirectConnectionFallback();
           developer.log(
             'Pool returned invalid connection id ($connId) for non-query, falling back to direct connection',
@@ -2659,6 +2663,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       ).timeout(timeout);
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
+      _metrics.recordOdbcQueryTimeoutByStage('query');
       _metrics.recordDiagnosticReason(
         category: 'timeout',
         reason: RpcSqlBudgetConstants.queryTimeoutReason,
@@ -3006,6 +3011,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
+      _metrics.recordOdbcQueryTimeoutByStage('non_query');
       _metrics.recordDiagnosticReason(
         category: 'timeout',
         reason: RpcSqlBudgetConstants.queryTimeoutReason,
@@ -3227,7 +3233,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     String connectionString,
     Stopwatch stopwatch, {
     required OdbcPreparedQueryExecution preparedExecution,
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? timeout,
     bool afterVacuousPooledMulti = false,
     bool allowAdaptiveRetry = true,
@@ -3268,7 +3274,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     try {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: effectiveOptions,
+        options: effectiveOptions.toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
         (connection) async {
@@ -3298,6 +3304,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             if (!outcome.isSuccess) {
               final error = outcome.error!;
               if (_isBufferTooSmallError(error)) {
+                _metrics.recordOdbcBufferExpansion();
                 _metrics.recordDiagnosticReason(
                   category: 'query',
                   reason: OdbcContextConstants.bufferTooSmallReason,
@@ -3470,7 +3477,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         connectionString,
         options: _connectionOptionsForTimeout(
           _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
-        ),
+        ).toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
         (connection) async {
@@ -3585,9 +3592,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return '$updated${suffix}DATABASE=$database';
   }
 
-  ConnectionOptions _buildExpandedConnectionOptions(
+  ConnectionAcquireOptions _buildExpandedConnectionOptions(
     Object error, {
-    required ConnectionOptions baseOptions,
+    required ConnectionAcquireOptions baseOptions,
     required int currentBufferBytes,
   }) {
     final expandedBufferBytes = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
@@ -3607,7 +3614,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       level: 800,
     );
 
-    return ConnectionOptions(
+    return ConnectionAcquireOptions(
       loginTimeout: baseOptions.loginTimeout,
       queryTimeout: baseOptions.queryTimeout,
       maxResultBufferBytes: expandedBufferBytes,
@@ -3618,10 +3625,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  ConnectionOptions? _hintedConnectionOptions({
+  ConnectionAcquireOptions? _hintedConnectionOptions({
     required String connectionString,
     required String sql,
-    required ConnectionOptions baseOptions,
+    required ConnectionAcquireOptions baseOptions,
   }) {
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
@@ -3633,7 +3640,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     final initialBufferBytes =
         baseOptions.initialResultBufferBytes ?? ConnectionConstants.defaultInitialResultBufferBytes;
-    return ConnectionOptions(
+    return ConnectionAcquireOptions(
       loginTimeout: baseOptions.loginTimeout,
       queryTimeout: baseOptions.queryTimeout,
       maxResultBufferBytes: hintedBufferBytes,

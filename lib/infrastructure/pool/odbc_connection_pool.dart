@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -51,7 +52,7 @@ class OdbcConnectionPool
   @override
   Future<Result<String>> acquire(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
   }) {
     return acquireWithin(connectionString, options: options);
   }
@@ -59,7 +60,7 @@ class OdbcConnectionPool
   @override
   Future<Result<String>> acquireWithin(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
     final effectiveAcquireTimeout = acquireTimeout ?? _acquireTimeout;
@@ -115,7 +116,7 @@ class OdbcConnectionPool
         try {
           connectResult = await _service.connect(
             connectionString,
-            options: resolvedOptions,
+            options: resolvedOptions.toOdbcConnectionOptions(),
           );
         } finally {
           connectStopwatch.stop();

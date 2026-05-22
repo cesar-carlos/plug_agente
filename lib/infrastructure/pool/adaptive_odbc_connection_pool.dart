@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -80,7 +79,7 @@ final class AdaptiveOdbcConnectionPool
   @override
   Future<Result<String>> acquire(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
   }) {
     return acquireWithin(
       connectionString,
@@ -91,7 +90,7 @@ final class AdaptiveOdbcConnectionPool
   @override
   Future<Result<String>> acquireWithin(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
     return _acquireWithStrategy(
@@ -106,7 +105,7 @@ final class AdaptiveOdbcConnectionPool
   @override
   Future<Result<String>> acquireNativeCompatible(
     String connectionString, {
-    required ConnectionOptions leaseFallbackOptions,
+    required ConnectionAcquireOptions leaseFallbackOptions,
     Duration? acquireTimeout,
   }) {
     _metrics.recordOdbcNativeCompatibleAcquireAttempt();
@@ -120,9 +119,9 @@ final class AdaptiveOdbcConnectionPool
 
   Future<Result<String>> _acquireWithStrategy(
     String connectionString, {
-    required ConnectionOptions? leaseFallbackOptions,
+    required ConnectionAcquireOptions? leaseFallbackOptions,
     required bool allowNativeWithoutOptions,
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
     final driverInfo = await _resolveDriverInfo();
@@ -359,7 +358,7 @@ final class AdaptiveOdbcConnectionPool
     return _isNativeEligible(databaseType);
   }
 
-  bool _shouldSkipNativeForOptions(ConnectionOptions? options) {
+  bool _shouldSkipNativeForOptions(ConnectionAcquireOptions? options) {
     if (options == null) {
       _lastNativeSkipReason = null;
       return false;
@@ -432,9 +431,14 @@ final class AdaptiveOdbcConnectionPool
     final disabledUntil = failures >= _nativeCircuitBreakThreshold
         ? DateTime.now().add(_nativeCircuitBreakDuration)
         : null;
+    final reason = disabledUntil == null ? 'native_fallback' : 'native_circuit_open';
+    _metrics.recordOdbcNativeFallback(reason);
+    if (disabledUntil != null) {
+      _metrics.recordOdbcNativeCircuitOpened();
+    }
     _metrics.recordDiagnosticReason(
       category: 'pool',
-      reason: disabledUntil == null ? 'native_fallback' : 'native_circuit_open',
+      reason: reason,
     );
     _nativeCircuits[key] = _NativeCircuitState(
       failures: failures,

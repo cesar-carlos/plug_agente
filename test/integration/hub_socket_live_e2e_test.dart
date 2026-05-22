@@ -46,6 +46,10 @@ void main() async {
         if (hubUrl == null || hubUrl.isEmpty || hubToken == null || hubToken.isEmpty) {
           fail('E2E_HUB_URL and E2E_HUB_TOKEN must be set when this test is not skipped');
         }
+        final preflightFailure = E2EEnv.liveHubBlockingPreflightFailureMessage();
+        if (preflightFailure != null) {
+          fail(preflightFailure);
+        }
 
         final ds = SocketDataSource();
         final socket = ds.createSocket(hubUrl, authToken: hubToken);
@@ -98,6 +102,10 @@ void main() async {
             key == null ||
             key.isEmpty) {
           fail('E2E hub URL, token, and signing key env vars must be set when this test is not skipped');
+        }
+        final preflightFailure = E2EEnv.liveHubBlockingPreflightFailureMessage(requireSigning: true);
+        if (preflightFailure != null) {
+          fail(preflightFailure);
         }
 
         final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);

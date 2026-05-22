@@ -11,7 +11,7 @@ class _MockFeatureFlags extends Mock implements FeatureFlags {}
 PayloadFrame _frame({
   required String enc,
   required String cmp,
-  String schemaVersion = 'payload-frame/1.0',
+  String schemaVersion = '1.0',
 }) {
   return PayloadFrame(
     schemaVersion: schemaVersion,

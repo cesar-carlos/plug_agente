@@ -1,7 +1,7 @@
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
-import 'package:plug_agente/infrastructure/actions/elevated_action_runner_installer.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_runner_installer.dart';
 import 'package:result_dart/result_dart.dart';
 
 class PrepareElevatedActionRunner {
@@ -11,7 +11,7 @@ class PrepareElevatedActionRunner {
     this._storageContext,
   );
 
-  final ElevatedActionRunnerInstaller _installer;
+  final IElevatedActionRunnerInstaller _installer;
   final ElevatedActionRunnerReadinessService _readiness;
   final GlobalStorageContext _storageContext;
 
@@ -47,8 +47,7 @@ class PrepareElevatedActionRunner {
           code: AgentActionFailureCode.elevatedNotConfigured,
           context: {
             'state': after.state.name,
-            'user_message':
-                'A preparacao do executor elevado nao concluiu. Verifique o helper e a tarefa agendada.',
+            'user_message': 'A preparacao do executor elevado nao concluiu. Verifique o helper e a tarefa agendada.',
           },
         ),
       );

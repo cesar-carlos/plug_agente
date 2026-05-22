@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 
 /// Canonical JSON fingerprint for idempotency (stable key ordering).
@@ -37,7 +37,9 @@ Future<String> resolveIdempotencyFingerprint(
     params,
     jsonPayloadIsolateEncodeThresholdBytes,
   )) {
-    return compute(buildIdempotencyFingerprintForEnvelope, envelope);
+    return Isolate.run(
+      () => buildIdempotencyFingerprintForEnvelope(envelope),
+    );
   }
   return buildIdempotencyFingerprintForEnvelope(envelope);
 }

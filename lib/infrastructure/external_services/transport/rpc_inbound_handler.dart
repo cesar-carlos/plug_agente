@@ -18,7 +18,10 @@ import 'package:plug_agente/infrastructure/external_services/transport/payload_f
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 /// Handles inbound `rpc:request` events (single and batch) from the hub.
 ///
@@ -50,6 +53,13 @@ class RpcInboundHandler {
     required Future<void> Function(dynamic responseData) emitRpcResponse,
     required Future<void> Function(String event, dynamic payload) emitEvent,
     required bool Function() hasReceivedCapabilities,
+    Future<void> Function(
+      dynamic responseData, {
+      Map<Object?, String> methodsById,
+    })?
+    emitRpcResponseWithMethodContext,
+    JsonSchemaContractValidator? jsonSchemaValidator,
+    RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
     MetricsCollector? metricsCollector,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
@@ -63,9 +73,15 @@ class RpcInboundHandler {
        _requestGuard = requestGuard,
        _schemaValidator = schemaValidator,
        _streamEmitterFactory = streamEmitterFactory,
-       _emitRpcResponse = emitRpcResponse,
+       _emitRpcResponse =
+           emitRpcResponseWithMethodContext ??
+           ((dynamic responseData, {Map<Object?, String> methodsById = const <Object?, String>{}}) {
+             return emitRpcResponse(responseData);
+           }),
        _emitEvent = emitEvent,
        _hasReceivedCapabilities = hasReceivedCapabilities,
+       _jsonSchemaValidator = jsonSchemaValidator,
+       _schemaCatalog = schemaCatalog,
        _metricsCollector = metricsCollector;
 
   final FeatureFlags _featureFlags;
@@ -80,9 +96,15 @@ class RpcInboundHandler {
   final RpcRequestGuard _requestGuard;
   final RpcRequestSchemaValidator _schemaValidator;
   final IRpcStreamEmitter Function() _streamEmitterFactory;
-  final Future<void> Function(dynamic responseData) _emitRpcResponse;
+  final Future<void> Function(
+    dynamic responseData, {
+    Map<Object?, String> methodsById,
+  })
+  _emitRpcResponse;
   final Future<void> Function(String event, dynamic payload) _emitEvent;
   final bool Function() _hasReceivedCapabilities;
+  final JsonSchemaContractValidator? _jsonSchemaValidator;
+  final RpcMethodSchemaCatalog _schemaCatalog;
   final MetricsCollector? _metricsCollector;
 
   int _activeRpcHandlers = 0;
@@ -103,6 +125,16 @@ class RpcInboundHandler {
     _activeRpcHandlers--;
   }
 
+  _WirePayloadWithAck _unwrapWirePayload(dynamic data) {
+    if (data is List && data.length == 2 && data[1] is Function) {
+      return _WirePayloadWithAck(
+        payload: data[0],
+        socketAck: data[1] as void Function(),
+      );
+    }
+    return _WirePayloadWithAck(payload: data);
+  }
+
   Future<void> handleRequestWithRelease(dynamic data) async {
     try {
       await handleRequest(data);
@@ -115,46 +147,48 @@ class RpcInboundHandler {
   /// rejected due to the concurrent-handler cap. Best effort decoding so we
   /// can still echo the original request id whenever possible.
   Future<void> emitConcurrencyLimitedError(dynamic rawData) async {
+    final wirePayload = _unwrapWirePayload(rawData);
+    final payload = wirePayload.payload;
     dynamic id;
     try {
-      if (rawData is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(rawData)) {
-        final payload = _frameCodec.decodeIncoming(rawData, sourceEvent: 'rpc:request');
-        if (payload is Map<String, dynamic>) {
-          id = payload['id'];
+      if (payload is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(payload)) {
+        final decodedPayload = _frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
+        if (decodedPayload is Map<String, dynamic>) {
+          id = decodedPayload['id'];
         }
-      } else if (rawData is Map<String, dynamic>) {
-        id = rawData['id'];
+      } else if (payload is Map<String, dynamic>) {
+        id = payload['id'];
       }
     } on Object {
       id = null;
     }
 
-    await _emitRpcResponse(
-      _responsePreparer.buildErrorResponse(
-        id: id,
-        code: RpcErrorCode.rateLimited,
-        technicalMessage: RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(
-          ConnectionConstants.maxConcurrentRpcHandlers,
+    try {
+      await _emitRpcResponse(
+        _responsePreparer.buildErrorResponse(
+          id: id,
+          code: RpcErrorCode.rateLimited,
+          technicalMessage: RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(
+            ConnectionConstants.maxConcurrentRpcHandlers,
+          ),
+          // Distinguish from window-based rate limiting so the hub knows whether
+          // to back off in time (see rateWindowExceededReason) or reduce parallelism
+          // (see concurrentHandlersExceededReason).
+          errorReason: RpcInboundConstants.concurrentHandlersExceededReason,
         ),
-        // Distinguish from window-based rate limiting so the hub knows whether
-        // to back off in time (see rateWindowExceededReason) or reduce parallelism
-        // (see concurrentHandlersExceededReason).
-        errorReason: RpcInboundConstants.concurrentHandlersExceededReason,
-      ),
-    );
+      );
+    } finally {
+      wirePayload.socketAck?.call();
+    }
   }
 
   /// Processes a single inbound `rpc:request`. Acks are emitted as soon as the
   /// payload is parsed so the hub can release its in-flight slot quickly.
   Future<void> handleRequest(dynamic data) async {
     try {
-      dynamic payload = data;
-      void Function()? socketAck;
-
-      if (data is List && data.length == 2 && data[1] is Function) {
-        payload = data[0];
-        socketAck = data[1] as void Function();
-      }
+      final wirePayload = _unwrapWirePayload(data);
+      dynamic payload = wirePayload.payload;
+      final socketAck = wirePayload.socketAck;
 
       // Protocol-not-ready guard: the hub must NOT send `rpc:request` before
       // receiving `agent:capabilities`. If it does, reject with a structured
@@ -228,6 +262,10 @@ class RpcInboundHandler {
             return;
           }
         }
+        if (!await _validateSingleRequestJsonSchemasOrEmit(requestMap)) {
+          socketAck?.call();
+          return;
+        }
       }
 
       if (!_responsePreparer.verifyIncomingSignature(requestMap)) {
@@ -276,7 +314,10 @@ class RpcInboundHandler {
             request,
             RpcResponse.success(id: request.id, result: doc),
           );
-          await _emitRpcResponse(response);
+          await _emitRpcResponse(
+            response,
+            methodsById: <Object?, String>{request.id: request.method},
+          );
         }
         return;
       }
@@ -309,7 +350,10 @@ class RpcInboundHandler {
         return;
       }
 
-      await _emitRpcResponse(tracedResponse);
+      await _emitRpcResponse(
+        tracedResponse,
+        methodsById: <Object?, String>{request.id: request.method},
+      );
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC request',
@@ -402,6 +446,9 @@ class RpcInboundHandler {
             );
             return;
           }
+        }
+        if (!await _validateBatchRequestJsonSchemasOrEmit(data)) {
+          return;
         }
       }
 
@@ -517,6 +564,7 @@ class RpcInboundHandler {
       }
 
       final responses = <({int index, RpcResponse response})>[];
+      final responseMethodsById = <Object?, String>{};
 
       for (var index = 0; index < requests.length; index++) {
         final request = requests[index];
@@ -532,6 +580,7 @@ class RpcInboundHandler {
           );
           if (!request.isNotification) {
             responses.add((index: index, response: errorResponse));
+            responseMethodsById[request.id] = request.method;
           }
           continue;
         }
@@ -546,6 +595,7 @@ class RpcInboundHandler {
           );
           if (!request.isNotification) {
             responses.add((index: index, response: errorResponse));
+            responseMethodsById[request.id] = request.method;
           }
           continue;
         }
@@ -560,6 +610,7 @@ class RpcInboundHandler {
                 RpcResponse.success(id: request.id, result: doc),
               ),
             ));
+            responseMethodsById[request.id] = request.method;
           }
           continue;
         }
@@ -582,6 +633,7 @@ class RpcInboundHandler {
           continue;
         }
         responses.add((index: index, response: tracedResponse));
+        responseMethodsById[request.id] = request.method;
       }
 
       if (responses.isEmpty) {
@@ -593,7 +645,10 @@ class RpcInboundHandler {
                 .map((entry) => entry.response)
                 .toList()
           : responses.map((entry) => entry.response).toList();
-      await _emitRpcResponse(orderedResponses);
+      await _emitRpcResponse(
+        orderedResponses,
+        methodsById: responseMethodsById,
+      );
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC batch request',
@@ -655,6 +710,103 @@ class RpcInboundHandler {
     await _emitEvent('rpc:batch_ack', ackPayload);
   }
 
+  Future<bool> _validateBatchRequestJsonSchemasOrEmit(List<dynamic> data) async {
+    final jsonSchemaValidator = _jsonSchemaValidator;
+    if (jsonSchemaValidator == null) {
+      return true;
+    }
+
+    final batchValidation = jsonSchemaValidator.validate(
+      schemaId: TransportSchemaIds.rpcBatchRequest,
+      payload: data,
+      direction: 'inbound',
+    );
+    if (batchValidation.isError()) {
+      final failure = batchValidation.exceptionOrNull()! as domain.Failure;
+      await _sendSchemaValidationError(
+        null,
+        RpcErrorCode.invalidRequest,
+        failure.message,
+      );
+      return false;
+    }
+
+    for (final item in data.whereType<Map<String, dynamic>>()) {
+      if (!await _validateSingleRequestJsonSchemasOrEmit(item)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<bool> _validateSingleRequestJsonSchemasOrEmit(Map<String, dynamic> requestMap) async {
+    final envelopeFailure = _validateRequestEnvelopeJsonSchema(requestMap);
+    if (envelopeFailure != null) {
+      await _sendSchemaValidationError(
+        requestMap['id'],
+        RpcErrorCode.invalidRequest,
+        envelopeFailure.message,
+      );
+      return false;
+    }
+
+    final paramsFailure = _validateRequestParamsJsonSchema(requestMap);
+    if (paramsFailure != null) {
+      await _sendSchemaValidationError(
+        requestMap['id'],
+        RpcErrorCode.invalidParams,
+        paramsFailure.message,
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  domain.Failure? _validateRequestEnvelopeJsonSchema(Map<String, dynamic> requestMap) {
+    final jsonSchemaValidator = _jsonSchemaValidator;
+    if (jsonSchemaValidator == null) {
+      return null;
+    }
+
+    final validation = jsonSchemaValidator.validate(
+      schemaId: TransportSchemaIds.rpcRequest,
+      payload: requestMap,
+      direction: 'inbound',
+    );
+    if (validation.isError()) {
+      return validation.exceptionOrNull()! as domain.Failure;
+    }
+    return null;
+  }
+
+  domain.Failure? _validateRequestParamsJsonSchema(Map<String, dynamic> requestMap) {
+    final jsonSchemaValidator = _jsonSchemaValidator;
+    if (jsonSchemaValidator == null) {
+      return null;
+    }
+
+    final method = requestMap['method'];
+    if (method is! String || !requestMap.containsKey('params')) {
+      return null;
+    }
+
+    final schemaId = _schemaCatalog.paramsSchemaFor(method);
+    if (schemaId == null) {
+      return null;
+    }
+
+    final validation = jsonSchemaValidator.validate(
+      schemaId: schemaId,
+      payload: requestMap['params'],
+      direction: 'inbound',
+    );
+    if (validation.isError()) {
+      return validation.exceptionOrNull()! as domain.Failure;
+    }
+    return null;
+  }
+
   Future<void> _sendSchemaValidationError(
     dynamic id,
     int code,
@@ -701,6 +853,19 @@ class RpcInboundHandler {
       return (
         code: RpcErrorCode.authenticationFailed,
         reason: RpcErrorCode.reasonInvalidSignature,
+      );
+    }
+    final contextCode = failure.context['rpc_error_code'];
+    if (contextCode is int) {
+      return (code: contextCode, reason: null);
+    }
+    if (failure is domain.CompressionFailure) {
+      final operation = failure.context['operation'];
+      return (
+        code: operation == 'decode' || operation == 'jsonDecode'
+            ? RpcErrorCode.decodingFailed
+            : RpcErrorCode.compressionFailed,
+        reason: null,
       );
     }
     return (code: RpcErrorCode.invalidPayload, reason: null);
@@ -764,4 +929,14 @@ class RpcInboundHandler {
         return RpcInboundConstants.duplicateRequestIdWithinReplayWindowTechnicalMessage;
     }
   }
+}
+
+class _WirePayloadWithAck {
+  const _WirePayloadWithAck({
+    required this.payload,
+    this.socketAck,
+  });
+
+  final dynamic payload;
+  final void Function()? socketAck;
 }

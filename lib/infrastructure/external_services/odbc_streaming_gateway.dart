@@ -6,6 +6,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart' as app_log;
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -148,6 +149,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     int chunkSizeBytes = 1024 * 1024,
     String? executionId,
     Duration? queryTimeout,
+    CancellationToken? cancellationToken,
+    StreamingCancelReason? Function()? cancellationReasonProvider,
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -175,6 +178,16 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       return Failure(leaseResult.exceptionOrNull()!);
     }
     final directLease = leaseResult.getOrThrow();
+    if (cancellationToken?.isCancelled ?? false) {
+      directLease.release();
+      return Failure(
+        _streamCancelledFailure(
+          executionId: executionId,
+          connectionId: null,
+          reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
+        ),
+      );
+    }
     final connResult = await _service.connect(
       connectionString,
       options: _buildStreamingConnectionOptions(
@@ -187,6 +200,17 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     return connResult.fold(
       (connection) async {
         final streamExecutionId = executionId ?? connection.id;
+        if (cancellationToken?.isCancelled ?? false) {
+          await _service.disconnect(connection.id);
+          directLease.release();
+          return Failure(
+            _streamCancelledFailure(
+              executionId: streamExecutionId,
+              connectionId: connection.id,
+              reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
+            ),
+          );
+        }
         final activeStream = _ActiveStreamingConnection(
           executionId: streamExecutionId,
           connectionId: connection.id,
@@ -199,6 +223,10 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
             connection.id,
             query,
           )) {
+            if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
+              activeStream.isCancelRequested = true;
+              activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
+            }
             if (activeStream.isCancelRequested) {
               if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
                 return const Success(unit);
@@ -304,6 +332,26 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
           ),
         );
       },
+    );
+  }
+
+  domain.Failure _streamCancelledFailure({
+    required String? executionId,
+    required String? connectionId,
+    required StreamingCancelReason reason,
+  }) {
+    final context = <String, dynamic>{
+      ...?(connectionId == null ? null : <String, dynamic>{'connectionId': connectionId}),
+      ...?(executionId == null ? null : <String, dynamic>{'executionId': executionId}),
+      'reason': reason == StreamingCancelReason.socketDisconnect
+          ? OdbcContextConstants.socketDisconnectReason
+          : OdbcContextConstants.executionCancelledReason,
+    };
+    return OdbcFailureMapper.mapStreamingError(
+      StateError('stream_cancelled_${reason.name}'),
+      operation: 'executeQueryStream',
+      context: context,
+      cancelledByUser: reason != StreamingCancelReason.socketDisconnect,
     );
   }
 

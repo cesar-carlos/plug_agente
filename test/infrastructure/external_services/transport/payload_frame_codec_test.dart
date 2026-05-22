@@ -160,7 +160,7 @@ void main() {
         ),
       );
       final frameJson = const PayloadFrame(
-        schemaVersion: 'payload-frame/1.0',
+        schemaVersion: '1.0',
         enc: 'unsupported-format',
         cmp: 'none',
         contentType: 'application/json',
@@ -184,7 +184,7 @@ void main() {
         ),
       );
       final frameJson = const PayloadFrame(
-        schemaVersion: 'payload-frame/1.0',
+        schemaVersion: '1.0',
         enc: 'json',
         cmp: 'unsupported-codec',
         contentType: 'application/json',
@@ -196,6 +196,66 @@ void main() {
       expect(
         () => codec.decodeIncoming(frameJson),
         throwsA(isA<domain.ValidationFailure>()),
+      );
+    });
+
+    test('throws when frame uses an unsupported schema version', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+      );
+      final frameJson = const PayloadFrame(
+        schemaVersion: 'payload-frame/1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        payload: 'aGVsbG8=',
+        originalSize: 5,
+        compressedSize: 5,
+      ).toJson();
+
+      expect(
+        () => codec.decodeIncoming(frameJson),
+        throwsA(
+          isA<domain.ValidationFailure>().having(
+            (failure) => failure.context['rpc_error_code'],
+            'rpc_error_code',
+            RpcErrorCode.invalidPayload,
+          ),
+        ),
+      );
+    });
+
+    test('throws when frame uses an unsupported content type', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+      );
+      final frameJson = const PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/octet-stream',
+        payload: 'aGVsbG8=',
+        originalSize: 5,
+        compressedSize: 5,
+      ).toJson();
+
+      expect(
+        () => codec.decodeIncoming(frameJson),
+        throwsA(
+          isA<domain.ValidationFailure>().having(
+            (failure) => failure.context['rpc_error_code'],
+            'rpc_error_code',
+            RpcErrorCode.invalidPayload,
+          ),
+        ),
       );
     });
   });

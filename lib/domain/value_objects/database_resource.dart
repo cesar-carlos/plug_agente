@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 
 enum DatabaseResourceType {
   table,
@@ -6,7 +6,6 @@ enum DatabaseResourceType {
   unknown,
 }
 
-@immutable
 class DatabaseResource {
   const DatabaseResource({
     required this.resourceType,

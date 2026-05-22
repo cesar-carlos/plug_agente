@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.sql-cancel.v1.json",
+  "title": "sql.cancel result",
+  "description": "Result payload for successful sql.cancel responses.",
+  "type": "object",
+  "required": ["cancelled"],
+  "properties": {
+    "cancelled": { "type": "boolean" },
+    "execution_id": { "type": "string" },
+    "request_id": { "type": "string" }
+  },
+  "additionalProperties": false
+}

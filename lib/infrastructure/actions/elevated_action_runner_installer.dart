@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_runner_installer.dart';
 import 'package:plug_agente/infrastructure/actions/elevated_action_directory_acl_hardener.dart';
 import 'package:plug_agente/infrastructure/actions/elevated_action_runner_path_resolver.dart';
 import 'package:result_dart/result_dart.dart';
@@ -15,7 +16,7 @@ typedef ProcessRunner =
     );
 
 /// Registers and validates the Windows scheduled task for the elevated helper.
-class ElevatedActionRunnerInstaller {
+class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
   ElevatedActionRunnerInstaller({
     required GlobalStorageContext storageContext,
     ProcessRunner? processRunner,
@@ -28,6 +29,7 @@ class ElevatedActionRunnerInstaller {
   final ProcessRunner _processRunner;
   final ElevatedActionDirectoryAclHardener _directoryAclHardener;
 
+  @override
   Future<ElevatedActionRunnerInstallStatus> getStatus() async {
     if (!Platform.isWindows) {
       return const ElevatedActionRunnerInstallStatus(
@@ -43,7 +45,9 @@ class ElevatedActionRunnerInstaller {
     }
 
     final taskRegistered = await _isScheduledTaskRegistered();
-    final markerPresent = File(AgentActionElevatedConstants.readyMarkerPath(_storageContext.appDirectoryPath)).existsSync();
+    final markerPresent = File(
+      AgentActionElevatedConstants.readyMarkerPath(_storageContext.appDirectoryPath),
+    ).existsSync();
     if (!taskRegistered) {
       return ElevatedActionRunnerInstallStatus(
         state: ElevatedActionRunnerInstallState.scheduledTaskMissing,
@@ -63,6 +67,7 @@ class ElevatedActionRunnerInstaller {
     );
   }
 
+  @override
   Future<Result<void>> install({required bool requestElevation}) async {
     if (!Platform.isWindows) {
       return Failure(
@@ -122,8 +127,7 @@ class ElevatedActionRunnerInstaller {
             'exit_code': createResult.exitCode,
             'stdout': '${createResult.stdout}',
             'stderr': '${createResult.stderr}',
-            'user_message':
-                'Nao foi possivel registrar a tarefa elevada. Confirme o UAC e tente novamente.',
+            'user_message': 'Nao foi possivel registrar a tarefa elevada. Confirme o UAC e tente novamente.',
           },
         ),
       );

@@ -136,6 +136,77 @@ E2E_HUB_TOKEN='token-123'
     );
   });
 
+  test('should block live hub preflight for expired JWT before socket connect', () {
+    final expiredPayload = base64Url.encode(utf8.encode('{"exp":1}'));
+    final token = 'header.$expiredPayload.signature';
+
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: true,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+        payloadSigningKeyId: 'v1',
+      ),
+      isNotEmpty,
+    );
+  });
+
+  test('should not block live hub preflight when JWT expires soon but is still valid', () {
+    final soon = DateTime.now().toUtc().add(const Duration(minutes: 30)).millisecondsSinceEpoch ~/ 1000;
+    final payload = base64Url.encode(utf8.encode('{"exp":$soon}'));
+    final token = 'header.$payload.signature';
+
+    expect(liveHubTokenWarnings(token), isNotEmpty);
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: true,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+        payloadSigningKeyId: 'v1',
+      ),
+      isEmpty,
+    );
+  });
+
+  test('should block e2e-dev signing only when signing key id is provided for remote hub', () {
+    final farFuture = DateTime.now().toUtc().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+    final payload = base64Url.encode(utf8.encode('{"exp":$farFuture}'));
+    final token = 'header.$payload.signature';
+
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: true,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+      ),
+      isEmpty,
+    );
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: true,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+        payloadSigningKeyId: 'e2e-dev',
+      ),
+      isNotEmpty,
+    );
+  });
+
+  test('should not block live hub preflight when live flag is disabled', () {
+    final expiredPayload = base64Url.encode(utf8.encode('{"exp":1}'));
+    final token = 'header.$expiredPayload.signature';
+
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: false,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+        payloadSigningKeyId: 'v1',
+      ),
+      isEmpty,
+    );
+  });
+
   test('should not warn when E2E hub JWT expiry is far in the future', () {
     final farFuture = DateTime.now().toUtc().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
     final payload = base64Url.encode(utf8.encode('{"exp":$farFuture}'));

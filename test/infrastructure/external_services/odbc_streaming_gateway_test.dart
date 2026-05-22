@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
@@ -161,6 +162,27 @@ void main() {
       verify(
         () => mockService.disconnect('conn-cancel'),
       ).called(greaterThan(0));
+    });
+
+    test('should stop before connect when cancellation token is already cancelled', () async {
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      final cancellationToken = CancellationToken()..cancel();
+
+      final result = await gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {},
+        cancellationToken: cancellationToken,
+        cancellationReasonProvider: () => StreamingCancelReason.socketDisconnect,
+      );
+
+      expect(result.isError(), isTrue);
+      expect(gateway.activeStreamCount, 0);
+      verifyNever(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      );
     });
 
     test(

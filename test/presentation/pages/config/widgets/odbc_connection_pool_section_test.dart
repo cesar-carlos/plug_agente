@@ -1,6 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -14,7 +13,7 @@ class _FakeConnectionPool implements IConnectionPool {
   @override
   Future<Result<String>> acquire(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
   }) async {
     return const Success('connection-id');
   }

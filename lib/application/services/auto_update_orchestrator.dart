@@ -17,7 +17,7 @@ import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -59,7 +59,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     IAppcastProbeService appcastProbeService = const AppcastProbeService(),
     ISilentUpdateInstaller? silentUpdateInstaller,
     IAppSettingsStore? settingsStore,
-    MetricsCollector? metricsCollector,
+    IAutoUpdateMetricsCollector? metricsCollector,
     Future<void> Function()? closeApplicationForSilentUpdate,
     Duration manualTriggerTimeout = _defaultManualTriggerTimeout,
     Duration manualCompletionTimeout = _defaultManualCompletionTimeout,
@@ -91,7 +91,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   final IAppcastProbeService _appcastProbeService;
   final ISilentUpdateInstaller? _silentUpdateInstaller;
   final IAppSettingsStore? _settingsStore;
-  final MetricsCollector? _metricsCollector;
+  final IAutoUpdateMetricsCollector? _metricsCollector;
   final Future<void> Function()? _closeApplicationForSilentUpdate;
   final Duration _manualTriggerTimeout;
   final Duration _manualCompletionTimeout;

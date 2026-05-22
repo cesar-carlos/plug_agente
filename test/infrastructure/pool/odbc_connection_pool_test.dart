@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
@@ -68,7 +69,7 @@ void main() {
     });
 
     test('should honor custom connection options on acquire', () async {
-      const customOptions = ConnectionOptions(
+      const customOptions = ConnectionAcquireOptions(
         queryTimeout: Duration(seconds: 12),
         maxResultBufferBytes: 64 * 1024 * 1024,
       );

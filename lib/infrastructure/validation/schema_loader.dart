@@ -37,6 +37,7 @@ class TransportSchemaIds {
   static const String resultSqlExecute = 'rpc.result.sql-execute.schema.json';
   static const String resultSqlExecuteBatch = 'rpc.result.sql-execute-batch.schema.json';
   static const String resultSqlBulkInsert = 'rpc.result.sql-bulk-insert.schema.json';
+  static const String resultSqlCancel = 'rpc.result.sql-cancel.schema.json';
   static const String resultAgentGetProfile = 'rpc.result.agent-get-profile.schema.json';
   static const String resultAgentGetHealth = 'rpc.result.agent-get-health.schema.json';
   static const String resultAgentActionGetExecution = 'rpc.result.agent-action-get-execution.schema.json';
@@ -72,6 +73,7 @@ class TransportSchemaIds {
     resultSqlExecute,
     resultSqlExecuteBatch,
     resultSqlBulkInsert,
+    resultSqlCancel,
     resultAgentGetProfile,
     resultAgentGetHealth,
     resultAgentActionGetExecution,

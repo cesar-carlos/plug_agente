@@ -199,6 +199,22 @@ List<String> liveHubTokenWarnings(String? hubToken) {
   return const <String>[];
 }
 
+List<String> liveHubTokenBlockingFailures(String? hubToken) {
+  final exp = jwtExpiryEpochSeconds(hubToken);
+  if (exp == null) {
+    return const <String>[];
+  }
+  final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+  if (exp > nowSeconds) {
+    return const <String>[];
+  }
+  const expiredMessage =
+      'E2E_HUB_TOKEN JWT is expired - Hub connect will fail with jwt expired. '
+      'Refresh: dart run tool/fetch_e2e_hub_token_from_local_config.dart '
+      '--apply-token --force';
+  return const <String>[expiredMessage];
+}
+
 /// Non-fatal hints when `.env` is syntactically complete but likely wrong for a remote Hub.
 List<String> liveHubEnvWarnings({
   required String? hubUrl,
@@ -217,4 +233,35 @@ List<String> liveHubEnvWarnings({
   }
   warnings.addAll(liveHubTokenWarnings(hubToken));
   return warnings;
+}
+
+/// Blocking preflight failures before opening a live Hub Socket.IO connection.
+///
+/// Missing variables are intentionally left to the test-level skip logic. This
+/// function flags values that are present but known to produce an avoidable
+/// connect/register failure.
+List<String> blockingLiveHubEnvFailures({
+  required bool runLiveHubTests,
+  required String? hubUrl,
+  required String? hubToken,
+  String? payloadSigningKeyId,
+}) {
+  if (!runLiveHubTests) {
+    return const <String>[];
+  }
+  if (hubUrl == null || hubUrl.trim().isEmpty || hubToken == null || hubToken.trim().isEmpty) {
+    return const <String>[];
+  }
+  final failures = <String>[];
+  final url = hubUrl.trim().toLowerCase();
+  final keyId = payloadSigningKeyId?.trim().toLowerCase() ?? '';
+  final isLocalHub = url.contains('localhost') || url.contains('127.0.0.1') || url.contains('0.0.0.0');
+  if (keyId == 'e2e-dev' && url.isNotEmpty && !isLocalHub) {
+    failures.add(
+      'PAYLOAD_SIGNING_KEY_ID is e2e-dev while E2E_HUB_URL targets a remote hub - '
+      'copy PAYLOAD_SIGNING_* from the deployed Hub environment before running signed live tests.',
+    );
+  }
+  failures.addAll(liveHubTokenBlockingFailures(hubToken));
+  return failures;
 }

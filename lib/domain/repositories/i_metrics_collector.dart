@@ -4,4 +4,5 @@ abstract class IMetricsCollector {
   Stream<QueryMetrics> get metricsStream;
   List<QueryMetrics> get metrics;
   MetricsSummary getSummary({int limit = 100});
+  Map<String, Object> getSnapshot();
 }

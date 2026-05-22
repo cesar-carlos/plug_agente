@@ -6,6 +6,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
@@ -126,7 +127,7 @@ void main() {
 
       final acquired = await pool.acquire(
         'DSN=Prod',
-        options: const ConnectionOptions(
+        options: const ConnectionAcquireOptions(
           queryTimeout: Duration(seconds: 5),
           maxResultBufferBytes: 8 * 1024 * 1024,
         ),
@@ -182,7 +183,7 @@ void main() {
         configRepository: configRepository,
       );
 
-      const fallbackOptions = ConnectionOptions(
+      const fallbackOptions = ConnectionAcquireOptions(
         queryTimeout: Duration(seconds: 7),
         maxResultBufferBytes: 16 * 1024 * 1024,
       );

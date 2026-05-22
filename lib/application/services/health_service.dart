@@ -17,15 +17,15 @@ import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnost
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_direct_connection_limiter_diagnostics.dart';
+import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
-import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
 /// Service for reporting application health and metrics.
 class HealthService {
   HealthService({
-    required MetricsCollector metricsCollector,
+    required IMetricsCollector metricsCollector,
     required IDatabaseGateway gateway,
     IOdbcConnectionSettings? odbcSettings,
     IConnectionPool? connectionPool,
@@ -64,7 +64,7 @@ class HealthService {
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
        _poolSnapshotTtl = poolSnapshotTtl;
 
-  final MetricsCollector _metrics;
+  final IMetricsCollector _metrics;
   final IDatabaseGateway _gateway;
   final IOdbcConnectionSettings? _odbcSettings;
   final IConnectionPool? _connectionPool;

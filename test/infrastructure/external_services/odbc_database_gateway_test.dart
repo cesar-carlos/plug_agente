@@ -31,6 +31,7 @@ class MockNativeCompatibleConnectionPool extends Mock
 void main() {
   setUpAll(() {
     registerFallbackValue(const ConnectionOptions());
+    registerFallbackValue(const ConnectionAcquireOptions());
     registerFallbackValue(Duration.zero);
   });
 
@@ -503,7 +504,7 @@ void main() {
           ),
         ).thenAnswer((invocation) async {
           acquireCount++;
-          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          final options = invocation.namedArguments[#options] as ConnectionAcquireOptions?;
           if (acquireCount == 1) {
             return const Success(firstPooledId);
           }
@@ -763,7 +764,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ),
         ).thenAnswer((invocation) async {
           acquireCount++;
-          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          final options = invocation.namedArguments[#options] as ConnectionAcquireOptions?;
           if (acquireCount == 1) {
             return const Success(pooledConnectionId);
           }
@@ -842,7 +843,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ),
         ).thenAnswer((invocation) async {
           acquireCount++;
-          final options = invocation.namedArguments[#options] as ConnectionOptions?;
+          final options = invocation.namedArguments[#options] as ConnectionAcquireOptions?;
           if (acquireCount == 1) {
             return const Success(pooledConnectionId);
           }

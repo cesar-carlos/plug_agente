@@ -10,7 +10,9 @@ import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
 
 /// Servico para coletar e gerenciar metricas de performance.
 ///
@@ -18,6 +20,8 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 class MetricsCollector
     implements
         IMetricsCollector,
+        IAutoUpdateMetricsCollector,
+        ISchemaValidationMetricsCollector,
         SqlExecutionQueueMetricsCollector,
         ActionExecutionQueueMetricsCollector,
         AgentActionExecutionMetricsCollector {
@@ -36,7 +40,11 @@ class MetricsCollector
   static const String _batchBulkInsertRecommendedCounter = 'batch_bulk_insert_recommended';
   static const String _directConnectionFallbackCounter = 'direct_connection_fallback';
   static const String _odbcNativePoolFallbackCounter = 'odbc_native_pool_fallback';
+  static const String _odbcNativeFallbackTotalCounter = 'odbc_native_fallback_total';
   static const String _odbcNativePoolOptionsSkipCounter = 'odbc_native_pool_options_skip';
+  static const String _odbcNativeCircuitOpenedCounter = 'odbc_native_circuit_opened_total';
+  static const String _odbcBufferExpansionCounter = 'odbc_buffer_expansion_total';
+  static const String _odbcInvalidConnectionRecycleCounter = 'odbc_invalid_connection_recycle_total';
   static const String _odbcNativeCompatibleAcquireAttemptCounter = 'odbc_native_compatible_acquire_attempt';
   static const String _odbcNativeCompatibleAcquireSuccessCounter = 'odbc_native_compatible_acquire_success';
   static const String _readOnlyBatchParallelCounter = 'read_only_batch_parallel';
@@ -140,6 +148,12 @@ class MetricsCollector
       'rpc_remote_agent_action_get_execution_notification_rejected';
   static const String _rpcRemoteAgentActionBatchReadLimitRejectedCounter =
       'rpc_remote_agent_action_batch_read_limit_rejected';
+  static const String _rpcMethodConcurrencyLimitedCounter = 'rpc_method_concurrency_limited';
+  static const String _rpcSqlStreamCancelledCounter = 'rpc_sql_stream_cancelled';
+  static const String _rpcSqlStreamCancelFailedCounter = 'rpc_sql_stream_cancel_failed';
+  static const String _schemaValidationSuccessCounter = 'schema_validation_success_total';
+  static const String _schemaValidationFailureCounter = 'schema_validation_failure_total';
+  static const String _schemaValidationSkippedLargePayloadCounter = 'schema_validation_skipped_large_payload_total';
   static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';
   static const String _connectTimeoutCounter = 'connect_timeout';
   static const String _queryTimeoutCounter = 'query_timeout';
@@ -192,6 +206,12 @@ class MetricsCollector
   final Map<String, List<DateTime>> _sqlExecutionTimestampsByMode = <String, List<DateTime>>{};
   final List<Duration> _preparedPrepareTimes = [];
   final Map<String, int> _streamingSkipReasons = <String, int>{};
+  final Map<String, int> _odbcNativeFallbackReasons = <String, int>{};
+  final Map<String, int> _odbcQueryTimeoutByStage = <String, int>{};
+  final Map<String, int> _schemaValidationDurationUsByKey = <String, int>{};
+  final Map<String, int> _schemaValidationCountByKey = <String, int>{};
+  final Map<String, int> _schemaValidationFailuresByKey = <String, int>{};
+  int _schemaValidationDurationUs = 0;
   int _readOnlyBatchParallelLastRequested = 0;
   int _readOnlyBatchParallelLastEffective = 0;
   final Queue<String> _recentDiagnosticReasons = Queue<String>();
@@ -331,6 +351,12 @@ class MetricsCollector
     _sqlExecutionTimestampsByMode.clear();
     _preparedPrepareTimes.clear();
     _streamingSkipReasons.clear();
+    _odbcNativeFallbackReasons.clear();
+    _odbcQueryTimeoutByStage.clear();
+    _schemaValidationDurationUsByKey.clear();
+    _schemaValidationCountByKey.clear();
+    _schemaValidationFailuresByKey.clear();
+    _schemaValidationDurationUs = 0;
     _readOnlyBatchParallelLastRequested = 0;
     _readOnlyBatchParallelLastEffective = 0;
     _recentDiagnosticReasons.clear();
@@ -628,6 +654,28 @@ class MetricsCollector
 
   void recordOdbcNativePoolFallback() => _incrementEventCounter(_odbcNativePoolFallbackCounter);
 
+  void recordOdbcNativeFallback(String reason) {
+    final normalizedReason = reason.trim().isEmpty ? 'unknown' : reason.trim();
+    _incrementEventCounter(_odbcNativeFallbackTotalCounter);
+    _odbcNativeFallbackReasons[normalizedReason] = (_odbcNativeFallbackReasons[normalizedReason] ?? 0) + 1;
+    recordDiagnosticReason(
+      category: 'odbc_native_fallback',
+      reason: normalizedReason,
+    );
+  }
+
+  void recordOdbcNativeCircuitOpened() {
+    _incrementEventCounter(_odbcNativeCircuitOpenedCounter);
+    recordDiagnosticReason(
+      category: 'odbc_native',
+      reason: 'native_circuit_open',
+    );
+  }
+
+  void recordOdbcBufferExpansion() => _incrementEventCounter(_odbcBufferExpansionCounter);
+
+  void recordOdbcInvalidConnectionRecycle() => _incrementEventCounter(_odbcInvalidConnectionRecycleCounter);
+
   void recordOdbcNativePoolOptionsSkip() => _incrementEventCounter(_odbcNativePoolOptionsSkipCounter);
 
   void recordOdbcNativeCompatibleAcquireAttempt() => _incrementEventCounter(_odbcNativeCompatibleAcquireAttemptCounter);
@@ -802,6 +850,59 @@ class MetricsCollector
     _incrementEventCounter(_rpcRemoteAgentActionBatchReadLimitRejectedCounter);
   }
 
+  void recordRpcMethodConcurrencyLimited(String rpcMethod) {
+    _incrementEventCounter(_rpcMethodConcurrencyLimitedCounter);
+    recordDiagnosticReason(
+      category: 'rpc_method_concurrency_limit',
+      reason: rpcMethod,
+    );
+  }
+
+  void recordSqlStreamCancelled(String reason) {
+    _incrementEventCounter(_rpcSqlStreamCancelledCounter);
+    recordDiagnosticReason(
+      category: 'sql_stream_cancelled',
+      reason: reason,
+    );
+  }
+
+  void recordSqlStreamCancelFailed(String reason) {
+    _incrementEventCounter(_rpcSqlStreamCancelFailedCounter);
+    recordDiagnosticReason(
+      category: 'sql_stream_cancel_failed',
+      reason: reason,
+    );
+  }
+
+  @override
+  void recordSchemaValidation({
+    required String direction,
+    required String schemaId,
+    required bool success,
+    required Duration elapsed,
+  }) {
+    _incrementEventCounter(success ? _schemaValidationSuccessCounter : _schemaValidationFailureCounter);
+    final key = '${direction.trim()}:${schemaId.trim()}';
+    final elapsedUs = elapsed.inMicroseconds;
+    _schemaValidationDurationUs += elapsedUs;
+    _schemaValidationDurationUsByKey[key] = (_schemaValidationDurationUsByKey[key] ?? 0) + elapsedUs;
+    _schemaValidationCountByKey[key] = (_schemaValidationCountByKey[key] ?? 0) + 1;
+    if (!success) {
+      _schemaValidationFailuresByKey[key] = (_schemaValidationFailuresByKey[key] ?? 0) + 1;
+    }
+  }
+
+  @override
+  void recordSchemaValidationSkippedLargePayload({
+    required String direction,
+  }) {
+    _incrementEventCounter(_schemaValidationSkippedLargePayloadCounter);
+    recordDiagnosticReason(
+      category: 'schema_validation_skip',
+      reason: '${direction.trim()}:large_payload',
+    );
+  }
+
   void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
 
   void recordSqlQueueWorkersEqualPool({
@@ -823,6 +924,11 @@ class MetricsCollector
   void recordConnectTimeout() => _incrementEventCounter(_connectTimeoutCounter);
 
   void recordQueryTimeout() => _incrementEventCounter(_queryTimeoutCounter);
+
+  void recordOdbcQueryTimeoutByStage(String stage) {
+    final normalizedStage = stage.trim().isEmpty ? 'unknown' : stage.trim();
+    _odbcQueryTimeoutByStage[normalizedStage] = (_odbcQueryTimeoutByStage[normalizedStage] ?? 0) + 1;
+  }
 
   void recordPreparedStatementReuse() {
     _incrementEventCounter(_preparedStatementReuseCounter);
@@ -853,35 +959,47 @@ class MetricsCollector
 
   void recordStreamCancelDisconnectTimeout() => _incrementEventCounter(_streamCancelDisconnectTimeoutCounter);
 
+  @override
   void recordAutoUpdateManualCheckStarted() => _incrementEventCounter(_autoUpdateManualCheckStartedCounter);
 
+  @override
   void recordAutoUpdateManualCheckSuccessAvailable() =>
       _incrementEventCounter(_autoUpdateManualCheckSuccessAvailableCounter);
 
+  @override
   void recordAutoUpdateManualCheckSuccessNotAvailable() =>
       _incrementEventCounter(_autoUpdateManualCheckSuccessNotAvailableCounter);
 
+  @override
   void recordAutoUpdateManualCheckUpdaterError() => _incrementEventCounter(_autoUpdateManualCheckUpdaterErrorCounter);
 
+  @override
   void recordAutoUpdateManualCheckTriggerTimeout() =>
       _incrementEventCounter(_autoUpdateManualCheckTriggerTimeoutCounter);
 
+  @override
   void recordAutoUpdateManualCheckCompletionTimeout() =>
       _incrementEventCounter(_autoUpdateManualCheckCompletionTimeoutCounter);
 
+  @override
   void recordAutoUpdateManualCheckTriggerFailure() =>
       _incrementEventCounter(_autoUpdateManualCheckTriggerFailureCounter);
 
+  @override
   void recordAutoUpdateManualCheckNotInitialized() =>
       _incrementEventCounter(_autoUpdateManualCheckNotInitializedCounter);
 
+  @override
   void recordAutoUpdateCircuitOpened() => _incrementEventCounter(_autoUpdateCircuitOpenedCounter);
 
+  @override
   void recordAutoUpdateCircuitOpenRejected() => _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
 
+  @override
   void recordAutoUpdateBackgroundCheckTriggerFailure() =>
       _incrementEventCounter(_autoUpdateBackgroundCheckTriggerFailureCounter);
 
+  @override
   void recordAutoUpdateBackgroundCheckUpdaterError() =>
       _incrementEventCounter(_autoUpdateBackgroundCheckUpdaterErrorCounter);
 
@@ -981,6 +1099,7 @@ class MetricsCollector
   }
 
   /// Gets a snapshot of current metrics for health/monitoring.
+  @override
   Map<String, Object> getSnapshot() {
     final queryMetrics = _metrics.isNotEmpty ? _metrics : <QueryMetrics>[];
     final totalQueries = queryMetrics.length;
@@ -1032,6 +1151,12 @@ class MetricsCollector
       'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(),
       ..._durationStatsSnapshot('prepared_prepare', _preparedPrepareTimes),
       'rpc_sql_execute_db_streaming_skip_reasons': Map<String, int>.unmodifiable(_streamingSkipReasons),
+      'odbc_native_fallback_reasons': Map<String, int>.unmodifiable(_odbcNativeFallbackReasons),
+      'odbc_query_timeout_by_stage': Map<String, int>.unmodifiable(_odbcQueryTimeoutByStage),
+      'schema_validation_duration_us': _schemaValidationDurationUs,
+      'schema_validation_duration_by_schema_us': Map<String, int>.unmodifiable(_schemaValidationDurationUsByKey),
+      'schema_validation_count_by_schema': Map<String, int>.unmodifiable(_schemaValidationCountByKey),
+      'schema_validation_failure_by_schema': Map<String, int>.unmodifiable(_schemaValidationFailuresByKey),
       'read_only_batch_parallel_last_requested': _readOnlyBatchParallelLastRequested,
       'read_only_batch_parallel_last_effective': _readOnlyBatchParallelLastEffective,
       'recent_diagnostic_reasons': List<String>.unmodifiable(_recentDiagnosticReasons),

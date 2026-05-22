@@ -40,7 +40,9 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -62,6 +64,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
     ElevatedActionRunnerReadinessService? elevatedRunnerReadiness,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
     MetricsCollector? metricsCollector,
+    JsonSchemaContractValidator? jsonSchemaValidator,
+    RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
@@ -70,6 +74,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
        _agentActionLocalRunnerRegistry = agentActionLocalRunnerRegistry,
        _elevatedRunnerReadiness = elevatedRunnerReadiness,
        _metricsCollector = metricsCollector,
+       _jsonSchemaValidator = jsonSchemaValidator,
+       _schemaCatalog = schemaCatalog,
        _payloadSigner = payloadSigner,
        _payloadSigningConfig =
            payloadSigningConfig ??
@@ -111,6 +117,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       protocolProvider: () => _currentProtocol,
       usesBinaryTransport: () => _usesBinaryTransport,
       agentIdProvider: () => _agentId,
+      jsonSchemaValidator: _jsonSchemaValidator,
+      schemaCatalog: _schemaCatalog,
       payloadSigner: _payloadSigner,
     );
     _capabilitiesNegotiator = CapabilitiesNegotiator(
@@ -145,8 +153,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
       schemaValidator: _schemaValidator,
       streamEmitterFactory: _createStreamEmitter,
       emitRpcResponse: _emitRpcResponse,
+      emitRpcResponseWithMethodContext: _emitRpcResponse,
       emitEvent: _emitEventAsync,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
+      jsonSchemaValidator: _jsonSchemaValidator,
+      schemaCatalog: _schemaCatalog,
       metricsCollector: _metricsCollector,
     );
   }
@@ -159,6 +170,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final AgentActionLocalRunnerRegistry? _agentActionLocalRunnerRegistry;
   final ElevatedActionRunnerReadinessService? _elevatedRunnerReadiness;
   final MetricsCollector? _metricsCollector;
+  final JsonSchemaContractValidator? _jsonSchemaValidator;
+  final RpcMethodSchemaCatalog _schemaCatalog;
   final PayloadSigner? _payloadSigner;
   final PayloadSigningConfig _payloadSigningConfig;
   final ProtocolMetricsCollector? _protocolMetricsCollector;
@@ -353,11 +366,17 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
-  Future<void> _emitRpcResponse(dynamic responseData) async {
+  Future<void> _emitRpcResponse(
+    dynamic responseData, {
+    Map<Object?, String> methodsById = const <Object?, String>{},
+  }) async {
     final prepared = responseData is List<RpcResponse>
         ? responseData.map(_responsePreparer.prepareForSend).toList()
         : _responsePreparer.prepareForSend(responseData as RpcResponse);
-    final validatedPayload = _responsePreparer.validateOutgoing(prepared);
+    final validatedPayload = _responsePreparer.validateOutgoing(
+      prepared,
+      methodsById: methodsById,
+    );
     if (validatedPayload == null) {
       AppLogger.warning('rpc:response outgoing validation returned null - emitting internal error');
       final requestId = _extractResponseId(responseData);

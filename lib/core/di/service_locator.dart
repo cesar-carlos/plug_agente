@@ -42,6 +42,8 @@ import 'package:plug_agente/infrastructure/repositories/agent_config_drift_datab
 import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_payload_signing_key_store.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -476,6 +478,16 @@ Future<void> setupDependencies({
 
   registerPlugDependencyGraph(getIt, odbcWorkerLocator: _odbcLocator);
   registerPlugCapabilityServices(getIt, capabilities);
+
+  final transportSchemaLoader = TransportSchemaLoader();
+  await transportSchemaLoader.loadAll();
+  getIt.registerSingleton<TransportSchemaLoader>(transportSchemaLoader);
+  getIt.registerSingleton<JsonSchemaContractValidator>(
+    JsonSchemaContractValidator(
+      loader: transportSchemaLoader,
+      metrics: getIt<MetricsCollector>(),
+    ),
+  );
 
   final odbcInitResult = await getIt<odbc.OdbcService>().initialize();
   odbcInitResult.fold(

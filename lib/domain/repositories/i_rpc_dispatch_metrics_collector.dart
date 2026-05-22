@@ -42,4 +42,10 @@ abstract class IRpcDispatchMetricsCollector {
   /// Counts `agent.action.*` calls rejected because they were sent as JSON-RPC
   /// notifications (no `id`). Does not increment success/error RPC counters.
   void recordRpcAgentActionNotificationRejected(String rpcMethod);
+
+  void recordRpcMethodConcurrencyLimited(String rpcMethod);
+
+  void recordSqlStreamCancelled(String reason);
+
+  void recordSqlStreamCancelFailed(String reason);
 }

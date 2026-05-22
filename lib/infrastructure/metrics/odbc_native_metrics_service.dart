@@ -6,13 +6,14 @@ import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Collects native diagnostics snapshots from `odbc_fast`.
-class OdbcNativeMetricsService {
+class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   OdbcNativeMetricsService(
     this._service, {
     ActiveConfigResolver? activeConfigResolver,
@@ -39,6 +40,7 @@ class OdbcNativeMetricsService {
 
   static const int _asyncPendingWarningThresholdPercent = 80;
 
+  @override
   Future<Result<Map<String, dynamic>>> collectSnapshot() async {
     final metricsFuture = _service.getMetrics();
     final preparedFuture = _service.getPreparedStatementsMetrics();

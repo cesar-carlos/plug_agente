@@ -56,4 +56,13 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   @override
   void recordRpcAgentActionNotificationRejected(String rpcMethod) =>
       _metrics.recordRpcAgentActionNotificationRejected(rpcMethod);
+
+  @override
+  void recordRpcMethodConcurrencyLimited(String rpcMethod) => _metrics.recordRpcMethodConcurrencyLimited(rpcMethod);
+
+  @override
+  void recordSqlStreamCancelled(String reason) => _metrics.recordSqlStreamCancelled(reason);
+
+  @override
+  void recordSqlStreamCancelFailed(String reason) => _metrics.recordSqlStreamCancelFailed(reason);
 }

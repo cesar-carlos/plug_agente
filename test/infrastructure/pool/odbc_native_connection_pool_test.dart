@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
@@ -158,7 +159,7 @@ void main() {
     test('should reject custom connection options explicitly', () async {
       final result = await pool.acquire(
         'DSN=Options',
-        options: const ConnectionOptions(queryTimeout: Duration(seconds: 5)),
+        options: const ConnectionAcquireOptions(queryTimeout: Duration(seconds: 5)),
       );
 
       expect(result.isError(), isTrue);

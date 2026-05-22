@@ -7,7 +7,10 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 /// Builds the wire form of [RpcResponse] objects, attaches W3C/legacy trace
 /// metadata mirrored from the request, validates the outgoing contract (with
@@ -25,6 +28,8 @@ class RpcResponsePreparer {
     required ProtocolConfig Function() protocolProvider,
     required bool Function() usesBinaryTransport,
     required String Function() agentIdProvider,
+    JsonSchemaContractValidator? jsonSchemaValidator,
+    RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
     PayloadSigner? payloadSigner,
   }) : _featureFlags = featureFlags,
        _logSummarizer = logSummarizer,
@@ -32,6 +37,8 @@ class RpcResponsePreparer {
        _protocolProvider = protocolProvider,
        _usesBinaryTransport = usesBinaryTransport,
        _agentIdProvider = agentIdProvider,
+       _jsonSchemaValidator = jsonSchemaValidator,
+       _schemaCatalog = schemaCatalog,
        _payloadSigner = payloadSigner;
 
   final FeatureFlags _featureFlags;
@@ -40,6 +47,8 @@ class RpcResponsePreparer {
   final ProtocolConfig Function() _protocolProvider;
   final bool Function() _usesBinaryTransport;
   final String Function() _agentIdProvider;
+  final JsonSchemaContractValidator? _jsonSchemaValidator;
+  final RpcMethodSchemaCatalog _schemaCatalog;
   final PayloadSigner? _payloadSigner;
 
   /// Serialises a single [RpcResponse] into the wire `Map<String, dynamic>`,
@@ -91,7 +100,10 @@ class RpcResponsePreparer {
   /// Skips validation entirely when feature flags disable it or when the
   /// payload exceeds [ConnectionConstants.socketOutgoingContractValidationMaxBytes]
   /// (UTF-8 bytes), to keep CPU bounded for large result sets.
-  dynamic validateOutgoing(dynamic payload) {
+  dynamic validateOutgoing(
+    dynamic payload, {
+    Map<Object?, String> methodsById = const <Object?, String>{},
+  }) {
     if (!_featureFlags.enableSocketSchemaValidation) {
       return payload;
     }
@@ -101,17 +113,124 @@ class RpcResponsePreparer {
 
     const softCap = ConnectionConstants.socketOutgoingContractValidationMaxBytes;
     if (softCap > 0 && _logSummarizer.exceedsByteBudget(payload, softCap)) {
+      _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'outbound');
       return payload;
     }
 
     final validation = payload is List<dynamic>
         ? _contractValidator.validateBatchResponse(payload)
-        : _contractValidator.validateResponse(payload as Map<String, dynamic>);
+        : payload is Map<String, dynamic>
+        ? _contractValidator.validateResponse(payload)
+        : _contractValidator.validateResponse(const <String, dynamic>{});
     if (validation.isSuccess()) {
-      return payload;
+      final schemaValidation = _validateOutgoingWithJsonSchemas(
+        payload,
+        methodsById: methodsById,
+      );
+      if (schemaValidation == null) {
+        return payload;
+      }
+      return _fallbackForInvalidOutgoingPayload(schemaValidation);
     }
 
     final failure = validation.exceptionOrNull()! as domain.Failure;
+    return _fallbackForInvalidOutgoingPayload(failure);
+  }
+
+  domain.Failure? _validateOutgoingWithJsonSchemas(
+    dynamic payload, {
+    required Map<Object?, String> methodsById,
+  }) {
+    final jsonSchemaValidator = _jsonSchemaValidator;
+    if (jsonSchemaValidator == null) {
+      return null;
+    }
+
+    final envelopeSchemaId = payload is List<dynamic>
+        ? TransportSchemaIds.rpcBatchResponse
+        : TransportSchemaIds.rpcResponse;
+    final envelopeValidation = jsonSchemaValidator.validate(
+      schemaId: envelopeSchemaId,
+      payload: payload,
+      direction: 'outbound',
+    );
+    if (envelopeValidation.isError()) {
+      return envelopeValidation.exceptionOrNull()! as domain.Failure;
+    }
+
+    if (payload is List<dynamic>) {
+      for (final item in payload.whereType<Map<String, dynamic>>()) {
+        final failure = _validateSingleResponseJsonSchema(
+          item,
+          methodsById: methodsById,
+        );
+        if (failure != null) {
+          return failure;
+        }
+      }
+      return null;
+    }
+
+    if (payload is Map<String, dynamic>) {
+      return _validateSingleResponseJsonSchema(
+        payload,
+        methodsById: methodsById,
+      );
+    }
+
+    return domain.ValidationFailure.withContext(
+      message: 'Outgoing RPC response payload must be a response object or batch response array',
+      context: {'payloadType': payload.runtimeType.toString()},
+    );
+  }
+
+  domain.Failure? _validateSingleResponseJsonSchema(
+    Map<String, dynamic> response, {
+    required Map<Object?, String> methodsById,
+  }) {
+    final jsonSchemaValidator = _jsonSchemaValidator;
+    if (jsonSchemaValidator == null) {
+      return null;
+    }
+
+    final error = response['error'];
+    if (error != null) {
+      final errorValidation = jsonSchemaValidator.validate(
+        schemaId: TransportSchemaIds.rpcError,
+        payload: error,
+        direction: 'outbound',
+      );
+      if (errorValidation.isError()) {
+        return errorValidation.exceptionOrNull()! as domain.Failure;
+      }
+      return null;
+    }
+
+    if (!response.containsKey('result')) {
+      return null;
+    }
+
+    final method = methodsById[response['id']];
+    if (method == null) {
+      return null;
+    }
+    final schemaId = _schemaCatalog.resultSchemaFor(method);
+    if (schemaId == null) {
+      return null;
+    }
+
+    final resultValidation = jsonSchemaValidator.validate(
+      schemaId: schemaId,
+      payload: response['result'],
+      direction: 'outbound',
+    );
+    if (resultValidation.isError()) {
+      return resultValidation.exceptionOrNull()! as domain.Failure;
+    }
+    return null;
+  }
+
+  dynamic _fallbackForInvalidOutgoingPayload(domain.Failure failure) {
     AppLogger.error(
       'Outgoing rpc:response payload is invalid: ${failure.message}',
     );

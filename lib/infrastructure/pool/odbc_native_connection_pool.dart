@@ -168,7 +168,7 @@ class OdbcNativeConnectionPool
   @override
   Future<Result<String>> acquire(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
   }) {
     return acquireWithin(connectionString, options: options);
   }
@@ -176,7 +176,7 @@ class OdbcNativeConnectionPool
   @override
   Future<Result<String>> acquireWithin(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
     if (options != null) {

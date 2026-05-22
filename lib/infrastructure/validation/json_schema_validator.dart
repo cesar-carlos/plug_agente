@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -15,9 +16,14 @@ import 'package:result_dart/result_dart.dart';
 ///   - selective production validation where the schema covers more rules
 ///     than the procedural code (e.g. `agent.getProfile` `additionalProperties`).
 class JsonSchemaContractValidator {
-  JsonSchemaContractValidator({required TransportSchemaLoader loader}) : _loader = loader;
+  JsonSchemaContractValidator({
+    required TransportSchemaLoader loader,
+    ISchemaValidationMetricsCollector? metrics,
+  }) : _loader = loader,
+       _metrics = metrics;
 
   final TransportSchemaLoader _loader;
+  final ISchemaValidationMetricsCollector? _metrics;
 
   /// Validates [payload] against the schema with [schemaId]. Returns
   /// `Success(unit)` when the schema is missing (so the caller may fall back
@@ -26,6 +32,7 @@ class JsonSchemaContractValidator {
   Result<void> validate({
     required String schemaId,
     required Object? payload,
+    String direction = 'unknown',
   }) {
     final schema = _loader.get(schemaId);
     if (schema == null) {
@@ -39,10 +46,25 @@ class JsonSchemaContractValidator {
       }(), 'schema "$schemaId" not loaded');
       return const Success(unit);
     }
+    final stopwatch = Stopwatch()..start();
     final result = schema.validate(payload);
     if (result.isValid) {
+      stopwatch.stop();
+      _metrics?.recordSchemaValidation(
+        direction: direction,
+        schemaId: schemaId,
+        success: true,
+        elapsed: stopwatch.elapsed,
+      );
       return const Success(unit);
     }
+    stopwatch.stop();
+    _metrics?.recordSchemaValidation(
+      direction: direction,
+      schemaId: schemaId,
+      success: false,
+      elapsed: stopwatch.elapsed,
+    );
     final errors = result.errors
         .map((e) => '${e.instancePath.isEmpty ? '/' : e.instancePath}: ${e.message}')
         .join('; ');
@@ -61,4 +83,10 @@ class JsonSchemaContractValidator {
   /// Whether the schema with [schemaId] is loaded and usable. Lets callers
   /// decide upfront whether to skip JSON Schema validation entirely.
   bool isLoaded(String schemaId) => _loader.get(schemaId) != null;
+
+  void recordSkippedLargePayload({required String direction}) {
+    _metrics?.recordSchemaValidationSkippedLargePayload(
+      direction: direction,
+    );
+  }
 }

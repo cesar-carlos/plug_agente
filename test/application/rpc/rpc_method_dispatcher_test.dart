@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -197,6 +197,8 @@ void main() {
           chunkSizeBytes: any(named: 'chunkSizeBytes'),
           executionId: any(named: 'executionId'),
           queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
         ),
       ).thenAnswer((_) async => const Success(unit));
       when(
@@ -1589,6 +1591,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -1682,6 +1686,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           const timeoutSymbol = Symbol('queryTimeout');
@@ -1757,6 +1763,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -1810,6 +1818,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
@@ -1894,6 +1904,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -1966,6 +1978,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
@@ -2049,6 +2063,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(2);
       },
@@ -2117,6 +2133,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -2177,6 +2195,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -2219,6 +2239,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -2358,6 +2380,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any())).called(1);
@@ -3563,6 +3587,8 @@ void main() {
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
               executionId: any(named: 'executionId'),
               queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
             ),
           ).thenAnswer((_) => completer.future);
 
@@ -3660,6 +3686,8 @@ void main() {
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
               executionId: any(named: 'executionId'),
               queryTimeout: any(named: 'queryTimeout'),
+          cancellationToken: any(named: 'cancellationToken'),
+          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
             ),
           ).thenAnswer((_) => completer.future);
 
@@ -3837,3 +3865,4 @@ void main() {
     );
   });
 }
+

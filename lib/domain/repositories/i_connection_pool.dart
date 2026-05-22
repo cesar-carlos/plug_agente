@@ -1,12 +1,31 @@
-import 'package:odbc_fast/odbc_fast.dart';
 import 'package:result_dart/result_dart.dart';
+
+class ConnectionAcquireOptions {
+  const ConnectionAcquireOptions({
+    this.loginTimeout,
+    this.queryTimeout,
+    this.maxResultBufferBytes,
+    this.initialResultBufferBytes,
+    this.autoReconnectOnConnectionLost,
+    this.maxReconnectAttempts,
+    this.reconnectBackoff,
+  });
+
+  final Duration? loginTimeout;
+  final Duration? queryTimeout;
+  final int? maxResultBufferBytes;
+  final int? initialResultBufferBytes;
+  final bool? autoReconnectOnConnectionLost;
+  final int? maxReconnectAttempts;
+  final Duration? reconnectBackoff;
+}
 
 /// Interface para pool de conexoes ODBC.
 abstract class IConnectionPool {
   /// Adquire uma conexao do pool ou cria uma nova se necessario.
   Future<Result<String>> acquire(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
   });
 
   /// Libera uma conexao.
@@ -40,17 +59,17 @@ abstract class IConnectionPool {
 abstract class ITimedConnectionPoolAcquire {
   Future<Result<String>> acquireWithin(
     String connectionString, {
-    ConnectionOptions? options,
+    ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   });
 }
 
 /// Optional capability for adaptive pools that can try an optionless native
-/// acquire for simple SQL while preserving full [ConnectionOptions] on fallback.
+/// acquire for simple SQL while preserving full [ConnectionAcquireOptions] on fallback.
 abstract class INativeCompatibleConnectionPoolAcquire {
   Future<Result<String>> acquireNativeCompatible(
     String connectionString, {
-    required ConnectionOptions leaseFallbackOptions,
+    required ConnectionAcquireOptions leaseFallbackOptions,
     Duration? acquireTimeout,
   });
 }

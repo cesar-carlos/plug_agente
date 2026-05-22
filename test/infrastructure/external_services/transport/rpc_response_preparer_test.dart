@@ -4,7 +4,9 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -13,13 +15,15 @@ void main() {
   late PayloadLogSummarizer summarizer;
   late RpcResponsePreparer preparer;
 
-  setUp(() {
+  setUp(() async {
     featureFlags = _MockFeatureFlags();
     when(() => featureFlags.enableSocketSchemaValidation).thenReturn(true);
     when(() => featureFlags.enableSocketOutgoingContractValidation).thenReturn(true);
     when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(false);
     when(() => featureFlags.enablePayloadSigning).thenReturn(false);
     when(() => featureFlags.requireIncomingPayloadSignatures).thenReturn(false);
+    final schemaLoader = TransportSchemaLoader();
+    await schemaLoader.loadAll();
     summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
     preparer = RpcResponsePreparer(
       featureFlags: featureFlags,
@@ -35,6 +39,7 @@ void main() {
       ),
       usesBinaryTransport: () => true,
       agentIdProvider: () => 'agent-1',
+      jsonSchemaValidator: JsonSchemaContractValidator(loader: schemaLoader),
     );
   });
 
@@ -113,6 +118,49 @@ void main() {
       final result = preparer.validateOutgoing(junk);
 
       expect(result, junk);
+    });
+
+    test('rejects a method-specific success result that violates its schema', () {
+      final response = RpcResponse.success(
+        id: 'req-1',
+        result: const <String, dynamic>{
+          'items': <Object>[],
+        },
+      );
+      final wire = preparer.prepareForSend(response);
+
+      final result =
+          preparer.validateOutgoing(
+                wire,
+                methodsById: const <Object?, String>{'req-1': 'sql.execute'},
+              )
+              as Map<String, dynamic>;
+
+      expect(result, isNot(wire));
+      final error = result['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.internalError);
+    });
+
+    test('accepts a method-specific success result that conforms to its schema', () {
+      final now = DateTime.utc(2026).toIso8601String();
+      final response = RpcResponse.success(
+        id: 'req-1',
+        result: {
+          'execution_id': 'exec-1',
+          'started_at': now,
+          'finished_at': now,
+          'rows': const <Map<String, dynamic>>[],
+          'row_count': 0,
+        },
+      );
+      final wire = preparer.prepareForSend(response);
+
+      final result = preparer.validateOutgoing(
+        wire,
+        methodsById: const <Object?, String>{'req-1': 'sql.execute'},
+      );
+
+      expect(result, wire);
     });
   });
 
