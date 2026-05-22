@@ -28,6 +28,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:socket_io_client/src/manager.dart' as socket_io_manager;
 import 'package:uuid/uuid.dart';
 
 class MockSocketDataSource extends Mock implements SocketDataSource {}
@@ -41,6 +42,8 @@ class MockFeatureFlags extends Mock implements FeatureFlags {}
 class MockAgentActionLocalRunner extends Mock implements AgentActionLocalRunner {}
 
 class MockSocket extends Mock implements io.Socket {}
+
+class MockManager extends Mock implements socket_io_manager.Manager {}
 
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
@@ -93,9 +96,11 @@ void main() {
     late MockRpcMethodDispatcher mockDispatcher;
     late MockFeatureFlags mockFeatureFlags;
     late MockSocket mockSocket;
+    late MockManager mockManager;
     late ProtocolMetricsCollector metricsCollector;
     late SocketIOTransportClientV2 client;
     late Map<String, Function> handlers;
+    late Map<String, Function> managerHandlers;
     late List<({String event, dynamic data})> emitted;
 
     const defaultNegotiatedConfig = ProtocolConfig(
@@ -114,6 +119,13 @@ void main() {
 
     void emitEvent(String event, [dynamic data]) {
       final handler = handlers[event];
+      if (handler != null) {
+        Function.apply(handler, [data]);
+      }
+    }
+
+    void emitManagerEvent(String event, [dynamic data]) {
+      final handler = managerHandlers[event];
       if (handler != null) {
         Function.apply(handler, [data]);
       }
@@ -160,8 +172,10 @@ void main() {
       mockDispatcher = MockRpcMethodDispatcher();
       mockFeatureFlags = MockFeatureFlags();
       mockSocket = MockSocket();
+      mockManager = MockManager();
       metricsCollector = ProtocolMetricsCollector();
       handlers = <String, Function>{};
+      managerHandlers = <String, Function>{};
       emitted = <({String event, dynamic data})>[];
 
       when(
@@ -174,9 +188,17 @@ void main() {
         () => mockDispatcher.cancelActiveStreamOnDisconnect(),
       ).thenAnswer((_) async {});
       when(() => mockSocket.connected).thenReturn(true);
+      when(() => mockSocket.io).thenReturn(mockManager);
       when(() => mockSocket.on(any<String>(), any())).thenAnswer((invocation) {
         handlers[invocation.positionalArguments[0] as String] = invocation.positionalArguments[1] as Function;
         return () {};
+      });
+      when(() => mockManager.on(any<String>(), any())).thenAnswer((invocation) {
+        final event = invocation.positionalArguments[0] as String;
+        managerHandlers[event] = invocation.positionalArguments[1] as Function;
+        return () {
+          managerHandlers.remove(event);
+        };
       });
       when(() => mockSocket.emit(any<String>(), any<dynamic>())).thenAnswer((
         invocation,
@@ -383,6 +405,123 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(reconnectRequests, 1);
+    });
+
+    test('should register reconnect lifecycle handlers on Socket.IO manager', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+
+      verify(() => mockManager.on('reconnect', any())).called(1);
+      verify(() => mockManager.on('reconnect_attempt', any())).called(1);
+      verify(() => mockManager.on('reconnect_failed', any())).called(1);
+      verify(() => mockManager.on('reconnect_error', any())).called(1);
+      verifyNever(() => mockSocket.on('reconnect', any()));
+      verifyNever(() => mockSocket.on('reconnect_attempt', any()));
+      verifyNever(() => mockSocket.on('reconnect_failed', any()));
+      verifyNever(() => mockSocket.on('reconnect_error', any()));
+
+      emitEvent('connect');
+      await connectFuture;
+    });
+
+    test('should remove manager reconnect subscriptions on connect_error', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      expect(managerHandlers.keys, containsAll(<String>['reconnect', 'reconnect_attempt', 'reconnect_failed']));
+
+      emitEvent('connect_error', 'offline');
+      final result = await connectFuture;
+
+      expect(result.isError(), isTrue);
+      expect(managerHandlers, isEmpty);
+      verify(() => mockSocket.disconnect()).called(1);
+      verify(() => mockSocket.dispose()).called(1);
+    });
+
+    test('should re-register after manager reconnect and notify after capabilities', () async {
+      final notifications = <HubLifecycleNotification>[];
+      client.setOnHubLifecycle(notifications.add);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitManagerEvent('reconnect', 2);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.any((item) => item.event == 'agent:register'), isTrue);
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifications.whereType<HubTransportAutoReconnectSucceeded>(), hasLength(1));
+    });
+
+    test('should request application recovery when post-reconnect register throws', () async {
+      var profileCalls = 0;
+      client = SocketIOTransportClientV2(
+        dataSource: mockDataSource,
+        negotiator: mockNegotiator,
+        rpcDispatcher: mockDispatcher,
+        featureFlags: mockFeatureFlags,
+        registerProfileProvider: () async {
+          profileCalls += 1;
+          if (profileCalls > 1) {
+            throw StateError('profile unavailable');
+          }
+          return null;
+        },
+        protocolMetricsCollector: metricsCollector,
+      );
+      var reconnectRequests = 0;
+      client.setOnReconnectionNeeded(() => reconnectRequests++);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+
+      emitManagerEvent('reconnect', 2);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(profileCalls, 2);
+      expect(reconnectRequests, 1);
+    });
+
+    test('should escalate to application recovery when manager reconnect fails', () async {
+      var reconnectRequests = 0;
+      client.setOnReconnectionNeeded(() => reconnectRequests++);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitManagerEvent('reconnect_failed');
+
+      expect(reconnectRequests, 1);
+    });
+
+    test('should request token refresh only for auth-related manager reconnect errors', () async {
+      var tokenRefreshRequests = 0;
+      client.setOnTokenExpired(() => tokenRefreshRequests++);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      emitManagerEvent('reconnect_error', 'connection refused');
+      expect(tokenRefreshRequests, 0);
+
+      emitManagerEvent('reconnect_error', <String, dynamic>{
+        'code': 'auth_failed',
+        'message': 'Hub rejected the token',
+      });
+      expect(tokenRefreshRequests, 1);
     });
 
     test('should emit agent:ready after capabilities when readiness ack is negotiated', () async {
@@ -868,6 +1007,7 @@ void main() {
         );
 
         verify(() => mockSocket.disconnect()).called(greaterThanOrEqualTo(1));
+        expect(managerHandlers, isEmpty);
         expect(reconnectionRequested, isTrue);
       },
     );
@@ -924,6 +1064,7 @@ void main() {
         );
 
         verify(() => mockSocket.disconnect()).called(greaterThanOrEqualTo(1));
+        expect(managerHandlers, isEmpty);
         expect(reconnectionRequested, isTrue);
       },
     );

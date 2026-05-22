@@ -316,10 +316,7 @@ class ConnectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
-    transportClient.setOnTokenExpired(_handleTokenExpired);
-    transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
-    transportClient.setOnHubLifecycle(_handleHubLifecycle);
+    _configureTransportCallbacks();
 
     final result = await _connectToHubUseCase(
       serverUrl,
@@ -376,6 +373,46 @@ class ConnectionProvider extends ChangeNotifier {
 
     notifyListeners();
     return finalResult;
+  }
+
+  void startPersistentHubRecovery({
+    required String configId,
+    required String serverUrl,
+    required String agentId,
+    String? authToken,
+  }) {
+    _cancelPersistentRetryTimer();
+    _persistentFailureCount = 0;
+    _persistentRetryTickCount = 0;
+    _consecutiveReconnectFailures = 0;
+    _hardReloginAttemptedInCycle = false;
+    _sessionAuthInvalid = false;
+    _lastHubRefreshHttpCompletedAt = null;
+    _reconnectQuietFailureLogCount = 0;
+    _isDisconnectRequested = false;
+    _lastConfigId = configId;
+    _lastServerUrl = serverUrl;
+    _lastAgentId = agentId;
+    _lastAuthToken = _normalizeToken(authToken);
+
+    _configureTransportCallbacks();
+    _beginResilienceRecovery();
+    _status = ConnectionStatus.reconnecting;
+    _error = '';
+    _clearHubRecoveryUiHint();
+    AppLogger.warning(
+      'resilience: ${_resilienceLogPrefix()}persistent_retry event=startup_recovery_started '
+      'agent_id=$agentId',
+    );
+    notifyListeners();
+    _startPersistentRetry();
+  }
+
+  void _configureTransportCallbacks() {
+    final transportClient = _transportClientOverride ?? getIt<ITransportClient>();
+    transportClient.setOnTokenExpired(_handleTokenExpired);
+    transportClient.setOnReconnectionNeeded(_handleReconnectionNeeded);
+    transportClient.setOnHubLifecycle(_handleHubLifecycle);
   }
 
   Future<void> disconnect() async {
@@ -834,8 +871,7 @@ class ConnectionProvider extends ChangeNotifier {
 
       if (attempt % _tokenRefreshIntervalAttempts == 0) {
         final refreshResult = await _tryRefreshToken(context);
-        if (refreshResult.kind == _TokenRefreshResultKind.refreshed &&
-            refreshResult.token != null) {
+        if (refreshResult.kind == _TokenRefreshResultKind.refreshed && refreshResult.token != null) {
           authToken = refreshResult.token;
         }
       }
@@ -1347,17 +1383,13 @@ class _TokenRefreshResult {
     this.token,
   });
 
-  const _TokenRefreshResult.refreshed(String token)
-    : this._(kind: _TokenRefreshResultKind.refreshed, token: token);
+  const _TokenRefreshResult.refreshed(String token) : this._(kind: _TokenRefreshResultKind.refreshed, token: token);
 
-  const _TokenRefreshResult.skippedByCooldown()
-    : this._(kind: _TokenRefreshResultKind.skippedByCooldown);
+  const _TokenRefreshResult.skippedByCooldown() : this._(kind: _TokenRefreshResultKind.skippedByCooldown);
 
-  const _TokenRefreshResult.transientFailure()
-    : this._(kind: _TokenRefreshResultKind.transientFailure);
+  const _TokenRefreshResult.transientFailure() : this._(kind: _TokenRefreshResultKind.transientFailure);
 
-  const _TokenRefreshResult.terminalFailure()
-    : this._(kind: _TokenRefreshResultKind.terminalFailure);
+  const _TokenRefreshResult.terminalFailure() : this._(kind: _TokenRefreshResultKind.terminalFailure);
 
   final _TokenRefreshResultKind kind;
   final String? token;

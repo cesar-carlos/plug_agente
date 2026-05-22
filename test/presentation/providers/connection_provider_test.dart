@@ -445,6 +445,39 @@ void main() {
   });
 
   group('ConnectionProvider reconnection hardening', () {
+    test('startup persistent recovery enters reconnecting and keeps retrying while hub is offline', () async {
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => false);
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        transportClient: transport,
+        hubPersistentRetryInterval: const Duration(milliseconds: 25),
+        hubPersistentRetryMaxFailedTicks: 0,
+      );
+
+      provider.startPersistentHubRecovery(
+        configId: 'cfg-1',
+        serverUrl: 'https://hub.test',
+        agentId: 'agent-1',
+      );
+
+      expect(provider.status, ConnectionStatus.reconnecting);
+      expect(provider.error, isEmpty);
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(provider.status, ConnectionStatus.reconnecting);
+      verifyNever(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      );
+
+      await provider.disconnect();
+    });
+
     test('skips reconnect socket attempts while hub probe is offline', () async {
       when(
         () => connectToHub(any(), any(), authToken: any(named: 'authToken')),

@@ -172,6 +172,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   late final RpcInboundHandler _inboundHandler;
 
   io.Socket? _socket;
+  final List<void Function()> _managerReconnectSubscriptions = <void Function()>[];
   String? _resilienceRecoveryId;
   String _resilienceLogPrefix() {
     final id = _resilienceRecoveryId;
@@ -465,9 +466,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         final registerSent = await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
         if (!registerSent) {
           _heartbeat.stop();
-          _socket?.disconnect();
-          _socket?.dispose();
-          _socket = null;
+          _closeSocket();
           if (!completer.isCompleted) {
             completer.complete(
               Failure(
@@ -489,35 +488,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         }
       });
 
-      _socket!.on('reconnect', (_) async {
-        _logMessage('RECEIVED', 'reconnect', null);
-        AppLogger.info(
-          'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_reconnected '
-          'agent_id=$_agentId',
-        );
-        _heartbeat.resetTransientState();
-        await _capabilitiesNegotiator.sendReRegisterAfterReconnect();
-      });
-
-      _socket!.on('reconnect_attempt', (dynamic data) {
-        _logMessage('RECEIVED', 'reconnect_attempt', data);
-        final n = data is int ? data : (data is num ? data.toInt() : int.tryParse('$data'));
-        AppLogger.info(
-          'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_attempt '
-          'attempt=$n agent_id=$_agentId',
-        );
-        _onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: n));
-      });
-
-      _socket!.on('reconnect_failed', (_) {
-        _logMessage('ERROR', 'reconnect_failed', null);
-        AppLogger.error(
-          'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_exhausted '
-          'agent_id=$_agentId - Socket.IO gave up after repeated transport reconnects; '
-          'escalating to application-level hub recovery',
-        );
-        _onReconnectionNeeded?.call();
-      });
+      _registerManagerReconnectHandlers(_socket!);
 
       _socket!.on('connect_error', (error) {
         timeoutTimer?.cancel();
@@ -565,9 +536,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         final shouldReconnect = _capabilitiesNegotiator.handleRegisterError(map);
         if (shouldReconnect) {
           _heartbeat.stop();
-          _socket?.disconnect();
-          _socket?.dispose();
-          _socket = null;
+          _closeSocket();
         }
       });
 
@@ -607,8 +576,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
               'timeout_ms=${ConnectionConstants.socketConnectionTimeoutMs} '
               'agent_id=$_agentId',
             );
-            _socket?.dispose();
-            _socket = null;
+            _closeSocket();
             completer.complete(
               Failure(
                 domain.NetworkFailure.withContext(
@@ -627,8 +595,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
         'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_exception agent_id=$_agentId',
         e,
       );
-      _socket?.dispose();
-      _socket = null;
+      _closeSocket();
       return Failure(
         domain.NetworkFailure.withContext(
           message: 'Failed to connect to server',
@@ -681,11 +648,75 @@ class SocketIOTransportClientV2 implements ITransportClient {
           stackTrace,
         );
         _heartbeat.stop();
-        _socket?.disconnect();
-        _socket?.dispose();
-        _socket = null;
+        _closeSocket();
         _onReconnectionNeeded?.call();
     }
+  }
+
+  void _registerManagerReconnectHandlers(io.Socket socket) {
+    _clearManagerReconnectSubscriptions();
+    _managerReconnectSubscriptions
+      ..add(
+        io.DartySocket(socket).onReconnect((dynamic data) {
+          unawaited(_handleManagerReconnect(data));
+        }),
+      )
+      ..add(io.DartySocket(socket).onReconnectAttempt(_handleManagerReconnectAttempt))
+      ..add(
+        io.DartySocket(socket).onReconnectFailed((_) {
+          _handleManagerReconnectFailed();
+        }),
+      )
+      ..add(io.DartySocket(socket).onReconnectError(_handleManagerReconnectError));
+  }
+
+  Future<void> _handleManagerReconnect(dynamic data) async {
+    _logMessage('RECEIVED', 'reconnect', data);
+    AppLogger.info(
+      'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_reconnected '
+      'attempt=${_parseReconnectAttempt(data)} agent_id=$_agentId',
+    );
+    _heartbeat.resetTransientState();
+    try {
+      await _capabilitiesNegotiator.sendReRegisterAfterReconnect();
+    } on Object catch (error, stackTrace) {
+      AppLogger.error(
+        'resilience: ${_resilienceLogPrefix()}socket_transport event=post_reconnect_register_failed '
+        'agent_id=$_agentId',
+        error,
+        stackTrace,
+      );
+      _onReconnectionNeeded?.call();
+    }
+  }
+
+  void _handleManagerReconnectAttempt(dynamic data) {
+    _logMessage('RECEIVED', 'reconnect_attempt', data);
+    final attempt = _parseReconnectAttempt(data);
+    AppLogger.info(
+      'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_attempt '
+      'attempt=$attempt agent_id=$_agentId',
+    );
+    _onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: attempt));
+  }
+
+  void _handleManagerReconnectFailed() {
+    _logMessage('ERROR', 'reconnect_failed', null);
+    AppLogger.error(
+      'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_exhausted '
+      'agent_id=$_agentId - Socket.IO gave up after repeated transport reconnects; '
+      'escalating to application-level hub recovery',
+    );
+    _onReconnectionNeeded?.call();
+  }
+
+  void _handleManagerReconnectError(dynamic error) {
+    _logMessage('ERROR', 'reconnect_error', error);
+    _handleSocketError(error);
+  }
+
+  int? _parseReconnectAttempt(dynamic data) {
+    return data is int ? data : (data is num ? data.toInt() : int.tryParse('$data'));
   }
 
   void _emitEvent(String event, dynamic logicalPayload) {
@@ -784,8 +815,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     );
 
     if (!completer.isCompleted) {
-      _socket?.dispose();
-      _socket = null;
+      _closeSocket();
     }
 
     // Fire-and-forget: ConnectionProvider._handleTokenExpired schedules its own
@@ -892,6 +922,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _closeSocket() {
+    _clearManagerReconnectSubscriptions();
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
@@ -903,6 +934,21 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
     socket.disconnect();
     socket.dispose();
+  }
+
+  void _clearManagerReconnectSubscriptions() {
+    for (final unsubscribe in _managerReconnectSubscriptions) {
+      try {
+        unsubscribe();
+      } on Object catch (error, stackTrace) {
+        AppLogger.warning(
+          'Failed to remove Socket.IO manager reconnect subscription',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    _managerReconnectSubscriptions.clear();
   }
 
   @override

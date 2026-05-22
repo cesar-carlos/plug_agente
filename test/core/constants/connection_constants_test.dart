@@ -32,6 +32,10 @@ void main() {
       );
     });
 
+    test('should default hub persistent retry to unlimited', () {
+      expect(ConnectionConstants.hubPersistentRetryMaxFailedTicks, 0);
+    });
+
     test('should default ODBC async worker count to min pool size and processor count', () {
       expect(
         ConnectionConstants.odbcAsyncWorkerCountForPoolSize(8, 4),

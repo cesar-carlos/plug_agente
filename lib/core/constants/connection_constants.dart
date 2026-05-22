@@ -38,7 +38,7 @@ class ConnectionConstants {
   static const Duration hubHardReloginCooldown = Duration(seconds: 60);
 
   /// Max failed persistent reconnect ticks before giving up (`0` = unlimited).
-  static const int hubPersistentRetryMaxFailedTicks = 120;
+  static const int hubPersistentRetryMaxFailedTicks = 0;
 
   /// User-facing message when [hubPersistentRetryMaxFailedTicks] is exceeded (English;
   /// mirror in ARB for localized surfaces).

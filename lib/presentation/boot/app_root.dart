@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -52,22 +50,17 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
-import 'package:plug_agente/core/utils/url_utils.dart';
-import 'package:plug_agente/domain/entities/auth_token.dart';
-import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/presentation/app/app.dart';
-import 'package:plug_agente/presentation/boot/startup_auto_session_retry_policy.dart';
+import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -248,27 +241,6 @@ class _ProviderInitializer extends StatefulWidget {
 }
 
 class _ProviderInitializerState extends State<_ProviderInitializer> {
-  static const String _defaultServerUrl = 'https://api.example.com';
-  late final HubSessionCoordinator _hubSessionCoordinator = getIt<HubSessionCoordinator>();
-
-  ConnectionProvider? _connectionProvider;
-  AuthProvider? _authProvider;
-  ConfigProvider? _configProvider;
-  String? _lastOdbcSignature;
-  bool _startupFlowHandled = false;
-  bool _startupFlowRunning = false;
-  final StartupAutoSessionRetryPolicy _startupRetryPolicy = const StartupAutoSessionRetryPolicy();
-  Timer? _startupRetryTimer;
-  int _startupTransientRetryCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeProviders();
-    });
-  }
-
   @override
   void dispose() {
     if (getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
@@ -276,223 +248,17 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
         reason: AgentActionRuntimeStateConstants.appRootDisposeReason,
       );
     }
-    _configProvider?.removeListener(_onConfigStateChanged);
-    _cancelStartupRetryTimer();
     super.dispose();
-  }
-
-  void _initializeProviders() {
-    if (!mounted) {
-      return;
-    }
-    final connectionProvider = context.read<ConnectionProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final configProvider = context.read<ConfigProvider>();
-
-    _connectionProvider = connectionProvider;
-    _authProvider = authProvider;
-    _configProvider = configProvider;
-
-    connectionProvider.setAuthProvider(authProvider);
-    connectionProvider.setConfigProvider(configProvider);
-
-    configProvider.removeListener(_onConfigStateChanged);
-    configProvider.addListener(_onConfigStateChanged);
-
-    _syncDbIndicatorWithConfig();
-
-    _attemptStartupLoginAndConnect();
-  }
-
-  void _onConfigStateChanged() {
-    _syncDbIndicatorWithConfig();
-    if (_startupFlowHandled) {
-      return;
-    }
-    _attemptStartupLoginAndConnect();
-  }
-
-  void _syncDbIndicatorWithConfig() {
-    final configProvider = _configProvider;
-    final connectionProvider = _connectionProvider;
-    if (configProvider == null || connectionProvider == null) {
-      return;
-    }
-    if (configProvider.currentConfig == null) {
-      return;
-    }
-    final signature = configProvider.getConnectionString();
-    if (_lastOdbcSignature != null && _lastOdbcSignature!.isNotEmpty && signature != _lastOdbcSignature) {
-      connectionProvider.setDbConnectionIndicator(false);
-    }
-    _lastOdbcSignature = signature;
-  }
-
-  Future<void> _attemptStartupLoginAndConnect() async {
-    if (!mounted || _startupFlowHandled || _startupFlowRunning) {
-      return;
-    }
-
-    final configProvider = _configProvider;
-    final connectionProvider = _connectionProvider;
-    final authProvider = _authProvider;
-    if (configProvider == null || connectionProvider == null || authProvider == null) {
-      return;
-    }
-
-    if (configProvider.isLoading) {
-      return;
-    }
-    if (connectionProvider.isConnected ||
-        connectionProvider.status == ConnectionStatus.connecting ||
-        connectionProvider.status == ConnectionStatus.negotiating ||
-        connectionProvider.status == ConnectionStatus.reconnecting) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    final config = configProvider.currentConfig;
-    if (config == null) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    final startupContext = _buildStartupContext(config);
-    if (startupContext == null) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    _startupFlowRunning = true;
-    try {
-      final bootstrapResult = await _hubSessionCoordinator.bootstrapAutoSession(
-        configId: startupContext.configId,
-        serverUrl: startupContext.serverUrl,
-        agentId: startupContext.agentId,
-      );
-
-      var shouldStop = false;
-      AuthToken? startupToken;
-      var startupRetryScheduled = false;
-      bootstrapResult.fold(
-        (session) {
-          startupToken = session.token;
-          _startupTransientRetryCount = 0;
-          authProvider.restoreToken(
-            session.token,
-            configId: startupContext.configId,
-          );
-        },
-        (failure) {
-          authProvider.setRecoveryError(failure.toDisplayMessage());
-          startupRetryScheduled = _scheduleStartupRetryIfAllowed(failure);
-          shouldStop = true;
-        },
-      );
-      if (shouldStop || startupToken == null) {
-        if (!startupRetryScheduled) {
-          _markStartupFlowHandled();
-        }
-        return;
-      }
-
-      final connectResult = await connectionProvider.connect(
-        startupContext.serverUrl,
-        startupContext.agentId,
-        configId: startupContext.configId,
-        authToken: startupToken!.token,
-        recoverOnFailure: true,
-      );
-      if (connectResult.isSuccess() ||
-          connectionProvider.status == ConnectionStatus.reconnecting ||
-          connectionProvider.isReconnecting) {
-        _markStartupFlowHandled();
-      }
-    } finally {
-      _startupFlowRunning = false;
-    }
-  }
-
-  _StartupContext? _buildStartupContext(Config config) {
-    final serverUrl = normalizeServerUrl(config.serverUrl);
-    final agentId = config.agentId.trim();
-
-    if (serverUrl.isEmpty || serverUrl.toLowerCase() == _defaultServerUrl || agentId.isEmpty) {
-      return null;
-    }
-
-    final authToken = config.authToken?.trim();
-    final refreshToken = config.refreshToken?.trim();
-    final hasAuthTokenPair =
-        authToken != null && authToken.isNotEmpty && refreshToken != null && refreshToken.isNotEmpty;
-    final authUsername = config.authUsername?.trim();
-    final authPassword = config.authPassword?.trim();
-    final hasAuthCredentials =
-        authUsername != null && authUsername.isNotEmpty && authPassword != null && authPassword.isNotEmpty;
-
-    if (!hasAuthTokenPair && !hasAuthCredentials) {
-      return null;
-    }
-
-    return _StartupContext(
-      configId: config.id,
-      serverUrl: serverUrl,
-      agentId: agentId,
-    );
-  }
-
-  void _markStartupFlowHandled() {
-    _cancelStartupRetryTimer();
-    _startupFlowHandled = true;
-    AppLogger.debug('Startup auth/socket auto-flow completed');
-  }
-
-  bool _scheduleStartupRetryIfAllowed(Object failure) {
-    if (!_startupRetryPolicy.canRetry(failure, _startupTransientRetryCount)) {
-      return false;
-    }
-
-    _startupTransientRetryCount += 1;
-    final retryNumber = _startupTransientRetryCount;
-    final delay = _startupRetryPolicy.delayForRetry(retryNumber);
-    _startupRetryTimer?.cancel();
-    AppLogger.warning(
-      'Startup auth/socket bootstrap failed transiently; retrying in '
-      '${delay.inMilliseconds}ms (attempt $retryNumber/${_startupRetryPolicy.maxTransientRetries})',
-      failure.toTechnicalMessage(),
-    );
-    _startupRetryTimer = Timer(delay, () {
-      _startupRetryTimer = null;
-      if (!mounted || _startupFlowHandled) {
-        return;
-      }
-      unawaited(_attemptStartupLoginAndConnect());
-    });
-    return true;
-  }
-
-  void _cancelStartupRetryTimer() {
-    _startupRetryTimer?.cancel();
-    _startupRetryTimer = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    return PlugAgentApp(
-      initialRoute: widget.initialRoute,
-      capabilities: widget.capabilities,
+    return StartupAutoSessionInitializer(
+      hubSessionCoordinator: getIt<HubSessionCoordinator>(),
+      child: PlugAgentApp(
+        initialRoute: widget.initialRoute,
+        capabilities: widget.capabilities,
+      ),
     );
   }
-}
-
-class _StartupContext {
-  const _StartupContext({
-    required this.configId,
-    required this.serverUrl,
-    required this.agentId,
-  });
-
-  final String configId;
-  final String serverUrl;
-  final String agentId;
 }
