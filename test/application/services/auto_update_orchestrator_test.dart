@@ -84,6 +84,7 @@ class FakeAppcastProbeService implements IAppcastProbeService {
       assetSize: result.assetSize,
       assetName: result.assetName,
       sha256: result.sha256,
+      os: result.os,
       channel: result.channel,
       rolloutPercentage: result.rolloutPercentage,
       itemCount: result.itemCount,
@@ -108,11 +109,13 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
     ),
   );
   int cleanupCount = 0;
+  int installCount = 0;
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(
     SilentUpdateInstallRequest request,
   ) async {
+    installCount++;
     this.request = request;
     return result;
   }
@@ -311,6 +314,153 @@ void main() {
         expect(orchestrator.lastAutomaticDiagnostics?.appPid, 1234);
         expect(orchestrator.lastAutomaticDiagnostics?.updateDirectorySecurityStatus, 'restricted');
         expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isFalse);
+      });
+
+      test('runs only one probe and install for concurrent silent checks', () async {
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final firstFuture = orchestrator.checkSilently();
+        final secondFuture = orchestrator.checkSilently();
+        final results = await Future.wait(<Future<Result<bool>>>[
+          firstFuture,
+          secondFuture,
+        ]);
+
+        expect(fakeProbe.callCount, 1);
+        expect(fakeInstaller.installCount, 1);
+        final startedValues = <bool>[];
+        for (final result in results) {
+          result.fold(
+            startedValues.add,
+            (_) => fail('Expected success'),
+          );
+        }
+        expect(startedValues.where((started) => started).length, 1);
+        expect(startedValues.where((started) => !started).length, 1);
+      });
+
+      test('rejects appcast with external HTTP installer URL before starting installer', () async {
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'http://updates.example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.checkSilently();
+
+        expect(result.isError(), isTrue);
+        expect(fakeInstaller.installCount, 0);
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticValidationFailure,
+        );
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            expect(failure, isA<domain.ValidationFailure>());
+            final typedFailure = failure as domain.Failure;
+            expect(typedFailure.message, contains('invalid installer URL'));
+          },
+        );
+      });
+
+      test('rejects appcast with non-windows sparkle os before starting installer', () async {
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            os: 'macos',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.checkSilently();
+
+        expect(result.isError(), isTrue);
+        expect(fakeInstaller.installCount, 0);
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticValidationFailure,
+        );
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            expect(failure, isA<domain.ValidationFailure>());
+            final typedFailure = failure as domain.Failure;
+            expect(typedFailure.message, contains('unsupported operating system'));
+          },
+        );
+      });
+
+      test('accepts appcast without sparkle os for legacy compatibility', () async {
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.checkSilently();
+
+        expect(result.isSuccess(), isTrue);
+        expect(fakeInstaller.installCount, 1);
       });
 
       test('reconciles pending update with launcher status on startup', () async {
@@ -1092,6 +1242,24 @@ void main() {
     });
 
     group('checkInBackground', () {
+      test('calls allowQuitForUpdate before native updater quits the app', () async {
+        var allowQuitCalled = false;
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          allowQuitForUpdate: () async {
+            allowQuitCalled = true;
+          },
+        );
+
+        orchestrator.onUpdaterBeforeQuitForUpdate(null);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(allowQuitCalled, isTrue);
+      });
+
       test('persists background diagnostics and hydrates them in a new orchestrator instance', () async {
         await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
         final fakeGateway = FakeAutoUpdaterGateway();

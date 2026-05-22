@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
@@ -30,6 +32,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     UpdateHelperPathResolver? updateHelperPathResolver,
     CurrentProcessIdResolver? currentProcessIdResolver,
     UpdateDirectorySecurityHardener? updateDirectorySecurityHardener,
+    Duration downloadTimeout = _defaultDownloadTimeout,
   }) : _httpClientFactory = httpClientFactory ?? HttpClient.new,
        _processStarter = processStarter ?? Process.start,
        _downloadDirectoryResolver = downloadDirectoryResolver ?? _resolveDefaultDownloadDirectory,
@@ -37,7 +40,8 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
        _installDirectoryWritableProbe = installDirectoryWritableProbe ?? _canWriteToInstallDirectory,
        _updateHelperPathResolver = updateHelperPathResolver ?? _resolveDefaultUpdateHelperPath,
        _currentProcessIdResolver = currentProcessIdResolver ?? _resolveCurrentProcessId,
-       _updateDirectorySecurityHardener = updateDirectorySecurityHardener ?? _hardenUpdateDirectoryBestEffort;
+       _updateDirectorySecurityHardener = updateDirectorySecurityHardener ?? _hardenUpdateDirectoryBestEffort,
+       _downloadTimeout = downloadTimeout;
 
   final HttpClientFactory _httpClientFactory;
   final SilentUpdateProcessStarter _processStarter;
@@ -47,9 +51,11 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   final UpdateHelperPathResolver _updateHelperPathResolver;
   final CurrentProcessIdResolver _currentProcessIdResolver;
   final UpdateDirectorySecurityHardener _updateDirectorySecurityHardener;
+  final Duration _downloadTimeout;
 
   static final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
   static const int _waitPidTimeoutSeconds = 45;
+  static const Duration _defaultDownloadTimeout = Duration(minutes: 5);
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(
@@ -69,7 +75,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     }
 
     final assetUri = Uri.tryParse(request.assetUrl);
-    if (assetUri == null || !assetUri.hasScheme || !assetUri.hasAuthority) {
+    if (assetUri == null || !isAutoUpdateInstallerUrl(request.assetUrl)) {
       return Failure<SilentUpdateInstallResult, Exception>(
         domain.ValidationFailure.withContext(
           message: 'Silent update asset URL is invalid',
@@ -256,10 +262,16 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     required String version,
   }) async {
     final client = _httpClientFactory();
+    client.connectionTimeout = _downloadTimeout;
+    var didTimeOut = false;
+    final timeoutTimer = Timer(_downloadTimeout, () {
+      didTimeOut = true;
+      client.close(force: true);
+    });
     try {
-      final request = await client.getUrl(assetUri);
+      final request = await client.getUrl(assetUri).timeout(_downloadTimeout);
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
-      final response = await request.close();
+      final response = await request.close().timeout(_downloadTimeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return Failure(
           domain.NetworkFailure.withContext(
@@ -313,7 +325,14 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         await sink.close();
       }
       return const Success(unit);
+    } on TimeoutException catch (error) {
+      didTimeOut = true;
+      client.close(force: true);
+      return _downloadTimeoutFailure(assetUri, error);
     } on Exception catch (error) {
+      if (didTimeOut) {
+        return _downloadTimeoutFailure(assetUri, error);
+      }
       return Failure(
         domain.NetworkFailure.withContext(
           message: 'Silent update asset download failed',
@@ -325,8 +344,26 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         ),
       );
     } finally {
+      timeoutTimer.cancel();
       client.close(force: true);
     }
+  }
+
+  Result<void> _downloadTimeoutFailure(
+    Uri assetUri,
+    Exception error,
+  ) {
+    return Failure(
+      domain.NetworkFailure.withContext(
+        message: 'Silent update asset download timed out',
+        cause: error,
+        context: <String, dynamic>{
+          'operation': 'silentUpdateDownload',
+          'asset_url': assetUri.toString(),
+          'timeout_ms': _downloadTimeout.inMilliseconds,
+        },
+      ),
+    );
   }
 
   static Future<String> _resolveDefaultDownloadDirectory() async {

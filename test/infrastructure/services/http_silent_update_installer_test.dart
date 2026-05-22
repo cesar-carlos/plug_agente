@@ -96,6 +96,78 @@ void main() {
       );
     });
 
+    test('rejects external HTTP asset URL before downloading', () async {
+      var processStarted = false;
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        const SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://updates.example.com/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(processStarted, isFalse);
+      expect(tempDir.listSync(), isEmpty);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) => expect(failure, isA<domain.ValidationFailure>()),
+      );
+    });
+
+    test('returns network failure when download does not finish before timeout', () async {
+      final server = await _serveNeverEndingBytes(utf8.encode('h'));
+      addTearDown(() => server.close(force: true));
+      var processStarted = false;
+      final installer = HttpSilentUpdateInstaller(
+        downloadTimeout: const Duration(milliseconds: 50),
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(processStarted, isFalse);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          expect(failure, isA<domain.NetworkFailure>());
+          final typedFailure = failure as domain.Failure;
+          expect(typedFailure.message, contains('timed out'));
+          expect(typedFailure.context['timeout_ms'], 50);
+        },
+      );
+    });
+
     test('uses elevated-only launcher when install directory is not writable', () async {
       final server = await _serveBytes(utf8.encode('hello'));
       addTearDown(() => server.close(force: true));
@@ -340,6 +412,18 @@ Future<HttpServer> _serveBytes(List<int> bytes) async {
       ..headers.contentLength = bytes.length
       ..add(bytes);
     await request.response.close();
+  });
+  return server;
+}
+
+Future<HttpServer> _serveNeverEndingBytes(List<int> bytes) async {
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  server.listen((request) async {
+    request.response
+      ..statusCode = HttpStatus.ok
+      ..headers.contentLength = 5
+      ..add(bytes);
+    await request.response.flush();
   });
   return server;
 }

@@ -19,7 +19,6 @@ import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:window_manager/window_manager.dart';
 
 abstract interface class IAutoUpdaterGateway {
   void addListener(UpdaterListener listener);
@@ -61,6 +60,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     IAppSettingsStore? settingsStore,
     IAutoUpdateMetricsCollector? metricsCollector,
     Future<void> Function()? closeApplicationForSilentUpdate,
+    Future<void> Function()? allowQuitForUpdate,
     Duration manualTriggerTimeout = _defaultManualTriggerTimeout,
     Duration manualCompletionTimeout = _defaultManualCompletionTimeout,
     int timeoutCircuitThreshold = _defaultTimeoutCircuitThreshold,
@@ -75,6 +75,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
        _settingsStore = settingsStore,
        _metricsCollector = metricsCollector,
        _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
+       _allowQuitForUpdate = allowQuitForUpdate,
        _manualTriggerTimeout = manualTriggerTimeout,
        _manualCompletionTimeout = manualCompletionTimeout,
        _timeoutCircuitThreshold = timeoutCircuitThreshold,
@@ -93,6 +94,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   final IAppSettingsStore? _settingsStore;
   final IAutoUpdateMetricsCollector? _metricsCollector;
   final Future<void> Function()? _closeApplicationForSilentUpdate;
+  final Future<void> Function()? _allowQuitForUpdate;
   final Duration _manualTriggerTimeout;
   final Duration _manualCompletionTimeout;
   final int _timeoutCircuitThreshold;
@@ -817,63 +819,63 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       );
     }
 
-    final pending = _readPendingSilentUpdate();
-    if (pending != null) {
-      final now = DateTime.now();
-      final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
+    _isSilentCheckInProgress = true;
+    try {
+      final pending = _readPendingSilentUpdate();
+      if (pending != null) {
+        final now = DateTime.now();
+        final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
+        _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+          checkedAt: now,
+          configuredFeedUrl: feedUrl,
+          requestedFeedUrl: feedUrl,
+          currentVersion: AppConstants.appVersion,
+          completedAt: now,
+          completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+          pendingVersion: pending.version,
+          installerPath: launcherStatus?.installerPath ?? pending.installerPath,
+          installerLogPath: launcherStatus?.logPath ?? pending.logPath,
+          installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
+          silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
+          launcherPath: pending.launcherPath,
+          launcherStatusPath: pending.launcherStatusPath,
+          launcherState: launcherStatus?.state,
+          nonAdminExitCode: launcherStatus?.nonAdminExitCode,
+          nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
+          elevatedExitCode: launcherStatus?.elevatedExitCode,
+          elevatedDurationMs: launcherStatus?.elevatedDurationMs,
+          elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
+          waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
+          appPid: launcherStatus?.appPid ?? pending.appPid,
+          signatureStatus: launcherStatus?.signatureStatus,
+          signatureRequired: launcherStatus?.signatureRequired,
+          updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
+          actualSha256: launcherStatus?.actualSha256,
+          hashValidationStatus: launcherStatus?.hashValidationStatus,
+          installDirectoryWritable: launcherStatus?.installDirectoryWritable,
+          elevatedCancelled: launcherStatus?.elevatedCancelled,
+          errorMessage: 'Silent update already has a pending installer execution',
+        );
+        await _persistLastAutomaticDiagnostics();
+        return const Success<bool, Exception>(false);
+      }
+
+      await _cleanupSilentUpdateArtifacts(installer);
+      final cooldownResult = await _buildAutomaticCooldownResult(feedUrl);
+      if (cooldownResult != null) {
+        return cooldownResult;
+      }
+
+      final startedAt = DateTime.now();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-        checkedAt: now,
+        checkedAt: startedAt,
         configuredFeedUrl: feedUrl,
         requestedFeedUrl: feedUrl,
         currentVersion: AppConstants.appVersion,
-        completedAt: now,
-        completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-        pendingVersion: pending.version,
-        installerPath: launcherStatus?.installerPath ?? pending.installerPath,
-        installerLogPath: launcherStatus?.logPath ?? pending.logPath,
-        installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
-        silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
-        launcherPath: pending.launcherPath,
-        launcherStatusPath: pending.launcherStatusPath,
-        launcherState: launcherStatus?.state,
-        nonAdminExitCode: launcherStatus?.nonAdminExitCode,
-        nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
-        elevatedExitCode: launcherStatus?.elevatedExitCode,
-        elevatedDurationMs: launcherStatus?.elevatedDurationMs,
-        elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
-        waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
-        appPid: launcherStatus?.appPid ?? pending.appPid,
-        signatureStatus: launcherStatus?.signatureStatus,
-        signatureRequired: launcherStatus?.signatureRequired,
-        updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
-        actualSha256: launcherStatus?.actualSha256,
-        hashValidationStatus: launcherStatus?.hashValidationStatus,
-        installDirectoryWritable: launcherStatus?.installDirectoryWritable,
-        elevatedCancelled: launcherStatus?.elevatedCancelled,
-        errorMessage: 'Silent update already has a pending installer execution',
+        probeRequestUrl: feedUrl,
       );
       await _persistLastAutomaticDiagnostics();
-      return const Success<bool, Exception>(false);
-    }
 
-    await _cleanupSilentUpdateArtifacts(installer);
-    final cooldownResult = await _buildAutomaticCooldownResult(feedUrl);
-    if (cooldownResult != null) {
-      return cooldownResult;
-    }
-
-    _isSilentCheckInProgress = true;
-    final startedAt = DateTime.now();
-    _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-      checkedAt: startedAt,
-      configuredFeedUrl: feedUrl,
-      requestedFeedUrl: feedUrl,
-      currentVersion: AppConstants.appVersion,
-      probeRequestUrl: feedUrl,
-    );
-    await _persistLastAutomaticDiagnostics();
-
-    try {
       final probeResult = await _appcastProbeService.probeLatest(feedUrl: feedUrl);
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         probeRequestUrl: probeResult.requestUrl,
@@ -1103,6 +1105,13 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     final assetUrl = result.assetUrl?.trim();
     if (assetUrl == null || assetUrl.isEmpty) {
       return 'Silent update appcast is missing the installer URL';
+    }
+    if (!isAutoUpdateInstallerUrl(assetUrl)) {
+      return 'Silent update appcast has an invalid installer URL';
+    }
+    final os = result.os?.trim().toLowerCase();
+    if (os != null && os.isNotEmpty && os != 'windows') {
+      return 'Silent update appcast targets an unsupported operating system';
     }
     final assetSize = result.assetSize;
     if (assetSize == null || assetSize <= 0) {
@@ -1708,7 +1717,10 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       'Before quit for update: ${appcastItem?.versionString}',
       checkId: _activeCheckId,
     );
-    windowManager.setPreventClose(false);
+    final allowQuitForUpdate = _allowQuitForUpdate;
+    if (allowQuitForUpdate != null) {
+      unawaited(allowQuitForUpdate());
+    }
   }
 }
 

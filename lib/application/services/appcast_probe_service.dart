@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:xml/xml.dart';
 
 class AppcastProbeResult {
@@ -11,6 +12,7 @@ class AppcastProbeResult {
     this.assetSize,
     this.assetName,
     this.sha256,
+    this.os,
     this.channel,
     this.rolloutPercentage,
     this.itemCount,
@@ -23,6 +25,7 @@ class AppcastProbeResult {
   final int? assetSize;
   final String? assetName;
   final String? sha256;
+  final String? os;
   final String? channel;
   final int? rolloutPercentage;
   final int? itemCount;
@@ -49,10 +52,10 @@ class AppcastProbeService implements IAppcastProbeService {
     Duration timeout = const Duration(seconds: 10),
   }) async {
     final uri = Uri.tryParse(feedUrl);
-    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+    if (uri == null || !isSparkleFeedUrl(feedUrl)) {
       return AppcastProbeResult(
         requestUrl: feedUrl,
-        errorMessage: 'Feed URL invalida',
+        errorMessage: 'Feed URL is not an allowed Sparkle appcast URL',
       );
     }
 
@@ -129,6 +132,7 @@ class AppcastProbeService implements IAppcastProbeService {
         assetSize: _assetSizeFromEnclosure(enclosure),
         assetName: _assetNameFromUrl(_attributeValue(enclosure, 'url')),
         sha256: _plugSha256FromEnclosure(enclosure),
+        os: _sparkleOsFromEnclosure(enclosure),
         channel: _plugChannelFromEnclosure(enclosure),
         rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
         itemCount: items.length,
@@ -164,6 +168,16 @@ class AppcastProbeService implements IAppcastProbeService {
       namespaceUri: _sparkleNamespace,
       qualifiedName: 'sparkle:version',
     );
+  }
+
+  static String? _sparkleOsFromEnclosure(XmlElement enclosure) {
+    return _namespacedAttributeValue(
+      enclosure,
+      localName: 'os',
+      prefix: 'sparkle',
+      namespaceUri: _sparkleNamespace,
+      qualifiedName: 'sparkle:os',
+    )?.toLowerCase();
   }
 
   static String? _plugSha256FromEnclosure(XmlElement enclosure) {

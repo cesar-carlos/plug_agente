@@ -30,10 +30,47 @@ String resolveAutoUpdateFeedUrl({
 }
 
 bool isSparkleFeedUrl(String url) {
-  final normalized = url.trim().toLowerCase();
-  if (normalized.isEmpty) return false;
-  final withoutQuery = normalized.split('?').first;
-  return withoutQuery.endsWith('.xml');
+  return _isAllowedAutoUpdateUrl(
+    url,
+    requiredExtension: '.xml',
+  );
+}
+
+bool isAutoUpdateInstallerUrl(String url) {
+  return _isAllowedAutoUpdateUrl(
+    url,
+    requiredExtension: '.exe',
+  );
+}
+
+bool _isAllowedAutoUpdateUrl(
+  String url, {
+  required String requiredExtension,
+}) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || !uri.hasScheme || !uri.hasAuthority || uri.host.isEmpty) {
+    return false;
+  }
+
+  if (!uri.path.toLowerCase().endsWith(requiredExtension)) {
+    return false;
+  }
+
+  return _usesAllowedAutoUpdateTransport(uri);
+}
+
+bool _usesAllowedAutoUpdateTransport(Uri uri) {
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme == 'https') {
+    return true;
+  }
+
+  return scheme == 'http' && _isLoopbackHost(uri.host);
+}
+
+bool _isLoopbackHost(String host) {
+  final normalized = host.toLowerCase();
+  return normalized == 'localhost' || normalized == '127.0.0.1' || normalized == '::1';
 }
 
 bool isOfficialAutoUpdateFeedUrl(String url) {

@@ -65,8 +65,45 @@ void main() {
       );
     });
 
+    test('accepts HTTP loopback xml URL', () {
+      expect(isSparkleFeedUrl('http://localhost/appcast.xml'), isTrue);
+      expect(isSparkleFeedUrl('http://127.0.0.1:8080/appcast.xml'), isTrue);
+      expect(isSparkleFeedUrl('http://[::1]:8080/appcast.xml'), isTrue);
+    });
+
+    test('rejects external HTTP xml URL', () {
+      expect(isSparkleFeedUrl('http://example.com/appcast.xml'), isFalse);
+    });
+
+    test('rejects relative xml URL', () {
+      expect(isSparkleFeedUrl('/appcast.xml'), isFalse);
+    });
+
     test('rejects non-xml URL', () {
       expect(isSparkleFeedUrl('https://example.com/check'), isFalse);
+    });
+  });
+
+  group('isAutoUpdateInstallerUrl', () {
+    test('accepts HTTPS exe URL', () {
+      expect(
+        isAutoUpdateInstallerUrl('https://example.com/PlugAgente-Setup.exe?cache=1'),
+        isTrue,
+      );
+    });
+
+    test('accepts HTTP loopback exe URL', () {
+      expect(isAutoUpdateInstallerUrl('http://localhost/PlugAgente-Setup.exe'), isTrue);
+      expect(isAutoUpdateInstallerUrl('http://127.0.0.1:8080/PlugAgente-Setup.exe'), isTrue);
+      expect(isAutoUpdateInstallerUrl('http://[::1]:8080/PlugAgente-Setup.exe'), isTrue);
+    });
+
+    test('rejects external HTTP exe URL', () {
+      expect(isAutoUpdateInstallerUrl('http://example.com/PlugAgente-Setup.exe'), isFalse);
+    });
+
+    test('rejects relative exe URL', () {
+      expect(isAutoUpdateInstallerUrl('PlugAgente-Setup.exe'), isFalse);
     });
   });
 

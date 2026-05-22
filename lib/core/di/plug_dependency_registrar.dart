@@ -1246,6 +1246,11 @@ void registerPlugDependencyGraph(
           await shutdownApp();
           exit(0);
         },
+        allowQuitForUpdate: () async {
+          if (getIt.isRegistered<WindowManagerService>()) {
+            await getIt<WindowManagerService>().allowQuitForUpdate();
+          }
+        },
       ),
     )
     ..registerLazySingleton(

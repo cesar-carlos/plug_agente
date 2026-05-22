@@ -274,6 +274,10 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     }
   }
 
+  Future<void> allowQuitForUpdate() async {
+    await windowManager.setPreventClose(false);
+  }
+
   Future<void> setTitle(String title) async {
     await windowManager.setTitle(title);
   }

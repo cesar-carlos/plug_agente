@@ -23,6 +23,7 @@ void main() {
       <enclosure
         url="https://example.com/downloads/PlugAgente-Setup-1.2.3.exe"
         sparkle:version="1.2.3+4"
+        sparkle:os="windows"
         length="12345"
         plug:sha256="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         plug:channel="stable"
@@ -47,6 +48,7 @@ void main() {
       expect(result.assetSize, 12345);
       expect(result.assetName, 'PlugAgente-Setup-1.2.3.exe');
       expect(result.sha256, '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+      expect(result.os, 'windows');
       expect(result.channel, 'stable');
       expect(result.rolloutPercentage, 25);
       expect(result.itemCount, 2);
