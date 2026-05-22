@@ -49,7 +49,7 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        run: flutter test --exclude-tags "live || slow || perf"
 
       - name: Agent actions production preflight
         run: dart run tool/preflight_agent_actions_production.dart

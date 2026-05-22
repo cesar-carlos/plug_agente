@@ -113,6 +113,12 @@ class E2EEnv {
   /// Active PayloadFrame signing secret for live hub signing tests.
   static String? get e2ePayloadSigningKey => _get('PAYLOAD_SIGNING_KEY');
 
+  /// When true (`E2E_HUB_IS_LOCAL=true`), treat [e2eHubUrl] as local for signing preflight (e.g. staging LAN).
+  static bool get e2eHubTreatAsLocal => _get('E2E_HUB_IS_LOCAL') == 'true';
+
+  /// When true (`E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE=true`), skip blocking on `e2e-dev` vs remote Hub (diagnostics only).
+  static bool get e2eHubAllowE2eDevOnRemote => _get('E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE') == 'true';
+
   /// Environment variable names missing for live hub `agent.action.*` tests.
   static List<String> get missingLiveHubAgentActionVariableNames => live_hub_env.missingLiveHubAgentActionVariables(
     runLiveHubTests: runLiveHubTests,
@@ -141,6 +147,8 @@ class E2EEnv {
       hubUrl: e2eHubUrl,
       hubToken: e2eHubToken,
       payloadSigningKeyId: requireSigning ? e2ePayloadSigningKeyId : null,
+      hubTreatAsLocal: e2eHubTreatAsLocal,
+      allowE2eDevOnRemote: e2eHubAllowE2eDevOnRemote,
     );
     if (failures.isEmpty) {
       return null;

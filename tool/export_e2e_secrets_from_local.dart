@@ -49,6 +49,11 @@ void main(List<String> args) {
   var patched = false;
   final fileEnv = loadRepoEnvFile(projectRoot);
   final replaceToken = force || liveHubTokenWarnings(envValue(fileEnv, 'E2E_HUB_TOKEN')).isNotEmpty;
+  final hubUrl = envValue(fileEnv, 'E2E_HUB_URL');
+  final currentSigningKeyId =
+      envValue(fileEnv, 'PAYLOAD_SIGNING_KEY_ID') ?? envValue(fileEnv, 'PAYLOAD_SIGNING_ACTIVE_KEY_ID');
+  final hubTreatAsLocal = envFlag(fileEnv, 'E2E_HUB_IS_LOCAL');
+  final allowE2eDevOnRemote = envFlag(fileEnv, 'E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE');
 
   final hubTokenKey = 'hub_auth_secret_${config.configId}_auth_token';
   final hubToken = map[hubTokenKey]?.trim();
@@ -68,30 +73,53 @@ void main(List<String> args) {
 
   final signing = readPayloadSigningFromSecureStorageMap(map);
   if (signing != null) {
-    patched =
+    final replaceSigning =
+        force ||
+        isRemoteHubSigningMismatch(
+          hubUrl: hubUrl,
+          payloadSigningKeyId: currentSigningKeyId,
+          hubTreatAsLocal: hubTreatAsLocal,
+          allowE2eDevOnRemote: allowE2eDevOnRemote,
+        ) ||
+        (currentSigningKeyId != null &&
+            currentSigningKeyId.trim().isNotEmpty &&
+            signing.keyId.trim() != currentSigningKeyId.trim());
+    final signingOnlyIfEmpty = !replaceSigning;
+    var signingChanged = false;
+    signingChanged =
         patchDotEnvKey(
           projectRoot: projectRoot,
           key: 'PAYLOAD_SIGNING_KEY_ID',
           value: signing.keyId,
+          onlyIfEmpty: signingOnlyIfEmpty,
         ) ||
-        patched;
-    patched =
+        signingChanged;
+    signingChanged =
         patchDotEnvKey(
           projectRoot: projectRoot,
           key: 'PAYLOAD_SIGNING_KEY',
           value: signing.secret,
+          onlyIfEmpty: signingOnlyIfEmpty,
         ) ||
-        patched;
+        signingChanged;
     if (signing.activeKeyId != null && signing.activeKeyId!.isNotEmpty && signing.activeKeyId != signing.keyId) {
-      patched =
+      signingChanged =
           patchDotEnvKey(
             projectRoot: projectRoot,
             key: 'PAYLOAD_SIGNING_ACTIVE_KEY_ID',
             value: signing.activeKeyId!,
+            onlyIfEmpty: signingOnlyIfEmpty,
           ) ||
-          patched;
+          signingChanged;
     }
-    print('[ok] PAYLOAD_SIGNING_* ${patched ? "patched or already set" : "unchanged"}');
+    patched = patched || signingChanged;
+    if (signingChanged) {
+      print('[ok] PAYLOAD_SIGNING_* patched from secure storage');
+    } else if (replaceSigning) {
+      print('[skip] PAYLOAD_SIGNING_* unchanged (already matches secure storage values)');
+    } else {
+      print('[skip] PAYLOAD_SIGNING_* unchanged (use --force to overwrite)');
+    }
   } else {
     print('[ ] payload signing keys not in secure storage');
     final related = listPayloadSigningRelatedStorageKeys(map);

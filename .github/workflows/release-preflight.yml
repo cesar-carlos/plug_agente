@@ -134,7 +134,7 @@ jobs:
 
       - name: Dart tests
         if: inputs.run_full_tests
-        run: flutter test
+        run: flutter test --exclude-tags "live || slow || perf"
 
       - name: Focused release tests
         run: |

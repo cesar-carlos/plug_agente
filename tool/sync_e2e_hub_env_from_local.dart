@@ -43,9 +43,25 @@ void main(List<String> args) async {
 
   if (exportSecure) {
     print('==> export from Windows secure storage (no stdout secrets)');
-    await _run(<String>['run', 'tool/export_e2e_secrets_from_local.dart']);
+    final fileEnvForExport = loadRepoEnvFile(projectRoot);
+    final tokenExpiredForExport = liveHubTokenWarnings(envValue(fileEnvForExport, 'E2E_HUB_TOKEN')).isNotEmpty;
+    final hubUrlForExport = envValue(fileEnvForExport, 'E2E_HUB_URL');
+    final currentSigningKeyIdForExport =
+        envValue(fileEnvForExport, 'PAYLOAD_SIGNING_KEY_ID') ??
+        envValue(fileEnvForExport, 'PAYLOAD_SIGNING_ACTIVE_KEY_ID');
+    final signingMismatchRemote = isRemoteHubSigningMismatch(
+      hubUrl: hubUrlForExport,
+      payloadSigningKeyId: currentSigningKeyIdForExport,
+      hubTreatAsLocal: envFlag(fileEnvForExport, 'E2E_HUB_IS_LOCAL'),
+      allowE2eDevOnRemote: envFlag(fileEnvForExport, 'E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE'),
+    );
+    final exportArgs = <String>['run', 'tool/export_e2e_secrets_from_local.dart'];
+    if (apply && (forceTokenFlag || tokenExpiredForExport || signingMismatchRemote)) {
+      exportArgs.add('--force');
+    }
+    await _run(exportArgs);
     print('==> promote PAYLOAD_SIGNING_* from monorepo plug_server/.env');
-    await _run(<String>['run', 'tool/promote_e2e_signing_from_monorepo_env.dart']);
+    await _run(<String>['run', 'tool/promote_e2e_signing_from_monorepo_env.dart', '--force']);
   }
 
   print('==> validate live Hub .env');

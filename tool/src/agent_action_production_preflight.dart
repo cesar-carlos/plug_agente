@@ -84,12 +84,19 @@ AgentActionProductionPreflightResult evaluateAgentActionProductionPreflight({
 
   if (envFlag(fileEnv, 'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS')) {
     final missingLive = missingFromRepoEnv(fileEnv);
-    if (missingLive.isEmpty) {
-      ok.add('Live Hub .env variables complete for agent.action.* tests.');
-    } else {
+    if (missingLive.isNotEmpty) {
       failures.add(
         'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true but missing: ${missingLive.join(', ')}.',
       );
+    } else {
+      ok.add('Live Hub .env variables complete for agent.action.* tests.');
+      final readiness = LiveHubEnvReadiness.fromRepoEnv(fileEnv);
+      failures.addAll(readiness.blocking);
+      for (final w in readiness.warnings) {
+        if (!warnings.contains(w)) {
+          warnings.add(w);
+        }
+      }
     }
   } else {
     ok.add('Live Hub agent.action RPC tests not enabled in .env (CI/local gate only).');

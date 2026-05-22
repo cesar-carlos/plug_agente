@@ -116,10 +116,45 @@ const Set<String> _hubLiveKeys = <String>{
   'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS',
   'E2E_HUB_URL',
   'E2E_HUB_TOKEN',
+  'E2E_HUB_IS_LOCAL',
+  'E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE',
   'PAYLOAD_SIGNING_KEY_ID',
   'PAYLOAD_SIGNING_ACTIVE_KEY_ID',
   'PAYLOAD_SIGNING_KEY',
 };
+
+/// Whether [url] targets a local Hub (loopback hostnames) or [hubTreatAsLocal] is true.
+bool isLocalHubUrl(String? url, {bool hubTreatAsLocal = false}) {
+  if (hubTreatAsLocal) {
+    return true;
+  }
+  final u = url?.trim().toLowerCase() ?? '';
+  if (u.isEmpty) {
+    return false;
+  }
+  return u.contains('localhost') || u.contains('127.0.0.1') || u.contains('0.0.0.0');
+}
+
+/// `e2e-dev` signing key id against a non-local Hub URL (unless [allowE2eDevOnRemote]).
+bool isRemoteHubSigningMismatch({
+  required String? hubUrl,
+  required String? payloadSigningKeyId,
+  bool hubTreatAsLocal = false,
+  bool allowE2eDevOnRemote = false,
+}) {
+  if (allowE2eDevOnRemote) {
+    return false;
+  }
+  final keyId = payloadSigningKeyId?.trim().toLowerCase() ?? '';
+  if (keyId != 'e2e-dev') {
+    return false;
+  }
+  final url = hubUrl?.trim() ?? '';
+  if (url.isEmpty) {
+    return false;
+  }
+  return !isLocalHubUrl(hubUrl, hubTreatAsLocal: hubTreatAsLocal);
+}
 
 List<String> missingFromRepoEnv(Map<String, String> fileEnv) {
   return missingLiveHubAgentActionVariables(
@@ -220,12 +255,16 @@ List<String> liveHubEnvWarnings({
   required String? hubUrl,
   required String? payloadSigningKeyId,
   String? hubToken,
+  bool hubTreatAsLocal = false,
+  bool allowE2eDevOnRemote = false,
 }) {
   final warnings = <String>[];
-  final url = hubUrl?.trim().toLowerCase() ?? '';
-  final keyId = payloadSigningKeyId?.trim().toLowerCase() ?? '';
-  final isLocalHub = url.contains('localhost') || url.contains('127.0.0.1') || url.contains('0.0.0.0');
-  if (keyId == 'e2e-dev' && url.isNotEmpty && !isLocalHub) {
+  if (isRemoteHubSigningMismatch(
+    hubUrl: hubUrl,
+    payloadSigningKeyId: payloadSigningKeyId,
+    hubTreatAsLocal: hubTreatAsLocal,
+    allowE2eDevOnRemote: allowE2eDevOnRemote,
+  )) {
     warnings.add(
       'PAYLOAD_SIGNING_KEY_ID is e2e-dev while E2E_HUB_URL targets a remote hub — '
       'agent:capabilities will time out unless the server uses the same dev HMAC pair.',
@@ -245,6 +284,8 @@ List<String> blockingLiveHubEnvFailures({
   required String? hubUrl,
   required String? hubToken,
   String? payloadSigningKeyId,
+  bool hubTreatAsLocal = false,
+  bool allowE2eDevOnRemote = false,
 }) {
   if (!runLiveHubTests) {
     return const <String>[];
@@ -253,10 +294,12 @@ List<String> blockingLiveHubEnvFailures({
     return const <String>[];
   }
   final failures = <String>[];
-  final url = hubUrl.trim().toLowerCase();
-  final keyId = payloadSigningKeyId?.trim().toLowerCase() ?? '';
-  final isLocalHub = url.contains('localhost') || url.contains('127.0.0.1') || url.contains('0.0.0.0');
-  if (keyId == 'e2e-dev' && url.isNotEmpty && !isLocalHub) {
+  if (isRemoteHubSigningMismatch(
+    hubUrl: hubUrl,
+    payloadSigningKeyId: payloadSigningKeyId,
+    hubTreatAsLocal: hubTreatAsLocal,
+    allowE2eDevOnRemote: allowE2eDevOnRemote,
+  )) {
     failures.add(
       'PAYLOAD_SIGNING_KEY_ID is e2e-dev while E2E_HUB_URL targets a remote hub - '
       'copy PAYLOAD_SIGNING_* from the deployed Hub environment before running signed live tests.',
@@ -264,4 +307,103 @@ List<String> blockingLiveHubEnvFailures({
   }
   failures.addAll(liveHubTokenBlockingFailures(hubToken));
   return failures;
+}
+
+/// Aggregates missing keys, non-fatal warnings, and blocking preflight failures for live Hub tests.
+final class LiveHubEnvReadiness {
+  const LiveHubEnvReadiness({
+    required this.missing,
+    required this.warnings,
+    required this.blocking,
+  });
+
+  factory LiveHubEnvReadiness.fromRepoEnv(Map<String, String> fileEnv) {
+    final missing = missingFromRepoEnv(fileEnv);
+    final runLive = envFlag(fileEnv, 'RUN_LIVE_HUB_TESTS');
+    final runSigning = envFlag(fileEnv, 'RUN_LIVE_HUB_SIGNING_TESTS');
+    final hubUrl = envValue(fileEnv, 'E2E_HUB_URL');
+    final hubToken = envValue(fileEnv, 'E2E_HUB_TOKEN');
+    final keyId = envValue(fileEnv, 'PAYLOAD_SIGNING_KEY_ID') ?? envValue(fileEnv, 'PAYLOAD_SIGNING_ACTIVE_KEY_ID');
+    final hubTreatAsLocal = envFlag(fileEnv, 'E2E_HUB_IS_LOCAL');
+    final allowE2eDevOnRemote = envFlag(fileEnv, 'E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE');
+
+    final warnings = liveHubEnvWarnings(
+      hubUrl: hubUrl,
+      payloadSigningKeyId: keyId,
+      hubToken: hubToken,
+      hubTreatAsLocal: hubTreatAsLocal,
+      allowE2eDevOnRemote: allowE2eDevOnRemote,
+    );
+
+    final blocking = blockingLiveHubEnvFailures(
+      runLiveHubTests: runLive,
+      hubUrl: hubUrl,
+      hubToken: hubToken,
+      payloadSigningKeyId: runSigning ? keyId : null,
+      hubTreatAsLocal: hubTreatAsLocal,
+      allowE2eDevOnRemote: allowE2eDevOnRemote,
+    );
+
+    return LiveHubEnvReadiness(
+      missing: missing,
+      warnings: warnings,
+      blocking: blocking,
+    );
+  }
+
+  final List<String> missing;
+  final List<String> warnings;
+  final List<String> blocking;
+}
+
+/// Result of evaluating `.env` for live Hub agent.action validation (exit codes for tooling).
+///
+/// [exitCode]: `0` = ready; `1` = missing vars or blocking preflight; `2` = warnings only.
+final class LiveHubAgentActionsEnvOutcome {
+  const LiveHubAgentActionsEnvOutcome({
+    required this.exitCode,
+    required this.missing,
+    required this.warnings,
+    required this.blocking,
+  });
+
+  factory LiveHubAgentActionsEnvOutcome.evaluate(Map<String, String> fileEnv) {
+    final missing = missingFromRepoEnv(fileEnv);
+    if (missing.isNotEmpty) {
+      return LiveHubAgentActionsEnvOutcome(
+        exitCode: 1,
+        missing: missing,
+        warnings: const <String>[],
+        blocking: const <String>[],
+      );
+    }
+    final readiness = LiveHubEnvReadiness.fromRepoEnv(fileEnv);
+    if (readiness.blocking.isNotEmpty) {
+      return LiveHubAgentActionsEnvOutcome(
+        exitCode: 1,
+        missing: const <String>[],
+        warnings: readiness.warnings,
+        blocking: readiness.blocking,
+      );
+    }
+    if (readiness.warnings.isNotEmpty) {
+      return LiveHubAgentActionsEnvOutcome(
+        exitCode: 2,
+        missing: const <String>[],
+        warnings: readiness.warnings,
+        blocking: const <String>[],
+      );
+    }
+    return const LiveHubAgentActionsEnvOutcome(
+      exitCode: 0,
+      missing: <String>[],
+      warnings: <String>[],
+      blocking: <String>[],
+    );
+  }
+
+  final int exitCode;
+  final List<String> missing;
+  final List<String> warnings;
+  final List<String> blocking;
 }

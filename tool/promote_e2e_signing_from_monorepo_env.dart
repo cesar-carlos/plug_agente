@@ -11,12 +11,16 @@ import 'dart:io';
 
 import 'src/dot_env_patch.dart';
 import 'src/e2e_monorepo_env_paths.dart';
+import 'src/live_hub_agent_action_env_check.dart';
 
 void main(List<String> args) {
   final force = args.contains('--force');
   final projectRoot = Directory.current.path;
   var foundSource = false;
   var patched = false;
+  String? sourceEnvPath;
+  String? sourceKeyId;
+  String? sourceKey;
 
   for (final envPath in siblingHubEnvFileCandidates(projectRoot)) {
     final file = File(envPath);
@@ -31,6 +35,9 @@ void main(List<String> args) {
       continue;
     }
     foundSource = true;
+    sourceEnvPath = envPath;
+    sourceKeyId = keyId;
+    sourceKey = key;
     print('[ok] Source: $envPath (values not shown)');
     patched =
         patchDotEnvKey(
@@ -59,7 +66,32 @@ void main(List<String> args) {
     exit(1);
   }
 
-  if (!patched) {
+  final agentEnv = loadRepoEnvFile(projectRoot);
+  final hubUrl = envValue(agentEnv, 'E2E_HUB_URL');
+  final hubTreatAsLocal = envFlag(agentEnv, 'E2E_HUB_IS_LOCAL');
+  final allowE2eDevOnRemote = envFlag(agentEnv, 'E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE');
+
+  if (force && !patched && sourceKeyId != null && sourceKey != null) {
+    final agentKeyId =
+        envValue(agentEnv, 'PAYLOAD_SIGNING_KEY_ID') ?? envValue(agentEnv, 'PAYLOAD_SIGNING_ACTIVE_KEY_ID') ?? '';
+    final agentKey = envValue(agentEnv, 'PAYLOAD_SIGNING_KEY') ?? '';
+    if (agentKeyId == sourceKeyId && agentKey == sourceKey) {
+      print('[skip] plug_agente PAYLOAD_SIGNING_* already matches $sourceEnvPath.');
+    } else if (isRemoteHubSigningMismatch(
+      hubUrl: hubUrl,
+      payloadSigningKeyId: sourceKeyId,
+      hubTreatAsLocal: hubTreatAsLocal,
+      allowE2eDevOnRemote: allowE2eDevOnRemote,
+    )) {
+      print(
+        '[fail] Sibling PAYLOAD_SIGNING_KEY_ID is e2e-dev while E2E_HUB_URL targets a remote hub — '
+        'the monorepo .env is a dev pair. Copy PAYLOAD_SIGNING_* from the deployed Hub .env into plug_agente/.env.',
+      );
+      exit(1);
+    } else {
+      print('[skip] plug_agente .env already has PAYLOAD_SIGNING_* (not overwritten).');
+    }
+  } else if (!patched) {
     print('[skip] plug_agente .env already has PAYLOAD_SIGNING_* (not overwritten).');
   } else {
     print('[ok] Wrote PAYLOAD_SIGNING_KEY_ID and PAYLOAD_SIGNING_KEY to plug_agente/.env');

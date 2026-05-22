@@ -50,6 +50,19 @@ hub:
 
 \* Defina `PAYLOAD_SIGNING_ACTIVE_KEY_ID` ou `PAYLOAD_SIGNING_KEY_ID`.
 
+| `E2E_HUB_IS_LOCAL` | Não | `true`: trata a URL como Hub local no preflight de assinatura (ex.: staging em LAN sem `localhost` no hostname). |
+| `E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE` | Não | `true`: desliga o bloqueio `e2e-dev` vs Hub remoto (**só diagnóstico**; não usar em CI). |
+
+#### Exit codes: `dart run tool/validate_live_hub_agent_actions_env.dart`
+
+| Código | Significado |
+| ------ | ------------- |
+| `0` | Variáveis obrigatórias presentes e sem bloqueios nem avisos (pronto para live). |
+| `1` | Variáveis em falta **ou** preflight bloqueante (JWT expirado; `e2e-dev` + Hub remoto com `RUN_LIVE_HUB_SIGNING_TESTS=true`; etc.). |
+| `2` | Variáveis ok; há avisos não bloqueantes (ex.: JWT expira em breve; ou `e2e-dev` + remoto quando assinatura live está desligada — o aviso ainda aparece em `liveHubEnvWarnings`). |
+
+O job principal de CI (`flutter_ci.yml`, `release-preflight.yml`, `release.yml`) executa `flutter test --exclude-tags "live || slow || perf"` na suíte ampla; o job opcional `live-hub-e2e` continua a correr testes live com secrets.
+
 Não coloque o token em logs. Em CI, use *secrets* do repositório (ver job opcional `live-hub-e2e` no workflow Flutter).
 
 #### Onde obter os valores (desenvolvimento local)
@@ -79,17 +92,17 @@ em `../plug_server/.env` (mesmo par nos dois). **Não use `e2e-dev` contra um Hu
 de produção** — o connect Socket.IO pode passar, mas `agent:capabilities` assinado
 estoura timeout até o par HMAC coincidir com o servidor.
 
-Se `validate_live_hub_agent_actions_env.dart` mostrar aviso `e2e-dev` + URL remota,
+Se `validate_live_hub_agent_actions_env.dart` terminar com código `1` por `e2e-dev` + URL remota com assinatura ligada,
 copie `PAYLOAD_SIGNING_*` do `.env` do Hub em deploy (`promote_e2e_signing_from_monorepo_env.dart`
-ou painel **Config → WebSocket** + `export_e2e_secrets_from_local.dart`).
+ou painel **Config → WebSocket** + `export_e2e_secrets_from_local.dart`). Com código `2`, corrija avisos (ex.: renove o JWT) antes de uma corrida longa.
+
+Depois de preencher o `.env`, rode `dart run tool/validate_live_hub_agent_actions_env.dart` (checklist `[ok]`/`[ ]`, sem imprimir segredos; ver tabela de exit codes acima).
 
 Smoke Socket.IO (só URL + token, sem assinatura PayloadFrame):  
 `flutter test test/integration/hub_socket_live_e2e_test.dart --name "should connect to agents namespace"`
 
 Smoke assinatura (`agent:register` → `agent:capabilities` — exige HMAC igual ao Hub):  
 `flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"`
-
-Depois de preencher o `.env`, rode `dart run tool/validate_live_hub_agent_actions_env.dart` (checklist `[ok]`/`[ ]`, sem imprimir segredos).
 
 Alinhe o agent id do register assinado com o agente do token:
 
@@ -110,7 +123,7 @@ Alternativa sem abrir o app (credenciais de agente no `.env`):
 dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
 ```
 
-`sync_e2e_hub_env_from_local.dart` passa `--force` automaticamente quando o JWT em `.env` já expirou.
+`sync_e2e_hub_env_from_local.dart` passa `--force` automaticamente para `export_e2e_secrets_from_local.dart` quando o JWT em `.env` já expirou ou quando o preflight deteta `e2e-dev` + Hub remoto (para tentar sobrescrever signing a partir do secure storage).
 
 No Windows, se o Plug Agente já estiver configurado na UI (**Config** → URL do servidor + login), rode:
 
@@ -421,7 +434,7 @@ worksheet operacional:
 # Suíte rápida: exclui testes marcados como live/slow/perf
 flutter test --exclude-tags "live || slow || perf"
 
-# Suíte completa, incluindo testes marcados
+# Suíte completa, incluindo testes marcados (pode falhar se RUN_LIVE_HUB_* / ODBC opt-in estiverem ligados sem `.env` adequado)
 flutter test
 
 # Todos os testes de integração

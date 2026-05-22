@@ -109,6 +109,82 @@ E2E_HUB_TOKEN='token-123'
       ),
       isEmpty,
     );
+    expect(
+      liveHubEnvWarnings(
+        hubUrl: 'https://plug-server.example.com/agents',
+        payloadSigningKeyId: 'e2e-dev',
+        allowE2eDevOnRemote: true,
+      ),
+      isEmpty,
+    );
+    expect(
+      liveHubEnvWarnings(
+        hubUrl: 'https://lan-host/agents',
+        payloadSigningKeyId: 'e2e-dev',
+        hubTreatAsLocal: true,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('isLocalHubUrl should detect loopback and E2E_HUB_IS_LOCAL override', () {
+    expect(isLocalHubUrl('https://localhost:3000/agents'), isTrue);
+    expect(isLocalHubUrl('http://127.0.0.1:1'), isTrue);
+    expect(isLocalHubUrl('https://plug-server.example.com'), isFalse);
+    expect(isLocalHubUrl('https://plug-server.example.com', hubTreatAsLocal: true), isTrue);
+    expect(isLocalHubUrl(null), isFalse);
+  });
+
+  test('isRemoteHubSigningMismatch should match e2e-dev on non-local URL', () {
+    expect(
+      isRemoteHubSigningMismatch(
+        hubUrl: 'https://hub.example.com',
+        payloadSigningKeyId: 'e2e-dev',
+      ),
+      isTrue,
+    );
+    expect(
+      isRemoteHubSigningMismatch(
+        hubUrl: 'http://localhost/agents',
+        payloadSigningKeyId: 'e2e-dev',
+      ),
+      isFalse,
+    );
+    expect(
+      isRemoteHubSigningMismatch(
+        hubUrl: 'https://remote.example.com',
+        payloadSigningKeyId: 'e2e-dev',
+        allowE2eDevOnRemote: true,
+      ),
+      isFalse,
+    );
+    expect(
+      isRemoteHubSigningMismatch(
+        hubUrl: 'https://remote.example.com',
+        payloadSigningKeyId: 'v1',
+      ),
+      isFalse,
+    );
+  });
+
+  test('LiveHubEnvReadiness.fromRepoEnv should aggregate blocking when signing enabled', () {
+    final farFuture = DateTime.now().toUtc().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+    final payload = base64Url.encode(utf8.encode('{"exp":$farFuture}'));
+    final token = 'h.$payload.s';
+
+    final readiness = LiveHubEnvReadiness.fromRepoEnv(<String, String>{
+      'RUN_LIVE_HUB_TESTS': 'true',
+      'RUN_LIVE_HUB_SIGNING_TESTS': 'true',
+      'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS': 'true',
+      'E2E_HUB_URL': 'https://hub.example.com',
+      'E2E_HUB_TOKEN': token,
+      'PAYLOAD_SIGNING_KEY_ID': 'e2e-dev',
+      'PAYLOAD_SIGNING_KEY': 'secret',
+    });
+
+    expect(readiness.missing, isEmpty);
+    expect(readiness.blocking, isNotEmpty);
+    expect(readiness.warnings, isNotEmpty);
   });
 
   test('should read E2E hub login credentials from env map', () {
@@ -189,6 +265,23 @@ E2E_HUB_TOKEN='token-123'
         payloadSigningKeyId: 'e2e-dev',
       ),
       isNotEmpty,
+    );
+  });
+
+  test('should not block e2e-dev signing for remote hub when allowE2eDevOnRemote is true', () {
+    final farFuture = DateTime.now().toUtc().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+    final payload = base64Url.encode(utf8.encode('{"exp":$farFuture}'));
+    final token = 'header.$payload.signature';
+
+    expect(
+      blockingLiveHubEnvFailures(
+        runLiveHubTests: true,
+        hubUrl: 'https://hub.example.com/agents',
+        hubToken: token,
+        payloadSigningKeyId: 'e2e-dev',
+        allowE2eDevOnRemote: true,
+      ),
+      isEmpty,
     );
   });
 

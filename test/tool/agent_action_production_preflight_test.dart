@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tool/src/agent_action_production_preflight.dart';
@@ -63,6 +65,29 @@ return const <RegisteredComObjectInvocation>[
         result.failures.single,
         contains('RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS'),
       );
+    });
+
+    test('should fail when live RPC tests enabled and Hub signing preflight blocks', () {
+      final farFuture = DateTime.now().toUtc().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+      final payload = base64Url.encode(utf8.encode('{"exp":$farFuture}'));
+      final token = 'h.$payload.s';
+
+      final result = evaluateAgentActionProductionPreflight(
+        comRegistrationsSource: 'return const <RegisteredComObjectInvocation>[];',
+        fileEnv: <String, String>{
+          'RUN_LIVE_HUB_TESTS': 'true',
+          'RUN_LIVE_HUB_SIGNING_TESTS': 'true',
+          'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS': 'true',
+          'E2E_HUB_URL': 'https://hub.example.com',
+          'E2E_HUB_TOKEN': token,
+          'PAYLOAD_SIGNING_KEY_ID': 'e2e-dev',
+          'PAYLOAD_SIGNING_KEY': 'secret',
+        },
+        projectRoot: '.',
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.failures.any((String s) => s.contains('e2e-dev')), isTrue);
     });
   });
 }

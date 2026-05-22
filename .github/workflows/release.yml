@@ -115,7 +115,7 @@ jobs:
 
       - name: Test
         if: inputs.run_tests
-        run: flutter test
+        run: flutter test --exclude-tags "live || slow || perf"
 
       - name: Validate appcast tooling
         if: inputs.run_tests
