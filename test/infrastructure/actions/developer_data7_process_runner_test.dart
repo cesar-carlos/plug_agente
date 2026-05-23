@@ -229,6 +229,7 @@ DeveloperData7DefinitionResolver _resolverForCatalog() {
     canonicalizeDirectory: (path) async => path,
     fileLength: (_) async => 32,
     readText: (_) async => '{}',
+    launchAccessValidator: ({required actionId, required field, required path, required phase}) => null,
   );
   return DeveloperData7DefinitionResolver(
     pathValidator: pathValidator,
