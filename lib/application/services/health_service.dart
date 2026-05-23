@@ -421,6 +421,7 @@ class HealthService {
         'com_object_invocation_ready': comDiagnostics.registeredHandlerCount > 0,
       },
       'maintenance_mode': flags.enableAgentActionsMaintenanceMode,
+      'maintenance_strict_mode': flags.enableAgentActionsMaintenanceStrictMode,
       'remote_audit_enabled': flags.enableAgentActionRemoteAudit,
       'status': statusName,
       'supported_types': supportedTypes,

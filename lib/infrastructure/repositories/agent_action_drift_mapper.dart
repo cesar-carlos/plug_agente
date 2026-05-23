@@ -21,6 +21,7 @@ class AgentActionDriftMapper {
       definitionVersion: definition.definitionVersion,
       definitionSnapshotHash: definition.definitionSnapshotHash,
       lastPreflightSnapshotHash: definition.lastPreflightSnapshotHash,
+      lastPreflightValidatedAt: definition.lastPreflightValidatedAt,
       createdAt: definition.createdAt ?? now,
       updatedAt: definition.updatedAt ?? now,
     );
@@ -43,6 +44,7 @@ class AgentActionDriftMapper {
       definitionVersion: data.definitionVersion,
       definitionSnapshotHash: data.definitionSnapshotHash,
       lastPreflightSnapshotHash: data.lastPreflightSnapshotHash,
+      lastPreflightValidatedAt: data.lastPreflightValidatedAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
@@ -699,6 +701,7 @@ class AgentActionDriftMapper {
       'state': definition.state.name,
       'definitionVersion': definition.definitionVersion,
       'lastPreflightSnapshotHash': definition.lastPreflightSnapshotHash,
+      'lastPreflightValidatedAt': definition.lastPreflightValidatedAt?.toUtc().toIso8601String(),
       'config': _configToJson(definition.config),
       'policies': _policiesToJson(definition.policies),
     };
@@ -729,6 +732,7 @@ class AgentActionDriftMapper {
       policies: _policiesFromJson(_readObject(json, 'policies')),
       definitionVersion: json['definitionVersion'] as int? ?? 1,
       lastPreflightSnapshotHash: json['lastPreflightSnapshotHash'] as String?,
+      lastPreflightValidatedAt: _parseOptionalDate(json['lastPreflightValidatedAt'] as String?),
     );
   }
 

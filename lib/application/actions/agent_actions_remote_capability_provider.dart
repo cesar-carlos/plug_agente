@@ -17,6 +17,7 @@ class AgentActionsRemoteCapabilityProvider implements IAgentActionsRemoteCapabil
   Map<String, dynamic> buildForTransport({
     required List<String> supportedTypes,
     required bool maintenanceModeEnabled,
+    required bool maintenanceStrictModeEnabled,
     required bool remoteAdHocEnabled,
     required bool elevatedActionsEnabled,
   }) {
@@ -30,6 +31,7 @@ class AgentActionsRemoteCapabilityProvider implements IAgentActionsRemoteCapabil
       supportedTypes: supportedTypes,
       status: status,
       maintenanceMode: maintenanceModeEnabled || status == 'maintenance',
+      maintenanceStrictMode: maintenanceStrictModeEnabled,
       unavailableTypes: unavailableTypes,
       remoteAdHoc: remoteAdHocEnabled,
       elevatedAllowed: elevatedActionsEnabled,

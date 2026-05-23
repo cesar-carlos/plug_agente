@@ -83,6 +83,7 @@ class AgentActionDefinitionTable extends Table {
   IntColumn get definitionVersion => integer().withDefault(const Constant(1))();
   TextColumn get definitionSnapshotHash => text().nullable()();
   TextColumn get lastPreflightSnapshotHash => text().nullable()();
+  DateTimeColumn get lastPreflightValidatedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 

@@ -267,7 +267,7 @@ void main() {
           id: 'action-1',
           name: 'Dangerous command',
           state: AgentActionState.active,
-          config: CommandLineActionConfig(command: r'powershell -enc ABC'),
+          config: CommandLineActionConfig(command: 'powershell -enc ABC'),
         ),
         request: const AgentActionExecutionRequest(
           actionId: 'action-1',

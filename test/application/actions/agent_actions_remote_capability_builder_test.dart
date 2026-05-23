@@ -9,6 +9,7 @@ void main() {
         supportedTypes: const <String>['commandLine'],
         status: 'ready',
         maintenanceMode: false,
+        maintenanceStrictMode: true,
         unavailableTypes: const <String>[],
         remoteAdHoc: false,
         elevatedAllowed: true,
@@ -17,6 +18,7 @@ void main() {
       );
 
       expect(capability['enabled'], isTrue);
+      expect(capability['maintenanceStrictMode'], isTrue);
       expect(capability['profile'], 'production');
       expect(capability['methods'], AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
       expect(capability['supportedTypes'], const <String>['commandLine']);

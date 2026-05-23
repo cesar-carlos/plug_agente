@@ -429,7 +429,7 @@ void main() {
       late bool capturedIncludeParentEnvironment;
       final runner = CommandLineActionProcessRunner(
         pathValidator: _acceptingPathValidator(),
-        operationalProfileResolver: _FixedProfileResolver('prod'),
+        operationalProfileResolver: const _FixedProfileResolver('prod'),
         processStarter:
             (
               String executable,

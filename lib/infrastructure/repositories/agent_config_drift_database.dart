@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -211,6 +211,9 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       if (from < 26) {
         await _addAgentActionDefinitionLastPreflightSnapshotHashColumnIfMissing(m);
       }
+      if (from < 27) {
+        await _addAgentActionDefinitionLastPreflightValidatedAtColumnIfMissing(m);
+      }
       await _createClientTokenIndexes();
       await _createAgentActionIndexes();
       await _createRpcIdempotencyIndexes();
@@ -350,6 +353,17 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   ) async {
     final existing = await _readAgentActionDefinitionTableColumnNames();
     final column = agentActionDefinitionTable.lastPreflightSnapshotHash;
+    final sqlName = column.name;
+    if (!existing.contains(sqlName)) {
+      await m.addColumn(agentActionDefinitionTable, column);
+    }
+  }
+
+  Future<void> _addAgentActionDefinitionLastPreflightValidatedAtColumnIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionDefinitionTableColumnNames();
+    final column = agentActionDefinitionTable.lastPreflightValidatedAt;
     final sqlName = column.name;
     if (!existing.contains(sqlName)) {
       await m.addColumn(agentActionDefinitionTable, column);

@@ -5,6 +5,13 @@ abstract final class AgentActionCommandSafetyConstants {
   static const String userMessageBlockedPattern =
       'O comando contem um padrao de alto risco e foi bloqueado por seguranca. Revise o comando ou solicite aprovacao operacional.';
 
+  static String userMessageWarnPattern({
+    required String patternId,
+    required String patternDescription,
+  }) {
+    return 'O comando contem um padrao de alto risco ($patternId: $patternDescription). Revise antes de executar em producao.';
+  }
+
   /// Default enforcement for MVP security hardening.
   static const AgentActionCommandSafetyMode defaultMode = AgentActionCommandSafetyMode.block;
 }
@@ -12,6 +19,47 @@ abstract final class AgentActionCommandSafetyConstants {
 enum AgentActionCommandSafetyMode {
   block,
   warn,
+}
+
+enum AgentActionDangerousCommandRunPolicy {
+  allow,
+  warn,
+  block,
+}
+
+class AgentActionDangerousCommandMatch {
+  const AgentActionDangerousCommandMatch({
+    required this.patternId,
+    required this.description,
+  });
+
+  final String patternId;
+  final String description;
+}
+
+class AgentActionDangerousCommandAssessment {
+  const AgentActionDangerousCommandAssessment._({
+    required this.policy,
+    this.match,
+  });
+
+  const AgentActionDangerousCommandAssessment.allow()
+    : this._(policy: AgentActionDangerousCommandRunPolicy.allow);
+
+  const AgentActionDangerousCommandAssessment.warn({
+    required AgentActionDangerousCommandMatch match,
+  }) : this._(policy: AgentActionDangerousCommandRunPolicy.warn, match: match);
+
+  const AgentActionDangerousCommandAssessment.block({
+    required AgentActionDangerousCommandMatch match,
+  }) : this._(policy: AgentActionDangerousCommandRunPolicy.block, match: match);
+
+  final AgentActionDangerousCommandRunPolicy policy;
+  final AgentActionDangerousCommandMatch? match;
+
+  bool get requiresConfirmation => policy == AgentActionDangerousCommandRunPolicy.warn;
+
+  bool get isBlocked => policy == AgentActionDangerousCommandRunPolicy.block;
 }
 
 class AgentActionDangerousCommandPattern {

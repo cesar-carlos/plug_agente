@@ -15,6 +15,7 @@ abstract final class AgentActionPolicyDefaults {
 
   /// Max `agent.action.getExecution` / `agent.action.validateRun` items per JSON-RPC batch.
   static const int defaultMaxAgentActionReadRpcMethodsPerBatch = 32;
+  static const int defaultPreflightValidityDays = 30;
 
   static int get maxConcurrentActions => _positiveInt(
     'AGENT_ACTION_MAX_CONCURRENT',
@@ -74,6 +75,15 @@ abstract final class AgentActionPolicyDefaults {
     defaultMaxAgentActionReadRpcMethodsPerBatch,
     min: 1,
     max: 256,
+  );
+
+  static Duration get preflightValidityDuration => Duration(
+    days: _positiveInt(
+      'AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS',
+      defaultPreflightValidityDays,
+      min: 1,
+      max: 365,
+    ),
   );
 
   static int get defaultQueueTimeoutMs => defaultQueueTimeout.inMilliseconds;

@@ -27,7 +27,7 @@ class ScriptActionProcessRunner implements AgentActionLocalRunner {
     ActionProcessStdinSetup? stdinSetup,
     AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _processStarter = processStarter ?? Process.start,
-       _commandNormalizer = commandNormalizer ?? ActionCommandNormalizer(),
+       _commandNormalizer = commandNormalizer ?? const ActionCommandNormalizer(),
        _pathValidator = pathValidator ?? ActionPathValidator(),
        _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
        _operationalProfileResolver = operationalProfileResolver ?? const AgentOperationalProfileResolver(),

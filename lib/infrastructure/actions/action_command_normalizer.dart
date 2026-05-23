@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_executable_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_jar_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
@@ -32,9 +34,20 @@ class AgentActionCommandInvocation {
 class ActionCommandNormalizer {
   const ActionCommandNormalizer({
     ActionCommandSafetyValidator commandSafetyValidator = const ActionCommandSafetyValidator(),
-  }) : _commandSafetyValidator = commandSafetyValidator;
+    FeatureFlags? featureFlags,
+  }) : _commandSafetyValidator = commandSafetyValidator,
+       _featureFlags = featureFlags;
 
   final ActionCommandSafetyValidator _commandSafetyValidator;
+  final FeatureFlags? _featureFlags;
+
+  AgentActionCommandSafetyMode get _commandSafetyMode {
+    if (_featureFlags?.enableAgentActionDangerousCommandWarnMode ?? false) {
+      return AgentActionCommandSafetyMode.warn;
+    }
+
+    return AgentActionCommandSafetyConstants.defaultMode;
+  }
 
   Result<AgentActionCommandInvocation> normalizeCommandLine({
     required String actionId,
@@ -61,6 +74,7 @@ class ActionCommandNormalizer {
       actionId: actionId,
       command: normalizedCommand,
       phase: phase,
+      mode: _commandSafetyMode,
     );
     if (safetyFailure != null) {
       return Failure(safetyFailure);

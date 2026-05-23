@@ -435,6 +435,8 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<DeveloperData7ProcessRunner>(
       () => DeveloperData7ProcessRunner(
         definitionResolver: getIt<DeveloperData7DefinitionResolver>(),
+        environmentResolver: getIt<ActionEnvironmentResolver>(),
+        operationalProfileResolver: const AgentOperationalProfileResolver(),
       ),
     )
     ..registerLazySingleton<ActionExecutionQueue>(

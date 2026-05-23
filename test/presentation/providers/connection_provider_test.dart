@@ -1352,8 +1352,6 @@ void main() {
         transportClient: transport,
         initialReconnectDelay: Duration.zero,
         maxReconnectDelay: Duration.zero,
-        maxReconnectAttempts: 3,
-        tokenRefreshIntervalAttempts: 2,
         hubTokenRefreshMinInterval: Duration.zero,
         enableHardReloginRecovery: false,
       );
@@ -1364,8 +1362,7 @@ void main() {
 
       await _waitForStatus(provider, ConnectionStatus.reconnecting);
       final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while (DateTime.now().isBefore(deadline) &&
-          provider.hubRecoveryDiagnostics.consecutiveReconnectFailures < 3) {
+      while (DateTime.now().isBefore(deadline) && provider.hubRecoveryDiagnostics.consecutiveReconnectFailures < 3) {
         await Future<void>.delayed(const Duration(milliseconds: 15));
       }
 

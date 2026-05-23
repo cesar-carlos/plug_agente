@@ -27,7 +27,7 @@ class JarActionProcessRunner implements AgentActionLocalRunner {
     ActionProcessStdinSetup? stdinSetup,
     AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _processStarter = processStarter ?? Process.start,
-       _commandNormalizer = commandNormalizer ?? ActionCommandNormalizer(),
+       _commandNormalizer = commandNormalizer ?? const ActionCommandNormalizer(),
        _pathValidator = pathValidator ?? ActionPathValidator(),
        _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
        _operationalProfileResolver = operationalProfileResolver ?? const AgentOperationalProfileResolver(),
@@ -244,8 +244,7 @@ class JarActionProcessRunner implements AgentActionLocalRunner {
             ),
             'phase': 'start_process',
             'reason': AgentActionProcessConstants.processStartFailedReason,
-            'user_message':
-                'Nao foi possivel iniciar o Java. Verifique o .jar, o java.exe e o diretorio de trabalho.',
+            'user_message': 'Nao foi possivel iniciar o Java. Verifique o .jar, o java.exe e o diretorio de trabalho.',
           },
         ),
       );
@@ -262,8 +261,7 @@ class JarActionProcessRunner implements AgentActionLocalRunner {
             ),
             'phase': 'process_runtime',
             'reason': AgentActionProcessConstants.processRuntimeErrorReason,
-            'user_message':
-                'Falha ao executar o .jar configurado. Verifique a configuracao da acao e tente novamente.',
+            'user_message': 'Falha ao executar o .jar configurado. Verifique a configuracao da acao e tente novamente.',
           },
         ),
       );

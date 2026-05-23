@@ -69,12 +69,35 @@ class ActionCommandSafetyValidator {
     );
   }
 
+  AgentActionDangerousCommandAssessment assessForLocalRun({
+    required String command,
+    required bool warnModeEnabled,
+  }) {
+    final match = findMatch(command);
+    if (match == null) {
+      return const AgentActionDangerousCommandAssessment.allow();
+    }
+
+    final dangerousMatch = AgentActionDangerousCommandMatch(
+      patternId: match.patternId,
+      description: match.description,
+    );
+    if (warnModeEnabled) {
+      return AgentActionDangerousCommandAssessment.warn(match: dangerousMatch);
+    }
+
+    return AgentActionDangerousCommandAssessment.block(match: dangerousMatch);
+  }
+
   String? warningMessageFor(String command) {
     final match = findMatch(command);
     if (match == null) {
       return null;
     }
 
-    return 'O comando contem um padrao de alto risco (${match.patternId}). Revise antes de executar em producao.';
+    return AgentActionCommandSafetyConstants.userMessageWarnPattern(
+      patternId: match.patternId,
+      patternDescription: match.description,
+    );
   }
 }

@@ -13,6 +13,7 @@ class AgentActionDefinition {
     this.definitionVersion = 1,
     this.definitionSnapshotHash,
     this.lastPreflightSnapshotHash,
+    this.lastPreflightValidatedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -26,6 +27,7 @@ class AgentActionDefinition {
   final int definitionVersion;
   final String? definitionSnapshotHash;
   final String? lastPreflightSnapshotHash;
+  final DateTime? lastPreflightValidatedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -45,6 +47,7 @@ class AgentActionDefinition {
     int? definitionVersion,
     String? definitionSnapshotHash,
     Object? lastPreflightSnapshotHash = _unset,
+    Object? lastPreflightValidatedAt = _unset,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -60,6 +63,9 @@ class AgentActionDefinition {
       lastPreflightSnapshotHash: identical(lastPreflightSnapshotHash, _unset)
           ? this.lastPreflightSnapshotHash
           : lastPreflightSnapshotHash as String?,
+      lastPreflightValidatedAt: identical(lastPreflightValidatedAt, _unset)
+          ? this.lastPreflightValidatedAt
+          : lastPreflightValidatedAt as DateTime?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

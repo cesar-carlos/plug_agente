@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
+import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
 import 'package:plug_agente/application/actions/agent_action_remote_approval_reconciler.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
@@ -15,13 +16,16 @@ class SaveAgentActionDefinition {
     this._snapshotter,
     this._featureFlags, {
     AgentActionSecretReferenceFingerprinter? secretReferenceFingerprinter,
-  }) : _secretReferenceFingerprinter = secretReferenceFingerprinter;
+    DateTime Function()? now,
+  }) : _secretReferenceFingerprinter = secretReferenceFingerprinter,
+       _now = now ?? DateTime.now;
 
   final IAgentActionRepository _repository;
   final ValidateAgentActionDefinition _validateDefinition;
   final AgentActionDefinitionSnapshotter _snapshotter;
   final FeatureFlags _featureFlags;
   final AgentActionSecretReferenceFingerprinter? _secretReferenceFingerprinter;
+  final DateTime Function() _now;
   late final AgentActionRemoteApprovalReconciler _remoteApprovalReconciler = AgentActionRemoteApprovalReconciler(
     _snapshotter,
     secretFingerprinter: _secretReferenceFingerprinter,
@@ -97,16 +101,38 @@ class SaveAgentActionDefinition {
     if (definitionWithRemote.state == AgentActionState.active) {
       final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
       final recordedPreflightHash = definition.lastPreflightSnapshotHash ?? definitionWithRemote.lastPreflightSnapshotHash;
-      if (recordedPreflightHash == null || recordedPreflightHash != preflightSnapshotHash) {
+      final recordedPreflightValidatedAt =
+          definition.lastPreflightValidatedAt ?? definitionWithRemote.lastPreflightValidatedAt;
+      if (!AgentActionPreflightValidity.isValid(
+        recordedHash: recordedPreflightHash,
+        expectedHash: preflightSnapshotHash,
+        lastValidatedAt: recordedPreflightValidatedAt,
+        now: _now(),
+      )) {
+        final isExpired = recordedPreflightHash != null &&
+            recordedPreflightHash == preflightSnapshotHash &&
+            !AgentActionPreflightValidity.isTimestampValid(
+              recordedPreflightValidatedAt,
+              now: _now(),
+            );
         return Failure(
           ActionValidationFailure.withContext(
-            message: 'Action preflight validation is required before activation.',
-            code: AgentActionFailureCode.preflightRequiredForActive,
+            message: isExpired
+                ? 'Action preflight validation has expired.'
+                : 'Action preflight validation is required before activation.',
+            code: isExpired
+                ? AgentActionFailureCode.preflightExpiredForActive
+                : AgentActionFailureCode.preflightRequiredForActive,
             context: {
               'action_id': definitionWithRemote.id,
-              'reason': 'preflight_required_for_active',
-              'user_message':
-                  'Execute "Testar acao" com sucesso antes de salvar esta acao como ativa.',
+              'reason': isExpired ? 'preflight_expired_for_active' : 'preflight_required_for_active',
+              if (recordedPreflightValidatedAt != null)
+                'last_preflight_validated_at': recordedPreflightValidatedAt.toUtc().toIso8601String(),
+              if (AgentActionPreflightValidity.expiresAt(recordedPreflightValidatedAt) case final DateTime expiry)
+                'preflight_expires_at': expiry.toIso8601String(),
+              'user_message': isExpired
+                  ? 'O preflight desta acao expirou. Execute "Testar acao" novamente antes de salvar como Ativa.'
+                  : 'Execute "Testar acao" com sucesso antes de salvar esta acao como ativa.',
             },
           ),
         );
@@ -122,6 +148,7 @@ class SaveAgentActionDefinition {
           definitionWithSnapshot.lastPreflightSnapshotHash != preflightSnapshotHash) {
         definitionWithSnapshot = definitionWithSnapshot.copyWith(
           lastPreflightSnapshotHash: null,
+          lastPreflightValidatedAt: null,
         );
       }
     }

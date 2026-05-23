@@ -1144,7 +1144,6 @@ void main() {
     repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',
       name: 'Run command',
-      state: AgentActionState.needsValidation,
       config: CommandLineActionConfig(command: 'dir'),
     );
     await provider.load();
@@ -1169,7 +1168,6 @@ void main() {
     repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',
       name: 'Run command',
-      state: AgentActionState.needsValidation,
       config: CommandLineActionConfig(command: 'dir'),
     );
     await provider.load();

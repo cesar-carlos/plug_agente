@@ -380,6 +380,7 @@ void main() {
       expect(agentActions['enabled'], isTrue);
       expect(agentActions['status'], 'draining');
       expect(agentActions['maintenanceMode'], isFalse);
+      expect(agentActions['maintenanceStrictMode'], isFalse);
       expect(agentActions['remoteAdHoc'], isFalse);
       expect(agentActions['elevatedAllowed'], isFalse);
       expect(agentActions['supportsElevated'], isFalse);

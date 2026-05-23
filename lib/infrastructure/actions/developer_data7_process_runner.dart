@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:plug_agente/application/actions/action_environment_resolver.dart';
+import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_output_capture.dart';
@@ -26,15 +28,21 @@ class DeveloperData7ProcessRunner implements AgentActionLocalRunner {
   DeveloperData7ProcessRunner({
     DeveloperData7DefinitionResolver? definitionResolver,
     DeveloperData7ProcessStarter? processStarter,
+    ActionEnvironmentResolver? environmentResolver,
+    AgentOperationalProfileResolver? operationalProfileResolver,
     ActionProcessStdinSetup? stdinSetup,
     AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _definitionResolver = definitionResolver ?? DeveloperData7DefinitionResolver(),
        _processStarter = processStarter ?? Process.start,
+       _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
+       _operationalProfileResolver = operationalProfileResolver ?? const AgentOperationalProfileResolver(),
        _stdinSetup = stdinSetup ?? const ActionProcessStdinSetup(),
        _redactor = redactor;
 
   final DeveloperData7DefinitionResolver _definitionResolver;
   final DeveloperData7ProcessStarter _processStarter;
+  final ActionEnvironmentResolver _environmentResolver;
+  final AgentOperationalProfileResolver _operationalProfileResolver;
   final ActionProcessStdinSetup _stdinSetup;
   final AgentActionRedactor _redactor;
   final Map<String, Process> _activeProcessesByExecutionId = <String, Process>{};
@@ -58,13 +66,18 @@ class DeveloperData7ProcessRunner implements AgentActionLocalRunner {
     }
     final prepared = preparedResult.getOrThrow();
 
+    final includeParentEnvironment = _environmentResolver.resolveIncludeParentEnvironment(
+      policy: definition.policies.environment,
+      operationalProfile: _operationalProfileResolver.currentProfile,
+    );
+
     try {
       final startedAt = DateTime.now();
       final process = await _processStarter(
         prepared.command.executable,
         prepared.command.arguments,
         workingDirectory: prepared.command.workingDirectory,
-        includeParentEnvironment: true,
+        includeParentEnvironment: includeParentEnvironment,
         runInShell: false,
         mode: ProcessStartMode.normal,
       );

@@ -145,7 +145,7 @@ void main() {
       var reconnectInvocations = 0;
       var hardReloginInvocations = 0;
       late final HubRecoveryOrchestrator orchestrator;
-      final HubRecoveryRuntimeDependencies deps = HubRecoveryRuntimeDependencies(
+      final deps = HubRecoveryRuntimeDependencies(
         resilienceCoordinator: _MockHubResilienceCoordinator(),
         contextSource: _FakeHubContextSource(),
         checkHubAvailability: null,
@@ -174,8 +174,8 @@ void main() {
         maxReconnectDelay: Duration.zero,
         runtime: deps,
       );
-      final HubConnectionContext context = deps.contextSource.resolveConnectionContext()!;
-      final bool ok = await orchestrator.runBurstRecovery(
+      final context = deps.contextSource.resolveConnectionContext()!;
+      final ok = await orchestrator.runBurstRecovery(
         context,
         proactiveHardReloginBeforeSocket: false,
         effectiveHardReloginRecoveryEnabled: true,
@@ -195,7 +195,7 @@ void main() {
       var reconnectInvocations = 0;
       var hardReloginInvocations = 0;
       late final HubRecoveryOrchestrator orchestrator;
-      final HubRecoveryRuntimeDependencies deps = HubRecoveryRuntimeDependencies(
+      final deps = HubRecoveryRuntimeDependencies(
         resilienceCoordinator: _MockHubResilienceCoordinator(),
         contextSource: _FakeHubContextSource(),
         checkHubAvailability: null,
@@ -224,8 +224,8 @@ void main() {
         maxReconnectDelay: Duration.zero,
         runtime: deps,
       );
-      final HubConnectionContext context = deps.contextSource.resolveConnectionContext()!;
-      final bool ok = await orchestrator.runBurstRecovery(
+      final context = deps.contextSource.resolveConnectionContext()!;
+      final ok = await orchestrator.runBurstRecovery(
         context,
         proactiveHardReloginBeforeSocket: false,
         effectiveHardReloginRecoveryEnabled: true,

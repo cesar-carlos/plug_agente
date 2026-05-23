@@ -427,7 +427,6 @@ void main() {
       final result = await validator.validateWorkingDirectory(
         actionId: 'action-1',
         path: const AgentActionPathReference(originalPath: r'C:\Data7'),
-        pathPolicy: const AgentActionPathPolicy(),
       );
 
       expect(result.isError(), isTrue);
@@ -447,7 +446,6 @@ void main() {
       final result = await validator.validateWorkingDirectory(
         actionId: 'action-1',
         path: const AgentActionPathReference(originalPath: r'C:\Data7'),
-        pathPolicy: const AgentActionPathPolicy(),
       );
 
       expect(result.isSuccess(), isTrue);

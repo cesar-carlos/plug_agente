@@ -204,6 +204,28 @@ void main() {
       expect(retentionHealth['rpc_idempotency_ttl_seconds'], greaterThan(0));
     });
 
+    test('should expose maintenance flags in agent_actions when feature flags are wired', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+      await flags.setEnableAgentActionsMaintenanceStrictMode(true);
+      await flags.setEnableRemoteAgentActions(true);
+      await flags.setEnableRemoteAdHocAgentActions(true);
+      await flags.setEnableElevatedAgentActions(true);
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+      );
+
+      final agentActions = service.getHealthStatus()['agent_actions']! as Map<String, Object?>;
+      expect(agentActions['enabled'], isTrue);
+      expect(agentActions['maintenance_mode'], isTrue);
+      expect(agentActions['maintenance_strict_mode'], isTrue);
+      expect(agentActions['remote_enabled'], isTrue);
+      expect(agentActions['remote_ad_hoc_enabled'], isTrue);
+      expect(agentActions['elevated_enabled'], isTrue);
+    });
+
     test('should expose elevated readiness and purge counters in agent_actions', () async {
       final flags = FeatureFlags(InMemoryAppSettingsStore());
       await flags.setEnableElevatedAgentActions(true);

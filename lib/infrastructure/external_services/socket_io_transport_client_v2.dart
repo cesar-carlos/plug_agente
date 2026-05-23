@@ -311,6 +311,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return provider.buildForTransport(
       supportedTypes: _agentActionSupportedTypeNames(),
       maintenanceModeEnabled: _featureFlags.enableAgentActionsMaintenanceMode,
+      maintenanceStrictModeEnabled: _featureFlags.enableAgentActionsMaintenanceStrictMode,
       remoteAdHocEnabled: _featureFlags.enableRemoteAdHocAgentActions,
       elevatedActionsEnabled: _featureFlags.enableElevatedAgentActions,
     );
