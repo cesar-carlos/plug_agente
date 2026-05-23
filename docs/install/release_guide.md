@@ -59,7 +59,7 @@ version: 1.2.7+2
 ### 2. Gerar build Windows e instalador
 
 ```bash
-python tool/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc
+python tool/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
 python installer/build_installer.py
 ```
 
@@ -164,7 +164,7 @@ ISCC installer/setup.iss
 Preflight local completo antes de publicar manualmente:
 
 ```bash
-python tool/release_preflight.py --version 1.2.7 --require-iscc --analyze --tests
+python tool/release_preflight.py --version 1.2.7 --require-iscc --check-pages --analyze --tests
 ```
 
 ## Seguranca Operacional

@@ -81,7 +81,8 @@ class AppcastContext:
 
 
 def sanitize_release_notes(raw: str, max_len: int = 2000) -> str:
-    cleaned = CONTROL_CHAR_RE.sub("", raw or "")
+    normalized = (raw or "").lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = CONTROL_CHAR_RE.sub("", normalized)
     return cleaned[:max_len]
 
 
@@ -159,6 +160,43 @@ def _ensure_channel(root: et.Element) -> et.Element:
     return channel
 
 
+def _find_matching_item(channel: et.Element, context: AppcastContext) -> et.Element | None:
+    for item in channel.findall("item"):
+        enclosure = item.find("enclosure")
+        if _sparkle_version(enclosure) in {context.version, context.version_short}:
+            return item
+    return None
+
+
+def _item_matches_context(item: et.Element, context: AppcastContext) -> bool:
+    try:
+        validate_item(item, context)
+    except Exception:
+        return False
+    return True
+
+
+def _build_appcast_item(
+    context: AppcastContext,
+    *,
+    pub_date: str,
+) -> et.Element:
+    item = et.Element("item")
+    et.SubElement(item, "title").text = context.expected_title
+    et.SubElement(item, "pubDate").text = pub_date
+    et.SubElement(item, "description").text = context.expected_description
+    enclosure = et.SubElement(item, "enclosure")
+    enclosure.set("url", context.asset_url)
+    enclosure.set(_sparkle_attr("version"), context.version)
+    enclosure.set(_sparkle_attr("os"), WINDOWS_OS_NAME)
+    enclosure.set(_plug_attr("sha256"), context.expected_asset_sha256)
+    enclosure.set(_plug_attr("channel"), context.expected_channel)
+    enclosure.set(_plug_attr("rolloutPercentage"), str(context.expected_rollout_percentage))
+    enclosure.set("length", str(context.asset_size))
+    enclosure.set("type", ENCLOSURE_MIME_TYPE)
+    return item
+
+
 def _base_rss_root() -> et.Element:
     root = et.Element("rss")
     root.set("version", "2.0")
@@ -181,6 +219,8 @@ def update_appcast_tree(
     channel = _ensure_channel(root)
     et.register_namespace("sparkle", SPARKLE_NS)
     et.register_namespace("plug", PLUG_NS)
+    matching_item = _find_matching_item(channel, context)
+    existing_pub_date = (matching_item.findtext("pubDate") or "").strip() if matching_item is not None else ""
 
     for item in list(channel.findall("item")):
         enclosure = item.find("enclosure")
@@ -188,19 +228,13 @@ def update_appcast_tree(
         if sparkle_version in {context.version, context.version_short}:
             channel.remove(item)
 
-    item = et.Element("item")
-    et.SubElement(item, "title").text = context.expected_title
-    et.SubElement(item, "pubDate").text = published_at.strftime("%a, %d %b %Y %H:%M:%S +0000")
-    et.SubElement(item, "description").text = context.expected_description
-    enclosure = et.SubElement(item, "enclosure")
-    enclosure.set("url", context.asset_url)
-    enclosure.set(_sparkle_attr("version"), context.version)
-    enclosure.set(_sparkle_attr("os"), WINDOWS_OS_NAME)
-    enclosure.set(_plug_attr("sha256"), context.expected_asset_sha256)
-    enclosure.set(_plug_attr("channel"), context.expected_channel)
-    enclosure.set(_plug_attr("rolloutPercentage"), str(context.expected_rollout_percentage))
-    enclosure.set("length", str(context.asset_size))
-    enclosure.set("type", ENCLOSURE_MIME_TYPE)
+    if matching_item is not None and existing_pub_date and _item_matches_context(matching_item, context):
+        item = matching_item
+    else:
+        item = _build_appcast_item(
+            context,
+            pub_date=existing_pub_date or published_at.strftime("%a, %d %b %Y %H:%M:%S +0000"),
+        )
     channel.insert(0, item)
 
     preserved = [child for child in channel if child.tag in {"title", "link", "description"}]

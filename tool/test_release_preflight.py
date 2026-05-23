@@ -92,6 +92,52 @@ class ReleasePreflightTests(unittest.TestCase):
 
         release_preflight.ensure_installer_exists("1.6.6")
 
+    def test_run_wraps_cmd_and_bat_files_for_windows_execution(self) -> None:
+        with (
+            patch.object(release_preflight.shutil, "which", return_value=r"C:\tools\flutter.bat"),
+            patch.object(release_preflight.subprocess, "run") as subprocess_run,
+        ):
+            subprocess_run.return_value = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+            release_preflight.run(["flutter", "analyze"])
+
+        called_cmd = subprocess_run.call_args.args[0]
+        called_kwargs = subprocess_run.call_args.kwargs
+        self.assertEqual(
+            called_cmd,
+            ["cmd.exe", "/d", "/c", r"C:\tools\flutter.bat", "analyze"],
+        )
+        self.assertEqual(called_kwargs["encoding"], "utf-8")
+        self.assertEqual(called_kwargs["errors"], "replace")
+
+    def test_ensure_github_pages_workflow_ready_accepts_actions_pages(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"build_type":"workflow"}',
+            stderr="",
+        )
+
+        with patch.object(release_preflight, "run", return_value=result):
+            release_preflight.ensure_github_pages_workflow_ready("owner/repo")
+
+    def test_ensure_github_pages_workflow_ready_rejects_missing_pages(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="Not Found",
+        )
+
+        with patch.object(release_preflight, "run", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "GitHub Pages is not enabled"):
+                release_preflight.ensure_github_pages_workflow_ready("owner/repo")
+
 
 if __name__ == "__main__":
     unittest.main()

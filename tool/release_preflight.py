@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -31,12 +32,26 @@ class VersionState:
     generated_version: str
 
 
+def resolve_command(cmd: Sequence[str]) -> list[str]:
+    args = list(cmd)
+    if not args:
+        raise RuntimeError("Command cannot be empty.")
+
+    executable = args[0]
+    resolved = shutil.which(executable) or executable
+    if Path(resolved).suffix.lower() in {".bat", ".cmd"}:
+        return ["cmd.exe", "/d", "/c", resolved, *args[1:]]
+    return [resolved, *args[1:]]
+
+
 def run(cmd: Sequence[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        list(cmd),
+        resolve_command(cmd),
         cwd=PROJECT_ROOT,
         check=check,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -109,8 +124,10 @@ def find_iscc() -> str | None:
     return None
 
 
-def ensure_tools(*, require_iscc: bool) -> None:
+def ensure_tools(*, require_iscc: bool, check_pages: bool) -> None:
     missing = [command for command in ("git", "python", "flutter") if not command_exists(command)]
+    if check_pages and not command_exists("gh"):
+        missing.append("gh")
     if require_iscc and find_iscc() is None:
         missing.append("ISCC")
     if missing:
@@ -134,6 +151,29 @@ def ensure_installer_exists(version: str) -> None:
         raise RuntimeError(f"Installer is empty: {installer}")
 
 
+def ensure_github_pages_workflow_ready(repo: str) -> None:
+    result = run(["gh", "api", f"repos/{repo}/pages"], check=False)
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            "GitHub Pages is not enabled for this repository. "
+            "Enable Pages with GitHub Actions as the build source before publishing."
+            + (f" Details: {details}" if details else "")
+        )
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Unable to parse GitHub Pages API response.") from error
+
+    build_type = str(payload.get("build_type") or "")
+    if build_type != "workflow":
+        raise RuntimeError(
+            "GitHub Pages must use GitHub Actions as the build source "
+            f"(expected build_type='workflow', actual={build_type!r})."
+        )
+
+
 def run_optional_checks(args: argparse.Namespace) -> None:
     if args.analyze:
         run(["flutter", "analyze"])
@@ -148,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-existing-tag", action="store_true", help="Do not fail when the release tag exists.")
     parser.add_argument("--require-iscc", action="store_true", help="Require Inno Setup compiler to be available.")
     parser.add_argument("--check-installer", action="store_true", help="Require installer/dist asset for this version.")
+    parser.add_argument("--check-pages", action="store_true", help="Require GitHub Pages to be enabled for Actions deploy.")
+    parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
     parser.add_argument("--analyze", action="store_true", help="Run flutter analyze.")
     parser.add_argument("--tests", action="store_true", help="Run flutter test.")
     return parser
@@ -160,11 +202,13 @@ def main(argv: list[str] | None = None) -> int:
         state = load_version_state()
         ensure_clean_worktree(allow_dirty=args.allow_dirty)
         ensure_version_sync(state, args.version)
-        ensure_tools(require_iscc=args.require_iscc)
+        ensure_tools(require_iscc=args.require_iscc, check_pages=args.check_pages)
         if not args.allow_existing_tag:
             ensure_tag_available(f"v{state.short_version}")
         if args.check_installer:
             ensure_installer_exists(state.short_version)
+        if args.check_pages:
+            ensure_github_pages_workflow_ready(args.repo)
         run_optional_checks(args)
     except Exception as error:
         print(f"Release preflight failed: {error}", file=sys.stderr)

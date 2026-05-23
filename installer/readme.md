@@ -31,7 +31,7 @@ producao ate a assinatura Authenticode estar validada ponta a ponta.
 Antes de publicar manualmente, rode:
 
 ```bash
-python tool/release_preflight.py --version {versao} --require-iscc
+python tool/release_preflight.py --version {versao} --require-iscc --check-pages
 ```
 
 Para uma validacao completa no GitHub Actions sem publicar, use o workflow

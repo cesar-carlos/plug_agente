@@ -86,6 +86,44 @@ class AppcastManagerTests(unittest.TestCase):
             description = parsed.getroot().find("channel").find("item").findtext("description")
             self.assertEqual(description, "Body with <tag> & details")
 
+    def test_update_appcast_tree_strips_release_body_bom(self) -> None:
+        context = self.build_context(release_body="\ufeffRelease notes")
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+        )
+
+        description = tree.getroot().find("channel").find("item").findtext("description")
+        self.assertEqual(description, "Release notes")
+
+    def test_update_appcast_tree_normalizes_release_body_line_endings(self) -> None:
+        context = self.build_context(release_body="Line 1\r\nLine 2\rLine 3")
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+        )
+
+        description = tree.getroot().find("channel").find("item").findtext("description")
+        self.assertEqual(description, "Line 1\nLine 2\nLine 3")
+
+    def test_update_appcast_tree_preserves_matching_item_pub_date_on_rerun(self) -> None:
+        context = self.build_context()
+        tree = appcast_manager.update_appcast_tree(
+            appcast_manager.et.ElementTree(appcast_manager._base_rss_root()),
+            context,
+            published_at=datetime(2026, 5, 8, 12, 0, tzinfo=timezone.utc),
+        )
+
+        appcast_manager.update_appcast_tree(
+            tree,
+            context,
+            published_at=datetime(2026, 5, 8, 13, 0, tzinfo=timezone.utc),
+        )
+
+        items = tree.getroot().find("channel").findall("item")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].findtext("pubDate"), "Fri, 08 May 2026 12:00:00 +0000")
+
     def test_validate_appcast_tree_requires_latest_item_to_match_context(self) -> None:
         context = self.build_context()
         tree = appcast_manager.update_appcast_tree(

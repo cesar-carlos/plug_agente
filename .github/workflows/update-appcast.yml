@@ -345,7 +345,30 @@ jobs:
           git diff --staged --quiet || git commit -m "Update appcast.xml for ${{ steps.release.outputs.tag }}"
           git push origin main
 
+  dispatch-main-appcast-publish:
+    if: ${{ github.event_name == 'release' }}
+    needs: update-appcast
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch appcast publish from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.update-appcast.outputs.tag }}
+          ROLLOUT_PERCENTAGE: ${{ needs.update-appcast.outputs.rollout_percentage }}
+          CHANNEL: ${{ needs.update-appcast.outputs.channel }}
+        run: |
+          gh workflow run "${GITHUB_WORKFLOW}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f release_tag="${RELEASE_TAG}" \
+            -f rollout_percentage="${ROLLOUT_PERCENTAGE}" \
+            -f channel="${CHANNEL}"
+
   deploy-pages:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: update-appcast
     runs-on: ubuntu-latest
     permissions:
@@ -380,6 +403,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   smoke-validate-appcast:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs:
       - update-appcast
       - deploy-pages
