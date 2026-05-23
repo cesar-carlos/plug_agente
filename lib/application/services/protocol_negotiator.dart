@@ -1,3 +1,5 @@
+import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 
@@ -206,6 +208,14 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       negotiated['plugProfile'] = plugProfile;
     }
 
+    final parallelBatchDispatch = _negotiateParallelBatchDispatch(
+      agentExtensions,
+      serverExtensions,
+    );
+    if (parallelBatchDispatch != null) {
+      negotiated['parallelBatchDispatch'] = parallelBatchDispatch;
+    }
+
     // Backpressure window hints: pick the minimum of agent and server values so
     // both sides agree on a safe upper bound. Recommended is also clamped by
     // the negotiated max so the recommended value never exceeds the cap.
@@ -228,6 +238,45 @@ class ProtocolNegotiator implements IProtocolNegotiator {
     }
 
     return negotiated;
+  }
+
+  Map<String, dynamic>? _negotiateParallelBatchDispatch(
+    Map<String, dynamic> agentExtensions,
+    Map<String, dynamic> serverExtensions,
+  ) {
+    final agentRaw = agentExtensions['parallelBatchDispatch'];
+    final serverRaw = serverExtensions['parallelBatchDispatch'];
+    if (agentRaw == true && serverRaw == true) {
+      return ParallelBatchDispatchNegotiation.agentAdvertisement(enabled: true);
+    }
+    if (agentRaw is! Map<String, dynamic> || serverRaw is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final agentEnabled = agentRaw['enabled'] as bool? ?? false;
+    final serverEnabled = serverRaw['enabled'] as bool? ?? false;
+    if (!agentEnabled || !serverEnabled) {
+      return null;
+    }
+
+    final maxConcurrency = _negotiateMinPositiveInt(
+          agentRaw['maxConcurrency'],
+          serverRaw['maxConcurrency'],
+        ) ??
+        RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
+    final mixedReadOnlyMethods =
+        (agentRaw['mixedReadOnlyMethods'] as bool? ?? false) &&
+        (serverRaw['mixedReadOnlyMethods'] as bool? ?? false);
+    final selectOnlySqlExecute =
+        (agentRaw['selectOnlySqlExecute'] as bool? ?? false) &&
+        (serverRaw['selectOnlySqlExecute'] as bool? ?? false);
+
+    return ParallelBatchDispatchNegotiation.agentAdvertisement(
+      enabled: true,
+      maxConcurrency: maxConcurrency,
+      mixedReadOnlyMethods: mixedReadOnlyMethods,
+      selectOnlySqlExecute: selectOnlySqlExecute,
+    );
   }
 
   int? _negotiateMinPositiveInt(dynamic agentValue, dynamic serverValue) {

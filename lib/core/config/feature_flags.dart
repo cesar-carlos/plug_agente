@@ -378,8 +378,9 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableAgentActionsMaintenanceMode, value);
   }
 
-  /// When true, homogeneous read-only JSON-RPC batches may dispatch whitelisted
-  /// methods in parallel (bounded pool) after sequential guard evaluation.
+  /// When true, read-only JSON-RPC batches may dispatch whitelisted methods in
+  /// parallel (bounded pool) after sequential guard evaluation, when the hub
+  /// also negotiates `parallelBatchDispatch`.
   bool get enableParallelJsonRpcBatchDispatch => _prefs.getBool(_keyEnableParallelJsonRpcBatchDispatch) ?? false;
 
   Future<void> setEnableParallelJsonRpcBatchDispatch(bool value) async {

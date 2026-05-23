@@ -61,6 +61,7 @@ import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dar
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/presentation/adapters/hub_recovery_auth_bridge.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -119,17 +120,25 @@ class AppRoot extends StatelessWidget {
             getIt<HubSessionCoordinator>(),
           ),
         ),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<AuthProvider, ConnectionProvider>(
           create: (context) => ConnectionProvider(
             getIt<ConnectToHub>(),
             getIt<TestDbConnection>(),
             getIt<CheckOdbcDriver>(),
             transportClient: getIt<ITransportClient>(),
-            hubSessionCoordinator: getIt<HubSessionCoordinator>(),
             checkHubAvailabilityUseCase: getIt<CheckHubAvailability>(),
             hubResilience: getIt<HubResilienceConfig>(),
             featureFlags: getIt<FeatureFlags>(),
           ),
+          update: (context, auth, connection) {
+            connection!.setHubRecoveryAuthBridge(
+              HubRecoveryAuthBridge(
+                sessionCoordinator: getIt<HubSessionCoordinator>(),
+                authProvider: auth,
+              ),
+            );
+            return connection;
+          },
         ),
         ChangeNotifierProvider(
           create: (context) => ClientTokenProvider(

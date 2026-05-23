@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/capabilities_negotiator.dart';
@@ -308,8 +310,8 @@ void main() {
 
         async.elapse(
           const Duration(
-            milliseconds: ConnectionConstants.capabilitiesTimeoutMs *
-                (ConnectionConstants.capabilitiesMaxReRegisterAttempts + 2),
+            milliseconds:
+                ConnectionConstants.capabilitiesTimeoutMs * (ConnectionConstants.capabilitiesMaxReRegisterAttempts + 2),
           ),
         );
         async.flushMicrotasks();
@@ -319,6 +321,101 @@ void main() {
 
         neg.reset();
       });
+    });
+  });
+
+  group('parallelBatchDispatch negotiation', () {
+    CapabilitiesNegotiator buildRealNegotiator({
+      ProtocolCapabilities Function()? localCapabilitiesProvider,
+    }) {
+      return CapabilitiesNegotiator(
+        negotiator: ProtocolNegotiator(),
+        featureFlags: featureFlags,
+        contractValidator: const RpcContractValidator(),
+        localCapabilitiesProvider:
+            localCapabilitiesProvider ??
+            () => ProtocolCapabilities.defaultCapabilities(
+              parallelBatchDispatch: ParallelBatchDispatchNegotiation.agentAdvertisement(enabled: true),
+            ),
+        agentIdProvider: () => 'agent-1',
+        emit: (event, payload) async {
+          emitted.add((event: event, payload: payload));
+        },
+        decodeIncoming: (payload, {String? sourceEvent}) {
+          return Success<Object, Exception>(payload as Object) as Result<dynamic>;
+        },
+        onTimeoutReconnect: () => reconnectCalls++,
+      );
+    }
+
+    test('should advertise parallelBatchDispatch in agent:register capabilities', () async {
+      final neg = buildRealNegotiator();
+      addTearDown(neg.reset);
+
+      final sent = await neg.sendRegisterAndStartTimeout();
+
+      expect(sent, isTrue);
+      final payload = emitted.single.payload as Map<String, dynamic>;
+      final capabilities = payload['capabilities'] as Map<String, dynamic>;
+      final extensions = capabilities['extensions'] as Map<String, dynamic>;
+      expect(extensions['parallelBatchDispatch'], {
+        'enabled': true,
+        'maxConcurrency': 4,
+        'mixedReadOnlyMethods': true,
+        'selectOnlySqlExecute': true,
+      });
+    });
+
+    test('should negotiate parallelBatchDispatch intersection in handleEnvelope', () {
+      final neg = buildRealNegotiator();
+      final outcome = neg.handleEnvelope({
+        'capabilities': const ProtocolCapabilities(
+          protocols: ['jsonrpc-v2'],
+          encodings: ['json'],
+          compressions: ['gzip', 'none'],
+          extensions: {
+            'binaryPayload': true,
+            'transportFrame': 'payload-frame/1.0',
+            'parallelBatchDispatch': {
+              'enabled': true,
+              'maxConcurrency': 2,
+              'mixedReadOnlyMethods': true,
+              'selectOnlySqlExecute': false,
+            },
+          },
+        ).toJson(),
+      });
+
+      expect(outcome, isA<CapabilitiesNegotiationSuccess>());
+      final negotiated = (outcome as CapabilitiesNegotiationSuccess).negotiatedProtocol;
+      expect(negotiated.negotiatedExtensions['parallelBatchDispatch'], {
+        'enabled': true,
+        'maxConcurrency': 2,
+        'mixedReadOnlyMethods': true,
+        'selectOnlySqlExecute': false,
+      });
+    });
+
+    test('should omit parallelBatchDispatch when server disables the extension', () {
+      final neg = buildRealNegotiator();
+      final outcome = neg.handleEnvelope({
+        'capabilities': const ProtocolCapabilities(
+          protocols: ['jsonrpc-v2'],
+          encodings: ['json'],
+          compressions: ['gzip', 'none'],
+          extensions: {
+            'binaryPayload': true,
+            'transportFrame': 'payload-frame/1.0',
+            'parallelBatchDispatch': {
+              'enabled': false,
+            },
+          },
+        ).toJson(),
+      });
+
+      expect(outcome, isA<CapabilitiesNegotiationSuccess>());
+      final negotiated = (outcome as CapabilitiesNegotiationSuccess).negotiatedProtocol;
+      expect(negotiated.negotiatedExtensions.containsKey('parallelBatchDispatch'), isFalse);
     });
   });
 

@@ -297,7 +297,7 @@ ainda sao aceitas mas podem gerar response vazio.
 | ---------------------- | ----------- | ----------------------------------------------------- |
 | Max itens por batch    | 32          | Acima disso, retorna `-32600` (invalid request)       |
 | IDs unicos             | obrigatorio | IDs duplicados retornam `-32600` (quando strict mode) |
-| Ordem de processamento | sequencial  | Respostas na mesma ordem dos requests                 |
+| Ordem de processamento | sequencial por padrao; dispatch paralelo opcional para lotes read-only elegiveis quando `parallelBatchDispatch` e negociado e `feature_enable_parallel_json_rpc_batch_dispatch` esta ativo — respostas permanecem ordenadas por indice quando `orderedBatchResponses` e negociado |
 | Notifications em batch | permitido   | Itens sem `id` nao geram response                     |
 
 
@@ -1599,6 +1599,12 @@ Exemplo de capacidades anunciadas (alinhado a
     },
     "plugProfile": "plug-jsonrpc-profile/2.11.2",
     "orderedBatchResponses": true,
+    "parallelBatchDispatch": {
+      "enabled": true,
+      "maxConcurrency": 4,
+      "mixedReadOnlyMethods": true,
+      "selectOnlySqlExecute": true
+    },
     "notificationNullIdCompatibility": true,
     "paginationModes": ["page-offset", "cursor-keyset", "cursor-offset"],
     "traceContext": ["w3c-trace-context", "legacy-trace-id"],
@@ -2048,7 +2054,9 @@ negociados de tamanho).
 por um resumo no callback (nao altera o fio).
 - Implementacao: serializacao/deserializacao JSON UTF-8 acima de ~384 KiB pode
 executar em isolate no envio (`prepareSendAsync`) e na recepcao
-(`receiveProcessAsync`). Fingerprint de idempotencia (quando a flag esta
+(`receiveProcessAsync`). GZIP acima de 32 KiB usa isolate no envio (tamanho
+UTF-8 pre-compressao) e na recepcao (`PayloadFrame.originalSize`, nao o tamanho
+comprimido em `payload`). Fingerprint de idempotencia (quando a flag esta
 ativa) tambem pode ser calculado em isolate para `params` grandes.
 - Estrategia atual recomendada: manter **JSON + GZIP** como baseline do
 transporte, usando o modo outbound `auto` quando o emissor quiser preservar a

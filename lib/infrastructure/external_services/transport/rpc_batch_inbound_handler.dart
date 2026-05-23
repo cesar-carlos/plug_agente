@@ -4,6 +4,7 @@ import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
@@ -300,12 +301,13 @@ class RpcBatchInboundHandler {
       }
 
       if (pendingDispatches.isNotEmpty) {
-        if (_shouldUseParallelBatchDispatch(requests)) {
+        final pendingRequests = pendingDispatches.map((entry) => entry.request).toList(growable: false);
+        if (_shouldUseParallelBatchDispatch(pendingRequests)) {
           await _dispatchBatchItemsInParallel(
             pendingDispatches,
             responses,
             responseMethodsById,
-            requests,
+            pendingRequests,
           );
         } else {
           await _dispatchBatchItemsSequentially(
@@ -369,26 +371,62 @@ class RpcBatchInboundHandler {
   }
 
   bool _shouldUseParallelBatchDispatch(List<RpcRequest> requests) {
-    if (!_featureFlags.enableParallelJsonRpcBatchDispatch || requests.length < 2) {
+    final negotiation = _negotiatedParallelBatchDispatch();
+    if (negotiation == null || !negotiation.enabled || requests.length < 2) {
       return false;
     }
 
+    if (!_featureFlags.enableParallelJsonRpcBatchDispatch) {
+      return false;
+    }
+
+    final hasSqlExecute = requests.any(
+      (request) => request.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod,
+    );
+    if (hasSqlExecute) {
+      if (!negotiation.selectOnlySqlExecute) {
+        return false;
+      }
+      return _isSelectOnlySqlExecuteBatch(requests);
+    }
+
+    if (!_isMixedReadOnlyWhitelistBatch(requests)) {
+      return false;
+    }
+
+    if (!_allRequestsShareSameMethod(requests)) {
+      return negotiation.mixedReadOnlyMethods;
+    }
+
+    return true;
+  }
+
+  ParallelBatchDispatchNegotiation? _negotiatedParallelBatchDispatch() {
+    return ParallelBatchDispatchNegotiation.fromNegotiatedExtensions(
+      _protocolProvider().negotiatedExtensions,
+    );
+  }
+
+  bool _allRequestsShareSameMethod(List<RpcRequest> requests) {
+    if (requests.isEmpty) {
+      return true;
+    }
     final method = requests.first.method;
     for (final request in requests) {
       if (request.method != method) {
         return false;
       }
     }
+    return true;
+  }
 
-    if (RpcBatchConstants.parallelJsonRpcBatchDispatchAllowedMethods.contains(method)) {
-      return true;
+  bool _isMixedReadOnlyWhitelistBatch(List<RpcRequest> requests) {
+    for (final request in requests) {
+      if (!RpcBatchConstants.parallelJsonRpcBatchDispatchAllowedMethods.contains(request.method)) {
+        return false;
+      }
     }
-
-    if (method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod) {
-      return _isSelectOnlySqlExecuteBatch(requests);
-    }
-
-    return false;
+    return true;
   }
 
   bool _isSelectOnlySqlExecuteBatch(List<RpcRequest> requests) {
@@ -402,13 +440,14 @@ class RpcBatchInboundHandler {
   }
 
   int _parallelBatchDispatchConcurrency(List<RpcRequest> requests) {
-    if (requests.isNotEmpty &&
-        requests.first.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod) {
+    final negotiatedMax = _negotiatedParallelBatchDispatch()?.maxConcurrency ??
+        RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
+    if (requests.any((request) => request.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod)) {
       return RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(
         _poolSizeProvider(),
-      );
+      ).clamp(1, negotiatedMax);
     }
-    return RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
+    return negotiatedMax;
   }
 
   Future<void> _dispatchBatchItemsSequentially(

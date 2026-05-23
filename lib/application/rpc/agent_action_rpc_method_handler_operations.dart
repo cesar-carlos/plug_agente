@@ -56,18 +56,27 @@ typedef AgentActionRpcStoreIdempotentSuccess = Future<void> Function({
   required RpcResponse response,
 });
 
+typedef AgentActionRpcRunIdempotentExecution = Future<RpcResponse> Function({
+  required RpcRequest request,
+  required String? idempotencyKey,
+  required String idempotencyFingerprint,
+  required Future<RpcResponse> Function() execute,
+});
+
 class AgentActionRpcMethodHandlerSupport {
   const AgentActionRpcMethodHandlerSupport({
     required this.invalidParams,
     required this.internalError,
     required this.consumeIdempotentCacheIfAny,
     required this.storeIdempotentSuccessIfApplicable,
+    required this.runIdempotentExecution,
   });
 
   final AgentActionRpcInvalidParams invalidParams;
   final AgentActionRpcInternalError internalError;
   final AgentActionRpcConsumeIdempotentCache consumeIdempotentCacheIfAny;
   final AgentActionRpcStoreIdempotentSuccess storeIdempotentSuccessIfApplicable;
+  final AgentActionRpcRunIdempotentExecution runIdempotentExecution;
 }
 
 class AgentActionRpcMethodHandlerOperations {
@@ -741,40 +750,36 @@ class AgentActionRpcMethodHandlerOperations {
                 request,
                 AgentActionRpcConstants.agentActionRpcParamTriggerId,
               );
-              final result = await runner(
-                actionId: actionId,
-                idempotencyKey: idempotencyKey,
-                triggerId: triggerId,
-                requestedBy: requestedBy,
-                traceId: traceId,
-              );
-              response = await result.fold<Future<RpcResponse>>(
-                (AgentActionExecution execution) async {
-                  final rpcResponse = RpcResponse.success(
-                    id: request.id,
-                    result: agentActionExecutionToGetExecutionResult(
-                      execution,
-                      sanitizeForRemoteHub: true,
+              response = await _support.runIdempotentExecution(
+                request: request,
+                idempotencyKey: idempotencyKeyForCache,
+                idempotencyFingerprint: idempotencyFingerprint,
+                execute: () async {
+                  final result = await runner(
+                    actionId: actionId,
+                    idempotencyKey: idempotencyKey,
+                    triggerId: triggerId,
+                    requestedBy: requestedBy,
+                    traceId: traceId,
+                  );
+                  return result.fold<Future<RpcResponse>>(
+                    (AgentActionExecution execution) async => RpcResponse.success(
+                      id: request.id,
+                      result: agentActionExecutionToGetExecutionResult(
+                        execution,
+                        sanitizeForRemoteHub: true,
+                      ),
+                    ),
+                    (Exception failure) async => RpcResponse.error(
+                      id: request.id,
+                      error: FailureToRpcErrorMapper.map(
+                        failure as domain.Failure,
+                        instance: request.id?.toString(),
+                        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+                      ),
                     ),
                   );
-                  if (idempotencyKeyForCache != null && idempotencyFingerprint.isNotEmpty) {
-                    await _support.storeIdempotentSuccessIfApplicable(
-                      request: request,
-                      idempotencyKey: idempotencyKeyForCache,
-                      idempotencyFingerprint: idempotencyFingerprint,
-                      response: rpcResponse,
-                    );
-                  }
-                  return rpcResponse;
                 },
-                (Exception failure) async => RpcResponse.error(
-                  id: request.id,
-                  error: FailureToRpcErrorMapper.map(
-                    failure as domain.Failure,
-                    instance: request.id?.toString(),
-                    useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-                  ),
-                ),
               );
             }
           }
@@ -876,39 +881,35 @@ class AgentActionRpcMethodHandlerOperations {
             if (idempotentEarly != null) {
               response = idempotentEarly;
             } else {
-              final result = await runner.validateRemoteRun(
-                AgentActionExecutionRequest(
-                  actionId: actionId,
-                  source: AgentActionRequestSource.remoteHub,
-                  idempotencyKey: idempotencyKey,
-                  requestedBy: requestedBy,
-                  traceId: traceId,
-                ),
-              );
-              response = await result.fold<Future<RpcResponse>>(
-                (AgentActionValidateRunSummary summary) async {
-                  final rpcResponse = RpcResponse.success(
-                    id: request.id,
-                    result: summary.toRpcResultJson(),
+              response = await _support.runIdempotentExecution(
+                request: request,
+                idempotencyKey: idempotencyKeyForCache,
+                idempotencyFingerprint: idempotencyFingerprint,
+                execute: () async {
+                  final result = await runner.validateRemoteRun(
+                    AgentActionExecutionRequest(
+                      actionId: actionId,
+                      source: AgentActionRequestSource.remoteHub,
+                      idempotencyKey: idempotencyKey,
+                      requestedBy: requestedBy,
+                      traceId: traceId,
+                    ),
                   );
-                  if (idempotencyKeyForCache != null && idempotencyFingerprint.isNotEmpty) {
-                    await _support.storeIdempotentSuccessIfApplicable(
-                      request: request,
-                      idempotencyKey: idempotencyKeyForCache,
-                      idempotencyFingerprint: idempotencyFingerprint,
-                      response: rpcResponse,
-                    );
-                  }
-                  return rpcResponse;
+                  return result.fold<Future<RpcResponse>>(
+                    (AgentActionValidateRunSummary summary) async => RpcResponse.success(
+                      id: request.id,
+                      result: summary.toRpcResultJson(),
+                    ),
+                    (Exception failure) async => RpcResponse.error(
+                      id: request.id,
+                      error: FailureToRpcErrorMapper.map(
+                        failure as domain.Failure,
+                        instance: request.id?.toString(),
+                        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+                      ),
+                    ),
+                  );
                 },
-                (Exception failure) async => RpcResponse.error(
-                  id: request.id,
-                  error: FailureToRpcErrorMapper.map(
-                    failure as domain.Failure,
-                    instance: request.id?.toString(),
-                    useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-                  ),
-                ),
               );
             }
           }

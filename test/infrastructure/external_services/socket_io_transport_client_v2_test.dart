@@ -280,6 +280,7 @@ void main() {
       when(() => mockFeatureFlags.enableElevatedAgentActions).thenReturn(false);
       when(() => mockFeatureFlags.enableAgentActionsMaintenanceMode).thenReturn(false);
       when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
+      when(() => mockFeatureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(false);
       when(
         () => mockNegotiator.negotiate(
           agentCapabilities: any(named: 'agentCapabilities'),

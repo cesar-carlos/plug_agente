@@ -43,6 +43,7 @@ class ProtocolCapabilities {
     int? recommendedStreamPullWindowSize,
     int? maxStreamPullWindowSize,
     Map<String, dynamic>? agentActions,
+    Map<String, dynamic>? parallelBatchDispatch,
   }) {
     final extensions = <String, dynamic>{
       'batchSupport': true,
@@ -72,6 +73,9 @@ class ProtocolCapabilities {
     }
     if (agentActions != null) {
       extensions['agentActions'] = agentActions;
+    }
+    if (parallelBatchDispatch != null) {
+      extensions['parallelBatchDispatch'] = parallelBatchDispatch;
     }
 
     return ProtocolCapabilities(

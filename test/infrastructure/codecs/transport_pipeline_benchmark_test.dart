@@ -21,7 +21,25 @@ void main() {
       expect(report, contains('large_sql_low_compressibility'));
       expect(report, contains('large_incompressible_blob'));
       expect(report, contains('| async | auto | true |'));
-      expect(report, contains('stage-p50/p95/p99 (ms)'));
+    },
+    timeout: Timeout.none,
+    tags: const ['perf'],
+  );
+
+  test(
+    'builds gzip isolate threshold sweep report',
+    () async {
+      final report = await benchmark.buildGzipIsolateThresholdSweepReport(
+        iterations: 4,
+      );
+
+      stdout.writeln(report);
+
+      expect(report, contains('gzip isolate threshold sweep'));
+      expect(report, contains('large_incompressible_blob'));
+      expect(report, contains('16.0KB'));
+      expect(report, contains('32.0KB'));
+      expect(report, contains('64.0KB'));
     },
     timeout: Timeout.none,
     tags: const ['perf'],

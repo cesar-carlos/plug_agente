@@ -227,6 +227,67 @@ void main() {
     });
 
     test(
+      'receiveProcessAsync uses gzip decompress isolate based on originalSize',
+      () async {
+        const threshold = 32 * 1024;
+        final collector = ProtocolMetricsCollector();
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: 10,
+          maxInflationRatio: 30,
+          metricsCollector: collector,
+        );
+
+        final originalData = {
+          'jsonrpc': '2.0',
+          'result': {
+            'rows': [
+              for (var i = 0; i < 4000; i++) {'col': 'value_${i}_repeated text for compression benchmark test'},
+            ],
+          },
+        };
+        final frame = pipeline.prepareSend(originalData).getOrThrow();
+        expect(frame.cmp, equals('gzip'));
+        expect(frame.originalSize, greaterThanOrEqualTo(threshold));
+        expect(frame.compressedSize, lessThan(threshold));
+
+        final result = await pipeline.receiveProcessAsync(frame);
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrThrow(), equals(originalData));
+        final receiveMetric = collector.metrics.lastWhere((m) => m.direction == 'receive');
+        expect(receiveMetric.usedGzipDecompressIsolate, isTrue);
+      },
+    );
+
+    test(
+      'receiveProcessAsync skips gzip decompress isolate when originalSize below threshold',
+      () async {
+        const threshold = 32 * 1024;
+        final collector = ProtocolMetricsCollector();
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'gzip',
+          compressionThreshold: 10,
+          maxInflationRatio: 30,
+          metricsCollector: collector,
+        );
+
+        final originalData = {'message': 'Hello World! ' * 20};
+        final frame = pipeline.prepareSend(originalData).getOrThrow();
+        expect(frame.cmp, equals('gzip'));
+        expect(frame.originalSize, lessThan(threshold));
+
+        final result = await pipeline.receiveProcessAsync(frame);
+
+        expect(result.isSuccess(), isTrue);
+        final receiveMetric = collector.metrics.lastWhere((m) => m.direction == 'receive');
+        expect(receiveMetric.usedGzipDecompressIsolate, isFalse);
+      },
+    );
+
+    test(
       'receiveProcessAsync should match receiveProcess for gzip frames',
       () async {
         final pipeline = TransportPipeline(
@@ -458,13 +519,13 @@ void main() {
           encoding: 'json',
           compression: 'none',
         );
-        final invalidGzip = Uint8List(pipeline.gzipIsolateThresholdBytes);
+        final invalidGzip = Uint8List(128);
         final frame = PayloadFrame(
           schemaVersion: '1.0',
           enc: 'json',
           cmp: 'gzip',
           contentType: const JsonPayloadCodec().contentType,
-          originalSize: 1,
+          originalSize: pipeline.gzipIsolateThresholdBytes,
           compressedSize: invalidGzip.length,
           payload: invalidGzip,
           traceId: 'trace',

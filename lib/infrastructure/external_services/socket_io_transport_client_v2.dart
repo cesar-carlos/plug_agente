@@ -6,6 +6,7 @@ import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
@@ -292,6 +293,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
       streamingResults: _featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb,
       agentActions: _featureFlags.enableAgentActions && _featureFlags.enableRemoteAgentActions
           ? _agentActionsCapability()
+          : null,
+      parallelBatchDispatch: _featureFlags.enableParallelJsonRpcBatchDispatch
+          ? ParallelBatchDispatchNegotiation.agentAdvertisement(enabled: true)
           : null,
     );
   }

@@ -616,8 +616,8 @@ class TransportPipeline {
     }
   }
 
-  /// Like [receiveProcess], but runs GZIP decompression in an isolate when the
-  /// compressed payload is at least [gzipIsolateThresholdBytes].
+  /// Like [receiveProcess], but runs GZIP decompression in an isolate when
+  /// [PayloadFrame.originalSize] is at least [gzipIsolateThresholdBytes].
   Future<Result<dynamic>> receiveProcessAsync(
     PayloadFrame frame, {
     int? maxCompressedBytes,
@@ -704,7 +704,7 @@ class TransportPipeline {
 
       if (frame.cmp != 'none') {
         final decompressStopwatch = Stopwatch()..start();
-        if (frame.cmp == 'gzip' && bytes.length >= gzipIsolateThresholdBytes) {
+        if (frame.cmp == 'gzip' && frame.originalSize >= gzipIsolateThresholdBytes) {
           usedGzipDecompressIsolate = true;
           try {
             decodableBytes = await compute(_decompressGzipInIsolate, bytes);

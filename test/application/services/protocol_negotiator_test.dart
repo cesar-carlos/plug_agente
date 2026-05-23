@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 
 void main() {
@@ -167,6 +168,39 @@ void main() {
         config.negotiatedExtensions['plugProfile'],
         equals(ProtocolVersion.plugProfile),
       );
+    });
+
+    test('should negotiate parallelBatchDispatch extension intersection', () {
+      final agentCaps = ProtocolCapabilities.defaultCapabilities(
+        parallelBatchDispatch: ParallelBatchDispatchNegotiation.agentAdvertisement(enabled: true),
+      );
+      const serverCaps = ProtocolCapabilities(
+        protocols: ['jsonrpc-v2'],
+        encodings: ['json'],
+        compressions: ['none'],
+        extensions: {
+          'binaryPayload': true,
+          'transportFrame': 'payload-frame/1.0',
+          'parallelBatchDispatch': {
+            'enabled': true,
+            'maxConcurrency': 2,
+            'mixedReadOnlyMethods': true,
+            'selectOnlySqlExecute': false,
+          },
+        },
+      );
+
+      final config = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(config.negotiatedExtensions['parallelBatchDispatch'], {
+        'enabled': true,
+        'maxConcurrency': 2,
+        'mixedReadOnlyMethods': true,
+        'selectOnlySqlExecute': false,
+      });
     });
 
     test('should negotiate streaming results only when both sides support it', () {

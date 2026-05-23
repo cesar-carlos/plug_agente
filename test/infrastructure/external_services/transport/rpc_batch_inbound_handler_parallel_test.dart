@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
@@ -50,9 +51,9 @@ void main() {
   late ProtocolConfig protocol;
   late List<dynamic> emittedResponses;
   late RpcBatchInboundHandler batchHandler;
-  int testPoolSize = ConnectionConstants.defaultPoolSize;
+  var testPoolSize = ConnectionConstants.defaultPoolSize;
 
-  RpcBatchInboundHandler _createBatchHandler({
+  RpcBatchInboundHandler createBatchHandler({
     RpcRequestGuard? requestGuard,
   }) {
     final summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
@@ -106,15 +107,18 @@ void main() {
     when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(false);
 
     dispatcher = _MockDispatcher();
-    protocol = const ProtocolConfig(
+    protocol = ProtocolConfig(
       protocol: 'jsonrpc-v2',
       encoding: 'json',
       compression: 'none',
-      negotiatedExtensions: {'orderedBatchResponses': true},
+      negotiatedExtensions: {
+        'orderedBatchResponses': true,
+        'parallelBatchDispatch': ParallelBatchDispatchNegotiation.agentAdvertisement(enabled: true),
+      },
     );
     emittedResponses = [];
     testPoolSize = ConnectionConstants.defaultPoolSize;
-    batchHandler = _createBatchHandler();
+    batchHandler = createBatchHandler();
   });
 
   group('parallel JSON-RPC batch dispatch', () {
@@ -202,8 +206,54 @@ void main() {
       ).called(3);
     });
 
-    test('should stay sequential for mixed-method batches even when flag is enabled', () async {
+    test('should dispatch mixed whitelist batch in parallel when flag is enabled', () async {
       when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      final inFlight = <String>[];
+      final maxInFlight = <int>[0];
+      final unblockDispatch = Completer<void>();
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        inFlight.add(request.id.toString());
+        maxInFlight.add(inFlight.length);
+        await unblockDispatch.future;
+        inFlight.remove(request.id.toString());
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      final handleFuture = batchHandler.handleBatchRequest([
+        _batchItem(id: 'health-1', method: 'agent.getHealth'),
+        _batchItem(id: 'profile-1', method: 'agent.getProfile'),
+      ]);
+
+      await pumpEventQueue();
+      expect(maxInFlight.reduce((left, right) => left > right ? left : right), greaterThan(1));
+
+      unblockDispatch.complete();
+      await handleFuture;
+
+      final responses = emittedResponses.single as List<RpcResponse>;
+      expect(responses.map((response) => response.id), ['health-1', 'profile-1']);
+    });
+
+    test('should stay sequential when parallelBatchDispatch is not negotiated', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      protocol = const ProtocolConfig(
+        protocol: 'jsonrpc-v2',
+        encoding: 'json',
+        compression: 'none',
+        negotiatedExtensions: {'orderedBatchResponses': true},
+      );
+      batchHandler = createBatchHandler();
+
       final dispatchStarted = <String>[];
       final unblockDispatch = Completer<void>();
 
@@ -224,7 +274,7 @@ void main() {
 
       final handleFuture = batchHandler.handleBatchRequest([
         _batchItem(id: 'health-1', method: 'agent.getHealth'),
-        _batchItem(id: 'profile-1', method: 'agent.getProfile'),
+        _batchItem(id: 'health-2', method: 'agent.getHealth'),
       ]);
 
       await pumpEventQueue();
@@ -233,7 +283,7 @@ void main() {
       unblockDispatch.complete();
       await handleFuture;
 
-      expect(dispatchStarted, ['health-1', 'profile-1']);
+      expect(dispatchStarted, ['health-1', 'health-2']);
     });
 
     test('should stay sequential for write-containing batches even when flag is enabled', () async {
@@ -286,7 +336,7 @@ void main() {
         return RpcRequestGuardResult.allow;
       });
 
-      final guardedHandler = _createBatchHandler(requestGuard: guard);
+      final guardedHandler = createBatchHandler(requestGuard: guard);
 
       when(
         () => dispatcher.dispatch(
@@ -505,7 +555,7 @@ void main() {
         return RpcRequestGuardResult.allow;
       });
 
-      final guardedHandler = _createBatchHandler(requestGuard: guard);
+      final guardedHandler = createBatchHandler(requestGuard: guard);
 
       when(
         () => dispatcher.dispatch(

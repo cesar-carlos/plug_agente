@@ -6,6 +6,7 @@ import 'package:plug_agente/application/rpc/agent_action_remote_authorization_se
 import 'package:plug_agente/application/rpc/agent_action_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/agent_metadata_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
+import 'package:plug_agente/application/rpc/rpc_idempotency_coordinator.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -85,9 +86,11 @@ class DefaultRpcMethodHandlerOperations {
     Duration queryStageBudget = _defaultQueryStageBudget,
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
+    RpcIdempotencyCoordinator? idempotencyCoordinator,
   }) : _authorizeSqlOperation = authorizeSqlOperation,
        _featureFlags = featureFlags,
        _idempotencyStore = idempotencyStore,
+       _idempotencyCoordinator = idempotencyCoordinator ?? RpcIdempotencyCoordinator(),
        _onIdempotencyFingerprintMismatch = onIdempotencyFingerprintMismatch,
        _agentActionRetentionSettings = agentActionRetentionSettings,
        _authorizationStageBudgetDuration = authorizationStageBudget {
@@ -102,6 +105,7 @@ class DefaultRpcMethodHandlerOperations {
         executionNotFound: _executionNotFound,
         consumeIdempotentCacheIfAny: _consumeIdempotentCacheIfAny,
         storeIdempotentSuccessIfApplicable: _storeIdempotentSuccessIfApplicable,
+        runIdempotentExecution: _runIdempotentExecution,
         buildMissingClientTokenFailure: _buildMissingClientTokenFailure,
         authorizeWithBudget: _authorizeWithBudget,
         effectiveStageTimeout: _effectiveStageTimeout,
@@ -127,6 +131,7 @@ class DefaultRpcMethodHandlerOperations {
         internalError: _internalError,
         consumeIdempotentCacheIfAny: _consumeIdempotentCacheIfAny,
         storeIdempotentSuccessIfApplicable: _storeIdempotentSuccessIfApplicable,
+        runIdempotentExecution: _runIdempotentExecution,
       ),
       idempotencyStore: idempotencyStore,
       dispatchMetrics: dispatchMetrics,
@@ -167,6 +172,7 @@ class DefaultRpcMethodHandlerOperations {
   final AuthorizeSqlOperation _authorizeSqlOperation;
   final FeatureFlags _featureFlags;
   final IIdempotencyStore? _idempotencyStore;
+  final RpcIdempotencyCoordinator _idempotencyCoordinator;
   final void Function()? _onIdempotencyFingerprintMismatch;
   final AgentActionRetentionSettings? _agentActionRetentionSettings;
   final Duration _authorizationStageBudgetDuration;
@@ -468,6 +474,45 @@ class DefaultRpcMethodHandlerOperations {
         ),
       ),
     );
+  }
+
+  Future<RpcResponse> _runIdempotentExecution({
+    required RpcRequest request,
+    required String? idempotencyKey,
+    required String idempotencyFingerprint,
+    required Future<RpcResponse> Function() execute,
+  }) async {
+    if (request.isNotification ||
+        !_featureFlags.enableSocketIdempotency ||
+        idempotencyKey == null ||
+        idempotencyKey.isEmpty ||
+        _idempotencyStore == null) {
+      return execute();
+    }
+
+    final namespacedKey = _namespacedRpcIdempotencyStoreKey(request, idempotencyKey);
+    final response = await _idempotencyCoordinator.runExclusive(
+      namespacedKey: namespacedKey,
+      action: () async {
+        final cached = await _consumeIdempotentCacheIfAny(
+          request,
+          idempotencyKey,
+          idempotencyFingerprint,
+        );
+        if (cached != null) {
+          return cached;
+        }
+        final executed = await execute();
+        await _storeIdempotentSuccessIfApplicable(
+          request: request,
+          idempotencyKey: idempotencyKey,
+          idempotencyFingerprint: idempotencyFingerprint,
+          response: executed,
+        );
+        return executed;
+      },
+    );
+    return _idempotencyCoordinator.remapResponseId(response, request.id);
   }
 
   Future<RpcResponse?> _consumeIdempotentCacheIfAny(

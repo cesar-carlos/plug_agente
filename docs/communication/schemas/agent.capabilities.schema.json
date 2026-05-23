@@ -24,7 +24,10 @@
           "minItems": 1,
           "items": { "type": "string" }
         },
-        "extensions": { "type": "object" },
+        "extensions": {
+          "type": "object",
+          "description": "Negotiated capability extensions. parallelBatchDispatch may be a boolean shorthand (enabled=true with agent defaults) or an object with enabled, maxConcurrency, mixedReadOnlyMethods, and selectOnlySqlExecute to opt into parallel read-only JSON-RPC batch dispatch when both sides support it."
+        },
         "limits": { "type": "object" }
       },
       "additionalProperties": false

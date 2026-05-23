@@ -12,17 +12,19 @@ import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart' show 
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
+import 'benchmark_transport_pipeline_async_stub.dart'
+    if (dart.library.ui) 'benchmark_transport_pipeline_async_impl.dart';
+
 const int defaultTransportCompressionThresholdBytes = 4096;
 
 const String _usage = '''
-Transport pipeline benchmark (sync codec path).
+Transport pipeline benchmark (sync and async codec paths).
 
-This tool exercises PayloadCodec/CompressionCodec directly on the main isolate.
-It does not call TransportPipeline.prepareSendAsync/receiveProcessAsync, so
-changing --gzip-isolate-threshold here only affects the report metadata and
-comparison against runtime ConnectionConstants.gzipIsolateThresholdBytes.
-Production isolate behaviour is controlled by TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES
-(or the default 32 KiB) on TransportPipeline instances.
+The async path exercises TransportPipeline.prepareSendAsync and
+receiveProcessAsync, including isolate offload for large JSON and GZIP.
+Async mode requires Flutter (dart:ui); under plain `dart run` use --path sync
+or run `flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --tags perf`.
+Use --gzip-isolate-threshold-sweep to compare isolate thresholds on the async path.
 
 Usage:
   dart run tool/benchmark_transport_pipeline.dart [options]
@@ -30,8 +32,11 @@ Usage:
 Options:
   --iterations <n>                 Benchmark iterations per case (default: 20)
   --threshold <bytes>              compressionThreshold for gzip/auto (default: 4096)
-  --gzip-isolate-threshold <bytes> GZIP isolate threshold for report (default: 32768
+  --path sync|async                Codec path (default: async)
+  --gzip-isolate-threshold <bytes> GZIP isolate threshold for async path (default: 32768
                                    or TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES)
+  --gzip-isolate-threshold-sweep <bytes,bytes,...>
+                                   Run async path once per threshold (comma-separated)
   --json                           Emit JSON instead of plain text
   --help                           Show this help
 ''';
@@ -48,15 +53,67 @@ Future<void> main(List<String> args) async {
     '--threshold',
     defaultTransportCompressionThresholdBytes,
   ).clamp(0, 1024 * 1024 * 1024);
+  final path = _readStringArg(args, '--path', 'async');
+  if (path != 'sync' && path != 'async') {
+    stderr.writeln('Invalid --path value: $path (expected sync or async)');
+    exitCode = 64;
+    return;
+  }
   final gzipIsolateThreshold = _readIntArg(
     args,
     '--gzip-isolate-threshold',
     ConnectionConstants.gzipIsolateThresholdBytes,
   ).clamp(1, 1024 * 1024 * 1024);
+  final sweepThresholds = _readIntListArg(args, '--gzip-isolate-threshold-sweep');
   final jsonOutput = args.contains('--json');
+
+  if (sweepThresholds.isNotEmpty && path != 'async') {
+    stderr.writeln('--gzip-isolate-threshold-sweep requires --path async');
+    exitCode = 64;
+    return;
+  }
+
+  if (sweepThresholds.isNotEmpty) {
+    final sweepReports = <Map<String, dynamic>>[];
+    for (final sweepThreshold in sweepThresholds) {
+      final results = await _buildBenchmarkResults(
+        iterations: iterations,
+        threshold: threshold,
+        path: 'async',
+        gzipIsolateThresholdBytes: sweepThreshold,
+      );
+      sweepReports.add(<String, dynamic>{
+        'gzip_isolate_threshold_bytes': sweepThreshold,
+        'results': results,
+      });
+    }
+
+    if (jsonOutput) {
+      stdout.writeln(
+        const JsonEncoder.withIndent('  ').convert(<String, dynamic>{
+          'iterations': iterations,
+          'threshold_bytes': threshold,
+          'path': 'async',
+          'sweep': sweepReports,
+        }),
+      );
+      return;
+    }
+
+    stdout.writeln(
+      _buildThresholdSweepReport(
+        sweepReports,
+        iterations: iterations,
+        threshold: threshold,
+      ),
+    );
+    return;
+  }
+
   final results = await _buildBenchmarkResults(
     iterations: iterations,
     threshold: threshold,
+    path: path,
     gzipIsolateThresholdBytes: gzipIsolateThreshold,
   );
 
@@ -65,8 +122,8 @@ Future<void> main(List<String> args) async {
       const JsonEncoder.withIndent('  ').convert(<String, dynamic>{
         'iterations': iterations,
         'threshold_bytes': threshold,
+        'path': path,
         'gzip_isolate_threshold_bytes': gzipIsolateThreshold,
-        'note': 'Sync codec benchmark; isolate threshold does not affect measured timings.',
         'results': results,
       }),
     );
@@ -78,6 +135,7 @@ Future<void> main(List<String> args) async {
       results,
       iterations: iterations,
       threshold: threshold,
+      path: path,
       gzipIsolateThresholdBytes: gzipIsolateThreshold,
     ),
   );
@@ -88,17 +146,20 @@ Future<String> buildTransportPipelineBenchmarkReport({
   int warmupIterations = 1,
   int threshold = defaultTransportCompressionThresholdBytes,
   int? gzipIsolateThresholdBytes,
+  String path = 'async',
 }) async {
   final effectiveGzipIsolateThreshold =
       gzipIsolateThresholdBytes ?? ConnectionConstants.gzipIsolateThresholdBytes;
   await _buildBenchmarkResults(
     iterations: warmupIterations.clamp(0, 1000),
     threshold: threshold,
+    path: path,
     gzipIsolateThresholdBytes: effectiveGzipIsolateThreshold,
   );
   final results = await _buildBenchmarkResults(
     iterations: iterations.clamp(1, 10000),
     threshold: threshold,
+    path: path,
     gzipIsolateThresholdBytes: effectiveGzipIsolateThreshold,
   );
   final buffer = StringBuffer()
@@ -107,30 +168,64 @@ Future<String> buildTransportPipelineBenchmarkReport({
     ..writeln('- iterations: $iterations')
     ..writeln('- warmupIterations: $warmupIterations')
     ..writeln('- thresholdBytes: $threshold')
+    ..writeln('- path: $path')
     ..writeln('- gzipIsolateThresholdBytes: $effectiveGzipIsolateThreshold')
     ..writeln('- maxInflationRatio: $defaultTransportMaxInflationRatio')
-    ..writeln('- note: sync codec path only; isolate threshold is metadata (see tool --help)')
     ..writeln('- stage-p50/p95/p99 (ms)')
     ..writeln()
     ..writeln(
-      '| case | path | mode | signed | cmp | original | wire | saved | send p50/p95/p99 | receive p50/p95/p99 |',
+      '| case | path | mode | signed | cmp | original | wire | saved | send p50/p95/p99 | receive p50/p95/p99 | isolates |',
     )
-    ..writeln('| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |');
+    ..writeln('| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (final result in results) {
     buffer.writeln(
-      '| ${result['case']} | async | ${result['requested_compression']} | ${result['signed']} | '
+      '| ${result['case']} | $path | ${result['requested_compression']} | ${result['signed']} | '
       '${result['effective_compression']} | '
       '${_formatBytes(result['original_bytes'] as int)} | ${_formatBytes(result['wire_bytes'] as int)} | '
       '${_formatBytes(result['bytes_saved'] as int)} | '
-      '${_formatMicrosTriple(result, 'send')} | ${_formatMicrosTriple(result, 'receive')} |',
+      '${_formatMicrosTriple(result, 'send')} | ${_formatMicrosTriple(result, 'receive')} | '
+      '${result['isolate_operations']} |',
     );
   }
   return buffer.toString();
 }
 
+Future<String> buildGzipIsolateThresholdSweepReport({
+  int iterations = 20,
+  int warmupIterations = 1,
+  int threshold = defaultTransportCompressionThresholdBytes,
+  List<int> sweepThresholds = const <int>[16 * 1024, 32 * 1024, 64 * 1024],
+}) async {
+  final sweepReports = <Map<String, dynamic>>[];
+  for (final sweepThreshold in sweepThresholds) {
+    await _buildBenchmarkResults(
+      iterations: warmupIterations.clamp(0, 1000),
+      threshold: threshold,
+      path: 'async',
+      gzipIsolateThresholdBytes: sweepThreshold,
+    );
+    final results = await _buildBenchmarkResults(
+      iterations: iterations.clamp(1, 10000),
+      threshold: threshold,
+      path: 'async',
+      gzipIsolateThresholdBytes: sweepThreshold,
+    );
+    sweepReports.add(<String, dynamic>{
+      'gzip_isolate_threshold_bytes': sweepThreshold,
+      'results': results,
+    });
+  }
+  return _buildThresholdSweepReport(
+    sweepReports,
+    iterations: iterations,
+    threshold: threshold,
+  );
+}
+
 Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   required int iterations,
   required int threshold,
+  required String path,
   required int gzipIsolateThresholdBytes,
 }) async {
   if (iterations <= 0) {
@@ -154,13 +249,22 @@ Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   for (final benchmarkCase in cases) {
     for (final mode in modes) {
       for (final signed in signedModes) {
-        final result = await _runCase(
-          benchmarkCase: benchmarkCase,
-          compressionMode: mode,
-          signed: signed,
-          iterations: iterations,
-          threshold: threshold,
-        );
+        final result = path == 'async'
+            ? await _runCaseAsync(
+                benchmarkCase: benchmarkCase,
+                compressionMode: mode,
+                signed: signed,
+                iterations: iterations,
+                threshold: threshold,
+                gzipIsolateThresholdBytes: gzipIsolateThresholdBytes,
+              )
+            : await _runCaseSync(
+                benchmarkCase: benchmarkCase,
+                compressionMode: mode,
+                signed: signed,
+                iterations: iterations,
+                threshold: threshold,
+              );
         results.add(result);
       }
     }
@@ -168,7 +272,26 @@ Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   return results;
 }
 
-Future<Map<String, dynamic>> _runCase({
+Future<Map<String, dynamic>> _runCaseAsync({
+  required _BenchmarkCase benchmarkCase,
+  required String compressionMode,
+  required bool signed,
+  required int iterations,
+  required int threshold,
+  required int gzipIsolateThresholdBytes,
+}) {
+  return runTransportPipelineBenchmarkCaseAsync(
+    payload: benchmarkCase.payload,
+    benchmarkCaseName: benchmarkCase.name,
+    compressionMode: compressionMode,
+    signed: signed,
+    iterations: iterations,
+    threshold: threshold,
+    gzipIsolateThresholdBytes: gzipIsolateThresholdBytes,
+  );
+}
+
+Future<Map<String, dynamic>> _runCaseSync({
   required _BenchmarkCase benchmarkCase,
   required String compressionMode,
   required bool signed,
@@ -183,7 +306,7 @@ Future<Map<String, dynamic>> _runCase({
         )
       : null;
   for (var i = 0; i < iterations; i++) {
-    final frame = _prepareFrame(
+    final frame = _prepareFrameSync(
       payload: benchmarkCase.payload,
       compressionMode: compressionMode,
       signer: signer,
@@ -191,7 +314,7 @@ Future<Map<String, dynamic>> _runCase({
       metricEventName: benchmarkCase.name,
       collector: collector,
     );
-    _receiveFrame(
+    _receiveFrameSync(
       frame: frame,
       requestedCompression: compressionMode,
       metricEventName: benchmarkCase.name,
@@ -199,6 +322,22 @@ Future<Map<String, dynamic>> _runCase({
     );
   }
 
+  return _buildCaseResult(
+    benchmarkCase: benchmarkCase,
+    compressionMode: compressionMode,
+    signed: signed,
+    iterations: iterations,
+    collector: collector,
+  );
+}
+
+Map<String, dynamic> _buildCaseResult({
+  required _BenchmarkCase benchmarkCase,
+  required String compressionMode,
+  required bool signed,
+  required int iterations,
+  required ProtocolMetricsCollector collector,
+}) {
   final summary = collector.getSummary();
   final sendSummary = ProtocolMetricsSummaryBuilder.fromList(
     collector.metrics.where((metric) => metric.direction == 'send').toList(growable: false),
@@ -226,11 +365,15 @@ Future<Map<String, dynamic>> _runCase({
     'receive_p95_us': receiveSummary.totalDurationPercentiles.p95Us,
     'receive_p99_us': receiveSummary.totalDurationPercentiles.p99Us,
     'isolate_operations': summary.totalIsolateOperations,
+    'json_encode_isolate_operations': summary.jsonEncodeIsolateOperations,
+    'gzip_compress_isolate_operations': summary.gzipCompressIsolateOperations,
+    'json_decode_isolate_operations': summary.jsonDecodeIsolateOperations,
+    'gzip_decompress_isolate_operations': summary.gzipDecompressIsolateOperations,
     'summary': summary.toJson(),
   };
 }
 
-PayloadFrame _prepareFrame({
+PayloadFrame _prepareFrameSync({
   required Map<String, dynamic> payload,
   required String compressionMode,
   required PayloadSigner? signer,
@@ -304,7 +447,7 @@ PayloadFrame _prepareFrame({
   return frame;
 }
 
-void _receiveFrame({
+void _receiveFrameSync({
   required PayloadFrame frame,
   required String requestedCompression,
   required String metricEventName,
@@ -421,6 +564,42 @@ int _readIntArg(List<String> args, String name, int fallback) {
   return fallback;
 }
 
+String _readStringArg(List<String> args, String name, String fallback) {
+  final inlinePrefix = '$name=';
+  for (var i = 0; i < args.length; i++) {
+    final arg = args[i];
+    if (arg.startsWith(inlinePrefix)) {
+      return arg.substring(inlinePrefix.length);
+    }
+    if (arg == name && i + 1 < args.length) {
+      return args[i + 1];
+    }
+  }
+  return fallback;
+}
+
+List<int> _readIntListArg(List<String> args, String name) {
+  final inlinePrefix = '$name=';
+  for (var i = 0; i < args.length; i++) {
+    final arg = args[i];
+    final raw = arg.startsWith(inlinePrefix)
+        ? arg.substring(inlinePrefix.length)
+        : arg == name && i + 1 < args.length
+        ? args[i + 1]
+        : null;
+    if (raw == null) {
+      continue;
+    }
+    return raw
+        .split(',')
+        .map((part) => int.tryParse(part.trim()))
+        .whereType<int>()
+        .where((value) => value > 0)
+        .toList(growable: false);
+  }
+  return const <int>[];
+}
+
 String _formatBytes(int bytes) {
   if (bytes.abs() >= 1024 * 1024) {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
@@ -448,13 +627,13 @@ String _buildPlainTextReport(
   List<Map<String, dynamic>> results, {
   required int iterations,
   required int threshold,
+  required String path,
   required int gzipIsolateThresholdBytes,
 }) {
   final buffer = StringBuffer()
     ..writeln('Transport pipeline benchmark')
-    ..writeln('iterations=$iterations threshold_bytes=$threshold '
+    ..writeln('iterations=$iterations threshold_bytes=$threshold path=$path '
         'gzip_isolate_threshold_bytes=$gzipIsolateThresholdBytes')
-    ..writeln('note: sync codec path; isolate threshold does not affect timings')
     ..writeln()
     ..writeln(
       [
@@ -468,6 +647,8 @@ String _buildPlainTextReport(
         'p95 send'.padLeft(10),
         'p95 recv'.padLeft(10),
         'isolates'.padLeft(8),
+        'gz-c'.padLeft(6),
+        'gz-d'.padLeft(6),
       ].join('  '),
     );
   for (final result in results) {
@@ -483,8 +664,58 @@ String _buildPlainTextReport(
         _formatMicros(result['send_p95_us'] as int).padLeft(10),
         _formatMicros(result['receive_p95_us'] as int).padLeft(10),
         '${result['isolate_operations']}'.padLeft(8),
+        '${result['gzip_compress_isolate_operations']}'.padLeft(6),
+        '${result['gzip_decompress_isolate_operations']}'.padLeft(6),
       ].join('  '),
     );
+  }
+  return buffer.toString();
+}
+
+String _buildThresholdSweepReport(
+  List<Map<String, dynamic>> sweepReports, {
+  required int iterations,
+  required int threshold,
+}) {
+  final buffer = StringBuffer()
+    ..writeln('Transport pipeline gzip isolate threshold sweep (async path)')
+    ..writeln('iterations=$iterations threshold_bytes=$threshold')
+    ..writeln()
+    ..writeln(
+      [
+        'threshold'.padRight(12),
+        'case'.padRight(30),
+        'mode'.padRight(6),
+        'cmp'.padRight(5),
+        'p95 send'.padLeft(10),
+        'p95 recv'.padLeft(10),
+        'isolates'.padLeft(8),
+        'gz-c'.padLeft(6),
+        'gz-d'.padLeft(6),
+      ].join('  '),
+    );
+
+  for (final sweepEntry in sweepReports) {
+    final sweepThreshold = sweepEntry['gzip_isolate_threshold_bytes'] as int;
+    final results = sweepEntry['results'] as List<Map<String, dynamic>>;
+    for (final result in results) {
+      if (result['requested_compression'] != 'gzip' || result['signed'] != false) {
+        continue;
+      }
+      buffer.writeln(
+        [
+          _formatBytes(sweepThreshold).padRight(12),
+          (result['case'] as String).padRight(30),
+          (result['requested_compression'] as String).padRight(6),
+          (result['effective_compression'] as String).padRight(5),
+          _formatMicros(result['send_p95_us'] as int).padLeft(10),
+          _formatMicros(result['receive_p95_us'] as int).padLeft(10),
+          '${result['isolate_operations']}'.padLeft(8),
+          '${result['gzip_compress_isolate_operations']}'.padLeft(6),
+          '${result['gzip_decompress_isolate_operations']}'.padLeft(6),
+        ].join('  '),
+      );
+    }
   }
   return buffer.toString();
 }

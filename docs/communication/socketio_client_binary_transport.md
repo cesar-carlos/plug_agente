@@ -134,7 +134,7 @@ Ao receber qualquer evento de aplicacao:
 ### Implementacao de referencia (Plug Agente, Dart)
 
 - **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
-- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`package:archive`** (`GZipEncoder`/`GZipDecoder`), partilhadas com o pipeline e com o compressor de linhas. Para payloads acima de 32 KiB, `TransportPipeline.prepareSendAsync` delega a compressão a um isolate via `compute`.
+- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`package:archive`** (`GZipEncoder`/`GZipDecoder`), partilhadas com o pipeline e com o compressor de linhas. Para payloads acima de 32 KiB, `TransportPipeline.prepareSendAsync` delega a compressão a um isolate via `compute` (comparando o tamanho UTF-8 **antes** da compressão). Na recepção, `receiveProcessAsync` usa o mesmo limiar comparando `PayloadFrame.originalSize` (tamanho decodificado esperado), nao o tamanho comprimido em `payload`.
 - **JSON em isolate:** o runtime atual so offloada encode/decode JSON quando o
   tamanho UTF-8 estimado passa de ~384 KiB; abaixo disso, o caminho padrao
   permanece no isolate principal.
@@ -199,16 +199,23 @@ Parametros atuais recomendados:
 Benchmark local recomendado antes de alterar esses valores:
 
 ```bash
-dart run tool/benchmark_transport_pipeline.dart --iterations 20
+dart run tool/benchmark_transport_pipeline.dart --iterations 20 --path sync
+flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --tags perf
+dart run tool/benchmark_transport_pipeline.dart --iterations 20 --path async
 dart run tool/benchmark_transport_pipeline.dart --iterations 20 --json
+dart run tool/benchmark_transport_pipeline.dart --path async --gzip-isolate-threshold-sweep 16384,32768,65536
 dart run tool/benchmark_transport_pipeline.dart --help
 ```
 
 O benchmark compara `none`, `auto` e `gzip` com payloads SQL sinteticos e
 exporta percentis de encode, compressao, decode e descompressao via
-`ProtocolMetricsSummary.toJson()`. Usa o caminho sync de codec (nao
-`TransportPipeline.prepareSendAsync`); o limiar de isolate (`--gzip-isolate-threshold`
-ou `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES`) aparece no relatorio como metadata.
+`ProtocolMetricsSummary.toJson()`. O caminho padrao e **`--path async`**
+(`TransportPipeline.prepareSendAsync` / `receiveProcessAsync`), incluindo
+contadores de isolate (`gz-c`, `gz-d`, etc.); requer runtime Flutter — use
+`flutter test .../transport_pipeline_benchmark_test.dart --tags perf` quando
+`dart run --path async` nao estiver disponivel no VM. Use `--path sync` para
+medir somente codecs no isolate principal via `dart run`. `--gzip-isolate-threshold-sweep`
+repete o benchmark async para cada limiar e resume p95/isolates por caso.
 
 Para clientes, a regra pratica permanece:
 

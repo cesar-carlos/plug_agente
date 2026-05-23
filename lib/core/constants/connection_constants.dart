@@ -349,6 +349,14 @@ class ConnectionConstants {
   static const int socketOutgoingContractValidationMaxBytes = 2 * 1024 * 1024;
 
   /// Default payload size above which GZIP compress/decompress runs in a background isolate.
+  ///
+  /// Send path compares UTF-8 size before compression; receive path compares
+  /// `originalSize` from frame metadata (decoded payload size), not wire bytes.
+  /// Benchmark sweep (2026-05, async path, SQL + blob cases): 32 KiB matched or
+  /// beat 16 KiB on p95 receive for large gzip payloads while avoiding extra isolate
+  /// churn on sub-threshold frames; 64 KiB increased main-isolate gzip cost without
+  /// clear win. Tune with `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES` or
+  /// `tool/benchmark_transport_pipeline.dart --gzip-isolate-threshold-sweep`.
   static const int defaultGzipIsolateThresholdBytes = 32 * 1024;
 
   /// GZIP payload size above which transport compress/decompress uses `compute`.

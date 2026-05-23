@@ -59,6 +59,13 @@ typedef SqlRpcStoreIdempotentSuccess = Future<void> Function({
   required RpcResponse response,
 });
 
+typedef SqlRpcRunIdempotentExecution = Future<RpcResponse> Function({
+  required RpcRequest request,
+  required String? idempotencyKey,
+  required String idempotencyFingerprint,
+  required Future<RpcResponse> Function() execute,
+});
+
 typedef SqlRpcAuthorizeWithBudget = Future<Result<void>> Function({
   required String token,
   required String sql,
@@ -80,6 +87,7 @@ class SqlRpcMethodHandlerSupport {
     required this.executionNotFound,
     required this.consumeIdempotentCacheIfAny,
     required this.storeIdempotentSuccessIfApplicable,
+    required this.runIdempotentExecution,
     required this.buildMissingClientTokenFailure,
     required this.authorizeWithBudget,
     required this.effectiveStageTimeout,
@@ -90,6 +98,7 @@ class SqlRpcMethodHandlerSupport {
   final RpcResponse Function(RpcRequest request) executionNotFound;
   final SqlRpcConsumeIdempotentCache consumeIdempotentCacheIfAny;
   final SqlRpcStoreIdempotentSuccess storeIdempotentSuccessIfApplicable;
+  final SqlRpcRunIdempotentExecution runIdempotentExecution;
   final domain.ConfigurationFailure Function() buildMissingClientTokenFailure;
   final SqlRpcAuthorizeWithBudget authorizeWithBudget;
   final SqlRpcEffectiveStageTimeout effectiveStageTimeout;
@@ -349,15 +358,20 @@ class SqlRpcMethodHandlerOperations {
       return streamingFromDbResponse;
     }
 
-    final result = await _executeQueryWithBudget(
-      queryRequest,
-      database: database,
-      requestId: request.id?.toString(),
-      deadline: deadline,
-      timeoutMs: requestedTimeoutMs,
-    );
+    return _support.runIdempotentExecution(
+      request: request,
+      idempotencyKey: idempotencyKey,
+      idempotencyFingerprint: idempotencyFingerprint,
+      execute: () async {
+        final result = await _executeQueryWithBudget(
+          queryRequest,
+          database: database,
+          requestId: request.id?.toString(),
+          deadline: deadline,
+          timeoutMs: requestedTimeoutMs,
+        );
 
-    return result.fold<Future<RpcResponse>>(
+        return result.fold<Future<RpcResponse>>(
       (QueryResponse queryResponse) async {
         // Normalize
         var normalized = _normalizerService.normalize(queryResponse);
@@ -487,12 +501,6 @@ class SqlRpcMethodHandlerOperations {
           result: resultData,
         );
         _dispatchMetrics?.recordSqlExecuteMaterializedResponse();
-        await _support.storeIdempotentSuccessIfApplicable(
-          request: request,
-          idempotencyKey: idempotencyKey,
-          idempotencyFingerprint: idempotencyFingerprint,
-          response: rpcResponse,
-        );
         return rpcResponse;
       },
       (Exception failure) async {
@@ -502,6 +510,8 @@ class SqlRpcMethodHandlerOperations {
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
         return RpcResponse.error(id: request.id, error: rpcError);
+      },
+    );
       },
     );
   }
@@ -1024,69 +1034,69 @@ class SqlRpcMethodHandlerOperations {
     );
 
     // Execute batch
-    final batchStartedAt = DateTime.now().toUtc();
-    final result = await _executeSqlBatchWithBudget(
-      agentId,
-      commands,
-      database: database,
-      options: effectiveOptions,
-      requestId: request.id?.toString(),
-      deadline: deadline,
-    );
-
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()! as domain.Failure;
-      final rpcError = FailureToRpcErrorMapper.map(
-        failure,
-        instance: request.id?.toString(),
-        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-      );
-      return RpcResponse.error(id: request.id, error: rpcError);
-    }
-
-    final commandResults = result.getOrThrow();
-    final batchFinishedAt = DateTime.now().toUtc();
-    final items =
-        commandResults
-            .map((SqlCommandResult batchResult) {
-              if (batchResult.index < 0 || batchResult.index >= commandPlans.length) {
-                return batchResult;
-              }
-              final requestIndex = commandPlans[batchResult.index].requestIndex;
-              return SqlCommandResult(
-                index: requestIndex,
-                ok: batchResult.ok,
-                rows: batchResult.rows,
-                rowCount: batchResult.rowCount,
-                affectedRows: batchResult.affectedRows,
-                error: batchResult.error,
-                columnMetadata: batchResult.columnMetadata,
-              );
-            })
-            .toList(growable: false)
-          ..sort((left, right) => left.index.compareTo(right.index));
-
-    final resultData = {
-      'execution_id': _uuid.v4(),
-      'started_at': batchStartedAt.toIso8601String(),
-      'finished_at': batchFinishedAt.toIso8601String(),
-      'items': items.map((r) => r.toJson()).toList(growable: false),
-      'total_commands': commands.length,
-      'successful_commands': items.where((r) => r.ok).length,
-      'failed_commands': items.where((r) => !r.ok).length,
-    };
-
-    final response = RpcResponse.success(
-      id: request.id,
-      result: resultData,
-    );
-    await _support.storeIdempotentSuccessIfApplicable(
+    return _support.runIdempotentExecution(
       request: request,
       idempotencyKey: idempotencyKey,
       idempotencyFingerprint: idempotencyFingerprint,
-      response: response,
+      execute: () async {
+        final batchStartedAt = DateTime.now().toUtc();
+        final result = await _executeSqlBatchWithBudget(
+          agentId,
+          commands,
+          database: database,
+          options: effectiveOptions,
+          requestId: request.id?.toString(),
+          deadline: deadline,
+        );
+
+        if (result.isError()) {
+          final failure = result.exceptionOrNull()! as domain.Failure;
+          final rpcError = FailureToRpcErrorMapper.map(
+            failure,
+            instance: request.id?.toString(),
+            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          return RpcResponse.error(id: request.id, error: rpcError);
+        }
+
+        final commandResults = result.getOrThrow();
+        final batchFinishedAt = DateTime.now().toUtc();
+        final items =
+            commandResults
+                .map((SqlCommandResult batchResult) {
+                  if (batchResult.index < 0 || batchResult.index >= commandPlans.length) {
+                    return batchResult;
+                  }
+                  final requestIndex = commandPlans[batchResult.index].requestIndex;
+                  return SqlCommandResult(
+                    index: requestIndex,
+                    ok: batchResult.ok,
+                    rows: batchResult.rows,
+                    rowCount: batchResult.rowCount,
+                    affectedRows: batchResult.affectedRows,
+                    error: batchResult.error,
+                    columnMetadata: batchResult.columnMetadata,
+                  );
+                })
+                .toList(growable: false)
+              ..sort((left, right) => left.index.compareTo(right.index));
+
+        final resultData = {
+          'execution_id': _uuid.v4(),
+          'started_at': batchStartedAt.toIso8601String(),
+          'finished_at': batchFinishedAt.toIso8601String(),
+          'items': items.map((r) => r.toJson()).toList(growable: false),
+          'total_commands': commands.length,
+          'successful_commands': items.where((r) => r.ok).length,
+          'failed_commands': items.where((r) => !r.ok).length,
+        };
+
+        return RpcResponse.success(
+          id: request.id,
+          result: resultData,
+        );
+      },
     );
-    return response;
   }
 
   Future<RpcResponse> handleSqlBulkInsert(
@@ -1186,45 +1196,45 @@ class SqlRpcMethodHandlerOperations {
 
     final options = params['options'] as Map<String, dynamic>?;
     final timeoutMs = jsonPositiveInt(options?['timeout_ms']) ?? 0;
-    final startedAt = DateTime.now().toUtc();
-    final result = await _executeBulkInsertWithBudget(
-      bulkRequest,
-      database: database,
-      timeoutMs: timeoutMs,
-      requestId: request.id?.toString(),
-      deadline: deadline,
-    );
-
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()! as domain.Failure;
-      final rpcError = FailureToRpcErrorMapper.map(
-        failure,
-        instance: request.id?.toString(),
-        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-      );
-      return RpcResponse.error(id: request.id, error: rpcError);
-    }
-
-    final insertedRows = result.getOrThrow();
-    final finishedAt = DateTime.now().toUtc();
-    final response = RpcResponse.success(
-      id: request.id,
-      result: {
-        'execution_id': _uuid.v4(),
-        'started_at': startedAt.toIso8601String(),
-        'finished_at': finishedAt.toIso8601String(),
-        'table': bulkRequest.table,
-        'row_count': bulkRequest.rowCount,
-        'inserted_rows': insertedRows,
-      },
-    );
-    await _support.storeIdempotentSuccessIfApplicable(
+    return _support.runIdempotentExecution(
       request: request,
       idempotencyKey: idempotencyKey,
       idempotencyFingerprint: idempotencyFingerprint,
-      response: response,
+      execute: () async {
+        final startedAt = DateTime.now().toUtc();
+        final result = await _executeBulkInsertWithBudget(
+          bulkRequest,
+          database: database,
+          timeoutMs: timeoutMs,
+          requestId: request.id?.toString(),
+          deadline: deadline,
+        );
+
+        if (result.isError()) {
+          final failure = result.exceptionOrNull()! as domain.Failure;
+          final rpcError = FailureToRpcErrorMapper.map(
+            failure,
+            instance: request.id?.toString(),
+            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          return RpcResponse.error(id: request.id, error: rpcError);
+        }
+
+        final insertedRows = result.getOrThrow();
+        final finishedAt = DateTime.now().toUtc();
+        return RpcResponse.success(
+          id: request.id,
+          result: {
+            'execution_id': _uuid.v4(),
+            'started_at': startedAt.toIso8601String(),
+            'finished_at': finishedAt.toIso8601String(),
+            'table': bulkRequest.table,
+            'row_count': bulkRequest.rowCount,
+            'inserted_rows': insertedRows,
+          },
+        );
+      },
     );
-    return response;
   }
 
   Result<BulkInsertRequest> _parseBulkInsertRequest(
