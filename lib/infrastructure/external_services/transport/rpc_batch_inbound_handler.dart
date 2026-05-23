@@ -1,6 +1,8 @@
+import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -45,6 +47,7 @@ class RpcBatchInboundHandler {
     required Future<bool> Function(List<dynamic> data) validateBatchRequestJsonSchemasOrEmit,
     required bool Function(Map<String, dynamic> requestMap) hasNullIdCompatibilityViolation,
     MetricsCollector? metricsCollector,
+    int Function()? poolSizeProvider,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _logSummarizer = logSummarizer,
@@ -59,7 +62,10 @@ class RpcBatchInboundHandler {
        _sendSchemaValidationError = sendSchemaValidationError,
        _validateBatchRequestJsonSchemasOrEmit = validateBatchRequestJsonSchemasOrEmit,
        _hasNullIdCompatibilityViolation = hasNullIdCompatibilityViolation,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector,
+       _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize;
+
+  static int _defaultPoolSize() => ConnectionConstants.poolSize;
 
   final FeatureFlags _featureFlags;
   final ProtocolConfig Function() _protocolProvider;
@@ -86,6 +92,7 @@ class RpcBatchInboundHandler {
   final Future<bool> Function(List<dynamic> data) _validateBatchRequestJsonSchemasOrEmit;
   final bool Function(Map<String, dynamic> requestMap) _hasNullIdCompatibilityViolation;
   final MetricsCollector? _metricsCollector;
+  final int Function() _poolSizeProvider;
 
   /// Validates the batch envelope, dispatches each item independently, then
   /// emits the merged batch response (optionally preserving order based on the
@@ -298,6 +305,7 @@ class RpcBatchInboundHandler {
             pendingDispatches,
             responses,
             responseMethodsById,
+            requests,
           );
         } else {
           await _dispatchBatchItemsSequentially(
@@ -366,17 +374,41 @@ class RpcBatchInboundHandler {
     }
 
     final method = requests.first.method;
-    if (!RpcBatchConstants.parallelJsonRpcBatchDispatchAllowedMethods.contains(method)) {
-      return false;
-    }
-
     for (final request in requests) {
       if (request.method != method) {
         return false;
       }
     }
 
+    if (RpcBatchConstants.parallelJsonRpcBatchDispatchAllowedMethods.contains(method)) {
+      return true;
+    }
+
+    if (method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod) {
+      return _isSelectOnlySqlExecuteBatch(requests);
+    }
+
+    return false;
+  }
+
+  bool _isSelectOnlySqlExecuteBatch(List<RpcRequest> requests) {
+    for (final request in requests) {
+      final sql = _extractSqlFromRpcParams(request.params);
+      if (sql == null || SqlValidator.validateSelectQuery(sql).isError()) {
+        return false;
+      }
+    }
     return true;
+  }
+
+  int _parallelBatchDispatchConcurrency(List<RpcRequest> requests) {
+    if (requests.isNotEmpty &&
+        requests.first.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod) {
+      return RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(
+        _poolSizeProvider(),
+      );
+    }
+    return RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
   }
 
   Future<void> _dispatchBatchItemsSequentially(
@@ -401,8 +433,9 @@ class RpcBatchInboundHandler {
     List<({int index, RpcRequest request})> items,
     List<({int index, RpcResponse response})> responses,
     Map<Object?, String> responseMethodsById,
+    List<RpcRequest> batchRequests,
   ) async {
-    final semaphore = PoolSemaphore(RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency);
+    final semaphore = PoolSemaphore(_parallelBatchDispatchConcurrency(batchRequests));
     final dispatchResults = await Future.wait(
       items.map((item) async {
         await semaphore.acquire();
@@ -489,5 +522,13 @@ class RpcBatchInboundHandler {
     if (params is! Map<String, dynamic>) return null;
     final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
+  }
+
+  String? _extractSqlFromRpcParams(dynamic params) {
+    if (params is! Map<String, dynamic>) {
+      return null;
+    }
+    final sql = params['sql'];
+    return sql is String ? sql : null;
   }
 }

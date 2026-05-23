@@ -174,6 +174,14 @@ class ConnectionConstants {
     return effectivePoolSize ~/ 2;
   }
 
+  /// Safe parallel fan-out for homogeneous read-only ODBC / JSON-RPC batch work.
+  ///
+  /// Matches read-only ODBC batch parallelism (`poolSize ~/ 2`, minimum 1).
+  static int readOnlyBatchParallelismForPoolSize(int poolSize) {
+    final effectivePoolSize = poolSize > 0 ? poolSize : 1;
+    return math.max(1, effectivePoolSize ~/ 2);
+  }
+
   static String directOdbcConnectionCapacityStrategy() {
     return directOdbcConnectionMaxConcurrentOverride == null ? 'half_pool_reserved' : 'env_override';
   }

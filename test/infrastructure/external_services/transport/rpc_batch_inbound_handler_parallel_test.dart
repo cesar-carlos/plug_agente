@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
@@ -49,6 +50,47 @@ void main() {
   late ProtocolConfig protocol;
   late List<dynamic> emittedResponses;
   late RpcBatchInboundHandler batchHandler;
+  int testPoolSize = ConnectionConstants.defaultPoolSize;
+
+  RpcBatchInboundHandler _createBatchHandler({
+    RpcRequestGuard? requestGuard,
+  }) {
+    final summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
+    final preparer = RpcResponsePreparer(
+      featureFlags: featureFlags,
+      logSummarizer: summarizer,
+      contractValidator: const RpcContractValidator(),
+      protocolProvider: () => protocol,
+      usesBinaryTransport: () => true,
+      agentIdProvider: () => 'agent-1',
+    );
+    final authzLogger = AuthorizationDecisionLogger(
+      featureFlags: featureFlags,
+      logMessage: (_, _, _) {},
+      agentIdProvider: () => 'agent-1',
+      onTokenRefreshRequested: () {},
+    );
+
+    return RpcBatchInboundHandler(
+      featureFlags: featureFlags,
+      protocolProvider: () => protocol,
+      logSummarizer: summarizer,
+      responsePreparer: preparer,
+      authorizationDecisionLogger: authzLogger,
+      dispatcher: dispatcher,
+      requestGuard: requestGuard ?? RpcRequestGuard(maxRequestsPerWindow: 1000),
+      schemaValidator: const RpcRequestSchemaValidator(),
+      agentIdProvider: () => 'agent-1',
+      emitInboundRpcResponse: (response, {methodsById = const {}}) async {
+        emittedResponses.add(response);
+      },
+      emitEvent: (_, _) async {},
+      sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+      validateBatchRequestJsonSchemasOrEmit: (_) async => true,
+      hasNullIdCompatibilityViolation: (_) => false,
+      poolSizeProvider: () => testPoolSize,
+    );
+  }
 
   setUp(() {
     featureFlags = _MockFeatureFlags();
@@ -71,41 +113,8 @@ void main() {
       negotiatedExtensions: {'orderedBatchResponses': true},
     );
     emittedResponses = [];
-
-    final summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
-    final preparer = RpcResponsePreparer(
-      featureFlags: featureFlags,
-      logSummarizer: summarizer,
-      contractValidator: const RpcContractValidator(),
-      protocolProvider: () => protocol,
-      usesBinaryTransport: () => true,
-      agentIdProvider: () => 'agent-1',
-    );
-    final authzLogger = AuthorizationDecisionLogger(
-      featureFlags: featureFlags,
-      logMessage: (_, _, _) {},
-      agentIdProvider: () => 'agent-1',
-      onTokenRefreshRequested: () {},
-    );
-
-    batchHandler = RpcBatchInboundHandler(
-      featureFlags: featureFlags,
-      protocolProvider: () => protocol,
-      logSummarizer: summarizer,
-      responsePreparer: preparer,
-      authorizationDecisionLogger: authzLogger,
-      dispatcher: dispatcher,
-      requestGuard: RpcRequestGuard(maxRequestsPerWindow: 1000),
-      schemaValidator: const RpcRequestSchemaValidator(),
-      agentIdProvider: () => 'agent-1',
-      emitInboundRpcResponse: (response, {methodsById = const {}}) async {
-        emittedResponses.add(response);
-      },
-      emitEvent: (_, _) async {},
-      sendSchemaValidationError: (_, _, _, {errorReason}) async {},
-      validateBatchRequestJsonSchemasOrEmit: (_) async => true,
-      hasNullIdCompatibilityViolation: (_) => false,
-    );
+    testPoolSize = ConnectionConstants.defaultPoolSize;
+    batchHandler = _createBatchHandler();
   });
 
   group('parallel JSON-RPC batch dispatch', () {
@@ -277,38 +286,7 @@ void main() {
         return RpcRequestGuardResult.allow;
       });
 
-      final summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
-      final preparer = RpcResponsePreparer(
-        featureFlags: featureFlags,
-        logSummarizer: summarizer,
-        contractValidator: const RpcContractValidator(),
-        protocolProvider: () => protocol,
-        usesBinaryTransport: () => true,
-        agentIdProvider: () => 'agent-1',
-      );
-      final guardedHandler = RpcBatchInboundHandler(
-        featureFlags: featureFlags,
-        protocolProvider: () => protocol,
-        logSummarizer: summarizer,
-        responsePreparer: preparer,
-        authorizationDecisionLogger: AuthorizationDecisionLogger(
-          featureFlags: featureFlags,
-          logMessage: (_, _, _) {},
-          agentIdProvider: () => 'agent-1',
-          onTokenRefreshRequested: () {},
-        ),
-        dispatcher: dispatcher,
-        requestGuard: guard,
-        schemaValidator: const RpcRequestSchemaValidator(),
-        agentIdProvider: () => 'agent-1',
-        emitInboundRpcResponse: (response, {methodsById = const {}}) async {
-          emittedResponses.add(response);
-        },
-        emitEvent: (_, _) async {},
-        sendSchemaValidationError: (_, _, _, {errorReason}) async {},
-        validateBatchRequestJsonSchemasOrEmit: (_) async => true,
-        hasNullIdCompatibilityViolation: (_) => false,
-      );
+      final guardedHandler = _createBatchHandler(requestGuard: guard);
 
       when(
         () => dispatcher.dispatch(
@@ -402,6 +380,199 @@ void main() {
       expect(
         maxInFlight.reduce((left, right) => left > right ? left : right),
         RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency,
+      );
+
+      unblockDispatch.complete();
+      await handleFuture;
+    });
+
+    test('should dispatch homogeneous SELECT-only sql.execute batch in parallel when flag is enabled', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      final inFlight = <String>[];
+      final maxInFlight = <int>[0];
+      final unblockDispatch = Completer<void>();
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        inFlight.add(request.id.toString());
+        maxInFlight.add(inFlight.length);
+        await unblockDispatch.future;
+        inFlight.remove(request.id.toString());
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      final handleFuture = batchHandler.handleBatchRequest([
+        _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+        _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'SELECT 2'}),
+        _batchItem(id: 'sql-3', method: 'sql.execute', params: {'sql': 'WITH cte AS (SELECT 3) SELECT * FROM cte'}),
+      ]);
+
+      await pumpEventQueue();
+      expect(maxInFlight.reduce((left, right) => left > right ? left : right), greaterThan(1));
+
+      unblockDispatch.complete();
+      await handleFuture;
+
+      final responses = emittedResponses.single as List<RpcResponse>;
+      expect(responses.map((response) => response.id), ['sql-1', 'sql-2', 'sql-3']);
+    });
+
+    test('should stay sequential for homogeneous sql.execute batch containing write SQL when flag is enabled', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      final dispatchStarted = <String>[];
+      final unblockDispatch = Completer<void>();
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        dispatchStarted.add(request.id.toString());
+        await unblockDispatch.future;
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      final handleFuture = batchHandler.handleBatchRequest([
+        _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+        _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'INSERT INTO t VALUES (1)'}),
+      ]);
+
+      await pumpEventQueue();
+      expect(dispatchStarted, ['sql-1']);
+
+      unblockDispatch.complete();
+      await handleFuture;
+
+      expect(dispatchStarted, ['sql-1', 'sql-2']);
+    });
+
+    test('should stay sequential for SELECT-only sql.execute batch when flag is disabled', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(false);
+      final dispatchStarted = <String>[];
+      final unblockDispatch = Completer<void>();
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        dispatchStarted.add(request.id.toString());
+        await unblockDispatch.future;
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      final handleFuture = batchHandler.handleBatchRequest([
+        _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+        _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'SELECT 2'}),
+      ]);
+
+      await pumpEventQueue();
+      expect(dispatchStarted, ['sql-1']);
+
+      unblockDispatch.complete();
+      await handleFuture;
+
+      expect(dispatchStarted, ['sql-1', 'sql-2']);
+    });
+
+    test('should evaluate RpcRequestGuard for all sql.execute items before parallel dispatch starts', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      final guard = _MockRequestGuard();
+      var guardEvaluations = 0;
+      var dispatchInvocations = 0;
+
+      when(() => guard.evaluate(any())).thenAnswer((_) {
+        guardEvaluations++;
+        expect(dispatchInvocations, 0);
+        return RpcRequestGuardResult.allow;
+      });
+
+      final guardedHandler = _createBatchHandler(requestGuard: guard);
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        dispatchInvocations++;
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      await guardedHandler.handleBatchRequest([
+        _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+        _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'SELECT 2'}),
+      ]);
+
+      expect(guardEvaluations, 2);
+      expect(dispatchInvocations, 2);
+      verify(() => guard.evaluate(any())).called(2);
+    });
+
+    test('should cap sql.execute parallel dispatch concurrency using pool-aware limit', () async {
+      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+      testPoolSize = 4;
+      final expectedConcurrency = RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(
+        testPoolSize,
+      );
+      final inFlight = <String>[];
+      final maxInFlight = <int>[0];
+      final unblockDispatch = Completer<void>();
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        inFlight.add(request.id.toString());
+        maxInFlight.add(inFlight.length);
+        await unblockDispatch.future;
+        inFlight.remove(request.id.toString());
+        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+      });
+
+      final batch = List<Map<String, dynamic>>.generate(
+        expectedConcurrency + 2,
+        (index) => _batchItem(
+          id: 'sql-$index',
+          method: 'sql.execute',
+          params: {'sql': 'SELECT $index'},
+        ),
+      );
+
+      final handleFuture = batchHandler.handleBatchRequest(batch);
+      await pumpEventQueue();
+
+      expect(
+        maxInFlight.reduce((left, right) => left > right ? left : right),
+        expectedConcurrency,
       );
 
       unblockDispatch.complete();

@@ -128,6 +128,12 @@ void main() {
       expect(ConnectionConstants.directOdbcConnectionCapacityStrategy(), 'half_pool_reserved');
     });
 
+    test('should reserve half of pool for read-only batch parallelism by default', () {
+      expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(7), 3);
+      expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(1), 1);
+      expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(0), 1);
+    });
+
     test('should use ODBC_DIRECT_CONNECTION_MAX_CONCURRENT when override is valid', () {
       dotenv.loadFromString(envString: 'ODBC_DIRECT_CONNECTION_MAX_CONCURRENT=5');
 

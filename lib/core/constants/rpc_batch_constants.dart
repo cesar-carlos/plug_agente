@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+
+import 'package:plug_agente/core/constants/connection_constants.dart';
+
 /// Stable `error.data.reason` values and related technical message prefixes for
 /// strict JSON-RPC batch validation.
 abstract final class RpcBatchConstants {
@@ -25,4 +29,15 @@ abstract final class RpcBatchConstants {
   static final Set<String> parallelJsonRpcBatchDispatchAllowedMethods = Set<String>.from(
     parallelJsonRpcBatchDispatchAllowedMethodsOrdered,
   );
+
+  /// RPC method handled by Phase 2 parallel dispatch when every item is SELECT-only.
+  static const String parallelJsonRpcBatchSqlExecuteMethod = 'sql.execute';
+
+  /// Pool-aware concurrency cap for homogeneous SELECT-only `sql.execute` batches.
+  static int parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(int poolSize) {
+    return math.min(
+      ConnectionConstants.readOnlyBatchParallelismForPoolSize(poolSize),
+      maxParallelJsonRpcBatchDispatchConcurrency,
+    );
+  }
 }
