@@ -423,266 +423,266 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         _clearDraft();
         return;
       }
-    _editingActionId = definition.id;
-    _nameController.text = definition.name;
-    _descriptionController.text = definition.description ?? '';
-    _state = definition.state;
-    final notification = definition.policies.notification;
-    _notifyOnSuccess = notification.notifyOnSuccess;
-    _notifyOnFailure = notification.notifyOnFailure;
-    _notifyOnTimeout = notification.notifyOnTimeout;
-    final retry = definition.policies.retry;
-    _maxAttempts = retry.maxAttempts < 1 ? 1 : retry.maxAttempts;
-    _allowRemoteRetry = retry.allowRemote;
-    final timeout = definition.policies.timeout;
-    _maxRuntimeMinutes = timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes;
-    _maxRuntimeMinutesController.text = '$_maxRuntimeMinutes';
-    _killMainProcessOnTimeout = timeout.killMainProcessOnTimeout;
-    final environment = definition.policies.environment;
-    _allowedProfilesController.text = environment.allowedProfiles.join(', ');
-    _allowedEnvironmentVariableNamesController.text = environment.allowedVariableNames.join(', ');
-    _environmentVariablesController.text = _formatEnvironmentVariables(environment.variables);
-    final exitCode = definition.policies.exitCode;
-    _acceptedExitCodesController.text = exitCode.acceptedExitCodes.join(', ');
-    _onAppExit = definition.policies.lifecycle.onAppExit;
-    _processWindowMode = definition.policies.process.windowMode;
-    final encoding = definition.policies.encoding;
-    _stdoutEncodingMode = encoding.stdout;
-    _stderrEncodingMode = encoding.stderr;
-    final capture = definition.policies.capture;
-    _captureStdout = capture.captureStdout;
-    _captureStderr = capture.captureStderr;
-    _redactBeforePersisting = capture.redactBeforePersisting;
-    final queue = definition.policies.queue;
-    _maxConcurrentController.text = '${queue.maxConcurrent}';
-    _maxQueuedController.text = '${queue.maxQueued}';
-    _concurrencyBehavior = queue.concurrencyBehavior;
-    final pathPolicy = definition.policies.path;
-    _allowedWorkingDirectoriesController.text = pathPolicy.allowedWorkingDirectories.join(', ');
-    _allowedContextDirectoriesController.text = pathPolicy.allowedContextDirectories.join(', ');
-    final remote = definition.policies.remote;
-    _remoteEnabled = remote.isEnabled;
-    _remoteAdHoc = remote.allowAdHoc && widget.provider.isRemoteAdHocAgentActionsEnabled;
-    _remoteApprovalGranted = remote.approvedAt != null && !remote.requiresReapproval;
-    _runElevated = definition.policies.elevated.runElevated && widget.provider.isElevatedAgentActionsEnabled;
-    final contextPolicy = definition.policies.context;
-    _contextInjectionMode = contextPolicy.injectionMode;
-    final runtimeSchema = contextPolicy.runtimeParameterSchema;
-    _runtimeParameterSchemaController.text = runtimeSchema == null
-        ? ''
-        : const JsonEncoder.withIndent('  ').convert(runtimeSchema);
-    switch (definition.config) {
-      case final CommandLineActionConfig config:
-        final powerShellCommand = PowerShellCommandLine.tryParseInlineCommand(config.command);
-        if (powerShellCommand == null) {
-          _setDraftKind(_AgentActionDraftKind.commandLine);
-          _commandController.text = config.command;
-        } else {
-          _powerShellMode = _PowerShellDraftMode.inline;
-          _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(powerShellCommand.executable)
-              ? _PowerShellExecutable.powerShell7
-              : _PowerShellExecutable.windowsPowerShell;
-          _setDraftKind(_AgentActionDraftKind.powerShell);
-          _commandController.text = powerShellCommand.command;
-        }
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _pathChangePolicy = config.workingDirectory?.pathChangePolicy ?? AgentActionPathChangePolicy.failIfChanged;
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ExecutableActionConfig config:
-        _setDraftKind(_AgentActionDraftKind.executable);
-        _commandController.clear();
-        _executableTargetPathController.text = config.executablePath.originalPath;
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ScriptActionConfig config:
-        if (PowerShellCommandLine.isPowerShellScriptPath(config.scriptPath.originalPath)) {
-          _powerShellMode = _PowerShellDraftMode.script;
-          _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(config.interpreterPath?.originalPath)
-              ? _PowerShellExecutable.powerShell7
-              : _PowerShellExecutable.windowsPowerShell;
-          _setDraftKind(_AgentActionDraftKind.powerShell);
-        } else {
-          _setDraftKind(_AgentActionDraftKind.script);
-        }
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.text = config.scriptPath.originalPath;
-        _scriptInterpreterPathController.text = config.interpreterPath?.originalPath ?? '';
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final JarActionConfig config:
-        _setDraftKind(_AgentActionDraftKind.jar);
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.text = config.jarPath.originalPath;
-        _javaExecutablePathController.text = config.javaExecutablePath?.originalPath ?? '';
-        _executableArgumentsController.text = config.arguments.join('\n');
-        _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final EmailActionConfig config:
-        _setDraftKind(_AgentActionDraftKind.email);
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.text = config.smtpProfileId;
-        _emailFromController.text = config.from;
-        _emailToController.text = config.to.join('\n');
-        _emailCcController.text = config.cc.join('\n');
-        _emailBccController.text = config.bcc.join('\n');
-        _emailSubjectController.text = config.subjectTemplate;
-        _emailBodyController.text = config.bodyTemplate;
-        _emailAttachmentsController.text = config.attachmentPaths.map((path) => path.originalPath).join('\n');
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final ComObjectActionConfig config:
-        _setDraftKind(_AgentActionDraftKind.comObject);
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.text = config.progId;
-        _comMemberNameController.text = config.memberName;
-        _comArgumentsController.text = const JsonEncoder.withIndent('  ').convert(config.arguments);
-        _executorPathController.clear();
-        _projectPathController.clear();
-        _data7ConfigPathController.clear();
-        _connectionIdController.clear();
-        _connectionLabelController.clear();
-        widget.provider.clearDeveloperData7Connections(notify: false);
-      case final DeveloperActionConfig config:
-        _setDraftKind(_AgentActionDraftKind.developer);
-        _commandController.clear();
-        _executableTargetPathController.clear();
-        _executableArgumentsController.clear();
-        _scriptPathController.clear();
-        _scriptInterpreterPathController.clear();
-        _jarPathController.clear();
-        _javaExecutablePathController.clear();
-        _workingDirectoryController.clear();
-        _smtpProfileIdController.clear();
-        _emailFromController.clear();
-        _emailToController.clear();
-        _emailCcController.clear();
-        _emailBccController.clear();
-        _emailSubjectController.clear();
-        _emailBodyController.clear();
-        _emailAttachmentsController.clear();
-        _comProgIdController.clear();
-        _comMemberNameController.clear();
-        _comArgumentsController.text = '{}';
-        _executorPathController.text = config.executorPath.originalPath;
-        _projectPathController.text = config.projectPath.originalPath;
-        _data7ConfigPathController.text = config.data7ConfigPath.originalPath;
-        _connectionIdController.text = config.connectionId;
-        _connectionLabelController.text = config.connectionLabel;
-        _scheduleDeveloperConnectionReload(
-          pathPolicy: definition.policies.path,
-          selectedConnectionId: config.connectionId,
-        );
-    }
+      _editingActionId = definition.id;
+      _nameController.text = definition.name;
+      _descriptionController.text = definition.description ?? '';
+      _state = definition.state;
+      final notification = definition.policies.notification;
+      _notifyOnSuccess = notification.notifyOnSuccess;
+      _notifyOnFailure = notification.notifyOnFailure;
+      _notifyOnTimeout = notification.notifyOnTimeout;
+      final retry = definition.policies.retry;
+      _maxAttempts = retry.maxAttempts < 1 ? 1 : retry.maxAttempts;
+      _allowRemoteRetry = retry.allowRemote;
+      final timeout = definition.policies.timeout;
+      _maxRuntimeMinutes = timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes;
+      _maxRuntimeMinutesController.text = '$_maxRuntimeMinutes';
+      _killMainProcessOnTimeout = timeout.killMainProcessOnTimeout;
+      final environment = definition.policies.environment;
+      _allowedProfilesController.text = environment.allowedProfiles.join(', ');
+      _allowedEnvironmentVariableNamesController.text = environment.allowedVariableNames.join(', ');
+      _environmentVariablesController.text = _formatEnvironmentVariables(environment.variables);
+      final exitCode = definition.policies.exitCode;
+      _acceptedExitCodesController.text = exitCode.acceptedExitCodes.join(', ');
+      _onAppExit = definition.policies.lifecycle.onAppExit;
+      _processWindowMode = definition.policies.process.windowMode;
+      final encoding = definition.policies.encoding;
+      _stdoutEncodingMode = encoding.stdout;
+      _stderrEncodingMode = encoding.stderr;
+      final capture = definition.policies.capture;
+      _captureStdout = capture.captureStdout;
+      _captureStderr = capture.captureStderr;
+      _redactBeforePersisting = capture.redactBeforePersisting;
+      final queue = definition.policies.queue;
+      _maxConcurrentController.text = '${queue.maxConcurrent}';
+      _maxQueuedController.text = '${queue.maxQueued}';
+      _concurrencyBehavior = queue.concurrencyBehavior;
+      final pathPolicy = definition.policies.path;
+      _allowedWorkingDirectoriesController.text = pathPolicy.allowedWorkingDirectories.join(', ');
+      _allowedContextDirectoriesController.text = pathPolicy.allowedContextDirectories.join(', ');
+      final remote = definition.policies.remote;
+      _remoteEnabled = remote.isEnabled;
+      _remoteAdHoc = remote.allowAdHoc && widget.provider.isRemoteAdHocAgentActionsEnabled;
+      _remoteApprovalGranted = remote.approvedAt != null && !remote.requiresReapproval;
+      _runElevated = definition.policies.elevated.runElevated && widget.provider.isElevatedAgentActionsEnabled;
+      final contextPolicy = definition.policies.context;
+      _contextInjectionMode = contextPolicy.injectionMode;
+      final runtimeSchema = contextPolicy.runtimeParameterSchema;
+      _runtimeParameterSchemaController.text = runtimeSchema == null
+          ? ''
+          : const JsonEncoder.withIndent('  ').convert(runtimeSchema);
+      switch (definition.config) {
+        case final CommandLineActionConfig config:
+          final powerShellCommand = PowerShellCommandLine.tryParseInlineCommand(config.command);
+          if (powerShellCommand == null) {
+            _setDraftKind(_AgentActionDraftKind.commandLine);
+            _commandController.text = config.command;
+          } else {
+            _powerShellMode = _PowerShellDraftMode.inline;
+            _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(powerShellCommand.executable)
+                ? _PowerShellExecutable.powerShell7
+                : _PowerShellExecutable.windowsPowerShell;
+            _setDraftKind(_AgentActionDraftKind.powerShell);
+            _commandController.text = powerShellCommand.command;
+          }
+          _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
+          _pathChangePolicy = config.workingDirectory?.pathChangePolicy ?? AgentActionPathChangePolicy.failIfChanged;
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.clear();
+          _comMemberNameController.clear();
+          _comArgumentsController.text = '{}';
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final ExecutableActionConfig config:
+          _setDraftKind(_AgentActionDraftKind.executable);
+          _commandController.clear();
+          _executableTargetPathController.text = config.executablePath.originalPath;
+          _executableArgumentsController.text = config.arguments.join('\n');
+          _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.clear();
+          _comMemberNameController.clear();
+          _comArgumentsController.text = '{}';
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final ScriptActionConfig config:
+          if (PowerShellCommandLine.isPowerShellScriptPath(config.scriptPath.originalPath)) {
+            _powerShellMode = _PowerShellDraftMode.script;
+            _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(config.interpreterPath?.originalPath)
+                ? _PowerShellExecutable.powerShell7
+                : _PowerShellExecutable.windowsPowerShell;
+            _setDraftKind(_AgentActionDraftKind.powerShell);
+          } else {
+            _setDraftKind(_AgentActionDraftKind.script);
+          }
+          _commandController.clear();
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.text = config.scriptPath.originalPath;
+          _scriptInterpreterPathController.text = config.interpreterPath?.originalPath ?? '';
+          _executableArgumentsController.text = config.arguments.join('\n');
+          _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.clear();
+          _comMemberNameController.clear();
+          _comArgumentsController.text = '{}';
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final JarActionConfig config:
+          _setDraftKind(_AgentActionDraftKind.jar);
+          _commandController.clear();
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.text = config.jarPath.originalPath;
+          _javaExecutablePathController.text = config.javaExecutablePath?.originalPath ?? '';
+          _executableArgumentsController.text = config.arguments.join('\n');
+          _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.clear();
+          _comMemberNameController.clear();
+          _comArgumentsController.text = '{}';
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final EmailActionConfig config:
+          _setDraftKind(_AgentActionDraftKind.email);
+          _commandController.clear();
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _workingDirectoryController.clear();
+          _smtpProfileIdController.text = config.smtpProfileId;
+          _emailFromController.text = config.from;
+          _emailToController.text = config.to.join('\n');
+          _emailCcController.text = config.cc.join('\n');
+          _emailBccController.text = config.bcc.join('\n');
+          _emailSubjectController.text = config.subjectTemplate;
+          _emailBodyController.text = config.bodyTemplate;
+          _emailAttachmentsController.text = config.attachmentPaths.map((path) => path.originalPath).join('\n');
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final ComObjectActionConfig config:
+          _setDraftKind(_AgentActionDraftKind.comObject);
+          _commandController.clear();
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _workingDirectoryController.clear();
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.text = config.progId;
+          _comMemberNameController.text = config.memberName;
+          _comArgumentsController.text = const JsonEncoder.withIndent('  ').convert(config.arguments);
+          _executorPathController.clear();
+          _projectPathController.clear();
+          _data7ConfigPathController.clear();
+          _connectionIdController.clear();
+          _connectionLabelController.clear();
+          widget.provider.clearDeveloperData7Connections(notify: false);
+        case final DeveloperActionConfig config:
+          _setDraftKind(_AgentActionDraftKind.developer);
+          _commandController.clear();
+          _executableTargetPathController.clear();
+          _executableArgumentsController.clear();
+          _scriptPathController.clear();
+          _scriptInterpreterPathController.clear();
+          _jarPathController.clear();
+          _javaExecutablePathController.clear();
+          _workingDirectoryController.clear();
+          _smtpProfileIdController.clear();
+          _emailFromController.clear();
+          _emailToController.clear();
+          _emailCcController.clear();
+          _emailBccController.clear();
+          _emailSubjectController.clear();
+          _emailBodyController.clear();
+          _emailAttachmentsController.clear();
+          _comProgIdController.clear();
+          _comMemberNameController.clear();
+          _comArgumentsController.text = '{}';
+          _executorPathController.text = config.executorPath.originalPath;
+          _projectPathController.text = config.projectPath.originalPath;
+          _data7ConfigPathController.text = config.data7ConfigPath.originalPath;
+          _connectionIdController.text = config.connectionId;
+          _connectionLabelController.text = config.connectionLabel;
+          _scheduleDeveloperConnectionReload(
+            pathPolicy: definition.policies.path,
+            selectedConnectionId: config.connectionId,
+          );
+      }
     } finally {
       _applyingLoadedDefinition = false;
     }
@@ -868,9 +868,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       );
     }
 
-    final isExpired = definition != null &&
-        !_isDraftModifiedSinceLoad &&
-        widget.provider.isPreflightExpiredForDefinition(definition);
+    final isExpired =
+        definition != null && !_isDraftModifiedSinceLoad && widget.provider.isPreflightExpiredForDefinition(definition);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -878,9 +877,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         InfoBar(
           title: Text(
-            isExpired
-                ? widget.l10n.agentActionsPreflightExpiredTitle
-                : widget.l10n.agentActionsPreflightRequiredTitle,
+            isExpired ? widget.l10n.agentActionsPreflightExpiredTitle : widget.l10n.agentActionsPreflightRequiredTitle,
           ),
           content: Text(
             isExpired

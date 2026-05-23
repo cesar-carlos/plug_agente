@@ -58,7 +58,7 @@ import 'package:plug_agente/infrastructure/actions/action_command_safety_validat
 import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/agent_actions_page.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_page.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';

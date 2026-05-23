@@ -6,6 +6,7 @@
 test/infrastructure/actions/agent_action_type_registry_contract_test.dart
 test/infrastructure/actions/action_command_normalizer_test.dart
 test/infrastructure/actions/action_path_validator_test.dart
+test/infrastructure/actions/agent_actions_bundle_file_gateway_test.dart
 test/infrastructure/actions/developer_data7_connection_catalog_test.dart
 test/infrastructure/actions/developer_data7_action_adapter_test.dart
 test/infrastructure/actions/developer_data7_process_runner_test.dart

@@ -47,6 +47,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_filter_helpers.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -214,7 +215,16 @@ class AgentActionsProvider extends ChangeNotifier {
       return cached;
     }
 
-    final matched = _definitions.where(_matchesDefinitionListFilter).toList(growable: false);
+    final matched = _definitions
+        .where(
+          (AgentActionDefinition definition) => agentActionsMatchesDefinitionListFilter(
+            definition: definition,
+            typeFilter: _definitionTypeFilter,
+            stateFilter: _definitionStateFilter,
+            searchQuery: _definitionSearchQuery,
+          ),
+        )
+        .toList(growable: false);
     final selectedId = selectedActionId;
     if (selectedId == null) {
       return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
@@ -534,8 +544,14 @@ class AgentActionsProvider extends ChangeNotifier {
           final matchesStatus = _historyStatusFilter == null || execution.status == _historyStatusFilter;
           final matchesSource = _historySourceFilter == null || execution.source == _historySourceFilter;
           final matchesPeriod = periodStart == null || !execution.requestedAt.isBefore(periodStart);
-          final matchesFailurePhase = _matchesHistoryFailurePhase(execution);
-          final matchesSearch = _matchesHistorySearch(execution);
+          final matchesFailurePhase = agentActionsMatchesHistoryFailurePhase(
+            execution: execution,
+            failurePhaseFilter: _historyFailurePhaseFilter,
+          );
+          final matchesSearch = agentActionsMatchesHistorySearch(
+            execution: execution,
+            searchQuery: _historySearchQuery,
+          );
           return matchesAction &&
               matchesStatus &&
               matchesSource &&
@@ -971,58 +987,6 @@ class AgentActionsProvider extends ChangeNotifier {
     _definitionStateFilter = null;
     _definitionSearchQuery = '';
     notifyListeners();
-  }
-
-  bool _matchesDefinitionListFilter(AgentActionDefinition definition) {
-    if (_definitionTypeFilter != null && definition.type != _definitionTypeFilter) {
-      return false;
-    }
-    if (_definitionStateFilter != null && definition.state != _definitionStateFilter) {
-      return false;
-    }
-    if (_definitionSearchQuery.isEmpty) {
-      return true;
-    }
-    final needle = _definitionSearchQuery.toLowerCase();
-    if (definition.name.toLowerCase().contains(needle)) {
-      return true;
-    }
-    if (definition.id.toLowerCase().contains(needle)) {
-      return true;
-    }
-    return definition.type.name.toLowerCase().contains(needle);
-  }
-
-  bool _matchesHistoryFailurePhase(AgentActionExecution execution) {
-    final filter = _historyFailurePhaseFilter;
-    if (filter == null) {
-      return true;
-    }
-    final phase = execution.failurePhase?.trim().toLowerCase();
-    return phase != null && phase == filter.toLowerCase();
-  }
-
-  bool _matchesHistorySearch(AgentActionExecution execution) {
-    if (_historySearchQuery.isEmpty) {
-      return true;
-    }
-
-    final needle = _historySearchQuery.toLowerCase();
-    if (execution.id.toLowerCase().contains(needle)) {
-      return true;
-    }
-
-    final idempotencyKey = execution.idempotencyKey?.toLowerCase();
-    if (idempotencyKey != null && idempotencyKey.contains(needle)) {
-      return true;
-    }
-
-    final traceId = execution.traceId?.toLowerCase();
-    if (traceId != null && traceId.contains(needle)) {
-      return true;
-    }
-
-    return false;
   }
 
   Future<void> _refreshSelectedSecretReport() async {
