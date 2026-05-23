@@ -62,6 +62,7 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - "tool/plug_agente_elevated_runner/**"
   plugins:
     - drift_dev
 

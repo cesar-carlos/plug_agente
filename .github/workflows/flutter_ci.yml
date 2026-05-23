@@ -48,6 +48,14 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Install elevated runner dependencies
+        working-directory: tool/plug_agente_elevated_runner
+        run: dart pub get
+
+      - name: Analyze elevated runner
+        working-directory: tool/plug_agente_elevated_runner
+        run: dart analyze
+
       - name: Test
         run: flutter test --exclude-tags "live || slow || perf"
 
@@ -58,10 +66,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          contract_paths=$(grep -v '^\s*#' tool/agent_actions_contract_test_paths.txt | grep -v '^\s*$' | tr '\n' ' ')
-          ui_paths=$(grep -v '^\s*#' tool/agent_actions_ui_test_paths.txt | grep -v '^\s*$' | tr '\n' ' ')
-          flutter test $contract_paths
-          flutter test $ui_paths
+          mapfile -t contract_paths < <(grep -v '^\s*#' tool/agent_actions_contract_test_paths.txt | grep -v '^\s*$')
+          mapfile -t ui_paths < <(grep -v '^\s*#' tool/agent_actions_ui_test_paths.txt | grep -v '^\s*$')
+          flutter test "${contract_paths[@]}"
+          flutter test "${ui_paths[@]}"
 
       - name: Installer setup script test
         run: flutter test test/installer/setup_script_test.dart
