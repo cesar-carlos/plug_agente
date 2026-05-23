@@ -1,4 +1,24 @@
-part of 'agent_actions_page.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:collection/collection.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/widgets.dart' as widgets;
+import 'package:intl/intl.dart';
+import 'package:plug_agente/application/actions/actions.dart';
+import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/core/utils/powershell_command_line.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
+import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 enum _AgentActionDraftKind {
   commandLine,
@@ -21,7 +41,7 @@ enum _PowerShellExecutable {
   powerShell7,
 }
 
-abstract final class _AgentActionEditorKeys {
+abstract final class AgentActionEditorKeys {
   static const ValueKey<String> actionTypeDropdown = ValueKey<String>('agent_action_editor_type_dropdown');
   static const ValueKey<String> powerShellModeDropdown = ValueKey<String>(
     'agent_action_editor_powershell_mode_dropdown',
@@ -29,10 +49,20 @@ abstract final class _AgentActionEditorKeys {
   static const ValueKey<String> powerShellExecutableDropdown = ValueKey<String>(
     'agent_action_editor_powershell_executable_dropdown',
   );
+  static const ValueKey<String> remoteReapprovalInfoBar = ValueKey<String>('agent_actions_remote_reapproval_info_bar');
+  static const ValueKey<String> developerConnectionMissingInfoBar = ValueKey<String>(
+    'agent_actions_developer_connection_missing_info_bar',
+  );
+  static const ValueKey<String> developerConnectionUnknownInfoBar = ValueKey<String>(
+    'agent_actions_developer_connection_unknown_info_bar',
+  );
+  static const ValueKey<String> developerConnectionChangedInfoBar = ValueKey<String>(
+    'agent_actions_developer_connection_changed_info_bar',
+  );
 }
 
-class _AgentActionEditor extends StatefulWidget {
-  const _AgentActionEditor({
+class AgentActionEditor extends StatefulWidget {
+  const AgentActionEditor({
     required this.provider,
     required this.l10n,
     this.definition,
@@ -47,10 +77,22 @@ class _AgentActionEditor extends StatefulWidget {
   final VoidCallback? onSaved;
 
   @override
-  State<_AgentActionEditor> createState() => _AgentActionEditorState();
+  State<AgentActionEditor> createState() => _AgentActionEditorState();
 }
 
-class _AgentActionEditorState extends State<_AgentActionEditor> {
+
+const List<_AgentActionDraftKind> _editableDraftKinds = <_AgentActionDraftKind>[
+  _AgentActionDraftKind.commandLine,
+  _AgentActionDraftKind.executable,
+  _AgentActionDraftKind.script,
+  _AgentActionDraftKind.jar,
+  _AgentActionDraftKind.email,
+  _AgentActionDraftKind.comObject,
+  _AgentActionDraftKind.developer,
+  _AgentActionDraftKind.powerShell,
+];
+
+class _AgentActionEditorState extends State<AgentActionEditor> {
   static const int _dialogSectionCount = 6;
   static const String _defaultDeveloperExecutorPath = r'C:\Data7\bin\Executor.exe';
   static const String _defaultDeveloperConfigBinPath = r'C:\Data7\bin\Data7.Config';
@@ -143,7 +185,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   }
 
   @override
-  void didUpdateWidget(_AgentActionEditor oldWidget) {
+  void didUpdateWidget(AgentActionEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.definition?.id != widget.definition?.id || oldWidget.definition?.type != widget.definition?.type) {
       _loadDefinition(widget.definition);
@@ -378,13 +420,13 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
   String _draftKindLabel(_AgentActionDraftKind draftKind) {
     return switch (draftKind) {
-      _AgentActionDraftKind.commandLine => _typeLabel(AgentActionType.commandLine, widget.l10n),
-      _AgentActionDraftKind.executable => _typeLabel(AgentActionType.executable, widget.l10n),
-      _AgentActionDraftKind.script => _typeLabel(AgentActionType.script, widget.l10n),
-      _AgentActionDraftKind.jar => _typeLabel(AgentActionType.jar, widget.l10n),
-      _AgentActionDraftKind.email => _typeLabel(AgentActionType.email, widget.l10n),
-      _AgentActionDraftKind.comObject => _typeLabel(AgentActionType.comObject, widget.l10n),
-      _AgentActionDraftKind.developer => _typeLabel(AgentActionType.developer, widget.l10n),
+      _AgentActionDraftKind.commandLine => agentActionEditorTypeLabel(AgentActionType.commandLine, widget.l10n),
+      _AgentActionDraftKind.executable => agentActionEditorTypeLabel(AgentActionType.executable, widget.l10n),
+      _AgentActionDraftKind.script => agentActionEditorTypeLabel(AgentActionType.script, widget.l10n),
+      _AgentActionDraftKind.jar => agentActionEditorTypeLabel(AgentActionType.jar, widget.l10n),
+      _AgentActionDraftKind.email => agentActionEditorTypeLabel(AgentActionType.email, widget.l10n),
+      _AgentActionDraftKind.comObject => agentActionEditorTypeLabel(AgentActionType.comObject, widget.l10n),
+      _AgentActionDraftKind.developer => agentActionEditorTypeLabel(AgentActionType.developer, widget.l10n),
       _AgentActionDraftKind.powerShell => widget.l10n.agentActionsTypePowerShell,
     };
   }
@@ -1300,7 +1342,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
               final isEditing = _editingActionId != null;
               final typeField = isEditing
                   ? AppTextField(
-                      key: _AgentActionEditorKeys.actionTypeDropdown,
+                      key: AgentActionEditorKeys.actionTypeDropdown,
                       label: widget.l10n.agentActionsFormType,
                       helpTitle: widget.l10n.agentActionsHelpTypeTitle,
                       helpMessage: widget.l10n.agentActionsHelpTypeMessage,
@@ -1310,7 +1352,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       textInputAction: TextInputAction.next,
                     )
                   : AppDropdown<_AgentActionDraftKind>(
-                      key: _AgentActionEditorKeys.actionTypeDropdown,
+                      key: AgentActionEditorKeys.actionTypeDropdown,
                       label: widget.l10n.agentActionsFormType,
                       helpTitle: widget.l10n.agentActionsHelpTypeTitle,
                       helpMessage: widget.l10n.agentActionsHelpTypeMessage,
@@ -1355,7 +1397,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       (state) => ComboBoxItem<AgentActionState>(
                         value: state,
                         enabled: state != AgentActionState.active || canSelectActiveState,
-                        child: Text(_stateLabel(state, widget.l10n)),
+                        child: Text(agentActionEditorStateLabel(state, widget.l10n)),
                       ),
                     )
                     .toList(growable: false),
@@ -1567,7 +1609,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormKillOnTimeout,
                 helpTitle: widget.l10n.agentActionsHelpKillOnTimeoutTitle,
                 helpMessage: widget.l10n.agentActionsHelpKillOnTimeoutMessage,
@@ -1582,7 +1624,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormAllowRemoteRetry,
                 helpTitle: widget.l10n.agentActionsHelpRemoteRetryTitle,
                 helpMessage: widget.l10n.agentActionsHelpRemoteRetryMessage,
@@ -1597,7 +1639,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         unawaited(_onRunElevatedChanged(value ?? false));
                       }
                     : null,
-                content: _HelpCheckboxLabel(
+                content: AgentActionEditorHelpCheckboxLabel(
                   label: widget.l10n.agentActionsFormRunElevated,
                   helpTitle: widget.l10n.agentActionsHelpRunElevatedTitle,
                   helpMessage: widget.l10n.agentActionsHelpRunElevatedMessage,
@@ -1898,7 +1940,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: _HelpCheckboxLabel(
+                content: AgentActionEditorHelpCheckboxLabel(
                   label: widget.l10n.agentActionsFormCaptureStdout,
                   helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
                   helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
@@ -1913,7 +1955,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: _HelpCheckboxLabel(
+                content: AgentActionEditorHelpCheckboxLabel(
                   label: widget.l10n.agentActionsFormCaptureStderr,
                   helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
                   helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
@@ -1928,7 +1970,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       }
                     : null,
-                content: _HelpCheckboxLabel(
+                content: AgentActionEditorHelpCheckboxLabel(
                   label: widget.l10n.agentActionsFormRedactBeforePersisting,
                   helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
                   helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
@@ -2139,7 +2181,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                   : (bool? value) {
                       unawaited(_onRemoteEnabledChanged(value ?? false));
                     },
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormRemoteExecutionEnabled,
                 helpTitle: widget.l10n.agentActionsHelpRemoteExecutionTitle,
                 helpMessage: widget.l10n.agentActionsHelpRemoteExecutionMessage,
@@ -2152,7 +2194,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                   : (bool? value) {
                       unawaited(_onRemoteAdHocChanged(value ?? false));
                     },
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormRemoteAdHocEnabled,
                 helpTitle: widget.l10n.agentActionsHelpRemoteAdHocTitle,
                 helpMessage: widget.l10n.agentActionsHelpRemoteAdHocMessage,
@@ -2163,7 +2205,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         if (widget.definition?.policies.remote.requiresReapproval ?? false) ...[
           const SizedBox(height: AppSpacing.sm),
           InfoBar(
-            key: _AgentActionsPageKeys.remoteReapprovalInfoBar,
+            key: AgentActionEditorKeys.remoteReapprovalInfoBar,
             title: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredTitle),
             content: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredMessage),
             severity: InfoBarSeverity.warning,
@@ -2289,7 +2331,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormNotifyOnSuccess,
                 helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
                 helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
@@ -2304,7 +2346,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormNotifyOnFailure,
                 helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
                 helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
@@ -2319,7 +2361,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                       });
                     }
                   : null,
-              content: _HelpCheckboxLabel(
+              content: AgentActionEditorHelpCheckboxLabel(
                 label: widget.l10n.agentActionsFormNotifyOnTimeout,
                 helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
                 helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
@@ -2368,7 +2410,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           controller: _executableTargetPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowseExecutablePath,
             icon: FluentIcons.open_file,
             onPressed: saving || !widget.provider.canSaveAction ? null : _pickExecutableTargetPath,
@@ -2527,7 +2569,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           controller: _jarPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowseJarPath,
             icon: FluentIcons.open_file,
             onPressed: saving || !widget.provider.canSaveAction ? null : _pickJarPath,
@@ -2542,7 +2584,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
           hint: widget.l10n.agentActionsFormJavaExecutablePathHint,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowseJavaExecutablePath,
             icon: FluentIcons.open_file,
             onPressed: saving || !widget.provider.canSaveAction ? null : _pickJavaExecutablePath,
@@ -2580,7 +2622,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           controller: _scriptPathController,
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowseScriptPath,
             icon: FluentIcons.open_file,
             onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptPath,
@@ -2595,7 +2637,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           enabled: !saving && widget.provider.canSaveAction,
           textInputAction: TextInputAction.next,
           hint: widget.l10n.agentActionsFormInterpreterPathHint,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowseInterpreterPath,
             icon: FluentIcons.open_file,
             onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptInterpreterPath,
@@ -2638,7 +2680,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
                 onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: _PathPickerButton(
+                suffixIcon: AgentActionEditorPathPickerButton(
                   tooltip: widget.l10n.agentActionsFormBrowseExecutorPath,
                   icon: FluentIcons.open_file,
                   onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperExecutorPath,
@@ -2655,7 +2697,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
                 onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: _PathPickerButton(
+                suffixIcon: AgentActionEditorPathPickerButton(
                   tooltip: widget.l10n.agentActionsFormBrowseProjectPath,
                   icon: FluentIcons.open_file,
                   onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperProjectPath,
@@ -2665,7 +2707,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        _DeveloperPathShortcuts(
+        AgentActionEditorDeveloperPathShortcuts(
           primaryLabel: widget.l10n.agentActionsFormUseDefaultExecutorPath,
           onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperExecutorPath,
         ),
@@ -2731,7 +2773,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                 enabled: !saving && widget.provider.canSaveAction,
                 textInputAction: TextInputAction.next,
                 onChanged: _handleDeveloperConfigPathChanged,
-                suffixIcon: _PathPickerButton(
+                suffixIcon: AgentActionEditorPathPickerButton(
                   tooltip: widget.l10n.agentActionsFormBrowseData7ConfigPath,
                   icon: FluentIcons.open_file,
                   onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperData7ConfigPath,
@@ -2753,7 +2795,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        _DeveloperPathShortcuts(
+        AgentActionEditorDeveloperPathShortcuts(
           primaryLabel: widget.l10n.agentActionsFormUseDefaultConfigBinPath,
           onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperData7ConfigBinPath,
           secondaryLabel: widget.l10n.agentActionsFormUseDefaultConfigRootPath,
@@ -2830,7 +2872,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     final isEditing = _editingActionId != null;
     final modeField = isEditing
         ? AppTextField(
-            key: _AgentActionEditorKeys.powerShellModeDropdown,
+            key: AgentActionEditorKeys.powerShellModeDropdown,
             label: widget.l10n.agentActionsFormPowerShellMode,
             helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
             helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
@@ -2840,7 +2882,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
             textInputAction: TextInputAction.next,
           )
         : AppDropdown<_PowerShellDraftMode>(
-            key: _AgentActionEditorKeys.powerShellModeDropdown,
+            key: AgentActionEditorKeys.powerShellModeDropdown,
             label: widget.l10n.agentActionsFormPowerShellMode,
             helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
             helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
@@ -2872,7 +2914,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                 : null,
           );
     final executableField = AppDropdown<_PowerShellExecutable>(
-      key: _AgentActionEditorKeys.powerShellExecutableDropdown,
+      key: AgentActionEditorKeys.powerShellExecutableDropdown,
       label: widget.l10n.agentActionsFormPowerShellExecutable,
       helpTitle: widget.l10n.agentActionsHelpPowerShellExecutableTitle,
       helpMessage: widget.l10n.agentActionsHelpPowerShellExecutableMessage,
@@ -2926,7 +2968,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           controller: _scriptPathController,
           enabled: enabled,
           textInputAction: TextInputAction.next,
-          suffixIcon: _PathPickerButton(
+          suffixIcon: AgentActionEditorPathPickerButton(
             tooltip: widget.l10n.agentActionsFormBrowsePowerShellScriptPath,
             icon: FluentIcons.open_file,
             onPressed: enabled ? _pickPowerShellScriptPath : null,
@@ -2974,19 +3016,19 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   }
 
   List<Widget> _buildDeveloperBinaryPathHints() {
-    final hints = <_DeveloperHintData>[];
+    final hints = <AgentActionEditorDeveloperHintData>[];
     final executorPath = _executorPathController.text.trim();
     if (executorPath.isNotEmpty) {
       final normalizedExecutorPath = _normalizePathForComparison(executorPath);
       if (!_endsWithFileName(normalizedExecutorPath, 'executor.exe')) {
         hints.add(
-          _DeveloperHintData.warning(
+          AgentActionEditorDeveloperHintData.warning(
             widget.l10n.agentActionsFormExecutorPathHintExpectedFileName,
           ),
         );
       } else if (normalizedExecutorPath == _normalizePathForComparison(_defaultDeveloperExecutorPath)) {
         hints.add(
-          _DeveloperHintData.info(
+          AgentActionEditorDeveloperHintData.info(
             widget.l10n.agentActionsFormExecutorPathHintDefault,
           ),
         );
@@ -3004,7 +3046,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     if (projectPath.isNotEmpty) {
       if (!_normalizePathForComparison(projectPath).endsWith('.7proj')) {
         hints.add(
-          _DeveloperHintData.warning(
+          AgentActionEditorDeveloperHintData.warning(
             widget.l10n.agentActionsFormProjectPathHintExpectedExtension,
           ),
         );
@@ -3024,7 +3066,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
     return <Widget>[
       const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(hints: hints),
+      AgentActionEditorDeveloperHintsWrap(hints: hints),
     ];
   }
 
@@ -3035,22 +3077,22 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     }
 
     final normalizedConfigPath = _normalizePathForComparison(configPath);
-    final hints = <_DeveloperHintData>[];
+    final hints = <AgentActionEditorDeveloperHintData>[];
     if (!_endsWithFileName(normalizedConfigPath, 'data7.config')) {
       hints.add(
-        _DeveloperHintData.warning(
+        AgentActionEditorDeveloperHintData.warning(
           widget.l10n.agentActionsFormData7ConfigPathHintExpectedFileName,
         ),
       );
     } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigBinPath)) {
       hints.add(
-        _DeveloperHintData.info(
+        AgentActionEditorDeveloperHintData.info(
           widget.l10n.agentActionsFormData7ConfigPathHintDefaultBin,
         ),
       );
     } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigRootPath)) {
       hints.add(
-        _DeveloperHintData.info(
+        AgentActionEditorDeveloperHintData.info(
           widget.l10n.agentActionsFormData7ConfigPathHintDefaultRoot,
         ),
       );
@@ -3069,7 +3111,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
     return <Widget>[
       const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(hints: hints),
+      AgentActionEditorDeveloperHintsWrap(hints: hints),
     ];
   }
 
@@ -3088,9 +3130,9 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
     return <Widget>[
       const SizedBox(height: AppSpacing.xs),
-      _DeveloperHintsWrap(
-        hints: <_DeveloperHintData>[
-          _DeveloperHintData.info(message),
+      AgentActionEditorDeveloperHintsWrap(
+        hints: <AgentActionEditorDeveloperHintData>[
+          AgentActionEditorDeveloperHintData.info(message),
         ],
       ),
     ];
@@ -3125,8 +3167,8 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
         const SizedBox(height: AppSpacing.sm),
         InfoBar(
           key: isSavedConnectionMissing
-              ? _AgentActionsPageKeys.developerConnectionMissingInfoBar
-              : _AgentActionsPageKeys.developerConnectionUnknownInfoBar,
+              ? AgentActionEditorKeys.developerConnectionMissingInfoBar
+              : AgentActionEditorKeys.developerConnectionUnknownInfoBar,
           title: Text(
             isSavedConnectionMissing
                 ? widget.l10n.agentActionsFormConnectionMissingTitle
@@ -3151,7 +3193,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       return <Widget>[
         const SizedBox(height: AppSpacing.sm),
         InfoBar(
-          key: _AgentActionsPageKeys.developerConnectionChangedInfoBar,
+          key: AgentActionEditorKeys.developerConnectionChangedInfoBar,
           title: Text(widget.l10n.agentActionsFormConnectionChangedTitle),
           content: Text(widget.l10n.agentActionsFormConnectionChangedMessage),
           severity: InfoBarSeverity.warning,
@@ -3997,7 +4039,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     return normalizedPath.endsWith(expectedSuffix) || normalizedPath == fileName.toLowerCase();
   }
 
-  List<_DeveloperHintData> _buildDeveloperFileInspectionHints({
+  List<AgentActionEditorDeveloperHintData> _buildDeveloperFileInspectionHints({
     required String path,
     required String missingMessage,
     required String directoryMessage,
@@ -4005,60 +4047,20 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     try {
       final entityType = FileSystemEntity.typeSync(path);
       return switch (entityType) {
-        FileSystemEntityType.notFound => <_DeveloperHintData>[
-          _DeveloperHintData.warning(missingMessage),
+        FileSystemEntityType.notFound => <AgentActionEditorDeveloperHintData>[
+          AgentActionEditorDeveloperHintData.warning(missingMessage),
         ],
-        FileSystemEntityType.directory => <_DeveloperHintData>[
-          _DeveloperHintData.warning(directoryMessage),
+        FileSystemEntityType.directory => <AgentActionEditorDeveloperHintData>[
+          AgentActionEditorDeveloperHintData.warning(directoryMessage),
         ],
-        _ => const <_DeveloperHintData>[],
+        _ => const <AgentActionEditorDeveloperHintData>[],
       };
     } on FileSystemException {
-      return <_DeveloperHintData>[
-        _DeveloperHintData.warning(
+      return <AgentActionEditorDeveloperHintData>[
+        AgentActionEditorDeveloperHintData.warning(
           widget.l10n.agentActionsFormPathHintInspectionFailed,
         ),
       ];
     }
-  }
-}
-
-class _HelpCheckboxLabel extends StatelessWidget {
-  const _HelpCheckboxLabel({
-    required this.label,
-    required this.helpTitle,
-    required this.helpMessage,
-  });
-
-  final String label;
-  final String helpTitle;
-  final String helpMessage;
-
-  String get _helpKeyToken {
-    var token = label.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
-    while (token.startsWith('_')) {
-      token = token.substring(1);
-    }
-    while (token.endsWith('_')) {
-      token = token.substring(0, token.length - 1);
-    }
-    return token;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(label),
-        AppHelpButton(
-          key: ValueKey<String>('app_help_button_$_helpKeyToken'),
-          title: helpTitle,
-          message: helpMessage,
-          semanticLabel: '$label. $helpTitle',
-        ),
-      ],
-    );
   }
 }

@@ -1,81 +1,43 @@
 ﻿import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
-import 'package:intl/intl.dart';
-import 'package:plug_agente/application/actions/actions.dart';
-import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
-import 'package:plug_agente/application/rpc/agent_action_execution_output_pager.dart';
-import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_failure_phase_filter_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_page_editor.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_preferences.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_actions_tab.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_history_tab.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_keys.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_selected_detail.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_settings_tab.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_status_strip.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_definition_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_secrets_section.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_dangerous_command_warn_card.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_detail_panel.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_preflight_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_summary_card.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_toolbar_card.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
-import 'package:plug_agente/shared/widgets/common/layout/app_filter_bar.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
-import 'package:result_dart/result_dart.dart';
-
-part 'agent_actions_page_editor.dart';
-part 'agent_actions_page_widgets.dart';
-
-class _AgentActionsPageKeys {
-  static const ValueKey<String> detailScroll = ValueKey<String>('agent_actions_detail_scroll');
-  static const ValueKey<String> testPreview = ValueKey<String>('agent_actions_test_preview');
-  static const ValueKey<String> remoteReapprovalInfoBar = ValueKey<String>('agent_actions_remote_reapproval_info_bar');
-  static const ValueKey<String> developerConnectionMissingInfoBar = ValueKey<String>(
-    'agent_actions_developer_connection_missing_info_bar',
-  );
-  static const ValueKey<String> developerConnectionUnknownInfoBar = ValueKey<String>(
-    'agent_actions_developer_connection_unknown_info_bar',
-  );
-  static const ValueKey<String> developerConnectionChangedInfoBar = ValueKey<String>(
-    'agent_actions_developer_connection_changed_info_bar',
-  );
-
-  static ValueKey<String> executionSupportCopyButton(String executionId) {
-    return ValueKey<String>('execution_support_copy_button_$executionId');
-  }
-}
 
 class AgentActionsPage extends StatefulWidget {
-  const AgentActionsPage({super.key});
+  const AgentActionsPage({
+    required this.runtimeCapabilities,
+    required this.appSettingsStore,
+    this.runtimeDiagnostics,
+    super.key,
+  });
+
+  final RuntimeCapabilities runtimeCapabilities;
+  final RuntimeDetectionDiagnostics? runtimeDiagnostics;
+  final IAppSettingsStore appSettingsStore;
 
   @override
   State<AgentActionsPage> createState() => _AgentActionsPageState();
@@ -90,7 +52,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   @override
   void initState() {
     super.initState();
-    _uiPreferences = AgentActionsUiPreferences(_settingsStore);
+    _uiPreferences = AgentActionsUiPreferences(() => widget.appSettingsStore);
     _selectedTabIndex = _uiPreferences.readSelectedTabIndex() ?? 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -105,10 +67,6 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final runtimeCapabilities = getIt<RuntimeCapabilities>();
-    final runtimeDiagnostics = getIt.isRegistered<RuntimeDetectionDiagnostics>()
-        ? getIt<RuntimeDetectionDiagnostics>()
-        : null;
 
     return ScaffoldPage(
       header: PageHeader(
@@ -148,7 +106,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                 _runPageShortcut(() {
                   if (provider.canRunSelected) {
                     unawaited(
-                      _runSelectedActionWithDangerousCommandCheck(
+                      runAgentActionWithDangerousCommandCheck(
                         context,
                         provider,
                         l10n,
@@ -165,7 +123,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _AgentActionsStatusStrip(
+                    AgentActionsStatusStrip(
                       provider: provider,
                       l10n: l10n,
                     ),
@@ -176,8 +134,8 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                               context: context,
                               provider: provider,
                               l10n: l10n,
-                              runtimeCapabilities: runtimeCapabilities,
-                              runtimeDiagnostics: runtimeDiagnostics,
+                              runtimeCapabilities: widget.runtimeCapabilities,
+                              runtimeDiagnostics: widget.runtimeDiagnostics,
                             )
                           : AppCard(
                               child: Center(
@@ -213,7 +171,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       AppFluentTabItem(
         icon: FluentIcons.processing,
         text: l10n.agentActionsSummaryActions,
-        body: _AgentActionsActionsTab(
+        body: AgentActionsActionsTab(
           provider: provider,
           l10n: l10n,
           uiPreferences: _uiPreferences,
@@ -235,12 +193,12 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       AppFluentTabItem(
         icon: FluentIcons.history,
         text: l10n.agentActionsHistoryTitle,
-        body: _AgentActionsHistoryTab(provider: provider, l10n: l10n, uiPreferences: _uiPreferences),
+        body: AgentActionsHistoryTab(provider: provider, l10n: l10n, uiPreferences: _uiPreferences),
       ),
       AppFluentTabItem(
         icon: FluentIcons.settings,
         text: l10n.configTabPreferences,
-        body: _AgentActionsSettingsTab(
+        body: AgentActionsSettingsTab(
           provider: provider,
           l10n: l10n,
           runtimeCapabilities: runtimeCapabilities,
@@ -313,7 +271,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     if (definition == null || !provider.canDeleteSelected) {
       return;
     }
-    unawaited(_confirmDelete(context, provider, definition, l10n));
+    unawaited(confirmAgentActionDelete(context, provider, definition, l10n));
   }
 
   Future<void> _showActionEditorDialog(
@@ -401,9 +359,9 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
               }
 
               return ListView(
-                key: _AgentActionsPageKeys.detailScroll,
+                key: AgentActionsPageKeys.detailScroll,
                 children: [
-                  _SelectedActionDetailContent(
+                  AgentActionSelectedDetailContent(
                     provider: provider,
                     l10n: l10n,
                     definition: selected,
@@ -467,7 +425,7 @@ class _DeferredActionEditorState extends State<_DeferredActionEditor> {
       return const Center(child: ProgressRing());
     }
 
-    return _AgentActionEditor(
+    return AgentActionEditor(
       provider: widget.provider,
       definition: widget.definition,
       l10n: widget.l10n,

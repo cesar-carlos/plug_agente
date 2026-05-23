@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/rpc/agent_action_execution_output_pager.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
@@ -42,7 +41,6 @@ import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instanc
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
-import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -57,6 +55,7 @@ void main() {
   late ActionExecutionQueue executionQueue;
   late AgentActionsProvider provider;
   late _FakeDeveloperData7ConnectionGateway developerData7ConnectionGateway;
+  late _FakeAgentActionsBundleFileGateway bundleFileGateway;
 
   late AgentActionRetentionSettings retentionSettings;
 
@@ -68,6 +67,7 @@ void main() {
     featureFlags = FeatureFlags(appSettingsStore);
     executionQueue = ActionExecutionQueue();
     developerData7ConnectionGateway = _FakeDeveloperData7ConnectionGateway();
+    bundleFileGateway = _FakeAgentActionsBundleFileGateway();
 
     final runnerRegistry = AgentActionLocalRunnerRegistry([
       const _FakeAgentActionLocalRunner(),
@@ -144,7 +144,7 @@ void main() {
       const Uuid(),
       const ActionCommandSafetyValidator(),
       retentionSettings,
-      const AgentActionsBundleFileGateway(),
+      bundleFileGateway,
       now: () => DateTime(2026, 5, 15, 12),
       preflightSettings: preflightSettings,
     );
@@ -563,7 +563,7 @@ void main() {
       const Uuid(),
       const ActionCommandSafetyValidator(),
       retentionSettings,
-      const AgentActionsBundleFileGateway(),
+      bundleFileGateway,
       triggerScheduler: scheduler,
       preflightSettings: preflightSettings,
     );
@@ -1133,29 +1133,22 @@ void main() {
 
     await provider.load();
 
-    final exportFile = File(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}agent_actions_bundle_export_test.json',
-    );
-    if (exportFile.existsSync()) {
-      exportFile.deleteSync();
-    }
+    const exportPath = '/tmp/agent_actions_bundle_export_test.json';
 
-    final exported = await provider.exportBundleToFile(exportFile.path);
+    final exported = await provider.exportBundleToFile(exportPath);
     expect(exported, isTrue);
-    expect(exportFile.existsSync(), isTrue);
+    expect(bundleFileGateway.files.containsKey(exportPath), isTrue);
 
     repository.definitions.clear();
     repository.triggers.clear();
 
-    final imported = await provider.importBundleFromFile(exportFile.path);
+    final imported = await provider.importBundleFromFile(exportPath);
     expect(imported, isNotNull);
     expect(imported!.importedDefinitionIds, ['action-1']);
     expect(imported.importedTriggerIds, ['trigger-1']);
     expect(imported.secretPlaceholderNames, contains('api_key'));
     expect(repository.definitions['action-1']?.state, AgentActionState.needsValidation);
     expect(repository.triggers['trigger-1']?.isEnabled, isFalse);
-
-    exportFile.deleteSync();
   });
 
   test('should block saving active command-line action without preflight validation', () async {
@@ -1316,6 +1309,7 @@ AgentActionsProvider _buildProvider({
   AgentActionLocalRunnerRegistry? runnerRegistry,
   IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
   AgentActionTriggerScheduler? triggerScheduler,
+  IAgentActionsBundleFileGateway? bundleFileGateway,
 }) {
   final runners =
       runnerRegistry ??
@@ -1394,7 +1388,7 @@ AgentActionsProvider _buildProvider({
     const Uuid(),
     const ActionCommandSafetyValidator(),
     retentionSettings,
-    const AgentActionsBundleFileGateway(),
+    bundleFileGateway ?? _FakeAgentActionsBundleFileGateway(),
     triggerScheduler: triggerScheduler,
     comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
     now: () => DateTime(2026, 5, 15, 12),
@@ -1887,4 +1881,23 @@ class _StubRemoteAuditStore implements IAgentActionRemoteAuditStore {
     required DateTime cutoffUtc,
     required int limit,
   }) async => 0;
+}
+
+class _FakeAgentActionsBundleFileGateway implements IAgentActionsBundleFileGateway {
+  final Map<String, String> files = <String, String>{};
+
+  @override
+  Future<Result<void>> writeText(String filePath, String payload) async {
+    files[filePath] = payload;
+    return const Success(unit);
+  }
+
+  @override
+  Future<Result<String>> readText(String filePath) async {
+    final content = files[filePath];
+    if (content == null) {
+      return Failure(Exception('Bundle file not found: $filePath'));
+    }
+    return Success(content);
+  }
 }

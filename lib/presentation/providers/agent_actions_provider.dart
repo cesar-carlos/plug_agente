@@ -51,6 +51,10 @@ import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_p
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+part 'agent_actions/agent_actions_provider_bundle_transfer.dart';
+part 'agent_actions/agent_actions_provider_definition_list.dart';
+part 'agent_actions/agent_actions_provider_remote_audit.dart';
+
 enum AgentActionHistoryPeriod {
   all,
   last24Hours,
@@ -208,42 +212,8 @@ class AgentActionsProvider extends ChangeNotifier {
   AgentActionType? get definitionTypeFilter => _definitionTypeFilter;
   AgentActionState? get definitionStateFilter => _definitionStateFilter;
   String get definitionSearchQuery => _definitionSearchQuery;
-
-  List<AgentActionDefinition> get filteredDefinitions {
-    final cached = _filteredDefinitionsCache;
-    if (cached != null) {
-      return cached;
-    }
-
-    final matched = _definitions
-        .where(
-          (AgentActionDefinition definition) => agentActionsMatchesDefinitionListFilter(
-            definition: definition,
-            typeFilter: _definitionTypeFilter,
-            stateFilter: _definitionStateFilter,
-            searchQuery: _definitionSearchQuery,
-          ),
-        )
-        .toList(growable: false);
-    final selectedId = selectedActionId;
-    if (selectedId == null) {
-      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
-    }
-    if (matched.any((definition) => definition.id == selectedId)) {
-      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
-    }
-    final selected = _existingDefinition(selectedId);
-    if (selected == null) {
-      return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(matched);
-    }
-    return _filteredDefinitionsCache = List<AgentActionDefinition>.unmodifiable(<AgentActionDefinition>[
-      selected,
-      ...matched,
-    ]);
-  }
-
-  bool get hasDefinitionListFilters =>
-      _definitionTypeFilter != null || _definitionStateFilter != null || _definitionSearchQuery.isNotEmpty;
+  List<AgentActionDefinition> get filteredDefinitions => filteredDefinitionsFor(this);
+  bool get hasDefinitionListFilters => hasDefinitionListFiltersFor(this);
   List<AgentActionExecution> get executions =>
       _executionsViewCache ??= UnmodifiableListView<AgentActionExecution>(_executions);
   bool get isLoading => _isLoading;
@@ -306,6 +276,13 @@ class AgentActionsProvider extends ChangeNotifier {
   bool get usedDefaultDeveloperData7ConfigPath => _usedDefaultDeveloperData7ConfigPath;
 
   bool get isRemoteAuditSectionVisible => isFeatureEnabled && _featureFlags.enableAgentActionRemoteAudit;
+  List<AgentActionRemoteAuditRecord> get remoteAuditEntries =>
+      _remoteAuditEntriesViewCache ??= UnmodifiableListView<AgentActionRemoteAuditRecord>(_remoteAuditEntries);
+  String? get remoteAuditLoadError => _remoteAuditLoadError;
+  bool get isLoadingRemoteAudit => _isLoadingRemoteAudit;
+  String? get auditCorrelationExecutionId => _auditCorrelationExecutionId;
+
+  String? get selectedActionId => _selectedActionId;
 
   /// When temporal scheduling did not start, exposes a stable reason for operator messaging.
   String? get schedulerOperationalIssueReason {
@@ -350,14 +327,6 @@ class AgentActionsProvider extends ChangeNotifier {
 
     return diagnostics.registeredHandlerCount <= 0;
   }
-
-  List<AgentActionRemoteAuditRecord> get remoteAuditEntries =>
-      _remoteAuditEntriesViewCache ??= UnmodifiableListView<AgentActionRemoteAuditRecord>(_remoteAuditEntries);
-  String? get remoteAuditLoadError => _remoteAuditLoadError;
-  bool get isLoadingRemoteAudit => _isLoadingRemoteAudit;
-  String? get auditCorrelationExecutionId => _auditCorrelationExecutionId;
-
-  String? get selectedActionId => _selectedActionId;
 
   AgentActionDefinition? get selectedDefinition {
     final selectedId = _selectedActionId;
@@ -635,22 +604,7 @@ class AgentActionsProvider extends ChangeNotifier {
     _syncSessionPreflightSnapshotHashes();
     _selectedActionId = _resolveSelectedActionId();
 
-    if (_featureFlags.enableAgentActionRemoteAudit) {
-      final auditResult = await _listRecentRemoteAudit();
-      auditResult.fold(
-        (rows) {
-          _remoteAuditEntries = rows;
-          _remoteAuditLoadError = null;
-        },
-        (failure) {
-          _remoteAuditEntries = <AgentActionRemoteAuditRecord>[];
-          _remoteAuditLoadError = _messageFor(failure);
-        },
-      );
-    } else {
-      _remoteAuditEntries = <AgentActionRemoteAuditRecord>[];
-      _remoteAuditLoadError = null;
-    }
+    await loadRemoteAuditDuringLoadFor(this);
 
     _refreshElevatedRunnerReadiness();
     _isLoading = false;
@@ -692,33 +646,13 @@ class AgentActionsProvider extends ChangeNotifier {
     readiness.refresh(storage);
   }
 
-  Future<void> refreshRemoteAudit() async {
-    if (!isRemoteAuditSectionVisible) {
-      return;
-    }
+  Future<void> refreshRemoteAudit() => refreshRemoteAuditFor(this);
 
-    _isLoadingRemoteAudit = true;
-    notifyListeners();
+  String buildRemoteAuditJsonExport() => buildRemoteAuditJsonExportFor(this);
 
-    final auditResult = await _listRecentRemoteAudit();
-    auditResult.fold(
-      (rows) {
-        _remoteAuditEntries = rows;
-        _remoteAuditLoadError = null;
-      },
-      (failure) {
-        _remoteAuditEntries = <AgentActionRemoteAuditRecord>[];
-        _remoteAuditLoadError = _messageFor(failure);
-      },
-    );
-
-    _isLoadingRemoteAudit = false;
-    notifyListeners();
-  }
-
-  String buildRemoteAuditJsonExport() {
-    return _remoteAuditExport.buildJson(_remoteAuditEntries);
-  }
+  Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAudit(
+    AgentActionRemoteAuditRecord record,
+  ) => focusExecutionFromRemoteAuditFor(this, record);
 
   @override
   void notifyListeners() {
@@ -734,109 +668,6 @@ class AgentActionsProvider extends ChangeNotifier {
     _remoteAuditEntriesViewCache = null;
     _filteredDefinitionsCache = null;
     _filteredSelectedExecutionsCache = null;
-  }
-
-  /// Resets execution history filters, selects the audited action id, and highlights
-  /// the audited execution id when that execution is visible after the in-memory
-  /// list is updated. When the execution is missing from the list loaded by `load`,
-  /// loads it once via `GetAgentActionExecution` and merges it into the cache when
-  /// the stored `action_id` matches the audit row.
-  ///
-  /// Correlates a remote audit row with the local history panel (filters, selection,
-  /// highlight). See [AgentActionRemoteAuditFocusResult] for failure reasons.
-  Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAudit(
-    AgentActionRemoteAuditRecord record,
-  ) async {
-    if (!isFeatureEnabled) {
-      return AgentActionRemoteAuditFocusResult.featureDisabled;
-    }
-
-    final actionId = record.actionId?.trim();
-    if (actionId == null || actionId.isEmpty) {
-      return AgentActionRemoteAuditFocusResult.missingActionId;
-    }
-
-    _historyStatusFilter = null;
-    _historySourceFilter = null;
-    _historyPeriodFilter = AgentActionHistoryPeriod.all;
-    _historyFailurePhaseFilter = null;
-
-    final executionId = record.executionId?.trim();
-    _selectedActionId = actionId;
-    _auditCorrelationExecutionId = executionId != null && executionId.isNotEmpty ? executionId : null;
-
-    notifyListeners();
-    unawaited(_syncTriggersForSelection());
-
-    if (executionId == null || executionId.isEmpty) {
-      return AgentActionRemoteAuditFocusResult.succeeded;
-    }
-
-    final visible = filteredSelectedExecutions
-        .where((AgentActionExecution e) => e.id == executionId)
-        .toList(growable: false);
-    if (visible.isNotEmpty) {
-      if (!_auditRuntimeMatchesExecution(record, visible.single)) {
-        _auditCorrelationExecutionId = null;
-        notifyListeners();
-        return AgentActionRemoteAuditFocusResult.runtimeInstanceMismatch;
-      }
-      return AgentActionRemoteAuditFocusResult.succeeded;
-    }
-
-    final fetched = await _getExecution(executionId, hydrateCapturedOutput: false);
-    if (fetched.isError()) {
-      _auditCorrelationExecutionId = null;
-      notifyListeners();
-      return AgentActionRemoteAuditFocusResult.executionNotResolvable;
-    }
-
-    final execution = fetched.getOrThrow();
-    if (execution.actionId.trim() != actionId) {
-      _auditCorrelationExecutionId = null;
-      notifyListeners();
-      return AgentActionRemoteAuditFocusResult.executionNotResolvable;
-    }
-
-    if (!_auditRuntimeMatchesExecution(record, execution)) {
-      _auditCorrelationExecutionId = null;
-      notifyListeners();
-      return AgentActionRemoteAuditFocusResult.runtimeInstanceMismatch;
-    }
-
-    _mergeExecutionIntoCache(execution);
-
-    if (!filteredSelectedExecutions.any((AgentActionExecution e) => e.id == executionId)) {
-      _auditCorrelationExecutionId = null;
-      notifyListeners();
-      return AgentActionRemoteAuditFocusResult.executionNotResolvable;
-    }
-
-    return AgentActionRemoteAuditFocusResult.succeeded;
-  }
-
-  bool _auditRuntimeMatchesExecution(
-    AgentActionRemoteAuditRecord record,
-    AgentActionExecution execution,
-  ) {
-    final auditInstance = record.runtimeInstanceId?.trim();
-    if (auditInstance == null || auditInstance.isEmpty) {
-      return true;
-    }
-    final executionInstance = execution.runtimeInstanceId?.trim();
-    if (executionInstance == null || executionInstance.isEmpty) {
-      return true;
-    }
-    return auditInstance == executionInstance;
-  }
-
-  void _mergeExecutionIntoCache(AgentActionExecution execution) {
-    final merged = <AgentActionExecution>[
-      ..._executions.where((AgentActionExecution e) => e.id != execution.id),
-      execution,
-    ]..sort((AgentActionExecution a, AgentActionExecution b) => b.requestedAt.compareTo(a.requestedAt));
-    _executions = merged;
-    _invalidateDerivedCaches();
   }
 
   Future<Result<CapturedOutputUtf8Window>> sliceCapturedOutput({
@@ -950,44 +781,13 @@ class AgentActionsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDefinitionTypeFilter(AgentActionType? type) {
-    if (_definitionTypeFilter == type) {
-      return;
-    }
+  void setDefinitionTypeFilter(AgentActionType? type) => setDefinitionTypeFilterFor(this, type);
 
-    _definitionTypeFilter = type;
-    notifyListeners();
-  }
+  void setDefinitionStateFilter(AgentActionState? state) => setDefinitionStateFilterFor(this, state);
 
-  void setDefinitionStateFilter(AgentActionState? state) {
-    if (_definitionStateFilter == state) {
-      return;
-    }
+  void setDefinitionSearchQuery(String query) => setDefinitionSearchQueryFor(this, query);
 
-    _definitionStateFilter = state;
-    notifyListeners();
-  }
-
-  void setDefinitionSearchQuery(String query) {
-    final normalized = query.trim();
-    if (_definitionSearchQuery == normalized) {
-      return;
-    }
-
-    _definitionSearchQuery = normalized;
-    notifyListeners();
-  }
-
-  void clearDefinitionFilters() {
-    if (!hasDefinitionListFilters) {
-      return;
-    }
-
-    _definitionTypeFilter = null;
-    _definitionStateFilter = null;
-    _definitionSearchQuery = '';
-    notifyListeners();
-  }
+  void clearDefinitionFilters() => clearDefinitionFiltersFor(this);
 
   Future<void> _refreshSelectedSecretReport() async {
     final definition = selectedDefinition;
@@ -1688,71 +1488,10 @@ class AgentActionsProvider extends ChangeNotifier {
     return _persistDefinition(definition);
   }
 
-  Future<bool> exportBundleToFile(String filePath) async {
-    if (!canTransferBundle) {
-      return false;
-    }
+  Future<bool> exportBundleToFile(String filePath) => exportBundleToFileFor(this, filePath);
 
-    final selectedId = _selectedActionId;
-    final actionIds = selectedId == null ? null : <String>[selectedId];
-
-    _isTransferringBundle = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    final result = await _exportBundle(actionIds: actionIds);
-    if (result.isError()) {
-      _isTransferringBundle = false;
-      _errorMessage = _messageFor(result.exceptionOrNull()!);
-      notifyListeners();
-      return false;
-    }
-
-    final writeResult = await _bundleFileGateway.writeText(filePath, result.getOrThrow());
-    if (writeResult.isError()) {
-      _isTransferringBundle = false;
-      _errorMessage = lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleExportWriteFailed;
-      notifyListeners();
-      return false;
-    }
-
-    _isTransferringBundle = false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath) async {
-    if (!canTransferBundle) {
-      return null;
-    }
-
-    _isTransferringBundle = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    final readResult = await _bundleFileGateway.readText(filePath);
-    if (readResult.isError()) {
-      _isTransferringBundle = false;
-      _errorMessage = lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleImportReadFailed;
-      notifyListeners();
-      return null;
-    }
-
-    final payload = readResult.getOrThrow();
-
-    final result = await _importBundle(payload);
-    if (result.isError()) {
-      _isTransferringBundle = false;
-      _errorMessage = _messageFor(result.exceptionOrNull()!);
-      notifyListeners();
-      return null;
-    }
-
-    final summary = result.getOrThrow();
-    _isTransferringBundle = false;
-    await load();
-    return summary;
-  }
+  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath) =>
+      importBundleFromFileFor(this, filePath);
 
   Future<void> deleteSelectedAction() async {
     final definition = selectedDefinition;

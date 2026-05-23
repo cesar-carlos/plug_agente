@@ -1,6 +1,8 @@
 # Agent actions UI regression gate.
 
 test/presentation/pages/agent_actions_page_test.dart
+test/presentation/pages/agent_actions/agent_actions_settings_tab_test.dart
+test/presentation/pages/agent_actions/agent_actions_actions_tab_test.dart
 test/presentation/widgets/agent_actions/agent_actions_summary_card_test.dart
 test/presentation/widgets/agent_actions/agent_action_risk_labels_test.dart
 test/presentation/widgets/agent_actions/agent_action_confirmations_test.dart

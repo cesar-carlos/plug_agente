@@ -5,6 +5,8 @@ import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_page.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
@@ -132,7 +134,13 @@ GoRouter createAppRouter({
             path: AppRoutes.agentActions,
             name: 'agentActions',
             builder: (context, state) {
-              return const AgentActionsPage();
+              return AgentActionsPage(
+                runtimeCapabilities: capabilities,
+                runtimeDiagnostics: getIt.isRegistered<RuntimeDetectionDiagnostics>()
+                    ? getIt<RuntimeDetectionDiagnostics>()
+                    : null,
+                appSettingsStore: getIt<IAppSettingsStore>(),
+              );
             },
           ),
         ],
