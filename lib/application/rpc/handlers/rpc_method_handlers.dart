@@ -4,9 +4,11 @@ import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 Iterable<RpcMethodHandler> createDefaultRpcMethodHandlers(
-  DefaultRpcMethodHandlerOperations operations,
-) {
+  DefaultRpcMethodHandlerOperations operations, {
+  Future<Map<String, dynamic>> Function()? loadOpenRpcDocument,
+}) {
   return <RpcMethodHandler>[
+    if (loadOpenRpcDocument != null) RpcDiscoverRpcHandler(loadDocument: loadOpenRpcDocument),
     SqlExecuteRpcHandler(operations),
     SqlExecuteBatchRpcHandler(operations),
     SqlBulkInsertRpcHandler(operations),
@@ -25,6 +27,22 @@ abstract class _OperationsRpcMethodHandler implements RpcMethodHandler {
   const _OperationsRpcMethodHandler(this.operations);
 
   final DefaultRpcMethodHandlerOperations operations;
+}
+
+class RpcDiscoverRpcHandler implements RpcMethodHandler {
+  RpcDiscoverRpcHandler({required Future<Map<String, dynamic>> Function() loadDocument})
+    : _loadDocument = loadDocument;
+
+  final Future<Map<String, dynamic>> Function() _loadDocument;
+
+  @override
+  String get method => 'rpc.discover';
+
+  @override
+  Future<RpcResponse> handle(RpcRequest request, RpcDispatchContext context) async {
+    final document = await _loadDocument();
+    return RpcResponse.success(id: request.id, result: document);
+  }
 }
 
 class SqlExecuteRpcHandler extends _OperationsRpcMethodHandler {

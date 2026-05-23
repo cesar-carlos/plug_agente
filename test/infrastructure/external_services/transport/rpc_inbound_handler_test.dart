@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -11,11 +12,11 @@ import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
-import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_handler.dart';
@@ -27,7 +28,7 @@ import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validat
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class _MockDispatcher extends Mock implements RpcMethodDispatcher {}
+class _MockDispatcher extends Mock implements IRpcRequestDispatcher, RpcMethodDispatcher {}
 
 class _MockStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
@@ -133,11 +134,6 @@ void main() {
       logSummarizer: summarizer,
       responsePreparer: preparer,
       authorizationDecisionLogger: authzLogger,
-      openRpcDocumentLoader: OpenRpcDocumentLoader(
-        assetLoader: (_) async => '{"openrpc":"1.3.2","info":{"title":"t","version":"1"},"methods":[]}',
-        fileLoader: (_) async => throw StateError('unused'),
-        cwdProvider: () => '.',
-      ),
       dispatcher: dispatcher,
       requestGuard: RpcRequestGuard(),
       schemaValidator: const RpcRequestSchemaValidator(),
@@ -190,6 +186,151 @@ void main() {
         data['technical_message'],
         RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(ConnectionConstants.maxConcurrentRpcHandlers),
       );
+    });
+
+    test('handleRequestWithRelease frees slot before slow emit completes', () async {
+      final dispatchCompleted = Completer<void>();
+      final emitEntered = Completer<void>();
+      final unblockEmit = Completer<void>();
+
+      reset(dispatcher);
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((_) async {
+        if (!dispatchCompleted.isCompleted) {
+          dispatchCompleted.complete();
+        }
+        return RpcResponse.success(id: 'slot-1', result: <String, dynamic>{'ok': true});
+      });
+
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = (await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: const {
+          'jsonrpc': '2.0',
+          'id': 'slot-1',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT 1'},
+        },
+      )).getOrThrow();
+
+      final throughputHandler = RpcInboundHandler(
+        featureFlags: featureFlags,
+        protocolProvider: () => protocol,
+        agentIdProvider: () => 'agent-1',
+        frameCodec: frameCodec,
+        logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+        responsePreparer: RpcResponsePreparer(
+          featureFlags: featureFlags,
+          logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+          contractValidator: const RpcContractValidator(),
+          protocolProvider: () => protocol,
+          usesBinaryTransport: () => true,
+          agentIdProvider: () => 'agent-1',
+        ),
+        authorizationDecisionLogger: AuthorizationDecisionLogger(
+          featureFlags: featureFlags,
+          logMessage: (_, _, _) {},
+          agentIdProvider: () => 'agent-1',
+          onTokenRefreshRequested: () {},
+        ),
+        dispatcher: dispatcher,
+        requestGuard: RpcRequestGuard(),
+        schemaValidator: const RpcRequestSchemaValidator(),
+        streamEmitterFactory: _MockStreamEmitter.new,
+        emitRpcResponse: (response) async {
+          if (!emitEntered.isCompleted) {
+            emitEntered.complete();
+          }
+          await unblockEmit.future;
+          emittedResponses.add(response);
+        },
+        emitEvent: (event, payload) async {
+          emittedEvents.add((event: event, payload: payload));
+        },
+        hasReceivedCapabilities: () => true,
+      );
+
+      expect(throughputHandler.tryAcquireSlot(), isTrue);
+      final handleFuture = throughputHandler.handleRequestWithRelease(wire);
+
+      await dispatchCompleted.future;
+      await emitEntered.future;
+
+      expect(throughputHandler.tryAcquireSlot(), isTrue);
+
+      unblockEmit.complete();
+      await handleFuture;
+
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.error, isNull);
+    });
+
+    test('handleRequestWithRelease releases slot on notification-only path without emit', () async {
+      reset(dispatcher);
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(id: null, result: <String, dynamic>{'handled': true}),
+      );
+
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = (await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: const {
+          'jsonrpc': '2.0',
+          'method': AgentActionRpcConstants.agentActionRunRpcMethodName,
+          'params': <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-notify',
+          },
+        },
+      )).getOrThrow();
+
+      expect(handler.tryAcquireSlot(), isTrue);
+      await handler.handleRequestWithRelease(wire);
+
+      expect(emittedResponses, isEmpty);
+      expect(handler.tryAcquireSlot(), isTrue);
     });
 
     test('emitConcurrencyLimitedError unwraps framed payload and calls socket ack once', () async {
@@ -265,9 +406,29 @@ void main() {
     });
   });
 
-  group('rpc.discover special-case', () {
-    test('returns the OpenRPC document without invoking the dispatcher', () async {
-      // Wrap in a frame so handleRequest's decode step succeeds.
+  group('rpc.discover dispatch', () {
+    test('returns the OpenRPC document via the dispatcher', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: <String, dynamic>{
+            'openrpc': '1.3.2',
+            'info': <String, dynamic>{'title': 't', 'version': '1'},
+            'methods': <dynamic>[],
+          },
+        );
+      });
+
       final pipelineCache = TransportPipelineCache(
         protocolProvider: () => protocol,
         hasReceivedCapabilities: () => true,
@@ -281,14 +442,14 @@ void main() {
         localShouldSignOutgoing: () => false,
         localRequiresIncomingSignature: () => false,
       );
-      final wire = await frameCodec.prepareOutgoing(
+      final wire = (await frameCodec.prepareOutgoing(
         event: 'rpc:request',
         logicalPayload: const {
           'jsonrpc': '2.0',
           'id': 'disc-1',
           'method': 'rpc.discover',
         },
-      );
+      )).getOrThrow();
 
       await handler.handleRequest(wire);
 
@@ -296,16 +457,16 @@ void main() {
       final response = emittedResponses.single as RpcResponse;
       expect(response.id, 'disc-1');
       expect(response.result, isA<Map<String, dynamic>>());
-      verifyNever(
+      verify(
         () => dispatcher.dispatch(
-          any(),
+          any(that: predicate<RpcRequest>((request) => request.method == 'rpc.discover')),
           any(),
           clientToken: any(named: 'clientToken'),
           streamEmitter: any(named: 'streamEmitter'),
           limits: any(named: 'limits'),
           negotiatedExtensions: any(named: 'negotiatedExtensions'),
         ),
-      );
+      ).called(1);
     });
   });
 
@@ -348,7 +509,7 @@ void main() {
         localShouldSignOutgoing: () => false,
         localRequiresIncomingSignature: () => false,
       );
-      final wire = await frameCodec.prepareOutgoing(
+      final wire = (await frameCodec.prepareOutgoing(
         event: 'rpc:request',
         logicalPayload: const {
           'jsonrpc': '2.0',
@@ -358,7 +519,7 @@ void main() {
             'idempotency_key': 'idem-1',
           },
         },
-      );
+      )).getOrThrow();
 
       await handler.handleRequest(wire);
 
@@ -409,7 +570,7 @@ void main() {
         localShouldSignOutgoing: () => false,
         localRequiresIncomingSignature: () => false,
       );
-      final wire = await frameCodec.prepareOutgoing(
+      final wire = (await frameCodec.prepareOutgoing(
         event: 'rpc:request',
         logicalPayload: const {
           'jsonrpc': '2.0',
@@ -417,7 +578,7 @@ void main() {
           'method': 'sql.execute',
           'params': {'sql': 'SELECT * FROM users'},
         },
-      );
+      )).getOrThrow();
 
       await handler.handleRequest(wire);
 
@@ -667,11 +828,6 @@ void main() {
         logSummarizer: summarizer,
         responsePreparer: preparer,
         authorizationDecisionLogger: authzLogger,
-        openRpcDocumentLoader: OpenRpcDocumentLoader(
-          assetLoader: (_) async => '{"openrpc":"1.3.2","info":{"title":"t","version":"1"},"methods":[]}',
-          fileLoader: (_) async => throw StateError('unused'),
-          cwdProvider: () => '.',
-        ),
         dispatcher: dispatcher,
         requestGuard: RpcRequestGuard(),
         schemaValidator: const RpcRequestSchemaValidator(),

@@ -57,8 +57,10 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -122,6 +124,7 @@ class AppRoot extends StatelessWidget {
             getIt<ConnectToHub>(),
             getIt<TestDbConnection>(),
             getIt<CheckOdbcDriver>(),
+            transportClient: getIt<ITransportClient>(),
             hubSessionCoordinator: getIt<HubSessionCoordinator>(),
             checkHubAvailabilityUseCase: getIt<CheckHubAvailability>(),
             hubResilience: getIt<HubResilienceConfig>(),
@@ -212,7 +215,14 @@ class AppRoot extends StatelessWidget {
                 : null,
           ),
         ),
-        ChangeNotifierProvider(create: (context) => WebSocketLogProvider()),
+        ChangeNotifierProvider(
+          create: (context) => WebSocketLogProvider(
+            transportClient: getIt<ITransportClient>(),
+          ),
+        ),
+        Provider<IProtocolMetricsCollector>(
+          create: (_) => getIt<IProtocolMetricsCollector>(),
+        ),
         ChangeNotifierProvider(
           create: (context) => SqlInvestigationProvider(
             getIt<ISqlInvestigationCollector>(),

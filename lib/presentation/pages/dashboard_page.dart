@@ -8,14 +8,10 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
-import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-import 'package:provider/provider.dart';
-
 enum _MetricsPeriod { last1h, last24h, all }
 
 const _dashboardMetricsPeriodKey = 'dashboard_metrics_period';
@@ -36,7 +32,6 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _setupWebSocketLogging();
     _updateMetrics();
     unawaited(
       _restoreMetricsPeriod().catchError(
@@ -55,25 +50,6 @@ class _DashboardPageState extends State<DashboardPage> {
         s,
       ),
     );
-  }
-
-  void _setupWebSocketLogging() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final logProvider = Provider.of<WebSocketLogProvider>(
-        context,
-        listen: false,
-      );
-      try {
-        final transportClient = getIt<ITransportClient>();
-        transportClient.setMessageCallback(logProvider.addMessage);
-      } on Object catch (error, stackTrace) {
-        AppLogger.warning(
-          'Transport client not available for WebSocket logging yet',
-          error,
-          stackTrace,
-        );
-      }
-    });
   }
 
   void _updateMetrics() {

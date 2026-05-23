@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/repositories/i_hub_availability_probe.dart';
 import 'package:plug_agente/infrastructure/external_services/dio_factory.dart';
@@ -29,8 +30,26 @@ class HubAvailabilityProbe implements IHubAvailabilityProbe {
       if (error.response != null) {
         return true;
       }
+      AppLogger.warning(
+        'Hub availability probe failed (no HTTP response)',
+        <String, Object?>{
+          'stage': 'dio_exception',
+          'type': error.type.name,
+          'url': targetUrl,
+          if (error.message != null) 'message': error.message,
+        },
+      );
       return false;
-    } on Exception {
+    } on Exception catch (error, stackTrace) {
+      AppLogger.warning(
+        'Hub availability probe failed',
+        <String, Object?>{
+          'stage': 'exception',
+          'type': error.runtimeType.toString(),
+          'url': targetUrl,
+        },
+        stackTrace,
+      );
       return false;
     }
   }

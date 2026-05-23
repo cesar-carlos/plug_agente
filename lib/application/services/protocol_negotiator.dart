@@ -1,10 +1,12 @@
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 
 /// Service for negotiating protocol configuration between client and server.
-class ProtocolNegotiator {
+class ProtocolNegotiator implements IProtocolNegotiator {
   /// Negotiates protocol configuration based on agent and server capabilities.
   ///
   /// Returns the best mutually supported configuration.
+  @override
   ProtocolConfig negotiate({
     required ProtocolCapabilities agentCapabilities,
     required ProtocolCapabilities serverCapabilities,

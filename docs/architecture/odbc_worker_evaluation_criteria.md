@@ -4,7 +4,7 @@ Atualizado: 2026-05-14
 
 Este documento separa dois assuntos que nao devem ser misturados:
 
-- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.8.0.
+- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.8.1.
   Agora e o default do app, configurado por `ODBC_ASYNC_WORKER_COUNT` e
   `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 - **Arquitetura customizada multi-`ServiceLocator`/multi-pool**: continuamos

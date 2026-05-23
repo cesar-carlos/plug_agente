@@ -1,13 +1,14 @@
 import 'dart:async';
 
-import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
+import 'package:result_dart/result_dart.dart';
 
 /// Outcome reported by [CapabilitiesNegotiator.handleEnvelope] so the transport
 /// client can react to the negotiation result without owning the
@@ -48,13 +49,13 @@ class CapabilitiesNegotiationFailure extends CapabilitiesNegotiationOutcome {
 /// emitting frames and decoding inbound payloads.
 class CapabilitiesNegotiator {
   CapabilitiesNegotiator({
-    required ProtocolNegotiator negotiator,
+    required IProtocolNegotiator negotiator,
     required FeatureFlags featureFlags,
     required RpcContractValidator contractValidator,
     required ProtocolCapabilities Function() localCapabilitiesProvider,
     required String Function() agentIdProvider,
     required Future<void> Function(String event, dynamic payload) emit,
-    required dynamic Function(dynamic payload, {String? sourceEvent}) decodeIncoming,
+    required Result<dynamic> Function(dynamic payload, {String? sourceEvent}) decodeIncoming,
     required void Function() onTimeoutReconnect,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
     PayloadSigner? payloadSigner,
@@ -69,14 +70,14 @@ class CapabilitiesNegotiator {
        _onTimeoutReconnect = onTimeoutReconnect,
        _payloadSigner = payloadSigner;
 
-  final ProtocolNegotiator _negotiator;
+  final IProtocolNegotiator _negotiator;
   final FeatureFlags _featureFlags;
   final RpcContractValidator _contractValidator;
   final ProtocolCapabilities Function() _localCapabilitiesProvider;
   final String Function() _agentIdProvider;
   final Future<Map<String, dynamic>?> Function()? _registerProfileProvider;
   final Future<void> Function(String event, dynamic payload) _emit;
-  final dynamic Function(dynamic payload, {String? sourceEvent}) _decodeIncoming;
+  final Result<dynamic> Function(dynamic payload, {String? sourceEvent}) _decodeIncoming;
   final void Function() _onTimeoutReconnect;
   final PayloadSigner? _payloadSigner;
 
@@ -174,7 +175,11 @@ class CapabilitiesNegotiator {
   /// Processes the `agent:capabilities` envelope received from the hub.
   CapabilitiesNegotiationOutcome handleEnvelope(dynamic data) {
     try {
-      final payload = _decodeIncoming(data, sourceEvent: 'agent:capabilities');
+      final decodeResult = _decodeIncoming(data, sourceEvent: 'agent:capabilities');
+      if (decodeResult.isError()) {
+        throw decodeResult.exceptionOrNull()!;
+      }
+      final payload = decodeResult.getOrThrow();
       if (payload is! Map<String, dynamic>) {
         throw StateError('agent:capabilities payload must be an object');
       }

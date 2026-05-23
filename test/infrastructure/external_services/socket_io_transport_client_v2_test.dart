@@ -1,23 +1,29 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/actions/agent_actions_remote_capability_provider.dart';
+import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/health_service.dart';
-import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
@@ -31,11 +37,18 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:socket_io_client/src/manager.dart' as socket_io_manager;
 import 'package:uuid/uuid.dart';
 
+NetworkFailure requireNetworkFailure(Result<void> result) {
+  expect(result.isError(), isTrue);
+  final Object? error = result.exceptionOrNull();
+  expect(error, isA<NetworkFailure>(), reason: 'Expected NetworkFailure, got $error');
+  return error! as NetworkFailure;
+}
+
 class MockSocketDataSource extends Mock implements SocketDataSource {}
 
-class MockProtocolNegotiator extends Mock implements ProtocolNegotiator {}
+class MockProtocolNegotiator extends Mock implements IProtocolNegotiator {}
 
-class MockRpcMethodDispatcher extends Mock implements RpcMethodDispatcher {}
+class MockRpcRequestDispatcher extends Mock implements IRpcRequestDispatcher {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -93,7 +106,7 @@ void main() {
   group('SocketIOTransportClientV2', () {
     late MockSocketDataSource mockDataSource;
     late MockProtocolNegotiator mockNegotiator;
-    late MockRpcMethodDispatcher mockDispatcher;
+    late MockRpcRequestDispatcher mockDispatcher;
     late MockFeatureFlags mockFeatureFlags;
     late MockSocket mockSocket;
     late MockManager mockManager;
@@ -169,7 +182,7 @@ void main() {
     setUp(() {
       mockDataSource = MockSocketDataSource();
       mockNegotiator = MockProtocolNegotiator();
-      mockDispatcher = MockRpcMethodDispatcher();
+      mockDispatcher = MockRpcRequestDispatcher();
       mockFeatureFlags = MockFeatureFlags();
       mockSocket = MockSocket();
       mockManager = MockManager();
@@ -335,13 +348,17 @@ void main() {
       ]);
 
       final runtimeStateGuard = AgentActionRuntimeStateGuard()..markDraining(reason: 'shutdown');
+      final capabilityProvider = AgentActionsRemoteCapabilityProvider(
+        runtimeStateGuard: runtimeStateGuard,
+        elevatedRunnerReadiness: ElevatedActionRunnerReadinessService(),
+      );
       client = SocketIOTransportClientV2(
         dataSource: mockDataSource,
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
         protocolMetricsCollector: metricsCollector,
-        actionRuntimeStateGuard: runtimeStateGuard,
+        agentActionsRemoteCapabilityProvider: capabilityProvider,
         agentActionLocalRunnerRegistry: runnerRegistry,
       );
 
@@ -435,6 +452,30 @@ void main() {
       verify(() => mockSocket.disconnect()).called(1);
       verify(() => mockSocket.dispose()).called(1);
     });
+
+    test(
+      'should complete connect with transport timeout failure when connect event never arrives',
+      () {
+        fakeAsync((async) {
+          Result<void>? result;
+          client.connect('https://hub.test', 'agent-1').then((value) => result = value);
+          async.flushMicrotasks();
+
+          async.elapse(
+            const Duration(milliseconds: ConnectionConstants.socketConnectionTimeoutMs),
+          );
+          async.flushMicrotasks();
+
+          expect(result, isNotNull);
+          final failure = requireNetworkFailure(result!);
+          expect(failure.context['timeout'], isTrue);
+          expect(failure.context['timeout_stage'], 'transport');
+          expect(failure.context['operation'], 'connect');
+          verify(() => mockSocket.disconnect()).called(1);
+          verify(() => mockSocket.dispose()).called(1);
+        });
+      },
+    );
 
     test('should re-register after manager reconnect and notify after capabilities', () async {
       final notifications = <HubLifecycleNotification>[];
@@ -645,6 +686,22 @@ void main() {
           authToken: 'expired-token',
         ),
       ).called(1);
+    });
+
+    test('should include hub_code and hub_reason in connect failure context', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect_error', <String, dynamic>{
+        'code': 'hub_unavailable',
+        'reason': 'maintenance_window',
+        'message': 'Hub is temporarily unavailable',
+      });
+
+      final result = await connectFuture;
+
+      final failure = requireNetworkFailure(result);
+      expect(failure.context['hub_code'], 'hub_unavailable');
+      expect(failure.context['hub_reason'], 'maintenance_window');
+      expect(failure.context['operation'], 'connect');
     });
 
     test('should fail connect when local agent:register validation fails', () async {
@@ -947,6 +1004,27 @@ void main() {
     );
 
     test('should respond to rpc.discover with OpenRPC document', () async {
+      when(
+        () => mockDispatcher.dispatch(
+          any(that: predicate<RpcRequest>((request) => request.method == 'rpc.discover')),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: <String, dynamic>{
+            'openrpc': '1.3.2',
+            'info': <String, dynamic>{'title': 'Plug Agente', 'version': '1'},
+            'methods': <dynamic>[],
+          },
+        );
+      });
+
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
       await connectFuture;
@@ -964,16 +1042,16 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
-      verifyNever(
+      verify(
         () => mockDispatcher.dispatch(
-          any(),
-          any(),
+          any(that: predicate<RpcRequest>((request) => request.method == 'rpc.discover')),
+          'agent-1',
           clientToken: any(named: 'clientToken'),
           streamEmitter: any(named: 'streamEmitter'),
           limits: any(named: 'limits'),
           negotiatedExtensions: any(named: 'negotiatedExtensions'),
         ),
-      );
+      ).called(1);
       final responsePayload =
           decodeWirePayload(
                 emitted.firstWhere((item) => item.event == 'rpc:response').data,

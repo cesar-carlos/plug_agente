@@ -51,21 +51,49 @@ void main() {
       expect(doc['methods'], ['from_disk']);
     });
 
-    test('returns minimal fallback when both asset and disk fail', () async {
+    test('throws OpenRpcDocumentLoadException when both asset and disk fail', () async {
       final loader = OpenRpcDocumentLoader(
         assetLoader: (_) => throw StateError('asset missing'),
         fileLoader: (_) => throw StateError('disk missing'),
         cwdProvider: () => 'C:/cwd',
       );
 
+      await expectLater(
+        loader.getDocument(),
+        throwsA(
+          isA<OpenRpcDocumentLoadException>()
+              .having((e) => e.message, 'message', contains('OpenRPC document unavailable'))
+              .having((e) => e.cwd, 'cwd', 'C:/cwd')
+              .having((e) => e.assetError, 'assetError', isA<StateError>())
+              .having((e) => e.fileError, 'fileError', isA<StateError>()),
+        ),
+      );
+    });
+
+    test('does not cache failed loads so a later retry can succeed', () async {
+      var assetCallCount = 0;
+      final loader = OpenRpcDocumentLoader(
+        assetLoader: (_) async {
+          assetCallCount++;
+          if (assetCallCount == 1) {
+            throw StateError('asset missing');
+          }
+          return jsonEncode({
+            'openrpc': '1.3.2',
+            'info': {'title': 'asset', 'version': '1.0'},
+            'methods': ['m1'],
+          });
+        },
+        fileLoader: (_) => throw StateError('disk missing'),
+        cwdProvider: () => 'C:/cwd',
+      );
+
+      await expectLater(loader.getDocument(), throwsA(isA<OpenRpcDocumentLoadException>()));
+
       final doc = await loader.getDocument();
 
-      expect(doc['openrpc'], '1.3.2');
-      expect(doc['methods'], isEmpty);
-      expect(
-        (doc['info'] as Map<String, dynamic>)['title'],
-        'Plug Agente Socket RPC',
-      );
+      expect((doc['info'] as Map<String, dynamic>)['title'], 'asset');
+      expect(assetCallCount, 2);
     });
 
     test('shares an in-flight load across concurrent callers', () async {

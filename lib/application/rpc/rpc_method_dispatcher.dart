@@ -31,6 +31,7 @@ import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -43,7 +44,7 @@ const _defaultQueryStageBudget = Duration(seconds: 30);
 const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
 
 /// RPC method facade for routing JSON-RPC requests to registered handlers.
-class RpcMethodDispatcher {
+class RpcMethodDispatcher implements IRpcRequestDispatcher {
   RpcMethodDispatcher({
     required IDatabaseGateway databaseGateway,
     required HealthService healthService,
@@ -85,6 +86,7 @@ class RpcMethodDispatcher {
     Duration queryStageBudget = _defaultQueryStageBudget,
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     Iterable<RpcMethodHandler>? handlers,
+    Future<Map<String, dynamic>> Function()? loadOpenRpcDocument,
     RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
   }) : _defaultLimits = defaultLimits,
@@ -138,7 +140,11 @@ class RpcMethodDispatcher {
       sqlStreamingCoordinator: _sqlStreamingCoordinator,
     );
     _handlersByMethod = _buildHandlerRegistry(
-      handlers ?? createDefaultRpcMethodHandlers(operations),
+      handlers ??
+          createDefaultRpcMethodHandlers(
+            operations,
+            loadOpenRpcDocument: loadOpenRpcDocument,
+          ),
     );
   }
 
@@ -148,6 +154,7 @@ class RpcMethodDispatcher {
   final SqlStreamingCoordinator _sqlStreamingCoordinator;
   late final Map<String, RpcMethodHandler> _handlersByMethod;
 
+  @override
   Future<RpcResponse> dispatch(
     RpcRequest request,
     String agentId, {
@@ -186,6 +193,7 @@ class RpcMethodDispatcher {
     }
   }
 
+  @override
   Future<void> cancelActiveStreamOnDisconnect() {
     return _sqlStreamingCoordinator.cancelActiveStreamOnDisconnect();
   }

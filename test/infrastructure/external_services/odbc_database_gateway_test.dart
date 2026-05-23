@@ -33,6 +33,7 @@ void main() {
     registerFallbackValue(const ConnectionOptions());
     registerFallbackValue(const ConnectionAcquireOptions());
     registerFallbackValue(Duration.zero);
+    registerFallbackValue(<Object?>[]);
   });
 
   group('OdbcDatabaseGateway', () {
@@ -730,6 +731,83 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           parameters,
         ),
       ).called(1);
+    });
+
+    test('should route opt-in result encoding through parameter buffer execution', () async {
+      dotenv.loadFromString(envString: 'ODBC_RESULT_ENCODING=columnarCompressed');
+      const pooledConnectionId = 'pool-columnar-named';
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      const sql = '''
+SELECT * FROM users
+WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
+''';
+      const parameters = {
+        'id': 42,
+        'label': 'active',
+      };
+      final config = _buildConfig(connectionString);
+      final request = QueryRequest(
+        id: 'req-columnar-named',
+        agentId: config.agentId,
+        query: sql,
+        parameters: parameters,
+        timestamp: DateTime.now(),
+      );
+
+      when(() => mockService.initialize()).thenAnswer((_) async {
+        return const Success(unit);
+      });
+      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
+        return Success(config);
+      });
+      when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
+        return const Success(pooledConnectionId);
+      });
+      when(
+        () => mockService.executeQueryParams(
+          pooledConnectionId,
+          any(),
+          any(),
+          resultEncoding: ResultEncoding.columnarCompressed,
+        ),
+      ).thenAnswer((_) async {
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [42],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+        return const Success(unit);
+      });
+
+      final result = await gateway.executeQuery(request);
+
+      expect(result.isSuccess(), isTrue);
+      final captured = verify(
+        () => mockService.executeQueryParams(
+          pooledConnectionId,
+          captureAny(),
+          captureAny(),
+          resultEncoding: ResultEncoding.columnarCompressed,
+        ),
+      ).captured;
+      expect(
+        captured[0],
+        contains('WHERE id = ? OR parent_id = ? OR label = ? OR alias = ?'),
+      );
+      expect(captured[1], [42, 42, 'active', 'active']);
+      verifyNever(
+        () => mockService.executeQueryNamed(
+          any(),
+          any(),
+          any(),
+        ),
+      );
     });
 
     test(

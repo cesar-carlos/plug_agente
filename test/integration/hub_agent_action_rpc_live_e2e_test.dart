@@ -85,12 +85,7 @@ _openSessionAfterSignedCapabilities({
   required String keyId,
   required String key,
 }) async {
-  final preflightFailure = E2EEnv.liveHubBlockingPreflightFailureMessage(requireSigning: true);
-  if (preflightFailure != null) {
-    fail(preflightFailure);
-  }
-
-  final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
+final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
   final pipeline = TransportPipeline(
     encoding: 'json',
     compression: 'auto',

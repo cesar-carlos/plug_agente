@@ -265,7 +265,7 @@ O `E2EEnv.odbcLongQuery` escolhe a variável consoante o DSN que o streaming est
 
 Pelo menos um DSN deve estar definido para rodar os testes ODBC. O teste usa o primeiro disponível na ordem: SQL Anywhere → SQL Server → PostgreSQL.
 
-### ODBC runtime tuning (`odbc_fast 3.8.0`)
+### ODBC runtime tuning (`odbc_fast 3.8.1`)
 
 Os harnesses E2E que inicializam `odbc.ServiceLocator` usam os mesmos calculos
 do runtime da app:
@@ -274,6 +274,7 @@ do runtime da app:
 | -------- | ----------- | --------- |
 | `ODBC_ASYNC_WORKER_COUNT` | Nao | Override positivo para workers assincronos; limitado a `min(poolSize, CPU cores)`. |
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4`. |
+| `ODBC_RESULT_ENCODING` | Nao | Opt-in para `rowMajor`, `columnar` ou `columnarCompressed` em queries parametrizadas; default `rowMajor`. |
 
 O app mantem `asyncBackpressureMode=failFast` de forma explicita porque a
 fila `SqlExecutionQueue` ja controla backpressure antes do worker pool interno
@@ -295,6 +296,16 @@ Ou use o wrapper local, que imprime as variaveis de tuning antes de iniciar:
 ```powershell
 .\tool\odbc_async_benchmark.ps1
 ```
+
+Para validar apenas o runtime local do pacote, sem DSN, rode:
+
+```powershell
+dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+```
+
+Esse smoke inicializa o worker async e verifica exports nativos usados pelo
+modo `columnarCompressed`. O fluxo operacional consolidado executa essa etapa
+antes dos testes com DSN.
 
 Para comparar streaming legado e batched streaming do pacote (`streamQuery`
 versus `streamQueryBatched`):
@@ -467,13 +478,16 @@ flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
 # Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
 flutter test test/integration/sql_queue_burst_test.dart
 
-# Benchmark manual do worker pool interno do odbc_fast 3.8.0
+# Benchmark manual do worker pool interno do odbc_fast 3.8.1
 dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
+
+# Smoke do runtime local do odbc_fast, sem DSN
+dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
 
 # Mesmo benchmark via wrapper local
 .\tool\odbc_async_benchmark.ps1
 
-# Benchmark de streaming do odbc_fast 3.8.0
+# Benchmark de streaming do odbc_fast 3.8.1
 .\tool\odbc_streaming_benchmark.ps1
 
 # Fluxo operacional completo + worksheet Markdown

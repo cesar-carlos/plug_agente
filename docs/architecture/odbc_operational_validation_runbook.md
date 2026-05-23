@@ -16,7 +16,9 @@ Responder, com dados, a estas perguntas:
   superdimensionado?
 - O pool adaptativo esta usando o caminho nativo somente em drivers elegiveis?
 - `service.streamQuery` continua usando o caminho batched-first do
-  `odbc_fast 3.8.0` sem regressao no workload local?
+  `odbc_fast 3.8.1` sem regressao no workload local?
+- O runtime local do `odbc_fast` expoe os simbolos necessarios para
+  `columnarCompressed` antes de qualquer opt-in?
 - Ha sinais de gargalo no banco/driver em vez do app?
 
 ## Ambiente Validado
@@ -42,6 +44,7 @@ Anote os valores vigentes:
 ODBC_POOL_SIZE=
 ODBC_ASYNC_WORKER_COUNT=
 ODBC_ASYNC_MAX_PENDING_REQUESTS=
+ODBC_RESULT_ENCODING=
 SQL_QUEUE_MAX_SIZE=
 SQL_QUEUE_MAX_WORKERS=
 SQL_QUEUE_TIMEOUT_SEC=
@@ -51,14 +54,15 @@ CIRCUIT_BREAKER_RESET_SEC=
 
 ## Sequencia Recomendada
 
-0. Rodar preflight de ambiente e confirmar DSN/query longa.
-1. Rodar smoke test com query simples.
-2. Coletar um snapshot de `agent.getHealth`.
-3. Rodar burst test opt-in.
-4. Coletar novo snapshot de `agent.getHealth`.
-5. Rodar benchmark async ODBC.
-6. Rodar benchmark de streaming ODBC.
-7. Comparar resultados e decidir tuning.
+0. Rodar smoke do runtime `odbc_fast`, sem DSN.
+1. Rodar preflight de ambiente e confirmar DSN/query longa.
+2. Rodar smoke test com query simples.
+3. Coletar um snapshot de `agent.getHealth`.
+4. Rodar burst test opt-in.
+5. Coletar novo snapshot de `agent.getHealth`.
+6. Rodar benchmark async ODBC.
+7. Rodar benchmark de streaming ODBC.
+8. Comparar resultados e decidir tuning.
 
 Atalho opcional no Windows:
 
@@ -78,6 +82,7 @@ Cada execucao cria uma subpasta timestampada com:
 
 - `odbc_operational_validation_report.md`
 - `health_snapshot_template.json`
+- `odbc_runtime.log`
 - `preflight.log`
 - `smoke.log`
 - `burst.log`
@@ -89,7 +94,32 @@ O template JSON e um baseline local do shape atual de `agent.getHealth`; ainda
 vale coletar snapshots reais antes/depois do burst quando o app estiver em
 execucao.
 
-## 0. Preflight
+## 0. ODBC Runtime
+
+Comando:
+
+```powershell
+dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+```
+
+Confirmar no output:
+
+- Inicializacao do `odbc_fast` passou
+- Worker async foi criado
+- `native_exports.result_encoding_options=true`
+- `native_exports.columnar_decompress=true`
+
+Registrar:
+
+| Item | Valor |
+| --- | --- |
+| Runtime passou? | |
+| Version map | |
+| Result encoding options disponivel? | |
+| Columnar decompress disponivel? | |
+| Observacoes | |
+
+## 1. Preflight
 
 Comando:
 
@@ -112,7 +142,7 @@ Registrar:
 | Query longa efetiva | |
 | Observacoes | |
 
-## 1. Smoke
+## 2. Smoke
 
 Referencias:
 
@@ -135,7 +165,7 @@ Registrar:
 | Erros | |
 | Observacoes | |
 
-## 2. Burst
+## 3. Burst
 
 Comandos:
 
@@ -155,7 +185,7 @@ Registrar:
 | Recuperou para fila/pool zerados? | |
 | Observacoes | |
 
-## 3. Benchmark Async ODBC
+## 4. Benchmark Async ODBC
 
 Comandos:
 
@@ -181,9 +211,9 @@ Registrar:
 | Timeouts | |
 | Observacoes | |
 
-## 4. Benchmark Streaming ODBC
+## 5. Benchmark Streaming ODBC
 
-O app chama `service.streamQuery`; no `odbc_fast 3.8.0`, esse caminho tenta
+O app chama `service.streamQuery`; no `odbc_fast 3.8.1`, esse caminho tenta
 `streamQueryBatched` primeiro e usa o streaming legado apenas como fallback.
 Use o benchmark abaixo para comparar `streamQuery` e `streamQueryBatched` com
 o mesmo DSN/query.
@@ -302,6 +332,7 @@ Campos mais importantes:
 | --- | --- | --- | --- |
 | `odbc_runtime_tuning.async_worker_count` | | | |
 | `odbc_runtime_tuning.async_max_pending_requests` | | | |
+| `odbc_runtime_tuning.result_encoding` | | | |
 | `pool.effective_strategy` | | | |
 | `pool.native_eligible` | | | |
 | `pool.active_count` | | | |
@@ -326,7 +357,8 @@ Use esta regra pratica:
   esperados, sem sinal de gargalo no banco.
 - Aumente `ODBC_POOL_SIZE` e `SQL_QUEUE_MAX_WORKERS` apenas se houver beneficio
   real em throughput e sem piorar p95/p99.
-- Nao habilite `ResultEncoding.columnar` sem benchmark dedicado.
+- Nao habilite `ResultEncoding.columnar`/`columnarCompressed` sem benchmark
+  dedicado e smoke de runtime passando.
 - Nao introduza multi-`ServiceLocator` ou pools customizados sem evidencia
   forte de que o worker pool suportado foi esgotado.
 

@@ -148,7 +148,7 @@ During burst tests, monitor these metrics via `MetricsCollector`:
 
 ## Runtime Tuning Follow-up
 
-The app now uses the internal async worker pool from `odbc_fast 3.8.0` by
+The app now uses the internal async worker pool from `odbc_fast 3.8.1` by
 default. Burst test analysis should use the ODBC diagnostic payload before
 changing concurrency limits:
 

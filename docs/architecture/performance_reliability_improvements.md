@@ -3,7 +3,7 @@
 Atualizado: 2026-05-14
 
 Este documento registra o estado atual das melhorias de performance e
-confiabilidade do caminho ODBC. O foco atual e `odbc_fast 3.8.0`: usar o
+confiabilidade do caminho ODBC. O foco atual e `odbc_fast 3.8.1`: usar o
 worker pool assincrono interno do pacote por padrao e habilitar o pool
 adaptativo para drivers elegiveis com fallback seguro.
 
@@ -20,9 +20,9 @@ adaptativo para drivers elegiveis com fallback seguro.
 | Streaming | Implementado | O app chama `streamQuery`; o `odbc_fast` tenta `streamQueryBatched` internamente antes do fallback. |
 | Worker pool assincrono `odbc_fast` | Implementado | Default configuravel: `min(poolSize persistido, CPU cores)`, minimo 1. |
 | Adaptive/native pool | Implementado | Habilitado por default para SQL Server/PostgreSQL elegiveis; SQL Anywhere fica fora. |
-| Result encoding columnar | Adiado | Row-major continua default compativel. Columnar deve ser opt-in por flag e benchmark. |
+| Result encoding columnar | Opt-in implementado | Row-major continua default compativel. Columnar/columnarCompressed exigem flag e benchmark. |
 
-## ODBC Fast 3.8.0
+## ODBC Fast 3.8.1
 
 O bootstrap do runtime inicializa `odbc.ServiceLocator` com:
 
@@ -42,6 +42,7 @@ Variaveis de ambiente:
 | --- | --- | --- |
 | `ODBC_ASYNC_WORKER_COUNT` | `min(poolSize, CPU cores)` | Deve ser positiva e e limitada ao mesmo teto. Valor invalido ou `0` e ignorado. |
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | `poolSize * 4` | Deve ser positiva. Valor invalido ou `0` e ignorado. |
+| `ODBC_RESULT_ENCODING` | `rowMajor` | Aceita `rowMajor`, `columnar` e `columnarCompressed`; so afeta queries parametrizadas. |
 | `ODBC_POOL_SIZE` | `4` | Define o tamanho do pool lease-based quando nao ha valor persistido. |
 
 O `poolSize` persistido pelo usuario vence o default de `ConnectionConstants`.
@@ -61,6 +62,7 @@ o worker pool interno do pacote.
 - `async_worker_count`
 - `async_max_pending_requests`
 - `async_backpressure_mode`
+- `result_encoding`
 
 `async_worker_pool` inclui:
 
@@ -90,18 +92,23 @@ tambem e exposto ali para facilitar suporte operacional.
 
 ## Result Encoding
 
-Nao habilite `ResultEncoding.columnar` por padrao sem benchmark. O pacote
-documenta row-major como default compativel e columnar como otimizacao opt-in
-para workloads com muitas linhas e tipos estaveis.
+Nao habilite `ResultEncoding.columnar` por padrao sem benchmark. O app mantem
+`rowMajor` como default compativel e aceita opt-in apenas por ambiente para
+workloads com muitas linhas e tipos estaveis.
 
-Se for ativado depois, use uma flag como:
+Use:
 
 ```env
 ODBC_RESULT_ENCODING=rowMajor|columnar|columnarCompressed
 ```
 
-A aplicacao inicial deve ficar restrita aos caminhos parametrizados que ja usam
-`executeQueryParams`.
+A aplicacao fica restrita aos caminhos parametrizados que ja usam
+`executeQueryParams`. Antes de ativar `columnarCompressed`, valide os exports
+nativos locais:
+
+```powershell
+dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+```
 
 ## Validacao
 
@@ -126,7 +133,7 @@ Ou pelo wrapper local:
 .\tool\odbc_async_benchmark.ps1
 ```
 
-Para validar streaming batched-first do `odbc_fast 3.8.0`:
+Para validar streaming batched-first do `odbc_fast 3.8.1`:
 
 ```powershell
 .\tool\odbc_streaming_benchmark.ps1

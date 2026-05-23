@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:plug_agente/infrastructure/config/odbc_result_encoding_parser.dart';
+
 const int _defaultPoolSize = 4;
 const int _defaultSqlQueueMaxSize = 50;
 const int _defaultSqlQueueTimeoutSeconds = 5;
@@ -88,6 +90,9 @@ Future<Map<String, Object?>> buildOdbcHealthSnapshotTemplate({
     processorCount: effectiveProcessorCount,
   );
   final asyncMaxPendingRequests = _positiveIntEnv(environment, 'ODBC_ASYNC_MAX_PENDING_REQUESTS') ?? poolSize * 4;
+  final resultEncoding = resolveOdbcResultEncodingValue(
+    environment[odbcResultEncodingEnvKey],
+  );
 
   return <String, Object?>{
     'status': 'healthy',
@@ -99,6 +104,7 @@ Future<Map<String, Object?>> buildOdbcHealthSnapshotTemplate({
       'async_worker_count': asyncWorkerCount,
       'async_max_pending_requests': asyncMaxPendingRequests,
       'async_backpressure_mode': 'failFast',
+      'result_encoding': resultEncodingConfigName(resultEncoding),
     },
     'pool': <String, Object?>{
       'size': poolSize,

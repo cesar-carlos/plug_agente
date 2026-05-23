@@ -18,18 +18,26 @@ import 'src/hub_auth_login.dart';
 import 'src/live_hub_agent_action_env_check.dart';
 import 'src/local_agent_config_reader.dart';
 
-Future<({String token, String source})?> _resolveFromLocalConfig(LocalAgentHubConfig config) async {
+Future<({String token, String source})?> _resolveFromLocalConfig(
+  LocalAgentHubConfig config, {
+  String? loginServerUrl,
+  String? agentId,
+  bool preferLoginOverCachedToken = false,
+}) async {
+  final effectiveServerUrl = loginServerUrl ?? hubHttpLoginServerUrl(config.serverUrl);
+  final effectiveAgentId = (agentId ?? config.agentId).trim();
   final localToken = config.authToken?.trim();
   final refreshToken = config.refreshToken?.trim();
   final tokenWarnings = liveHubTokenWarnings(localToken);
   final tokenExpired = tokenWarnings.any((warning) => warning.contains('JWT is expired'));
-  if (localToken != null && localToken.isNotEmpty && !tokenExpired) {
-    return (token: config.authToken!.trim(), source: 'local config / secure storage auth token');
+
+  if (!preferLoginOverCachedToken && localToken != null && localToken.isNotEmpty && !tokenExpired) {
+    return (token: localToken, source: 'local config / secure storage auth token');
   }
   if (refreshToken != null && refreshToken.isNotEmpty) {
     try {
       final result = await refreshHubAgentSession(
-        serverUrl: config.serverUrl,
+        serverUrl: effectiveServerUrl,
         refreshToken: refreshToken,
       );
       return (
@@ -41,18 +49,29 @@ Future<({String token, String source})?> _resolveFromLocalConfig(LocalAgentHubCo
     }
   }
   if (!config.hasStoredCredentials) {
-    if (localToken != null && localToken.isNotEmpty) {
+    if (!preferLoginOverCachedToken && localToken != null && localToken.isNotEmpty) {
       return (token: localToken, source: 'local config / secure storage auth token');
     }
     return null;
   }
   final result = await loginHubAgent(
-    serverUrl: config.serverUrl,
-    agentId: config.agentId,
+    serverUrl: effectiveServerUrl,
+    agentId: effectiveAgentId,
     username: config.authUsername!.trim(),
     password: config.authPassword!.trim(),
   );
-  return (token: result.accessToken, source: 'Hub login (saved credentials in local config / secure storage)');
+  final loginTarget = loginServerUrl == null ? 'saved credentials in local config / secure storage' : 'saved credentials against E2E_HUB_URL';
+  return (token: result.accessToken, source: 'Hub login ($loginTarget)');
+}
+
+bool _envHubLoginDiffersFromConfig({
+  required String? envHubUrl,
+  required String configServerUrl,
+}) {
+  if (envHubUrl == null || isPlaceholderServerUrl(envHubUrl)) {
+    return false;
+  }
+  return hubHttpLoginServerUrl(envHubUrl) != hubHttpLoginServerUrl(configServerUrl);
 }
 
 Future<({String token, String source})?> _resolveFromEnvCredentials(String projectRoot) async {
@@ -77,9 +96,23 @@ void main(List<String> args) async {
   try {
     ({String token, String source})? resolved;
 
+    final fileEnv = loadRepoEnvFile(projectRoot);
+    final envHubUrl = envValue(fileEnv, 'E2E_HUB_URL');
+    final envAgentId = envValue(fileEnv, 'E2E_HUB_AGENT_ID');
+    final loginServerUrl =
+        envHubUrl != null && !isPlaceholderServerUrl(envHubUrl) ? hubHttpLoginServerUrl(envHubUrl) : null;
+
     final config = readLatestResolvedLocalAgentHubConfig();
     if (config != null && !isPlaceholderServerUrl(config.serverUrl)) {
-      resolved = await _resolveFromLocalConfig(config);
+      final preferLoginOverCachedToken =
+          forceToken ||
+          _envHubLoginDiffersFromConfig(envHubUrl: envHubUrl, configServerUrl: config.serverUrl);
+      resolved = await _resolveFromLocalConfig(
+        config,
+        loginServerUrl: loginServerUrl,
+        agentId: envAgentId,
+        preferLoginOverCachedToken: preferLoginOverCachedToken,
+      );
     }
 
     resolved ??= await _resolveFromEnvCredentials(projectRoot);

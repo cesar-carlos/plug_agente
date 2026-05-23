@@ -76,4 +76,23 @@ E2E_HUB_IS_LOCAL=true
 
     expect(E2EEnv.liveHubBlockingPreflightFailureMessage(requireSigning: true), isNull);
   });
+
+  test('should skip live hub agent action tests when E2E hub JWT is expired', () async {
+    final expired = DateTime.now().toUtc().subtract(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000;
+    final payload = base64Url.encode(utf8.encode('{"exp":$expired}'));
+    final token = 'h.$payload.s';
+
+    await E2EEnv.loadForTesting('''
+RUN_LIVE_HUB_TESTS=true
+RUN_LIVE_HUB_SIGNING_TESTS=true
+RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true
+E2E_HUB_URL=https://hub.example.com
+E2E_HUB_TOKEN=$token
+PAYLOAD_SIGNING_KEY_ID=v1
+PAYLOAD_SIGNING_KEY=secret
+''');
+
+    expect(E2EEnv.isLiveHubAgentActionReady, isFalse);
+    expect(E2EEnv.liveHubAgentActionReadinessSkipMessage, contains('JWT is expired'));
+  });
 }

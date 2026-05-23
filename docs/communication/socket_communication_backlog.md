@@ -13,7 +13,7 @@ Referencia de implementacao atual:
 - Todos os tickets do plano incremental original (`01` a `06`) foram concluidos.
 - Contratos formais (notifications, batch, api_version/meta, schemas, versionamento) publicados.
 - Limites de transporte negociados via `TransportLimits` no handshake.
-- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256) com feature flag `enablePayloadSigning`.
+- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256) com feature flag `enablePayloadSigning` (default **off**).
 - Feature flags estaveis promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
 - Transporte binario com `PayloadFrame` implementado para todos os eventos de aplicacao.
 - Compressao GZIP movida para a borda de transporte com fallback por threshold.

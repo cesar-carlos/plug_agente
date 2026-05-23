@@ -45,7 +45,7 @@ Estado implementado atual:
 Todos os itens da Fase 5 foram implementados:
 
 - Negociacao real de limites via `TransportLimits` em `ProtocolCapabilities`.
-- `PayloadSigner` com HMAC-SHA256, verificacao constant-time, feature flag `enablePayloadSigning`.
+- `PayloadSigner` com HMAC-SHA256, verificacao constant-time, feature flag `enablePayloadSigning` (default **off**).
 - Feature flags promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
 
 ## Fase 6 - Observabilidade e operacao

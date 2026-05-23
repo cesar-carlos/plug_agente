@@ -11,6 +11,7 @@ import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
+import 'package:result_dart/result_dart.dart';
 
 /// Builds the wire form of [RpcResponse] objects, attaches W3C/legacy trace
 /// metadata mirrored from the request, validates the outgoing contract (with
@@ -93,28 +94,28 @@ class RpcResponsePreparer {
   }
 
   /// Validates the outgoing wire payload against the contract (single response
-  /// or batch). Returns the original payload on success, a fallback minimal
-  /// error response on validation failure, or `null` if even the fallback is
-  /// invalid (extremely defensive — should never happen in practice).
+  /// or batch). Returns the original payload on success or a fallback minimal
+  /// error response when validation fails. Returns [Failure] only when even the
+  /// fallback cannot be validated (extremely defensive — should never happen).
   ///
   /// Skips validation entirely when feature flags disable it or when the
   /// payload exceeds [ConnectionConstants.socketOutgoingContractValidationMaxBytes]
   /// (UTF-8 bytes), to keep CPU bounded for large result sets.
-  dynamic validateOutgoing(
+  Result<dynamic> validateOutgoing(
     dynamic payload, {
     Map<Object?, String> methodsById = const <Object?, String>{},
   }) {
     if (!_featureFlags.enableSocketSchemaValidation) {
-      return payload;
+      return Success(payload as Object);
     }
     if (!_featureFlags.enableSocketOutgoingContractValidation) {
-      return payload;
+      return Success(payload as Object);
     }
 
     const softCap = ConnectionConstants.socketOutgoingContractValidationMaxBytes;
     if (softCap > 0 && _logSummarizer.exceedsByteBudget(payload, softCap)) {
       _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'outbound');
-      return payload;
+      return Success(payload as Object);
     }
 
     final validation = payload is List<dynamic>
@@ -128,7 +129,7 @@ class RpcResponsePreparer {
         methodsById: methodsById,
       );
       if (schemaValidation == null) {
-        return payload;
+        return Success(payload as Object);
       }
       return _fallbackForInvalidOutgoingPayload(schemaValidation);
     }
@@ -230,7 +231,7 @@ class RpcResponsePreparer {
     return null;
   }
 
-  dynamic _fallbackForInvalidOutgoingPayload(domain.Failure failure) {
+  Result<dynamic> _fallbackForInvalidOutgoingPayload(domain.Failure failure) {
     AppLogger.error(
       'Outgoing rpc:response payload is invalid: ${failure.message}',
     );
@@ -248,9 +249,15 @@ class RpcResponsePreparer {
       AppLogger.error(
         'Fallback rpc:response payload is invalid: ${fallbackFailure.message}',
       );
-      return null;
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Fallback rpc:response payload is invalid',
+          cause: fallbackFailure,
+          context: {'rpc_error_code': RpcErrorCode.internalError},
+        ),
+      );
     }
-    return fallback;
+    return Success(fallback as Object);
   }
 
   /// Mirrors trace context (W3C `traceparent`/`tracestate` and/or legacy

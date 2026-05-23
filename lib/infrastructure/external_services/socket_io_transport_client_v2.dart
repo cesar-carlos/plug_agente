@@ -1,11 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
-import 'package:plug_agente/application/actions/agent_actions_remote_capability_builder.dart';
-import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
-import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
-import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
@@ -20,7 +15,9 @@ import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/delivery_guarantee.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
-import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capability_provider.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -29,17 +26,16 @@ import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.d
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/capabilities_negotiator.dart';
-import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
-import 'package:plug_agente/infrastructure/external_services/transport/stream_emitter_registry.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_stream_pull_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/transport_socket_event_binder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
-import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
@@ -51,17 +47,15 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 class SocketIOTransportClientV2 implements ITransportClient {
   SocketIOTransportClientV2({
     required SocketDataSource dataSource,
-    required ProtocolNegotiator negotiator,
-    required RpcMethodDispatcher rpcDispatcher,
+    required IProtocolNegotiator negotiator,
+    required IRpcRequestDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
     PayloadSigner? payloadSigner,
     PayloadSigningConfig? payloadSigningConfig,
     ProtocolMetricsCollector? protocolMetricsCollector,
-    OpenRpcDocumentLoader? openRpcDocumentLoader,
     PayloadLogSummarizer? logSummarizer,
-    AgentActionRuntimeStateGuard? actionRuntimeStateGuard,
+    IAgentActionsRemoteCapabilityProvider? agentActionsRemoteCapabilityProvider,
     AgentActionLocalRunnerRegistry? agentActionLocalRunnerRegistry,
-    ElevatedActionRunnerReadinessService? elevatedRunnerReadiness,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
     MetricsCollector? metricsCollector,
     JsonSchemaContractValidator? jsonSchemaValidator,
@@ -70,9 +64,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
-       _actionRuntimeStateGuard = actionRuntimeStateGuard,
+       _agentActionsRemoteCapabilityProvider = agentActionsRemoteCapabilityProvider,
        _agentActionLocalRunnerRegistry = agentActionLocalRunnerRegistry,
-       _elevatedRunnerReadiness = elevatedRunnerReadiness,
        _metricsCollector = metricsCollector,
        _jsonSchemaValidator = jsonSchemaValidator,
        _schemaCatalog = schemaCatalog,
@@ -88,7 +81,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
                    },
            ),
        _protocolMetricsCollector = protocolMetricsCollector,
-       _openRpcDocumentLoader = openRpcDocumentLoader ?? OpenRpcDocumentLoader(),
        _logSummarizer =
            logSummarizer ??
            PayloadLogSummarizer(
@@ -139,6 +131,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
       agentIdProvider: () => _agentId,
       onTokenRefreshRequested: () => _onTokenExpired?.call(),
     );
+    _streamPullHandler = RpcStreamPullHandler(
+      featureFlags: _featureFlags,
+      frameCodec: _frameCodec,
+      contractValidator: _contractValidator,
+      protocolProvider: () => _currentProtocol,
+      emitEventAsync: _emitEventAsync,
+      logMessage: _logMessage,
+    );
     _inboundHandler = RpcInboundHandler(
       featureFlags: _featureFlags,
       protocolProvider: () => _currentProtocol,
@@ -147,11 +147,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       logSummarizer: _logSummarizer,
       responsePreparer: _responsePreparer,
       authorizationDecisionLogger: _authorizationDecisionLogger,
-      openRpcDocumentLoader: _openRpcDocumentLoader,
       dispatcher: _rpcDispatcher,
       requestGuard: _rpcRequestGuard,
       schemaValidator: _schemaValidator,
-      streamEmitterFactory: _createStreamEmitter,
+      streamEmitterFactory: _streamPullHandler.createStreamEmitter,
       emitRpcResponse: _emitRpcResponse,
       emitRpcResponseWithMethodContext: _emitRpcResponse,
       emitEvent: _emitEventAsync,
@@ -160,32 +159,57 @@ class SocketIOTransportClientV2 implements ITransportClient {
       schemaCatalog: _schemaCatalog,
       metricsCollector: _metricsCollector,
     );
+    _socketEventBinder = TransportSocketEventBinder(
+      featureFlags: _featureFlags,
+      inboundHandler: _inboundHandler,
+      capabilitiesNegotiator: _capabilitiesNegotiator,
+      streamPullHandler: _streamPullHandler,
+      logMessage: _logMessage,
+      agentIdProvider: () => _agentId,
+      resilienceLogPrefixProvider: _resilienceLogPrefix,
+      connectGenerationProvider: () => _connectGeneration,
+      isStaleConnectGeneration: (generation) => generation != _connectGeneration,
+      onAuthorizationSessionReset: _authorizationDecisionLogger.resetSessionState,
+      onHeartbeatResetTransient: _heartbeat.resetTransientState,
+      onTransportConnectedRegister: _capabilitiesNegotiator.sendRegisterAndStartTimeout,
+      onHeartbeatStop: _heartbeat.stop,
+      onCloseSocket: _closeSocket,
+      onConnectError: _handleConnectionError,
+      onSocketError: _handleSocketError,
+      onDisconnect: _handleDisconnect,
+      onCapabilitiesEnvelope: _handleCapabilitiesNegotiation,
+      onHeartbeatAck: _handleHeartbeatAck,
+      onReconnectionNeeded: () => _onReconnectionNeeded?.call(),
+      onHubLifecycle: (notification) => _onHubLifecycle?.call(notification),
+      hasMessageCallback: () => _onMessage != null,
+      sendReRegisterAfterReconnect: _capabilitiesNegotiator.sendReRegisterAfterReconnect,
+    );
   }
 
   final SocketDataSource _dataSource;
-  final ProtocolNegotiator _negotiator;
-  final RpcMethodDispatcher _rpcDispatcher;
+  final IProtocolNegotiator _negotiator;
+  final IRpcRequestDispatcher _rpcDispatcher;
   final FeatureFlags _featureFlags;
-  final AgentActionRuntimeStateGuard? _actionRuntimeStateGuard;
+  final IAgentActionsRemoteCapabilityProvider? _agentActionsRemoteCapabilityProvider;
   final AgentActionLocalRunnerRegistry? _agentActionLocalRunnerRegistry;
-  final ElevatedActionRunnerReadinessService? _elevatedRunnerReadiness;
   final MetricsCollector? _metricsCollector;
   final JsonSchemaContractValidator? _jsonSchemaValidator;
   final RpcMethodSchemaCatalog _schemaCatalog;
   final PayloadSigner? _payloadSigner;
   final PayloadSigningConfig _payloadSigningConfig;
   final ProtocolMetricsCollector? _protocolMetricsCollector;
-  final OpenRpcDocumentLoader _openRpcDocumentLoader;
   final PayloadLogSummarizer _logSummarizer;
   late final TransportPipelineCache _pipelineCache;
   late final PayloadFrameCodec _frameCodec;
   late final RpcResponsePreparer _responsePreparer;
   late final CapabilitiesNegotiator _capabilitiesNegotiator;
   late final AuthorizationDecisionLogger _authorizationDecisionLogger;
+  late final RpcStreamPullHandler _streamPullHandler;
   late final RpcInboundHandler _inboundHandler;
+  late final TransportSocketEventBinder _socketEventBinder;
 
   io.Socket? _socket;
-  final List<void Function()> _managerReconnectSubscriptions = <void Function()>[];
+  int _connectGeneration = 0;
   String? _resilienceRecoveryId;
   String _resilienceLogPrefix() {
     final id = _resilienceRecoveryId;
@@ -216,11 +240,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcRequestSchemaValidator _schemaValidator = const RpcRequestSchemaValidator();
   final RpcContractValidator _contractValidator = const RpcContractValidator();
   final LogRateLimiter _diagnosticLogLimiter = LogRateLimiter();
-  late final StreamEmitterRegistry _streamEmitters = StreamEmitterRegistry(
-    hardCeiling: ConnectionConstants.maxConcurrentRpcStreams,
-    idleTtl: ConnectionConstants.rpcStreamEmitterMaxIdle,
-    capProvider: () => _currentProtocol.effectiveLimits.maxConcurrentStreams,
-  );
 
   @override
   void setMessageCallback(
@@ -251,10 +270,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _logMessage(String direction, String event, dynamic data) {
+    final onMessage = _onMessage;
+    if (onMessage == null) {
+      return;
+    }
     final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs && data != null
         ? _logSummarizer.summarize(direction, event, data)
         : data;
-    _onMessage?.call(direction, event, traced);
+    onMessage(direction, event, traced);
   }
 
   ProtocolCapabilities _localCapabilities() {
@@ -274,19 +297,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   Map<String, dynamic> _agentActionsCapability() {
-    final runtimeSnapshot = _actionRuntimeStateGuard?.snapshot;
-    final status = runtimeSnapshot?.status.name ?? 'ready';
-    final unavailableTypes =
-        runtimeSnapshot?.unavailableActionTypes.map((type) => type.name).toList(growable: false) ?? const <String>[];
+    final provider = _agentActionsRemoteCapabilityProvider;
+    if (provider == null) {
+      throw StateError(
+        'IAgentActionsRemoteCapabilityProvider is required when remote agent actions are enabled.',
+      );
+    }
 
-    return AgentActionsRemoteCapabilityBuilder.build(
+    return provider.buildForTransport(
       supportedTypes: _agentActionSupportedTypeNames(),
-      status: status,
-      maintenanceMode: _featureFlags.enableAgentActionsMaintenanceMode || status == 'maintenance',
-      unavailableTypes: unavailableTypes,
-      remoteAdHoc: _featureFlags.enableRemoteAdHocAgentActions,
-      elevatedAllowed: _featureFlags.enableElevatedAgentActions,
-      supportsElevated: _featureFlags.enableElevatedAgentActions && (_elevatedRunnerReadiness?.isConfigured ?? false),
+      maintenanceModeEnabled: _featureFlags.enableAgentActionsMaintenanceMode,
+      remoteAdHocEnabled: _featureFlags.enableRemoteAdHocAgentActions,
+      elevatedActionsEnabled: _featureFlags.enableElevatedAgentActions,
     );
   }
 
@@ -316,56 +338,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return _currentProtocol.usesBinaryPayload && _currentProtocol.usesTransportFrame;
   }
 
-  IRpcStreamEmitter _createStreamEmitter() {
-    if (!_featureFlags.enableSocketBackpressure) {
-      return _SocketRpcStreamEmitter(_emitValidatedStreamEvent);
-    }
-    return BackpressureStreamEmitter(
-      emit: _emitValidatedStreamEvent,
-      onRegister: (streamId, emitter) {
-        final accepted = _streamEmitters.tryRegister(streamId, emitter);
-        if (!accepted) {
-          AppLogger.warning(
-            'rpc stream emitter rejected: cap (effective='
-            '${_streamEmitters.effectiveCap}, hard_ceiling='
-            '${ConnectionConstants.maxConcurrentRpcStreams}) reached. '
-            'stream_id=$streamId',
-          );
-        }
-        return accepted;
-      },
-      onUnregister: _streamEmitters.unregister,
-    );
-  }
-
-  void _handleStreamPull(dynamic data) {
-    try {
-      final payload = _decodeIncomingPayloadOrThrow(
-        data,
-        sourceEvent: 'rpc:stream.pull',
-      );
-      if (payload is! Map<String, dynamic>) {
-        return;
-      }
-      final pull = RpcStreamPull.fromJson(payload);
-      _logMessage('INFO', 'rpc:stream.pull', {
-        'stream_id': pull.streamId,
-        'window_size': pull.windowSize,
-      });
-      final emitter = _streamEmitters.get(pull.streamId);
-      if (emitter != null) {
-        _streamEmitters.touch(pull.streamId);
-        emitter.releaseChunks(pull.windowSize);
-      }
-    } on Object catch (error, stackTrace) {
-      AppLogger.warning(
-        'Failed to handle rpc:stream.pull',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
   Future<void> _emitRpcResponse(
     dynamic responseData, {
     Map<Object?, String> methodsById = const <Object?, String>{},
@@ -373,30 +345,38 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final prepared = responseData is List<RpcResponse>
         ? responseData.map(_responsePreparer.prepareForSend).toList()
         : _responsePreparer.prepareForSend(responseData as RpcResponse);
-    final validatedPayload = _responsePreparer.validateOutgoing(
+    final validatedResult = _responsePreparer.validateOutgoing(
       prepared,
       methodsById: methodsById,
     );
-    if (validatedPayload == null) {
-      AppLogger.warning('rpc:response outgoing validation returned null - emitting internal error');
+    if (validatedResult.isError()) {
+      AppLogger.warning(
+        'rpc:response outgoing validation failed catastrophically - emitting internal error',
+        validatedResult.exceptionOrNull(),
+      );
       final requestId = _extractResponseId(responseData);
       await _emitInternalErrorResponse(requestId);
       return;
     }
+    final validatedPayload = validatedResult.getOrThrow();
     _publishLargeResponseAdvice(
       event: 'rpc:response',
       logicalPayload: validatedPayload,
     );
-    final outgoingPayload = await _prepareOutgoingPayloadAsync(
+    final outgoingResult = await _prepareOutgoingPayloadAsync(
       'rpc:response',
       validatedPayload,
     );
-    if (outgoingPayload == null) {
-      AppLogger.warning('rpc:response pipeline encoding returned null - emitting internal error');
+    if (outgoingResult.isError()) {
+      AppLogger.warning(
+        'rpc:response pipeline encoding failed - emitting internal error',
+        outgoingResult.exceptionOrNull(),
+      );
       final requestId = _extractResponseId(responseData);
       await _emitInternalErrorResponse(requestId);
       return;
     }
+    final outgoingPayload = outgoingResult.getOrThrow();
 
     if (!_featureFlags.enableSocketDeliveryGuarantees || _socket == null) {
       _logMessage('SENT', 'rpc:response', validatedPayload);
@@ -446,6 +426,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     String agentId, {
     String? authToken,
   }) async {
+    final connectGeneration = ++_connectGeneration;
     try {
       if (!_featureFlags.enableBinaryPayload) {
         return Failure(
@@ -474,108 +455,12 @@ class SocketIOTransportClientV2 implements ITransportClient {
       final completer = Completer<Result<void>>();
       Timer? timeoutTimer;
 
-      _socket!.on('connect', (_) async {
-        timeoutTimer?.cancel();
-        _logMessage('RECEIVED', 'connect', null);
-        AppLogger.info(
-          'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_connected agent_id=$_agentId',
-        );
-        _authorizationDecisionLogger.resetSessionState();
-        _heartbeat.resetTransientState();
-        final registerSent = await _capabilitiesNegotiator.sendRegisterAndStartTimeout();
-        if (!registerSent) {
-          _heartbeat.stop();
-          _closeSocket();
-          if (!completer.isCompleted) {
-            completer.complete(
-              Failure(
-                domain.ConfigurationFailure.withContext(
-                  message: 'Failed to send agent registration to hub.',
-                  context: {
-                    'operation': 'agent_register',
-                    'agent_id': _agentId,
-                  },
-                ),
-              ),
-            );
-          }
-          return;
-        }
-
-        if (!completer.isCompleted) {
-          completer.complete(const Success<Object, Exception>(Object()));
-        }
-      });
-
-      _registerManagerReconnectHandlers(_socket!);
-
-      _socket!.on('connect_error', (error) {
-        timeoutTimer?.cancel();
-        _logMessage('ERROR', 'connect_error', error);
-        _handleConnectionError(error, completer);
-      });
-
-      _socket!.on('error', (error) {
-        _logMessage('ERROR', 'socket_error', error);
-        _handleSocketError(error);
-      });
-
-      _socket!.on('disconnect', (dynamic reason) {
-        _logMessage('RECEIVED', 'disconnect', reason);
-        _heartbeat.stop();
-        unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
-        final asString = reason is String ? reason : reason?.toString();
-        final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
-        final disconnectLine =
-            'resilience: ${_resilienceLogPrefix()}socket_transport event=disconnect '
-            'kind=${serverInitiated ? "io_server_disconnect" : "client_or_network"} '
-            'reason=${asString ?? "unknown"} agent_id=$_agentId '
-            '${serverInitiated ? "action=schedule_full_hub_reconnect" : "action=await_transport_reconnect"}';
-        if (serverInitiated) {
-          AppLogger.warning(disconnectLine);
-        } else {
-          AppLogger.info(disconnectLine);
-        }
-        _onHubLifecycle?.call(HubTransportDisconnected(reason: asString));
-        if (serverInitiated) {
-          _onReconnectionNeeded?.call();
-        }
-      });
-
-      // Protocol negotiation response
-      _socket!.on('agent:capabilities', (data) {
-        _logMessage('RECEIVED', 'agent:capabilities', data);
-        _handleCapabilitiesNegotiation(data);
-      });
-
-      // Hub-side rejection of agent:register (e.g. unsupported protocol).
-      _socket!.on('agent:register_error', (data) {
-        _logMessage('RECEIVED', 'agent:register_error', data);
-        final map = data is Map ? data.map((key, value) => MapEntry(key.toString(), value)) : <String, dynamic>{};
-        final shouldReconnect = _capabilitiesNegotiator.handleRegisterError(map);
-        if (shouldReconnect) {
-          _heartbeat.stop();
-          _closeSocket();
-        }
-      });
-
-      _socket!.on('hub:heartbeat_ack', _handleHeartbeatAck);
-
-      _socket!.on('rpc:request', (data) {
-        _logMessage('RECEIVED', 'rpc:request', data);
-        if (!_inboundHandler.tryAcquireSlot()) {
-          unawaited(_inboundHandler.emitConcurrencyLimitedError(data));
-          return;
-        }
-        unawaited(_inboundHandler.handleRequestWithRelease(data));
-      });
-
-      if (_featureFlags.enableSocketBackpressure) {
-        _socket!.on('rpc:stream.pull', (data) {
-          _logMessage('RECEIVED', 'rpc:stream.pull', data);
-          _handleStreamPull(data);
-        });
-      }
+      _socketEventBinder.bind(
+        socket: _socket!,
+        connectGeneration: connectGeneration,
+        connectCompleter: completer,
+        cancelConnectTimeout: () => timeoutTimer?.cancel(),
+      );
 
       _socket!.connect();
 
@@ -598,9 +483,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
             _closeSocket();
             completer.complete(
               Failure(
-                domain.NetworkFailure.withContext(
-                  message: 'Connection timeout',
-                  context: {'timeout': true, 'timeout_stage': 'transport'},
+                _buildConnectionFailure(
+                  'Connection timeout',
+                  StateError('Connection timeout'),
+                  extraContext: const {
+                    'timeout': true,
+                    'timeout_stage': 'transport',
+                  },
                 ),
               ),
             );
@@ -622,6 +511,27 @@ class SocketIOTransportClientV2 implements ITransportClient {
           context: {'operation': 'connect'},
         ),
       );
+    }
+  }
+
+  void _handleDisconnect(dynamic reason) {
+    _heartbeat.stop();
+    unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
+    final asString = reason is String ? reason : reason?.toString();
+    final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
+    final disconnectLine =
+        'resilience: ${_resilienceLogPrefix()}socket_transport event=disconnect '
+        'kind=${serverInitiated ? "io_server_disconnect" : "client_or_network"} '
+        'reason=${asString ?? "unknown"} agent_id=$_agentId '
+        '${serverInitiated ? "action=schedule_full_hub_reconnect" : "action=await_transport_reconnect"}';
+    if (serverInitiated) {
+      AppLogger.warning(disconnectLine);
+    } else {
+      AppLogger.info(disconnectLine);
+    }
+    _onHubLifecycle?.call(HubTransportDisconnected(reason: asString));
+    if (serverInitiated) {
+      _onReconnectionNeeded?.call();
     }
   }
 
@@ -672,72 +582,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
   }
 
-  void _registerManagerReconnectHandlers(io.Socket socket) {
-    _clearManagerReconnectSubscriptions();
-    _managerReconnectSubscriptions
-      ..add(
-        io.DartySocket(socket).onReconnect((dynamic data) {
-          unawaited(_handleManagerReconnect(data));
-        }),
-      )
-      ..add(io.DartySocket(socket).onReconnectAttempt(_handleManagerReconnectAttempt))
-      ..add(
-        io.DartySocket(socket).onReconnectFailed((_) {
-          _handleManagerReconnectFailed();
-        }),
-      )
-      ..add(io.DartySocket(socket).onReconnectError(_handleManagerReconnectError));
-  }
-
-  Future<void> _handleManagerReconnect(dynamic data) async {
-    _logMessage('RECEIVED', 'reconnect', data);
-    AppLogger.info(
-      'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_reconnected '
-      'attempt=${_parseReconnectAttempt(data)} agent_id=$_agentId',
-    );
-    _heartbeat.resetTransientState();
-    try {
-      await _capabilitiesNegotiator.sendReRegisterAfterReconnect();
-    } on Object catch (error, stackTrace) {
-      AppLogger.error(
-        'resilience: ${_resilienceLogPrefix()}socket_transport event=post_reconnect_register_failed '
-        'agent_id=$_agentId',
-        error,
-        stackTrace,
-      );
-      _onReconnectionNeeded?.call();
-    }
-  }
-
-  void _handleManagerReconnectAttempt(dynamic data) {
-    _logMessage('RECEIVED', 'reconnect_attempt', data);
-    final attempt = _parseReconnectAttempt(data);
-    AppLogger.info(
-      'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_attempt '
-      'attempt=$attempt agent_id=$_agentId',
-    );
-    _onHubLifecycle?.call(HubTransportReconnectAttempt(attemptNumber: attempt));
-  }
-
-  void _handleManagerReconnectFailed() {
-    _logMessage('ERROR', 'reconnect_failed', null);
-    AppLogger.error(
-      'resilience: ${_resilienceLogPrefix()}socket_transport event=reconnect_exhausted '
-      'agent_id=$_agentId - Socket.IO gave up after repeated transport reconnects; '
-      'escalating to application-level hub recovery',
-    );
-    _onReconnectionNeeded?.call();
-  }
-
-  void _handleManagerReconnectError(dynamic error) {
-    _logMessage('ERROR', 'reconnect_error', error);
-    _handleSocketError(error);
-  }
-
-  int? _parseReconnectAttempt(dynamic data) {
-    return data is int ? data : (data is num ? data.toInt() : int.tryParse('$data'));
-  }
-
   void _emitEvent(String event, dynamic logicalPayload) {
     unawaited(_emitEventAsync(event, logicalPayload));
   }
@@ -746,18 +590,19 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (_socket == null) {
       return;
     }
-    final outgoingPayload = await _prepareOutgoingPayloadAsync(
+    final outgoingResult = await _prepareOutgoingPayloadAsync(
       event,
       logicalPayload,
     );
-    if (outgoingPayload == null) {
+    if (outgoingResult.isError()) {
       return;
     }
+    final outgoingPayload = outgoingResult.getOrThrow();
     _logMessage('SENT', event, logicalPayload);
     _socket!.emit(event, outgoingPayload);
   }
 
-  Future<dynamic> _prepareOutgoingPayloadAsync(
+  Future<Result<Map<String, dynamic>>> _prepareOutgoingPayloadAsync(
     String event,
     dynamic logicalPayload,
   ) async {
@@ -765,7 +610,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
       AppLogger.error(
         'Attempted to emit $event without negotiated binary PayloadFrame transport',
       );
-      return null;
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Binary PayloadFrame transport is not negotiated',
+          context: {
+            'event': event,
+            'rpc_error_code': RpcErrorCode.internalError,
+          },
+        ),
+      );
     }
     return _frameCodec.prepareOutgoing(
       event: event,
@@ -817,7 +670,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     dynamic payload, {
     String? sourceEvent,
   }) {
-    return _frameCodec.decodeIncoming(payload, sourceEvent: sourceEvent);
+    return _frameCodec.decodeIncoming(payload, sourceEvent: sourceEvent).getOrThrow();
   }
 
   void _handleConnectionError(
@@ -827,7 +680,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final structured = _parseStructuredErrorPayload(error);
     final errorMessage = structured?.message ?? error.toString();
     final errorObj = error as Object? ?? Exception(errorMessage);
-    final failure = _buildConnectionFailure(errorMessage, errorObj);
+    final failure = _buildConnectionFailure(
+      errorMessage,
+      errorObj,
+      structured: structured,
+    );
     AppLogger.error(
       'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_error ${failure.message}',
       failure.toTechnicalMessage(),
@@ -854,7 +711,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final structured = _parseStructuredErrorPayload(error);
     final errorMessage = structured?.message ?? error.toString();
     final errorObj = error as Object? ?? Exception(errorMessage);
-    final failure = _buildConnectionFailure(errorMessage, errorObj);
+    final failure = _buildConnectionFailure(
+      errorMessage,
+      errorObj,
+      structured: structured,
+    );
     AppLogger.error(
       'resilience: ${_resilienceLogPrefix()}socket_transport event=socket_error ${failure.message}',
       failure.toTechnicalMessage(),
@@ -905,25 +766,59 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return isHubConnectAuthRelatedMessage(errorMessage);
   }
 
-  domain.Failure _buildConnectionFailure(String errorMessage, Object error) {
+  domain.Failure _buildConnectionFailure(
+    String errorMessage,
+    Object error, {
+    _StructuredConnectError? structured,
+    Map<String, Object>? extraContext,
+  }) {
+    final context = _connectFailureContext(
+      structured: structured,
+      extraContext: extraContext,
+    );
+
     if (isHubConnectAuthRelatedMessage(errorMessage)) {
       return domain.ConfigurationFailure.withContext(
         message: 'Authentication failed. Please sign in again.',
         cause: error,
-        context: {'operation': 'connect'},
+        context: context,
       );
     }
 
     return domain.NetworkFailure.withContext(
       message: 'Unable to connect to the hub. Check the server URL and your network connection.',
       cause: error,
-      context: {'operation': 'connect'},
+      context: context,
     );
+  }
+
+  Map<String, Object> _connectFailureContext({
+    _StructuredConnectError? structured,
+    Map<String, Object>? extraContext,
+  }) {
+    final context = <String, Object>{
+      'operation': 'connect',
+      ...?extraContext,
+    };
+    final code = structured?.code;
+    if (code != null && code.isNotEmpty) {
+      context['hub_code'] = code;
+    }
+    final reason = structured?.reason;
+    if (reason != null && reason.isNotEmpty) {
+      context['hub_reason'] = reason;
+    }
+    final recoveryId = _resilienceRecoveryId;
+    if (recoveryId != null && recoveryId.isNotEmpty) {
+      context['recovery_id'] = recoveryId;
+    }
+    return context;
   }
 
   @override
   Future<Result<void>> disconnect() async {
     try {
+      _connectGeneration++;
       _onHubLifecycle = null;
       _heartbeat.stop();
       _closeSocket();
@@ -941,33 +836,18 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _closeSocket() {
-    _clearManagerReconnectSubscriptions();
+    _socketEventBinder.clearSubscriptions();
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
-    _streamEmitters.dispose();
+    _streamPullHandler.dispose();
     if (socket == null) {
       return;
     }
     socket.disconnect();
     socket.dispose();
-  }
-
-  void _clearManagerReconnectSubscriptions() {
-    for (final unsubscribe in _managerReconnectSubscriptions) {
-      try {
-        unsubscribe();
-      } on Object catch (error, stackTrace) {
-        AppLogger.warning(
-          'Failed to remove Socket.IO manager reconnect subscription',
-          error,
-          stackTrace,
-        );
-      }
-    }
-    _managerReconnectSubscriptions.clear();
   }
 
   @override
@@ -1128,33 +1008,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _logMessage('RECEIVED', 'hub:heartbeat_ack', payload);
   }
 
-  Future<void> _emitValidatedStreamEvent(
-    String event,
-    Map<String, dynamic> payload,
-  ) async {
-    if (_socket == null) {
-      return;
-    }
-
-    if (_featureFlags.enableSocketSchemaValidation) {
-      Result<void> validation;
-      if (event == 'rpc:chunk') {
-        validation = _contractValidator.validateStreamChunk(payload);
-      } else if (event == 'rpc:complete') {
-        validation = _contractValidator.validateStreamComplete(payload);
-      } else {
-        validation = const Success(unit);
-      }
-      if (validation.isError()) {
-        final failure = validation.exceptionOrNull()! as domain.Failure;
-        AppLogger.error('Invalid $event payload: ${failure.message}');
-        return;
-      }
-    }
-
-    await _emitEventAsync(event, payload);
-  }
-
   bool _supportsProtocolReadyAck() {
     final extensionValue = _currentProtocol.negotiatedExtensions['protocolReadyAck'];
     return extensionValue is bool && extensionValue;
@@ -1216,41 +1069,31 @@ class SocketIOTransportClientV2 implements ITransportClient {
         ),
       );
       final prepared = _responsePreparer.prepareForSend(errorResponse);
-      final validatedPayload = _responsePreparer.validateOutgoing(prepared);
-      if (validatedPayload == null) {
-        AppLogger.warning('Fallback rpc:response failed contract validation');
+      final validatedResult = _responsePreparer.validateOutgoing(prepared);
+      if (validatedResult.isError()) {
+        AppLogger.warning(
+          'Fallback rpc:response failed contract validation',
+          validatedResult.exceptionOrNull(),
+        );
         return;
       }
-      final outgoingPayload = await _prepareOutgoingPayloadAsync(
+      final outgoingResult = await _prepareOutgoingPayloadAsync(
         'rpc:response',
-        validatedPayload,
+        validatedResult.getOrThrow(),
       );
-      if (outgoingPayload == null) {
-        AppLogger.warning('Fallback rpc:response could not be framed as PayloadFrame');
+      if (outgoingResult.isError()) {
+        AppLogger.warning(
+          'Fallback rpc:response could not be framed as PayloadFrame',
+          outgoingResult.exceptionOrNull(),
+        );
         return;
       }
-      _logMessage('SENT', 'rpc:response', validatedPayload);
+      final outgoingPayload = outgoingResult.getOrThrow();
+      _logMessage('SENT', 'rpc:response', validatedResult.getOrThrow());
       _socket!.emit('rpc:response', outgoingPayload);
     } on Object catch (e, st) {
       AppLogger.warning('Failed to emit fallback internal error response', e, st);
     }
-  }
-}
-
-class _SocketRpcStreamEmitter implements IRpcStreamEmitter {
-  _SocketRpcStreamEmitter(this._emitAsync);
-
-  final Future<void> Function(String event, Map<String, dynamic> payload) _emitAsync;
-
-  @override
-  Future<bool> emitChunk(RpcStreamChunk chunk) async {
-    await _emitAsync('rpc:chunk', chunk.toJson());
-    return true;
-  }
-
-  @override
-  Future<void> emitComplete(RpcStreamComplete complete) async {
-    await _emitAsync('rpc:complete', complete.toJson());
   }
 }
 

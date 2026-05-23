@@ -103,15 +103,14 @@ void main() {
         'params': {'sql': 'SELECT 1'},
       };
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'rpc:request',
         logicalPayload: original,
-      );
+      )).getOrThrow();
 
-      expect(wire, isNotNull);
       expect(codec.looksLikePayloadFrame(wire), isTrue);
 
-      final decoded = codec.decodeIncoming(wire);
+      final decoded = codec.decodeIncoming(wire).getOrThrow();
       expect(decoded, original);
     });
 
@@ -125,19 +124,19 @@ void main() {
       );
       final original = <String, dynamic>{'a': 1, 'b': 'two'};
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'rpc:request',
         logicalPayload: original,
-      );
+      )).getOrThrow();
 
-      final decodedSync = codec.decodeIncoming(wire);
-      final decodedAsync = await codec.decodeIncomingAsync(wire);
+      final decodedSync = codec.decodeIncoming(wire).getOrThrow();
+      final decodedAsync = (await codec.decodeIncomingAsync(wire)).getOrThrow();
       expect(decodedSync, decodedAsync);
     });
   });
 
   group('PayloadFrameCodec.decodeIncoming - validation', () {
-    test('throws when payload is not a frame', () {
+    test('returns failure when payload is not a frame', () {
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -145,13 +144,12 @@ void main() {
           compression: 'gzip',
         ),
       );
-      expect(
-        () => codec.decodeIncoming({'jsonrpc': '2.0', 'id': 1}),
-        throwsA(isA<domain.ValidationFailure>()),
-      );
+      final result = codec.decodeIncoming({'jsonrpc': '2.0', 'id': 1});
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
     });
 
-    test('throws when frame uses unsupported encoding', () {
+    test('returns failure when frame uses unsupported encoding', () {
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -169,13 +167,12 @@ void main() {
         compressedSize: 5,
       ).toJson();
 
-      expect(
-        () => codec.decodeIncoming(frameJson),
-        throwsA(isA<domain.ValidationFailure>()),
-      );
+      final result = codec.decodeIncoming(frameJson);
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
     });
 
-    test('throws when frame uses unsupported compression', () {
+    test('returns failure when frame uses unsupported compression', () {
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -193,13 +190,12 @@ void main() {
         compressedSize: 5,
       ).toJson();
 
-      expect(
-        () => codec.decodeIncoming(frameJson),
-        throwsA(isA<domain.ValidationFailure>()),
-      );
+      final result = codec.decodeIncoming(frameJson);
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
     });
 
-    test('throws when frame uses an unsupported schema version', () {
+    test('returns failure when frame uses an unsupported schema version', () {
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -217,19 +213,19 @@ void main() {
         compressedSize: 5,
       ).toJson();
 
+      final result = codec.decodeIncoming(frameJson);
+      expect(result.isError(), isTrue);
       expect(
-        () => codec.decodeIncoming(frameJson),
-        throwsA(
-          isA<domain.ValidationFailure>().having(
-            (failure) => failure.context['rpc_error_code'],
-            'rpc_error_code',
-            RpcErrorCode.invalidPayload,
-          ),
+        result.exceptionOrNull(),
+        isA<domain.ValidationFailure>().having(
+          (failure) => failure.context['rpc_error_code'],
+          'rpc_error_code',
+          RpcErrorCode.invalidPayload,
         ),
       );
     });
 
-    test('throws when frame uses an unsupported content type', () {
+    test('returns failure when frame uses an unsupported content type', () {
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -247,14 +243,14 @@ void main() {
         compressedSize: 5,
       ).toJson();
 
+      final result = codec.decodeIncoming(frameJson);
+      expect(result.isError(), isTrue);
       expect(
-        () => codec.decodeIncoming(frameJson),
-        throwsA(
-          isA<domain.ValidationFailure>().having(
-            (failure) => failure.context['rpc_error_code'],
-            'rpc_error_code',
-            RpcErrorCode.invalidPayload,
-          ),
+        result.exceptionOrNull(),
+        isA<domain.ValidationFailure>().having(
+          (failure) => failure.context['rpc_error_code'],
+          'rpc_error_code',
+          RpcErrorCode.invalidPayload,
         ),
       );
     });
@@ -285,13 +281,13 @@ void main() {
         payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
       );
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'rpc:response',
         logicalPayload: {'id': 'req-1', 'result': true},
-      );
+      )).getOrThrow();
 
       expect(codec.shouldSignTransportFrames, isTrue);
-      expect(wire?['signature'], isA<Map<String, dynamic>>());
+      expect(wire['signature'], isA<Map<String, dynamic>>());
     });
 
     test('does not sign optional outgoing frames before capabilities are received', () async {
@@ -306,13 +302,13 @@ void main() {
         payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
       );
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'agent:register',
         logicalPayload: {'agentId': 'agent-1'},
-      );
+      )).getOrThrow();
 
       expect(codec.shouldSignTransportFrames, isFalse);
-      expect(wire?['signature'], isNull);
+      expect(wire['signature'], isNull);
     });
 
     test('does not sign optional outgoing frames when no signature algorithm is negotiated', () async {
@@ -326,13 +322,13 @@ void main() {
         payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
       );
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'rpc:response',
         logicalPayload: {'id': 'req-1', 'result': true},
-      );
+      )).getOrThrow();
 
       expect(codec.shouldSignTransportFrames, isFalse);
-      expect(wire?['signature'], isNull);
+      expect(wire['signature'], isNull);
     });
 
     test('signs before capabilities only when local inbound signatures are required', () async {
@@ -348,13 +344,13 @@ void main() {
         payloadSigner: PayloadSigner(keys: {'key-1': 'secret'}),
       );
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'agent:register',
         logicalPayload: {'agentId': 'agent-1'},
-      );
+      )).getOrThrow();
 
       expect(codec.shouldSignTransportFrames, isTrue);
-      expect(wire?['signature'], isA<Map<String, dynamic>>());
+      expect(wire['signature'], isA<Map<String, dynamic>>());
     });
 
     test('does not require inbound signature before negotiation when only outgoing signing is enabled', () {
@@ -373,7 +369,7 @@ void main() {
         compression: 'gzip',
       ).prepareSend({'capabilities': ProtocolCapabilities.defaultCapabilities().toJson()}).getOrThrow();
 
-      final decoded = codec.decodeIncoming(frame.toJson());
+      final decoded = codec.decodeIncoming(frame.toJson()).getOrThrow();
 
       expect(decoded, isA<Map<String, dynamic>>());
     });
@@ -393,10 +389,9 @@ void main() {
         compression: 'gzip',
       ).prepareSend({'id': 'req-1', 'method': 'sql.execute'}).getOrThrow();
 
-      expect(
-        () => codec.decodeIncoming(frame.toJson()),
-        throwsA(isA<domain.ValidationFailure>()),
-      );
+      final result = codec.decodeIncoming(frame.toJson());
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
     });
 
     test('rejects signed inbound frames when no signer is configured', () async {
@@ -418,15 +413,14 @@ void main() {
           compression: 'gzip',
         ),
       );
-      final wire = await signedCodec.prepareOutgoing(
+      final wire = (await signedCodec.prepareOutgoing(
         event: 'rpc:response',
         logicalPayload: {'id': 'req-1', 'result': true},
-      );
+      )).getOrThrow();
 
-      expect(
-        () => verifyingCodec.decodeIncoming(wire),
-        throwsA(isA<domain.ValidationFailure>()),
-      );
+      final result = verifyingCodec.decodeIncoming(wire);
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
     });
 
     test('records runtime signing and verification metrics', () async {
@@ -444,11 +438,11 @@ void main() {
         metricsCollector: collector,
       );
 
-      final wire = await codec.prepareOutgoing(
+      final wire = (await codec.prepareOutgoing(
         event: 'rpc:response',
         logicalPayload: {'id': 'req-1', 'result': true},
-      );
-      final decoded = codec.decodeIncoming(wire, sourceEvent: 'rpc:request');
+      )).getOrThrow();
+      final decoded = codec.decodeIncoming(wire, sourceEvent: 'rpc:request').getOrThrow();
 
       expect(decoded, {'id': 'req-1', 'result': true});
       expect(

@@ -16,6 +16,7 @@ import 'package:plug_agente/application/actions/agent_action_secret_placeholder_
 import 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/actions/agent_actions_remote_capability_provider.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/application/actions/elevated_action_execution_abort_registry.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
@@ -131,6 +132,7 @@ import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_stor
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capability_provider.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
@@ -157,9 +159,12 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
@@ -181,6 +186,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
@@ -313,7 +319,11 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton(ProtocolNegotiator.new)
+    ..registerLazySingleton<IProtocolNegotiator>(getIt.get<ProtocolNegotiator>)
     ..registerLazySingleton(ProtocolMetricsCollector.new)
+    ..registerLazySingleton<IProtocolMetricsCollector>(
+      getIt.get<ProtocolMetricsCollector>,
+    )
     ..registerLazySingleton(AuthorizationMetricsCollector.new)
     ..registerLazySingleton<IAuthorizationMetricsCollector>(
       getIt.get<AuthorizationMetricsCollector>,
@@ -474,6 +484,12 @@ void registerPlugDependencyGraph(
       AgentActionRuntimeStateGuard.new,
     )
     ..registerLazySingleton(ElevatedActionRunnerReadinessService.new)
+    ..registerLazySingleton<IAgentActionsRemoteCapabilityProvider>(
+      () => AgentActionsRemoteCapabilityProvider(
+        runtimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+        elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
+      ),
+    )
     ..registerLazySingleton(ElevatedActionExecutionAbortRegistry.new)
     ..registerLazySingleton(
       () => ElevatedActionRunnerInstaller(
@@ -679,6 +695,7 @@ void registerPlugDependencyGraph(
         onPermissionDenied: getIt<MetricsCollector>().recordRemotePermissionDenied,
       ),
     )
+    ..registerLazySingleton(OpenRpcDocumentLoader.new)
     ..registerLazySingleton(
       () => RpcMethodDispatcher(
         databaseGateway: getIt<IDatabaseGateway>(),
@@ -713,7 +730,11 @@ void registerPlugDependencyGraph(
         agentActionRuntimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
         agentRuntimeIdentity: getIt<AgentRuntimeIdentity>(),
         agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
+        loadOpenRpcDocument: getIt<OpenRpcDocumentLoader>().getDocument,
       ),
+    )
+    ..registerLazySingleton<IRpcRequestDispatcher>(
+      getIt.get<RpcMethodDispatcher>,
     )
     ..registerLazySingleton<ITransportClient>(
       () {
@@ -755,16 +776,15 @@ void registerPlugDependencyGraph(
         }
         return SocketIOTransportClientV2(
           dataSource: getIt<SocketDataSource>(),
-          negotiator: getIt<ProtocolNegotiator>(),
-          rpcDispatcher: getIt<RpcMethodDispatcher>(),
+          negotiator: getIt<IProtocolNegotiator>(),
+          rpcDispatcher: getIt<IRpcRequestDispatcher>(),
           featureFlags: getIt<FeatureFlags>(),
           payloadSigner: payloadSigner,
           payloadSigningConfig: signingConfig,
           protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
           metricsCollector: getIt<MetricsCollector>(),
-          actionRuntimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+          agentActionsRemoteCapabilityProvider: getIt<IAgentActionsRemoteCapabilityProvider>(),
           agentActionLocalRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
-          elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
           registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
           jsonSchemaValidator: getIt.isRegistered<JsonSchemaContractValidator>()
               ? getIt<JsonSchemaContractValidator>()

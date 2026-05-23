@@ -108,7 +108,7 @@ void main() {
 
       final validated = preparer.validateOutgoing(wire);
 
-      expect(validated, wire);
+      expect(validated.getOrThrow(), wire);
     });
 
     test('skips validation entirely when schema validation flag is off', () {
@@ -117,7 +117,7 @@ void main() {
 
       final result = preparer.validateOutgoing(junk);
 
-      expect(result, junk);
+      expect(result.getOrThrow(), junk);
     });
 
     test('rejects a method-specific success result that violates its schema', () {
@@ -130,10 +130,12 @@ void main() {
       final wire = preparer.prepareForSend(response);
 
       final result =
-          preparer.validateOutgoing(
-                wire,
-                methodsById: const <Object?, String>{'req-1': 'sql.execute'},
-              )
+          preparer
+                  .validateOutgoing(
+                    wire,
+                    methodsById: const <Object?, String>{'req-1': 'sql.execute'},
+                  )
+                  .getOrThrow()
               as Map<String, dynamic>;
 
       expect(result, isNot(wire));
@@ -160,7 +162,7 @@ void main() {
         methodsById: const <Object?, String>{'req-1': 'sql.execute'},
       );
 
-      expect(result, wire);
+      expect(result.getOrThrow(), wire);
     });
   });
 

@@ -36,7 +36,7 @@ class PayloadFrame {
   /// Schema version (e.g., '1.0').
   final String schemaVersion;
 
-  /// Encoding format: 'json' or 'msgpack'.
+  /// Encoding format. Wire contract uses `json` only (`enc` must be `json`).
   final String enc;
 
   /// Compression algorithm: 'none' or 'gzip'.

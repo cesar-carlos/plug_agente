@@ -1,21 +1,20 @@
 import 'dart:async';
 
-import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
-import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
-import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_batch_inbound_handler.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
@@ -26,11 +25,11 @@ import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 /// Handles inbound `rpc:request` events (single and batch) from the hub.
 ///
 /// Owns:
-///   * Concurrency control (slot acquire/release before dispatch).
+///   * Concurrency control (slot held through dispatch only; released before emit).
 ///   * Frame decode + per-payload validation (size limit, schema, signature).
 ///   * Replay/rate-limit guards via [RpcRequestGuard].
 ///   * `request_ack` / `batch_ack` delivery confirmations.
-///   * Routing to [RpcMethodDispatcher] (with optional streaming emitter).
+///   * Routing to [IRpcRequestDispatcher] (with optional streaming emitter).
 ///   * Trace context mirroring and authorization decision logging.
 ///
 /// Stays free of `io.Socket`: the transport client passes in the emit/ack
@@ -45,8 +44,7 @@ class RpcInboundHandler {
     required PayloadLogSummarizer logSummarizer,
     required RpcResponsePreparer responsePreparer,
     required AuthorizationDecisionLogger authorizationDecisionLogger,
-    required OpenRpcDocumentLoader openRpcDocumentLoader,
-    required RpcMethodDispatcher dispatcher,
+    required IRpcRequestDispatcher dispatcher,
     required RpcRequestGuard requestGuard,
     required RpcRequestSchemaValidator schemaValidator,
     required IRpcStreamEmitter Function() streamEmitterFactory,
@@ -68,7 +66,6 @@ class RpcInboundHandler {
        _logSummarizer = logSummarizer,
        _responsePreparer = responsePreparer,
        _authorizationDecisionLogger = authorizationDecisionLogger,
-       _openRpcDocumentLoader = openRpcDocumentLoader,
        _dispatcher = dispatcher,
        _requestGuard = requestGuard,
        _schemaValidator = schemaValidator,
@@ -82,7 +79,25 @@ class RpcInboundHandler {
        _hasReceivedCapabilities = hasReceivedCapabilities,
        _jsonSchemaValidator = jsonSchemaValidator,
        _schemaCatalog = schemaCatalog,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector {
+    _batchHandler = RpcBatchInboundHandler(
+      featureFlags: _featureFlags,
+      protocolProvider: _protocolProvider,
+      logSummarizer: _logSummarizer,
+      responsePreparer: _responsePreparer,
+      authorizationDecisionLogger: _authorizationDecisionLogger,
+      dispatcher: _dispatcher,
+      requestGuard: _requestGuard,
+      schemaValidator: _schemaValidator,
+      agentIdProvider: _agentIdProvider,
+      emitInboundRpcResponse: _emitInboundRpcResponse,
+      emitEvent: _emitEvent,
+      sendSchemaValidationError: _sendSchemaValidationError,
+      validateBatchRequestJsonSchemasOrEmit: _validateBatchRequestJsonSchemasOrEmit,
+      hasNullIdCompatibilityViolation: _hasNullIdCompatibilityViolation,
+      metricsCollector: _metricsCollector,
+    );
+  }
 
   final FeatureFlags _featureFlags;
   final ProtocolConfig Function() _protocolProvider;
@@ -91,8 +106,7 @@ class RpcInboundHandler {
   final PayloadLogSummarizer _logSummarizer;
   final RpcResponsePreparer _responsePreparer;
   final AuthorizationDecisionLogger _authorizationDecisionLogger;
-  final OpenRpcDocumentLoader _openRpcDocumentLoader;
-  final RpcMethodDispatcher _dispatcher;
+  final IRpcRequestDispatcher _dispatcher;
   final RpcRequestGuard _requestGuard;
   final RpcRequestSchemaValidator _schemaValidator;
   final IRpcStreamEmitter Function() _streamEmitterFactory;
@@ -107,11 +121,14 @@ class RpcInboundHandler {
   final RpcMethodSchemaCatalog _schemaCatalog;
   final MetricsCollector? _metricsCollector;
 
+  late final RpcBatchInboundHandler _batchHandler;
+
   int _activeRpcHandlers = 0;
+  bool _deferInboundSlotRelease = false;
 
   /// Returns `true` if a slot was acquired (caller must call [releaseSlot]
-  /// after the request handler completes). Returns `false` when the per-socket
-  /// concurrency cap is reached; callers should answer with
+  /// after dispatch completes, before outbound encode/emit). Returns `false`
+  /// when the per-socket concurrency cap is reached; callers should answer with
   /// [emitConcurrencyLimitedError] and skip dispatching.
   bool tryAcquireSlot() {
     if (_activeRpcHandlers >= ConnectionConstants.maxConcurrentRpcHandlers) {
@@ -125,6 +142,25 @@ class RpcInboundHandler {
     _activeRpcHandlers--;
   }
 
+  void _releaseInboundSlotIfDeferred() {
+    if (!_deferInboundSlotRelease) {
+      return;
+    }
+    _deferInboundSlotRelease = false;
+    releaseSlot();
+  }
+
+  Future<void> _emitInboundRpcResponse(
+    dynamic responseData, {
+    Map<Object?, String> methodsById = const <Object?, String>{},
+  }) async {
+    _releaseInboundSlotIfDeferred();
+    await _emitRpcResponse(
+      responseData,
+      methodsById: methodsById,
+    );
+  }
+
   _WirePayloadWithAck _unwrapWirePayload(dynamic data) {
     if (data is List && data.length == 2 && data[1] is Function) {
       return _WirePayloadWithAck(
@@ -136,10 +172,11 @@ class RpcInboundHandler {
   }
 
   Future<void> handleRequestWithRelease(dynamic data) async {
+    _deferInboundSlotRelease = true;
     try {
       await handleRequest(data);
     } finally {
-      releaseSlot();
+      _releaseInboundSlotIfDeferred();
     }
   }
 
@@ -150,17 +187,18 @@ class RpcInboundHandler {
     final wirePayload = _unwrapWirePayload(rawData);
     final payload = wirePayload.payload;
     dynamic id;
-    try {
-      if (payload is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(payload)) {
-        final decodedPayload = _frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
-        if (decodedPayload is Map<String, dynamic>) {
-          id = decodedPayload['id'];
-        }
-      } else if (payload is Map<String, dynamic>) {
-        id = payload['id'];
-      }
-    } on Object {
-      id = null;
+    if (payload is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(payload)) {
+      final decodeResult = _frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
+      decodeResult.fold(
+        (dynamic decodedPayload) {
+          if (decodedPayload is Map<String, dynamic>) {
+            id = decodedPayload['id'];
+          }
+        },
+        (_) => id = null,
+      );
+    } else if (payload is Map<String, dynamic>) {
+      id = payload['id'];
     }
 
     try {
@@ -204,10 +242,10 @@ class RpcInboundHandler {
         return;
       }
 
-      try {
-        payload = await _frameCodec.decodeIncomingAsync(payload, sourceEvent: 'rpc:request');
-      } on domain.Failure catch (failure) {
-        final mapped = _mapInboundTransportDecodeFailure(failure);
+      final decodeResult = await _frameCodec.decodeIncomingAsync(payload, sourceEvent: 'rpc:request');
+      if (decodeResult.isError()) {
+        final failure = decodeResult.exceptionOrNull()! as domain.Failure;
+        final mapped = mapRpcInboundTransportDecodeFailure(failure);
         await _sendSchemaValidationError(
           _extractRequestIdFromWirePayload(payload),
           mapped.code,
@@ -217,6 +255,7 @@ class RpcInboundHandler {
         socketAck?.call();
         return;
       }
+      payload = decodeResult.getOrThrow();
 
       if (payload is List) {
         await handleBatchRequest(payload);
@@ -255,7 +294,7 @@ class RpcInboundHandler {
           if (failure != null) {
             await _sendSchemaValidationError(
               requestMap['id'],
-              _validationFailureCode(failure),
+              rpcInboundValidationFailureCode(failure),
               failure.message,
             );
             socketAck?.call();
@@ -299,26 +338,11 @@ class RpcInboundHandler {
       if (guardResult != RpcRequestGuardResult.allow) {
         final errorResponse = _responsePreparer.buildErrorResponse(
           id: request.id,
-          code: _guardResultToCode(guardResult),
-          technicalMessage: _guardResultToTechnicalMessage(guardResult),
-          errorReason: _guardResultToReason(guardResult),
+          code: rpcInboundGuardResultToCode(guardResult),
+          technicalMessage: rpcInboundGuardResultToTechnicalMessage(guardResult),
+          errorReason: rpcInboundGuardResultToReason(guardResult),
         );
-        await _emitRpcResponse(errorResponse);
-        return;
-      }
-
-      if (request.method == 'rpc.discover') {
-        if (!_featureFlags.enableSocketNotificationsContract || !request.isNotification) {
-          final doc = await _openRpcDocumentLoader.getDocument();
-          final response = _responsePreparer.attachRequestTrace(
-            request,
-            RpcResponse.success(id: request.id, result: doc),
-          );
-          await _emitRpcResponse(
-            response,
-            methodsById: <Object?, String>{request.id: request.method},
-          );
-        }
+        await _emitInboundRpcResponse(errorResponse);
         return;
       }
 
@@ -350,7 +374,7 @@ class RpcInboundHandler {
         return;
       }
 
-      await _emitRpcResponse(
+      await _emitInboundRpcResponse(
         tracedResponse,
         methodsById: <Object?, String>{request.id: request.method},
       );
@@ -383,7 +407,7 @@ class RpcInboundHandler {
         ),
       );
 
-      await _emitRpcResponse(errorResponse);
+      await _emitInboundRpcResponse(errorResponse);
     }
   }
 
@@ -399,295 +423,9 @@ class RpcInboundHandler {
         (_featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb);
   }
 
-  /// Processes a JSON-RPC batch request. Validates the envelope, dispatches
-  /// each item independently, then emits the merged batch response (optionally
-  /// preserving order based on the negotiated extension).
-  Future<void> handleBatchRequest(List<dynamic> data) async {
-    try {
-      if (data.isEmpty) {
-        const code = RpcErrorCode.invalidRequest;
-        final errorResponse = RpcResponse.error(
-          id: null,
-          error: RpcError(
-            code: code,
-            message: RpcErrorCode.getMessage(code),
-            data: RpcErrorCode.buildErrorData(
-              code: code,
-              technicalMessage: RpcInboundConstants.batchRequestEmptyDetail,
-              extra: {'detail': RpcInboundConstants.batchRequestEmptyDetail},
-            ),
-          ),
-        );
-        await _emitRpcResponse(errorResponse);
-        return;
-      }
-
-      if (_exceedsPayloadLimit(data)) {
-        await _sendSchemaValidationError(
-          null,
-          RpcErrorCode.invalidPayload,
-          RpcInboundConstants.batchRequestExceedsPayloadLimitTechnicalMessage,
-        );
-        return;
-      }
-
-      if (_featureFlags.enableSocketSchemaValidation) {
-        final validation = _schemaValidator.validateBatch(
-          data,
-          limits: _protocolProvider().effectiveLimits,
-        );
-        if (validation.isError()) {
-          final failure = validation.exceptionOrNull() as domain.Failure?;
-          if (failure != null) {
-            await _sendSchemaValidationError(
-              null,
-              _validationFailureCode(failure),
-              failure.message,
-            );
-            return;
-          }
-        }
-        if (!await _validateBatchRequestJsonSchemasOrEmit(data)) {
-          return;
-        }
-      }
-
-      for (final item in data) {
-        if (item is! Map<String, dynamic>) {
-          await _sendSchemaValidationError(
-            null,
-            RpcErrorCode.invalidRequest,
-            RpcInboundConstants.eachBatchElementMustBeJsonObjectTechnicalMessage,
-          );
-          return;
-        }
-        if (!_responsePreparer.verifyIncomingSignature(item)) {
-          await _sendSchemaValidationError(
-            item['id'],
-            RpcErrorCode.authenticationFailed,
-            RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
-            errorReason: RpcErrorCode.reasonInvalidSignature,
-          );
-          return;
-        }
-      }
-
-      final requests = data.map((e) => RpcRequest.fromJson(e as Map<String, dynamic>)).toList();
-
-      for (final item in data.whereType<Map<String, dynamic>>()) {
-        if (_hasNullIdCompatibilityViolation(item)) {
-          await _sendSchemaValidationError(
-            null,
-            RpcErrorCode.invalidRequest,
-            RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
-          );
-          return;
-        }
-      }
-
-      if (_featureFlags.enableSocketDeliveryGuarantees) {
-        await _emitBatchRequestAck(requests);
-      }
-
-      if (_featureFlags.enableSocketBatchStrictValidation) {
-        final batch = RpcBatchRequest(requests);
-        final validation = batch.validateStrict(
-          maxSize: _protocolProvider().effectiveLimits.maxBatchSize,
-        );
-        switch (validation) {
-          case RpcBatchDuplicateIds(:final duplicateIds):
-            await _emitRpcResponse(
-              RpcResponse.error(
-                id: null,
-                error: RpcError(
-                  code: RpcErrorCode.invalidRequest,
-                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                  data: RpcErrorCode.buildErrorData(
-                    code: RpcErrorCode.invalidRequest,
-                    technicalMessage: '${RpcBatchConstants.duplicateRequestIdsTechnicalMessagePrefix}$duplicateIds',
-                    reason: RpcBatchConstants.duplicateRequestIdsReason,
-                    extra: {'duplicate_ids': duplicateIds},
-                  ),
-                ),
-              ),
-            );
-            return;
-          case RpcBatchExceedsLimit(:final size, :final limit):
-            await _emitRpcResponse(
-              RpcResponse.error(
-                id: null,
-                error: RpcError(
-                  code: RpcErrorCode.invalidRequest,
-                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                  data: RpcErrorCode.buildErrorData(
-                    code: RpcErrorCode.invalidRequest,
-                    technicalMessage: '${RpcBatchConstants.exceedsLimitTechnicalMessagePrefix}$size > $limit',
-                    reason: RpcBatchConstants.exceedsLimitReason,
-                    extra: {'size': size, 'limit': limit},
-                  ),
-                ),
-              ),
-            );
-            return;
-          case RpcBatchValid():
-            break;
-        }
-      }
-
-      final readOnlyAgentActionCount = requests
-          .where((request) => _isAgentActionBatchReadMethod(request.method))
-          .length;
-      final maxReadPerBatch = AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch;
-      if (readOnlyAgentActionCount > maxReadPerBatch) {
-        _metricsCollector?.recordRpcAgentActionBatchReadLimitRejected();
-        await _emitRpcResponse(
-          RpcResponse.error(
-            id: null,
-            error: RpcError(
-              code: RpcErrorCode.invalidRequest,
-              message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-              data: RpcErrorCode.buildErrorData(
-                code: RpcErrorCode.invalidRequest,
-                technicalMessage:
-                    '${AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitTechnicalMessagePrefix}'
-                    '$readOnlyAgentActionCount > $maxReadPerBatch',
-                reason: AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitErrorReason,
-                extra: <String, Object?>{
-                  'read_method_count': readOnlyAgentActionCount,
-                  'limit': maxReadPerBatch,
-                },
-              ),
-            ),
-          ),
-        );
-        return;
-      }
-
-      final responses = <({int index, RpcResponse response})>[];
-      final responseMethodsById = <Object?, String>{};
-
-      for (var index = 0; index < requests.length; index++) {
-        final request = requests[index];
-        if (_isAgentActionBatchRejectedMethod(request.method)) {
-          final errorResponse = _responsePreparer.buildErrorResponse(
-            id: request.id,
-            code: RpcErrorCode.invalidRequest,
-            technicalMessage:
-                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessagePrefix}'
-                '${request.method}'
-                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessageSuffix}',
-            errorReason: AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedErrorReason,
-          );
-          if (!request.isNotification) {
-            responses.add((index: index, response: errorResponse));
-            responseMethodsById[request.id] = request.method;
-          }
-          continue;
-        }
-
-        final guardResult = _requestGuard.evaluate(request);
-        if (guardResult != RpcRequestGuardResult.allow) {
-          final errorResponse = _responsePreparer.buildErrorResponse(
-            id: request.id,
-            code: _guardResultToCode(guardResult),
-            technicalMessage: _guardResultToTechnicalMessage(guardResult),
-            errorReason: _guardResultToReason(guardResult),
-          );
-          if (!request.isNotification) {
-            responses.add((index: index, response: errorResponse));
-            responseMethodsById[request.id] = request.method;
-          }
-          continue;
-        }
-
-        if (request.method == 'rpc.discover') {
-          if (!_featureFlags.enableSocketNotificationsContract || !request.isNotification) {
-            final doc = await _openRpcDocumentLoader.getDocument();
-            responses.add((
-              index: index,
-              response: _responsePreparer.attachRequestTrace(
-                request,
-                RpcResponse.success(id: request.id, result: doc),
-              ),
-            ));
-            responseMethodsById[request.id] = request.method;
-          }
-          continue;
-        }
-
-        final clientToken = _extractClientTokenFromRpcParams(request.params);
-        final response = await _dispatcher.dispatch(
-          request,
-          _agentIdProvider(),
-          clientToken: clientToken,
-          limits: _protocolProvider().effectiveLimits,
-          negotiatedExtensions: _protocolProvider().negotiatedExtensions,
-        );
-        final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
-        _authorizationDecisionLogger.log(
-          request: request,
-          response: tracedResponse,
-          clientToken: clientToken,
-        );
-        if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
-          continue;
-        }
-        responses.add((index: index, response: tracedResponse));
-        responseMethodsById[request.id] = request.method;
-      }
-
-      if (responses.isEmpty) {
-        return;
-      }
-
-      final orderedResponses = _supportsOrderedBatchResponses()
-          ? (responses.toList()..sort((left, right) => left.index.compareTo(right.index)))
-                .map((entry) => entry.response)
-                .toList()
-          : responses.map((entry) => entry.response).toList();
-      await _emitRpcResponse(
-        orderedResponses,
-        methodsById: responseMethodsById,
-      );
-    } on Exception catch (error, stackTrace) {
-      AppLogger.error(
-        'Error processing RPC batch request',
-        error,
-        stackTrace,
-      );
-      // Always answer the hub even on unhandled errors so the request slot is
-      // released. Without this the hub would hang on the batch indefinitely.
-      final errorResponse = RpcResponse.error(
-        id: null,
-        error: RpcError(
-          code: RpcErrorCode.internalError,
-          message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
-          data: RpcErrorCode.buildErrorData(
-            code: RpcErrorCode.internalError,
-            technicalMessage: RpcInboundConstants.unhandledBatchProcessingTechnicalMessage,
-            extra: {'failure_code': RpcInboundConstants.unhandledBatchExceptionFailureCode},
-          ),
-        ),
-      );
-      try {
-        await _emitRpcResponse(errorResponse);
-      } on Object catch (emitError, emitStack) {
-        AppLogger.error(
-          'Failed to emit batch error response',
-          emitError,
-          emitStack,
-        );
-      }
-    }
-  }
-
-  bool _isAgentActionBatchRejectedMethod(String method) {
-    return AgentActionRpcConstants.jsonRpcBatchDisallowedAgentActionMethods.contains(method);
-  }
-
-  bool _isAgentActionBatchReadMethod(String method) {
-    return method == AgentActionRpcConstants.agentActionGetExecutionRpcMethodName ||
-        method == AgentActionRpcConstants.agentActionValidateRunRpcMethodName;
+  /// Processes a JSON-RPC batch request via [RpcBatchInboundHandler].
+  Future<void> handleBatchRequest(List<dynamic> data) {
+    return _batchHandler.handleBatchRequest(data);
   }
 
   Future<void> _emitRequestAck(dynamic requestId) async {
@@ -697,17 +435,6 @@ class RpcInboundHandler {
       'received_at': DateTime.now().toIso8601String(),
     };
     await _emitEvent('rpc:request_ack', ackPayload);
-  }
-
-  Future<void> _emitBatchRequestAck(List<RpcRequest> requests) async {
-    if (requests.isEmpty) return;
-    final ids = requests.where((r) => r.id != null).map((r) => r.id.toString()).toList();
-    if (ids.isEmpty) return;
-    final ackPayload = {
-      'request_ids': ids,
-      'received_at': DateTime.now().toIso8601String(),
-    };
-    await _emitEvent('rpc:batch_ack', ackPayload);
   }
 
   Future<bool> _validateBatchRequestJsonSchemasOrEmit(List<dynamic> data) async {
@@ -819,7 +546,7 @@ class RpcInboundHandler {
       technicalMessage: technicalMessage,
       errorReason: errorReason,
     );
-    await _emitRpcResponse(errorResponse);
+    await _emitInboundRpcResponse(errorResponse);
   }
 
   bool _exceedsPayloadLimit(dynamic payload) {
@@ -837,40 +564,6 @@ class RpcInboundHandler {
     return true;
   }
 
-  bool _supportsOrderedBatchResponses() {
-    final extensionValue = _protocolProvider().negotiatedExtensions['orderedBatchResponses'];
-    if (extensionValue is bool) return extensionValue;
-    return true;
-  }
-
-  int _validationFailureCode(domain.Failure failure) {
-    final code = failure.context['rpc_error_code'];
-    return code is int ? code : RpcErrorCode.invalidRequest;
-  }
-
-  ({int code, String? reason}) _mapInboundTransportDecodeFailure(domain.Failure failure) {
-    if (failure is domain.ValidationFailure && failure.context['transport_signature_invalid'] == true) {
-      return (
-        code: RpcErrorCode.authenticationFailed,
-        reason: RpcErrorCode.reasonInvalidSignature,
-      );
-    }
-    final contextCode = failure.context['rpc_error_code'];
-    if (contextCode is int) {
-      return (code: contextCode, reason: null);
-    }
-    if (failure is domain.CompressionFailure) {
-      final operation = failure.context['operation'];
-      return (
-        code: operation == 'decode' || operation == 'jsonDecode'
-            ? RpcErrorCode.decodingFailed
-            : RpcErrorCode.compressionFailed,
-        reason: null,
-      );
-    }
-    return (code: RpcErrorCode.invalidPayload, reason: null);
-  }
-
   dynamic _extractRequestIdFromWirePayload(dynamic payload) {
     if (_frameCodec.looksLikePayloadFrame(payload)) {
       return (payload as Map<String, dynamic>)['requestId'];
@@ -885,49 +578,6 @@ class RpcInboundHandler {
     if (params is! Map<String, dynamic>) return null;
     final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
     return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
-  }
-
-  int _guardResultToCode(RpcRequestGuardResult result) {
-    switch (result) {
-      case RpcRequestGuardResult.allow:
-        // Invariant: callers must short-circuit when guard returns `allow`,
-        // so this arm should be unreachable. The internalError fallback only
-        // exists to satisfy the exhaustiveness check; the assert documents
-        // the invariant in dev/test builds.
-        assert(false, 'guard.allow should not reach error mapping path');
-        return RpcErrorCode.internalError;
-      case RpcRequestGuardResult.rateLimited:
-        return RpcErrorCode.rateLimited;
-      case RpcRequestGuardResult.replayDetected:
-        return RpcErrorCode.replayDetected;
-    }
-  }
-
-  /// Distinct reasons for the same RPC code (`-32013 rate_limited`) so the
-  /// hub can choose the right back-off strategy:
-  /// - `RpcInboundConstants.rateWindowExceededReason`: too many requests per time window.
-  /// - `RpcInboundConstants.concurrentHandlersExceededReason`: too many in-flight RPC handlers.
-  /// - Replay uses the canonical `RpcErrorCode.getReason(replayDetected)`.
-  String? _guardResultToReason(RpcRequestGuardResult result) {
-    switch (result) {
-      case RpcRequestGuardResult.allow:
-        return null;
-      case RpcRequestGuardResult.rateLimited:
-        return RpcInboundConstants.rateWindowExceededReason;
-      case RpcRequestGuardResult.replayDetected:
-        return RpcErrorCode.getReason(RpcErrorCode.replayDetected);
-    }
-  }
-
-  String _guardResultToTechnicalMessage(RpcRequestGuardResult result) {
-    switch (result) {
-      case RpcRequestGuardResult.allow:
-        return RpcInboundConstants.unexpectedGuardResultTechnicalMessage;
-      case RpcRequestGuardResult.rateLimited:
-        return RpcInboundConstants.rateLimitExceededForRpcRequestTechnicalMessage;
-      case RpcRequestGuardResult.replayDetected:
-        return RpcInboundConstants.duplicateRequestIdWithinReplayWindowTechnicalMessage;
-    }
   }
 }
 

@@ -1,14 +1,19 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/capabilities_negotiator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
+import 'package:result_dart/result_dart.dart';
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class _MockProtocolNegotiator extends Mock implements ProtocolNegotiator {}
+class _MockProtocolNegotiator extends Mock implements IProtocolNegotiator {}
 
 void main() {
   setUpAll(() {
@@ -41,7 +46,7 @@ void main() {
   });
 
   CapabilitiesNegotiator buildNegotiator({
-    dynamic Function(dynamic, {String? sourceEvent})? decode,
+    Result<dynamic> Function(dynamic, {String? sourceEvent})? decode,
     String Function()? agentIdProvider,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
   }) {
@@ -55,7 +60,11 @@ void main() {
       emit: (event, payload) async {
         emitted.add((event: event, payload: payload));
       },
-      decodeIncoming: decode ?? (payload, {String? sourceEvent}) => payload,
+      decodeIncoming:
+          decode ??
+          (payload, {String? sourceEvent}) {
+            return Success<Object, Exception>(payload as Object) as Result<dynamic>;
+          },
       onTimeoutReconnect: () => reconnectCalls++,
     );
   }
@@ -217,6 +226,99 @@ void main() {
       final outcome = neg.handleEnvelope('not a map');
 
       expect(outcome, isA<CapabilitiesNegotiationFailure>());
+    });
+  });
+
+  group('capabilities timeout', () {
+    test('re-registers when timer fires before hub responds', () {
+      fakeAsync((async) {
+        final neg = buildNegotiator();
+
+        unawaited(neg.sendRegisterAndStartTimeout());
+        async.flushMicrotasks();
+
+        expect(emitted, hasLength(1));
+        expect(reconnectCalls, 0);
+
+        async.elapse(
+          const Duration(milliseconds: ConnectionConstants.capabilitiesTimeoutMs),
+        );
+        async.flushMicrotasks();
+
+        expect(emitted, hasLength(2));
+        expect(emitted.every((item) => item.event == 'agent:register'), isTrue);
+        expect(reconnectCalls, 0);
+
+        neg.reset();
+      });
+    });
+
+    test('calls onTimeoutReconnect after max re-register attempts are exhausted', () {
+      fakeAsync((async) {
+        final neg = buildNegotiator();
+
+        unawaited(neg.sendRegisterAndStartTimeout());
+        async.flushMicrotasks();
+
+        for (var attempt = 0; attempt < ConnectionConstants.capabilitiesMaxReRegisterAttempts; attempt++) {
+          async.elapse(
+            const Duration(milliseconds: ConnectionConstants.capabilitiesTimeoutMs),
+          );
+          async.flushMicrotasks();
+        }
+
+        expect(
+          emitted.where((item) => item.event == 'agent:register').length,
+          ConnectionConstants.capabilitiesMaxReRegisterAttempts + 1,
+        );
+        expect(reconnectCalls, 0);
+
+        async.elapse(
+          const Duration(milliseconds: ConnectionConstants.capabilitiesTimeoutMs),
+        );
+        async.flushMicrotasks();
+
+        expect(reconnectCalls, 1);
+        expect(
+          emitted.where((item) => item.event == 'agent:register').length,
+          ConnectionConstants.capabilitiesMaxReRegisterAttempts + 1,
+        );
+
+        neg.reset();
+      });
+    });
+
+    test('does not re-register after capabilities are received', () {
+      when(
+        () => negotiator.negotiate(
+          agentCapabilities: any(named: 'agentCapabilities'),
+          serverCapabilities: any(named: 'serverCapabilities'),
+        ),
+      ).thenReturn(binaryProtocol());
+
+      fakeAsync((async) {
+        final neg = buildNegotiator();
+
+        unawaited(neg.sendRegisterAndStartTimeout());
+        async.flushMicrotasks();
+
+        neg.handleEnvelope({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        });
+
+        async.elapse(
+          const Duration(
+            milliseconds: ConnectionConstants.capabilitiesTimeoutMs *
+                (ConnectionConstants.capabilitiesMaxReRegisterAttempts + 2),
+          ),
+        );
+        async.flushMicrotasks();
+
+        expect(emitted, hasLength(1));
+        expect(reconnectCalls, 0);
+
+        neg.reset();
+      });
     });
   });
 

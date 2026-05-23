@@ -4,17 +4,37 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
-import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+
+/// Thrown when the OpenRPC document cannot be loaded from the asset bundle or
+/// disk. Callers should surface this as an RPC error instead of advertising
+/// zero methods.
+class OpenRpcDocumentLoadException implements Exception {
+  OpenRpcDocumentLoadException({
+    required this.message,
+    this.assetError,
+    this.fileError,
+    this.cwd,
+  });
+
+  final String message;
+  final Object? assetError;
+  final Object? fileError;
+  final String? cwd;
+
+  @override
+  String toString() => 'OpenRpcDocumentLoadException: $message';
+}
 
 /// Loads the OpenRPC document used to answer `rpc.discover` requests.
 ///
 /// Tries the asset bundle first, then the on-disk copy at
-/// `<cwd>/docs/communication/openrpc.json`, and finally returns a minimal
-/// fallback so `rpc.discover` always succeeds.
+/// `<cwd>/docs/communication/openrpc.json`. On total failure, throws
+/// [OpenRpcDocumentLoadException] so `rpc.discover` does not silently return
+/// an empty method list.
 ///
-/// Caches the first successful load (or the fallback) so subsequent reads are
-/// O(1). The cache is shared across all callers of [getDocument].
+/// Caches the first successful load so subsequent reads are O(1). The cache is
+/// shared across all callers of [getDocument].
 class OpenRpcDocumentLoader {
   OpenRpcDocumentLoader({
     Future<String> Function(String key)? assetLoader,
@@ -33,8 +53,8 @@ class OpenRpcDocumentLoader {
   Map<String, dynamic>? _cached;
   Future<Map<String, dynamic>>? _inFlight;
 
-  /// Returns the cached document, the asset, the disk copy, or the minimal
-  /// fallback. Concurrent callers share the same in-flight load.
+  /// Returns the cached document, the asset, or the disk copy. Concurrent
+  /// callers share the same in-flight load.
   Future<Map<String, dynamic>> getDocument() {
     final cached = _cached;
     if (cached != null) {
@@ -62,36 +82,30 @@ class OpenRpcDocumentLoader {
         _cached = json;
         return json;
       } on Object catch (fileError, fileStack) {
-        AppLogger.warning(
-          'Failed to load OpenRPC from asset and disk, using fallback',
+        final cwd = _cwdProvider();
+        AppLogger.error(
+          'Failed to load OpenRPC from asset bundle ($_assetKey)',
           assetError,
           assetStack,
         );
-        AppLogger.warning(
-          'OpenRPC disk fallback also failed (cwd=${_cwdProvider()})',
+        AppLogger.error(
+          'Failed to load OpenRPC from disk (cwd=$cwd/docs/communication/openrpc.json)',
           fileError,
           fileStack,
+        );
+        throw OpenRpcDocumentLoadException(
+          message:
+              'OpenRPC document unavailable from asset bundle and disk. '
+              'Ensure docs/communication/openrpc.json is bundled in the app '
+              'and available on disk for development.',
+          assetError: assetError,
+          fileError: fileError,
+          cwd: cwd,
         );
       }
     } finally {
       _inFlight = null;
     }
-
-    AppLogger.warning(
-      'OpenRPC document unavailable; using minimal fallback. '
-      'rpc.discover will return zero methods until the document can be loaded.',
-    );
-
-    final fallback = <String, dynamic>{
-      'openrpc': '1.3.2',
-      'info': <String, dynamic>{
-        'title': 'Plug Agente Socket RPC',
-        'version': ProtocolVersion.openRpcVersion,
-      },
-      'methods': <dynamic>[],
-    };
-    _cached = fallback;
-    return fallback;
   }
 
   static Future<String> _defaultFileLoader(String filePath) {

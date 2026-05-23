@@ -192,6 +192,15 @@ class ConnectionConstants {
   /// Max agent:register retries before forcing reconnect when capabilities missing.
   static const int capabilitiesMaxReRegisterAttempts = 2;
 
+  /// Extra slack for the presentation-layer negotiating watchdog beyond transport
+  /// register + re-register cycles.
+  static const int capabilitiesNegotiationWatchdogMarginMs = 2000;
+
+  /// UI backstop when hub status stays negotiating beyond transport capability
+  /// timeout cycles (initial register + [capabilitiesMaxReRegisterAttempts] retries).
+  static int get capabilitiesNegotiationWatchdogMs =>
+      capabilitiesTimeoutMs * (capabilitiesMaxReRegisterAttempts + 1) + capabilitiesNegotiationWatchdogMarginMs;
+
   /// Socket.IO client internal reconnection attempts (transport-level).
   static const int socketReconnectionAttempts = 15;
   static const int socketReconnectionDelayMs = 5000;

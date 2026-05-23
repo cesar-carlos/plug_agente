@@ -6,10 +6,11 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
+import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
 import 'package:plug_agente/domain/entities/sql_investigation_event.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
-import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
@@ -305,7 +306,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
   int _tabIndex = 0;
   StreamSubscription<void>? _authMetricsSub;
   StreamSubscription<void>? _deprecationMetricsSub;
-  StreamSubscription<ProtocolMetrics>? _protocolMetricsSub;
+  StreamSubscription<void>? _protocolMetricsSub;
   AuthorizationMetricsSummary? _authSummary;
   int? _deprecationCount;
   ProtocolMetricsSummary? _protocolSummary;
@@ -317,9 +318,8 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
     _deprecationCount = getIt.isRegistered<IDeprecationMetricsCollector>()
         ? getIt<IDeprecationMetricsCollector>().preserveSqlUsageCount
         : null;
-    _protocolSummary = getIt.isRegistered<ProtocolMetricsCollector>()
-        ? getIt<ProtocolMetricsCollector>().getSummary(period: const Duration(minutes: 15))
-        : null;
+    final protocolMetrics = _readProtocolMetricsCollector(context);
+    _protocolSummary = protocolMetrics?.getSummary(period: const Duration(minutes: 15));
   }
 
   @override
@@ -340,12 +340,21 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
         }
       });
     }
-    if (getIt.isRegistered<ProtocolMetricsCollector>()) {
-      _protocolMetricsSub = getIt<ProtocolMetricsCollector>().metricsStream.listen((_) {
+    final protocolMetrics = _readProtocolMetricsCollector(context);
+    if (protocolMetrics != null) {
+      _protocolMetricsSub = protocolMetrics.updates.listen((_) {
         if (mounted) {
           setState(_snapMetrics);
         }
       });
+    }
+  }
+
+  IProtocolMetricsCollector? _readProtocolMetricsCollector(BuildContext context) {
+    try {
+      return context.read<IProtocolMetricsCollector>();
+    } on ProviderNotFoundException {
+      return null;
     }
   }
 

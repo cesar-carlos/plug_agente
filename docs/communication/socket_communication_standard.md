@@ -50,15 +50,15 @@ binario esta documentado em
 | Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                                                                          |
 | Compatibilidade de leitura para payload JSON cru                     | not supported in current runtime                                                                                           |
 | `sql.cancel`                                                         | implemented (via feature flag)                                                                                             |
-| Streaming chunked                                                    | implemented (via feature flag; acima de `streaming_row_threshold`)                                                         |
-| Streaming direto do banco (SELECT sem params)                        | implemented (via enableSocketStreamingFromDb)                                                                              |
-| Backpressure                                                         | implemented (window_size em rpc:stream.pull controla envio)                                                                |
+| Streaming chunked                                                    | implemented (`enableSocketStreamingChunks`; default **off**; acima de `streaming_row_threshold`)                         |
+| Streaming direto do banco (SELECT sem params)                        | implemented (`enableSocketStreamingFromDb`; default **on**)                                                                |
+| Backpressure                                                         | implemented (`enableSocketBackpressure`; default **off**; `window_size` em `rpc:stream.pull`)                              |
 | Ack explicito de prontidao (`agent:ready`)                           | implemented (agent-side; opcional e retrocompativel)                                                                       |
 | Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                                                                            |
 | Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
-| Garantia de entrega por evento (ack/retry)                           | implemented (via feature flag)                                                                                             |
-| Timeout por etapa (SQL, transporte, ack)                             | implemented (via feature flag)                                                                                             |
-| Idempotencia por `idempotency_key` (sql.execute/batch/bulkInsert + extensoes) | implemented (feature flag; cache SQLite com TTL/LRU; chave interna `{method}:{key}`; purge bootstrap e periodico) |
+| Garantia de entrega por evento (ack/retry)                           | implemented (`enableSocketDeliveryGuarantees`; default **off**)                                                            |
+| Timeout por etapa (SQL, transporte, ack)                             | implemented (`enableSocketTimeoutByStage`; default **off**)                                                              |
+| Idempotencia por `idempotency_key` (sql.execute/batch/bulkInsert + extensoes) | implemented (`enableSocketIdempotency`; default **off**; cache SQLite com TTL/LRU; chave `{method}:{key}`)        |
 | Connection state recovery                                            | implemented (agent-side retry/backoff)                                                                                     |
 | Politica de auth no reconnect                                        | implemented (agent-side)                                                                                                   |
 | Rate limiting por evento                                             | implemented (agent-side)                                                                                                   |
@@ -67,7 +67,7 @@ binario esta documentado em
 | Schema de streaming (chunk/complete/pull)                            | implemented (docs/communication/schemas/)                                                                                  |
 | Politica de versao e deprecacao                                      | implemented (neste documento)                                                                                              |
 | Limites negociados por transporte                                    | implemented (negociacao via TransportLimits no handshake)                                                                  |
-| Assinatura opcional de payload                                       | implemented (HMAC-SHA256; feature flag `enablePayloadSigning`)                                                             |
+| Assinatura opcional de payload                                       | implemented (HMAC-SHA256; `enablePayloadSigning`; default **off**)                                                         |
 | Validacao de schema na entrada (rpc:request)                         | implemented (via feature flag)                                                                                             |
 | Validacao de contrato na saida (`rpc:response`, batch, streaming)    | implemented (via `enableSocketOutgoingContractValidation`; acima de ~2 MiB UTF-8 a validacao de saida e omitida por custo) |
 | Resumo de payloads grandes no tracer Socket (`onMessage`)            | implemented (via `enableSocketSummarizeLargePayloadLogs`; limiar 8 KiB UTF-8 estimado)                                     |
@@ -83,6 +83,18 @@ binario esta documentado em
 | Replay protection por janela de request ID                           | implemented (agent-side)                                                                                                   |
 | Auditoria de token management                                        | implemented (via feature flag)                                                                                             |
 
+
+### Agent defaults
+
+**Implemented** indica codigo e contrato disponiveis no runtime, nao que a
+funcionalidade esteja ativa em instalacao padrao. Flags abaixo iniciam
+**desligadas** (`FeatureFlags` / preferencias do app): `enableSocketStreamingChunks`,
+`enableSocketBackpressure`, `enablePayloadSigning`, `enableSocketIdempotency`,
+`enableSocketDeliveryGuarantees`, `enableSocketTimeoutByStage`. Flags de
+protocolo maduro (ex.: `enableSocketCancelMethod`, `enableSocketSchemaValidation`,
+`enableClientTokenAuthorization`, `enableSocketStreamingFromDb`) iniciam
+**ligadas**. Habilite as flags opt-in nas configuracoes do agente quando o hub
+exigir o comportamento correspondente.
 
 ## Plug JSON-RPC Profile
 
@@ -209,7 +221,7 @@ do contrato Socket.IO/JSON-RPC.
 Para cargas grandes, a recomendacao operacional e usar chunking no nivel do
 metodo de negocio, sem abrir excecao para o transporte.
 
-## Streaming chunked (quando `enableSocketStreamingChunks` ativo)
+## Streaming chunked (quando `enableSocketStreamingChunks` ativo; default **off**)
 
 Fluxo atual para resultados grandes:
 
@@ -1957,9 +1969,9 @@ e, depois, transportado dentro do `PayloadFrame`.
 - Metodo `sql.cancel` disponivel via feature flag `enableSocketCancelMethod`
 (cancela execucao em streaming ativa; execucoes nao-streaming nao sao
 cancelaveis).
-- Streaming chunked: ativo via `enableSocketStreamingChunks`; resultados
-acima de `streaming_row_threshold` negociado sao enviados em chunks
-(`rpc:chunk`, `rpc:complete`).
+- Streaming chunked: opt-in via `enableSocketStreamingChunks` (default **off**);
+resultados acima de `streaming_row_threshold` negociado sao enviados em chunks
+(`rpc:chunk`, `rpc:complete`) quando a flag esta ligada.
 - `capabilities.extensions.streamingResults` e negociado entre agente e hub.
   Quando `enableSocketStreamingFromDb` esta ativo, o agente pode criar emissor
   de stream para consultas `SELECT` elegiveis mesmo que o chunking materializado
@@ -1969,9 +1981,9 @@ acima de `streaming_row_threshold` negociado sao enviados em chunks
   nomes simples (`users`) e nomes qualificados (`public.users`), separados por
   virgula. CTEs, joins e subqueries exigem `options.prefer_db_streaming=true`
   para evitar roteamento automatico por heuristica parcial.
-- Backpressure: implementado quando `enableSocketBackpressure`; o hub envia
-`rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
-envia por vez; credito inicial de 1 chunk.
+- Backpressure: opt-in via `enableSocketBackpressure` (default **off**); o hub
+envia `rpc:stream.pull` com `window_size` para controlar quantos chunks o
+agente envia por vez; credito inicial de 1 chunk.
 - `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
 contrato formal na secao "api_version e meta".
 - `agent:ready` e enviado apos `agent:capabilities` como ack explicito de
@@ -1985,8 +1997,9 @@ enforcement via `enableSocketBatchStrictValidation`.
 (`query_timeout`, `transport_timeout`, `ack_timeout`).
 - Em timeout de SQL, o agente aplica cancelamento best-effort da execucao no
 banco (desconexao/recuperacao de conexao) para evitar trabalho zumbi.
-- Garantia de entrega por tipo de evento disponivel via
-`enableSocketDeliveryGuarantees`; ver tabela abaixo quando ativo.
+- Garantia de entrega por tipo de evento: opt-in via
+`enableSocketDeliveryGuarantees` (default **off**); ver tabela abaixo quando
+ativo.
 - Connection state recovery com retry/backoff esta ativo agent-side.
 - Politica de refresh/auth no reconnect esta ativa agent-side.
 - Rate limits/quotas por evento estao ativos agent-side.

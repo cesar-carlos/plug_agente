@@ -346,7 +346,7 @@ packages:
     source: hosted
     version: "2.0.8"
   fake_async:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: fake_async
       sha256: "5368f224a74523e8d2e7399ea1638b37aecfca824a3cc4dfdf77bf1fa905ac44"
@@ -801,10 +801,10 @@ packages:
     dependency: "direct main"
     description:
       name: odbc_fast
-      sha256: "8a204b0cc8c1a59c203a9f22c237acbd2b76b6ec2780054090f442bef7ebe3ac"
+      sha256: "99ad2056ffd2922f9eb96f0f5494600b9c218c6d95b05104f81f9dab913a2245"
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.0"
+    version: "3.8.1"
   opentelemetry:
     dependency: transitive
     description:

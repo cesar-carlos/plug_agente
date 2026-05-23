@@ -29,6 +29,7 @@ import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/config/odbc_result_encoding_config.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
@@ -189,6 +190,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
     RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
   ];
+  ResultEncoding _lastLoggedResultEncoding = ResultEncoding.rowMajor;
 
   static String _previewSqlForLog(String sql) {
     final collapsed = sql.replaceAll(_previewSqlWhitespaceCollapse, ' ').trim();
@@ -3705,15 +3707,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final queryResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
-        ? await _service.executeQueryNamed(
+    final resultEncoding = resolveOdbcResultEncoding();
+    if (resultEncoding != ResultEncoding.rowMajor) {
+      _logResultEncodingIfNeeded(resultEncoding);
+    }
+
+    final queryResult = resultEncoding == ResultEncoding.rowMajor
+        ? await _executeQueryRowMajor(connectionId, preparedExecution)
+        : await _executeQueryWithResultEncoding(
             connectionId,
-            preparedExecution.sql,
-            preparedExecution.parameters!,
-          )
-        : await _service.executeQuery(
-            preparedExecution.sql,
-            connectionId: connectionId,
+            preparedExecution,
+            resultEncoding,
           );
 
     return queryResult.fold(
@@ -3721,6 +3725,69 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _createSuccessResponse(request, success),
       ),
       _QueryExecutionOutcome.failure,
+    );
+  }
+
+  Future<Result<QueryResult>> _executeQueryRowMajor(
+    String connectionId,
+    OdbcPreparedQueryExecution preparedExecution,
+  ) {
+    final parameters = preparedExecution.parameters;
+    if (parameters != null && parameters.isNotEmpty) {
+      return _service.executeQueryNamed(
+        connectionId,
+        preparedExecution.sql,
+        parameters,
+      );
+    }
+
+    return _service.executeQuery(
+      preparedExecution.sql,
+      connectionId: connectionId,
+    );
+  }
+
+  Future<Result<QueryResult>> _executeQueryWithResultEncoding(
+    String connectionId,
+    OdbcPreparedQueryExecution preparedExecution,
+    ResultEncoding resultEncoding,
+  ) {
+    final parameters = preparedExecution.parameters;
+    if (parameters == null || parameters.isEmpty) {
+      return _service.executeQueryParams(
+        connectionId,
+        preparedExecution.sql,
+        const <Object?>[],
+        resultEncoding: resultEncoding,
+      );
+    }
+
+    final parsed = NamedParameterParser.extract(preparedExecution.sql);
+    final positionalParams = NamedParameterParser.toPositionalParams(
+      namedParams: Map<String, Object?>.from(parameters),
+      paramNames: parsed.paramNames,
+    );
+    return _service.executeQueryParams(
+      connectionId,
+      parsed.cleanedSql,
+      positionalParams,
+      resultEncoding: resultEncoding,
+    );
+  }
+
+  void _logResultEncodingIfNeeded(ResultEncoding resultEncoding) {
+    if (_lastLoggedResultEncoding == resultEncoding) {
+      return;
+    }
+    _lastLoggedResultEncoding = resultEncoding;
+    developer.log(
+      'ODBC result encoding override enabled',
+      name: 'database_gateway',
+      level: 800,
+      error: <String, Object?>{
+        'env': odbcResultEncodingEnvKey,
+        'result_encoding': resultEncodingConfigName(resultEncoding),
+      },
     );
   }
 }

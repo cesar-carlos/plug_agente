@@ -180,6 +180,9 @@ function Update-ContextFromHealthSnapshotTemplate {
       if ($null -ne $runtime.async_max_pending_requests) {
         $Context.OdbcAsyncMaxPendingRequests = [string]$runtime.async_max_pending_requests
       }
+      if ($null -ne $runtime.result_encoding) {
+        $Context.OdbcResultEncoding = [string]$runtime.result_encoding
+      }
     }
 
     $sqlQueue = $snapshot.sql_queue
@@ -246,6 +249,7 @@ function New-ValidationReport {
     ('ODBC_POOL_SIZE={0}' -f $Context.OdbcPoolSize),
     ('ODBC_ASYNC_WORKER_COUNT={0}' -f $Context.OdbcAsyncWorkerCount),
     ('ODBC_ASYNC_MAX_PENDING_REQUESTS={0}' -f $Context.OdbcAsyncMaxPendingRequests),
+    ('ODBC_RESULT_ENCODING={0}' -f $Context.OdbcResultEncoding),
     ('SQL_QUEUE_MAX_SIZE={0}' -f $Context.SqlQueueMaxSize),
     ('SQL_QUEUE_MAX_WORKERS={0}' -f $Context.SqlQueueMaxWorkers),
     ('SQL_QUEUE_TIMEOUT_SEC={0}' -f $Context.SqlQueueTimeoutSec),
@@ -263,6 +267,7 @@ function New-ValidationReport {
     '',
     '| Step | Status | Command |',
     '| --- | --- | --- |',
+    ('| ODBC runtime | {0} | `{1}` |' -f $Steps.OdbcRuntime.Status, $Steps.OdbcRuntime.Command),
     ('| Preflight | {0} | `{1}` |' -f $Steps.Preflight.Status, $Steps.Preflight.Command),
     ('| Smoke | {0} | `{1}` |' -f $Steps.Smoke.Status, $Steps.Smoke.Command),
     ('| Burst | {0} | `{1}` |' -f $Steps.Burst.Status, $Steps.Burst.Command),
@@ -274,6 +279,7 @@ function New-ValidationReport {
     '',
     '| Step | Log | Started at | Finished at |',
     '| --- | --- | --- | --- |',
+    ('| ODBC runtime | {0} | {1} | {2} |' -f $Steps.OdbcRuntime.Log, $Steps.OdbcRuntime.StartedAt, $Steps.OdbcRuntime.FinishedAt),
     ('| Preflight | {0} | {1} | {2} |' -f $Steps.Preflight.Log, $Steps.Preflight.StartedAt, $Steps.Preflight.FinishedAt),
     ('| Smoke | {0} | {1} | {2} |' -f $Steps.Smoke.Log, $Steps.Smoke.StartedAt, $Steps.Smoke.FinishedAt),
     ('| Burst | {0} | {1} | {2} |' -f $Steps.Burst.Log, $Steps.Burst.StartedAt, $Steps.Burst.FinishedAt),
@@ -286,6 +292,7 @@ function New-ValidationReport {
     '| Artifact | Purpose |',
     '| --- | --- |',
     '| `health_snapshot_template.json` | Template no shape atual de `agent.getHealth` com tuning efetivo do ambiente local. |',
+    '| `odbc_runtime.log` | Smoke sem DSN para inicializacao do `odbc_fast`, worker async e exports columnar/compressed. |',
     '| `health_burst_*_before.json` / `health_burst_*_after.json` | Snapshots reais de `HealthService.getHealthStatusAsync()` gravados pelo teste de burst quando `-RunBurst`/`-All` roda. |',
     '| `driver_matrix_*_async.log` / `driver_matrix_*_streaming.log` | Benchmark por driver configurado; drivers sem DSN sao pulados. |',
     '',
@@ -381,6 +388,7 @@ $context = @{
   OdbcPoolSize = Get-EffectiveEnvValue @("ODBC_POOL_SIZE")
   OdbcAsyncWorkerCount = Get-EffectiveEnvValue @("ODBC_ASYNC_WORKER_COUNT")
   OdbcAsyncMaxPendingRequests = Get-EffectiveEnvValue @("ODBC_ASYNC_MAX_PENDING_REQUESTS")
+  OdbcResultEncoding = Get-EffectiveEnvValue @("ODBC_RESULT_ENCODING")
   SqlQueueMaxSize = Get-EffectiveEnvValue @("SQL_QUEUE_MAX_SIZE")
   SqlQueueMaxWorkers = Get-EffectiveEnvValue @("SQL_QUEUE_MAX_WORKERS")
   SqlQueueTimeoutSec = Get-EffectiveEnvValue @("SQL_QUEUE_TIMEOUT_SEC")
@@ -414,7 +422,18 @@ if ([string]::IsNullOrWhiteSpace($context.CircuitBreakerResetSec)) {
   $context.CircuitBreakerResetSec = "30"
 }
 
+if ([string]::IsNullOrWhiteSpace($context.OdbcResultEncoding)) {
+  $context.OdbcResultEncoding = "rowMajor"
+}
+
 $steps = @{
+  OdbcRuntime = @{
+    Status = "pending"
+    Command = "dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed"
+    Log = "odbc_runtime.log"
+    StartedAt = "-"
+    FinishedAt = "-"
+  }
   Preflight = @{
     Status = if ($SkipPreflight) { "skipped" } else { "pending" }
     Command = "dart run tool/check_e2e_env.dart"
@@ -492,6 +511,17 @@ try {
   } else {
     Update-ContextFromHealthSnapshotTemplate -Context $context -TemplatePath $healthSnapshotTemplatePath
     Write-Pass "Health snapshot template generated."
+  }
+
+  $odbcRuntimeResult = Invoke-StepCommand -Name "ODBC runtime" -CommandText $steps.OdbcRuntime.Command -LogPath (Join-Path $runDirectory $steps.OdbcRuntime.Log) -Command {
+    dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+  }
+  $steps.OdbcRuntime.Status = if ($odbcRuntimeResult.Succeeded) { "passed" } else { "failed" }
+  $steps.OdbcRuntime.StartedAt = $odbcRuntimeResult.StartedAt
+  $steps.OdbcRuntime.FinishedAt = $odbcRuntimeResult.FinishedAt
+  if (-not $odbcRuntimeResult.Succeeded) {
+    $failureDetected = $true
+    throw "ODBC runtime failed."
   }
 
   if (-not $SkipPreflight) {

@@ -7,7 +7,7 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Changed
 
-- Updated `odbc_fast` to `^3.8.0`.
+- Updated `odbc_fast` to `^3.8.1`.
 - Enabled adaptive ODBC pooling by default for eligible SQL Server/PostgreSQL
   drivers while keeping SQL Anywhere on the lease/direct path.
 - Added a transactional DML batch fast path that can use the native-compatible
@@ -31,7 +31,11 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   validation to benchmark configured SQL Anywhere, SQL Server and PostgreSQL
   DSNs separately.
 - Added automatic burst health snapshots in ODBC operational validation.
-- Documented the `odbc_fast 3.8.0` operational validation path and streaming
+- Added `ODBC_RESULT_ENCODING` as an opt-in result encoding flag for
+  parameterized ODBC queries; `rowMajor` remains the default.
+- Added a no-DSN `odbc_fast` runtime smoke to validate async worker startup and
+  columnar/compressed native exports before operational ODBC runs.
+- Documented the `odbc_fast 3.8.1` operational validation path and streaming
   benchmark workflow.
 - Cached derived lists in `AgentActionsProvider` to reduce repeated filtering
   work during UI rebuilds.
@@ -41,4 +45,6 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - `feature_enable_odbc_experimental_driver_adaptive_pooling=false` remains a
   persisted opt-out.
 - `service.streamQuery` already uses the package batched-first path in
-  `odbc_fast 3.8.0`; no low-level streaming bypass was added.
+  `odbc_fast 3.8.1`; no low-level streaming bypass was added.
+- The manual transaction path was kept because it owns app-specific
+  failure mapping, metrics, rollback and native-pool fallback semantics.

@@ -149,10 +149,10 @@ Future<Map<String, dynamic>> _runCase({
   }
 
   final summary = collector.getSummary();
-  final sendSummary = ProtocolMetricsSummary.fromList(
+  final sendSummary = ProtocolMetricsSummaryBuilder.fromList(
     collector.metrics.where((metric) => metric.direction == 'send').toList(growable: false),
   );
-  final receiveSummary = ProtocolMetricsSummary.fromList(
+  final receiveSummary = ProtocolMetricsSummaryBuilder.fromList(
     collector.metrics.where((metric) => metric.direction == 'receive').toList(growable: false),
   );
   final sendMetric = collector.metrics.firstWhere((metric) => metric.direction == 'send');

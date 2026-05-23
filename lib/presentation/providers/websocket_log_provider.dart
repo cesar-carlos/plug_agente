@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/utils/log_sanitizer.dart';
+import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 
 const int _maxMessagesDefault = AppConstants.dashboardDiagnosticFeedMaxItems;
 
@@ -64,8 +65,13 @@ class WebSocketMessage {
 
 class WebSocketLogProvider extends ChangeNotifier {
   WebSocketLogProvider({
+    ITransportClient? transportClient,
     Duration debounceDelay = const Duration(milliseconds: 80),
-  }) : _debounceDelay = debounceDelay;
+  }) : _debounceDelay = debounceDelay {
+    if (transportClient != null) {
+      attachTransport(transportClient);
+    }
+  }
 
   final List<WebSocketMessage> _messages = [];
   bool _isEnabled = true;
@@ -76,6 +82,14 @@ class WebSocketLogProvider extends ChangeNotifier {
   List<WebSocketMessage> get messages => List.unmodifiable(_messages);
   bool get isEnabled => _isEnabled;
   int get maxMessages => _maxMessages;
+
+  void attachTransport(ITransportClient transportClient) {
+    transportClient.setMessageCallback((String direction, String event, dynamic data) {
+      if (_isEnabled) {
+        addMessage(direction, event, data);
+      }
+    });
+  }
 
   void addMessage(String direction, String event, dynamic data) {
     if (!_isEnabled) return;

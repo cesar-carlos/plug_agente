@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -310,6 +310,53 @@ void main() {
         expect(data['category'], equals('validation'));
         expect(data['correlation_id'], equals(method));
       }
+    });
+
+    test('should return OpenRPC document for rpc.discover when loader is configured', () async {
+      final discoverDispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+        loadOpenRpcDocument: () async => <String, dynamic>{
+          'openrpc': '1.3.2',
+          'info': <String, dynamic>{'title': 'Plug Agente', 'version': '1'},
+          'methods': <dynamic>[],
+        },
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'rpc.discover',
+        id: 'disc-1',
+      );
+
+      final response = await discoverDispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isError, isFalse);
+      expect(response.id, 'disc-1');
+      final result = response.result! as Map<String, dynamic>;
+      expect(result['openrpc'], '1.3.2');
+      expect(result['methods'], isA<List<dynamic>>());
+    });
+
+    test('should return methodNotFound for rpc.discover when loader is not configured', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'rpc.discover',
+        id: 'disc-missing',
+      );
+
+      final response = await dispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isError, isTrue);
+      expect(response.error!.code, equals(RpcErrorCode.methodNotFound));
     });
 
     test('should allow agent.getProfile without client token when auth is enabled', () async {
@@ -1591,8 +1638,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -1686,8 +1733,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           const timeoutSymbol = Symbol('queryTimeout');
@@ -1763,8 +1810,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -1818,8 +1865,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
@@ -1904,8 +1951,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -1978,8 +2025,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
@@ -2063,8 +2110,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(2);
       },
@@ -2133,8 +2180,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -2195,8 +2242,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
@@ -2239,8 +2286,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).thenAnswer((invocation) async {
           final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
@@ -2380,8 +2427,8 @@ void main() {
             chunkSizeBytes: any(named: 'chunkSizeBytes'),
             executionId: any(named: 'executionId'),
             queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
         verify(() => mockGateway.executeQuery(any())).called(1);
@@ -3587,8 +3634,8 @@ void main() {
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
               executionId: any(named: 'executionId'),
               queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+              cancellationToken: any(named: 'cancellationToken'),
+              cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
             ),
           ).thenAnswer((_) => completer.future);
 
@@ -3686,8 +3733,8 @@ void main() {
               chunkSizeBytes: any(named: 'chunkSizeBytes'),
               executionId: any(named: 'executionId'),
               queryTimeout: any(named: 'queryTimeout'),
-          cancellationToken: any(named: 'cancellationToken'),
-          cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+              cancellationToken: any(named: 'cancellationToken'),
+              cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
             ),
           ).thenAnswer((_) => completer.future);
 
@@ -3865,4 +3912,3 @@ void main() {
     );
   });
 }
-

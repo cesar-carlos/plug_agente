@@ -15,15 +15,19 @@ Atualizacao 2026-05-14:
 - `.env.example`, E2E docs e benchmark wrapper local foram atualizados para
   `ODBC_ASYNC_WORKER_COUNT` e `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 
-Atualizacao 2026-05-21 (ODBC 3.8.0):
+Atualizacao 2026-05-21 (ODBC 3.8.1):
 
-- `odbc_fast` atualizado para `^3.8.0`.
+- `odbc_fast` atualizado para `^3.8.1`.
 - Pool adaptativo ODBC habilitado por default para SQL Server/PostgreSQL
   elegiveis, mantendo SQL Anywhere no caminho lease/direct.
 - Batch transacional DML-only pode usar o caminho native-compatible com
   fallback direto e metricas dedicadas.
 - Benchmark wrapper de streaming adicionado para comparar `streamQuery` e
   `streamQueryBatched`.
+- `ODBC_RESULT_ENCODING` adicionado como opt-in para `columnar` e
+  `columnarCompressed`, mantendo `rowMajor` como default.
+- Smoke `tool/check_odbc_fast_runtime.dart` adicionado para validar worker async
+  e exports columnar/compressed sem DSN.
 
 Atualizacao 2026-05-21:
 

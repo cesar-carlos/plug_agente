@@ -19,6 +19,7 @@ void main() {
       expect(runtime['pool_size'], 4);
       expect(runtime['async_worker_count'], 4);
       expect(runtime['async_max_pending_requests'], 16);
+      expect(runtime['result_encoding'], 'rowMajor');
       expect(pool['size'], 4);
       expect(sqlQueue['enabled'], isTrue);
       expect(sqlQueue['max_size'], 50);
@@ -37,6 +38,7 @@ void main() {
           'ODBC_POOL_SIZE': '7',
           'ODBC_ASYNC_WORKER_COUNT': '3',
           'ODBC_ASYNC_MAX_PENDING_REQUESTS': '19',
+          'ODBC_RESULT_ENCODING': 'columnarCompressed',
           'SQL_QUEUE_MAX_SIZE': '13',
           'SQL_QUEUE_MAX_WORKERS': '5',
           'SQL_QUEUE_TIMEOUT_SEC': '9',
@@ -51,6 +53,7 @@ void main() {
       expect(runtime['pool_size'], 7);
       expect(runtime['async_worker_count'], 3);
       expect(runtime['async_max_pending_requests'], 19);
+      expect(runtime['result_encoding'], 'columnarCompressed');
       expect(pool['size'], 7);
       expect(sqlQueue['max_size'], 13);
       expect(sqlQueue['max_workers'], 5);

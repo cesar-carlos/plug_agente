@@ -19,7 +19,7 @@ void main() async {
   final urlOrNull = E2EEnv.e2eHubUrl;
   final tokenOrNull = E2EEnv.e2eHubToken;
 
-  final skipMessage = !run
+  var skipMessage = !run
       ? 'Set RUN_LIVE_HUB_TESTS=true in .env to run hub Socket live tests.'
       : (urlOrNull == null || urlOrNull.isEmpty)
       ? 'Set E2E_HUB_URL (hub base URL, e.g. https://host:port or wss://host/path).'
@@ -27,7 +27,7 @@ void main() async {
       ? 'Set E2E_HUB_TOKEN (agent token for the Socket.IO auth handshake).'
       : null;
 
-  final signingSkipMessage = !E2EEnv.runLiveHubSigningTests
+  var signingSkipMessage = !E2EEnv.runLiveHubSigningTests
       ? 'Set RUN_LIVE_HUB_SIGNING_TESTS=true in .env to run signed PayloadFrame hub tests.'
       : (urlOrNull == null || urlOrNull.isEmpty)
       ? 'Set E2E_HUB_URL (hub base URL, e.g. https://host:port or wss://host/path).'
@@ -36,6 +36,9 @@ void main() async {
       : (E2EEnv.e2ePayloadSigningKeyId == null || E2EEnv.e2ePayloadSigningKey == null)
       ? 'Set PAYLOAD_SIGNING_KEY_ID/PAYLOAD_SIGNING_KEY or PAYLOAD_SIGNING_ACTIVE_KEY_ID/PAYLOAD_SIGNING_KEY.'
       : null;
+  skipMessage ??= E2EEnv.liveHubBlockingPreflightFailureMessage();
+
+  signingSkipMessage ??= E2EEnv.liveHubBlockingPreflightFailureMessage(requireSigning: true);
 
   group('Hub Socket.IO (live E2E)', () {
     test(
@@ -46,12 +49,7 @@ void main() async {
         if (hubUrl == null || hubUrl.isEmpty || hubToken == null || hubToken.isEmpty) {
           fail('E2E_HUB_URL and E2E_HUB_TOKEN must be set when this test is not skipped');
         }
-        final preflightFailure = E2EEnv.liveHubBlockingPreflightFailureMessage();
-        if (preflightFailure != null) {
-          fail(preflightFailure);
-        }
-
-        final ds = SocketDataSource();
+final ds = SocketDataSource();
         final socket = ds.createSocket(hubUrl, authToken: hubToken);
         final completer = Completer<void>();
 
@@ -103,12 +101,7 @@ void main() async {
             key.isEmpty) {
           fail('E2E hub URL, token, and signing key env vars must be set when this test is not skipped');
         }
-        final preflightFailure = E2EEnv.liveHubBlockingPreflightFailureMessage(requireSigning: true);
-        if (preflightFailure != null) {
-          fail(preflightFailure);
-        }
-
-        final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
+final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
         final pipeline = TransportPipeline(
           encoding: 'json',
           compression: 'auto',

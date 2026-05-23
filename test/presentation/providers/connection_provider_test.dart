@@ -201,6 +201,7 @@ void main() {
           connectToHub,
           testDb,
           checkDriver,
+          transportClient: transport,
           tokenRefreshIntervalAttempts: 0,
         ),
         throwsArgumentError,
@@ -210,6 +211,7 @@ void main() {
           connectToHub,
           testDb,
           checkDriver,
+          transportClient: transport,
           maxReconnectAttempts: 0,
         ),
         throwsArgumentError,
@@ -219,6 +221,7 @@ void main() {
           connectToHub,
           testDb,
           checkDriver,
+          transportClient: transport,
           hubTokenRefreshMinInterval: const Duration(microseconds: -1),
         ),
         throwsArgumentError,
@@ -269,6 +272,80 @@ void main() {
 
       expect(provider.status, ConnectionStatus.reconnecting);
     });
+
+    test(
+      'HubTransportDisconnected starts burst recovery when hub context exists',
+      () async {
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          return const Success(unit);
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 2,
+          hubTokenRefreshMinInterval: Duration.zero,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
+        expect(connectCalls, 1);
+
+        transport.onHubLifecycle?.call(const HubTransportDisconnected());
+
+        await _waitForStatus(provider, ConnectionStatus.negotiating);
+        expect(connectCalls, greaterThan(1));
+
+        await provider.disconnect();
+      },
+    );
+
+    test(
+      'negotiating watchdog triggers burst recovery when protocol ready never arrives',
+      () async {
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          return const Success(unit);
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          capabilitiesNegotiationWatchdogOverride: const Duration(milliseconds: 30),
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 2,
+          hubTokenRefreshMinInterval: Duration.zero,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        expect(provider.status, ConnectionStatus.negotiating);
+        expect(connectCalls, 1);
+
+        await _waitForStatus(provider, ConnectionStatus.reconnecting);
+        await _waitForStatus(provider, ConnectionStatus.negotiating);
+        expect(connectCalls, greaterThan(1));
+
+        await provider.disconnect();
+      },
+    );
 
     test('HubTransportAutoReconnectSucceeded moves status back to connected', () async {
       when(
@@ -325,6 +402,7 @@ void main() {
         connectToHub,
         testDb,
         checkDriver,
+        transportClient: transport,
       );
       // Indirect check: the provider accepts the defaults without throwing,
       // which today requires `tokenRefreshIntervalAttempts >= 1`. The contract
@@ -426,7 +504,8 @@ void main() {
         transport.triggerProtocolReady();
         transport.onReconnectionNeeded?.call();
 
-        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await _waitForStatus(provider, ConnectionStatus.reconnecting);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
         transport.onTokenExpired?.call();
         await Future<void>.delayed(const Duration(milliseconds: 30));
 
@@ -440,6 +519,168 @@ void main() {
 
         firstRecoverAttempt.complete(Failure(Exception('unblock burst')));
         await provider.disconnect();
+      },
+    );
+  });
+
+  group('ConnectionProvider reconnect serialization', () {
+    test(
+      'should serialize concurrent recovery triggers into a single hub connect attempt',
+      () async {
+        var connectCalls = 0;
+        var maxConcurrentConnects = 0;
+        var inFlightConnects = 0;
+        Completer<void>? firstConnectGate;
+
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          inFlightConnects++;
+          if (inFlightConnects > maxConcurrentConnects) {
+            maxConcurrentConnects = inFlightConnects;
+          }
+          try {
+            if (connectCalls == 1) {
+              return const Success(unit);
+            }
+            firstConnectGate ??= Completer<void>();
+            await firstConnectGate!.future;
+            return const Success(unit);
+          } finally {
+            inFlightConnects--;
+          }
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 2,
+          hubTokenRefreshMinInterval: Duration.zero,
+          enableHardReloginRecovery: false,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
+        expect(connectCalls, 1);
+
+        transport.onHubLifecycle?.call(const HubTransportDisconnected(reason: 'io server disconnect'));
+        transport.onReconnectionNeeded?.call();
+
+        await _waitForStatus(provider, ConnectionStatus.reconnecting);
+        final recoveryDeadline = DateTime.now().add(const Duration(seconds: 2));
+        while (DateTime.now().isBefore(recoveryDeadline)) {
+          if (connectCalls >= 2) break;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(connectCalls, 2);
+        expect(maxConcurrentConnects, 1);
+
+        firstConnectGate?.complete();
+        await _waitForStatus(provider, ConnectionStatus.negotiating);
+
+        await provider.disconnect();
+      },
+    );
+
+    test(
+      'should not overlap hub connect attempts when recovery and persistent retry run together',
+      () async {
+        var connectCalls = 0;
+        var maxConcurrentConnects = 0;
+        var inFlightConnects = 0;
+
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          inFlightConnects++;
+          if (inFlightConnects > maxConcurrentConnects) {
+            maxConcurrentConnects = inFlightConnects;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+          inFlightConnects--;
+          if (connectCalls == 1) {
+            return const Success(unit);
+          }
+          return Failure(Exception('hub socket down'));
+        });
+        when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 1,
+          hubPersistentRetryInterval: const Duration(milliseconds: 20),
+          hubPersistentRetryMaxFailedTicks: 0,
+          hubTokenRefreshMinInterval: Duration.zero,
+          enableHardReloginRecovery: false,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
+        transport.onReconnectionNeeded?.call();
+
+        await _waitForStatus(provider, ConnectionStatus.reconnecting);
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+
+        expect(maxConcurrentConnects, 1);
+        expect(connectCalls, greaterThan(1));
+
+        await provider.disconnect();
+      },
+    );
+
+    test(
+      'should ignore stale serialized reconnect after disconnect bumps connect epoch',
+      () async {
+        Completer<void>? blockedConnect;
+
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          blockedConnect ??= Completer<void>();
+          await blockedConnect!.future;
+          return const Success(unit);
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 1,
+          hubTokenRefreshMinInterval: Duration.zero,
+          enableHardReloginRecovery: false,
+        );
+
+        final connectFuture = provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await provider.disconnect();
+        blockedConnect?.complete();
+
+        await connectFuture;
+
+        verify(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).called(1);
+        expect(provider.status, ConnectionStatus.disconnected);
       },
     );
   });
@@ -606,6 +847,7 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
       await _waitForStatus(provider, ConnectionStatus.negotiating);
       transport.triggerProtocolReady();
       await _waitForStatus(provider, ConnectionStatus.connected);
@@ -675,6 +917,7 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
       await Future<void>.delayed(const Duration(milliseconds: 120));
 
       verifyNever(() => mockAuth.setRecoveryError(any()));
@@ -723,6 +966,7 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
       await Future<void>.delayed(const Duration(milliseconds: 120));
 
       verify(() => mockAuth.setRecoveryError(any())).called(1);
@@ -785,6 +1029,7 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
       await Future<void>.delayed(const Duration(milliseconds: 400));
 
       expect(refreshCalls, 1);
@@ -890,7 +1135,8 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
       verify(
         () => hubRecoveryAuthCoordinator.loginWithStoredCredentials(
@@ -927,7 +1173,7 @@ void main() {
       transport.triggerProtocolReady();
       transport.onReconnectionNeeded?.call();
 
-      await _waitForStatus(provider, ConnectionStatus.error, timeout: const Duration(seconds: 4));
+      await _waitForStatus(provider, ConnectionStatus.error, timeout: const Duration(seconds: 8));
       expect(provider.error, isNotEmpty);
 
       await provider.disconnect();

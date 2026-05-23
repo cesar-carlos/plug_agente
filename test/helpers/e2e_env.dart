@@ -180,7 +180,7 @@ class E2EEnv {
     if (keyId == null || keyId.isEmpty || key == null || key.isEmpty) {
       return 'Set PAYLOAD_SIGNING_KEY_ID/PAYLOAD_SIGNING_KEY or PAYLOAD_SIGNING_ACTIVE_KEY_ID/PAYLOAD_SIGNING_KEY.';
     }
-    return null;
+    return liveHubBlockingPreflightFailureMessage(requireSigning: true);
   }
 
   static const String _defaultApiBaseUrl = 'http://31.97.29.223:3000/';

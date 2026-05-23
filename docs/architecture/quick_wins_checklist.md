@@ -501,7 +501,7 @@ SQL_QUEUE_MAX_WORKERS=16
 1. **Executar smoke tests e burst tests** (seguir `sql_queue_concurrency_tests.md`)
 2. **Medir tuning do worker pool async** com DSN representativo
 3. **Otimizar limites** (`ODBC_POOL_SIZE`, `ODBC_ASYNC_MAX_PENDING_REQUESTS`, `SQL_QUEUE_MAX_SIZE`) com dados reais
-4. **Avaliar ganhos adicionais opt-in** como `ResultEncoding.columnar` e tuning de streaming
+4. **Avaliar ganhos adicionais opt-in** com `ODBC_RESULT_ENCODING=columnar|columnarCompressed` e tuning de streaming
 
 ---
 

@@ -215,7 +215,7 @@ void main() {
         ),
       ];
 
-      final summary = ProtocolMetricsSummary.fromList(metrics);
+      final summary = ProtocolMetricsSummaryBuilder.fromList(metrics);
 
       expect(summary.totalMessages, equals(3));
       expect(summary.totalOriginalBytes, equals(3500));
@@ -262,7 +262,7 @@ void main() {
         ),
       ];
 
-      final summary = ProtocolMetricsSummary.fromList(metrics);
+      final summary = ProtocolMetricsSummaryBuilder.fromList(metrics);
 
       expect(summary.requestedCompressionUsage['auto'], equals(2));
       expect(summary.averageTotalDurationUs, equals(1750));
@@ -281,7 +281,7 @@ void main() {
     });
 
     test('should keep signing stage metrics out of transport message totals', () {
-      final summary = ProtocolMetricsSummary.fromList([
+      final summary = ProtocolMetricsSummaryBuilder.fromList([
         ProtocolMetrics(
           timestamp: DateTime.now(),
           protocol: 'jsonrpc-v2',
@@ -332,7 +332,7 @@ void main() {
     });
 
     test('should export diagnostic json summary', () {
-      final summary = ProtocolMetricsSummary.fromList([
+      final summary = ProtocolMetricsSummaryBuilder.fromList([
         ProtocolMetrics(
           timestamp: DateTime.now(),
           protocol: 'jsonrpc-v2',
@@ -381,7 +381,7 @@ void main() {
         ),
       ];
 
-      final summary = ProtocolMetricsSummary.fromList(metrics);
+      final summary = ProtocolMetricsSummaryBuilder.fromList(metrics);
 
       expect(summary.errorCount, equals(1));
       expect(summary.errorRate, equals(0.5));
@@ -389,7 +389,7 @@ void main() {
     });
 
     test('should handle empty metrics list', () {
-      final summary = ProtocolMetricsSummary.fromList([]);
+      final summary = ProtocolMetricsSummaryBuilder.fromList([]);
 
       expect(summary.totalMessages, equals(0));
       expect(summary.totalOriginalBytes, equals(0));
