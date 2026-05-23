@@ -284,7 +284,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       context: context,
       builder: (dialogContext) {
         return AgentActionDefinitionDialog(
-          child: _DeferredActionEditor(
+          child: DeferredAgentActionEditor(
             provider: provider,
             definition: definition,
             l10n: l10n,
@@ -382,55 +382,6 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           ),
         );
       },
-    );
-  }
-}
-
-class _DeferredActionEditor extends StatefulWidget {
-  const _DeferredActionEditor({
-    required this.provider,
-    required this.l10n,
-    required this.onSaved,
-    this.definition,
-  });
-
-  final AgentActionsProvider provider;
-  final AgentActionDefinition? definition;
-  final AppLocalizations l10n;
-  final VoidCallback onSaved;
-
-  @override
-  State<_DeferredActionEditor> createState() => _DeferredActionEditorState();
-}
-
-class _DeferredActionEditorState extends State<_DeferredActionEditor> {
-  bool _showEditor = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _showEditor = true;
-      });
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_showEditor) {
-      return const Center(child: ProgressRing());
-    }
-
-    return AgentActionEditor(
-      provider: widget.provider,
-      definition: widget.definition,
-      l10n: widget.l10n,
-      showChrome: false,
-      onSaved: widget.onSaved,
     );
   }
 }

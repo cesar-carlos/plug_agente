@@ -20,6 +20,7 @@ class AgentActionSelectedDetailContent extends StatelessWidget {
     required this.definition,
     required this.lastTestCanRun,
     required this.onEditAction,
+    super.key,
   });
 
   final AgentActionsProvider provider;
@@ -238,7 +239,7 @@ class AgentActionSelectedDetailContent extends StatelessWidget {
 }
 
 class AgentActionDetailPill extends StatelessWidget {
-  const AgentActionDetailPill({required this.text});
+  const AgentActionDetailPill({required this.text, super.key});
 
   final String text;
 
@@ -254,4 +255,3 @@ class AgentActionDetailPill extends StatelessWidget {
     );
   }
 }
-

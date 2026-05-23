@@ -1,9 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
@@ -16,7 +11,6 @@ import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
-import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.dart';
@@ -35,17 +29,14 @@ import 'package:plug_agente/application/use_cases/test_agent_action_definition.d
 import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
-import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
@@ -242,7 +233,6 @@ String triggerTypeTestLabel(AgentActionTriggerType type, AppLocalizations l10n) 
     AgentActionTriggerType.appClose => l10n.agentActionsTriggerTypeAppClose,
   };
 }
-
 
 class HeldSchedulerInstanceLockForPageTest implements IAgentActionSchedulerInstanceLock {
   @override

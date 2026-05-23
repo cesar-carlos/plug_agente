@@ -18,6 +18,7 @@ class AgentActionPagedCapturedOutput extends StatefulWidget {
     this.fullText,
     this.storedInChunks = false,
     this.onSlice,
+    super.key,
   }) : assert(
          fullText != null || onSlice != null,
          'Either fullText or onSlice must be provided for output display',
@@ -206,6 +207,7 @@ class AgentActionDiagnosticLine extends StatelessWidget {
   const AgentActionDiagnosticLine({
     required this.label,
     required this.value,
+    super.key,
   });
 
   final String label;
@@ -240,6 +242,7 @@ class AgentActionOutputBlock extends StatelessWidget {
     required this.value,
     required this.truncated,
     required this.l10n,
+    super.key,
   });
 
   final String label;

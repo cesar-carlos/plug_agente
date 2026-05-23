@@ -15,6 +15,7 @@ class AgentActionsHistoryTab extends StatelessWidget {
     required this.provider,
     required this.l10n,
     required this.uiPreferences,
+    super.key,
   });
 
   final AgentActionsProvider provider;

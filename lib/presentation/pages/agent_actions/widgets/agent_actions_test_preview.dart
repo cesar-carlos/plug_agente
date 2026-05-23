@@ -10,6 +10,7 @@ class AgentActionTestPreview extends StatelessWidget {
   const AgentActionTestPreview({
     required this.provider,
     required this.l10n,
+    super.key,
   });
 
   final AgentActionsProvider provider;

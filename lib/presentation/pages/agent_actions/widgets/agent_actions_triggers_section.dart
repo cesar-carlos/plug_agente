@@ -14,6 +14,7 @@ class AgentActionTriggersSection extends StatelessWidget {
     required this.provider,
     required this.l10n,
     required this.actionId,
+    super.key,
   });
 
   final AgentActionsProvider provider;
@@ -72,6 +73,7 @@ class AgentActionTriggerRow extends StatelessWidget {
     required this.provider,
     required this.l10n,
     required this.actionId,
+    super.key,
   });
 
   final AgentActionTrigger trigger;

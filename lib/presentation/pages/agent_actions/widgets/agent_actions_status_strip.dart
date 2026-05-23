@@ -11,6 +11,7 @@ class AgentActionsStatusStrip extends StatelessWidget {
   const AgentActionsStatusStrip({
     required this.provider,
     required this.l10n,
+    super.key,
   });
 
   final AgentActionsProvider provider;

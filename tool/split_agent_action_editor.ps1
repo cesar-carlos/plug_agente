@@ -23,8 +23,13 @@ function Wrap-Mixin([string]$name, [string[]]$bodyLines) {
     @(
         "part of '../../agent_actions_page_editor.dart';",
         '',
-        "mixin $name on _AgentActionEditorState {"
+        "mixin $name on _AgentActionEditorStateBase {"
     ) + $bodyLines + @('}')
+}
+
+$importEndLine = 0
+for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '^import ') { $importEndLine = $i + 1 }
 }
 
 $stateLine = Find-Line '^class _AgentActionEditorState extends'
@@ -51,8 +56,7 @@ for ($i = $lines.Count - 1; $i -ge 0; $i--) {
 }
 
 $fieldBody = Get-Lines $fieldsStartLine $fieldsEndLine
-$main = @(
-    (Get-Lines 1 ($stateLine - 1))
+$main = (Get-Lines 1 $importEndLine) + @(
     ''
     "part 'widgets/editor/agent_action_editor_core.dart';"
     "part 'widgets/editor/agent_action_editor_ui.dart';"
@@ -61,37 +65,36 @@ $main = @(
     "part 'widgets/editor/agent_action_editor_developer.dart';"
     "part 'widgets/editor/agent_action_editor_save.dart';"
     ''
-    'class _AgentActionEditorState extends State<AgentActionEditor>'
+) + (Get-Lines ($importEndLine + 1) ($stateLine - 1)) + @(
+    ''
+    'abstract class _AgentActionEditorStateBase extends State<AgentActionEditor> {'
+) + $fieldBody + @(
+    '}'
+    ''
+    'class _AgentActionEditorState extends _AgentActionEditorStateBase'
     '    with'
     '        _AgentActionEditorCore,'
     '        _AgentActionEditorUi,'
     '        _AgentActionEditorPolicies,'
     '        _AgentActionEditorDraftFields,'
     '        _AgentActionEditorDeveloper,'
-    '        _AgentActionEditorSave {'
-) + $fieldBody + @(
-    '}'
+    '        _AgentActionEditorSave {}'
     ''
 )
 
 $main | Set-Content $srcPath -Encoding UTF8
 
-Wrap-Mixin '_AgentActionEditorCore' (Get-Lines $initLine ($preflightLine - 1)) |
-    Set-Content (Join-Path $editorDir 'agent_action_editor_core.dart') -Encoding UTF8
-Wrap-Mixin '_AgentActionEditorUi' (Get-Lines $preflightLine ($execPoliciesLine - 1)) |
-    Set-Content (Join-Path $editorDir 'agent_action_editor_ui.dart') -Encoding UTF8
-Wrap-Mixin '_AgentActionEditorPolicies' (Get-Lines $execPoliciesLine ($draftFieldsLine - 1)) |
-    Set-Content (Join-Path $editorDir 'agent_action_editor_policies.dart') -Encoding UTF8
-Wrap-Mixin '_AgentActionEditorDraftFields' (Get-Lines $draftFieldsLine ($devHintsLine - 1)) |
-    Set-Content (Join-Path $editorDir 'agent_action_editor_draft_fields.dart') -Encoding UTF8
+$coreBody = Get-Lines $initLine ($preflightLine - 1)
+if ($coreBody[0] -match '^\s+void initState') {
+    $coreBody[0] = '  @override' + [Environment]::NewLine + $coreBody[0]
+}
+Wrap-Mixin '_AgentActionEditorCore' $coreBody | Set-Content (Join-Path $editorDir 'agent_action_editor_core.dart') -Encoding UTF8
+Wrap-Mixin '_AgentActionEditorUi' (Get-Lines $preflightLine ($execPoliciesLine - 1)) | Set-Content (Join-Path $editorDir 'agent_action_editor_ui.dart') -Encoding UTF8
+Wrap-Mixin '_AgentActionEditorPolicies' (Get-Lines $execPoliciesLine ($draftFieldsLine - 1)) | Set-Content (Join-Path $editorDir 'agent_action_editor_policies.dart') -Encoding UTF8
+Wrap-Mixin '_AgentActionEditorDraftFields' (Get-Lines $draftFieldsLine ($devHintsLine - 1)) | Set-Content (Join-Path $editorDir 'agent_action_editor_draft_fields.dart') -Encoding UTF8
 Wrap-Mixin '_AgentActionEditorDeveloper' (
     (Get-Lines $devHintsLine ($saveExecLine - 1)) + (Get-Lines $scheduleDevLine ($closeStateLine - 1))
 ) | Set-Content (Join-Path $editorDir 'agent_action_editor_developer.dart') -Encoding UTF8
-Wrap-Mixin '_AgentActionEditorSave' (Get-Lines $saveExecLine ($scheduleDevLine - 1)) |
-    Set-Content (Join-Path $editorDir 'agent_action_editor_save.dart') -Encoding UTF8
+Wrap-Mixin '_AgentActionEditorSave' (Get-Lines $saveExecLine ($scheduleDevLine - 1)) | Set-Content (Join-Path $editorDir 'agent_action_editor_save.dart') -Encoding UTF8
 
 Write-Host "Main lines: $($main.Count)"
-Get-ChildItem $editorDir -Filter 'agent_action_editor_*.dart' | ForEach-Object {
-    $count = (Get-Content $_.FullName).Count
-    Write-Host "$($_.Name): $count lines"
-}

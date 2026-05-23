@@ -13,6 +13,7 @@ class AgentActionExecutionList extends StatelessWidget {
     required this.executions,
     required this.provider,
     required this.l10n,
+    super.key,
   });
 
   final List<AgentActionExecution> executions;
@@ -51,6 +52,7 @@ class AgentActionExecutionRow extends StatelessWidget {
     required this.execution,
     required this.provider,
     required this.l10n,
+    super.key,
   });
 
   final AgentActionExecution execution;

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 
 import 'agent_actions_page_test_harness.dart';
@@ -177,5 +177,4 @@ void main() {
     expect(find.textContaining('runtime_mode: degraded', findRichText: true), findsWidgets);
     expect(find.textContaining('product_name: Windows Server 2019', findRichText: true), findsWidgets);
   });
-
 }

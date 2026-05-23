@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -199,4 +199,3 @@ String agentActionEditorStateLabel(AgentActionState state, AppLocalizations l10n
     AgentActionState.needsValidation => l10n.agentActionsStateNeedsValidation,
   };
 }
-

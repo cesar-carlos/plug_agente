@@ -5,7 +5,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
@@ -13,16 +12,13 @@ import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart'
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
-import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
-import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 import 'agent_actions_page_test_harness.dart';
@@ -232,7 +228,9 @@ void main() {
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledMessage), findsOneWidget);
   });
 
-  testWidgets('shows production path allowlist error when operational profile is prod and allowlist is empty', (tester) async {
+  testWidgets('shows production path allowlist error when operational profile is prod and allowlist is empty', (
+    tester,
+  ) async {
     dotenv.loadFromString(envString: 'AGENT_OPERATIONAL_PROFILE=prod');
     addTearDown(dotenv.clean);
 

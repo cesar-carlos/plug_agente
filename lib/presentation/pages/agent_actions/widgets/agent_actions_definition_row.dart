@@ -6,13 +6,14 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 
 class AgentActionDefinitionNameCell extends StatelessWidget {
   const AgentActionDefinitionNameCell({
     required this.definition,
     required this.l10n,
+    super.key,
   });
 
   final AgentActionDefinition definition;
@@ -47,6 +48,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
     required this.onShowDetails,
     required this.onAddTrigger,
     required this.onEditAction,
+    super.key,
   });
 
   final AgentActionDefinition definition;

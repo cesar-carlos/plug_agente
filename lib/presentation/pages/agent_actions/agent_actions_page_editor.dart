@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/widgets.dart' as widgets;
 import 'package:intl/intl.dart';
 import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
@@ -68,6 +67,7 @@ class AgentActionEditor extends StatefulWidget {
     this.definition,
     this.showChrome = true,
     this.onSaved,
+    super.key,
   });
 
   final AgentActionsProvider provider;
@@ -79,7 +79,6 @@ class AgentActionEditor extends StatefulWidget {
   @override
   State<AgentActionEditor> createState() => _AgentActionEditorState();
 }
-
 
 const List<_AgentActionDraftKind> _editableDraftKinds = <_AgentActionDraftKind>[
   _AgentActionDraftKind.commandLine,
@@ -4062,5 +4061,56 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         ),
       ];
     }
+  }
+}
+
+/// Defers mounting [AgentActionEditor] until after the first frame so dialog layout settles.
+class DeferredAgentActionEditor extends StatefulWidget {
+  const DeferredAgentActionEditor({
+    required this.provider,
+    required this.l10n,
+    required this.onSaved,
+    this.definition,
+    super.key,
+  });
+
+  final AgentActionsProvider provider;
+  final AgentActionDefinition? definition;
+  final AppLocalizations l10n;
+  final VoidCallback onSaved;
+
+  @override
+  State<DeferredAgentActionEditor> createState() => _DeferredAgentActionEditorState();
+}
+
+class _DeferredAgentActionEditorState extends State<DeferredAgentActionEditor> {
+  bool _showEditor = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showEditor = true;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showEditor) {
+      return const Center(child: ProgressRing());
+    }
+
+    return AgentActionEditor(
+      provider: widget.provider,
+      definition: widget.definition,
+      l10n: widget.l10n,
+      showChrome: false,
+      onSaved: widget.onSaved,
+    );
   }
 }

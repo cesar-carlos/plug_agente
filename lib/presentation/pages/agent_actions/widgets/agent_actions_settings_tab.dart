@@ -17,6 +17,7 @@ class AgentActionsSettingsTab extends StatelessWidget {
     required this.l10n,
     required this.runtimeCapabilities,
     required this.runtimeDiagnostics,
+    super.key,
   });
 
   final AgentActionsProvider provider;

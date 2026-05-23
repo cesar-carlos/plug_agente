@@ -18,6 +18,7 @@ class AgentActionsActionsTab extends StatelessWidget {
     required this.onCreateAction,
     required this.onShowDetails,
     required this.onEditAction,
+    super.key,
   });
 
   final AgentActionsProvider provider;

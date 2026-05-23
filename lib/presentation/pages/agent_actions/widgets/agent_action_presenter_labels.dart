@@ -18,7 +18,9 @@ IconData agentActionTypeIcon(AgentActionType type) {
 }
 
 IconData agentActionDefinitionIconFor(AgentActionDefinition definition) {
-  return isAgentActionPowerShellDefinition(definition) ? FluentIcons.command_prompt : agentActionTypeIcon(definition.type);
+  return isAgentActionPowerShellDefinition(definition)
+      ? FluentIcons.command_prompt
+      : agentActionTypeIcon(definition.type);
 }
 
 IconData agentActionExecutionStatusIcon(AgentActionExecutionStatus status) {
@@ -61,7 +63,9 @@ String agentActionTypeLabel(AgentActionType type, AppLocalizations l10n) {
 }
 
 String agentActionDefinitionTypeLabel(AgentActionDefinition definition, AppLocalizations l10n) {
-  return isAgentActionPowerShellDefinition(definition) ? l10n.agentActionsTypePowerShell : agentActionTypeLabel(definition.type, l10n);
+  return isAgentActionPowerShellDefinition(definition)
+      ? l10n.agentActionsTypePowerShell
+      : agentActionTypeLabel(definition.type, l10n);
 }
 
 bool isAgentActionPowerShellDefinition(AgentActionDefinition definition) {

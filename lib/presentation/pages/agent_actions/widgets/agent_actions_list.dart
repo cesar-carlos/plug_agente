@@ -21,6 +21,7 @@ class AgentActionsList extends StatelessWidget {
     required this.onShowDetails,
     required this.onAddTrigger,
     required this.onEditAction,
+    super.key,
   });
 
   final AgentActionsProvider provider;
